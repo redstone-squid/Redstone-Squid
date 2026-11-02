@@ -1178,7 +1178,7 @@ export type DraftSummaryResponse = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_CURSOR' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
 
 /**
  * ExtenderDetails
@@ -1768,6 +1768,26 @@ export type OwnVoteSelection = {
 };
 
 /**
+ * PageAnchor
+ *
+ * Query-parameter values addressing an adjacent page. Exactly one field is set.
+ */
+export type PageAnchor = {
+    /**
+     * Offset
+     */
+    offset?: number | null;
+    /**
+     * After Id
+     */
+    after_id?: number | null;
+    /**
+     * Before Id
+     */
+    before_id?: number | null;
+};
+
+/**
  * Page[Annotated[Union[BuildSearchResult, RecordSearchResult, MetadataSearchResult], FieldInfo(annotation=NoneType, required=True, discriminator='resource_kind')]]
  */
 export type PageAnnotatedUnionBuildSearchResultRecordSearchResultMetadataSearchResultFieldInfoAnnotationNoneTypeRequiredTrueDiscriminatorResourceKind = {
@@ -1776,13 +1796,11 @@ export type PageAnnotatedUnionBuildSearchResultRecordSearchResultMetadataSearchR
      */
     items: Array<BuildSearchResult | RecordSearchResult | MetadataSearchResult>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1794,13 +1812,11 @@ export type PageBuildSummary = {
      */
     items: Array<BuildSummary>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1812,13 +1828,11 @@ export type PageInboxNotificationDetail = {
      */
     items: Array<InboxNotificationDetail>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1830,13 +1844,11 @@ export type PageRecordSummary = {
      */
     items: Array<RecordSummary>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1848,13 +1860,11 @@ export type PageSchematicSummary = {
      */
     items: Array<SchematicSummary>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1866,13 +1876,11 @@ export type PageTagDetail = {
      */
     items: Array<TagDetail>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1884,13 +1892,11 @@ export type PageVersionDetail = {
      */
     items: Array<VersionDetail>;
     /**
-     * Next Cursor
+     * Total
      */
-    next_cursor: string | null;
-    /**
-     * Has More
-     */
-    has_more: boolean;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
 };
 
 /**
@@ -1954,10 +1960,6 @@ export type ProblemDetail = {
     context?: {
         [key: string]: JsonValue;
     } | null;
-    /**
-     * Error Id
-     */
-    error_id?: string | null;
 };
 
 /**
@@ -2383,6 +2385,13 @@ export type ServerProfileSchema = {
 };
 
 /**
+ * SourceKind
+ *
+ * How a source produces candidates.
+ */
+export type SourceKind = 'enumerable' | 'queried';
+
+/**
  * StoredDraftResponse
  *
  * The compacted current state of one caller-owned synchronized draft.
@@ -2492,6 +2501,96 @@ export type SubmissionOrigin = 'discord' | 'web' | 'cli' | 'paper' | 'fabric';
  * Durable subject types an account may follow.
  */
 export type SubscriptionKind = 'creator' | 'record' | 'record_filter';
+
+/**
+ * SuggestionItem
+ *
+ * One candidate completion.
+ *
+ * `value` is what a client submits and `label` is what it shows. They differ wherever a command
+ * or form field stores an identifier the user should never have to see.
+ */
+export type SuggestionItem = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Kind
+     */
+    kind: string;
+};
+
+/**
+ * SuggestionPage
+ *
+ * Ranked completions for one partially typed value.
+ */
+export type SuggestionPage = {
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Revision
+     */
+    revision: number | null;
+    replacement: SuggestionReplacement | null;
+    /**
+     * Items
+     */
+    items: Array<SuggestionItem>;
+};
+
+/**
+ * SuggestionReplacement
+ *
+ * The half-open range of the submitted query a value replaces.
+ */
+export type SuggestionReplacement = {
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * End
+     */
+    end: number;
+};
+
+/**
+ * SuggestionSourceInfo
+ *
+ * What a client needs to know to drive one source without hardcoding it.
+ */
+export type SuggestionSourceInfo = {
+    /**
+     * Id
+     */
+    id: string;
+    kind: SourceKind;
+    value_type: ValueType;
+    /**
+     * Context Keys
+     */
+    context_keys: Array<string>;
+    /**
+     * Multi Value
+     */
+    multi_value: string | null;
+    /**
+     * Requires Authentication
+     */
+    requires_authentication: boolean;
+};
 
 /**
  * TagDetail
@@ -2683,6 +2782,13 @@ export type ValidationError = {
  * Canonical JSON value expected from a field.
  */
 export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'game_ticks';
+
+/**
+ * ValueType
+ *
+ * The scalar type a suggestion's value carries.
+ */
+export type ValueType = 'string' | 'integer';
 
 /**
  * VersionDetail
@@ -3224,12 +3330,28 @@ export type BuildsListData = {
         sort?: string | null;
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/builds';
 };
@@ -4053,12 +4175,28 @@ export type AccountBuildsListData = {
         status?: BuildStatusFilter | null;
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/users/me/builds';
 };
@@ -4391,13 +4529,13 @@ export type PaperChallengeStartData = {
          */
         'Idempotency-Key'?: string | null;
         /**
-         * X-Squid-Installation-Id
+         * Squid-Installation-Id
          */
-        'X-Squid-Installation-ID'?: string | null;
+        'Squid-Installation-ID'?: string | null;
         /**
-         * X-Squid-Installation-Secret
+         * Squid-Installation-Secret
          */
-        'X-Squid-Installation-Secret'?: string | null;
+        'Squid-Installation-Secret'?: string | null;
     };
     path?: never;
     query?: never;
@@ -4452,13 +4590,13 @@ export type PaperChallengeExchangeData = {
          */
         'Idempotency-Key'?: string | null;
         /**
-         * X-Squid-Installation-Id
+         * Squid-Installation-Id
          */
-        'X-Squid-Installation-ID'?: string | null;
+        'Squid-Installation-ID'?: string | null;
         /**
-         * X-Squid-Installation-Secret
+         * Squid-Installation-Secret
          */
-        'X-Squid-Installation-Secret'?: string | null;
+        'Squid-Installation-Secret'?: string | null;
     };
     path?: never;
     query?: never;
@@ -5027,12 +5165,28 @@ export type NotificationInboxListData = {
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/users/me/notifications/inbox';
 };
@@ -5188,13 +5342,33 @@ export type RecordsListData = {
     path?: never;
     query?: {
         /**
+         * Sort
+         */
+        sort?: string | null;
+        /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/records';
 };
@@ -5240,12 +5414,16 @@ export type BuildSchematicsListData = {
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/builds/{build_id}/schematics';
 };
@@ -5462,12 +5640,16 @@ export type SearchExecuteData = {
         sort?: string | null;
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/search';
 };
@@ -6318,18 +6500,112 @@ export type SubmissionMediaGetResponses = {
 
 export type SubmissionMediaGetResponse = SubmissionMediaGetResponses[keyof SubmissionMediaGetResponses];
 
+export type SuggestionSourcesListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/suggest';
+};
+
+export type SuggestionSourcesListErrors = {
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SuggestionSourcesListError = SuggestionSourcesListErrors[keyof SuggestionSourcesListErrors];
+
+export type SuggestionSourcesListResponses = {
+    /**
+     * Response List Sources V1 Suggest Get
+     *
+     * Successful Response
+     */
+    200: Array<SuggestionSourceInfo>;
+};
+
+export type SuggestionSourcesListResponse = SuggestionSourcesListResponses[keyof SuggestionSourcesListResponses];
+
+export type SuggestionsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Source
+         */
+        source: string;
+    };
+    query?: {
+        /**
+         * Q
+         */
+        q?: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Cursor
+         */
+        cursor?: number | null;
+        /**
+         * Category
+         */
+        category?: string | null;
+    };
+    url: '/v1/suggest/{source}';
+};
+
+export type SuggestionsGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SuggestionsGetError = SuggestionsGetErrors[keyof SuggestionsGetErrors];
+
+export type SuggestionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SuggestionPage;
+};
+
+export type SuggestionsGetResponse = SuggestionsGetResponses[keyof SuggestionsGetResponses];
+
 export type TagsListData = {
     body?: never;
     path?: never;
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/tags';
 };
@@ -6496,12 +6772,16 @@ export type MinecraftVersionsListData = {
     query?: {
         /**
          * Page Size
+         *
+         * Maximum number of items to return.
          */
         page_size?: number;
         /**
-         * Cursor
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
          */
-        cursor?: string | null;
+        offset?: number | null;
     };
     url: '/v1/versions';
 };

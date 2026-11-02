@@ -138,7 +138,7 @@ class DraftSnapshot:
         )
         object.__setattr__(self, "answers", deepcopy(dict(self.answers)))
 
-    def apply(self, change: DraftChange) -> "DraftSnapshot":
+    def apply(self, change: DraftChange) -> DraftSnapshot:
         """Apply an atomic edit or reject it when the client is stale."""
         if self.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             msg = f"drafts in {self.status.value} state cannot be edited"
@@ -157,7 +157,7 @@ class DraftSnapshot:
                 max_bytes=MAX_DRAFT_ANSWERS_BYTES,
                 max_depth=MAX_DRAFT_JSON_DEPTH + 1,
             )
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             msg = "The draft answers exceed the retained data limit."
             raise ValidationError(
                 msg,
@@ -166,7 +166,7 @@ class DraftSnapshot:
             ) from None
         return replace(self, revision=self.revision + 1, status=DraftStatus.EDITING, answers=answers)
 
-    def transition(self, status: DraftStatus) -> "DraftSnapshot":
+    def transition(self, status: DraftStatus) -> DraftSnapshot:
         """Apply an allowed lifecycle transition."""
         allowed: dict[DraftStatus, frozenset[DraftStatus]] = {
             DraftStatus.EDITING: frozenset({DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION, DraftStatus.EXPIRED}),

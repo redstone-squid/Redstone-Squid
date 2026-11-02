@@ -16,6 +16,7 @@ from squid.accounts.domain import (
     CreatorAlias,
     CreatorProfile,
     IdentityProvider,
+    IdentityRefresh,
 )
 
 
@@ -26,6 +27,13 @@ class VerificationLinkResult:
     account: Account | None = None
     claimed_alias: CreatorAlias | None = None
     conflicting_java_uuid: UUID | None = None
+    refresh: IdentityRefresh | None = None
+    """The full name reconciliation, when the code was consumed.
+
+    `claimed_alias` is the one field of it the original link flow needed and is kept for that
+    caller; everything a rename produced — the previous name, retained credits, a contested
+    name and the claim it opened — is here.
+    """
 
 
 class AccountRepository(Protocol):
@@ -39,6 +47,8 @@ class AccountRepository(Protocol):
     ) -> Account: ...
 
     async def get_by_id(self, account_id: int) -> Account | None: ...
+
+    async def get_many(self, account_ids: Sequence[int]) -> dict[int, Account]: ...
 
     async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None: ...
 
@@ -64,9 +74,16 @@ class AccountRepository(Protocol):
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None: ...
 
-    async def pending_claims(self) -> Sequence[AliasClaim]: ...
+    async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]: ...
 
-    async def resolve_claim(self, *, claim_id: int, status: ClaimStatus, resolved_by_account_id: int) -> AliasClaim: ...
+    async def resolve_claim(
+        self,
+        *,
+        claim_id: int,
+        status: ClaimStatus,
+        resolved_by_account_id: int,
+        reassign: bool = False,
+    ) -> AliasClaim: ...
 
     async def consume_code_and_link_account(
         self,
@@ -75,5 +92,7 @@ class AccountRepository(Protocol):
         code: str,
         consent: AccountConsent,
     ) -> VerificationLinkResult: ...
+
+    async def refresh_java_identity(self, *, account_id: int, java_uuid: UUID, username: str) -> IdentityRefresh: ...
 
     async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None: ...

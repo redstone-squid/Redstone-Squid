@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.starboard.domain import (
-    EntryAction,
     OriginMessage,
     StarboardConfig,
     StarboardDirection,
@@ -24,14 +23,21 @@ class PendingVote:
     weight: float
 
 
+type EntryKey = tuple[int, int]
+"""One entry, as (starboard id, origin message id)."""
+
+
 @dataclass(frozen=True, slots=True)
-class EntryPlan:
-    """A transport-neutral materialization operation."""
+class EntryState:
+    """Everything needed to decide and render one entry.
+
+    Carries no action. Whether a post should exist is derived from the score and the
+    posts that are actually there, rather than remembered on the entry row.
+    """
 
     config: StarboardConfig
     origin: OriginMessage
     entry: StarboardEntry
-    action: EntryAction
 
 
 class StarboardRepository(Protocol):
@@ -45,29 +51,23 @@ class StarboardRepository(Protocol):
 
     async def record_votes(
         self, origin: OriginMessage, user_id: int, votes: Sequence[PendingVote]
-    ) -> Sequence[EntryPlan]: ...
+    ) -> Sequence[EntryKey]: ...
 
     async def recount_votes(
         self, origin: OriginMessage, votes: Sequence[tuple[int, PendingVote]]
-    ) -> Sequence[EntryPlan]: ...
+    ) -> Sequence[EntryKey]: ...
 
-    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> Sequence[EntryPlan]: ...
+    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> Sequence[EntryKey]: ...
 
-    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> Sequence[EntryPlan]: ...
+    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> Sequence[EntryKey]: ...
 
-    async def refresh(self, origin_message_id: int, *, force: bool = False) -> Sequence[EntryPlan]: ...
+    async def refresh(self, origin_message_id: int, *, force: bool = False) -> Sequence[EntryKey]: ...
 
-    async def mark_origin_deleted(self, origin_message_id: int) -> Sequence[EntryPlan]: ...
+    async def mark_origin_deleted(self, origin_message_id: int) -> Sequence[EntryKey]: ...
 
-    async def mark_posted(
-        self, starboard_id: int, origin_message_id: int, message_id: int, channel_id: int
-    ) -> None: ...
+    async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None: ...
 
     async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None: ...
-
-    async def mark_removed(self, starboard_id: int, origin_message_id: int) -> None: ...
-
-    async def reset_deleted_post(self, posted_message_id: int) -> tuple[int, int] | None: ...
 
     async def disable_channel(self, channel_id: int) -> None: ...
 

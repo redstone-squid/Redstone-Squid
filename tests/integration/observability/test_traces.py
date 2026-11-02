@@ -1,4 +1,17 @@
-"""End-to-end framework span composition with the optional observability extra."""
+"""Squid's telemetry surface, exercised against a live OpenTelemetry SDK.
+
+Not a test of the third-party instrumentors. Every assertion here is about Squid code
+whose behaviour only exists once composed with them, and which nothing else can check:
+`correlation_id` resolving to the trace an operator can search for, `TraceContextFilter`
+stamping that trace onto log records, and `inject_trace_context`/`extracted_trace_span`
+carrying a trace across the schematic process boundary. Unit tests of those functions can
+only assert against a mocked tracer, which is how they would keep passing after the
+composition broke.
+
+The one genuinely third-party claim - a SQL span nesting under the HTTP server span -
+earns its place because the two instrumentors are configured independently by Squid, and
+a flat trace is exactly what a misconfiguration produces.
+"""
 
 import logging
 
@@ -35,7 +48,13 @@ from squid.observability import (
 )
 
 
-def test_http_request_contains_sql_child_span() -> None:
+def test_squid_telemetry_composes_with_a_live_sdk() -> None:
+    """One setup, five claims: nesting, correlation id, log stamping, propagation, privacy.
+
+    Kept as a single test because instrumenting FastAPI and SQLAlchemy and standing up a
+    provider is the expensive part; splitting it would repeat that four more times to
+    assert against the same trace.
+    """
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))

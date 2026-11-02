@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from itertools import combinations, groupby, product
 
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.models import (
     ActiveRecord,
     CandidateFacet,
@@ -266,28 +267,27 @@ class RecordService:
     async def list_page(
         self,
         *,
-        offset: int = 0,
-        after_id: int | None = None,
-        before_id: int | None = None,
+        selector: PageSelector = FIRST_PAGE,
         descending: bool = True,
-        limit: int = 21,
-    ) -> Sequence[ActiveRecord]:
-        """Return one page of active record results in display order.
-
-        ID anchors page relative to the display order; a `before_id` page carries its overfetched
-        row at the front for the caller to trim. `offset` skips rows instead.
-        """
-        return await self._runs.list_active_records(
-            offset=offset,
-            after_id=after_id,
-            before_id=before_id,
+        page_size: int = 20,
+    ) -> Page[ActiveRecord]:
+        """Return one page of active record results in display order."""
+        rows = await self._runs.list_active_records(
+            offset=selector.offset,
+            after_id=selector.after_id,
+            before_id=selector.before_id,
             descending=descending,
-            limit=limit,
+            # One row past the page proves whether another page follows.
+            limit=page_size + 1,
         )
-
-    async def count(self) -> int:
-        """Count the currently active computed record results."""
-        return await self._runs.count_active_records()
+        return keyset_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            total=await self._runs.count_active_records(),
+            keyset=True,
+            id_of=lambda record: record.id,
+        )
 
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""

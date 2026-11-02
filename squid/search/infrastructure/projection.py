@@ -309,7 +309,7 @@ class SearchProjectionLoader:
             canonical_title = formatted.title
             canonical_subtitle = formatted.subtitle
             title_diagnostics = [diagnostic.as_dict() for diagnostic in formatted.diagnostics]
-        except (DataIntegrityError, InvalidBuildError, NotImplementedError, TypeError, ValueError):
+        except DataIntegrityError, InvalidBuildError, NotImplementedError, TypeError, ValueError:
             title = f"{build.category or 'Build'} #{build.id}"
         description = build.description
         if description is None:
@@ -658,5 +658,5 @@ def _render_tag_assignment(assignment: TagAssignment) -> str:
     template = definition.render_template
     try:
         return template.format(name=name, value=value, unit=unit)
-    except (IndexError, KeyError, ValueError):
+    except IndexError, KeyError, ValueError:
         return f"{name}: {value}{unit}"

@@ -171,15 +171,7 @@ class StarboardEntry(Base, kw_only=True):
     """The materialized-post state for one source message on one starboard."""
 
     __tablename__ = "starboard_entries"
-    __table_args__ = (
-        Index(
-            "starboard_entries_posted_message_key",
-            "posted_message_id",
-            unique=True,
-            postgresql_where=text("posted_message_id IS NOT NULL"),
-        ),
-        Index("starboard_entries_score_idx", "starboard_id", text("score DESC")),
-    )
+    __table_args__ = (Index("starboard_entries_score_idx", "starboard_id", text("score DESC")),)
 
     starboard_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("starboards.id", ondelete="CASCADE"), primary_key=True
@@ -187,8 +179,6 @@ class StarboardEntry(Base, kw_only=True):
     origin_message_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("starboard_origin_messages.id", ondelete="CASCADE"), primary_key=True
     )
-    posted_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
-    posted_channel_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     score: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0.0"), default=0.0)
     raw_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_rendered_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)

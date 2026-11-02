@@ -106,19 +106,21 @@ def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture
         configure_observability(enabled_config(), service_name="api")
 
 
-def test_correlation_id_uses_active_trace_id(mocker: MockerFixture) -> None:
-    mocker.patch.object(observability, "_current_trace_id", return_value="a" * 32)
+def test_correlation_id_stays_unique_without_a_tracer(mocker: MockerFixture) -> None:
+    """Errors stay correlatable on deployments that never installed the SDK.
 
-    assert observability.correlation_id() == "a" * 32
-
-
-def test_correlation_id_has_a_local_fallback(mocker: MockerFixture) -> None:
+    `build_error_presentation` shows this id to the user and logs it beside the redacted
+    diagnostic, so the untraced path has to keep producing distinct ids rather than a
+    constant. That it prefers the active trace id when there is one is proven for real,
+    against a live tracer, in tests/integration/observability/test_traces.py.
+    """
     mocker.patch.object(observability, "_current_trace_id", return_value=None)
 
-    error_id = observability.correlation_id()
+    error_ids = {observability.correlation_id() for _ in range(3)}
 
-    assert len(error_id) == 12
-    assert int(error_id, 16) >= 0
+    assert len(error_ids) == 3
+    assert all(len(error_id) == 12 for error_id in error_ids)
+    assert all(set(error_id) <= set("0123456789abcdef") for error_id in error_ids)
 
 
 def test_trace_context_filter_adds_active_ids(mocker: MockerFixture) -> None:
@@ -141,3 +143,59 @@ def test_trace_context_filter_preserves_propagated_child_ids(mocker: MockerFixtu
 
     assert vars(record)["trace_id"] == "c" * 32
     assert vars(record)["span_id"] == "d" * 16
+
+
+def test_bound_correlation_id_wins_and_resets(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_id", return_value=None)
+
+    token = observability.bind_correlation_id("request-scoped-id")
+    try:
+        assert observability.correlation_id() == "request-scoped-id"
+    finally:
+        observability.unbind_correlation_id(token)
+
+    # After unbinding, the untraced fallback resumes producing 12-hex-char ids.
+    fallback = observability.correlation_id()
+    assert len(fallback) == 12
+    assert set(fallback) <= set("0123456789abcdef")
+
+
+def test_trace_context_filter_stamps_bound_request_id(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_context", return_value=None)
+    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
+
+    token = observability.bind_correlation_id("bound-request-id")
+    try:
+        observability.TraceContextFilter().filter(record)
+    finally:
+        observability.unbind_correlation_id(token)
+
+    assert vars(record)["request_id"] == "bound-request-id"
+
+
+def test_trace_context_filter_preserves_preset_request_id(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_context", return_value=None)
+    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
+    vars(record)["request_id"] = "already-set"
+
+    token = observability.bind_correlation_id("bound-request-id")
+    try:
+        observability.TraceContextFilter().filter(record)
+    finally:
+        observability.unbind_correlation_id(token)
+
+    assert vars(record)["request_id"] == "already-set"
+
+
+def test_install_trace_context_log_filter_is_idempotent() -> None:
+    handler = logging.NullHandler()
+    handler.set_name("squid-test-idempotent-handler")
+    logging.getLogger().addHandler(handler)
+    try:
+        observability.install_trace_context_log_filter()
+        observability.install_trace_context_log_filter()
+
+        trace_filters = [f for f in handler.filters if isinstance(f, observability.TraceContextFilter)]
+        assert len(trace_filters) == 1
+    finally:
+        logging.getLogger().removeHandler(handler)

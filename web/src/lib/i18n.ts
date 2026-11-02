@@ -134,6 +134,7 @@ const english = {
   "about.recordsBody":
     "Record holders come from active competitions and are hydrated from confirmed builds, so a missing holder is treated as an error instead of a partial claim.",
   "common.loadMore": "Load more",
+  "common.previous": "Previous",
   "common.viewBuild": "View build",
   "common.viewRecord": "View record",
   "common.notAvailable": "Not recorded",
@@ -296,6 +297,7 @@ const chinese: Dictionary = {
   "about.recordsBody":
     "纪录保持者来自当前竞赛，并从已确认作品加载；缺少保持作品会显示错误，而不会展示不完整的结论。",
   "common.loadMore": "加载更多",
+  "common.previous": "上一页",
   "common.viewBuild": "查看作品",
   "common.viewRecord": "查看纪录",
   "common.notAvailable": "未记录",

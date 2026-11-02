@@ -29,8 +29,10 @@
 - [ ] Connect a semantic candidate provider to the cross-resource search backend.
 - [ ] Process `search_embedding_queue` items and store embeddings for projected search documents.
 - [ ] Consider dynamic `facet.<name>` filters so new projected facets do not require a field-registry code change.
-- [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, facet, RRF, and cursor behavior.
-- [ ] Add autocomplete for field names, taxonomy values, and canonical record base keys.
+- [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, and RRF behavior.
+  - Pagination and facet sorting are covered by `tests/integration/search/test_repository_pagination.py`.
+- [x] Add autocomplete for field names, taxonomy values, and canonical record base keys.
+  - See `docs/plans/autocomplete.md` for the source registry the three surfaces share.
 - [ ] Replace raw showcase qualifiers with parameterized taxonomy tags.
   - Store metric kind, value, unit, display order, and evidence.
   - Consider Pareto-frontier calculation for builds with multiple showcase metrics.
@@ -40,8 +42,18 @@
 - [ ] Persist failed computation attempts for auditing instead of only rolling back and retrying.
 - [ ] Improve co-holder history from a linear predecessor chain to an explicit set-based transition model.
 - [ ] Add moderation tooling for missing completion dates, timing evidence, volume evidence, and version support.
-- [ ] Add a friendly category selector for `/records lookup` instead of requiring a canonical base key and numeric IDs.
+- [x] Add a friendly category selector for `/records lookup` instead of requiring a canonical base key and numeric IDs.
+  - Autocomplete completes the base key, and restrictions are picked by name while still submitting IDs.
 - [ ] Add integration tests for record recomputation triggers, queue retries, advisory locking, and atomic activation.
+
+## Observability
+
+- [ ] Add a Discord command and API endpoint to retrieve a logged error by its reference/correlation ID.
+  - Currently the reference shown to users (`squid/bot/errors.py`, `squid/api/errors.py`) is only a `correlation_id()`
+    for log-grepping; nothing persists errors in a queryable store, and the Discord and API paths track separate
+    reference schemes.
+- [ ] Integrate Sentry (or wire up a real log/trace backend) instead of the current no-op `debug` exporter in
+  `deploy/otel-collector.yaml`.
 
 ## Migration and cleanup
 

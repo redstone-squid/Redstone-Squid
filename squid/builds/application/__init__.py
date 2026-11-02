@@ -11,19 +11,30 @@ from squid.builds.application.inference import (
     InferredBuild,
     InlineImage,
 )
-from squid.builds.application.queries import BuildQueryService, RestrictionSearchItem
+from squid.builds.application.queries import (
+    BUILD_SORT_FIELDS,
+    DEFAULT_BUILD_LIST_SORT,
+    BuildListSort,
+    BuildQueryService,
+    BuildSortField,
+    RestrictionSearchItem,
+)
 from squid.builds.application.restrictions import RestrictionDefinition, RestrictionService
 from squid.builds.application.services import (
     BuildService,
 )
 
 __all__ = [
+    "BUILD_SORT_FIELDS",
+    "DEFAULT_BUILD_LIST_SORT",
     "BuildEditPatch",
     "BuildEmbeddingService",
     "BuildInferenceInput",
     "BuildInferenceService",
+    "BuildListSort",
     "BuildQueryService",
     "BuildService",
+    "BuildSortField",
     "ContextMessage",
     "DoorSubmissionInput",
     "InferenceResult",

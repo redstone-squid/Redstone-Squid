@@ -62,9 +62,18 @@ describe("SearchComposer", () => {
   it("debounces abortable same-origin suggestions and supports keyboard selection", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(JSON.stringify({ suggestions: ["door", "door type"] }), {
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          source: "build_titles",
+          revision: null,
+          replacement: null,
+          items: [
+            { value: "door", label: "door", description: null, kind: "build" },
+            { value: "door type", label: "door type", description: null, kind: "build" },
+          ],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
     render(<SearchComposer locale="en" action="/search" />);
@@ -78,7 +87,7 @@ describe("SearchComposer", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     const request = fetchMock.mock.calls[0]?.[0];
     const requestUrl = request instanceof Request ? request.url : request?.toString();
-    expect(requestUrl).toContain("/api/suggest?q=do");
+    expect(requestUrl).toContain("/api/suggest/build_titles?q=do");
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "ArrowUp" });
     fireEvent.keyDown(input, { key: "ArrowDown" });
@@ -92,9 +101,17 @@ describe("SearchComposer", () => {
       "fetch",
       vi.fn<typeof fetch>().mockImplementation(() =>
         Promise.resolve(
-          new Response(JSON.stringify({ suggestions: ["tag:seamless"] }), {
-            headers: { "Content-Type": "application/json" },
-          }),
+          new Response(
+            JSON.stringify({
+              source: "search_query",
+              revision: null,
+              replacement: { start: 0, end: 2 },
+              items: [
+                { value: "tag:seamless", label: "tag:seamless", description: null, kind: "field" },
+              ],
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          ),
         ),
       ),
     );
@@ -115,6 +132,42 @@ describe("SearchComposer", () => {
     });
     fireEvent.keyDown(screen.getByLabelText("Advanced query"), { key: "Escape" });
     expect(screen.queryByRole("option", { name: "tag:seamless" })).not.toBeInTheDocument();
+  });
+
+  it("splices a completion into the span the server reported", async () => {
+    // The advanced box completes one token; without the span, picking a field name would discard
+    // everything else the user had already typed.
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            source: "search_query",
+            revision: null,
+            replacement: { start: 10, end: 13 },
+            items: [
+              { value: "restriction:", label: "restriction:", description: "text", kind: "field" },
+            ],
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    render(
+      <SearchComposer
+        locale="en"
+        action="/search"
+        initialMode="advanced"
+        initialQuery="kind:door res"
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+      await Promise.resolve();
+    });
+    act(() => screen.getByRole("option", { name: /restriction:/ }).click());
+    expect(screen.getByLabelText("Advanced query")).toHaveValue("kind:door restriction:");
   });
 
   it("ignores aborted suggestion requests", async () => {

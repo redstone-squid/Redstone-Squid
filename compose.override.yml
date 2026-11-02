@@ -1,0 +1,45 @@
+# Local development conveniences.
+#
+# Compose auto-loads this file for a bare `docker compose up`, but skips it when
+# files are named explicitly with -f -- which is how deploy/compose.production.yml
+# is applied. Production therefore keeps running migrations as a deliberate
+# one-shot step before the long-running containers are replaced.
+services:
+  # Locally there is no separate deploy step, so bring the schema to head on the
+  # way up and let the app services wait for it to exit cleanly.
+  migrate:
+    build:
+      context: .
+      args:
+        WITH_OBSERVABILITY: ${WITH_OBSERVABILITY:-1}
+    container_name: redstone-squid-migrate
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    env_file:
+      - ${SQUID_ENV_FILE:-.env}
+    environment:
+      SQUID_STRICT_UNKNOWN_KEYS: ${SQUID_STRICT_UNKNOWN_KEYS:-true}
+      SQUID_STORAGE_LOCAL_DIRECTORY: ${SQUID_STORAGE_LOCAL_DIRECTORY:-/var/lib/app/objects}
+    volumes:
+      - ./logs:/var/log/app
+      - squid-objects:/var/lib/app/objects
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # These merge with the base depends_on rather than replacing it, so the
+  # db health gate from compose.yml still applies.
+  api:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  bot:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

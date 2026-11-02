@@ -33,6 +33,7 @@ from squid.permissions.application import (
     PermissionService,
 )
 from squid.permissions.application.epoch import POLL_INTERVAL_SECONDS as PERMISSION_POLL_INTERVAL_SECONDS
+from squid.posts.application import PostService
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.search.application import SearchEmbeddingService, SearchService
@@ -44,6 +45,7 @@ from squid.submissions.application import (
     SubmissionFinalizationWorker,
     SubmissionFormService,
 )
+from squid.suggestions.application import SuggestionService
 from squid.sync import DiscordSyncService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
@@ -76,6 +78,7 @@ class ApiServices:
     submission_forms: SubmissionFormService
     submission_drafts: SubmissionDraftService
     submission_finalization: SubmissionFinalizationService
+    suggestions: SuggestionService
     media_jobs: MediaNormalizationJobService | None
     minecraft_installations: InstallationCredentialService | None
     minecraft_player_authorization: PlayerAuthorizationService | None
@@ -94,6 +97,7 @@ class BotServices:
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
+    posts: PostService
     permissions: PermissionService
     permission_admin: PermissionAdministrationService
     permission_epoch: PermissionEpochWatcher
@@ -104,6 +108,7 @@ class BotServices:
     tags: TagService
     settings: SettingsService
     starboards: StarboardService
+    suggestions: SuggestionService
     accounts: AccountService
     versions: VersionService
     votes: VoteService
@@ -168,7 +173,7 @@ class ApplicationRuntime[ServicesT]:
 
 
 def start_permission_epoch_watch(
-    supervisor: "BackgroundTaskSupervisor",
+    supervisor: BackgroundTaskSupervisor,
     watcher: PermissionEpochWatcher,
 ) -> None:
     """Start one process's permission-cache invalidation jobs.

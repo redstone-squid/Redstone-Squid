@@ -88,6 +88,22 @@ OPERATIONS = (
     _operation("get", "/v1/users/me", "account_get", "browser-only"),
     _operation("post", "/v1/users/me/consent", "account_consent_grant", "browser-only"),
     _operation("get", "/v1/users/me/builds", "account_builds_list", "browser-only"),
+    # A CLI command rather than browser-only: a rename is noticed in game, and the caller
+    # reaching for this is as likely to be holding a CLI device credential as a browser session.
+    _operation(
+        "post",
+        "/v1/users/me/minecraft/refresh",
+        "account_minecraft_refresh",
+        "command",
+        command="account.refresh",
+        interaction="direct",
+    ),
+    _operation(
+        "post",
+        "/v1/accounts/{account_id}/minecraft/refresh",
+        "account_minecraft_refresh_for",
+        "browser-only",
+    ),
     _operation("get", "/v1/minecraft/auth/paper/installations", "paper_installations_list", "browser-only"),
     _operation("post", "/v1/minecraft/auth/paper/installations", "paper_installation_create", "browser-only"),
     _operation(
@@ -140,6 +156,8 @@ OPERATIONS = (
     _operation("get", "/v1/search/fields", "search_fields_list"),
     _operation("get", "/v1/search/suggest", "search_terms_suggest"),
     _operation("get", "/v1/search", "search_execute"),
+    _operation("get", "/v1/suggest", "suggestion_sources_list"),
+    _operation("get", "/v1/suggest/{source}", "suggestions_get"),
     _operation(
         "get",
         "/v1/submissions/drafts",
@@ -369,11 +387,17 @@ def _postprocess(document: dict[str, Any]) -> None:
     components["securitySchemes"] = {
         "ApiCredential": {"type": "apiKey", "in": "header", "name": "Authorization"},
         "WebSession": {"type": "apiKey", "in": "cookie", "name": "__Host-squid_session"},
-        "CsrfToken": {"type": "apiKey", "in": "header", "name": "X-CSRF-Token"},
+        "CsrfToken": {"type": "apiKey", "in": "header", "name": "CSRF-Token"},
         "DeviceSession": {"type": "http", "scheme": "bearer", "bearerFormat": "Squid CLI session"},
         "MinecraftPlayer": {"type": "http", "scheme": "bearer", "bearerFormat": "Squid player grant"},
-        "PaperInstallationId": {"type": "apiKey", "in": "header", "name": "X-Squid-Installation-ID"},
-        "PaperInstallationSecret": {"type": "apiKey", "in": "header", "name": "X-Squid-Installation-Secret"},
+        "PaperInstallationId": {"type": "apiKey", "in": "header", "name": "Squid-Installation-ID"},
+        "PaperInstallationSecret": {"type": "apiKey", "in": "header", "name": "Squid-Installation-Secret"},
+    }
+    components["headers"] = {
+        "RequestId": {
+            "description": "Correlation id for this request; an echo of a valid inbound Request-Id when supplied.",
+            "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]{8,128}$"},
+        }
     }
     for contract in OPERATIONS:
         operation = document["paths"][contract.path][contract.method]
@@ -381,6 +405,7 @@ def _postprocess(document: dict[str, Any]) -> None:
         operation["security"] = _security(contract)
         operation["x-squid-cli"] = _cli_metadata(contract)
         _install_response_links(operation, contract)
+        _install_request_id_header(operation)
         if scopes := _SCOPES.get(contract.operation_id):
             operation["x-required-api-scopes"] = list(scopes)
 
@@ -428,6 +453,12 @@ def _install_response_links(operation: dict[str, Any], contract: OperationContra
             continue
         response = operation["responses"][status_code]
         response["links"] = links
+
+
+def _install_request_id_header(operation: dict[str, Any]) -> None:
+    """Declare the Request-Id correlation header the middleware emits on every response."""
+    for response in operation["responses"].values():
+        response.setdefault("headers", {})["Request-Id"] = {"$ref": "#/components/headers/RequestId"}
 
 
 def validate_operation_manifest() -> None:

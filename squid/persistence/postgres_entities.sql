@@ -32,21 +32,6 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.get_unsent_builds(server_id_input bigint) RETURNS SETOF public.builds
-    LANGUAGE plpgsql
-    AS $$
-  begin
-    return query select *
-    from builds
-    where id not in (
-      select build_id
-      from messages
-      where server_id = server_id_input
-      )
-    and submission_status = 1;  -- accepted
-  end;
-$$;
-
 CREATE FUNCTION public.power_set_max(txt text[], max_k integer DEFAULT 8) RETURNS SETOF text[]
     LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
     AS $$
@@ -90,15 +75,6 @@ begin
   end if;
   return new;
 end;
-$$;
-
-CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
 $$;
 
 CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
@@ -204,12 +180,15 @@ BEGIN
             last_error = NULL;
 
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
-        SELECT 'build', assignment.build_id::text, 'refresh', now(), NULL, NULL, 0, NULL
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'build', assignment.build_id::text, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
         FROM public.build_tag_assignments assignment
         WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action,
+            generation = EXCLUDED.generation,
             enqueued_at = EXCLUDED.enqueued_at,
             claimed_at = NULL,
             dead_at = NULL,
@@ -300,16 +279,98 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM public.builds WHERE id = target_key) THEN RETURN NULL; END IF;
     END IF;
 
+    -- The generation is drawn from a sequence rather than counted per row. Acknowledging
+    -- a job deletes its queue row, so a per-row counter restarted at 1 on the next edit
+    -- and could name a revision below one already applied. Sequences are exempt from
+    -- rollback, which is exactly what a staleness token needs.
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
-    VALUES (target_kind, target_key::text, target_action, now(), NULL, NULL, 0, NULL)
+        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+    VALUES (
+        target_kind, target_key::text, target_action,
+        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+    )
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
+        generation = EXCLUDED.generation,
         enqueued_at = EXCLUDED.enqueued_at,
         claimed_at = NULL,
         dead_at = NULL,
         attempts = 0,
         last_error = NULL;
+
+    -- A review card embeds the build it is voting on, so a build change makes the
+    -- session's cards stale too. Their posts are keyed by session, not by build, so
+    -- the sessions have to be enqueued in their own right.
+    IF target_kind = 'build' AND target_action = 'refresh' THEN
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'vote_session', bvs.vote_session_id::text, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        FROM public.build_vote_sessions bvs
+        WHERE bvs.build_id = target_key
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET generation = EXCLUDED.generation,
+            enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL,
+            dead_at = NULL,
+            attempts = 0,
+            last_error = NULL;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE FUNCTION public.enqueue_starboard_sync() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_key text;
+BEGIN
+    IF TG_TABLE_NAME = 'starboards' THEN
+        -- A configuration change restyles or re-thresholds every entry on the board.
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        FROM public.starboard_entries e
+        WHERE e.starboard_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+        RETURN NULL;
+    END IF;
+
+    IF TG_TABLE_NAME = 'starboard_origin_messages' THEN
+        target_key := NULL;
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        FROM public.starboard_entries e
+        WHERE e.origin_message_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+        RETURN NULL;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        target_key := OLD.starboard_id || ':' || OLD.origin_message_id;
+    ELSE
+        target_key := NEW.starboard_id || ':' || NEW.origin_message_id;
+    END IF;
+    INSERT INTO public.discord_sync_queue
+        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+    VALUES (
+        'starboard_entry', target_key, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'refresh' END,
+        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+    )
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action, generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
+        claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
     RETURN NULL;
 END;
 $$;
@@ -422,53 +483,9 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.bump_discord_sync_generation() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.generation := OLD.generation + 1;
-    RETURN NEW;
-END;
-$$;
-
-CREATE FUNCTION public.project_discord_message_desired_state() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    UPDATE public.messages
-    SET desired_action = NEW.action,
-        desired_revision = NEW.generation
-    WHERE projection_resource_kind = NEW.resource_kind
-      AND projection_source_key = NEW.source_key;
-    RETURN NULL;
-END;
-$$;
-
-CREATE FUNCTION public.initialize_discord_message_projection() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    current_generation bigint;
-BEGIN
-    IF NEW.projection_resource_kind IS NULL OR NEW.projection_source_key IS NULL THEN
-        RETURN NEW;
-    END IF;
-    SELECT generation INTO current_generation
-    FROM public.discord_sync_queue
-    WHERE resource_kind = NEW.projection_resource_kind
-      AND source_key = NEW.projection_source_key;
-    NEW.desired_action := 'refresh';
-    NEW.desired_revision := COALESCE(current_generation, 1);
-    NEW.applied_revision := NEW.desired_revision;
-    RETURN NEW;
-END;
-$$;
-
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
 
 CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
-
-CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
@@ -522,11 +539,11 @@ CREATE TRIGGER vote_sessions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDA
 
 CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
-CREATE TRIGGER discord_sync_queue_bump_generation BEFORE UPDATE OF enqueued_at ON public.discord_sync_queue FOR EACH ROW WHEN (OLD.enqueued_at IS DISTINCT FROM NEW.enqueued_at) EXECUTE FUNCTION public.bump_discord_sync_generation();
+CREATE TRIGGER starboard_entries_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE OF score ON public.starboard_entries FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
 
-CREATE TRIGGER discord_sync_queue_project_desired_state AFTER INSERT OR UPDATE OF generation, action ON public.discord_sync_queue FOR EACH ROW EXECUTE FUNCTION public.project_discord_message_desired_state();
+CREATE TRIGGER starboards_enqueue_discord_sync AFTER UPDATE ON public.starboards FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
 
-CREATE TRIGGER messages_initialize_discord_projection BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.initialize_discord_message_projection();
+CREATE TRIGGER starboard_origin_messages_enqueue_discord_sync AFTER UPDATE OF deleted_at ON public.starboard_origin_messages FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
 
 CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 

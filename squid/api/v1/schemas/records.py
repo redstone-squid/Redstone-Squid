@@ -27,7 +27,7 @@ class RecordSummary(BaseModel):
     computed_at: datetime
 
     @classmethod
-    def from_domain(cls, record: ActiveRecord) -> "RecordSummary":
+    def from_domain(cls, record: ActiveRecord) -> RecordSummary:
         return cls(
             id=record.id,
             definition_id=record.definition_id,

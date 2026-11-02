@@ -63,7 +63,7 @@ class ServerProfileSchema(StrictSchema):
         )
 
     @classmethod
-    def from_domain(cls, profile: PublicServerProfile) -> "ServerProfileSchema":
+    def from_domain(cls, profile: PublicServerProfile) -> ServerProfileSchema:
         return cls(
             enabled=profile.enabled,
             display_name=profile.display_name,
@@ -100,7 +100,7 @@ class InstallationResponse(StrictSchema):
     revoked_at: datetime | None
 
     @classmethod
-    def from_domain(cls, installation: PaperInstallation) -> "InstallationResponse":
+    def from_domain(cls, installation: PaperInstallation) -> InstallationResponse:
         return cls(
             id=installation.id,
             label=installation.label,
@@ -125,7 +125,7 @@ class IssuedInstallationResponse(StrictSchema):
     secret: str
 
     @classmethod
-    def from_domain(cls, issued: IssuedInstallationCredential) -> "IssuedInstallationResponse":
+    def from_domain(cls, issued: IssuedInstallationCredential) -> IssuedInstallationResponse:
         parsed = MinecraftSecretCodec.parse_installation_token(issued.token)
         if parsed is None or parsed[0] != issued.installation.id:
             msg = "Issued installation credential did not match its installation."
@@ -166,7 +166,7 @@ class ChallengeCreateResponse(StrictSchema):
         challenge: IssuedPlayerChallenge,
         *,
         verification_uri: AnyHttpUrl,
-    ) -> "ChallengeCreateResponse":
+    ) -> ChallengeCreateResponse:
         separator = "&" if verification_uri.query else "?"
         return cls(
             id=challenge.id,
@@ -209,7 +209,7 @@ class ChallengeApprovalResponse(StrictSchema):
     approved_at: datetime
 
     @classmethod
-    def from_domain(cls, challenge: PlayerAuthorizationChallenge) -> "ChallengeApprovalResponse":
+    def from_domain(cls, challenge: PlayerAuthorizationChallenge) -> ChallengeApprovalResponse:
         if challenge.approved_at is None:
             msg = "Approved challenge response requires an approval timestamp."
             raise ValueError(msg)
@@ -232,7 +232,7 @@ class IssuedPlayerGrantResponse(StrictSchema):
     expires_at: datetime
 
     @classmethod
-    def from_domain(cls, issued: IssuedPlayerGrant) -> "IssuedPlayerGrantResponse":
+    def from_domain(cls, issued: IssuedPlayerGrant) -> IssuedPlayerGrantResponse:
         return cls(
             grant_id=issued.grant.id,
             token=issued.token,

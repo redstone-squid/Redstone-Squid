@@ -5,7 +5,7 @@ from typing import Protocol
 
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.notifications import NotificationService
-from squid.voting.domain import VoteSessionSnapshot
+from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
 
 logger = logging.getLogger(__name__)
 CORE_CONSUMER = "core"
@@ -46,15 +46,12 @@ class ApplyBuildVoteOutcomeHandler:
 
     async def handle(self, event: DomainEvent) -> None:
         snapshot = await self._votes.get_session_by_id(event.aggregate_id)
-        if snapshot is None or snapshot.kind != "build" or snapshot.status != "closed":
+        if snapshot is None or snapshot.is_open or not isinstance(snapshot.target, BuildVoteTarget):
             return
-        build_id = snapshot.target.build_id
-        if build_id is None:
-            return
-        if snapshot.result == "approved":
-            await self._builds.confirm(build_id)
-        elif snapshot.result == "denied":
-            await self._builds.deny(build_id)
+        if snapshot.result is VoteSessionResult.APPROVED:
+            await self._builds.confirm(snapshot.target.build_id)
+        elif snapshot.result is VoteSessionResult.DENIED:
+            await self._builds.deny(snapshot.target.build_id)
 
 
 class MaterializeNotificationHandler:

@@ -181,6 +181,6 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     bot.add_dynamic_items(DynamicRemoveOwnRedstonerRoleButton)
     await bot.add_cog(GiveRedstoner(bot))

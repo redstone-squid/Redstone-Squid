@@ -26,9 +26,9 @@ const notFound = error.status === 404;
       }
     </p>
     {
-      error.problem?.error_id && (
+      error.requestId && (
         <p class="error-code">
-          {translate(locale, "error.reference", { id: error.problem.error_id })}
+          {translate(locale, "error.reference", { id: error.requestId })}
         </p>
       )
     }

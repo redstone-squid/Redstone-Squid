@@ -4,7 +4,7 @@ import sys
 from enum import Enum
 from typing import override
 
-_registry: dict[str, "Sentinel"] = {}
+_registry: dict[str, Sentinel] = {}
 
 
 class Sentinel:
@@ -20,7 +20,7 @@ class Sentinel:
         if module_name is None:
             try:
                 module_name = sys._getframe(1).f_globals.get("__name__", "__main__")  # type: ignore
-            except (AttributeError, ValueError):
+            except AttributeError, ValueError:
                 module_name = __name__
             assert module_name is not None
 

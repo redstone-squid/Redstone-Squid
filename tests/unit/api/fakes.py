@@ -12,6 +12,7 @@ from squid.accounts.errors import MinecraftAccountNotFoundError
 from squid.api.app import create_api_app
 from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.config import ApiProcessConfig
+from squid.core.pagination import Page
 from squid.idempotency import PendingRequest
 from squid.media.application.jobs import StagedMediaUploadSubmission
 from squid.media.domain import MediaLimits
@@ -23,6 +24,7 @@ from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage
 from squid.submissions.application import FormOptionSet, build_submission_manifest
+from squid.suggestions.application import SuggestionRegistry, SuggestionService
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
 NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
@@ -32,7 +34,6 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
     {
         "database": {"url": "postgresql://user:password@database.example/squid"},
         "verification": {"code_pepper": "verification-pepper"},
-        "cursor": {"secret": "cursor-secret-for-tests"},
         "api": {
             "secret": TEST_SYNERGY_SECRET,
             "key_pepper": "api-key-pepper-for-tests",
@@ -90,6 +91,14 @@ class MockCliAuthorization:
         return unavailable
 
 
+_EMPTY_PAGE: Page[object] = Page(items=(), total=0, next=None, prev=None)
+"""What a paginated query returns when nothing matches.
+
+The routes hand this straight to `render_page`, so a bare `()` or `[]` here reads as an
+empty result but reaches production code as the wrong type and 500s.
+"""
+
+
 class MockBuildQueries:
     async def get(self, _build_id: int):
         return None
@@ -97,13 +106,13 @@ class MockBuildQueries:
     async def get_many(self, _build_ids: list[int]):
         return []
 
-    async def list_page(self, **_kwargs: object):
-        return []
+    async def list_page(self, **_kwargs: object) -> Page[object]:
+        return _EMPTY_PAGE
 
 
 class MockSearch:
     async def search(self, _request: object) -> SearchPage:
-        return SearchPage(hits=(), next_cursor=None, has_more=False)
+        return SearchPage(hits=(), total=0, next=None, prev=None)
 
     async def suggest(self, _query: str, *, limit: int = 5) -> tuple[str, ...]:
         return ()
@@ -183,8 +192,8 @@ class MockRecords:
     async def get(self, _result_id: int):
         return None
 
-    async def list_page(self, **_kwargs: object):
-        return ()
+    async def list_page(self, **_kwargs: object) -> Page[object]:
+        return _EMPTY_PAGE
 
 
 class MockSubmissionForms:
@@ -304,6 +313,9 @@ def build_app(
             permissions=MockPermissions(),
             permission_epoch=MockPermissionEpoch(),
             search=MockSearch(),
+            # The real service over an empty registry, not a mock: every source id is
+            # then unknown, which is the 404 the route promises rather than a 500.
+            suggestions=SuggestionService(SuggestionRegistry.of(())),
             tags=MockTags(),
             versions=MockVersions(),
             schematics=MockSchematics(),

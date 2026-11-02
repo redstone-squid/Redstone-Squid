@@ -2,9 +2,10 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, get_args
 
 from squid.builds.domain import Build, Status
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,15 +17,25 @@ class RestrictionSearchItem:
     is_alias: bool
 
 
+type BuildSortField = Literal["id", "submission_time"]
+BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__))
+"""Columns an authoritative build listing may order by; both are indexed."""
+
+
 @dataclass(frozen=True, slots=True)
 class BuildListSort:
     """Display ordering for an authoritative build listing."""
 
-    field: Literal["id", "submission_time"] = "id"
+    field: BuildSortField = "id"
     descending: bool = True
 
 
 DEFAULT_BUILD_LIST_SORT = BuildListSort()
+
+
+def _persisted_build_id(build: Build) -> int:
+    assert build.id is not None, "a listed build has always been persisted"
+    return build.id
 
 
 class BuildQueryRepository(Protocol):
@@ -104,40 +115,33 @@ class BuildQueryService:
         submitter_id: int | None = None,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
-        offset: int = 0,
-        after_id: int | None = None,
-        before_id: int | None = None,
-        limit: int = 21,
-    ) -> list[Build]:
-        """List one page of authoritative builds in display order under a visibility policy.
-
-        `after_id`/`before_id` anchor a keyset page relative to the display order and require the
-        ID sort; `offset` skips rows instead. A `before_id` page is returned in display order, so
-        an overfetched row appears at the front and must be trimmed there by the caller.
-        """
-        return await self._builds.list_page(
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+    ) -> Page[Build]:
+        """Return one page of authoritative builds in display order under a visibility policy."""
+        rows = await self._builds.list_page(
             statuses=statuses,
             submitter_id=submitter_id,
             submitter_account_id=submitter_account_id,
             sort=sort,
-            offset=offset,
-            after_id=after_id,
-            before_id=before_id,
-            limit=limit,
+            offset=selector.offset,
+            after_id=selector.after_id,
+            before_id=selector.before_id,
+            # One row past the page proves whether another page follows.
+            limit=page_size + 1,
         )
-
-    async def count(
-        self,
-        *,
-        statuses: frozenset[Status],
-        submitter_id: int | None = None,
-        submitter_account_id: int | None = None,
-    ) -> int:
-        """Count the builds visible to a listing under a visibility policy."""
-        return await self._builds.count(
+        total = await self._builds.count(
             statuses=statuses,
             submitter_id=submitter_id,
             submitter_account_id=submitter_account_id,
+        )
+        return keyset_page(
+            rows,
+            selector=selector,
+            page_size=page_size,
+            total=total,
+            keyset=sort.field == "id",
+            id_of=_persisted_build_id,
         )
 
     async def restrictions(self, query: str | None) -> list[RestrictionSearchItem]:

@@ -30,7 +30,7 @@ class RedisCredentials:
     application_password: str = field(repr=False)
 
     @classmethod
-    def generate(cls) -> "RedisCredentials":
+    def generate(cls) -> RedisCredentials:
         """Generate coordinator-owned Redis credentials independent of run identity."""
         return cls(secrets.token_urlsafe(32), secrets.token_urlsafe(32))
 

@@ -3,78 +3,59 @@
 import pytest
 
 from squid.core.errors import ValidationError
-from squid.search.application import CursorCodec, SearchQueryParser, SearchService, SearchSlice
-from squid.search.domain import (
-    BuildSearchHit,
-    CursorPosition,
-    SearchMode,
-    SearchQuery,
-    SearchRequest,
-    SearchScope,
-)
+from squid.core.pagination import PageAnchor
+from squid.search.application import SearchQueryParser, SearchService, SearchSlice
+from squid.search.domain import BuildSearchHit, SearchQuery, SearchRequest, SearchScope
 
 
 class FakeSearchBackend:
-    def __init__(self) -> None:
-        self.calls: list[tuple[SearchRequest, SearchQuery, CursorPosition | None]] = []
+    def __init__(self, total: int = 25) -> None:
+        self.calls: list[tuple[SearchRequest, SearchQuery, int]] = []
         self.suggestions: tuple[str, ...] = ("door",)
+        self.total = total
 
-    async def search(
-        self,
-        request: SearchRequest,
-        query: SearchQuery,
-        cursor: CursorPosition | None,
-    ) -> SearchSlice:
-        self.calls.append((request, query, cursor))
+    async def search(self, request: SearchRequest, query: SearchQuery, *, offset: int) -> SearchSlice:
+        self.calls.append((request, query, offset))
         hit = BuildSearchHit("1", "Door", "confirmed", score=0.5)
-        position = CursorPosition(
-            CursorCodec.request_hash(request),
-            request.scope,
-            request.mode,
-            0.5,
-            "build",
-            "1",
-        )
-        return SearchSlice((hit,), has_more=True, last_position=position, warnings=("degraded",))
+        return SearchSlice((hit,), self.total, warnings=("degraded",))
 
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]:
         return self.suggestions[:limit]
 
 
-async def test_service_parses_query_and_encodes_backend_position(codec: CursorCodec) -> None:
+async def test_service_parses_query_and_reports_the_backend_total() -> None:
     backend = FakeSearchBackend()
-    service = SearchService(backend, SearchQueryParser(), codec)
-    request = SearchRequest("status:confirmed door", scope=SearchScope.BUILDS)
+    service = SearchService(backend, SearchQueryParser())
 
-    page = await service.search(request)
+    page = await service.search(SearchRequest("status:confirmed door", scope=SearchScope.BUILDS, page_size=5))
 
     assert page.hits[0].resource_kind == "build"
-    assert page.has_more
+    assert page.total == 25
     assert page.warnings == ("degraded",)
-    assert page.next_cursor is not None
-    assert codec.decode(page.next_cursor, request=request).source_id == "1"
     assert backend.calls[0][1].normalized == "status:confirmed AND door"
+    assert backend.calls[0][2] == 0
 
 
-async def test_service_validates_and_passes_existing_cursor(codec: CursorCodec) -> None:
-    backend = FakeSearchBackend()
-    service = SearchService(backend, SearchQueryParser(), codec)
-    original = SearchRequest("door", scope=SearchScope.ALL, mode=SearchMode.SEMANTIC)
-    position = CursorPosition(codec.request_hash(original), original.scope, original.mode, 0.5, "build", "1")
-    request = SearchRequest(
-        original.query,
-        scope=original.scope,
-        mode=original.mode,
-        cursor=codec.encode(position),
-    )
+async def test_service_addresses_neighbouring_pages_by_offset() -> None:
+    service = SearchService(FakeSearchBackend(), SearchQueryParser())
 
-    await service.search(request)
+    page = await service.search(SearchRequest("door", page_size=5, offset=10))
 
-    assert backend.calls[0][2] == position
+    assert (page.prev, page.next) == (PageAnchor(offset=5), PageAnchor(offset=15))
 
 
-async def test_service_delegates_suggestions_and_bounds_limit(codec: CursorCodec) -> None:
-    service = SearchService(FakeSearchBackend(), SearchQueryParser(), codec)
+async def test_service_stops_paging_at_the_end_of_the_results() -> None:
+    service = SearchService(FakeSearchBackend(total=12), SearchQueryParser())
+
+    first = await service.search(SearchRequest("door", page_size=5))
+    last = await service.search(SearchRequest("door", page_size=5, offset=10))
+
+    assert (first.prev, first.next) == (None, PageAnchor(offset=5))
+    assert (last.prev, last.next) == (PageAnchor(offset=5), None)
+
+
+async def test_service_delegates_suggestions_and_bounds_limit() -> None:
+    service = SearchService(FakeSearchBackend(), SearchQueryParser())
 
     assert await service.suggest("dor", limit=1) == ("door",)
 

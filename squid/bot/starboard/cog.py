@@ -1,6 +1,5 @@
 """Discord listeners and configuration commands for starboards."""
 
-import asyncio
 import contextlib
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Literal, override
@@ -11,12 +10,11 @@ from discord.ext import commands
 from discord.ext.commands import Context, guild_only, hybrid_group
 from whenever import Instant
 
-from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
-from squid.bot.starboard.render import starboard_layout
-from squid.bot.utils.components import edit_layout, no_mentions, text_layout
+from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
@@ -28,9 +26,14 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
+from squid.posts.domain import starboard_entry_key
 from squid.reactions.domain import ReactionActor
-from squid.starboard.application import EntryPlan
-from squid.starboard.domain import EntryAction, OriginMessage, StarboardConfig, StarboardEmoji
+from squid.starboard.domain import (
+    EDITABLE_SETTINGS,
+    OriginMessage,
+    StarboardConfig,
+    StarboardEmoji,
+)
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -85,7 +88,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         if result.remove_reaction:
             with contextlib.suppress(discord.NotFound, discord.Forbidden):
                 await message.remove_reaction(payload.emoji, member)
-        self._schedule(result.plans)
+        self._schedule(result.keys)
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
         payload = event.payload
@@ -101,92 +104,25 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent) -> None:
-        plans = await self.service.refresh(payload.message_id, force=True)
-        self._schedule((plan for plan in plans if plan.config.link_edits), force=True)
+        self._schedule(await self.service.refresh(payload.message_id, force=True), force=True)
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
-        deleted_post = await self.service.reset_deleted_post(payload.message_id)
-        if deleted_post is not None:
-            self._debouncer.schedule(deleted_post, force=True)
+        # A deleted *post* is tombstoned by the shared message listener and repaired by
+        # the reconciler, so only the origin's disappearance is starboard business.
         self._schedule(await self.service.mark_origin_deleted(payload.message_id), force=True)
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
         await self.service.disable_channel(channel.id)
 
-    def _schedule(self, plans: Iterable[EntryPlan], *, force: bool = False) -> None:
-        for plan in plans:
-            self._debouncer.schedule((plan.config.id, plan.origin.id), force=force)
-
-    async def _refresh_key(self, key: EntryKey, force: bool) -> None:
-        starboard_id, origin_message_id = key
-        plans = await self.service.refresh(origin_message_id, force=force)
-        plan = next((item for item in plans if item.config.id == starboard_id), None)
-        if plan is not None:
-            await self._execute(plan)
-
-    async def _execute(self, plan: EntryPlan) -> None:
-        if plan.action is EntryAction.NOOP:
-            return
-        if plan.action is EntryAction.REMOVE:
-            if plan.entry.posted_message_id is not None and plan.entry.posted_channel_id is not None:
-                posted = await self._message(plan.entry.posted_channel_id, plan.entry.posted_message_id)
-                if posted is not None:
-                    with contextlib.suppress(discord.NotFound):
-                        await posted.delete()
-            await self.service.mark_removed(plan)
-            return
-        destination = await self._channel(plan.config.channel_id)
-        origin = await self._message(plan.origin.channel_id, plan.origin.id)
-        if destination is None or origin is None or self._unsafe_nsfw(origin.channel, destination):
-            return
-        mentions = (
-            discord.AllowedMentions(everyone=False, roles=False, users=(origin.author,), replied_user=False)
-            if plan.config.ping_author
-            else no_mentions()
-        )
-        locale = await resolve_locale(origin, self.bot.services.settings)
-        if plan.action is EntryAction.SEND:
-            posted = await destination.send(
-                view=starboard_layout(plan, origin, locale=locale), allowed_mentions=mentions
-            )
-            await self.service.mark_posted(plan, posted.id, destination.id)
-            await self._autoreact(posted, plan)
-            return
-        if plan.entry.posted_message_id is None or plan.entry.posted_channel_id is None:
-            return
-        posted = await self._message(plan.entry.posted_channel_id, plan.entry.posted_message_id)
-        if posted is None:
-            await self.service.mark_removed(plan)
-            self._debouncer.schedule((plan.config.id, plan.origin.id), force=True)
-            return
-        await edit_layout(posted, starboard_layout(plan, origin, locale=locale), allowed_mentions=mentions)
-        await self.service.mark_rendered(plan)
-
-    async def _autoreact(self, message: discord.Message, plan: EntryPlan) -> None:
-        for item in plan.config.emojis:
-            enabled = plan.config.autoreact_upvote if item.direction == "up" else plan.config.autoreact_downvote
-            if enabled:
-                with contextlib.suppress(discord.Forbidden):
-                    await message.add_reaction(item.emoji)
-                await asyncio.sleep(0)
-
-    async def _channel(self, channel_id: int) -> GuildMessageable | None:
-        channel = await self.bot.get_or_fetch_messageable_channel(channel_id)
-        return channel if isinstance(channel, GuildMessageable) else None
-
-    async def _message(self, channel_id: int, message_id: int) -> discord.Message | None:
-        return await self.bot.get_or_fetch_message(channel_id, message_id, untrack_if_missing=False)
-
-    @staticmethod
-    def _unsafe_nsfw(source: discord.abc.Messageable, destination: GuildMessageable) -> bool:
-        source_nsfw = bool(getattr(source, "is_nsfw", lambda: False)())
-        destination_nsfw = bool(getattr(destination, "is_nsfw", lambda: False)())
-        return source_nsfw and not destination_nsfw
+    def _schedule(self, keys: Iterable[EntryKey], *, force: bool = False) -> None:
+        for key in keys:
+            self._debouncer.schedule(key, force=force)
 
     @staticmethod
     def _origin(message: discord.Message) -> OriginMessage:
+        """Read the source-message facts starboard policy is decided from."""
         assert message.guild is not None
         channel_nsfw = bool(getattr(message.channel, "is_nsfw", lambda: False)())
         has_image = any((item.content_type or "").startswith("image/") for item in message.attachments) or any(
@@ -202,6 +138,17 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             is_nsfw=channel_nsfw,
             has_image=has_image,
         )
+
+    async def _refresh_key(self, key: EntryKey, force: bool) -> None:
+        """Nudge the reconciler for one entry.
+
+        The debouncer exists for latency, not correctness: the score write already
+        enqueued durable work, so a dropped nudge costs a few seconds rather than a
+        missing post. Coalescing reaction storms is what it is actually for.
+        """
+        del force
+        starboard_id, origin_message_id = key
+        await self.bot.refresh_posts("starboard_entry", starboard_entry_key(starboard_id, origin_message_id))
 
     @hybrid_group(name="starboard")
     @guild_only()
@@ -224,6 +171,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             ctx, _("Created starboard **{name}** in {channel}."), name=config.name, channel=channel.mention
         )
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @starboard_group.command(name="delete")
     @requires(STARBOARD_BOARD_DELETE)
     async def delete_starboard(self, ctx: Context[BotT], name: str) -> None:
@@ -239,6 +187,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         lines = [f"**{item.name}** · <#{item.channel_id}> · {item.required:g}" for item in configs]
         await self._reply(ctx, "\n".join(lines) or _("No starboards are configured."))
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @starboard_group.command(name="show")
     @requires(STARBOARD_BOARD_VIEW)
     async def show_starboard(self, ctx: Context[BotT], name: str) -> None:
@@ -258,6 +207,10 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             emojis=emojis,
         )
 
+    @autocompletes(
+        name=suggests("starboard_names", context=guild_context),
+        setting="starboard_settings",
+    )
     @starboard_group.command(name="edit")
     @requires(STARBOARD_BOARD_EDIT)
     async def edit_starboard(self, ctx: Context[BotT], name: str, setting: str, value: str) -> None:
@@ -276,6 +229,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Configure starboard reaction aliases."""
         await ctx.send_help("starboard emoji")
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @emoji_group.command(name="add")
     @requires(STARBOARD_EMOJI_EDIT)
     async def emoji_add(
@@ -296,6 +250,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         await self.service.set_emojis(config, aliases)
         await self._reply(ctx, _("Starboard emoji added."))
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @emoji_group.command(name="remove")
     @requires(STARBOARD_EMOJI_EDIT)
     async def emoji_remove(self, ctx: Context[BotT], name: str, emoji: str) -> None:
@@ -305,6 +260,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         await self.service.set_emojis(config, tuple(item for item in config.emojis if item.emoji != emoji))
         await self._reply(ctx, _("Starboard emoji removed."))
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @emoji_group.command(name="list")
     @requires(STARBOARD_BOARD_VIEW)
     async def emoji_list(self, ctx: Context[BotT], name: str) -> None:
@@ -320,6 +276,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Configure role multipliers."""
         await ctx.send_help("starboard weight")
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @weight_group.command(name="set")
     @requires(STARBOARD_WEIGHT_EDIT)
     async def weight_set(self, ctx: Context[BotT], name: str, role: discord.Role, multiplier: float) -> None:
@@ -328,6 +285,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             await self.service.set_role_multiplier(config, role.id, multiplier)
             await self._reply(ctx, _("Starboard role weight updated."))
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @weight_group.command(name="remove")
     @requires(STARBOARD_WEIGHT_EDIT)
     async def weight_remove(self, ctx: Context[BotT], name: str, role: discord.Role) -> None:
@@ -336,6 +294,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             await self.service.set_role_multiplier(config, role.id, None)
             await self._reply(ctx, _("Starboard role weight removed."))
 
+    @autocompletes(name=suggests("starboard_names", context=guild_context))
     @weight_group.command(name="list")
     @requires(STARBOARD_BOARD_VIEW)
     async def weight_list(self, ctx: Context[BotT], name: str) -> None:
@@ -379,36 +338,23 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @staticmethod
     def _parse_setting(setting: str, value: str) -> object:
-        booleans = {
-            "enabled",
-            "self_vote",
-            "allow_bots",
-            "require_image",
-            "autoreact_upvote",
-            "autoreact_downvote",
-            "remove_invalid_reactions",
-            "link_edits",
-            "link_deletes",
-            "jump_to_message",
-            "attachments_list",
-            "replied_to",
-            "ping_author",
-        }
-        if setting in booleans:
-            normalized = value.lower()
-            if normalized not in {"true", "false", "on", "off", "yes", "no"}:
-                msg = "Boolean settings accept true or false."
+        match EDITABLE_SETTINGS.get(setting):
+            case "boolean":
+                normalized = value.lower()
+                if normalized not in {"true", "false", "on", "off", "yes", "no"}:
+                    msg = "Boolean settings accept true or false."
+                    raise ValueError(msg)
+                return normalized in {"true", "on", "yes"}
+            case "threshold":
+                return float(value)
+            case "integer":
+                return int(value, 0)
+            case "text":
+                return value
+            case _:
+                msg = f"Unknown starboard setting: {setting}"
                 raise ValueError(msg)
-            return normalized in {"true", "on", "yes"}
-        if setting in {"required", "required_remove"}:
-            return float(value)
-        if setting in {"min_age_seconds", "max_age_seconds", "colour", "channel_id"}:
-            return int(value, 0)
-        if setting in {"name", "display_emoji"}:
-            return value
-        msg = f"Unknown starboard setting: {setting}"
-        raise ValueError(msg)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     await bot.add_cog(StarboardCog(bot))

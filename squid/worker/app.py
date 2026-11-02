@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from whenever import Instant
 
 from squid.bootstrap import create_worker_runtime
-from squid.config import WorkerConfig, WorkerProcessConfig, load_worker_process_config
+from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability, record_histogram, trace_span
@@ -131,11 +131,6 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 300),
         )
         self._supervisor.start_periodic(
-            self._maintain_artifacts,
-            name="artifact-maintenance",
-            interval=maintenance_interval,
-        )
-        self._supervisor.start_periodic(
             self._cleanup_schematic_jobs,
             name="schematic-job-cleanup",
             interval=max(maintenance_interval, 300),
@@ -188,7 +183,6 @@ class DatabaseWorker:
             "record-maintenance",
             "due-votes",
             "stale-build-locks",
-            "artifact-maintenance",
             "schematic-job-cleanup",
             "media-storage-cleanup",
             "queue-health",
@@ -278,15 +272,6 @@ class DatabaseWorker:
         with trace_span("squid.worker.stale_build_locks", {"squid.surface": "background_loop"}):
             await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
 
-    async def _maintain_artifacts(self) -> None:
-        with trace_span("squid.worker.artifact_maintenance", {"squid.surface": "background_loop"}):
-            migrated, recovered = await self._services.schematics.maintain_storage()
-        if migrated or recovered:
-            logger.info(
-                "Schematic artifact maintenance completed",
-                extra={"squid.artifacts.migrated": migrated, "squid.artifacts.recovered": recovered},
-            )
-
     async def _cleanup_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": "background_loop"}):
             await self._schematic_jobs.cleanup()
@@ -316,7 +301,7 @@ class DatabaseWorker:
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
     """Run the worker until a process signal or caller-owned stop event fires."""
-    resolved_config = process_config or load_worker_process_config()
+    resolved_config = process_config or load_or_exit(load_worker_process_config)
     configure_service_worker_logging(resolved_config.logging)
     observability = configure_observability(resolved_config.observability, service_name="worker")
     stop = stop_event or asyncio.Event()

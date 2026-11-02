@@ -31,7 +31,7 @@ from squid.media.errors import MediaLimitExceededError
 from squid.submissions.application import StoredDraft
 
 _NO_STORE = "no-store"
-_MAX_UPLOAD_HEADER = "X-Squid-Max-Upload-Bytes"
+_MAX_UPLOAD_HEADER = "Squid-Max-Upload-Bytes"
 _MEDIA_TYPE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 _CONTENT_LENGTH = re.compile(r"^[1-9][0-9]*$")
 _UPLOAD_QUERY_NAMES = frozenset({"strip_audio", "upload_id"})

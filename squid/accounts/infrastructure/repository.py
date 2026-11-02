@@ -21,13 +21,15 @@ from squid.accounts.domain import (
     CreatorAlias,
     CreatorProfile,
     IdentityProvider,
-    normalize_ign,
+    IdentityRefresh,
+    fold_creator_name,
 )
 from squid.accounts.errors import (
     AccountNotFoundError,
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
     CreatorAliasNotFoundError,
+    MinecraftAccountNotFoundError,
 )
 from squid.accounts.infrastructure.models import Account as AccountModel
 from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
@@ -39,6 +41,17 @@ from squid.core.errors import DataIntegrityError
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
+
+
+def _now() -> Instant:
+    """The current instant at the precision `timestamptz` actually keeps.
+
+    `Instant.now()` carries nanoseconds and the column carries microseconds, so an unfloored
+    value makes an object built from it disagree with the row it was just written to. Every
+    timestamp this module stores goes through here, so an in-memory value and its persisted
+    form are the same value.
+    """
+    return Instant.now().round("microsecond", mode="floor")
 
 
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
@@ -75,7 +88,7 @@ def _to_alias(alias: CreatorAliasModel, public_creator_id: uuid.UUID | None = No
     )
 
 
-def _to_claim(claim: CreatorAliasClaimModel, alias_name: str) -> AliasClaim:
+def _to_claim(claim: CreatorAliasClaimModel, alias_name: str, claimant: Account | None = None) -> AliasClaim:
     return AliasClaim(
         id=claim.id,
         alias_id=claim.alias_id,
@@ -85,6 +98,7 @@ def _to_claim(claim: CreatorAliasClaimModel, alias_name: str) -> AliasClaim:
         created_at=claim.created_at,
         resolved_at=claim.resolved_at,
         resolved_by_account_id=claim.resolved_by_account_id,
+        claimant=claimant,
     )
 
 
@@ -111,9 +125,10 @@ class AccountRepository:
             await session.flush()
             rows = [self._identity_model(account.id, identity) for identity in identities]
             session.add_all(rows)
+            # The flush populates `id` from RETURNING, and every other column `_to_identity`
+            # reads was set here, so the per-row refresh this used to do bought one round trip
+            # each for values already in hand.
             await session.flush()
-            for row in rows:
-                await session.refresh(row)
             return _to_account(account, sorted(rows, key=lambda row: (row.provider, row.id)))
 
     async def get_by_id(self, account_id: int) -> Account | None:
@@ -121,6 +136,22 @@ class AccountRepository:
         async with self._session_factory() as session:
             model = await session.get(AccountModel, account_id)
             return None if model is None else await self._load_account(session, model)
+
+    async def get_many(self, account_ids: Sequence[int]) -> dict[int, Account]:
+        """Return several accounts, with their identities, in two queries regardless of count.
+
+        Anything presenting a list of accounts — the staff claim queue, for one — needs this
+        rather than a `get_by_id` per row.
+        """
+        if not account_ids:
+            return {}
+        async with self._session_factory() as session:
+            models = (
+                await session.scalars(
+                    select(AccountModel).where(AccountModel.id.in_(set(account_ids))).order_by(AccountModel.id)
+                )
+            ).all()
+            return await self._load_accounts(session, models)
 
     async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         """Return the account holding one canonical provider subject."""
@@ -153,7 +184,7 @@ class AccountRepository:
                     account_id=candidate.id,
                     provider=identity.provider,
                     subject=identity.subject,
-                    verified_at=Instant.now(),
+                    verified_at=_now(),
                 )
                 .on_conflict_do_nothing(index_elements=[AccountIdentityModel.provider, AccountIdentityModel.subject])
                 .returning(AccountIdentityModel.id)
@@ -240,7 +271,7 @@ class AccountRepository:
                 await session.execute(
                     select(CreatorAliasModel, AccountModel.public_creator_id)
                     .outerjoin(AccountModel, AccountModel.id == CreatorAliasModel.account_id)
-                    .where(CreatorAliasModel.normalized_name == normalize_ign(name))
+                    .where(CreatorAliasModel.normalized_name == fold_creator_name(name))
                 )
             ).one_or_none()
             return None if row is None else _to_alias(row[0], row[1])
@@ -274,10 +305,10 @@ class AccountRepository:
             alias = await session.scalar(
                 update(CreatorAliasModel)
                 .where(
-                    CreatorAliasModel.normalized_name == normalize_ign(name),
+                    CreatorAliasModel.normalized_name == fold_creator_name(name),
                     CreatorAliasModel.account_id.is_(None),
                 )
-                .values(account_id=account_id, claimed_at=Instant.now(), claim_method=method)
+                .values(account_id=account_id, claimed_at=_now(), claim_method=method)
                 .returning(CreatorAliasModel)
             )
             public_id = await session.scalar(
@@ -289,7 +320,7 @@ class AccountRepository:
         """Open a pending alias claim, reusing an existing matching request."""
         async with self._session_factory.begin() as session:
             alias = await session.scalar(
-                select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == normalize_ign(name))
+                select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == fold_creator_name(name))
             )
             if alias is None:
                 raise CreatorAliasNotFoundError(name)
@@ -321,8 +352,13 @@ class AccountRepository:
             ).one_or_none()
             return None if row is None else _to_claim(row[0], row[1])
 
-    async def pending_claims(self) -> Sequence[AliasClaim]:
-        """List claims awaiting staff review, oldest first."""
+    async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        """List claims awaiting staff review, oldest first.
+
+        *with_claimants* loads every claimant's account in the same two extra queries no
+        matter how long the queue is, which is what presenting a claimant as anything better
+        than an internal account ID needs.
+        """
         async with self._session_factory() as session:
             rows = (
                 await session.execute(
@@ -332,10 +368,33 @@ class AccountRepository:
                     .order_by(CreatorAliasClaimModel.created_at)
                 )
             ).all()
-            return tuple(_to_claim(claim, name) for claim, name in rows)
+            claimants: dict[int, Account] = {}
+            if with_claimants and rows:
+                models = (
+                    await session.scalars(
+                        select(AccountModel)
+                        .where(AccountModel.id.in_({claim.account_id for claim, _ in rows}))
+                        .order_by(AccountModel.id)
+                    )
+                ).all()
+                claimants = await self._load_accounts(session, models)
+            return tuple(_to_claim(claim, name, claimants.get(claim.account_id)) for claim, name in rows)
 
-    async def resolve_claim(self, *, claim_id: int, status: ClaimStatus, resolved_by_account_id: int) -> AliasClaim:
-        """Approve or reject a pending claim."""
+    async def resolve_claim(
+        self,
+        *,
+        claim_id: int,
+        status: ClaimStatus,
+        resolved_by_account_id: int,
+        reassign: bool = False,
+    ) -> AliasClaim:
+        """Approve or reject a pending claim.
+
+        Approving a name that is already credited to someone else is refused unless *reassign*
+        is set. A rename into a contested name opens exactly such a claim, so staff need a way
+        to move the credit — but moving it is a deliberate act, never a side effect of routine
+        approval.
+        """
         async with self._session_factory.begin() as session:
             claim = await session.get(CreatorAliasClaimModel, claim_id, with_for_update=True)
             if claim is None or claim.status != ClaimStatus.PENDING:
@@ -344,13 +403,13 @@ class AccountRepository:
             if alias is None:
                 raise ClaimNotFoundError(claim_id)
             if status is ClaimStatus.APPROVED:
-                if alias.account_id is not None:
+                if alias.account_id is not None and not (reassign and alias.account_id != claim.account_id):
                     raise AliasAlreadyClaimedError(alias.name)
                 alias.account_id = claim.account_id
-                alias.claimed_at = Instant.now()
+                alias.claimed_at = _now()
                 alias.claim_method = ClaimMethod.STAFF_APPROVED
             claim.status = status
-            claim.resolved_at = Instant.now()
+            claim.resolved_at = _now()
             claim.resolved_by_account_id = resolved_by_account_id
             await session.flush()
             return _to_claim(claim, alias.name)
@@ -409,10 +468,9 @@ class AccountRepository:
                 session.add(discord_account)
                 await session.flush()
                 session.add(
-                    self._identity_model(
-                        discord_account.id, AccountIdentity.discord(discord_id, verified_at=Instant.now())
-                    )
+                    self._identity_model(discord_account.id, AccountIdentity.discord(discord_id, verified_at=_now()))
                 )
+            previous_name = None
             if existing_java is None:
                 session.add(
                     self._identity_model(
@@ -420,35 +478,163 @@ class AccountRepository:
                         AccountIdentity.java(
                             verification_code.minecraft_uuid,
                             username=verification_code.username,
-                            verified_at=Instant.now(),
+                            verified_at=_now(),
                         ),
                     )
                 )
             else:
+                previous_name = existing_java.display_name
                 existing_java.display_name = verification_code.username
-                existing_java.verified_at = Instant.now()
+                existing_java.verified_at = _now()
             discord_account.consent_version = consent.version
             discord_account.consented_at = consent.granted_at
             verification_code.valid = False
 
-            alias = await session.scalar(
-                update(CreatorAliasModel)
-                .where(
-                    CreatorAliasModel.normalized_name == normalize_ign(verification_code.username),
-                    CreatorAliasModel.account_id.is_(None),
-                )
-                .values(
-                    account_id=discord_account.id,
-                    claimed_at=Instant.now(),
-                    claim_method=ClaimMethod.VERIFIED_IGN,
-                )
-                .returning(CreatorAliasModel)
+            refresh = await self._reconcile_java_name(
+                session,
+                account=discord_account,
+                java_uuid=verification_code.minecraft_uuid,
+                username=verification_code.username,
+                previous_name=previous_name,
             )
             await session.flush()
             return VerificationLinkResult(
                 account=await self._load_account(session, discord_account),
-                claimed_alias=(None if alias is None else _to_alias(alias, discord_account.public_creator_id)),
+                claimed_alias=refresh.claimed_alias,
+                refresh=refresh,
             )
+
+    async def refresh_java_identity(
+        self,
+        *,
+        account_id: int,
+        java_uuid: uuid.UUID,
+        username: str,
+    ) -> IdentityRefresh:
+        """Record a freshly observed Java name and reconcile the creator credit that follows it.
+
+        Runs the same reconciliation the link path does, so a rename is handled identically
+        whether it is noticed during linking or by an explicit refresh.
+        """
+        async with self._session_factory.begin() as session:
+            account = await session.get(AccountModel, account_id, with_for_update=True)
+            if account is None:
+                raise AccountNotFoundError(account_id)
+            identity = await session.scalar(
+                select(AccountIdentityModel)
+                .where(
+                    AccountIdentityModel.account_id == account_id,
+                    AccountIdentityModel.provider == IdentityProvider.JAVA,
+                    AccountIdentityModel.subject == str(java_uuid),
+                )
+                .with_for_update()
+            )
+            if identity is None:
+                raise MinecraftAccountNotFoundError(java_uuid)
+            previous_name = identity.display_name
+            identity.display_name = username
+            identity.verified_at = _now()
+            return await self._reconcile_java_name(
+                session,
+                account=account,
+                java_uuid=java_uuid,
+                username=username,
+                previous_name=previous_name,
+            )
+
+    @staticmethod
+    async def _reconcile_java_name(
+        session: AsyncSession,
+        *,
+        account: AccountModel,
+        java_uuid: uuid.UUID,
+        username: str,
+        previous_name: str | None,
+    ) -> IdentityRefresh:
+        """Attach the verified name's creator credit, without ever taking one from someone else.
+
+        The four cases are exhaustive by design, so a rename can never fall through into
+        "nothing happened": the name is unknown, free, already ours, or someone else's. Only
+        the last needs a human, and it gets a pending claim rather than a silent no-op.
+
+        Aliases claimed under previous names are deliberately left attached. A rename does not
+        retract the credit for work published under the old name.
+        """
+        folded = fold_creator_name(username)
+        claimed: CreatorAlias | None = None
+        contested: CreatorAlias | None = None
+        opened_claim: AliasClaim | None = None
+
+        alias = await session.scalar(
+            select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == folded).with_for_update()
+        )
+        if alias is None:
+            # No build has credited this name yet. Create it so the public profile shows the
+            # current name rather than lagging until someone happens to credit it.
+            inserted = await session.scalar(
+                insert(CreatorAliasModel)
+                .values(
+                    name=username,
+                    account_id=account.id,
+                    claimed_at=_now(),
+                    claim_method=ClaimMethod.VERIFIED_IGN,
+                )
+                .on_conflict_do_nothing(index_elements=[CreatorAliasModel.normalized_name])
+                .returning(CreatorAliasModel)
+            )
+            alias = inserted or await session.scalar(
+                select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == folded).with_for_update()
+            )
+            assert alias is not None
+        if alias.account_id is None:
+            alias.account_id = account.id
+            alias.claimed_at = _now()
+            alias.claim_method = ClaimMethod.VERIFIED_IGN
+            claimed = _to_alias(alias, account.public_creator_id)
+        elif alias.account_id == account.id:
+            claimed = _to_alias(alias, account.public_creator_id)
+        else:
+            # Someone else is credited under this name. Never transfer on a rename; open a
+            # claim so it lands in the staff queue instead of vanishing.
+            contested = _to_alias(alias)
+            claim = await session.scalar(
+                insert(CreatorAliasClaimModel)
+                .values(alias_id=alias.id, account_id=account.id, status=ClaimStatus.PENDING)
+                # `creator_alias_claims_one_pending_per_account` is partial, so the predicate has
+                # to be restated here or Postgres cannot match the conflict to it.
+                .on_conflict_do_nothing(
+                    index_elements=[CreatorAliasClaimModel.alias_id, CreatorAliasClaimModel.account_id],
+                    index_where=text("status = 'pending'"),
+                )
+                .returning(CreatorAliasClaimModel)
+            )
+            claim = claim or await session.scalar(
+                select(CreatorAliasClaimModel).where(
+                    CreatorAliasClaimModel.alias_id == alias.id,
+                    CreatorAliasClaimModel.account_id == account.id,
+                    CreatorAliasClaimModel.status == ClaimStatus.PENDING,
+                )
+            )
+            opened_claim = None if claim is None else _to_claim(claim, alias.name)
+
+        await session.flush()
+        retained = (
+            await session.scalars(
+                select(CreatorAliasModel.name)
+                .where(CreatorAliasModel.account_id == account.id, CreatorAliasModel.normalized_name != folded)
+                .order_by(CreatorAliasModel.normalized_name)
+            )
+        ).all()
+        return IdentityRefresh(
+            account_id=account.id,
+            java_uuid=java_uuid,
+            current_name=username,
+            previous_name=previous_name,
+            claimed_alias=claimed,
+            retained_alias_names=tuple(retained),
+            contested_alias=contested,
+            opened_claim=opened_claim,
+        )
 
     async def replace_verification_code(
         self,
@@ -482,7 +668,7 @@ class AccountRepository:
             provider=identity.provider,
             subject=identity.subject,
             display_name=identity.display_name,
-            verified_at=identity.verified_at or Instant.now(),
+            verified_at=identity.verified_at or _now(),
         )
 
     @staticmethod
@@ -502,16 +688,33 @@ class AccountRepository:
             statement = statement.with_for_update(of=AccountModel)
         return await session.scalar(statement)
 
+    @classmethod
+    async def _load_account(cls, session: AsyncSession, account: AccountModel) -> Account:
+        loaded = await cls._load_accounts(session, [account])
+        return loaded[account.id]
+
     @staticmethod
-    async def _load_account(session: AsyncSession, account: AccountModel) -> Account:
+    async def _load_accounts(session: AsyncSession, accounts: Sequence[AccountModel]) -> dict[int, Account]:
+        """Load identities for several accounts in one query.
+
+        The mapping stays explicit — the domain objects are frozen dataclasses and must not
+        learn about SQLAlchemy — but the *fetch* does not have to be per row, which is what
+        made any multi-account read an N+1.
+        """
+        if not accounts:
+            return {}
+        account_ids = [account.id for account in accounts]
         identities = (
             await session.scalars(
                 select(AccountIdentityModel)
-                .where(AccountIdentityModel.account_id == account.id)
+                .where(AccountIdentityModel.account_id.in_(account_ids))
                 .order_by(AccountIdentityModel.provider, AccountIdentityModel.id)
             )
         ).all()
-        return _to_account(account, identities)
+        grouped: dict[int, list[AccountIdentityModel]] = {account_id: [] for account_id in account_ids}
+        for identity in identities:
+            grouped[identity.account_id].append(identity)
+        return {account.id: _to_account(account, grouped[account.id]) for account in accounts}
 
     @staticmethod
     async def _merge_references(session: AsyncSession, survivor: int, absorbed: int) -> None:
@@ -648,7 +851,7 @@ async def _canonicalize_finalization_job_owners(
             )
         ).all()
     )
-    rewritten_at = Instant.now()
+    rewritten_at = _now()
     for job in jobs:
         payload = job.payload
         if not isinstance(payload, dict):

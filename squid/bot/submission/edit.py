@@ -11,6 +11,7 @@ from discord.ext.commands import Context, flag
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
+from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import (
     DimensionsConverter,
@@ -84,25 +85,34 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         pattern: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='The pattern type of the door. For example, "full lamp" or "funnel".')
         door_type: Literal['Door', 'Skydoor', 'Trapdoor'] | MissingType = flag(default=MISSING, converter=NoneStrConverter(choices=["Door", "Skydoor", "Trapdoor"]), description='Door, Skydoor, or Trapdoor.')
         build_size: tuple[int | None, int | None, int | None] | MissingType = flag(default=MISSING, converter=DimensionsConverter, description='The dimension of the build. In width x height x depth.')
-        works_in: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
+        works_in: str | MissingType | None = flag(default=MISSING, converter=NoneStrConverter, description='Specify the versions the build works in. The format should be like "1.17 - 1.18.1, 1.20+".')
         wiring_placement_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Seamless, Full Flush". See `/info docs` for the complete list.')
         animated_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "Symmetrical, Full Sync". See `/info docs` for the complete list.')
         component_restrictions: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='For example, "No Pistons, No Slime Blocks". See `/info docs` for the complete list.')
-        extra_user_info: str | None | MissingType = flag(name="notes", converter=NoneStrConverter, default=MISSING, description='Any additional information about the build.')
-        normal_closing_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to close the door, in game ticks (20 per second).')
-        normal_opening_time: int | None | MissingType = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to open the door, in game ticks (20 per second).')
-        date_of_creation: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The date the build was created.')
+        extra_user_info: str | MissingType | None = flag(name="notes", converter=NoneStrConverter, default=MISSING, description='Any additional information about the build.')
+        normal_closing_time: int | MissingType | None = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to close the door, in game ticks (20 per second).')
+        normal_opening_time: int | MissingType | None = flag(default=MISSING, converter=GameTickConverter, description='The time it takes to open the door, in game ticks (20 per second).')
+        date_of_creation: str | MissingType | None = flag(default=MISSING, converter=NoneStrConverter, description='The date the build was created.')
         creators: list[str] | MissingType = flag(default=MISSING, converter=ListConverter, description='The in-game name of the creator(s).')
         locationality: Literal["Locational", "Locational with fixes", "Not locational"] | MissingType = flag(default=MISSING, converter=NoneStrConverter(choices=["Locational", "Locational with fixes", "Not locational"]), description='Whether the build works everywhere, or only in certain locations.')
         directionality: Literal["Directional", "Directional with fixes", "Not directional"] | MissingType = flag(default=MISSING, converter=NoneStrConverter(choices=["Directional", "Directional with fixes", "Not directional"]), description='Whether the build works in all directions, or only in certain directions.')
         image_urls: list[str] | MissingType = flag(name="image_links", default=MISSING, converter=ListConverter, description='Links to images of the build.')
         video_urls: list[str] | MissingType = flag(name="video_links", default=MISSING, converter=ListConverter, description='Links to videos of the build.')
         world_download_urls: list[str] | MissingType = flag(name="world_download_links", default=MISSING, converter=ListConverter, description='Links to download the world.')
-        server_ip: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The IP of the server where the build is located.')
-        coordinates: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The coordinates of the build in the server.')
-        command_to_get_to_build: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The command to get to the build in the server.')
+        server_ip: str | MissingType | None = flag(default=MISSING, converter=NoneStrConverter, description='The IP of the server where the build is located.')
+        coordinates: str | MissingType | None = flag(default=MISSING, converter=NoneStrConverter, description='The coordinates of the build in the server.')
+        command_to_get_to_build: str | MissingType | None = flag(default=MISSING, converter=NoneStrConverter, description='The command to get to the build in the server.')
         # fmt: on
 
+    @autocompletes(
+        build_id="builds",
+        pattern=suggests("approved_patterns", multi=True),
+        works_in="approved_source_versions",
+        wiring_placement_restrictions=suggests("approved_restrictions", multi=True),
+        animated_restrictions=suggests("approved_restrictions", multi=True),
+        component_restrictions=suggests("approved_restrictions", multi=True),
+        creators=suggests("creators", multi=True),
+    )
     @BuildCommandGroup.build_hybrid_group.command(name="edit")  # type: ignore
     @requires(BUILD_SUBMISSION_EDIT)
     async def edit_door(self, ctx: Context[BotT], *, flags: EditDoorFlags):
@@ -162,7 +172,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                 await edit.commit()
 
             await asyncio.gather(
-                self.bot.for_build(build).update_messages(),
+                self.bot.refresh_posts("build", str(build.id)),
                 edit_layout(
                     sent_message,
                     info_layout(t(locale, _("Success")), t(locale, _("Build edited successfully"))),
@@ -183,15 +193,22 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                 allowed_mentions=no_mentions(),
             )
 
-        message_record = await self.messages.get(message.id)
-        if message_record is None or message_record.build_id is None:
+        # Which build a card shows is a property of the post, not of the message: the
+        # same message row is just a fact about a Discord message.
+        post = await self.bot.services.posts.resolve(message.id)
+        if post is None or post.resource_kind != "build":
             return await interaction.followup.send(
                 view=text_layout(t(locale, _("This does not look like a build."))),
                 ephemeral=True,
                 allowed_mentions=no_mentions(),
             )
 
-        build = await self.builds.get(message_record.build_id)
-        assert build is not None
+        build = await self.builds.get(int(post.resource_key))
+        if build is None:
+            return await interaction.followup.send(
+                view=text_layout(t(locale, _("This does not look like a build."))),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
         await BuildEditView(build, self.builds).send(interaction, ephemeral=True)
         return None

@@ -83,7 +83,7 @@ def _managed_sql() -> list[TextClause]:
 
 
 @pytest.fixture(autouse=True)
-async def event_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def event_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     """Create the minimal production-shaped schema plus the managed emit entities."""
     async with async_engine.begin() as connection:
         for statement in _CREATE_SCHEMA.strip().split(";"):

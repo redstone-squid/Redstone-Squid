@@ -1,4 +1,4 @@
-"""Public tracked message application API."""
+"""Public Discord message application API."""
 
 from squid.messages.application.services import MessageService
 

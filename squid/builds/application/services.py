@@ -46,7 +46,11 @@ class BuildService:
         """Return the build previously finalized from a synchronized draft, if any."""
         return await self._repository.get_by_source_submission_draft_id(draft_id)
 
-    async def submit_door(self, submission: DoorSubmissionInput) -> Build:
+    async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
+        """Return every build inferred from one Discord message, newest bundle included."""
+        return await self._repository.list_ids_for_source_message(message_id)
+
+    async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
         build = DoorBuild(
             submitter_id=submission.submitter_id,
             ai_generated=submission.ai_generated,

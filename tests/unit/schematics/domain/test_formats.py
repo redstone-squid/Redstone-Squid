@@ -193,7 +193,7 @@ def test_the_sniffers_are_total_over_arbitrary_bytes(data: bytes) -> None:
 def test_the_inflation_budget_is_never_exceeded(data: bytes, limit: int) -> None:
     try:
         size = inflated_size_at_most(data, limit)
-    except (DecompressionBudgetExceededError, InvalidSchematicError):
+    except DecompressionBudgetExceededError, InvalidSchematicError:
         return
 
     assert size <= limit

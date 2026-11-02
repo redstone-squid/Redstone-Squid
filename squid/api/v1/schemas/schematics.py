@@ -16,7 +16,7 @@ class SchematicSize(BaseModel):
     depth: int
 
     @classmethod
-    def from_domain(cls, dimensions: SchematicDimensions) -> "SchematicSize":
+    def from_domain(cls, dimensions: SchematicDimensions) -> SchematicSize:
         return cls(width=dimensions.width, height=dimensions.height, depth=dimensions.length)
 
 
@@ -43,7 +43,7 @@ class SchematicSummary(BaseModel):
     download_url: str
 
     @classmethod
-    def from_domain(cls, schematic: StoredSchematic) -> "SchematicSummary":
+    def from_domain(cls, schematic: StoredSchematic) -> SchematicSummary:
         analysis = schematic.analysis
         metrics = analysis.metrics
         license = schematic.publication.license

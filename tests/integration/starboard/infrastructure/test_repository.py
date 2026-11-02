@@ -8,7 +8,7 @@ from whenever import Instant
 
 from squid.settings.infrastructure.models import ServerSetting
 from squid.starboard.application import PendingVote
-from squid.starboard.domain import EntryAction, OriginMessage, StarboardConfig, StarboardEmoji
+from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoji
 from squid.starboard.infrastructure.models import (
     Starboard,
     StarboardEntry,
@@ -38,7 +38,7 @@ TABLES = cast(
 
 
 @pytest.fixture(autouse=True)
-async def starboard_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def starboard_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         for table in TABLES:
             await connection.run_sync(table.create)
@@ -74,17 +74,25 @@ async def test_vote_overwrite_and_exact_emoji_withdrawal(
     )
     origin = OriginMessage(100, 10, 30, 40, author_is_bot=False, posted_at=Instant.now())
 
-    plans = await repo.record_votes(origin, 50, (PendingVote(created, "⭐", "up", 1),))
-    assert plans[0].action is EntryAction.SEND
-    assert plans[0].entry.score == 1
+    keys = await repo.record_votes(origin, 50, (PendingVote(created, "⭐", "up", 1),))
+    assert keys == [(created.id, origin.id)]
+    state = await repo.entry_state(created.id, origin.id)
+    assert state is not None
+    assert state.entry.score == 1
 
-    plans = await repo.record_votes(origin, 50, (PendingVote(created, "💩", "down", 1),))
-    assert plans[0].entry.score == -1
+    await repo.record_votes(origin, 50, (PendingVote(created, "💩", "down", 1),))
+    state = await repo.entry_state(created.id, origin.id)
+    assert state is not None
+    assert state.entry.score == -1
+
+    # Withdrawing an emoji the member did not cast changes nothing.
     assert await repo.withdraw_vote(origin.id, 50, "⭐") == ()
 
-    plans = await repo.withdraw_vote(origin.id, 50, "💩")
-    assert plans[0].entry.score == 0
-    assert plans[0].entry.raw_count == 0
+    await repo.withdraw_vote(origin.id, 50, "💩")
+    state = await repo.entry_state(created.id, origin.id)
+    assert state is not None
+    assert state.entry.score == 0
+    assert state.entry.raw_count == 0
 
 
 async def test_whole_guild_and_channel_sources_do_not_duplicate_configs(

@@ -128,7 +128,7 @@ describe("submission API transport", () => {
     await expect(createSubmissionApi("en", config).createDraft("door")).resolves.toEqual(draft);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const request = capturedRequest();
-    expect(request.headers.get("X-CSRF-Token")).toBe("csrf-token");
+    expect(request.headers.get("CSRF-Token")).toBe("csrf-token");
     expect(request.headers.get("Idempotency-Key")).toMatch(/^[0-9a-f-]{36}$/);
     await expect(request.clone().json()).resolves.toEqual({
       category: "door",
@@ -154,8 +154,8 @@ describe("submission API transport", () => {
     await api.submitDraft(draft.id);
     expect(new URL(capturedRequest(0).url).pathname).toBe("/v1/auth/csrf");
     expect(capturedRequest(0)).toMatchObject({ credentials: "include", cache: "no-store" });
-    expect(capturedRequest(1).headers.get("X-CSRF-Token")).toBe("remote-csrf-token");
-    expect(capturedRequest(2).headers.get("X-CSRF-Token")).toBe("remote-csrf-token");
+    expect(capturedRequest(1).headers.get("CSRF-Token")).toBe("remote-csrf-token");
+    expect(capturedRequest(2).headers.get("CSRF-Token")).toBe("remote-csrf-token");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -175,8 +175,8 @@ describe("submission API transport", () => {
       "/v1/auth/csrf",
       "/v1/submissions/drafts",
     ]);
-    expect(capturedRequest(1).headers.get("X-CSRF-Token")).toBe("stale-token");
-    expect(capturedRequest(3).headers.get("X-CSRF-Token")).toBe("fresh-token");
+    expect(capturedRequest(1).headers.get("CSRF-Token")).toBe("stale-token");
+    expect(capturedRequest(3).headers.get("CSRF-Token")).toBe("fresh-token");
     expect(capturedRequest(1).headers.get("Idempotency-Key")).toBe(
       capturedRequest(3).headers.get("Idempotency-Key"),
     );
@@ -300,7 +300,7 @@ describe("Minecraft user-code approval transport", () => {
     const first = capturedRequest(0);
     const second = capturedRequest(1);
     expect(new URL(first.url).pathname).toBe("/v1/minecraft/auth/challenges/approval");
-    expect(first.headers.get("X-CSRF-Token")).toBe("csrf-token");
+    expect(first.headers.get("CSRF-Token")).toBe("csrf-token");
     expect(first.headers.get("Idempotency-Key")).toBe(second.headers.get("Idempotency-Key"));
     await expect(first.clone().json()).resolves.toEqual({ user_code: "ABCD-EFGH-IJKL-MNOP" });
     expect(JSON.stringify(await second.clone().json())).not.toMatch(/device|token/i);
@@ -338,7 +338,7 @@ describe("CLI user-code approval transport", () => {
     const first = capturedRequest(1);
     const second = capturedRequest(2);
     expect(first.method).toBe("POST");
-    expect(first.headers.get("X-CSRF-Token")).toBe("csrf-token");
+    expect(first.headers.get("CSRF-Token")).toBe("csrf-token");
     expect(first.headers.get("Idempotency-Key")).toBe(second.headers.get("Idempotency-Key"));
     await expect(first.clone().json()).resolves.toEqual({ user_code: "ABCD-EFGH" });
     expect(JSON.stringify(await second.clone().json())).not.toMatch(

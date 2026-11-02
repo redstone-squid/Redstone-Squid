@@ -10,6 +10,8 @@ import com.redstonesquid.minecraft.core.auth.PendingFabricAuthorization
 import com.redstonesquid.minecraft.core.auth.PendingPaperAuthorization
 import com.redstonesquid.minecraft.core.auth.PendingPlayerAuthorization
 import com.redstonesquid.minecraft.core.auth.PlayerGrantKey
+import com.redstonesquid.minecraft.core.command.SquidSuggestion
+import com.redstonesquid.minecraft.core.command.SuggestionSlot
 import com.redstonesquid.minecraft.core.http.BackendApiException
 import com.redstonesquid.minecraft.core.http.BackendTransport
 import com.redstonesquid.minecraft.core.http.BackendTransportException
@@ -228,6 +230,49 @@ public class MinecraftSubmissionWorkflow(
 
     public fun unsetField(playerId: UUID, locale: String, fieldId: String, notify: (String) -> Unit) {
         mutateField(playerId, locale, fieldId, null, unset = true, notify)
+    }
+
+    /**
+     * Offer completions for a `/squid` argument from this player's session.
+     *
+     * Answered entirely from state already in memory — the manifest fetched when the draft was
+     * opened, and the draft's own answers. Brigadier asks for suggestions on the server thread as
+     * the player types, so this must never fetch, block, or wait on a lock held by network work.
+     *
+     * A player with no active session gets nothing, which is correct: until `/squid submit` has
+     * run there is no draft to answer fields on.
+     */
+    public fun suggestions(playerId: UUID, slot: SuggestionSlot, field: String?): List<SquidSuggestion> {
+        val session = synchronized(sessions) { sessions[playerId] } ?: return emptyList()
+        val manifest = session.manifest
+        val draft = session.draft
+        return when (slot) {
+            SuggestionSlot.SUBMIT_TARGET -> draft?.let { listOf(SquidSuggestion(it.id, it.category)) }.orEmpty()
+            SuggestionSlot.SET_FIELD -> settableFields(manifest, draft)
+            SuggestionSlot.UNSET_FIELD ->
+                // Only what the draft actually answers: unsetting anything else is a no-op.
+                draft?.answers?.keys?.map { SquidSuggestion(it) }.orEmpty()
+            SuggestionSlot.SET_VALUE -> fieldValues(manifest, draft, field)
+        }
+    }
+
+    private fun settableFields(manifest: FormManifest?, draft: StoredDraft?): List<SquidSuggestion> {
+        if (manifest == null || draft == null) return emptyList()
+        return manifest.fieldsFor(draft.category, origin.wireValue)
+            .filter { visible(it, draft.answers) }
+            .map { field ->
+                val required = if (field.required && field.id !in draft.answers) "required" else field.valueKind
+                SquidSuggestion(field.id, "${field.label} ($required)")
+            }
+    }
+
+    private fun fieldValues(manifest: FormManifest?, draft: StoredDraft?, fieldId: String?): List<SquidSuggestion> {
+        if (manifest == null || draft == null || fieldId == null) return emptyList()
+        val field = manifest.fieldsFor(draft.category, origin.wireValue).singleOrNull { it.id == fieldId }
+            ?: return emptyList()
+        // Only inline choices are offered. A dynamic `optionSource` would have to be fetched, and
+        // the tick loop is not somewhere to discover that the backend is slow.
+        return field.options.map { SquidSuggestion(it.value, it.label) }
     }
 
     override fun close() {

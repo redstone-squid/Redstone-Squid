@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
@@ -11,6 +13,7 @@ from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.utils.components import DISCORD_GREEN, edit_interaction_layout, no_mentions
 from squid.core.i18n import _
+from squid.core.pagination import PageAnchor
 from squid.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
 
 if TYPE_CHECKING:
@@ -18,7 +21,7 @@ if TYPE_CHECKING:
 
 
 class SearchResultsView(ExpiringLayoutView):
-    """A message-bound cursor paginator with inline result details."""
+    """A message-bound offset paginator with inline result details."""
 
     def __init__(
         self,
@@ -35,7 +38,6 @@ class SearchResultsView(ExpiringLayoutView):
         self._page = page
         self._author_id = author_id
         self.locale = locale
-        self._cursor_history: list[str | None] = [request.cursor]
         self.render_results()
 
     @override
@@ -56,12 +58,12 @@ class SearchResultsView(ExpiringLayoutView):
         if not lines:
             lines.append(t(self.locale, _("No results match this query.")))
         warning = "\n".join(f"-# ⚠ {escape_markdown(item)}" for item in self._page.warnings)
-        page_number = len(self._cursor_history)
         body = t(
             self.locale,
-            _("## Search results\n{lines}\n-# Page {page}"),
+            _("## Search results\n{lines}\n-# Page {page} of {pages}"),
             lines=" ".join(lines),
-            page=page_number,
+            page=self._request.offset // self._request.page_size + 1,
+            pages=max(1, math.ceil(self._page.total / self._request.page_size)),
         )
         if warning:
             body += f"\n{warning}"
@@ -104,44 +106,29 @@ class SearchResultsView(ExpiringLayoutView):
 
     @property
     def can_go_back(self) -> bool:
-        """Return whether a previous cursor is available."""
-        return len(self._cursor_history) > 1
+        """Return whether an earlier page exists."""
+        return self._page.prev is not None
 
     @property
     def can_go_forward(self) -> bool:
-        """Return whether a next cursor is available."""
-        return self._page.next_cursor is not None
+        """Return whether a later page exists."""
+        return self._page.next is not None
 
     async def next_page(self) -> None:
-        """Fetch and render the next cursor page."""
-        if self._page.next_cursor is None:
-            return
-        self._cursor_history.append(self._page.next_cursor)
-        self._request = SearchRequest(
-            self._request.query,
-            self._request.scope,
-            self._request.mode,
-            self._request.page_size,
-            self._page.next_cursor,
-            self._request.sort,
-        )
-        self._page = await self._service.search(self._request)
-        self.render_results()
+        """Fetch and render the following page."""
+        await self._go_to(self._page.next)
 
     async def previous_page(self) -> None:
-        """Fetch and render the previous cursor page."""
-        if len(self._cursor_history) == 1:
+        """Fetch and render the preceding page."""
+        await self._go_to(self._page.prev)
+
+    async def _go_to(self, anchor: PageAnchor | None) -> None:
+        if anchor is None or anchor.offset is None:
             return
-        self._cursor_history.pop()
-        cursor = self._cursor_history[-1]
-        self._request = SearchRequest(
-            self._request.query,
-            self._request.scope,
-            self._request.mode,
-            self._request.page_size,
-            cursor,
-            self._request.sort,
-        )
+        offset = anchor.offset
+        # `replace` rather than positional reconstruction: the visibility policy and every other
+        # field the caller set have to survive paging.
+        self._request = replace(self._request, offset=offset)
         self._page = await self._service.search(self._request)
         self.render_results()
 
