@@ -14,6 +14,7 @@ Uses Python 3.14+ and discord.py.
   not familiar with the codebase. Examples may help for extremely complicated situations. Use comments to explain non-obvious decisions.
 - Pyrefly is the local type checker; BasedPyright also runs in CI. Keep existing `# pyright: ignore[...]`
   comments. Use `# type: ignore` or `# pyrefly: ignore` for new suppressions unless specific to BasedPyright.
+- don't use local imports unless you have a very good reason
 
 ## Concurrency
 
@@ -32,6 +33,10 @@ Uses Python 3.14+ and discord.py.
 - Use concise, imperative, component-scoped subjects, e.g. `builds: parse tick units in time strings`.
   For non-trivial changes, add a wrapped body explaining the problem, solution, and relevant testing or tradeoffs.
 - There is generally no need to mention how many tests you ran in the commit message.
+
+## Documentation
+
+We have littered too much into documentations. Try to write clear understandable English for engineers.
 
 ## Validation
 
