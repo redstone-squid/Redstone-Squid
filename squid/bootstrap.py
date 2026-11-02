@@ -49,7 +49,6 @@ from squid.media.domain import MediaLimits
 from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits
 from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.messages.application import MessageService
-from squid.messages.infrastructure.repository import MessageRepository
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.minecraft_auth.infrastructure import PostgresMinecraftAuthorizationRepository
@@ -754,7 +753,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_inference=graph.submission_inference,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
-        messages=MessageService(MessageRepository(db.async_session)),
+        messages=MessageService(uow_factory=partial(SqlAlchemyUnitOfWork, db.async_session)),
         posts=PostService(PostRepository(db.async_session)),
         permissions=graph.permissions,
         permission_admin=graph.permission_admin,

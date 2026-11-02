@@ -2,9 +2,9 @@
 
 from whenever import Instant
 
-from squid.messages.application.ports import MessageRepository
 from squid.messages.domain import MessageFact
 from squid.messages.models import MessageRecord
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 class MessageService:
@@ -15,8 +15,8 @@ class MessageService:
     the ones a build was inferred from — rather than by a purpose stored on the row.
     """
 
-    def __init__(self, repository: MessageRepository):
-        self._repository = repository
+    def __init__(self, *, uow_factory: UnitOfWorkFactory) -> None:
+        self._uow_factory = uow_factory
 
     async def observe(self, fact: MessageFact) -> None:
         """Record a Discord message as a fact, refreshing it if already known.
@@ -24,7 +24,9 @@ class MessageService:
         Idempotent by design: the same message legitimately arrives from several
         directions, and each is recording the same row rather than competing for it.
         """
-        await self._repository.upsert_fact(fact)
+        async with self._uow_factory() as uow:
+            await uow.messages.upsert_fact(fact)
+            await uow.commit()
 
     async def record_edit(self, message_id: int, content: str | None) -> bool:
         """Refresh stored content after Discord reports an edit.
@@ -32,14 +34,21 @@ class MessageService:
         Returns whether a stored message matched; most edits are to messages the
         bot has no reason to know about.
         """
-        return await self._repository.record_edit(message_id, content, Instant.now())
+        async with self._uow_factory() as uow:
+            changed = await uow.messages.record_edit(message_id, content, Instant.now())
+            await uow.commit()
+            return changed
 
     async def mark_deleted(self, message_id: int) -> bool:
         """Tombstone a message Discord reports gone, retaining it as a fact.
 
         Returns whether a stored message matched.
         """
-        return await self._repository.mark_deleted(message_id, Instant.now())
+        async with self._uow_factory() as uow:
+            changed = await uow.messages.mark_deleted(message_id, Instant.now())
+            await uow.commit()
+            return changed
 
     async def get(self, message_id: int) -> MessageRecord | None:
-        return await self._repository.get_by_id(message_id)
+        async with self._uow_factory() as uow:
+            return await uow.messages.get_by_id(message_id)

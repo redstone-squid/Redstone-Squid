@@ -1,12 +1,15 @@
 """Tracked message application service tests."""
 
+from copy import deepcopy
 from dataclasses import replace
+from functools import partial
 
 from whenever import Instant
 
 from squid.messages.application import MessageService
 from squid.messages.domain import MessageFact
 from squid.messages.models import MessageRecord
+from tests.support.unit_of_work import FakeUnitOfWork
 
 
 class FakeMessageRepository:
@@ -49,6 +52,22 @@ class FakeMessageRepository:
         return True
 
 
+class FakeMessageUnitOfWork(FakeUnitOfWork):
+    def __init__(self, committed: FakeMessageRepository) -> None:
+        self._committed = committed
+        self._messages = deepcopy(committed)
+
+    @property
+    def messages(self) -> FakeMessageRepository:
+        return self._messages
+
+    async def commit(self) -> None:
+        self._committed.facts = self.messages.facts.copy()
+        self._committed.observed_at = self.messages.observed_at.copy()
+        self._committed.edited_at = self.messages.edited_at.copy()
+        self._committed.deleted_at = self.messages.deleted_at.copy()
+
+
 def _fact(message_id: int = 1, *, content: str | None = "hello") -> MessageFact:
     return MessageFact(id=message_id, channel_id=20, author_id=30, guild_id=10, content=content)
 
@@ -56,7 +75,7 @@ def _fact(message_id: int = 1, *, content: str | None = "hello") -> MessageFact:
 async def test_observing_the_same_message_twice_keeps_one_fact() -> None:
     """Several uses of one message record the same row rather than competing for it."""
     repository = FakeMessageRepository()
-    service = MessageService(repository)
+    service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, repository))
 
     await service.observe(_fact())
     first_seen = repository.observed_at[1]
@@ -71,7 +90,7 @@ async def test_observing_the_same_message_twice_keeps_one_fact() -> None:
 async def test_observing_a_dm_is_allowed() -> None:
     """A message fact is true regardless of where it lives; only the guild is unknown."""
     repository = FakeMessageRepository()
-    service = MessageService(repository)
+    service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, repository))
 
     await service.observe(MessageFact(id=5, channel_id=20, author_id=30, guild_id=None, content="dm"))
 
@@ -81,7 +100,7 @@ async def test_observing_a_dm_is_allowed() -> None:
 async def test_edits_and_deletes_report_whether_the_message_was_known() -> None:
     """Most Discord edits and deletes are to messages the bot has no reason to store."""
     repository = FakeMessageRepository()
-    service = MessageService(repository)
+    service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, repository))
     await service.observe(_fact())
 
     assert await service.record_edit(1, "changed") is True

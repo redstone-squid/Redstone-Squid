@@ -1,12 +1,15 @@
 """Post persistence, replacement, and render tracking."""
 
+from functools import partial
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.messages.application.services import MessageService
 from squid.messages.domain import MessageFact
-from squid.messages.infrastructure.repository import MessageRepository
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.posts.infrastructure.repository import PostRepository
 from tests.support.database import assert_loaded_detached
 
@@ -21,9 +24,9 @@ async def _seed_guild(session_factory: async_sessionmaker[AsyncSession]) -> None
 
 async def _observe(session_factory: async_sessionmaker[AsyncSession], *message_ids: int) -> None:
     """Record the message facts the posts will point at."""
-    messages = MessageRepository(session_factory)
+    messages = MessageService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory))
     for message_id in message_ids:
-        await messages.upsert_fact(
+        await messages.observe(
             MessageFact(id=message_id, channel_id=CHANNEL, author_id=7000, guild_id=4000, content=None)
         )
 

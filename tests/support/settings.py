@@ -2,10 +2,9 @@
 
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
-from types import TracebackType
-from typing import Self
 
 from squid.settings.models import ServerSetting
+from tests.support.unit_of_work import FakeUnitOfWork
 
 
 class FakeSettingsRepository:
@@ -22,18 +21,14 @@ class FakeSettingsRepository:
         return self.rows.setdefault(server_id, ServerSetting(server_id=server_id))
 
 
-class FakeSettingsUnitOfWork:
+class FakeSettingsUnitOfWork(FakeUnitOfWork):
     def __init__(self, committed: dict[int, ServerSetting]) -> None:
         self._committed = committed
-        self.settings = FakeSettingsRepository({key: replace(row) for key, row in committed.items()})
+        self._settings = FakeSettingsRepository({key: replace(row) for key, row in committed.items()})
 
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(
-        self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
-    ) -> None:
-        pass
+    @property
+    def settings(self) -> FakeSettingsRepository:
+        return self._settings
 
     async def commit(self) -> None:
         self._committed.clear()

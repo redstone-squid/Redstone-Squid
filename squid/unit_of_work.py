@@ -5,6 +5,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Protocol, Self
 
 if TYPE_CHECKING:
+    from squid.messages.application.ports import MessageRepository
     from squid.settings.application.ports import SettingsStore
 
 
@@ -18,6 +19,9 @@ class UnitOfWork(Protocol):
 
     @property
     def settings(self) -> SettingsStore: ...
+
+    @property
+    def messages(self) -> MessageRepository: ...
 
     async def __aenter__(self) -> Self: ...
 
