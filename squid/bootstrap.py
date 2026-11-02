@@ -67,6 +67,7 @@ from squid.permissions.infrastructure.repository import (
     PermissionRepository,
 )
 from squid.persistence.engine import DatabaseEngine
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.persistence.wake_listener import PostgresWakeListener
 from squid.posts.application import PostService
 from squid.posts.infrastructure.repository import PostRepository
@@ -97,7 +98,6 @@ from squid.search.infrastructure import (
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import run_projection_batch
 from squid.settings.application import SettingsService
-from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.application import StarboardService
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.submissions.application import (
@@ -764,7 +764,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         schematics=graph.schematics,
         search=graph.search,
         tags=graph.tags,
-        settings=SettingsService(SettingsRepository(db.async_session)),
+        settings=SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, db.async_session)),
         starboards=graph.starboards,
         suggestions=graph.bot_suggestions,
         accounts=graph.accounts,

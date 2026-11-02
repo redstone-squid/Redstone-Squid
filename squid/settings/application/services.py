@@ -1,33 +1,56 @@
 """Server settings application services."""
 
 from collections.abc import Iterable, Mapping
+from typing import cast
 
-from squid.settings.application.ports import SettingsStore
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
+from squid.unit_of_work import UnitOfWorkFactory
+
+_CHANNEL_FIELDS: dict[Setting, str] = {
+    "Smallest": "smallest_channel_id",
+    "Fastest": "fastest_channel_id",
+    "First": "first_channel_id",
+    "Builds": "builds_channel_id",
+    "Vote": "voting_channel_id",
+}
 
 
 class SettingsService:
-    """Validate and apply server-setting changes."""
+    """Read and update server settings in short transactions."""
 
-    def __init__(self, repository: SettingsStore):
-        self._repository = repository
+    def __init__(self, *, uow_factory: UnitOfWorkFactory) -> None:
+        self._uow_factory = uow_factory
 
     async def guild_joined(self, server_id: int) -> None:
-        await self._repository.on_guild_join(server_id)
+        async with self._uow_factory() as uow:
+            settings = await uow.settings.get_or_create_for_update(server_id)
+            settings.in_server = True
+            await uow.commit()
 
     async def guild_removed(self, server_id: int) -> None:
-        await self._repository.on_guild_remove(server_id)
+        async with self._uow_factory() as uow:
+            settings = await uow.settings.get(server_id, for_update=True)
+            if settings is not None:
+                settings.in_server = False
+                await uow.commit()
 
     async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | None]:
-        # Every remaining setting is a channel id, so the overloads that used to
-        # distinguish role lists from channels have nothing left to distinguish.
-        return await self._repository.get(server_ids, setting)
+        """Return the requested channel setting, omitting servers without settings."""
+        async with self._uow_factory() as uow:
+            rows = await uow.settings.get_many(server_ids)
+            return {row.server_id: cast(int | None, getattr(row, _CHANNEL_FIELDS[setting])) for row in rows}
 
     async def get(self, server_id: int, setting: Setting) -> int | None:
-        return await self._repository.get_single(server_id, setting)
+        async with self._uow_factory() as uow:
+            row = await uow.settings.get(server_id)
+            return None if row is None else cast(int | None, getattr(row, _CHANNEL_FIELDS[setting]))
 
     async def get_all(self, server_id: int) -> SettingOptions:
-        return await self._repository.get_all(server_id)
+        async with self._uow_factory() as uow:
+            row = await uow.settings.get(server_id)
+            if row is None:
+                return {}
+            return SettingOptions(**{setting: getattr(row, column) for setting, column in _CHANNEL_FIELDS.items()})
 
     async def set_channel(self, server_id: int, setting: ScalarChannelSetting, channel_id: int) -> None:
         await self._set(server_id, setting, channel_id)
@@ -37,13 +60,19 @@ class SettingsService:
 
     async def get_locale(self, server_id: int) -> str | None:
         """Get the server's admin-configured locale override, if any."""
-        return await self._repository.get_locale(server_id)
+        async with self._uow_factory() as uow:
+            row = await uow.settings.get(server_id)
+            return None if row is None else row.locale
 
     async def set_locale(self, server_id: int, locale: str | None) -> None:
         """Set or clear the server's admin-configured locale override."""
-        await self._repository.set_locale(server_id, locale)
+        async with self._uow_factory() as uow:
+            settings = await uow.settings.get_or_create_for_update(server_id)
+            settings.locale = locale
+            await uow.commit()
 
     async def _set(self, server_id: int, setting: Setting, value: int | None) -> None:
-        settings = SettingOptions()
-        settings[setting] = value  # type: ignore[literal-required, typeddict-item]
-        await self._repository.set(server_id, **settings)
+        async with self._uow_factory() as uow:
+            settings = await uow.settings.get_or_create_for_update(server_id)
+            setattr(settings, _CHANNEL_FIELDS[setting], value)
+            await uow.commit()

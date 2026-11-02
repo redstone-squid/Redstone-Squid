@@ -11,7 +11,13 @@ existing integer, text, array, or JSON representation.
 
 Repositories own short transactions and return loaded, detached entities. Mutations persist only through an explicit
 repository write. Relationships reject implicit SQL; each repository selects the data its callers need. Cross-context
-facts such as a build's creators and versions are loaded in batches. Application-owned units of work remain phase two.
+facts such as a build's creators and versions are loaded in batches.
+
+The phase-two pilot moves server settings reads and writes into an application-owned unit of work. The service receives a
+`UnitOfWorkFactory` and uses `async with self._uow_factory() as uow`. Its `settings` repository returns attached
+entities, so mapped changes persist at `await uow.commit()` without a separate save. Commit ends the transaction;
+leaving without it rolls back. Closing detaches successfully committed entities. Existing repository APIs outside
+this pilot retain their transaction ownership and detached-read behavior.
 
 Keep values and projections separate when they represent something other than a live entity: incomplete build drafts,
 versioned submission and inference payloads, vote snapshots, compiled permission rules, delivery claims, schematic
