@@ -3,6 +3,7 @@
 from collections.abc import Iterable, Mapping
 from typing import cast
 
+from squid.settings.application.ports import SettingsUnitOfWork
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
 from squid.unit_of_work import UnitOfWorkFactory
 
@@ -18,7 +19,7 @@ _CHANNEL_FIELDS: dict[Setting, str] = {
 class SettingsService:
     """Read and update server settings in short transactions."""
 
-    def __init__(self, *, uow_factory: UnitOfWorkFactory) -> None:
+    def __init__(self, *, uow_factory: UnitOfWorkFactory[SettingsUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
     async def guild_joined(self, server_id: int) -> None:

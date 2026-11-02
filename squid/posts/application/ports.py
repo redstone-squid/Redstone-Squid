@@ -5,6 +5,7 @@ from typing import Protocol
 
 from squid.posts.domain import PostReference, ResourceKind, Surface
 from squid.posts.models import DiscordPost
+from squid.unit_of_work import UnitOfWork
 
 
 class PostRepository(Protocol):
@@ -34,3 +35,10 @@ class PostRepository(Protocol):
     async def forget(self, message_id: int) -> None: ...
 
     async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None: ...
+
+
+class PostUnitOfWork(UnitOfWork, Protocol):
+    """Transaction and repositories used by PostService."""
+
+    @property
+    def posts(self) -> PostRepository: ...

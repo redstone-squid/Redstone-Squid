@@ -6,6 +6,7 @@ from whenever import Instant
 
 from squid.messages.domain import MessageFact
 from squid.messages.models import MessageRecord
+from squid.unit_of_work import UnitOfWork
 
 
 class MessageRepository(Protocol):
@@ -18,3 +19,10 @@ class MessageRepository(Protocol):
     async def mark_deleted(self, message_id: int, deleted_at: Instant) -> bool: ...
 
     async def get_by_id(self, message_id: int) -> MessageRecord | None: ...
+
+
+class MessageUnitOfWork(UnitOfWork, Protocol):
+    """Transaction and repositories used by MessageService."""
+
+    @property
+    def messages(self) -> MessageRepository: ...

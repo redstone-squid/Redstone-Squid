@@ -2,13 +2,7 @@
 
 from collections.abc import Callable
 from types import TracebackType
-from typing import TYPE_CHECKING, Protocol, Self
-
-if TYPE_CHECKING:
-    from squid.messages.application.ports import MessageRepository
-    from squid.posts.application.ports import PostRepository
-    from squid.settings.application.ports import SettingsStore
-    from squid.versions.application.ports import VersionRepository
+from typing import Protocol, Self
 
 
 class UnitOfWork(Protocol):
@@ -19,18 +13,6 @@ class UnitOfWork(Protocol):
     when the scope closes; entities from a rolled-back scope should be discarded.
     """
 
-    @property
-    def settings(self) -> SettingsStore: ...
-
-    @property
-    def messages(self) -> MessageRepository: ...
-
-    @property
-    def posts(self) -> PostRepository: ...
-
-    @property
-    def versions(self) -> VersionRepository: ...
-
     async def __aenter__(self) -> Self: ...
 
     async def __aexit__(
@@ -40,4 +22,4 @@ class UnitOfWork(Protocol):
     async def commit(self) -> None: ...
 
 
-type UnitOfWorkFactory = Callable[[], UnitOfWork]
+type UnitOfWorkFactory[UowT: UnitOfWork] = Callable[[], UowT]

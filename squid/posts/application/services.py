@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from squid.posts.application.ports import PostUnitOfWork
 from squid.posts.domain import PostReference, ResourceKind, Surface
 from squid.posts.models import DiscordPost
 from squid.unit_of_work import UnitOfWorkFactory
@@ -10,7 +11,7 @@ from squid.unit_of_work import UnitOfWorkFactory
 class PostService:
     """Track published posts and the revisions they display."""
 
-    def __init__(self, *, uow_factory: UnitOfWorkFactory) -> None:
+    def __init__(self, *, uow_factory: UnitOfWorkFactory[PostUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
     async def record(

@@ -222,7 +222,7 @@ class _ServiceGraph:
         self.render_capable = render_capable
 
     @cached_property
-    def uow_factory(self) -> UnitOfWorkFactory:
+    def uow_factory(self) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
         return partial(SqlAlchemyUnitOfWork, self.db.async_session)
 
     @cached_property

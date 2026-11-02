@@ -1,6 +1,7 @@
 """Minecraft version application services."""
 
 from squid.unit_of_work import UnitOfWorkFactory
+from squid.versions.application.ports import VersionUnitOfWork
 from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
 from squid.versions.errors import InvalidVersionError, VersionCatalogUnavailableError
 
@@ -8,7 +9,7 @@ from squid.versions.errors import InvalidVersionError, VersionCatalogUnavailable
 class VersionService:
     """Parse, store, and list recognized Minecraft versions."""
 
-    def __init__(self, *, uow_factory: UnitOfWorkFactory) -> None:
+    def __init__(self, *, uow_factory: UnitOfWorkFactory[VersionUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
     async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:

@@ -2,6 +2,7 @@
 
 from typing import Protocol
 
+from squid.unit_of_work import UnitOfWork
 from squid.versions.domain import Edition, MinecraftVersion
 
 
@@ -11,3 +12,10 @@ class VersionRepository(Protocol):
     async def add(self, version: MinecraftVersion) -> MinecraftVersion: ...
 
     async def list(self, edition: Edition) -> list[MinecraftVersion]: ...
+
+
+class VersionUnitOfWork(UnitOfWork, Protocol):
+    """Transaction and repositories used by VersionService."""
+
+    @property
+    def versions(self) -> VersionRepository: ...

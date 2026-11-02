@@ -2,6 +2,7 @@
 
 from whenever import Instant
 
+from squid.messages.application.ports import MessageUnitOfWork
 from squid.messages.domain import MessageFact
 from squid.messages.models import MessageRecord
 from squid.unit_of_work import UnitOfWorkFactory
@@ -15,7 +16,7 @@ class MessageService:
     the ones a build was inferred from — rather than by a purpose stored on the row.
     """
 
-    def __init__(self, *, uow_factory: UnitOfWorkFactory) -> None:
+    def __init__(self, *, uow_factory: UnitOfWorkFactory[MessageUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
     async def observe(self, fact: MessageFact) -> None:
