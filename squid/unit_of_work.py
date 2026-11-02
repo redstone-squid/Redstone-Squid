@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from squid.messages.application.ports import MessageRepository
     from squid.posts.application.ports import PostRepository
     from squid.settings.application.ports import SettingsStore
+    from squid.versions.application.ports import VersionRepository
 
 
 class UnitOfWork(Protocol):
@@ -26,6 +27,9 @@ class UnitOfWork(Protocol):
 
     @property
     def posts(self) -> PostRepository: ...
+
+    @property
+    def versions(self) -> VersionRepository: ...
 
     async def __aenter__(self) -> Self: ...
 

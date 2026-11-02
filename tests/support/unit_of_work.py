@@ -6,6 +6,7 @@ from typing import Self
 from squid.messages.application.ports import MessageRepository
 from squid.posts.application.ports import PostRepository
 from squid.settings.application.ports import SettingsStore
+from squid.versions.application.ports import VersionRepository
 
 
 class FakeUnitOfWork:
@@ -22,6 +23,10 @@ class FakeUnitOfWork:
     @property
     def posts(self) -> PostRepository:
         raise AssertionError("This test does not provide a post repository.")
+
+    @property
+    def versions(self) -> VersionRepository:
+        raise AssertionError("This test does not provide a version repository.")
 
     async def __aenter__(self) -> Self:
         return self

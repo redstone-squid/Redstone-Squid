@@ -1,61 +1,48 @@
 """SQLAlchemy persistence adapter for Minecraft versions."""
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from collections.abc import Callable
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.errors import DataIntegrityError
-from squid.persistence.repository import BaseAsyncRepository
 from squid.versions.domain import Edition, MinecraftVersion
 from squid.versions.models import Version
-
-
-class _VersionModelRepository(BaseAsyncRepository[Version]):
-    model_type = Version
 
 
 class VersionRepository:
     """Persist and query Minecraft versions."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
     async def add(self, version: MinecraftVersion) -> MinecraftVersion:
-        async with self._session_factory() as session:
-            repository = _VersionModelRepository(session=session, auto_commit=True)
-            stored = await repository.add(
-                Version(
-                    edition=version.edition,
-                    major_version=version.major,
-                    minor_version=version.minor,
-                    patch_number=version.patch,
-                )
+        self._session().add(
+            Version(
+                edition=version.edition,
+                major_version=version.major,
+                minor_version=version.minor,
+                patch_number=version.patch,
             )
-            return MinecraftVersion(
-                edition=self._to_edition(stored.edition),
-                major=stored.major_version,
-                minor=stored.minor_version,
-                patch=stored.patch_number,
-            )
+        )
+        return version
 
     async def list(self, edition: Edition) -> list[MinecraftVersion]:
-        async with self._session_factory() as session:
-            repository = _VersionModelRepository(session=session)
-            versions = await repository.get_many(
-                Version.edition == edition,
-                order_by=[
-                    (Version.major_version, False),
-                    (Version.minor_version, False),
-                    (Version.patch_number, False),
-                ],
+        statement = (
+            select(Version)
+            .where(Version.edition == edition)
+            .order_by(Version.major_version, Version.minor_version, Version.patch_number)
+        )
+        versions = (await self._session().scalars(statement)).all()
+        return [
+            MinecraftVersion(
+                edition=self._to_edition(version.edition),
+                major=version.major_version,
+                minor=version.minor_version,
+                patch=version.patch_number,
             )
-            return [
-                MinecraftVersion(
-                    edition=self._to_edition(version.edition),
-                    major=version.major_version,
-                    minor=version.minor_version,
-                    patch=version.patch_number,
-                )
-                for version in versions
-            ]
+            for version in versions
+        ]
 
     @staticmethod
     def _to_edition(value: str) -> Edition:

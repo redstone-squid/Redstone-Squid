@@ -1,6 +1,6 @@
 """Minecraft version application services."""
 
-from squid.versions.application.ports import VersionRepository
+from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
 from squid.versions.errors import InvalidVersionError, VersionCatalogUnavailableError
 
@@ -8,22 +8,27 @@ from squid.versions.errors import InvalidVersionError, VersionCatalogUnavailable
 class VersionService:
     """Parse, store, and list recognized Minecraft versions."""
 
-    def __init__(self, repository: VersionRepository):
-        self._repository = repository
+    def __init__(self, *, uow_factory: UnitOfWorkFactory) -> None:
+        self._uow_factory = uow_factory
 
     async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
         parsed_edition, major, minor, patch = parse_version_string(version_string)
         version = MinecraftVersion(edition or parsed_edition, major, minor, patch)
-        return await self._repository.add(version)
+        async with self._uow_factory() as uow:
+            stored = await uow.versions.add(version)
+            await uow.commit()
+            return stored
 
     async def list_versions(self, edition: Edition) -> list[MinecraftVersion]:
-        return await self._repository.list(edition)
+        async with self._uow_factory() as uow:
+            return await uow.versions.list(edition)
 
     async def list_all(self) -> list[MinecraftVersion]:
         """List recognized versions for both supported editions."""
-        java = await self.list_versions("Java")
-        bedrock = await self.list_versions("Bedrock")
-        return [*java, *bedrock]
+        async with self._uow_factory() as uow:
+            java = await uow.versions.list("Java")
+            bedrock = await uow.versions.list("Bedrock")
+            return [*java, *bedrock]
 
     async def list_display(self, edition: Edition, *, limit: int | None = None) -> list[str]:
         versions = await self.list_versions(edition)

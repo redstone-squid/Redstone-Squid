@@ -3,6 +3,7 @@
 import uuid
 from collections.abc import Sequence
 from dataclasses import replace
+from functools import partial
 from typing import override
 
 import anyio
@@ -43,6 +44,7 @@ from squid.permissions.models import (
     PermissionRolePattern,
 )
 from squid.persistence.types import now
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
@@ -69,7 +71,6 @@ from squid.submissions.models.finalization import SubmissionFinalizationInput, S
 from squid.submissions.payload_integrity import submission_payload_digest
 from squid.tags.models import TagDefinition
 from squid.versions.application import VersionService
-from squid.versions.infrastructure.repository import VersionRepository
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
 
 
@@ -248,7 +249,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
 ) -> None:
     account_id = await seed_account_and_version(migrated_session_factory)
     repository = BuildRepository(migrated_session_factory)
-    versions = VersionService(VersionRepository(migrated_session_factory))
+    versions = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     builds = BuildService(
         repository,
         BuildLockRepository(migrated_session_factory),
@@ -294,7 +295,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     account_id = await seed_account_and_version(migrated_session_factory)
     draft_id = uuid.UUID("99999999-9999-4999-8999-999999999999")
     repository = BuildRepository(migrated_session_factory)
-    versions = VersionService(VersionRepository(migrated_session_factory))
+    versions = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     writer = SubmissionBuildPreparation(
         BuildService(
             repository,

@@ -10,6 +10,7 @@ from squid.core.errors import InvalidStateError
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
+from squid.versions.infrastructure.repository import VersionRepository
 
 
 class SqlAlchemyUnitOfWork:
@@ -22,6 +23,7 @@ class SqlAlchemyUnitOfWork:
         self._messages = MessageRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
         self._settings = SettingsRepository(self._active_session)
+        self._versions = VersionRepository(self._active_session)
 
     @property
     def settings(self) -> SettingsRepository:
@@ -37,6 +39,11 @@ class SqlAlchemyUnitOfWork:
     def posts(self) -> PostRepository:
         self._active_session()
         return self._posts
+
+    @property
+    def versions(self) -> VersionRepository:
+        self._active_session()
+        return self._versions
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

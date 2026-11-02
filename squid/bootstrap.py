@@ -130,8 +130,8 @@ from squid.sync import DiscordReconciliationService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
+from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
-from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
 from squid.voting.infrastructure.accounts import PostgresVoterDiscordIdLookup
 from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
@@ -222,6 +222,10 @@ class _ServiceGraph:
         self.render_capable = render_capable
 
     @cached_property
+    def uow_factory(self) -> UnitOfWorkFactory:
+        return partial(SqlAlchemyUnitOfWork, self.db.async_session)
+
+    @cached_property
     def restriction_repository(self) -> RestrictionRepository:
         return RestrictionRepository(self.db.async_session)
 
@@ -258,7 +262,7 @@ class _ServiceGraph:
 
     @cached_property
     def version_service(self) -> VersionService:
-        return VersionService(VersionRepository(self.db.async_session))
+        return VersionService(uow_factory=self.uow_factory)
 
     @cached_property
     def embedding_model(self) -> OpenAIEmbeddingModel:
@@ -752,8 +756,8 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_inference=graph.submission_inference,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
-        messages=MessageService(uow_factory=partial(SqlAlchemyUnitOfWork, db.async_session)),
-        posts=PostService(uow_factory=partial(SqlAlchemyUnitOfWork, db.async_session)),
+        messages=MessageService(uow_factory=graph.uow_factory),
+        posts=PostService(uow_factory=graph.uow_factory),
         permissions=graph.permissions,
         permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,
@@ -762,7 +766,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         schematics=graph.schematics,
         search=graph.search,
         tags=graph.tags,
-        settings=SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, db.async_session)),
+        settings=SettingsService(uow_factory=graph.uow_factory),
         starboards=graph.starboards,
         suggestions=graph.bot_suggestions,
         accounts=graph.accounts,
