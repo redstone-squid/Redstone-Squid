@@ -4,6 +4,7 @@ from types import TracebackType
 from typing import Self
 
 from squid.messages.application.ports import MessageRepository
+from squid.posts.application.ports import PostRepository
 from squid.settings.application.ports import SettingsStore
 
 
@@ -17,6 +18,10 @@ class FakeUnitOfWork:
     @property
     def messages(self) -> MessageRepository:
         raise AssertionError("This test does not provide a message repository.")
+
+    @property
+    def posts(self) -> PostRepository:
+        raise AssertionError("This test does not provide a post repository.")
 
     async def __aenter__(self) -> Self:
         return self

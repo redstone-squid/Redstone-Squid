@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Protocol, Self
 
 if TYPE_CHECKING:
     from squid.messages.application.ports import MessageRepository
+    from squid.posts.application.ports import PostRepository
     from squid.settings.application.ports import SettingsStore
 
 
@@ -22,6 +23,9 @@ class UnitOfWork(Protocol):
 
     @property
     def messages(self) -> MessageRepository: ...
+
+    @property
+    def posts(self) -> PostRepository: ...
 
     async def __aenter__(self) -> Self: ...
 

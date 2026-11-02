@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import InvalidStateError
 from squid.messages.infrastructure.repository import MessageRepository
+from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
 
 
@@ -19,6 +20,7 @@ class SqlAlchemyUnitOfWork:
         self._session: AsyncSession | None = None
         self._state: Literal["new", "active", "finished"] = "new"
         self._messages = MessageRepository(self._active_session)
+        self._posts = PostRepository(self._active_session)
         self._settings = SettingsRepository(self._active_session)
 
     @property
@@ -30,6 +32,11 @@ class SqlAlchemyUnitOfWork:
     def messages(self) -> MessageRepository:
         self._active_session()
         return self._messages
+
+    @property
+    def posts(self) -> PostRepository:
+        self._active_session()
+        return self._posts
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:
