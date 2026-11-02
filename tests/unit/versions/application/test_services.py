@@ -7,7 +7,7 @@ import pytest
 from squid.versions.application.services import VersionService
 from squid.versions.domain import Edition, MinecraftVersion
 from squid.versions.errors import VersionCatalogUnavailableError
-from tests.support.unit_of_work import FakeUnitOfWork
+from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
 class FakeVersionRepository:
@@ -22,48 +22,41 @@ class FakeVersionRepository:
         return [version for version in self.versions if version.edition == edition]
 
 
-class FakeVersionUnitOfWork(FakeUnitOfWork):
-    def __init__(self, committed: FakeVersionRepository) -> None:
-        self._committed = committed
-        self._versions = FakeVersionRepository()
-        self._versions.versions = committed.versions.copy()
-
+class FakeVersionUnitOfWork(FakeUnitOfWork[FakeVersionRepository]):
     @property
     def versions(self) -> FakeVersionRepository:
-        return self._versions
-
-    async def commit(self) -> None:
-        self._committed.versions = self.versions.versions.copy()
+        return self.state
 
 
 async def test_version_service_honors_explicit_edition() -> None:
-    repository = FakeVersionRepository()
-    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, repository))
+    committed = CommittedState(FakeVersionRepository())
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
     version = await service.add("1.21.4", edition="Bedrock")
 
     assert version == MinecraftVersion("Bedrock", 1, 21, 4)
-    assert repository.versions == [version]
+    assert committed.value.versions == [version]
 
 
 async def test_version_service_lists_both_editions() -> None:
-    repository = FakeVersionRepository()
-    repository.versions = [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
+    committed = CommittedState(FakeVersionRepository())
+    committed.value.versions = [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
 
     assert (
-        await VersionService(uow_factory=partial(FakeVersionUnitOfWork, repository)).list_all() == repository.versions
+        await VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed)).list_all()
+        == committed.value.versions
     )
 
 
 async def test_version_service_resolves_ranges_and_newest_version() -> None:
-    repository = FakeVersionRepository()
-    repository.versions = [
+    committed = CommittedState(FakeVersionRepository())
+    committed.value.versions = [
         MinecraftVersion("Java", 1, 19, 0),
         MinecraftVersion("Java", 1, 19, 1),
         MinecraftVersion("Java", 1, 20, 0),
         MinecraftVersion("Java", 1, 21, 0),
     ]
-    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, repository))
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
     assert await service.newest("Java") == "Java 1.21.0"
     assert await service.resolve_spec("1.19 - 1.20, 1.21+") == [
@@ -75,8 +68,8 @@ async def test_version_service_resolves_ranges_and_newest_version() -> None:
 
 
 async def test_version_service_reports_an_empty_catalog_as_infrastructure_failure() -> None:
-    repository = FakeVersionRepository()
-    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, repository))
+    committed = CommittedState(FakeVersionRepository())
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
     with pytest.raises(VersionCatalogUnavailableError) as exc_info:
         await service.newest("Bedrock")

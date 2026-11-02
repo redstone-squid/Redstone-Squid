@@ -4,7 +4,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import replace
 
 from squid.settings.models import ServerSetting
-from tests.support.unit_of_work import FakeUnitOfWork
+from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
 class FakeSettingsRepository:
@@ -21,15 +21,15 @@ class FakeSettingsRepository:
         return self.rows.setdefault(server_id, ServerSetting(server_id=server_id))
 
 
-class FakeSettingsUnitOfWork(FakeUnitOfWork):
-    def __init__(self, committed: dict[int, ServerSetting]) -> None:
-        self._committed = committed
-        self._settings = FakeSettingsRepository({key: replace(row) for key, row in committed.items()})
+def settings_state(rows: dict[int, ServerSetting] | None = None) -> CommittedState[dict[int, ServerSetting]]:
+    return CommittedState(rows if rows is not None else {}, clone=_copy_settings)
 
+
+def _copy_settings(rows: dict[int, ServerSetting]) -> dict[int, ServerSetting]:
+    return {key: replace(row) for key, row in rows.items()}
+
+
+class FakeSettingsUnitOfWork(FakeUnitOfWork[dict[int, ServerSetting]]):
     @property
     def settings(self) -> FakeSettingsRepository:
-        return self._settings
-
-    async def commit(self) -> None:
-        self._committed.clear()
-        self._committed.update({key: replace(row) for key, row in self.settings.rows.items()})
+        return FakeSettingsRepository(self.state)

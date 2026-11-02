@@ -12,11 +12,11 @@ import squid_ui_discord as sd
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
 from squid.settings.application import SettingsService
 from squid.settings.models import ServerSetting
-from tests.support.settings import FakeSettingsUnitOfWork
+from tests.support.settings import FakeSettingsUnitOfWork, settings_state
 
 
 def _settings_service(locale: str | None = None) -> SettingsService:
-    rows = {1: ServerSetting(server_id=1, locale=locale)}
+    rows = settings_state({1: ServerSetting(server_id=1, locale=locale)})
     return SettingsService(uow_factory=partial(FakeSettingsUnitOfWork, rows))
 
 
