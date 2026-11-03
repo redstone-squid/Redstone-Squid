@@ -31,6 +31,7 @@ from squid.records.domain import (
     VersionScope,
 )
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
+from tests.support.record_uow import RecordQueryScope, RecordScope
 
 
 class FakeCandidates:
@@ -211,7 +212,7 @@ async def test_rebuild_computes_eager_subsets_and_all_door_record_classes() -> N
         )
     )
     runs = FakeRuns()
-    service = RecordComputationService(candidates, runs)
+    service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
     summary = await service.rebuild(kinds=(BuildKind.DOOR,))
 
@@ -252,13 +253,15 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
 
     runs = FakeRuns()
     service = RecordComputationService(
-        FakeCandidates(
-            (
-                _door(1, volume=10, opening=5, restrictions=(m_wide(3),)),
-                _door(2, volume=8, opening=4, restrictions=(m_wide(4),)),
-            )
-        ),
-        runs,
+        uow_factory=lambda: RecordScope(
+            FakeCandidates(
+                (
+                    _door(1, volume=10, opening=5, restrictions=(m_wide(3),)),
+                    _door(2, volume=8, opening=4, restrictions=(m_wide(4),)),
+                )
+            ),
+            runs,
+        )
     )
 
     await service.rebuild(kinds=(BuildKind.DOOR,))
@@ -294,7 +297,7 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
 @pytest.mark.asyncio
 async def test_rebuild_creates_empty_extender_run() -> None:
     runs = FakeRuns()
-    service = RecordComputationService(FakeCandidates(()), runs)
+    service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     summary = await service.rebuild(kinds=(BuildKind.EXTENDER,))
 
@@ -313,7 +316,7 @@ async def test_current_version_run_filters_incompatible_candidates() -> None:
         )
     )
     runs = FakeRuns()
-    service = RecordComputationService(candidates, runs)
+    service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
     await service.rebuild(current_version_id=3, kinds=(BuildKind.DOOR,))
 
@@ -344,7 +347,9 @@ async def test_eager_categories_never_exceed_eight_restrictions() -> None:
     )
     runs = FakeRuns()
     service = RecordComputationService(
-        FakeCandidates((_door(1, volume=10, opening=5, restrictions=restrictions),)), runs
+        uow_factory=lambda: RecordScope(
+            FakeCandidates((_door(1, volume=10, opening=5, restrictions=restrictions),)), runs
+        )
     )
 
     await service.rebuild(kinds=(BuildKind.DOOR,))
@@ -367,8 +372,8 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     source = _door(1, volume=10, opening=5, restrictions=restrictions)
     candidates = FakeCandidates((source,))
     runs = FakeRuns()
-    computation = RecordComputationService(candidates, runs)
-    service = RecordService(candidates, runs, computation)
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
 
     summary = await service.lookup_or_materialize(
         RecordLookupRequest(
@@ -397,7 +402,10 @@ async def test_materialize_definition_round_trips_the_stored_identity() -> None:
     runs = FakeRuns()
     identity = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", (1,))
     runs.definition_identities[42] = identity
-    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
 
     summary = await service.materialize_definition(42, kind=BuildKind.DOOR)
 
@@ -409,7 +417,10 @@ async def test_materialize_definition_round_trips_the_stored_identity() -> None:
 async def test_materialize_definition_rejects_unknown_id() -> None:
     candidates = FakeCandidates(())
     runs = FakeRuns()
-    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
 
     with pytest.raises(RecordDefinitionNotFoundError):
         await service.materialize_definition(999)
@@ -420,7 +431,10 @@ async def test_materialize_definition_rejects_kind_mismatch() -> None:
     candidates = FakeCandidates(())
     runs = FakeRuns()
     runs.definition_identities[42] = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", ())
-    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
 
     with pytest.raises(ValidationError):
         await service.materialize_definition(42, kind=BuildKind.EXTENDER)
@@ -430,7 +444,10 @@ async def test_materialize_definition_rejects_kind_mismatch() -> None:
 async def test_lookup_rejects_category_without_confirmed_candidate() -> None:
     candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=()),))
     runs = FakeRuns()
-    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
 
     with pytest.raises(NoMatchingRecordCategoryError, match="No confirmed build"):
         await service.lookup_or_materialize(
@@ -455,7 +472,10 @@ async def test_gaps_delegates_active_result_query() -> None:
     )
     runs.gap_rows = (gap,)
     candidates = FakeCandidates(())
-    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
 
     assert await service.gaps(kind=BuildKind.DOOR) == (gap,)
 
@@ -465,7 +485,7 @@ async def test_public_record_query_preserves_holder_order() -> None:
     runs = FakeRuns()
     runs.published_records[7] = _published_record(41, 42)
     builds = FakePublicBuilds((_public_build(42), _public_build(41)))
-    service = PublicRecordQueryService(runs, builds)
+    service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
     detail = await service.get(7)
 
@@ -478,7 +498,9 @@ async def test_public_record_query_preserves_holder_order() -> None:
 async def test_public_record_query_rejects_unavailable_holder() -> None:
     runs = FakeRuns()
     runs.published_records[7] = _published_record(41, 42)
-    service = PublicRecordQueryService(runs, FakePublicBuilds((_public_build(41),)))
+    service = PublicRecordQueryService(
+        FakePublicBuilds((_public_build(41),)), uow_factory=lambda: RecordQueryScope(runs)
+    )
 
     with pytest.raises(DataIntegrityError) as exc_info:
         await service.get(7)
@@ -495,7 +517,7 @@ async def test_public_record_query_accepts_empty_nonresolved_standing() -> None:
         holder_build_ids=(),
     )
     builds = FakePublicBuilds(())
-    service = PublicRecordQueryService(runs, builds)
+    service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
     detail = await service.get(7)
 
@@ -515,7 +537,9 @@ async def test_public_record_query_accepts_empty_nonresolved_standing() -> None:
 async def test_public_record_query_rejects_status_holder_corruption(standing: PublishedRecord) -> None:
     runs = FakeRuns()
     runs.published_records[7] = standing
-    service = PublicRecordQueryService(runs, FakePublicBuilds((_public_build(41),)))
+    service = PublicRecordQueryService(
+        FakePublicBuilds((_public_build(41),)), uow_factory=lambda: RecordQueryScope(runs)
+    )
 
     with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
         await service.get(7)
@@ -529,7 +553,7 @@ async def test_public_record_query_rejects_status_holder_corruption(standing: Pu
 
 @pytest.mark.asyncio
 async def test_public_record_query_returns_none_for_unknown_standing() -> None:
-    service = PublicRecordQueryService(FakeRuns(), FakePublicBuilds(()))
+    service = PublicRecordQueryService(FakePublicBuilds(()), uow_factory=lambda: RecordQueryScope(FakeRuns()))
 
     assert await service.get(999) is None
 
@@ -544,7 +568,10 @@ async def test_title_gaps_delegates_active_definition_query() -> None:
     )
     runs.title_gap_rows = (gap,)
     candidates = FakeCandidates(())
-    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+    service = RecordService(
+        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
 
     assert await service.title_gaps(kind=BuildKind.DOOR) == (gap,)
 
@@ -553,7 +580,7 @@ async def test_title_gaps_delegates_active_definition_query() -> None:
 async def test_process_queue_rebuilds_and_acknowledges_claimed_kinds() -> None:
     runs = FakeRuns()
     runs.queued = (BuildKind.DOOR, BuildKind.EXTENDER)
-    computation = RecordComputationService(FakeCandidates(()), runs)
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     result = await computation.process_queue()
 
@@ -568,10 +595,27 @@ async def test_process_queue_preserves_the_pinned_current_version() -> None:
     runs = FakeRuns()
     runs.queued = (BuildKind.DOOR,)
     runs.current_version_id = 3
-    computation = RecordComputationService(FakeCandidates(()), runs)
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     result = await computation.process_queue()
 
     assert result.rebuild is not None
     assert result.rebuild.run_ids == (1, 2)
     assert [batch.version_id for batch in runs.batches] == [None, 3]
+
+
+async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> None:
+    class FailingRuns(FakeRuns):
+        async def activate(self, batch: ComputationBatch) -> int:
+            if self.batches:
+                raise RuntimeError("second activation failed")
+            return await super().activate(batch)
+
+    runs = FailingRuns()
+    candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=()),))
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+
+    with pytest.raises(RuntimeError, match="second activation"):
+        await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3)
+
+    assert runs.batches == []

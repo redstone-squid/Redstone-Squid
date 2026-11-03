@@ -5,14 +5,16 @@ was the stated reason it could not be fenced. It stamped `locked_at` per row all
 along, so it could carry a token the same way -- and without one it lost work.
 """
 
+from functools import partial
 from typing import Any
 
 import pytest
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.records.domain import BuildKind
-from squid.records.infrastructure.repository import PostgresRecordRepository
+from tests.support.unit_of_work import transact
 
 
 @pytest.fixture(autouse=True)
@@ -55,18 +57,18 @@ async def test_a_scope_lease_cannot_acknowledge_work_enqueued_during_the_run(
     dropped and never ran.
     """
     await _enqueue(migrated_session_factory, "door")
-    repository = PostgresRecordRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
-    worker_a = await repository.claim_recompute_kinds(limit=10)
+    worker_a = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
     assert worker_a.kinds == (BuildKind.DOOR,)
 
     # New DOOR work arrives mid-run and clears the lock, exactly as the trigger does.
     await _enqueue(migrated_session_factory, "door")
-    worker_b = await repository.claim_recompute_kinds(limit=10)
+    worker_b = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
     assert worker_b.kinds == (BuildKind.DOOR,)
     assert worker_b.claim_tokens != worker_a.claim_tokens
 
-    await repository.complete_recompute(worker_a)
+    await transact(repository, lambda uow: uow.records.complete_recompute(worker_a), commit=True)
 
     assert await _count(migrated_session_factory) == 1
     async with migrated_session_factory() as session:
@@ -83,13 +85,13 @@ async def test_a_crashed_workers_lease_is_reclaimed(
     `squid/worker/queue_health.py` reported it as in-flight forever.
     """
     await _enqueue(migrated_session_factory, "door")
-    repository = PostgresRecordRepository(migrated_session_factory)
-    abandoned = await repository.claim_recompute_kinds(limit=10)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    abandoned = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
 
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE record_recompute_queue SET locked_at = now() - interval '6 minutes'"))
 
-    reclaimed = await repository.claim_recompute_kinds(limit=10)
+    reclaimed = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
     assert reclaimed.kinds == (BuildKind.DOOR,)
     assert reclaimed.claim_tokens != abandoned.claim_tokens
 
@@ -99,15 +101,17 @@ async def test_a_failed_lease_backs_off_and_stays_queued(
 ) -> None:
     """`max_attempts=None`: a stuck recomputation stays visible rather than vanishing."""
     await _enqueue(migrated_session_factory, "door")
-    repository = PostgresRecordRepository(migrated_session_factory)
-    lease = await repository.claim_recompute_kinds(limit=10)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    lease = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
 
-    await repository.fail_recompute(lease, "boom")
+    await transact(repository, lambda uow: uow.records.fail_recompute(lease, "boom"), commit=True)
 
     row = await _one(migrated_session_factory)
     assert row == (1, None, None, True, "boom")
     # Backed off, not dropped, and not claimable until the delay elapses.
-    assert (await repository.claim_recompute_kinds(limit=10)).kinds == ()
+    assert (
+        await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
+    ).kinds == ()
     assert await _count(migrated_session_factory) == 1
 
 

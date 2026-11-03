@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from functools import partial
 
 import anyio
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.builds.domain import BuildCategory
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.events.models import DomainEvent
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.records.application.models import (
     CandidateFacet,
     CategoryCompetition,
@@ -27,7 +29,6 @@ from squid.records.domain import (
     ResolutionStatus,
     VersionScope,
 )
-from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.records.models import (
     RecordComputationRun,
     RecordDefinitionFacet,
@@ -39,6 +40,7 @@ from squid.records.models import (
 from squid.versions.models import Version
 from tests.support.database import record_queries
 from tests.support.submission_targets import seed_account_and_version, submission_build
+from tests.support.unit_of_work import transact
 
 
 def _batch(ruleset_id: int, build_ids: list[int]) -> ComputationBatch:
@@ -90,12 +92,12 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
         await builds.save(build)
         assert build.id is not None
         build_ids.append(build.id)
-    records = PostgresRecordRepository(sessions)
-    batch = _batch(await records.active_ruleset_id(), build_ids)
+    records = partial(SqlAlchemyUnitOfWork, sessions)
+    batch = _batch(await transact(records, lambda uow: uow.records.active_ruleset_id(), commit=True), build_ids)
 
-    first_run = await records.activate(batch)
+    first_run = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
     with record_queries(sessions) as statements:
-        current_run = await records.activate(batch)
+        current_run = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
 
     history_inserts = [
         statement for statement in statements if statement.startswith("INSERT INTO record_holder_history")
@@ -132,8 +134,11 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
         (first_run, None, True),
         (current_run, first_run, False),
     ]
-    published = await records.list_published_records(
-        offset=0, after_id=None, before_id=None, descending=False, limit=10
+    published = await transact(
+        records,
+        lambda uow: uow.records.list_published_records(
+            offset=0, after_id=None, before_id=None, descending=False, limit=10
+        ),
     )
     assert len(published) == 1
     assert published[0].title == "Smallest 2x3 Door"
@@ -150,8 +155,8 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
     build = submission_build(BuildCategory.DOOR, owner)
     await BuildRepository(sessions).save(build)
     assert build.id is not None
-    records = PostgresRecordRepository(sessions)
-    seed = _batch(await records.active_ruleset_id(), [build.id])
+    records = partial(SqlAlchemyUnitOfWork, sessions)
+    seed = _batch(await transact(records, lambda uow: uow.records.active_ruleset_id(), commit=True), [build.id])
     template = seed.records[0]
     # Cross the SQLAlchemy bulk page boundary; every category expands into five record classes.
     batch = replace(
@@ -175,11 +180,13 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
         ),
     )
     with record_queries(sessions) as first_queries:
-        await records.activate(batch)
+        await transact(records, lambda uow: uow.records.activate(batch), commit=True)
     identity = batch.records[0].competition.identity
     titles = {record_class: FormattedTitle(f"Requested {record_class.value}") for record_class in RecordClass}
-    await records.save_requested_category(batch.ruleset_id, identity, titles)
-    assert identity in await records.list_requested_categories(BuildKind.DOOR)
+    await transact(
+        records, lambda uow: uow.records.save_requested_category(batch.ruleset_id, identity, titles), commit=True
+    )
+    assert identity in await transact(records, lambda uow: uow.records.list_requested_categories(BuildKind.DOOR))
 
     async with sessions() as session:
         original = {
@@ -187,13 +194,15 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
             for row in (await session.scalars(select(RecordRule))).all()
         }
     with record_queries(sessions) as repeated_queries:
-        await records.activate(batch)
-    assert identity in await records.list_requested_categories(BuildKind.DOOR)
+        await transact(records, lambda uow: uow.records.activate(batch), commit=True)
+    assert identity in await transact(records, lambda uow: uow.records.list_requested_categories(BuildKind.DOOR))
 
     requested = CategoryIdentity(BuildKind.DOOR, "door|999x3|t[20]|Door", (1, 2))
 
     async def request_category() -> None:
-        await records.save_requested_category(batch.ruleset_id, requested, titles)
+        await transact(
+            records, lambda uow: uow.records.save_requested_category(batch.ruleset_id, requested, titles), commit=True
+        )
 
     with anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
@@ -227,15 +236,19 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
         version_id = await session.scalar(select(Version.id).where(Version.data_version == 3953))
     assert version_id is not None
     next_batch = replace(batch, ruleset_id=next_ruleset_id, records=batch.records[:5])
-    await records.activate(next_batch)
-    await records.activate(
-        replace(
-            next_batch,
-            version_id=version_id,
-            records=tuple(
-                replace(record, scope=VersionScope.CURRENT, version_id=version_id) for record in next_batch.records
-            ),
-        )
+    await transact(records, lambda uow: uow.records.activate(next_batch), commit=True)
+    await transact(
+        records,
+        lambda uow: uow.records.activate(
+            replace(
+                next_batch,
+                version_id=version_id,
+                records=tuple(
+                    replace(record, scope=VersionScope.CURRENT, version_id=version_id) for record in next_batch.records
+                ),
+            )
+        ),
+        commit=True,
     )
     async with sessions() as session:
         next_definitions = (

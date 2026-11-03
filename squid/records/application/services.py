@@ -26,7 +26,7 @@ from squid.records.application.models import (
     RecordSourceCandidate,
     TitleDiagnosticGap,
 )
-from squid.records.application.ports import PublicBuildSummaryReader, RecordCandidateRepository, RecordRunRepository
+from squid.records.application.ports import PublicBuildSummaryReader, RecordQueryUnitOfWork, RecordUnitOfWork
 from squid.records.domain import (
     BuildKind,
     DoorCategory,
@@ -47,6 +47,7 @@ from squid.records.domain import (
 )
 from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 class RecordComputationService:
@@ -54,14 +55,12 @@ class RecordComputationService:
 
     def __init__(
         self,
-        candidates: RecordCandidateRepository,
-        runs: RecordRunRepository,
         *,
+        uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
         formatter: TitleFormatter | None = None,
         category_limit: int = 8,
     ) -> None:
-        self._candidates = candidates
-        self._runs = runs
+        self._uow_factory = uow_factory
         self._formatter = formatter or RulesTitleFormatter()
         self._category_limit = category_limit
 
@@ -71,13 +70,26 @@ class RecordComputationService:
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
+        """Publish all requested kinds and scopes together."""
+        async with self._uow_factory() as uow:
+            result = await self.rebuild_in(uow, current_version_id=current_version_id, kinds=kinds)
+            await uow.commit()
+            return result
+
+    async def rebuild_in(
+        self,
+        uow: RecordUnitOfWork,
+        *,
+        current_version_id: int | None = None,
+        kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
+    ) -> RebuildSummary:
         """Recompute and atomically activate every requested kind/scope."""
-        ruleset_id = await self._runs.active_ruleset_id()
+        ruleset_id = await uow.records.active_ruleset_id()
         run_ids: list[int] = []
         records: list[ComputedRecord] = []
         for kind in kinds:
-            source = tuple(await self._candidates.list_confirmed(kind))
-            requested = tuple(await self._runs.list_requested_categories(kind))
+            source = tuple(await uow.record_candidates.list_confirmed(kind))
+            requested = tuple(await uow.records.list_requested_categories(kind))
             all_time = self._compute_scope(
                 ruleset_id,
                 kind,
@@ -86,7 +98,7 @@ class RecordComputationService:
                 pinned_current_version_id=current_version_id,
                 requested=requested,
             )
-            run_ids.append(await self._runs.activate(all_time))
+            run_ids.append(await uow.records.activate(all_time))
             records.extend(all_time.records)
 
             if current_version_id is not None:
@@ -98,7 +110,7 @@ class RecordComputationService:
                     pinned_current_version_id=current_version_id,
                     requested=requested,
                 )
-                run_ids.append(await self._runs.activate(current))
+                run_ids.append(await uow.records.activate(current))
                 records.extend(current.records)
 
         return RebuildSummary(
@@ -163,17 +175,23 @@ class RecordComputationService:
         limit: int = 20,
     ) -> QueueProcessSummary:
         """Claim queued scopes, rebuild them, and acknowledge only on success."""
-        lease = await self._runs.claim_recompute_kinds(limit=limit)
+        async with self._uow_factory() as uow:
+            lease = await uow.records.claim_recompute_kinds(limit=limit)
+            if current_version_id is None:
+                current_version_id = await uow.records.active_current_version_id()
+            await uow.commit()
         if not lease:
             return QueueProcessSummary(kinds=(), rebuild=None)
-        if current_version_id is None:
-            current_version_id = await self._runs.active_current_version_id()
         try:
             summary = await self.rebuild(current_version_id=current_version_id, kinds=lease.kinds)
         except Exception as error:
-            await self._runs.fail_recompute(lease, str(error))
+            async with self._uow_factory() as uow:
+                await uow.records.fail_recompute(lease, str(error))
+                await uow.commit()
             raise
-        await self._runs.complete_recompute(lease)
+        async with self._uow_factory() as uow:
+            await uow.records.complete_recompute(lease)
+            await uow.commit()
         return QueueProcessSummary(kinds=lease.kinds, rebuild=summary)
 
     def _eager_competitions(
@@ -257,25 +275,27 @@ class RecordService:
 
     def __init__(
         self,
-        candidates: RecordCandidateRepository,
-        runs: RecordRunRepository,
         computation: RecordComputationService,
+        *,
+        uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
     ) -> None:
-        self._candidates = candidates
-        self._runs = runs
+        self._uow_factory = uow_factory
         self._computation = computation
 
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         """Return decisive facts missing from active record results."""
-        return await self._runs.list_gaps(kind=kind)
+        async with self._uow_factory() as uow:
+            return await uow.records.list_gaps(kind=kind)
 
     async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         """Return active canonical record titles requiring taxonomy review."""
-        return await self._runs.list_title_gaps(kind=kind)
+        async with self._uow_factory() as uow:
+            return await uow.records.list_title_gaps(kind=kind)
 
     async def get(self, result_id: int) -> PublishedRecord | None:
         """Return one published computed record result."""
-        return await self._runs.get_published_record(result_id)
+        async with self._uow_factory() as uow:
+            return await uow.records.get_published_record(result_id)
 
     async def list_page(
         self,
@@ -285,22 +305,23 @@ class RecordService:
         page_size: int = 20,
     ) -> Page[PublishedRecord]:
         """Return one page of published record results in display order."""
-        rows = await self._runs.list_published_records(
-            offset=selector.offset,
-            after_id=selector.after_id,
-            before_id=selector.before_id,
-            descending=descending,
-            # One row past the page proves whether another page follows.
-            limit=page_size + 1,
-        )
-        return keyset_page(
-            rows,
-            selector=selector,
-            page_size=page_size,
-            total=await self._runs.count_published_records(),
-            keyset=True,
-            id_of=lambda record: record.id,
-        )
+        async with self._uow_factory() as uow:
+            rows = await uow.records.list_published_records(
+                offset=selector.offset,
+                after_id=selector.after_id,
+                before_id=selector.before_id,
+                descending=descending,
+                # One row past the page proves whether another page follows.
+                limit=page_size + 1,
+            )
+            return keyset_page(
+                rows,
+                selector=selector,
+                page_size=page_size,
+                total=await uow.records.count_published_records(),
+                keyset=True,
+                id_of=lambda record: record.id,
+            )
 
     async def materialize_definition(
         self,
@@ -310,7 +331,8 @@ class RecordService:
         version_id: int | None = None,
     ) -> RebuildSummary:
         """Re-materialize the exact category an existing definition identifies."""
-        identity = await self._runs.get_definition_identity(definition_id)
+        async with self._uow_factory() as uow:
+            identity = await uow.records.get_definition_identity(definition_id)
         if identity is None:
             raise RecordDefinitionNotFoundError(definition_id)
         if kind is not None and kind is not identity.kind:
@@ -329,42 +351,49 @@ class RecordService:
 
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""
-        source = tuple(await self._candidates.list_confirmed(request.kind))
-        scoped = tuple(
-            candidate
-            for candidate in source
-            if request.version_id is None or request.version_id in candidate.version_ids
-        )
-        identity = CategoryIdentity(
-            request.kind,
-            request.base_key,
-            tuple(sorted(request.restriction_ids)),
-            tuple(sorted(request.restriction_values)),
-        )
-        competition = self._computation.requested_competition(identity, scoped)
-        if competition is None:
-            raise NoMatchingRecordCategoryError(kind=request.kind.value, base_key=request.base_key)
+        async with self._uow_factory() as uow:
+            source = tuple(await uow.record_candidates.list_confirmed(request.kind))
+            scoped = tuple(
+                candidate
+                for candidate in source
+                if request.version_id is None or request.version_id in candidate.version_ids
+            )
+            identity = CategoryIdentity(
+                request.kind,
+                request.base_key,
+                tuple(sorted(request.restriction_ids)),
+                tuple(sorted(request.restriction_values)),
+            )
+            competition = self._computation.requested_competition(identity, scoped)
+            if competition is None:
+                raise NoMatchingRecordCategoryError(kind=request.kind.value, base_key=request.base_key)
 
-        ruleset_id = await self._runs.active_ruleset_id()
-        await self._runs.save_requested_category(
-            ruleset_id, identity, self._computation.format_record_titles(competition)
-        )
-        return await self._computation.rebuild(
-            current_version_id=request.version_id,
-            kinds=(request.kind,),
-        )
+            ruleset_id = await uow.records.active_ruleset_id()
+            await uow.records.save_requested_category(
+                ruleset_id, identity, self._computation.format_record_titles(competition)
+            )
+            result = await self._computation.rebuild_in(
+                uow,
+                current_version_id=request.version_id,
+                kinds=(request.kind,),
+            )
+            await uow.commit()
+            return result
 
 
 class PublicRecordQueryService:
     """Assemble public-complete record details across record and build read boundaries."""
 
-    def __init__(self, records: RecordRunRepository, builds: PublicBuildSummaryReader) -> None:
-        self._records = records
+    def __init__(
+        self, builds: PublicBuildSummaryReader, *, uow_factory: UnitOfWorkFactory[RecordQueryUnitOfWork]
+    ) -> None:
+        self._uow_factory = uow_factory
         self._builds = builds
 
     async def get(self, standing_id: int) -> PublicRecordDetail | None:
         """Return one public detail, rejecting missing or private holder references."""
-        standing = await self._records.get_published_record(standing_id)
+        async with self._uow_factory() as uow:
+            standing = await uow.records.get_published_record(standing_id)
         if standing is None:
             return None
         holders_match_status = bool(standing.holder_build_ids) is (standing.status is ResolutionStatus.RESOLVED)

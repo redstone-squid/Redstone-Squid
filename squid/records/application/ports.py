@@ -15,6 +15,7 @@ from squid.records.application.models import (
     TitleDiagnosticGap,
 )
 from squid.records.domain import BuildKind, FormattedTitle, RecordClass
+from squid.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,3 +92,13 @@ class RecordRunRepository(Protocol):
     async def complete_recompute(self, lease: RecomputeLease) -> None: ...
 
     async def fail_recompute(self, lease: RecomputeLease, error: str) -> None: ...
+
+
+class RecordQueryUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def records(self) -> RecordRunRepository: ...
+
+
+class RecordUnitOfWork(RecordQueryUnitOfWork, Protocol):
+    @property
+    def record_candidates(self) -> RecordCandidateRepository: ...

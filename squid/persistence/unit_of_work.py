@@ -18,6 +18,7 @@ from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuth
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
+from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
@@ -38,6 +39,7 @@ class SqlAlchemyUnitOfWork:
         self._reconciliation = PostgresDiscordSyncQueue(self._active_session)
         self._notifications = PostgresNotificationRepository(self._active_session)
         self._votes = VoteRepository(self._active_session)
+        self._records = PostgresRecordRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -149,6 +151,16 @@ class SqlAlchemyUnitOfWork:
     def votes(self) -> VoteRepository:
         self._active_session()
         return self._votes
+
+    @property
+    def records(self) -> PostgresRecordRepository:
+        self._active_session()
+        return self._records
+
+    @property
+    def record_candidates(self) -> PostgresRecordRepository:
+        self._active_session()
+        return self._records
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

@@ -61,7 +61,6 @@ from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.persistence.wake_listener import PostgresWakeListener
 from squid.posts.application import PostService
 from squid.records.application import PublicRecordQueryService, RecordComputationService, RecordService
-from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
 from squid.schematics.application import (
     RenderRequest,
@@ -305,10 +304,6 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def record_repository(self) -> PostgresRecordRepository:
-        return PostgresRecordRepository(self.db.async_session)
-
-    @cached_property
     def notifications(self) -> NotificationService:
         return NotificationService(
             uow_factory=self.uow_factory,
@@ -317,15 +312,15 @@ class _ServiceGraph:
 
     @cached_property
     def record_computation(self) -> RecordComputationService:
-        return RecordComputationService(self.record_repository, self.record_repository)
+        return RecordComputationService(uow_factory=self.uow_factory)
 
     @cached_property
     def records(self) -> RecordService:
-        return RecordService(self.record_repository, self.record_repository, self.record_computation)
+        return RecordService(self.record_computation, uow_factory=self.uow_factory)
 
     @cached_property
     def public_records(self) -> PublicRecordQueryService:
-        return PublicRecordQueryService(self.record_repository, self.build_queries)
+        return PublicRecordQueryService(self.build_queries, uow_factory=self.uow_factory)
 
     @cached_property
     def artifacts(self) -> ArtifactStore:

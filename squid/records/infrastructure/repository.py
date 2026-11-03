@@ -1,7 +1,7 @@
 """PostgreSQL candidate queries and atomic record-run persistence."""
 
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -10,7 +10,7 @@ from typing import cast
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
@@ -98,259 +98,259 @@ class _DefinitionWrite:
 class PostgresRecordRepository:
     """Load record candidates and atomically publish computation runs."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
-        self._recompute_queue = ClaimedRowQueue(RECORD_RECOMPUTE_QUEUE_SPEC, session_factory)
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+        self._recompute_queue = ClaimedRowQueue(RECORD_RECOMPUTE_QUEUE_SPEC)
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[RecordSourceCandidate]:
         """Load confirmed fixed candidates of one supported kind."""
-        async with self._session_factory() as session:
-            if kind is BuildKind.DOOR:
-                return await self._list_doors(session)
-            if kind is BuildKind.EXTENDER:
-                return await self._list_extenders(session)
-            return ()
+        session = self._session()
+        if kind is BuildKind.DOOR:
+            return await self._list_doors(session)
+        if kind is BuildKind.EXTENDER:
+            return await self._list_extenders(session)
+        return ()
 
     async def active_ruleset_id(self) -> int:
         """Return the running ruleset, activating and queuing it when needed."""
-        async with self._session_factory() as session, session.begin():
-            await _advisory_lock(session, "record-ruleset-activation")
-            active_id = (
-                await session.execute(
-                    select(RecordRuleset.id)
-                    .where(RecordRuleset.activated_at.is_not(None))
-                    .order_by(RecordRuleset.activated_at.desc(), RecordRuleset.id.desc())
-                    .limit(1)
-                )
-            ).scalar_one_or_none()
-            ruleset = (
-                await session.execute(
-                    select(RecordRuleset).where(
-                        RecordRuleset.document_hash == RULESET_DOCUMENT_HASH,
-                        RecordRuleset.calculator_version == CALCULATOR_VERSION,
-                        RecordRuleset.formatter_version == FORMATTER_VERSION,
-                    )
-                )
-            ).scalar_one_or_none()
-            if ruleset is not None and ruleset.id == active_id:
-                return ruleset.id
-
-            now = Instant.now()
-            if ruleset is None:
-                ruleset = RecordRuleset(
-                    document_hash=RULESET_DOCUMENT_HASH,
-                    calculator_version=CALCULATOR_VERSION,
-                    formatter_version=FORMATTER_VERSION,
-                    activated_at=now,
-                )
-                session.add(ruleset)
-                await session.flush()
-            else:
-                ruleset.activated_at = now
+        session = self._session()
+        await _advisory_lock(session, "record-ruleset-activation")
+        active_id = (
             await session.execute(
-                update(RecordRuleset)
-                .where(RecordRuleset.id != ruleset.id, RecordRuleset.activated_at.is_not(None))
-                .values(activated_at=None)
+                select(RecordRuleset.id)
+                .where(RecordRuleset.activated_at.is_not(None))
+                .order_by(RecordRuleset.activated_at.desc(), RecordRuleset.id.desc())
+                .limit(1)
             )
-            for kind in (BuildKind.DOOR, BuildKind.EXTENDER):
-                await session.execute(
-                    insert(RecordRecomputeQueueItem)
-                    .values(
-                        scope_key=kind.value,
-                        build_kind=kind,
-                        reasons=["ruleset_activation"],
-                    )
-                    .on_conflict_do_update(
-                        index_elements=[RecordRecomputeQueueItem.scope_key],
-                        set_={
-                            "reasons": ["ruleset_activation"],
-                            "enqueued_at": func.now(),
-                            "available_at": func.now(),
-                            "attempts": 0,
-                            "locked_at": None,
-                            "claim_token": None,
-                            "last_error": None,
-                        },
-                    )
+        ).scalar_one_or_none()
+        ruleset = (
+            await session.execute(
+                select(RecordRuleset).where(
+                    RecordRuleset.document_hash == RULESET_DOCUMENT_HASH,
+                    RecordRuleset.calculator_version == CALCULATOR_VERSION,
+                    RecordRuleset.formatter_version == FORMATTER_VERSION,
                 )
+            )
+        ).scalar_one_or_none()
+        if ruleset is not None and ruleset.id == active_id:
             return ruleset.id
+
+        now = Instant.now()
+        if ruleset is None:
+            ruleset = RecordRuleset(
+                document_hash=RULESET_DOCUMENT_HASH,
+                calculator_version=CALCULATOR_VERSION,
+                formatter_version=FORMATTER_VERSION,
+                activated_at=now,
+            )
+            session.add(ruleset)
+            await session.flush()
+        else:
+            ruleset.activated_at = now
+        await session.execute(
+            update(RecordRuleset)
+            .where(RecordRuleset.id != ruleset.id, RecordRuleset.activated_at.is_not(None))
+            .values(activated_at=None)
+        )
+        for kind in (BuildKind.DOOR, BuildKind.EXTENDER):
+            await session.execute(
+                insert(RecordRecomputeQueueItem)
+                .values(
+                    scope_key=kind.value,
+                    build_kind=kind,
+                    reasons=["ruleset_activation"],
+                )
+                .on_conflict_do_update(
+                    index_elements=[RecordRecomputeQueueItem.scope_key],
+                    set_={
+                        "reasons": ["ruleset_activation"],
+                        "enqueued_at": func.now(),
+                        "available_at": func.now(),
+                        "attempts": 0,
+                        "locked_at": None,
+                        "claim_token": None,
+                        "last_error": None,
+                    },
+                )
+            )
+        return ruleset.id
 
     async def active_current_version_id(self) -> int | None:
         """Return the version pinned by the newest active current-scope run."""
-        async with self._session_factory() as session:
-            statement = (
-                select(RecordComputationRun.version_id)
-                .where(
-                    RecordComputationRun.is_active,
-                    RecordComputationRun.version_id.is_not(None),
-                )
-                .order_by(RecordComputationRun.started_at.desc(), RecordComputationRun.id.desc())
-                .limit(1)
+        session = self._session()
+        statement = (
+            select(RecordComputationRun.version_id)
+            .where(
+                RecordComputationRun.is_active,
+                RecordComputationRun.version_id.is_not(None),
             )
-            return (await session.execute(statement)).scalar_one_or_none()
+            .order_by(RecordComputationRun.started_at.desc(), RecordComputationRun.id.desc())
+            .limit(1)
+        )
+        return (await session.execute(statement)).scalar_one_or_none()
 
     async def activate(self, batch: ComputationBatch) -> int:
         """Persist and activate a complete run in one transaction."""
-        async with self._session_factory() as session, session.begin():
-            await _advisory_lock(
-                session,
-                f"record-run:{batch.kind.value}:{batch.version_id}",
+        session = self._session()
+        await _advisory_lock(
+            session,
+            f"record-run:{batch.kind.value}:{batch.version_id}",
+        )
+        version_predicate = (
+            RecordComputationRun.version_id.is_(None)
+            if batch.version_id is None
+            else RecordComputationRun.version_id == batch.version_id
+        )
+        previous_run_id = await session.scalar(
+            select(RecordComputationRun.id).where(
+                RecordComputationRun.build_kind == batch.kind,
+                version_predicate,
+                RecordComputationRun.is_active.is_(True),
             )
-            version_predicate = (
-                RecordComputationRun.version_id.is_(None)
-                if batch.version_id is None
-                else RecordComputationRun.version_id == batch.version_id
-            )
-            previous_run_id = await session.scalar(
-                select(RecordComputationRun.id).where(
-                    RecordComputationRun.build_kind == batch.kind,
-                    version_predicate,
-                    RecordComputationRun.is_active.is_(True),
-                )
-            )
-            run = RecordComputationRun(
-                ruleset_id=batch.ruleset_id,
-                build_kind=batch.kind,
-                version_id=batch.version_id,
-                status=RecordComputationStatus.RUNNING,
-            )
-            session.add(run)
-            await session.flush()
+        )
+        run = RecordComputationRun(
+            ruleset_id=batch.ruleset_id,
+            build_kind=batch.kind,
+            version_id=batch.version_id,
+            status=RecordComputationStatus.RUNNING,
+        )
+        session.add(run)
+        await session.flush()
 
-            definitions = await self._ensure_definitions(session, batch)
-            results: list[tuple[ComputedRecord, RecordRule, RecordStanding]] = []
-            for computed, definition in zip(batch.records, definitions, strict=True):
-                result = RecordStanding(
-                    run_id=run.id,
-                    definition_id=definition.id,
-                    status=computed.resolution.status,
-                    gap_reasons=_serialize_gaps(computed),
-                    provisional_build_id=_provisional_build_id(computed),
-                    history_complete=computed.history_complete,
-                )
-                session.add(result)
-                results.append((computed, definition, result))
+        definitions = await self._ensure_definitions(session, batch)
+        results: list[tuple[ComputedRecord, RecordRule, RecordStanding]] = []
+        for computed, definition in zip(batch.records, definitions, strict=True):
+            result = RecordStanding(
+                run_id=run.id,
+                definition_id=definition.id,
+                status=computed.resolution.status,
+                gap_reasons=_serialize_gaps(computed),
+                provisional_build_id=_provisional_build_id(computed),
+                history_complete=computed.history_complete,
+            )
+            session.add(result)
+            results.append((computed, definition, result))
 
-            await session.flush()
-            history_chains: list[list[RecordHolderHistory]] = []
-            for computed, definition, result in results:
-                candidates_by_id = {candidate.build_id: candidate for candidate in computed.competition.candidates}
-                for build_id in computed.resolution.holder_ids:
+        await session.flush()
+        history_chains: list[list[RecordHolderHistory]] = []
+        for computed, definition, result in results:
+            candidates_by_id = {candidate.build_id: candidate for candidate in computed.competition.candidates}
+            for build_id in computed.resolution.holder_ids:
+                candidate = candidates_by_id[build_id]
+                session.add(
+                    RecordResultHolder(
+                        result_id=result.id,
+                        build_id=build_id,
+                        rank=1,
+                        metric_snapshot=_metric_snapshot(computed, candidate),
+                        title=_holder_title(computed, build_id),
+                        subtitle=computed.title.subtitle,
+                        completion_at=_as_instant(candidate.completion_at),
+                    )
+                )
+
+            history_chain: list[RecordHolderHistory] = []
+            for period in computed.history:
+                for build_id in period.build_ids:
                     candidate = candidates_by_id[build_id]
-                    session.add(
-                        RecordResultHolder(
-                            result_id=result.id,
-                            build_id=build_id,
-                            rank=1,
-                            metric_snapshot=_metric_snapshot(computed, candidate),
-                            title=_holder_title(computed, build_id),
-                            subtitle=computed.title.subtitle,
-                            completion_at=_as_instant(candidate.completion_at),
-                        )
+                    history = RecordHolderHistory(
+                        run_id=run.id,
+                        definition_id=definition.id,
+                        build_id=build_id,
+                        predecessor_id=None,
+                        held_from=Instant(period.held_from),
+                        held_until=Instant(period.held_until) if period.held_until is not None else None,
+                        metric_snapshot=_metric_snapshot(computed, candidate),
                     )
+                    session.add(history)
+                    history_chain.append(history)
+            if history_chain:
+                history_chains.append(history_chain)
 
-                history_chain: list[RecordHolderHistory] = []
-                for period in computed.history:
-                    for build_id in period.build_ids:
-                        candidate = candidates_by_id[build_id]
-                        history = RecordHolderHistory(
-                            run_id=run.id,
-                            definition_id=definition.id,
-                            build_id=build_id,
-                            predecessor_id=None,
-                            held_from=Instant(period.held_from),
-                            held_until=Instant(period.held_until) if period.held_until is not None else None,
-                            metric_snapshot=_metric_snapshot(computed, candidate),
-                        )
-                        session.add(history)
-                        history_chain.append(history)
-                if history_chain:
-                    history_chains.append(history_chain)
-
-            if history_chains:
-                await session.flush()
-                for history_chain in history_chains:
-                    for predecessor, history in pairwise(history_chain):
-                        history.predecessor_id = predecessor.id
-
-            await session.execute(
-                update(RecordComputationRun)
-                .where(
-                    RecordComputationRun.build_kind == batch.kind,
-                    version_predicate,
-                    RecordComputationRun.is_active.is_(True),
-                    RecordComputationRun.id != run.id,
-                )
-                .values(is_active=False)
-            )
-            run.status = RecordComputationStatus.COMPLETED
-            run.completed_at = Instant.now()
-            run.is_active = True
+        if history_chains:
             await session.flush()
-            await session.execute(
-                select(
-                    func.public.publish_domain_event(
-                        "record_run.activated",
-                        1,
-                        "record_run",
-                        run.id,
-                        func.jsonb_build_object(
-                            "previous_run_id",
-                            previous_run_id,
-                            "baseline",
-                            previous_run_id is None,
-                            "build_kind",
-                            batch.kind.value,
-                            "version_id",
-                            batch.version_id,
-                        ),
-                    )
+            for history_chain in history_chains:
+                for predecessor, history in pairwise(history_chain):
+                    history.predecessor_id = predecessor.id
+
+        await session.execute(
+            update(RecordComputationRun)
+            .where(
+                RecordComputationRun.build_kind == batch.kind,
+                version_predicate,
+                RecordComputationRun.is_active.is_(True),
+                RecordComputationRun.id != run.id,
+            )
+            .values(is_active=False)
+        )
+        run.status = RecordComputationStatus.COMPLETED
+        run.completed_at = Instant.now()
+        run.is_active = True
+        await session.flush()
+        await session.execute(
+            select(
+                func.public.publish_domain_event(
+                    "record_run.activated",
+                    1,
+                    "record_run",
+                    run.id,
+                    func.jsonb_build_object(
+                        "previous_run_id",
+                        previous_run_id,
+                        "baseline",
+                        previous_run_id is None,
+                        "build_kind",
+                        batch.kind.value,
+                        "version_id",
+                        batch.version_id,
+                    ),
                 )
             )
-            return run.id
+        )
+        return run.id
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         """List decisive gaps from currently active computation runs."""
-        async with self._session_factory() as session:
-            statement = (
-                select(RecordRule, RecordStanding)
-                .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
-                .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
-                .where(
-                    RecordComputationRun.is_active.is_(True),
-                    RecordStanding.status == ResolutionStatus.UNRESOLVED,
-                )
+        session = self._session()
+        statement = (
+            select(RecordRule, RecordStanding)
+            .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
+            .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
+            .where(
+                RecordComputationRun.is_active.is_(True),
+                RecordStanding.status == ResolutionStatus.UNRESOLVED,
             )
-            if kind is not None:
-                statement = statement.where(RecordRule.build_kind == kind)
-            rows = (await session.execute(statement)).all()
-            return tuple(_gap_from_row(definition, result) for definition, result in rows)
+        )
+        if kind is not None:
+            statement = statement.where(RecordRule.build_kind == kind)
+        rows = (await session.execute(statement)).all()
+        return tuple(_gap_from_row(definition, result) for definition, result in rows)
 
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         """List active canonical titles containing formatter diagnostics."""
-        async with self._session_factory() as session:
-            statement = (
-                select(RecordRule)
-                .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
-                .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
-                .where(
-                    RecordComputationRun.is_active.is_(True),
-                    RecordRule.title_diagnostics != [],
-                )
-                .distinct()
-                .order_by(RecordRule.id)
+        session = self._session()
+        statement = (
+            select(RecordRule)
+            .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
+            .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
+            .where(
+                RecordComputationRun.is_active.is_(True),
+                RecordRule.title_diagnostics != [],
             )
-            if kind is not None:
-                statement = statement.where(RecordRule.build_kind == kind)
-            definitions = (await session.execute(statement)).scalars()
-            return tuple(
-                TitleDiagnosticGap(
-                    definition_id=definition.id,
-                    title=definition.title,
-                    diagnostics=tuple(definition.title_diagnostics),
-                )
-                for definition in definitions
+            .distinct()
+            .order_by(RecordRule.id)
+        )
+        if kind is not None:
+            statement = statement.where(RecordRule.build_kind == kind)
+        definitions = (await session.execute(statement)).scalars()
+        return tuple(
+            TitleDiagnosticGap(
+                definition_id=definition.id,
+                title=definition.title,
+                diagnostics=tuple(definition.title_diagnostics),
             )
+            for definition in definitions
+        )
 
     async def get_published_record(self, result_id: int) -> PublishedRecord | None:
         """Return a published result by its public result identifier."""
@@ -382,14 +382,14 @@ class PostgresRecordRepository:
 
     async def count_published_records(self) -> int:
         """Count the results belonging to the currently active computation runs."""
-        async with self._session_factory() as session:
-            statement = (
-                select(func.count())
-                .select_from(RecordStanding)
-                .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
-                .where(RecordComputationRun.is_active.is_(True))
-            )
-            return await session.scalar(statement) or 0
+        session = self._session()
+        statement = (
+            select(func.count())
+            .select_from(RecordStanding)
+            .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
+            .where(RecordComputationRun.is_active.is_(True))
+        )
+        return await session.scalar(statement) or 0
 
     async def _active_records(
         self,
@@ -401,86 +401,86 @@ class PostgresRecordRepository:
         descending: bool = True,
         limit: int,
     ) -> tuple[PublishedRecord, ...]:
-        async with self._session_factory() as session:
-            statement = (
-                select(RecordStanding, RecordRule)
-                .join(RecordRule, RecordRule.id == RecordStanding.definition_id)
-                .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
-                .where(RecordComputationRun.is_active.is_(True))
-            )
-            if result_id is not None:
-                statement = statement.where(RecordStanding.id == result_id)
-            reverse = before_id is not None
-            if before_id is not None:
-                # Walk away from the anchor in reversed display order; the page is flipped back below.
+        session = self._session()
+        statement = (
+            select(RecordStanding, RecordRule)
+            .join(RecordRule, RecordRule.id == RecordStanding.definition_id)
+            .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
+            .where(RecordComputationRun.is_active.is_(True))
+        )
+        if result_id is not None:
+            statement = statement.where(RecordStanding.id == result_id)
+        reverse = before_id is not None
+        if before_id is not None:
+            # Walk away from the anchor in reversed display order; the page is flipped back below.
+            statement = statement.where(
+                RecordStanding.id > before_id if descending else RecordStanding.id < before_id
+            ).order_by(RecordStanding.id.asc() if descending else RecordStanding.id.desc())
+        else:
+            if after_id is not None:
                 statement = statement.where(
-                    RecordStanding.id > before_id if descending else RecordStanding.id < before_id
-                ).order_by(RecordStanding.id.asc() if descending else RecordStanding.id.desc())
-            else:
-                if after_id is not None:
-                    statement = statement.where(
-                        RecordStanding.id < after_id if descending else RecordStanding.id > after_id
-                    )
-                statement = statement.order_by(RecordStanding.id.desc() if descending else RecordStanding.id.asc())
-            if offset:
-                statement = statement.offset(offset)
-            rows = (await session.execute(statement.limit(limit))).all()
-            if reverse:
-                rows = list(reversed(rows))
-            if not rows:
-                return ()
-            result_ids = [result.id for result, _definition in rows]
-            holder_rows = (
-                await session.execute(
-                    select(RecordResultHolder.result_id, RecordResultHolder.build_id)
-                    .where(RecordResultHolder.result_id.in_(result_ids))
-                    .order_by(RecordResultHolder.result_id, RecordResultHolder.rank, RecordResultHolder.build_id)
+                    RecordStanding.id < after_id if descending else RecordStanding.id > after_id
                 )
-            ).all()
-            holders: dict[int, list[int]] = {}
-            for holder_result_id, build_id in holder_rows:
-                holders.setdefault(holder_result_id, []).append(build_id)
-            return tuple(
-                PublishedRecord(
-                    id=result.id,
-                    definition_id=definition.id,
-                    competition_id=definition.competition_id,
-                    title=definition.title,
-                    subtitle=definition.subtitle,
-                    record_class=definition.record_class,
-                    build_kind=definition.build_kind,
-                    version_scope=definition.version_scope,
-                    status=result.status,
-                    holder_build_ids=tuple(holders.get(result.id, ())),
-                    computed_at=result.computed_at.to_stdlib(),
-                )
-                for result, definition in rows
+            statement = statement.order_by(RecordStanding.id.desc() if descending else RecordStanding.id.asc())
+        if offset:
+            statement = statement.offset(offset)
+        rows = (await session.execute(statement.limit(limit))).all()
+        if reverse:
+            rows = list(reversed(rows))
+        if not rows:
+            return ()
+        result_ids = [result.id for result, _definition in rows]
+        holder_rows = (
+            await session.execute(
+                select(RecordResultHolder.result_id, RecordResultHolder.build_id)
+                .where(RecordResultHolder.result_id.in_(result_ids))
+                .order_by(RecordResultHolder.result_id, RecordResultHolder.rank, RecordResultHolder.build_id)
             )
+        ).all()
+        holders: dict[int, list[int]] = {}
+        for holder_result_id, build_id in holder_rows:
+            holders.setdefault(holder_result_id, []).append(build_id)
+        return tuple(
+            PublishedRecord(
+                id=result.id,
+                definition_id=definition.id,
+                competition_id=definition.competition_id,
+                title=definition.title,
+                subtitle=definition.subtitle,
+                record_class=definition.record_class,
+                build_kind=definition.build_kind,
+                version_scope=definition.version_scope,
+                status=result.status,
+                holder_build_ids=tuple(holders.get(result.id, ())),
+                computed_at=result.computed_at.to_stdlib(),
+            )
+            for result, definition in rows
+        )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         """Return exact categories previously accepted through public lookup."""
-        async with self._session_factory() as session:
-            keys = (
-                await session.execute(
-                    select(RecordRule.category_key)
-                    .where(
-                        RecordRule.build_kind == kind,
-                        RecordRule.materialization_source == RecordMaterializationSource.PUBLIC_LOOKUP,
-                    )
-                    .distinct()
+        session = self._session()
+        keys = (
+            await session.execute(
+                select(RecordRule.category_key)
+                .where(
+                    RecordRule.build_kind == kind,
+                    RecordRule.materialization_source == RecordMaterializationSource.PUBLIC_LOOKUP,
                 )
-            ).scalars()
-            identities: list[CategoryIdentity] = []
-            for key in keys:
-                identity = parse_category_key(key)
-                if identity is not None:
-                    identities.append(identity)
-            return tuple(identities)
+                .distinct()
+            )
+        ).scalars()
+        identities: list[CategoryIdentity] = []
+        for key in keys:
+            identity = parse_category_key(key)
+            if identity is not None:
+                identities.append(identity)
+        return tuple(identities)
 
     async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
         """Return the parsed category identity of one stored definition."""
-        async with self._session_factory() as session:
-            key = await session.scalar(select(RecordRule.category_key).where(RecordRule.id == definition_id))
+        session = self._session()
+        key = await session.scalar(select(RecordRule.category_key).where(RecordRule.id == definition_id))
         if key is None:
             return None
         identity = parse_category_key(key)
@@ -497,50 +497,50 @@ class PostgresRecordRepository:
         titles: Mapping[RecordClass, FormattedTitle],
     ) -> None:
         """Persist an accepted exact category so future rebuilds retain it."""
-        async with self._session_factory.begin() as session:
-            await self._write_definitions(
-                session,
-                ruleset_id=ruleset_id,
-                kind=category.kind,
-                scope=VersionScope.ALL_TIME,
-                version_id=None,
-                writes=tuple(
-                    _DefinitionWrite(
-                        record_class,
-                        category.key,
-                        title,
-                        RecordMaterializationSource.PUBLIC_LOOKUP,
-                        tuple((RecordFacetKind.RESTRICTION, facet_id) for facet_id in category.restriction_ids),
-                    )
-                    for record_class, title in titles.items()
-                ),
-            )
+        session = self._session()
+        await self._write_definitions(
+            session,
+            ruleset_id=ruleset_id,
+            kind=category.kind,
+            scope=VersionScope.ALL_TIME,
+            version_id=None,
+            writes=tuple(
+                _DefinitionWrite(
+                    record_class,
+                    category.key,
+                    title,
+                    RecordMaterializationSource.PUBLIC_LOOKUP,
+                    tuple((RecordFacetKind.RESTRICTION, facet_id) for facet_id in category.restriction_ids),
+                )
+                for record_class, title in titles.items()
+            ),
+        )
 
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None:
         """Enqueue a durable full-kind rebuild hint."""
         scope_key = f"{kind.value}:{build_id if build_id is not None else '*'}"
-        async with self._session_factory() as session, session.begin():
-            statement = (
-                insert(RecordRecomputeQueueItem)
-                .values(
-                    scope_key=scope_key,
-                    build_kind=kind,
-                    build_id=build_id,
-                    reasons=[reason],
-                )
-                .on_conflict_do_update(
-                    index_elements=[RecordRecomputeQueueItem.scope_key],
-                    set_={
-                        "reasons": [reason],
-                        "enqueued_at": func.now(),
-                        "available_at": func.now(),
-                        "locked_at": None,
-                        "claim_token": None,
-                        "last_error": None,
-                    },
-                )
+        session = self._session()
+        statement = (
+            insert(RecordRecomputeQueueItem)
+            .values(
+                scope_key=scope_key,
+                build_kind=kind,
+                build_id=build_id,
+                reasons=[reason],
             )
-            await session.execute(statement)
+            .on_conflict_do_update(
+                index_elements=[RecordRecomputeQueueItem.scope_key],
+                set_={
+                    "reasons": [reason],
+                    "enqueued_at": func.now(),
+                    "available_at": func.now(),
+                    "locked_at": None,
+                    "claim_token": None,
+                    "last_error": None,
+                },
+            )
+        )
+        await session.execute(statement)
 
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
         """Lease queued scopes without holding locks during computation.
@@ -550,7 +550,7 @@ class PostgresRecordRepository:
         killed process was never reclaimed and reported as in-flight indefinitely.
         The shared readiness predicate brings the timeout with it.
         """
-        rows = await self._recompute_queue.claim(limit=limit)
+        rows = await self._recompute_queue.claim(limit=limit, session=self._session())
         return RecomputeLease(
             kinds=tuple(dict.fromkeys(row.build_kind for row in rows)),
             claim_tokens=tuple(self._recompute_queue.token_of(row) for row in rows),
@@ -565,11 +565,11 @@ class PostgresRecordRepository:
         AND locked_at IS NOT NULL`. Fencing on the tokens this worker was handed
         leaves the other worker's row alone.
         """
-        await self._recompute_queue.complete_batch(lease.claim_tokens)
+        await self._recompute_queue.complete_batch(lease.claim_tokens, session=self._session())
 
     async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
         """Release the failed leases this worker still owns for a later retry."""
-        await self._recompute_queue.fail_batch(lease.claim_tokens, error=error)
+        await self._recompute_queue.fail_batch(lease.claim_tokens, error=error, session=self._session())
 
     async def _list_doors(self, session: AsyncSession) -> Sequence[RecordSourceCandidate]:
         statement = (
