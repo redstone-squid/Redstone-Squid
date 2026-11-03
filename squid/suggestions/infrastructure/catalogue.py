@@ -8,8 +8,6 @@ registry never disagree about what a name means.
 
 from typing import Protocol
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_LIST,
@@ -19,6 +17,7 @@ from squid.permissions.domain.catalogue import (
 from squid.records.domain import BuildKind, RecordClass, VersionScope
 from squid.search.application.fields import FieldRegistry
 from squid.suggestions.application import SuggestionRegistry, SuggestionSource
+from squid.suggestions.application.queries import SuggestionRepository
 from squid.suggestions.domain import SourceKind, ValueType, Visibility
 from squid.suggestions.infrastructure.providers import (
     DocumentProvider,
@@ -56,7 +55,6 @@ from squid.suggestions.infrastructure.providers.records import (
 )
 from squid.suggestions.infrastructure.providers.taxonomy import PendingTagDefinitions
 from squid.suggestions.infrastructure.providers.versions import CanonicalMinecraftVersions
-from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
 from squid.tags.domain import TagSemanticKind
 
 PUBLIC_BUILD_STATUSES = ("confirmed",)
@@ -73,8 +71,7 @@ class SearchFields(Protocol):
 
 def build_registry(
     *,
-    session_factory: async_sessionmaker[AsyncSession] | None = None,
-    repository: PostgresSuggestionRepository | None = None,
+    repository: SuggestionRepository,
     search: SearchFields,
     versions: CanonicalMinecraftVersions,
     tags: PendingTagDefinitions,
@@ -90,11 +87,6 @@ def build_registry(
     against a service that does not exist. `repository` is an injection point for tests, which need
     the real providers and revision arithmetic without a database behind them.
     """
-    if repository is None:
-        if session_factory is None:
-            msg = "build_registry needs either a session factory or a repository"
-            raise ValueError(msg)
-        repository = PostgresSuggestionRepository(session_factory)
     return SuggestionRegistry.of(
         (
             *_taxonomy_sources(repository),
@@ -213,7 +205,7 @@ def _viewer_sources(notifications: AccountSubscriptions | None) -> tuple[Suggest
     )
 
 
-def _taxonomy_sources(repository: PostgresSuggestionRepository) -> tuple[SuggestionSource, ...]:
+def _taxonomy_sources(repository: SuggestionRepository) -> tuple[SuggestionSource, ...]:
     return (
         SuggestionSource(
             id="approved_restrictions",
@@ -265,7 +257,7 @@ def _taxonomy_sources(repository: PostgresSuggestionRepository) -> tuple[Suggest
 
 def _search_sources(
     search: SearchFields,
-    repository: PostgresSuggestionRepository,
+    repository: SuggestionRepository,
 ) -> tuple[SuggestionSource, ...]:
     return (
         SuggestionSource(
@@ -288,7 +280,7 @@ def _search_sources(
     )
 
 
-def _document_sources(repository: PostgresSuggestionRepository) -> tuple[SuggestionSource, ...]:
+def _document_sources(repository: SuggestionRepository) -> tuple[SuggestionSource, ...]:
     return (
         SuggestionSource(
             id="builds",

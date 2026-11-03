@@ -7,17 +7,19 @@ exactly the shape of query that must not do that on every keystroke.
 """
 
 from collections.abc import AsyncGenerator
+from functools import partial
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.search.models import SearchDocument, SearchDocumentFacet
+from squid.suggestions.application.queries import SuggestionQueryService
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.providers.search_query import SearchQueryProvider
-from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
 
 pytestmark = pytest.mark.asyncio
 
@@ -88,7 +90,7 @@ async def test_facet_values_prefix_match_case_insensitively(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     assert await repository.facet_values("restriction", "sea", limit=10) == ["Seamless"]
     assert await repository.facet_values("restriction", "SEA", limit=10) == ["Seamless"]
@@ -100,7 +102,7 @@ async def test_facet_values_are_scoped_to_one_field(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     assert await repository.facet_values("restriction", "Builder", limit=10) == []
 
 
@@ -109,7 +111,7 @@ async def test_facet_values_are_distinct_and_bounded(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     values = await repository.facet_values("creator", "builder", limit=5)
     assert len(values) == 5
     assert len(set(values)) == 5
@@ -147,7 +149,7 @@ async def test_a_half_typed_field_expression_suggests_values_instead_of_raising(
     await seed(async_session_factory)
     provider = SearchQueryProvider(
         StaticFields(),
-        PostgresSuggestionRepository(async_session_factory),
+        SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
     )
 
     result = await provider.suggest(SuggestionRequest(source="search_query", query="restriction:sea", limit=10))
@@ -164,7 +166,7 @@ async def test_a_value_containing_a_space_is_quoted_so_it_parses_back_as_one_tok
     await seed(async_session_factory)
     provider = SearchQueryProvider(
         StaticFields(),
-        PostgresSuggestionRepository(async_session_factory),
+        SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
     )
 
     result = await provider.suggest(SuggestionRequest(source="search_query", query="restriction:full", limit=10))

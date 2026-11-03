@@ -100,6 +100,7 @@ from squid.submissions.infrastructure.inference_codec import PydanticInferenceRu
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.suggestions.application import SuggestionService
+from squid.suggestions.application.queries import SuggestionQueryService
 from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
 from squid.sync import DiscordReconciliationService
 from squid.tags.application import TagService
@@ -483,11 +484,15 @@ class _ServiceGraph:
         return SearchProjectionService(uow_factory=self.uow_factory)
 
     @cached_property
+    def suggestion_queries(self) -> SuggestionQueryService:
+        return SuggestionQueryService(uow_factory=self.uow_factory)
+
+    @cached_property
     def suggestions(self) -> SuggestionService:
         """Suggestion sources available to every process."""
         return SuggestionService(
             build_suggestion_registry(
-                session_factory=self.db.async_session,
+                repository=self.suggestion_queries,
                 search=self.search,
                 versions=self.version_service,
                 tags=self.tags,
@@ -501,7 +506,7 @@ class _ServiceGraph:
         """Suggestions plus the guild-scoped sources only the gateway process can answer."""
         return SuggestionService(
             build_suggestion_registry(
-                session_factory=self.db.async_session,
+                repository=self.suggestion_queries,
                 search=self.search,
                 versions=self.version_service,
                 tags=self.tags,

@@ -9,8 +9,8 @@ would only discard rows it cannot see a literal reason to keep.
 from collections.abc import Collection, Sequence
 from typing import Protocol
 
+from squid.suggestions.application.queries import DocumentEntry
 from squid.suggestions.domain import MAX_SUGGESTIONS, Suggestion, SuggestionRequest, SuggestionResult
-from squid.suggestions.infrastructure.repository import DocumentEntry
 
 
 class DocumentReader(Protocol):

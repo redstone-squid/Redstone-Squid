@@ -5,9 +5,9 @@ from collections.abc import Sequence
 import pytest
 
 from squid.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource, content_revision
+from squid.suggestions.application.queries import TaxonomyEntry
 from squid.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
 from squid.suggestions.infrastructure.providers import TaxonomyProvider
-from squid.suggestions.infrastructure.repository import TaxonomyEntry
 
 
 class TaxonomyReader:

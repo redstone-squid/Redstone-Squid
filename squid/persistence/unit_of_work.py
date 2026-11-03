@@ -39,6 +39,7 @@ from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
+from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
 from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.infrastructure.repository import VersionRepository
@@ -80,6 +81,7 @@ class SqlAlchemyUnitOfWork:
         self._search_embeddings = PostgresSearchEmbeddingQueue(self._active_session)
         self._search_vectors = PostgresSearchVectors(self._active_session)
         self._search_projection = PostgresSearchProjection(self._active_session)
+        self._suggestions = PostgresSuggestionRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -291,6 +293,11 @@ class SqlAlchemyUnitOfWork:
     def search_projection(self) -> PostgresSearchProjection:
         self._active_session()
         return self._search_projection
+
+    @property
+    def suggestions(self) -> PostgresSuggestionRepository:
+        self._active_session()
+        return self._suggestions
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

@@ -10,6 +10,7 @@ alias on every keystroke.
 # matter here: they are the inputs whose folding this file exists to pin.
 
 from collections.abc import AsyncGenerator
+from functools import partial
 
 import pytest
 from sqlalchemy import text
@@ -19,7 +20,8 @@ from whenever import Instant
 from squid.accounts.domain import ClaimMethod
 from squid.accounts.models import Account, CreatorAlias
 from squid.persistence.base import Base
-from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.suggestions.application.queries import SuggestionQueryService
 
 pytestmark = pytest.mark.asyncio
 
@@ -66,7 +68,7 @@ async def test_prefix_matches_regardless_of_typed_case(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     for typed in ("Notch", "notch", "NOTCH", "  notc"):
         names = [name for name, _claimed in await repository.creators(typed, limit=10)]
@@ -79,7 +81,7 @@ async def test_prefix_matches_across_compatibility_and_case_folding(
 ) -> None:
     """The query is folded by `fold_creator_name`, so it reaches names `casefold` unified."""
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     assert [name for name, _ in await repository.creators("Σς", limit=10)] == ["ΣΣ"]
     assert [name for name, _ in await repository.creators("strasse", limit=10)] == ["Straße"]
@@ -93,7 +95,7 @@ async def test_public_creator_profile_prefix_uses_the_same_compatibility_fold(
     typed: str,
 ) -> None:
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     profiles = await repository.creator_profiles(typed, limit=10)
 
@@ -105,7 +107,7 @@ async def test_claimed_flag_is_reported(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     assert await repository.creators("Ａlice", limit=10) == [("Ａlice", True)]
     assert await repository.creators("Notch", limit=10) == [("Notch", False)]
@@ -116,7 +118,7 @@ async def test_results_are_bounded(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     assert len(await repository.creators("builder", limit=5)) == 5
 
@@ -127,7 +129,7 @@ async def test_wildcards_in_the_query_are_escaped(
 ) -> None:
     """`%` is a literal a user can type, not a match-anything the typeahead should honour."""
     await seed(async_session_factory)
-    repository = PostgresSuggestionRepository(async_session_factory)
+    repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     assert await repository.creators("%", limit=10) == []
     assert await repository.creators("Buil%er", limit=10) == []

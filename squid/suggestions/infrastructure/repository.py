@@ -5,11 +5,10 @@ together with every alias a user might type, rather than the normalized entities
 services return.
 """
 
-from collections.abc import Collection, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Collection, Sequence
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from squid.accounts.domain import fold_creator_name
@@ -17,6 +16,7 @@ from squid.accounts.models import Account, CreatorAlias
 from squid.records.domain import VersionScope
 from squid.records.models import RecordRule, RecordSeries
 from squid.search.models import SearchDocument, SearchDocumentFacet
+from squid.suggestions.application.queries import DocumentEntry, TaxonomyEntry
 from squid.tags.models import TagApplicability, TagDefinition
 from squid.versions.models import Version
 
@@ -24,32 +24,11 @@ TRIGRAM_FLOOR = 0.1
 """Minimum trigram similarity, matching what `PostgresSearchRepository.suggest` already accepts."""
 
 
-@dataclass(frozen=True, slots=True)
-class TaxonomyEntry:
-    """One taxonomy value and every string that should match it."""
-
-    id: int
-    stable_key: str
-    display_name: str
-    semantic_kind: str
-    aliases: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class DocumentEntry:
-    """One projected resource offered as a completion."""
-
-    source_key: str
-    title: str
-    subtitle: str | None
-    status: str | None
-
-
 class PostgresSuggestionRepository:
     """Suggestion-shaped reads over the taxonomy tables."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
     async def taxonomy(
         self,
@@ -79,8 +58,8 @@ class PostgresSuggestionRepository:
             statement = statement.join(TagApplicability, TagApplicability.tag_id == TagDefinition.id).where(
                 TagApplicability.build_kind == build_kind
             )
-        async with self._session_factory() as session:
-            definitions = (await session.scalars(statement)).unique().all()
+        session = self._session()
+        definitions = (await session.scalars(statement)).unique().all()
         return [
             TaxonomyEntry(
                 id=row.id,
@@ -127,8 +106,8 @@ class PostgresSuggestionRepository:
             # No query yet: offer what changed most recently, which is what a moderator working a
             # queue or a submitter revisiting their build is looking for.
             statement = statement.order_by(SearchDocument.refreshed_at.desc())
-        async with self._session_factory() as session:
-            rows = (await session.execute(statement.limit(limit))).all()
+        session = self._session()
+        rows = (await session.execute(statement.limit(limit))).all()
         return [
             DocumentEntry(source_key=row.source_key, title=row.title, subtitle=row.subtitle, status=row.status)
             for row in rows
@@ -150,8 +129,8 @@ class PostgresSuggestionRepository:
                 condition = or_(condition, RecordRule.id == int(terms))
             statement = statement.where(condition)
         statement = statement.order_by(RecordRule.title, RecordRule.id).limit(limit)
-        async with self._session_factory() as session:
-            return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
+        session = self._session()
+        return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
 
     async def version_ids(self) -> Sequence[tuple[int, str]]:
         """Return each recognized version's database id with its display name.
@@ -171,8 +150,8 @@ class PostgresSuggestionRepository:
             Version.minor_version.desc(),
             Version.patch_number.desc(),
         )
-        async with self._session_factory() as session:
-            rows = (await session.execute(statement)).all()
+        session = self._session()
+        rows = (await session.execute(statement)).all()
         return [(row.id, f"{row.edition} {row.major_version}.{row.minor_version}.{row.patch_number}") for row in rows]
 
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
@@ -190,8 +169,8 @@ class PostgresSuggestionRepository:
         if terms:
             statement = statement.having(func.min(CreatorAlias.normalized_name).startswith(terms))
         statement = statement.order_by("name").limit(limit)
-        async with self._session_factory() as session:
-            rows = (await session.execute(statement)).all()
+        session = self._session()
+        rows = (await session.execute(statement)).all()
         return [(str(row.public_creator_id), row.name) for row in rows]
 
     async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
@@ -209,8 +188,8 @@ class PostgresSuggestionRepository:
         if normalized:
             statement = statement.where(func.lower(SearchDocumentFacet.text_value).startswith(normalized))
         statement = statement.distinct().order_by(SearchDocumentFacet.text_value).limit(limit)
-        async with self._session_factory() as session:
-            return [value for value in (await session.scalars(statement)).all() if value is not None]
+        session = self._session()
+        return [value for value in (await session.scalars(statement)).all() if value is not None]
 
     async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
         """Return record competition UUIDs with the newest definition's readable title.
@@ -231,8 +210,8 @@ class PostgresSuggestionRepository:
         if terms:
             statement = statement.where(or_(latest.c.title.ilike(f"%{terms}%"), latest.c.subtitle.ilike(f"%{terms}%")))
         statement = statement.order_by(latest.c.title, RecordSeries.public_id).limit(limit)
-        async with self._session_factory() as session:
-            rows = (await session.execute(statement)).all()
+        session = self._session()
+        rows = (await session.execute(statement)).all()
         return [(str(row.public_id), row.title, row.subtitle) for row in rows]
 
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
@@ -245,5 +224,5 @@ class PostgresSuggestionRepository:
         if terms:
             statement = statement.where(CreatorAlias.normalized_name.startswith(terms, autoescape=True))
         statement = statement.order_by(CreatorAlias.normalized_name).limit(limit)
-        async with self._session_factory() as session:
-            return [(row.name, row.account_id is not None) for row in (await session.execute(statement)).all()]
+        session = self._session()
+        return [(row.name, row.account_id is not None) for row in (await session.execute(statement)).all()]
