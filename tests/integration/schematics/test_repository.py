@@ -7,6 +7,7 @@ fingerprint indexes — are all database semantics rather than Python ones.
 
 import hashlib
 from collections.abc import AsyncGenerator
+from functools import partial
 from pathlib import Path
 from typing import cast, override
 
@@ -23,7 +24,10 @@ from squid.artifacts import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import DataIntegrityError
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.application import SchematicPublication
+from squid.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
+from squid.schematics.application.storage import SchematicStorageService
 from squid.schematics.domain.models import (
     SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     FingerprintPreset,
@@ -32,8 +36,6 @@ from squid.schematics.domain.models import (
     SchematicVisibility,
     SimulationResult,
 )
-from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
-from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from tests.unit.schematics.fakes import make_analysis
 
 pytestmark = pytest.mark.asyncio
@@ -77,8 +79,8 @@ def preview_publisher(
     schematic_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
     preview_artifacts: LocalArtifactStore,
-) -> PostgresSchematicPreviewPublisher:
-    return PostgresSchematicPreviewPublisher(async_session_factory, preview_artifacts)
+) -> SchematicPreviewStorage:
+    return SchematicPreviewStorage(preview_artifacts, uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
 
 @pytest.fixture
@@ -92,17 +94,13 @@ def repository(
     schematic_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
     preview_artifacts: LocalArtifactStore,
-    preview_publisher: PostgresSchematicPreviewPublisher,
-) -> PostgresSchematicStore:
-    return PostgresSchematicStore(
-        async_session_factory,
-        preview_artifacts,
-        preview_publisher,
-    )
+    preview_publisher: SchematicPreviewStorage,
+) -> SchematicStorageService:
+    return SchematicStorageService(preview_artifacts, uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
 
 async def _ready_preview_object(
-    publisher: PostgresSchematicPreviewPublisher,
+    publisher: SchematicPreviewStorage,
     artifacts: LocalArtifactStore,
     object_key: str,
     *,
@@ -120,7 +118,7 @@ async def _ready_preview_object(
 
 
 async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     """Content addressing is what makes "this is byte-identical to an existing submission"
     free to detect, so a resubmission must be an upsert rather than a conflict."""
@@ -132,7 +130,7 @@ async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
 
 
 async def test_new_payload_stores_only_object_metadata(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     digest = await repository.put_file(b"verified", source_format=SchematicFormat.LITEMATIC)
@@ -149,7 +147,7 @@ async def test_new_payload_stores_only_object_metadata(
 
 
 async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """An engine upgrade re-analyses; accumulating a row per pass would corrupt every count."""
@@ -167,7 +165,7 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
 
 
 async def test_uploader_account_attribution_reaches_the_persisted_attachment(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Provider-neutral account identity must survive the repository boundary."""
@@ -194,7 +192,7 @@ async def test_uploader_account_attribution_reaches_the_persisted_attachment(
     assert stored_account_id == account_id
 
 
-async def test_promoting_a_new_primary_demotes_the_previous_one(repository: PostgresSchematicStore) -> None:
+async def test_promoting_a_new_primary_demotes_the_previous_one(repository: SchematicStorageService) -> None:
     """A partial unique index allows only one primary per build, so the swap has to happen in
     a single transaction or the second insert fails."""
     first = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
@@ -210,8 +208,8 @@ async def test_promoting_a_new_primary_demotes_the_previous_one(repository: Post
 
 
 async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_the_generated_url(
-    repository: PostgresSchematicStore,
-    preview_publisher: PostgresSchematicPreviewPublisher,
+    repository: SchematicStorageService,
+    preview_publisher: SchematicPreviewStorage,
     preview_artifacts: LocalArtifactStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -299,8 +297,8 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
 
 
 async def test_primary_replacement_wins_a_concurrent_render_publication(
-    repository: PostgresSchematicStore,
-    preview_publisher: PostgresSchematicPreviewPublisher,
+    repository: SchematicStorageService,
+    preview_publisher: SchematicPreviewStorage,
     preview_artifacts: LocalArtifactStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -357,8 +355,8 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
 
 
 async def test_republishing_the_same_recipe_replaces_its_prior_generated_url(
-    repository: PostgresSchematicStore,
-    preview_publisher: PostgresSchematicPreviewPublisher,
+    repository: SchematicStorageService,
+    preview_publisher: SchematicPreviewStorage,
     preview_artifacts: LocalArtifactStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -394,8 +392,8 @@ async def test_republishing_the_same_recipe_replaces_its_prior_generated_url(
 
 
 async def test_preview_cleanup_retains_an_object_referenced_by_multiple_builds(
-    repository: PostgresSchematicStore,
-    preview_publisher: PostgresSchematicPreviewPublisher,
+    repository: SchematicStorageService,
+    preview_publisher: SchematicPreviewStorage,
     preview_artifacts: LocalArtifactStore,
 ) -> None:
     digest = await repository.put_file(b"shared-preview", source_format=SchematicFormat.LITEMATIC)
@@ -428,8 +426,8 @@ async def test_preview_cleanup_retains_an_object_referenced_by_multiple_builds(
 
 
 async def test_missing_cached_preview_is_marked_for_safe_regeneration(
-    repository: PostgresSchematicStore,
-    preview_publisher: PostgresSchematicPreviewPublisher,
+    repository: SchematicStorageService,
+    preview_publisher: SchematicPreviewStorage,
     preview_artifacts: LocalArtifactStore,
 ) -> None:
     digest = await repository.put_file(b"missing-preview", source_format=SchematicFormat.LITEMATIC)
@@ -460,7 +458,7 @@ async def test_missing_cached_preview_is_marked_for_safe_regeneration(
 
 
 async def test_cached_preview_that_disappears_during_publication_is_retried(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
     preview_artifacts: LocalArtifactStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -485,7 +483,7 @@ async def test_cached_preview_that_disappears_during_publication_is_retried(
             await self._delegate.delete(key)
 
     artifacts = DisappearingArtifactStore(preview_artifacts)
-    publisher = PostgresSchematicPreviewPublisher(async_session_factory, artifacts)
+    publisher = SchematicPreviewStorage(artifacts, uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     digest = await repository.put_file(b"vanishing-preview", source_format=SchematicFormat.LITEMATIC)
     schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
     object_key = "renders/vanishing.png"
@@ -515,7 +513,7 @@ async def test_cached_preview_that_disappears_during_publication_is_retried(
 
 
 async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_another_id(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     shared = make_analysis(shape="translated-shape")
     for build_id, payload in ((1, b"original"), (2, b"moved")):
@@ -533,7 +531,7 @@ async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_anoth
 
 
 async def test_an_exact_file_lookup_finds_every_build_using_the_same_bytes(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     digest = await repository.put_file(b"shared", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, digest, make_analysis(), primary=True)
@@ -545,7 +543,7 @@ async def test_an_exact_file_lookup_finds_every_build_using_the_same_bytes(
 
 
 async def test_a_fingerprint_from_another_engine_version_never_matches(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     """Fingerprints are hashes whose definition can change between releases. Comparing across
     versions would return confident garbage, so the version is part of every lookup."""
@@ -559,7 +557,7 @@ async def test_a_fingerprint_from_another_engine_version_never_matches(
 
 
 async def test_metric_neighbours_shortlist_builds_of_comparable_size(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     close = make_analysis(dimensions=(3, 4, 5), block_count=100)
     far = make_analysis(dimensions=(80, 90, 100), block_count=100_000)
@@ -573,7 +571,7 @@ async def test_metric_neighbours_shortlist_builds_of_comparable_size(
 
 
 async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     """`source_format` and `byte_size` describe the bytes, not the analysis, so they live on
     the content-addressed row and are joined back in rather than duplicated per attachment."""
@@ -587,7 +585,7 @@ async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
 
 
 async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     now = Instant.parse_iso("2026-08-11T12:00:00Z")
@@ -621,7 +619,7 @@ async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
 
 
 async def test_schema_ceiling_accepts_the_exact_boundary_and_refuses_one_byte_more(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     """Defence in depth: the size cap is a check constraint, not only an application rule."""
     exact = b"\x00" * SCHEMATIC_FILE_SCHEMA_MAX_BYTES
@@ -636,7 +634,7 @@ async def test_schema_ceiling_accepts_the_exact_boundary_and_refuses_one_byte_mo
 
 
 async def test_simulation_evidence_round_trips_without_changing_the_analysis(
-    repository: PostgresSchematicStore,
+    repository: SchematicStorageService,
 ) -> None:
     digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
     schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
@@ -658,3 +656,39 @@ async def test_simulation_evidence_round_trips_without_changing_the_analysis(
     assert stored is not None
     assert stored.simulation_evidence == evidence
     assert stored.analysis.metrics.block_count == make_analysis().metrics.block_count
+
+
+async def test_preview_cleanup_commits_its_fence_before_deleting_storage(
+    schematic_tables: AsyncEngine,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    started, release = anyio.Event(), anyio.Event()
+
+    class PausedDeletion(LocalArtifactStore):
+        @override
+        async def delete(self, key: str) -> None:
+            started.set()
+            await release.wait()
+            await super().delete(key)
+
+    artifacts = PausedDeletion(tmp_path / "cleanup")
+    publisher = SchematicPreviewStorage(artifacts, uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+    key = "renders/cleanup.png"
+    await _ready_preview_object(publisher, artifacts, key)
+
+    async def cleanup() -> None:
+        assert await publisher.cleanup_unreferenced_preview_objects(older_than=Instant.now().add(hours=1), limit=1) == 1
+
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(cleanup)
+            await started.wait()
+            with pytest.raises(PreviewCleanupInProgressError):
+                await publisher.reserve_preview_object(key, byte_size=42, sha256=hashlib.sha256(b"p" * 42).hexdigest())
+            release.set()
+    assert await artifacts.get(key, max_bytes=42) is None
+    replacement = await publisher.reserve_preview_object(
+        key, byte_size=42, sha256=hashlib.sha256(b"p" * 42).hexdigest()
+    )
+    assert replacement.upload_required

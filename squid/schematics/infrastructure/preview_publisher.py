@@ -1,17 +1,19 @@
 """SQLAlchemy persistence adapter for generated schematic previews."""
 
-import hashlib
+from collections.abc import Callable
+from datetime import timedelta
 from typing import cast
+from uuid import uuid4
 
 from sqlalchemy import Select, Table, and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.artifacts import ArtifactStore
 from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
 from squid.persistence.types import now
+from squid.schematics.application.preview_storage import PreviewCleanupClaim, PreviewCleanupInProgressError
 from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
 from squid.schematics.models import (
     BuildSchematic,
@@ -23,21 +25,15 @@ from squid.schematics.models import (
 _BUILD_TABLE = cast(Table, Build.__table__)
 
 
-class PostgresSchematicPreviewPublisher:
+class PostgresSchematicPreviewRepository:
     """Persist preview recipes and atomically publish their generated build links."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession], artifacts: ArtifactStore) -> None:
-        self._session_factory = session_factory
-        self._artifacts = artifacts
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
-    async def featured_attachment_changed(self, session: AsyncSession, build_id: int) -> None:
-        """Clear the old generated link and enqueue replacement within the caller's transaction.
-
-        The attachment store must already hold the build-row lock. Keeping this operation on
-        the caller's session makes attachment promotion, generated-link removal, and durable
-        preview intent one atomic change while this adapter remains the sole owner of preview
-        tables and generated build links.
-        """
+    async def featured_attachment_changed(self, build_id: int) -> None:
+        """Clear the old generated link and enqueue its replacement under the build lock."""
+        session = self._session()
         await self._clear_generated_preview_link(session, build_id)
         render_job = insert(SchematicRenderQueueItem).values(build_id=build_id)
         await session.execute(
@@ -55,25 +51,24 @@ class PostgresSchematicPreviewPublisher:
             )
         )
 
-    async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
-        async with self._session_factory() as session:
-            row = await session.scalar(
-                select(SchematicRender).where(
-                    and_(
-                        SchematicRender.build_schematic_id == schematic_id,
-                        SchematicRender.recipe_hash == recipe_hash,
-                    )
+    async def get_render(
+        self, schematic_id: int, recipe_hash: str
+    ) -> tuple[StoredRender, SchematicPreviewObject] | None:
+        session = self._session()
+        row = await session.scalar(
+            select(SchematicRender).where(
+                and_(
+                    SchematicRender.build_schematic_id == schematic_id,
+                    SchematicRender.recipe_hash == recipe_hash,
                 )
             )
+        )
         if row is None or row.object_key is None:
             return None
         preview_object = await self._preview_object(row.object_key)
-        if preview_object is None or preview_object.ready_at is None:
+        if preview_object is None or preview_object.cleanup_claim_token is not None or preview_object.ready_at is None:
             return None
-        if not await self._stored_object_is_ready(preview_object):
-            await self._mark_object_not_ready(preview_object.object_key)
-            return None
-        return _stored_render(row)
+        return _stored_render(row), preview_object
 
     async def reserve_preview_object(
         self,
@@ -81,66 +76,61 @@ class PostgresSchematicPreviewPublisher:
         *,
         byte_size: int,
         sha256: str,
-    ) -> PreviewObjectReservation:
+    ) -> SchematicPreviewObject:
         """Reserve durable ownership before upload and identify reusable ready bytes."""
+        session = self._session()
         seen_at = now()
-        async with self._session_factory() as session:
-            row = await session.scalar(
+        await session.execute(
+            insert(SchematicPreviewObject)
+            .values(object_key=object_key, byte_size=byte_size, sha256=sha256, last_seen_at=seen_at)
+            .on_conflict_do_nothing(index_elements=[SchematicPreviewObject.object_key])
+        )
+        row = (
+            await session.scalars(
                 select(SchematicPreviewObject).where(SchematicPreviewObject.object_key == object_key).with_for_update()
             )
-            if row is None:
-                row = SchematicPreviewObject(
-                    object_key=object_key,
-                    byte_size=byte_size,
-                    sha256=sha256,
-                    last_seen_at=seen_at,
-                )
-                session.add(row)
-                reusable = False
-            else:
-                referenced = bool(
-                    await session.scalar(
-                        select(func.count())
-                        .select_from(SchematicRender)
-                        .where(SchematicRender.object_key == object_key)
-                    )
-                )
-                metadata_changed = row.byte_size != byte_size or row.sha256 not in (None, sha256)
-                if metadata_changed and referenced:
-                    msg = "A referenced schematic preview object was reserved with different immutable metadata."
-                    raise DataIntegrityError(msg, context={"object_key": object_key})
-                if metadata_changed:
-                    row.byte_size = byte_size
-                    row.sha256 = sha256
-                    row.ready_at = None
-                elif row.sha256 is None:
-                    row.sha256 = sha256
-                row.last_seen_at = seen_at
-                reusable = row.ready_at is not None
-            await session.commit()
-
-        if reusable and await self._stored_object_is_ready(row):
-            return PreviewObjectReservation(object_key, byte_size, sha256, upload_required=False)
-        if reusable:
-            await self._mark_object_not_ready(object_key)
-        return PreviewObjectReservation(object_key, byte_size, sha256, upload_required=True)
+        ).one()
+        if row.cleanup_claim_token is not None:
+            raise PreviewCleanupInProgressError(object_key)
+        referenced = bool(
+            await session.scalar(
+                select(func.count()).select_from(SchematicRender).where(SchematicRender.object_key == object_key)
+            )
+        )
+        metadata_changed = row.byte_size != byte_size or row.sha256 not in (None, sha256)
+        if metadata_changed and referenced:
+            msg = "A referenced schematic preview object was reserved with different immutable metadata."
+            raise DataIntegrityError(msg, context={"object_key": object_key})
+        if metadata_changed:
+            row.byte_size = byte_size
+            row.sha256 = sha256
+            row.ready_at = None
+        elif row.sha256 is None:
+            row.sha256 = sha256
+        row.last_seen_at = seen_at
+        return row
 
     async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
         """Mark a reserved object reusable after its upload metadata was verified."""
         ready_at = now()
-        async with self._session_factory() as session:
-            row = await session.scalar(
-                select(SchematicPreviewObject)
-                .where(SchematicPreviewObject.object_key == reservation.object_key)
-                .with_for_update()
-            )
-            if row is None or row.byte_size != reservation.byte_size or row.sha256 not in (None, reservation.sha256):
-                msg = "Schematic preview object reservation no longer matches its uploaded bytes."
-                raise DataIntegrityError(msg, context={"object_key": reservation.object_key})
-            row.sha256 = reservation.sha256
-            row.ready_at = ready_at
-            row.last_seen_at = ready_at
-            await session.commit()
+        session = self._session()
+        row = await session.scalar(
+            select(SchematicPreviewObject)
+            .where(SchematicPreviewObject.object_key == reservation.object_key)
+            .with_for_update()
+        )
+        if (
+            row is None
+            or row.cleanup_claim_token is not None
+            or row.byte_size != reservation.byte_size
+            or row.sha256 not in (None, reservation.sha256)
+        ):
+            msg = "Schematic preview object reservation no longer matches its uploaded bytes."
+            raise DataIntegrityError(msg, context={"object_key": reservation.object_key})
+        row.sha256 = reservation.sha256
+        row.ready_at = ready_at
+        row.last_seen_at = ready_at
+        await session.flush()
 
     async def publish_fresh_preview(
         self,
@@ -182,75 +172,75 @@ class PostgresSchematicPreviewPublisher:
             )
             .returning(SchematicRender)
         )
-        async with self._session_factory() as session:
-            build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
-            if build_id is None:
-                return None
-            await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
-            preview_object = await session.scalar(
-                select(SchematicPreviewObject).where(SchematicPreviewObject.object_key == object_key).with_for_update()
+        session = self._session()
+        build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
+        if build_id is None:
+            return None
+        await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
+        preview_object = await session.scalar(
+            select(SchematicPreviewObject).where(SchematicPreviewObject.object_key == object_key).with_for_update()
+        )
+        if (
+            preview_object is None
+            or preview_object.cleanup_claim_token is not None
+            or preview_object.ready_at is None
+            or preview_object.byte_size != byte_size
+        ):
+            msg = "A generated preview cannot be published before its object is ready."
+            raise DataIntegrityError(msg, context={"object_key": object_key})
+        current_id = await session.scalar(
+            select(BuildSchematic.id).where(
+                BuildSchematic.build_id == build_id,
+                BuildSchematic.is_primary,
             )
-            if preview_object is None or preview_object.ready_at is None or preview_object.byte_size != byte_size:
-                msg = "A generated preview cannot be published before its object is ready."
-                raise DataIntegrityError(msg, context={"object_key": object_key})
-            current_id = await session.scalar(
-                select(BuildSchematic.id).where(
-                    BuildSchematic.build_id == build_id,
-                    BuildSchematic.is_primary,
-                )
+        )
+        if current_id != schematic_id:
+            return None
+        previous_url = await session.scalar(
+            select(SchematicRender.url).where(
+                SchematicRender.build_schematic_id == schematic_id,
+                SchematicRender.recipe_hash == recipe_hash,
             )
-            if current_id != schematic_id:
-                return None
-            previous_url = await session.scalar(
-                select(SchematicRender.url).where(
-                    SchematicRender.build_schematic_id == schematic_id,
-                    SchematicRender.recipe_hash == recipe_hash,
-                )
-            )
-            row = await session.scalar(statement)
-            await self.replace_generated_preview_link(session, build_id, url, previous_url=previous_url)
-            await session.commit()
+        )
+        row = await session.scalar(statement)
+        await self.replace_generated_preview_link(session, build_id, url, previous_url=previous_url)
+        await session.flush()
         assert row is not None
         return _stored_render(row)
 
     async def publish_cached_preview(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
         """Publish an existing recipe only if its source remains featured."""
-        async with self._session_factory() as session:
-            build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
-            if build_id is None:
-                return False
-            await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
-            current_id = await session.scalar(
-                select(BuildSchematic.id).where(
-                    BuildSchematic.build_id == build_id,
-                    BuildSchematic.is_primary,
-                )
+        session = self._session()
+        build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
+        if build_id is None:
+            return False
+        await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
+        current_id = await session.scalar(
+            select(BuildSchematic.id).where(
+                BuildSchematic.build_id == build_id,
+                BuildSchematic.is_primary,
             )
-            if current_id != schematic_id:
-                return False
-            render = await session.scalar(
-                select(SchematicRender).where(
-                    SchematicRender.build_schematic_id == schematic_id,
-                    SchematicRender.recipe_hash == recipe_hash,
-                    SchematicRender.url == url,
-                )
+        )
+        if current_id != schematic_id:
+            return False
+        render = await session.scalar(
+            select(SchematicRender).where(
+                SchematicRender.build_schematic_id == schematic_id,
+                SchematicRender.recipe_hash == recipe_hash,
+                SchematicRender.url == url,
             )
-            if render is None or render.object_key is None:
-                return False
-            preview_object = await session.scalar(
-                select(SchematicPreviewObject)
-                .where(SchematicPreviewObject.object_key == render.object_key)
-                .with_for_update()
-            )
-            if preview_object is None or preview_object.ready_at is None:
-                return False
-            if not await self._stored_object_is_ready(preview_object):
-                preview_object.ready_at = None
-                await session.commit()
-                msg = "A cached schematic preview disappeared after it was selected for publication."
-                raise DataIntegrityError(msg, context={"object_key": preview_object.object_key})
-            await self.replace_generated_preview_link(session, build_id, url)
-            await session.commit()
+        )
+        if render is None or render.object_key is None:
+            return False
+        preview_object = await session.scalar(
+            select(SchematicPreviewObject)
+            .where(SchematicPreviewObject.object_key == render.object_key)
+            .with_for_update()
+        )
+        if preview_object is None or preview_object.cleanup_claim_token is not None or preview_object.ready_at is None:
+            return False
+        await self.replace_generated_preview_link(session, build_id, url)
+        await session.flush()
         return True
 
     @staticmethod
@@ -262,7 +252,7 @@ class PostgresSchematicPreviewPublisher:
         previous_url: str | None = None,
     ) -> None:
         """Atomically replace only the build link owned by registered preview artifacts."""
-        registered_urls = PostgresSchematicPreviewPublisher._registered_preview_urls(build_id)
+        registered_urls = PostgresSchematicPreviewRepository._registered_preview_urls(build_id)
         owned_url = BuildLink.url.in_(registered_urls)
         if previous_url is not None:
             owned_url = or_(owned_url, BuildLink.url == previous_url)
@@ -291,7 +281,7 @@ class PostgresSchematicPreviewPublisher:
 
     @staticmethod
     async def _clear_generated_preview_link(session: AsyncSession, build_id: int) -> None:
-        registered_urls = PostgresSchematicPreviewPublisher._registered_preview_urls(build_id)
+        registered_urls = PostgresSchematicPreviewRepository._registered_preview_urls(build_id)
         existing = await session.scalar(
             select(BuildLink.url)
             .where(
@@ -323,73 +313,74 @@ class PostgresSchematicPreviewPublisher:
             .where(BuildSchematic.build_id == build_id)
         )
 
-    async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
-        """Load a registered preview artifact within the API response budget."""
-        async with self._session_factory() as session:
-            row = (
-                await session.execute(
-                    select(
-                        SchematicRender.object_key,
-                        SchematicPreviewObject.byte_size,
-                        SchematicPreviewObject.sha256,
-                        SchematicPreviewObject.ready_at,
-                    )
-                    .join(SchematicPreviewObject, SchematicRender.object_key == SchematicPreviewObject.object_key)
-                    .where(SchematicRender.recipe_hash == recipe_hash)
-                )
-            ).first()
-        if row is None or row.object_key is None or row.ready_at is None or row.byte_size > max_bytes:
-            return None
-        content = await self._artifacts.get(row.object_key, max_bytes=max_bytes)
-        if (
-            content is None
-            or len(content) != row.byte_size
-            or (row.sha256 is not None and hashlib.sha256(content).hexdigest() != row.sha256)
-        ):
-            await self._mark_object_not_ready(row.object_key)
-            return None
-        return content
+    async def render_object(self, recipe_hash: str) -> SchematicPreviewObject | None:
+        return await self._session().scalar(
+            select(SchematicPreviewObject)
+            .join(SchematicRender, SchematicRender.object_key == SchematicPreviewObject.object_key)
+            .where(SchematicRender.recipe_hash == recipe_hash)
+            .limit(1)
+        )
 
-    async def cleanup_unreferenced_preview_objects(self, *, older_than: Instant, limit: int) -> int:
-        """Delete old objects only while their lifecycle rows remain unreferenced and locked."""
-        removed = 0
-        for _ in range(limit):
-            async with self._session_factory() as session:
-                row = await session.scalar(
-                    select(SchematicPreviewObject)
-                    .where(
-                        SchematicPreviewObject.last_seen_at < older_than,
-                        ~select(SchematicRender.id)
-                        .where(SchematicRender.object_key == SchematicPreviewObject.object_key)
-                        .exists(),
-                    )
-                    .order_by(SchematicPreviewObject.last_seen_at, SchematicPreviewObject.object_key)
-                    .limit(1)
-                    .with_for_update(skip_locked=True)
+    async def claim_cleanup(self, *, older_than: Instant) -> PreviewCleanupClaim | None:
+        session = self._session()
+        row = await session.scalar(
+            select(SchematicPreviewObject)
+            .where(
+                SchematicPreviewObject.last_seen_at < older_than,
+                or_(
+                    SchematicPreviewObject.cleanup_claimed_at.is_(None),
+                    SchematicPreviewObject.cleanup_claimed_at < func.now() - timedelta(minutes=5),
+                ),
+                ~select(SchematicRender.id)
+                .where(SchematicRender.object_key == SchematicPreviewObject.object_key)
+                .exists(),
+            )
+            .order_by(SchematicPreviewObject.last_seen_at, SchematicPreviewObject.object_key)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if row is None:
+            return None
+        token = uuid4()
+        row.cleanup_claim_token = token
+        row.cleanup_claimed_at = now()
+        row.ready_at = None
+        return PreviewCleanupClaim(row.object_key, token)
+
+    async def complete_cleanup(self, claim: PreviewCleanupClaim) -> bool:
+        return (
+            await self._session().scalar(
+                delete(SchematicPreviewObject)
+                .where(
+                    SchematicPreviewObject.object_key == claim.object_key,
+                    SchematicPreviewObject.cleanup_claim_token == claim.token,
                 )
-                if row is None:
-                    break
-                await self._artifacts.delete(row.object_key)
-                await session.delete(row)
-                await session.commit()
-                removed += 1
-        return removed
+                .returning(SchematicPreviewObject.object_key)
+            )
+            is not None
+        )
+
+    async def release_cleanup(self, claim: PreviewCleanupClaim) -> None:
+        await self._session().execute(
+            update(SchematicPreviewObject)
+            .where(
+                SchematicPreviewObject.object_key == claim.object_key,
+                SchematicPreviewObject.cleanup_claim_token == claim.token,
+            )
+            .values(cleanup_claim_token=None, cleanup_claimed_at=None)
+        )
 
     async def _preview_object(self, object_key: str) -> SchematicPreviewObject | None:
-        async with self._session_factory() as session:
-            return await session.get(SchematicPreviewObject, object_key)
+        session = self._session()
+        return await session.get(SchematicPreviewObject, object_key)
 
-    async def _stored_object_is_ready(self, row: SchematicPreviewObject) -> bool:
-        metadata = await self._artifacts.stat(row.object_key)
-        return metadata is not None and metadata.byte_size == row.byte_size and metadata.sha256 in (None, row.sha256)
-
-    async def _mark_object_not_ready(self, object_key: str) -> None:
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                update(SchematicPreviewObject)
-                .where(SchematicPreviewObject.object_key == object_key)
-                .values(ready_at=None, last_seen_at=func.now())
-            )
+    async def mark_object_not_ready(self, object_key: str) -> None:
+        session = self._session()
+        await session.execute(
+            update(SchematicPreviewObject)
+            .where(SchematicPreviewObject.object_key == object_key)
+            .values(ready_at=None, last_seen_at=func.now())
+        )
 
 
 def _stored_render(row: SchematicRender) -> StoredRender:

@@ -1,24 +1,22 @@
 """SQLAlchemy persistence adapter for stored schematics."""
 
-import hashlib
+from collections.abc import Callable
 from typing import cast
 
 from sqlalchemy import ColumnElement, Select, Table, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.artifacts import ArtifactStore
 from squid.builds.models import Build
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     FingerprintPreset,
     SchematicAnalysis,
-    SchematicFormat,
     SchematicMetrics,
     SimulationResult,
 )
 from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
-from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
+from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewRepository
 from squid.schematics.models import BuildSchematic, SchematicFile
 
 _BUILD_TABLE = cast(Table, Build.__table__)
@@ -30,71 +28,30 @@ _FINGERPRINT_COLUMNS = {
 }
 
 
-class PostgresSchematicStore:
-    """Persist schematic metadata and store payloads in a bounded artifact adapter."""
+class PostgresSchematicRepository:
+    """Persist schematic metadata and attachment changes within one transaction."""
 
     def __init__(
         self,
-        session_factory: async_sessionmaker[AsyncSession],
-        artifacts: ArtifactStore,
-        previews: PostgresSchematicPreviewPublisher,
+        session: Callable[[], AsyncSession],
     ) -> None:
-        self._session_factory = session_factory
-        self._artifacts = artifacts
-        self._previews = previews
+        self._session = session
+        self._previews = PostgresSchematicPreviewRepository(session)
 
-    async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:
-        """Store bytes content-addressed by SHA-256, returning the digest.
-
-        Idempotent by construction: re-uploading the same file is a no-op insert rather than a
-        conflict, which is what makes "byte-identical to an existing submission" cheap to
-        detect before any analysis runs.
-        """
-        digest = hashlib.sha256(data).hexdigest()
-        object_key = _schematic_object_key(digest)
-        await self._write_verified_object(digest, object_key, data)
-        statement = (
+    async def register_file(self, file: SchematicFile) -> None:
+        await self._session().execute(
             insert(SchematicFile)
             .values(
-                sha256=digest,
-                object_key=object_key,
-                byte_size=len(data),
-                source_format=source_format.value,
+                sha256=file.sha256,
+                object_key=file.object_key,
+                byte_size=file.byte_size,
+                source_format=file.source_format,
             )
             .on_conflict_do_nothing(index_elements=[SchematicFile.sha256])
         )
-        async with self._session_factory() as session:
-            await session.execute(statement)
-            await session.commit()
-        return digest
 
-    async def get_file(self, sha256: str) -> bytes | None:
-        async with self._session_factory() as session:
-            row = (
-                await session.execute(
-                    select(
-                        SchematicFile.object_key,
-                        SchematicFile.byte_size,
-                    ).where(SchematicFile.sha256 == sha256)
-                )
-            ).one_or_none()
-        if row is None:
-            return None
-        data = await self._artifacts.get(row.object_key, max_bytes=row.byte_size)
-        if data is None or len(data) != row.byte_size or hashlib.sha256(data).hexdigest() != sha256:
-            msg = f"Object storage returned corrupt or missing schematic payload {sha256}."
-            raise RuntimeError(msg)
-        return data
-
-    async def _write_verified_object(self, digest: str, object_key: str, data: bytes) -> None:
-        metadata = await self._artifacts.put(object_key, data, content_type="application/octet-stream")
-        if metadata.byte_size != len(data) or metadata.sha256 not in (None, digest):
-            msg = f"Object storage did not confirm schematic payload {digest}."
-            raise RuntimeError(msg)
-        stored = await self._artifacts.get(object_key, max_bytes=len(data))
-        if stored is None or stored != data or hashlib.sha256(stored).hexdigest() != digest:
-            msg = f"Object storage failed integrity verification for schematic payload {digest}."
-            raise RuntimeError(msg)
+    async def get_file_metadata(self, sha256: str) -> SchematicFile | None:
+        return await self._session().get(SchematicFile, sha256)
 
     async def record_analysis(
         self,
@@ -139,20 +96,20 @@ class PostgresSchematicStore:
             )
             .returning(BuildSchematic.id)
         )
-        async with self._session_factory() as session:
-            if primary:
-                await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
-                # The partial unique index allows only one primary per build, so the previous
-                # holder must be demoted in the same transaction as the new one is promoted.
-                await session.execute(
-                    update(BuildSchematic)
-                    .where(and_(BuildSchematic.build_id == build_id, BuildSchematic.file_sha256 != sha256))
-                    .values(is_primary=False)
-                )
-            schematic_id = await session.scalar(statement)
-            if primary:
-                await self._previews.featured_attachment_changed(session, build_id)
-            await session.commit()
+        session = self._session()
+        if primary:
+            await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
+            # The partial unique index allows only one primary per build, so the previous
+            # holder must be demoted in the same transaction as the new one is promoted.
+            await session.execute(
+                update(BuildSchematic)
+                .where(and_(BuildSchematic.build_id == build_id, BuildSchematic.file_sha256 != sha256))
+                .values(is_primary=False)
+            )
+        schematic_id = await session.scalar(statement)
+        if primary:
+            await self._previews.featured_attachment_changed(build_id)
+        await session.flush()
         assert schematic_id is not None
         return schematic_id
 
@@ -241,13 +198,13 @@ class PostgresSchematicStore:
 
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         """Replace the latest moderator-triggered evidence for one schematic."""
-        async with self._session_factory() as session:
-            await session.execute(
-                update(BuildSchematic)
-                .where(BuildSchematic.id == schematic_id)
-                .values(simulation_evidence=simulation_to_json(result))
-            )
-            await session.commit()
+        session = self._session()
+        await session.execute(
+            update(BuildSchematic)
+            .where(BuildSchematic.id == schematic_id)
+            .values(simulation_evidence=simulation_to_json(result))
+        )
+        await session.flush()
 
     @staticmethod
     def _joined() -> Select[BuildSchematic, str, int]:
@@ -257,8 +214,8 @@ class PostgresSchematicStore:
         )
 
     async def _fetch(self, statement: Select[BuildSchematic, str, int]) -> list[StoredSchematic]:
-        async with self._session_factory() as session:
-            rows = (await session.execute(statement)).all()
+        session = self._session()
+        rows = (await session.execute(statement)).all()
         return [
             to_stored_schematic(row, source_format=source_format, byte_size=byte_size)
             for row, source_format, byte_size in rows
@@ -272,7 +229,3 @@ def _dimension_within(value: int, span: int) -> ColumnElement[bool]:
         BuildSchematic.height.between(value - span, value + span),
         BuildSchematic.length.between(value - span, value + span),
     )
-
-
-def _schematic_object_key(digest: str) -> str:
-    return f"schematics/{digest[:2]}/{digest}"

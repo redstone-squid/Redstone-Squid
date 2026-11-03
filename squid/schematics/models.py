@@ -217,6 +217,10 @@ class SchematicPreviewObject(Base, kw_only=True):
             "sha256 IS NULL OR sha256 ~ '^[0-9a-f]{64}$'",
             name="schematic_preview_objects_sha256_check",
         ),
+        CheckConstraint(
+            "(cleanup_claimed_at IS NULL) = (cleanup_claim_token IS NULL)",
+            name="schematic_preview_objects_cleanup_claim_pair",
+        ),
         Index("schematic_preview_objects_cleanup_idx", "last_seen_at"),
     )
 
@@ -224,6 +228,10 @@ class SchematicPreviewObject(Base, kw_only=True):
     byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sha256: Mapped[str | None] = mapped_column(Text, default=None)
     ready_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    cleanup_claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When cleanup reserved this unreferenced object for deletion."""
+    cleanup_claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """Fence shared by cleanup acknowledgement and publication checks."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

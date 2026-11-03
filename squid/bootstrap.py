@@ -66,12 +66,12 @@ from squid.schematics.application import (
     SchematicRenderJobService,
     SchematicService,
 )
+from squid.schematics.application.preview_storage import SchematicPreviewStorage
+from squid.schematics.application.storage import SchematicStorageService
+from squid.schematics.application.versions import SchematicVersionService
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
-from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
-from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
-from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
 from squid.search.application import SearchEmbeddingService, SearchService
 from squid.search.application.embeddings import SemanticCandidateService
 from squid.search.application.projection import SearchProjectionService
@@ -122,11 +122,11 @@ def create_schematic_analyzer(
 
 
 def create_schematic_service(
-    db: DatabaseEngine,
     config: SchematicConfig,
     artifacts: ArtifactStore,
     jobs: SchematicJobService,
     *,
+    uow_factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     render_capable: bool = False,
 ) -> SchematicService:
     """Assemble the schematic service over whichever analyzer this process can run.
@@ -146,12 +146,12 @@ def create_schematic_service(
             expected_sha256=config.render_pack_sha256,
             cache_dir=config.render_cache_dir,
         )
-    previews = PostgresSchematicPreviewPublisher(db.async_session, artifacts)
+    previews = SchematicPreviewStorage(artifacts, uow_factory=uow_factory)
     return SchematicService(
         analyzer,
-        PostgresSchematicStore(db.async_session, artifacts, previews),
+        SchematicStorageService(artifacts, uow_factory=uow_factory),
         previews,
-        PostgresSchematicVersionResolver(db.async_session),
+        SchematicVersionService(uow_factory=uow_factory),
         limits=SchematicLimits(
             max_upload_bytes=config.max_upload_bytes,
             max_inflated_bytes=config.max_inflated_bytes,
@@ -380,11 +380,11 @@ class _ServiceGraph:
     @cached_property
     def schematics(self) -> SchematicService:
         service = create_schematic_service(
-            self.db,
             self.config.schematics,
             self.artifacts,
             self.schematic_jobs,
             render_capable=self.render_capable,
+            uow_factory=self.uow_factory,
         )
         self.resources.push_async_callback(service.aclose)
         return service
