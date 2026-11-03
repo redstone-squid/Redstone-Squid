@@ -44,12 +44,12 @@ class StarboardService:
         return RoleWeightPolicy(multipliers, staff_multiplier=1.0)
 
     async def is_relevant_emoji(self, guild_id: int, emoji: str) -> bool:
-        async with self._uow_factory() as uow:
-            configured = self._emoji_cache.get(guild_id)
-            if configured is None:
+        configured = self._emoji_cache.get(guild_id)
+        if configured is None:
+            async with self._uow_factory() as uow:
                 configured = await uow.starboards.relevant_emojis(guild_id)
-                self._emoji_cache[guild_id] = configured
-            return emoji in configured
+            self._emoji_cache[guild_id] = configured
+        return emoji in configured
 
     async def record_vote(self, origin: OriginMessage, actor: ReactionActor, emoji: str) -> StarboardVoteResult:
         async with self._uow_factory() as uow:
@@ -159,7 +159,7 @@ class StarboardService:
     async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None:
         if not settings or not set(settings) <= set(EDITABLE_SETTINGS) | {"channel_id", "name"}:
             msg = "Unknown or empty starboard setting update."
-            raise ValueError(msg)
+            raise ValidationError(msg)
         async with self._uow_factory() as uow:
             current = await uow.starboards.get(guild_id, name, for_update=True)
             if current is None:

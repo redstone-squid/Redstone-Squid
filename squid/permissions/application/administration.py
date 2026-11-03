@@ -104,7 +104,7 @@ class PermissionAdministrationService:
         self._catalogue = catalogue
 
     async def actor(self, subject: Subject) -> Actor:
-        """Resolve everything the gates need about the caller, in one load."""
+        """Resolve the caller's capabilities and highest role rank in one transaction."""
         async with self._uow_factory() as uow:
             held = (
                 frozenset()

@@ -2,7 +2,9 @@
 
 ## Status
 
-Phase 1 is implemented. Phase 2 has not started; repositories still own transactions and require explicit writes.
+Phase 1 is implemented. Phase 2 is at a review checkpoint: settings, messages, posts, versions, tags, diagnostics,
+starboard, permissions (resolution, administration, and epoch polling), and API-key authentication use application-owned
+transactions. The larger aggregate and worker workflows remain; this is a checkpoint by service area, not by lines of code.
 See [Entities and persistence](../models.md) for the current model boundary.
 
 ## Goal and boundaries
@@ -56,7 +58,10 @@ Implement in dependency order: shared infrastructure and simple records; account
 
 ## Phase 2: Application-owned units of work
 
-Introduce a framework-independent UnitOfWork protocol and factory, implemented with one SQLAlchemy session and transaction. Expose typed, session-bound repositories and explicit commit(), rollback(), and flush() operations.
+Introduce a framework-independent UnitOfWork protocol and factory, implemented with one SQLAlchemy session and
+transaction. Expose typed, session-bound repositories and explicit terminal commit(). Leaving without committing rolls back;
+repositories flush when they need generated values or constraint checks. Each service declares the repositories it needs
+through a protocol extending the shared transaction lifecycle. The factory remains a callable type alias.
 
 The application API becomes:
 
@@ -77,6 +82,23 @@ async with self._uow_factory() as uow:
 - Update composition roots and service test doubles. Remove obsolete repository session factories, automatic commits, and parallel *_in_session interfaces as each workflow migrates.
 
 Start with one simple write service, then build edits, submission finalization, account merging, and the remaining application workflows. Infrastructure-only connection lifetimes, such as database listeners, remain separately owned.
+
+## Phase 2 review checkpoint
+
+The completed services share one concrete SQLAlchemy UoW. Repository methods no longer create sessions or commit.
+Permission administration passes the same UoW to internal checks. API-key issuance uses transaction-local permission
+reads, so a cached grant cannot authorize issuance after that grant has been revoked. Ordinary permission checks keep
+their cache, and epoch polling opens a fresh read scope.
+
+The useful distinctions so far are tracked field edits versus conditional SQL operations, and standalone service
+operations versus helpers participating in an existing transaction. Upserts and UPDATE RETURNING refresh loaded
+entities when stored values need to replace their in-memory values. Test fakes share commit snapshots; PostgreSQL
+checks cover locks, rollback, constraints, audit records, cache isolation, and projection requests.
+
+Remaining work includes accounts and merging; browser, CLI, and Minecraft authentication; builds and edit previews;
+records and voting; notifications; submission finalization; schematics and media jobs; search and suggestions; and
+worker claim/completion transitions. Keep external calls outside database scopes and preserve each existing atomic
+operation when those areas move. Infrastructure connection owners, such as listeners, remain separate.
 
 ## Verification and completion
 

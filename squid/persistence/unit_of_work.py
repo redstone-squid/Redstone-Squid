@@ -24,16 +24,16 @@ class SqlAlchemyUnitOfWork:
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = sessions
         self._session: AsyncSession | None = None
-        self._tags = PostgresTagDefinitionRepository(self._active_session)
-        self._error_reports = PostgresErrorReportRepository(self._active_session)
-        self._starboards = PostgresStarboardRepository(self._active_session)
-        self._permissions = PermissionRepository(self._active_session)
-        self._permission_admin = PermissionAdminRepository(self._active_session)
-        self._api_keys = PostgresApiKeyRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
+        self._api_keys = PostgresApiKeyRepository(self._active_session)
+        self._error_reports = PostgresErrorReportRepository(self._active_session)
         self._messages = MessageRepository(self._active_session)
+        self._permission_admin = PermissionAdminRepository(self._active_session)
+        self._permissions = PermissionRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
         self._settings = SettingsRepository(self._active_session)
+        self._starboards = PostgresStarboardRepository(self._active_session)
+        self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._versions = VersionRepository(self._active_session)
 
     @property

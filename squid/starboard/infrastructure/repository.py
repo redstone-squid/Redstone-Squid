@@ -64,9 +64,9 @@ class PostgresStarboardRepository:
     async def record_votes(
         self, origin: OriginMessage, user_id: int, votes: Sequence[PendingVote]
     ) -> Sequence[EntryKey]:
+        session = self._session()
         if not votes:
             return ()
-        session = self._session()
         await self._lock(session, origin.id)
         await session.scalar(
             pg_insert(OriginMessage)

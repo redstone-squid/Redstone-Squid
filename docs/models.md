@@ -13,11 +13,14 @@ Repositories own short transactions and return loaded, detached entities. Mutati
 repository write. Relationships reject implicit SQL; each repository selects the data its callers need. Cross-context
 facts such as a build's creators and versions are loaded in batches.
 
-Settings, messages, posts, and Minecraft versions use an application-owned unit of work. Each service receives a
-`UnitOfWorkFactory` and uses `async with self._uow_factory() as uow`. Repositories in a scope share its transaction.
+Settings, messages, posts, versions, tags, diagnostics, starboard, permissions, and API-key authentication use an
+application-owned unit of work. Each service receives a `UnitOfWorkFactory` and uses
+`async with self._uow_factory() as uow`. Repositories in a scope share its transaction.
 Loaded entities are attached, so mapped changes persist at `await uow.commit()` without a separate save. Commit ends
 the transaction; leaving without it rolls back. Closing detaches successfully committed entities. Other contexts
-retain their existing transaction ownership and detached-read behavior.
+retain their existing transaction ownership and detached-read behavior. Service-specific protocols expose the
+repositories each workflow needs. Helpers participating in an existing transaction receive its UoW explicitly;
+permission checks in those workflows bypass the process cache and never cache uncommitted rules.
 
 Keep values and projections separate when they represent something other than a live entity: incomplete build drafts,
 versioned submission and inference payloads, vote snapshots, compiled permission rules, delivery claims, schematic

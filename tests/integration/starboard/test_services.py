@@ -7,6 +7,7 @@ from anyio import create_task_group
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.errors import InvalidStateError
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.reactions.domain import ReactionActor
 from squid.starboard.application import PendingVote, StarboardService
@@ -51,9 +52,12 @@ async def test_concurrent_votes_commit_and_abandoned_votes_leave_no_entry(
         posted_at=Instant.now().subtract(seconds=60),
     )
     async with factory() as uow:
-        await uow.starboards.record_votes(origin, 50, [PendingVote(config, "⭐", "up", 1.0)])
+        repository = uow.starboards
+        await repository.record_votes(origin, 50, [PendingVote(config, "⭐", "up", 1.0)])
         assert await uow.starboards.entry_state(config.id, origin.id) is not None
     assert await service.entry_state(config.id, origin.id) is None
+    with pytest.raises(InvalidStateError):
+        await repository.record_votes(origin, 50, ())
 
     async with create_task_group() as tasks:
         tasks.start_soon(service.record_vote, origin, ReactionActor(50, 10), "⭐")
