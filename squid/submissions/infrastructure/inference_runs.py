@@ -4,11 +4,13 @@ from collections.abc import Callable
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildDraft
+from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 from squid.submissions.application.inference_runs import (
@@ -21,6 +23,7 @@ from squid.submissions.application.inference_runs import (
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftCapacityExceededError
 from squid.submissions.infrastructure.inference_payloads import BuildDraftPayload
+from squid.submissions.models.entities import SubmissionDraft
 from squid.submissions.models.inference import SubmissionInferenceRun
 
 _DRAFT = TypeAdapter(BuildDraftPayload)
@@ -54,8 +57,6 @@ class PostgresInferenceRuns:
             if row.claim_expires_at is not None and row.claim_expires_at > current:
                 raise inference_busy()
         else:
-            from squid.submissions.models.entities import SubmissionDraft
-
             terminal = (
                 select(func.count())
                 .select_from(SubmissionDraft)
@@ -143,10 +144,6 @@ class PostgresInferenceRuns:
         return row.owner_account_id, _candidates(row)
 
     async def public_status(self, run_id: UUID) -> InferenceStatus | None:
-        from squid.builds.application.inference import BuildInferenceInput
-        from squid.builds.models import Build
-        from squid.submissions.models.entities import SubmissionDraft
-
         session = self._session()
         row = await session.get(SubmissionInferenceRun, run_id)
         if row is None or row.inputs.get("purpose") != "submission" or row.expires_at <= Instant.now():
@@ -200,8 +197,6 @@ class PostgresInferenceRuns:
         return tuple(result)
 
     async def delete_expired(self, run_id: UUID) -> None:
-        from sqlalchemy import delete
-
         session = self._session()
         await session.execute(
             delete(SubmissionInferenceRun).where(
