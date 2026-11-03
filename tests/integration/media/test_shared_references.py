@@ -11,7 +11,6 @@ from whenever import Instant
 from squid.media.domain import MediaLimits
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.errors import MediaDraftNotFoundError
-from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.media.models import MediaNormalizationJobRecord
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import DraftStatus
@@ -33,22 +32,26 @@ async def test_shared_media_is_normalized_once_and_discarded_independently(
         await session.execute(
             update(SubmissionDraft).where(SubmissionDraft.id == second).values(owner_account_id=owner)
         )
-    jobs = PostgresMediaJobRepository(sessions)
+    jobs = partial(SqlAlchemyUnitOfWork, sessions)
     source = upload(draft_id=first)
-    await jobs.enqueue(source, MediaLimits())
-    assert await jobs.attach(first, second, source.id, MediaLimits())
-    assert await jobs.attach(first, second, source.id, MediaLimits())
-    (claim,) = await jobs.claim(limit=10)
-    assert await jobs.complete(claim, completed_artifacts(), MediaLimits())
-    assert await jobs.claim(limit=10) == ()
-    assert await jobs.discard(first, source.id)
-    assert (await jobs.list_for_draft(first))[0].status is MediaJobStatus.DISCARDED
-    shared = (await jobs.list_for_draft(second))[0]
+    await transact(jobs, lambda uow: uow.media_jobs.enqueue(source, MediaLimits()), commit=True)
+    assert await transact(jobs, lambda uow: uow.media_jobs.attach(first, second, source.id, MediaLimits()), commit=True)
+    assert await transact(jobs, lambda uow: uow.media_jobs.attach(first, second, source.id, MediaLimits()), commit=True)
+    (claim,) = await transact(jobs, lambda uow: uow.media_jobs.claim(limit=10), commit=True)
+    assert await transact(
+        jobs, lambda uow: uow.media_jobs.complete(claim, completed_artifacts(), MediaLimits()), commit=True
+    )
+    assert await transact(jobs, lambda uow: uow.media_jobs.claim(limit=10), commit=True) == ()
+    assert await transact(jobs, lambda uow: uow.media_jobs.discard(first, source.id), commit=True)
+    assert (await transact(jobs, lambda uow: uow.media_jobs.list_for_draft(first)))[
+        0
+    ].status is MediaJobStatus.DISCARDED
+    shared = (await transact(jobs, lambda uow: uow.media_jobs.list_for_draft(second)))[0]
     assert shared.status is MediaJobStatus.COMPLETED
     assert shared.upload.id == source.id
     assert shared.upload.draft_id == second
-    assert await jobs.discard(second, source.id)
-    final = await jobs.get(source.id)
+    assert await transact(jobs, lambda uow: uow.media_jobs.discard(second, source.id), commit=True)
+    final = await transact(jobs, lambda uow: uow.media_jobs.get(source.id))
     assert final is not None
     assert final.status is MediaJobStatus.DISCARDED
 
@@ -66,10 +69,10 @@ async def test_expiring_birth_draft_preserves_other_candidate(
         await session.execute(
             update(SubmissionDraft).where(SubmissionDraft.id == second).values(owner_account_id=owner)
         )
-    jobs = PostgresMediaJobRepository(sessions)
+    jobs = partial(SqlAlchemyUnitOfWork, sessions)
     source = upload(draft_id=first)
-    await jobs.enqueue(source, MediaLimits())
-    assert await jobs.attach(first, second, source.id, MediaLimits())
+    await transact(jobs, lambda uow: uow.media_jobs.enqueue(source, MediaLimits()), commit=True)
+    assert await transact(jobs, lambda uow: uow.media_jobs.attach(first, second, source.id, MediaLimits()), commit=True)
     async with sessions.begin() as session:
         await session.execute(
             update(SubmissionDraft)
@@ -87,9 +90,11 @@ async def test_expiring_birth_draft_preserves_other_candidate(
         )
         == 1
     )
-    assert (await jobs.list_for_draft(second))[0].status is MediaJobStatus.PENDING
-    (claim,) = await jobs.claim(limit=10)
-    assert await jobs.complete(claim, completed_artifacts(), MediaLimits())
+    assert (await transact(jobs, lambda uow: uow.media_jobs.list_for_draft(second)))[0].status is MediaJobStatus.PENDING
+    (claim,) = await transact(jobs, lambda uow: uow.media_jobs.claim(limit=10), commit=True)
+    assert await transact(
+        jobs, lambda uow: uow.media_jobs.complete(claim, completed_artifacts(), MediaLimits()), commit=True
+    )
     async with sessions() as session:
         assert (
             await session.scalar(select(SubmissionDraft.status).where(SubmissionDraft.id == first))
@@ -108,8 +113,8 @@ async def test_shared_media_cannot_cross_owners(migrated_session_factory: async_
     first, second = uuid4(), uuid4()
     await create_submission_draft(sessions, draft_id=first)
     await create_submission_draft(sessions, draft_id=second)
-    jobs = PostgresMediaJobRepository(sessions)
+    jobs = partial(SqlAlchemyUnitOfWork, sessions)
     source = upload(draft_id=first)
-    await jobs.enqueue(source, MediaLimits())
+    await transact(jobs, lambda uow: uow.media_jobs.enqueue(source, MediaLimits()), commit=True)
     with pytest.raises(MediaDraftNotFoundError):
-        await jobs.attach(first, second, source.id, MediaLimits())
+        await transact(jobs, lambda uow: uow.media_jobs.attach(first, second, source.id, MediaLimits()), commit=True)

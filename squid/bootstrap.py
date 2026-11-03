@@ -41,7 +41,6 @@ from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNorma
 from squid.media.application.services import MediaNormalizationService
 from squid.media.domain import MediaLimits
 from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits
-from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
@@ -326,8 +325,8 @@ class _ServiceGraph:
     def media_job_service(self) -> MediaNormalizationJobService:
         """Build durable media metadata services even when normalization is disabled."""
         return MediaNormalizationJobService(
-            self.media_repository,
             self.artifacts,
+            uow_factory=self.uow_factory,
             limits=MediaLimits(),
             max_attempts=self.config.media.job_max_attempts,
         )
@@ -341,10 +340,6 @@ class _ServiceGraph:
     @cached_property
     def media_cleanup(self) -> MediaStorageCleanup:
         return MediaStorageCleanup(self.media_job_service, self.artifacts)
-
-    @cached_property
-    def media_repository(self) -> PostgresMediaJobRepository:
-        return PostgresMediaJobRepository(self.db.async_session)
 
     @cached_property
     def media_runner(self) -> MediaNormalizationJobRunner | None:
@@ -450,7 +445,7 @@ class _ServiceGraph:
     @cached_property
     def submission_finalization(self) -> SubmissionFinalizationService:
         readiness = AuthoritativeDraftArtifactReadiness(
-            self.media_repository,
+            self.media_job_service,
             self.submission_schematics,
             intake=self.submission_intake,
             media_limits=MediaLimits(),

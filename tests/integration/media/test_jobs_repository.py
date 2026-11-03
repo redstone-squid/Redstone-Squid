@@ -2,10 +2,12 @@
 
 import asyncio
 import hashlib
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import timedelta
 from functools import partial
-from typing import cast
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import cast, override
 from uuid import UUID, uuid4
 
 import pytest
@@ -14,8 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.models import Account
+from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
+    MediaArtifactCleanupOutcome,
+    MediaNormalizationJobService,
     MediaUploadConflictError,
     MediaUploadMetadata,
     StoredMediaArtifact,
@@ -24,7 +29,6 @@ from squid.media.application.jobs import (
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import MediaDraftNotFoundError, MediaDraftStateConflictError, MediaLimitExceededError
-from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.media.models import (
     MediaArtifactObjectRecord,
     MediaArtifactPublicationRecord,
@@ -37,6 +41,7 @@ from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
+from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
@@ -151,15 +156,19 @@ def completed_artifacts() -> tuple[StoredMediaArtifact, ...]:
 async def test_identical_enqueue_is_retry_safe_but_mismatched_metadata_conflicts(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
 
-    assert (await repository.enqueue(metadata, LIMITS)).created is True
-    assert (await repository.enqueue(metadata, LIMITS)).created is False
+    assert (
+        await transact(repository, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True)
+    ).created is True
+    assert (
+        await transact(repository, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True)
+    ).created is False
     with pytest.raises(MediaUploadConflictError):
-        await repository.enqueue(upload(source=b"different"), LIMITS)
+        await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(source=b"different"), LIMITS), commit=True)
 
-    snapshot = await repository.get(UPLOAD_ID)
+    snapshot = await transact(repository, lambda uow: uow.media_jobs.get(UPLOAD_ID))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.PENDING
     assert snapshot.upload.source_sha256 == metadata.source_sha256
@@ -168,10 +177,10 @@ async def test_identical_enqueue_is_retry_safe_but_mismatched_metadata_conflicts
 async def test_reclaim_uses_a_new_token_and_stale_worker_cannot_complete(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
-    await repository.enqueue(upload(), LIMITS)
-    (first,) = await repository.claim(limit=1)
-    assert await repository.claim(limit=1) == ()
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
+    (first,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True) == ()
 
     async with async_session_factory.begin() as session:
         await session.execute(
@@ -179,12 +188,22 @@ async def test_reclaim_uses_a_new_token_and_stale_worker_cannot_complete(
             .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
             .values(claimed_at=first.claimed_at.subtract(minutes=6))
         )
-    (second,) = await repository.claim(limit=1)
+    (second,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
 
     assert second.claim_token != first.claim_token
-    assert await repository.complete(first, completed_artifacts(), LIMITS) is False
-    assert await repository.complete(second, completed_artifacts(), LIMITS) is True
-    snapshot = await repository.get(UPLOAD_ID)
+    assert (
+        await transact(
+            repository, lambda uow: uow.media_jobs.complete(first, completed_artifacts(), LIMITS), commit=True
+        )
+        is False
+    )
+    assert (
+        await transact(
+            repository, lambda uow: uow.media_jobs.complete(second, completed_artifacts(), LIMITS), commit=True
+        )
+        is True
+    )
+    snapshot = await transact(repository, lambda uow: uow.media_jobs.get(UPLOAD_ID))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.COMPLETED
     assert snapshot.claim_token is None
@@ -193,7 +212,7 @@ async def test_reclaim_uses_a_new_token_and_stale_worker_cannot_complete(
         MediaArtifactRole.REPORT,
     }
 
-    assert tuple(await repository.terminal_sources(limit=10)) == (
+    assert tuple(await transact(repository, lambda uow: uow.media_jobs.terminal_sources(limit=10))) == (
         TerminalMediaSource(UPLOAD_ID, upload().source_object_key),
     )
 
@@ -201,11 +220,11 @@ async def test_reclaim_uses_a_new_token_and_stale_worker_cannot_complete(
 async def test_heartbeat_keeps_long_media_work_owned_and_fences_an_old_token(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
-    await repository.enqueue(upload(), LIMITS)
-    (first,) = await repository.claim(limit=1)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
+    (first,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await repository.track_artifacts(first, artifacts)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(first, artifacts), commit=True)
     async with async_session_factory.begin() as session:
         await session.execute(
             update(MediaNormalizationJobRecord)
@@ -213,8 +232,8 @@ async def test_heartbeat_keeps_long_media_work_owned_and_fences_an_old_token(
             .values(claimed_at=first.claimed_at.subtract(minutes=6))
         )
 
-    assert await repository.heartbeat(first)
-    assert await repository.claim(limit=1) == ()
+    assert await transact(repository, lambda uow: uow.media_jobs.heartbeat(first), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True) == ()
     async with async_session_factory() as session:
         expiries = tuple((await session.scalars(select(MediaArtifactPublicationRecord.expires_at))).all())
     assert len(expiries) == 2
@@ -226,40 +245,42 @@ async def test_heartbeat_keeps_long_media_work_owned_and_fences_an_old_token(
             .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
             .values(claimed_at=first.claimed_at.subtract(minutes=6))
         )
-    (second,) = await repository.claim(limit=1)
-    assert await repository.heartbeat(first) is False
-    assert await repository.complete(first, artifacts, LIMITS) is False
-    assert await repository.heartbeat(second)
+    (second,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.heartbeat(first), commit=True) is False
+    assert (
+        await transact(repository, lambda uow: uow.media_jobs.complete(first, artifacts, LIMITS), commit=True) is False
+    )
+    assert await transact(repository, lambda uow: uow.media_jobs.heartbeat(second), commit=True)
 
 
 async def test_cleanup_preserves_shared_objects_until_every_reference_is_discarded(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     first = upload()
     second = upload(upload_id=uuid4(), source=b"another raw image")
-    await repository.enqueue(first, LIMITS)
-    (first_claim,) = await repository.claim(limit=1)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(first, LIMITS), commit=True)
+    (first_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await repository.complete(first_claim, artifacts, LIMITS)
-    await repository.enqueue(second, LIMITS)
-    (second_claim,) = await repository.claim(limit=1)
-    assert await repository.complete(second_claim, artifacts, LIMITS)
+    assert await transact(repository, lambda uow: uow.media_jobs.complete(first_claim, artifacts, LIMITS), commit=True)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(second, LIMITS), commit=True)
+    (second_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.complete(second_claim, artifacts, LIMITS), commit=True)
     deleted: list[str] = []
 
     async def delete(object_key: str) -> None:
         deleted.append(object_key)
 
-    assert await repository.discard(DRAFT_ID, first.id)
-    still_referenced = await repository.cleanup_artifacts(delete, limit=10)
+    assert await transact(repository, lambda uow: uow.media_jobs.discard(DRAFT_ID, first.id), commit=True)
+    still_referenced = await cleanup_artifacts(repository, delete, limit=10)
     assert (still_referenced.attempted, still_referenced.deleted, still_referenced.failed) == (0, 0, 0)
     assert deleted == []
 
-    assert await repository.discard(DRAFT_ID, second.id)
-    unreferenced = await repository.cleanup_artifacts(delete, limit=10)
+    assert await transact(repository, lambda uow: uow.media_jobs.discard(DRAFT_ID, second.id), commit=True)
+    unreferenced = await cleanup_artifacts(repository, delete, limit=10)
     assert (unreferenced.attempted, unreferenced.deleted, unreferenced.failed) == (2, 2, 0)
     assert set(deleted) == {artifact.object_key for artifact in artifacts}
-    snapshots = await repository.list_for_draft(DRAFT_ID)
+    snapshots = await transact(repository, lambda uow: uow.media_jobs.list_for_draft(DRAFT_ID))
     assert all(snapshot.status is MediaJobStatus.DISCARDED for snapshot in snapshots)
     assert all(snapshot.artifacts == artifacts for snapshot in snapshots)
 
@@ -267,21 +288,25 @@ async def test_cleanup_preserves_shared_objects_until_every_reference_is_discard
 async def test_artifact_cleanup_failure_is_durably_retried(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
-    await repository.enqueue(upload(), LIMITS)
-    (claim,) = await repository.claim(limit=1)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
+    (claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await repository.track_artifacts(claim, artifacts)
-    assert await repository.track_artifacts(claim, artifacts)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(claim, artifacts), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(claim, artifacts), commit=True)
     async with async_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(MediaArtifactPublicationRecord)) == 2
-    assert (await repository.fail(claim, "invalid", max_attempts=1, terminal=True)).dead
-    await repository.release_artifacts(claim, artifacts)
+    assert (
+        await transact(
+            repository, lambda uow: uow.media_jobs.fail(claim, "invalid", max_attempts=1, terminal=True), commit=True
+        )
+    ).dead
+    await transact(repository, lambda uow: uow.media_jobs.release_artifacts(claim, artifacts), commit=True)
 
     async def unavailable(_object_key: str) -> None:
         raise OSError("storage unavailable")
 
-    failed = await repository.cleanup_artifacts(unavailable, limit=10)
+    failed = await cleanup_artifacts(repository, unavailable, limit=10)
     assert (failed.attempted, failed.deleted, failed.failed) == (2, 0, 2)
     async with async_session_factory() as session:
         rows = tuple((await session.scalars(select(MediaArtifactObjectRecord))).all())
@@ -296,7 +321,7 @@ async def test_artifact_cleanup_failure_is_durably_retried(
     async def delete(object_key: str) -> None:
         deleted.append(object_key)
 
-    retried = await repository.cleanup_artifacts(delete, limit=10)
+    retried = await cleanup_artifacts(repository, delete, limit=10)
     assert (retried.attempted, retried.deleted, retried.failed) == (2, 2, 0)
     assert set(deleted) == {artifact.object_key for artifact in artifacts}
 
@@ -304,26 +329,26 @@ async def test_artifact_cleanup_failure_is_durably_retried(
 async def test_publication_lease_survives_discard_until_the_writer_releases_it(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
-    await repository.enqueue(metadata, LIMITS)
-    (claim,) = await repository.claim(limit=1)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True)
+    (claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await repository.track_artifacts(claim, artifacts)
-    assert await repository.discard(DRAFT_ID, metadata.id)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(claim, artifacts), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.discard(DRAFT_ID, metadata.id), commit=True)
     deleted: list[str] = []
 
     async def delete(object_key: str) -> None:
         deleted.append(object_key)
 
-    while_put_is_in_flight = await repository.cleanup_artifacts(delete, limit=10)
+    while_put_is_in_flight = await cleanup_artifacts(repository, delete, limit=10)
     assert while_put_is_in_flight.attempted == 0
     assert deleted == []
 
-    await repository.release_artifacts(claim, artifacts)
+    await transact(repository, lambda uow: uow.media_jobs.release_artifacts(claim, artifacts), commit=True)
     async with async_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(MediaArtifactPublicationRecord)) == 0
-    after_put_stopped = await repository.cleanup_artifacts(delete, limit=10)
+    after_put_stopped = await cleanup_artifacts(repository, delete, limit=10)
     assert after_put_stopped.deleted == 2
     assert set(deleted) == {artifact.object_key for artifact in artifacts}
 
@@ -331,18 +356,18 @@ async def test_publication_lease_survives_discard_until_the_writer_releases_it(
 async def test_crashed_publication_lease_expires_for_eventual_cleanup(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
-    await repository.enqueue(metadata, LIMITS)
-    (claim,) = await repository.claim(limit=1)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True)
+    (claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await repository.track_artifacts(claim, artifacts)
-    assert await repository.discard(DRAFT_ID, metadata.id)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(claim, artifacts), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.discard(DRAFT_ID, metadata.id), commit=True)
 
     async def delete(_object_key: str) -> None:
         pass
 
-    assert (await repository.cleanup_artifacts(delete, limit=10)).attempted == 0
+    assert (await cleanup_artifacts(repository, delete, limit=10)).attempted == 0
     async with async_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(MediaArtifactPublicationRecord)) == 2
     async with async_session_factory.begin() as session:
@@ -352,7 +377,7 @@ async def test_crashed_publication_lease_expires_for_eventual_cleanup(
                 expires_at=func.now() - timedelta(days=1),
             )
         )
-    expired = await repository.cleanup_artifacts(delete, limit=10)
+    expired = await cleanup_artifacts(repository, delete, limit=10)
     assert expired.deleted == 2
     async with async_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(MediaArtifactPublicationRecord)) == 0
@@ -361,11 +386,11 @@ async def test_crashed_publication_lease_expires_for_eventual_cleanup(
 async def test_expired_publication_revokes_paused_worker_before_deleting_partial_objects(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
-    await repository.enqueue(upload(), LIMITS)
-    (paused,) = await repository.claim(limit=1)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
+    (paused,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await repository.track_artifacts(paused, artifacts)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(paused, artifacts), commit=True)
     async with async_session_factory.begin() as session:
         await session.execute(
             update(MediaArtifactPublicationRecord).values(
@@ -376,23 +401,27 @@ async def test_expired_publication_revokes_paused_worker_before_deleting_partial
     deleted: list[str] = []
 
     async def delete(object_key: str) -> None:
-        snapshot = await repository.get(UPLOAD_ID)
+        snapshot = await transact(repository, lambda uow: uow.media_jobs.get(UPLOAD_ID))
         assert snapshot is not None
         assert snapshot.status is MediaJobStatus.PENDING
         assert snapshot.claim_token is None
         assert snapshot.attempts == 0
         deleted.append(object_key)
 
-    cleanup = await repository.cleanup_artifacts(delete, limit=10)
+    cleanup = await cleanup_artifacts(repository, delete, limit=10)
 
     assert cleanup.deleted == 2
     assert set(deleted) == {artifact.object_key for artifact in artifacts}
-    assert await repository.heartbeat(paused) is False
-    assert await repository.complete(paused, artifacts, LIMITS) is False
-    assert await repository.track_artifacts(paused, artifacts) is False
+    assert await transact(repository, lambda uow: uow.media_jobs.heartbeat(paused), commit=True) is False
+    assert (
+        await transact(repository, lambda uow: uow.media_jobs.complete(paused, artifacts, LIMITS), commit=True) is False
+    )
+    assert (
+        await transact(repository, lambda uow: uow.media_jobs.track_artifacts(paused, artifacts), commit=True) is False
+    )
 
     deleted.clear()
-    cleanup = await repository.cleanup_artifacts(delete, limit=10)
+    cleanup = await cleanup_artifacts(repository, delete, limit=10)
     assert cleanup.deleted == 2
     assert set(deleted) == {artifact.object_key for artifact in artifacts}
 
@@ -400,18 +429,30 @@ async def test_expired_publication_revokes_paused_worker_before_deleting_partial
 async def test_bounded_lease_pruning_never_exposes_an_unprocessed_publisher(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     first = upload()
     second = upload(upload_id=uuid4(), source=b"second raw image")
     artifacts = completed_artifacts()
-    await repository.enqueue(first, LIMITS)
-    (first_claim,) = await repository.claim(limit=1)
-    assert await repository.track_artifacts(first_claim, artifacts)
-    assert (await repository.fail(first_claim, "crashed", max_attempts=1, terminal=True)).dead
-    await repository.enqueue(second, LIMITS)
-    (second_claim,) = await repository.claim(limit=1)
-    assert await repository.track_artifacts(second_claim, artifacts)
-    assert (await repository.fail(second_claim, "crashed", max_attempts=1, terminal=True)).dead
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(first, LIMITS), commit=True)
+    (first_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(first_claim, artifacts), commit=True)
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.media_jobs.fail(first_claim, "crashed", max_attempts=1, terminal=True),
+            commit=True,
+        )
+    ).dead
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(second, LIMITS), commit=True)
+    (second_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(second_claim, artifacts), commit=True)
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.media_jobs.fail(second_claim, "crashed", max_attempts=1, terminal=True),
+            commit=True,
+        )
+    ).dead
     async with async_session_factory.begin() as session:
         await session.execute(
             update(MediaArtifactPublicationRecord).values(
@@ -424,26 +465,32 @@ async def test_bounded_lease_pruning_never_exposes_an_unprocessed_publisher(
     async def delete(object_key: str) -> None:
         deleted.append(object_key)
 
-    assert (await repository.cleanup_artifacts(delete, limit=1)).attempted == 0
+    assert (await cleanup_artifacts(repository, delete, limit=1)).attempted == 0
     assert deleted == []
-    assert (await repository.cleanup_artifacts(delete, limit=1)).deleted == 1
+    assert (await cleanup_artifacts(repository, delete, limit=1)).deleted == 1
     assert len(deleted) == 1
 
 
 async def test_cleanup_claim_prevents_publication_while_storage_delete_is_in_flight(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     stale = upload()
     publisher = upload(upload_id=uuid4(), source=b"publisher raw image")
     artifacts = completed_artifacts()
-    await repository.enqueue(stale, LIMITS)
-    (stale_claim,) = await repository.claim(limit=1)
-    assert await repository.track_artifacts(stale_claim, artifacts)
-    assert (await repository.fail(stale_claim, "invalid", max_attempts=1, terminal=True)).dead
-    await repository.release_artifacts(stale_claim, artifacts)
-    await repository.enqueue(publisher, LIMITS)
-    (publisher_claim,) = await repository.claim(limit=1)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(stale, LIMITS), commit=True)
+    (stale_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(stale_claim, artifacts), commit=True)
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.media_jobs.fail(stale_claim, "invalid", max_attempts=1, terminal=True),
+            commit=True,
+        )
+    ).dead
+    await transact(repository, lambda uow: uow.media_jobs.release_artifacts(stale_claim, artifacts), commit=True)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(publisher, LIMITS), commit=True)
+    (publisher_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     delete_started = asyncio.Event()
     allow_delete = asyncio.Event()
 
@@ -451,12 +498,14 @@ async def test_cleanup_claim_prevents_publication_while_storage_delete_is_in_fli
         delete_started.set()
         await allow_delete.wait()
 
-    cleanup_task = asyncio.create_task(repository.cleanup_artifacts(blocking_delete, limit=10))
+    cleanup_task = asyncio.create_task(cleanup_artifacts(repository, blocking_delete, limit=10))
     await asyncio.wait_for(delete_started.wait(), timeout=1)
     with pytest.raises(MediaArtifactCleanupInProgressError) as exc_info:
-        await repository.track_artifacts(publisher_claim, artifacts)
-    assert await repository.defer(publisher_claim, until=exc_info.value.retry_at)
-    deferred = await repository.get(publisher.id)
+        await transact(repository, lambda uow: uow.media_jobs.track_artifacts(publisher_claim, artifacts), commit=True)
+    assert await transact(
+        repository, lambda uow: uow.media_jobs.defer(publisher_claim, until=exc_info.value.retry_at), commit=True
+    )
+    deferred = await transact(repository, lambda uow: uow.media_jobs.get(publisher.id))
     assert deferred is not None
     assert deferred.status is MediaJobStatus.PENDING
     assert deferred.attempts == 0
@@ -470,22 +519,28 @@ async def test_cleanup_claim_prevents_publication_while_storage_delete_is_in_fli
             .where(MediaNormalizationJobRecord.upload_id == publisher.id)
             .values(available_at=func.now())
         )
-    (retry,) = await repository.claim(limit=1)
+    (retry,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     assert retry.attempts == 0
-    assert await repository.track_artifacts(retry, artifacts)
-    await repository.release_artifacts(retry, artifacts)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(retry, artifacts), commit=True)
+    await transact(repository, lambda uow: uow.media_jobs.release_artifacts(retry, artifacts), commit=True)
 
 
 async def test_stale_put_observed_during_delete_keeps_the_object_due_for_cleanup(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
-    await repository.enqueue(upload(), LIMITS)
-    (stale_claim,) = await repository.claim(limit=1)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
+    (stale_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await repository.track_artifacts(stale_claim, artifacts)
-    assert (await repository.fail(stale_claim, "invalid", max_attempts=1, terminal=True)).dead
-    await repository.release_artifacts(stale_claim, artifacts)
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(stale_claim, artifacts), commit=True)
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.media_jobs.fail(stale_claim, "invalid", max_attempts=1, terminal=True),
+            commit=True,
+        )
+    ).dead
+    await transact(repository, lambda uow: uow.media_jobs.release_artifacts(stale_claim, artifacts), commit=True)
     delete_started = asyncio.Event()
     allow_delete = asyncio.Event()
 
@@ -493,9 +548,12 @@ async def test_stale_put_observed_during_delete_keeps_the_object_due_for_cleanup
         delete_started.set()
         await allow_delete.wait()
 
-    cleanup_task = asyncio.create_task(repository.cleanup_artifacts(blocking_delete, limit=10))
+    cleanup_task = asyncio.create_task(cleanup_artifacts(repository, blocking_delete, limit=10))
     await asyncio.wait_for(delete_started.wait(), timeout=1)
-    assert await repository.track_artifacts(stale_claim, artifacts) is False
+    assert (
+        await transact(repository, lambda uow: uow.media_jobs.track_artifacts(stale_claim, artifacts), commit=True)
+        is False
+    )
     allow_delete.set()
     assert (await cleanup_task).deleted == 2
 
@@ -503,15 +561,15 @@ async def test_stale_put_observed_during_delete_keeps_the_object_due_for_cleanup
         objects = tuple((await session.scalars(select(MediaArtifactObjectRecord))).all())
     assert all(row.deleted_at is None for row in objects)
     assert all(row.cleanup_claim_token is None for row in objects)
-    assert (await repository.cleanup_artifacts(lambda _key: asyncio.sleep(0), limit=10)).deleted == 2
+    assert (await cleanup_artifacts(repository, lambda _key: asyncio.sleep(0), limit=10)).deleted == 2
 
 
 async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
-    await repository.enqueue(upload(), LIMITS)
-    (_claim,) = await repository.claim(limit=1)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
+    (_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
     async with async_session_factory.begin() as session:
         await session.execute(
@@ -542,7 +600,7 @@ async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
     async def delete(object_key: str) -> None:
         deleted.append(object_key)
 
-    reconciled = await repository.cleanup_artifacts(delete, limit=10)
+    reconciled = await cleanup_artifacts(repository, delete, limit=10)
     assert reconciled.attempted == 0
     assert deleted == []
     async with async_session_factory() as session:
@@ -550,24 +608,26 @@ async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
     assert {row.object_key for row in objects} == {artifact.object_key for artifact in artifacts}
     assert all(row.available_at > Instant.now().add(hours=47) for row in objects)
 
-    assert await repository.discard(DRAFT_ID, UPLOAD_ID)
-    assert (await repository.cleanup_artifacts(delete, limit=10)).attempted == 0
+    assert await transact(repository, lambda uow: uow.media_jobs.discard(DRAFT_ID, UPLOAD_ID), commit=True)
+    assert (await cleanup_artifacts(repository, delete, limit=10)).attempted == 0
     async with async_session_factory.begin() as session:
         await session.execute(update(MediaArtifactObjectRecord).values(available_at=func.now()))
-    assert (await repository.cleanup_artifacts(delete, limit=10)).deleted == 2
+    assert (await cleanup_artifacts(repository, delete, limit=10)).deleted == 2
     assert set(deleted) == {artifact.object_key for artifact in artifacts}
 
 
 async def test_retry_backoff_then_dead_state_and_raw_cleanup_acknowledgment(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
-    await repository.enqueue(upload(), LIMITS)
-    (first,) = await repository.claim(limit=1)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
+    (first,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
 
-    failure = await repository.fail(first, "transient", max_attempts=2, terminal=False)
+    failure = await transact(
+        repository, lambda uow: uow.media_jobs.fail(first, "transient", max_attempts=2, terminal=False), commit=True
+    )
     assert (failure.applied, failure.dead) == (True, False)
-    pending = await repository.get(UPLOAD_ID)
+    pending = await transact(repository, lambda uow: uow.media_jobs.get(UPLOAD_ID))
     assert pending is not None
     assert pending.status is MediaJobStatus.PENDING
     assert pending.attempts == 1
@@ -578,20 +638,22 @@ async def test_retry_backoff_then_dead_state_and_raw_cleanup_acknowledgment(
             .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
             .values(available_at=func.now())
         )
-    (second,) = await repository.claim(limit=1)
-    failure = await repository.fail(second, "still broken", max_attempts=2, terminal=False)
+    (second,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
+    failure = await transact(
+        repository, lambda uow: uow.media_jobs.fail(second, "still broken", max_attempts=2, terminal=False), commit=True
+    )
     assert (failure.applied, failure.dead) == (True, True)
 
-    dead = await repository.get(UPLOAD_ID)
+    dead = await transact(repository, lambda uow: uow.media_jobs.get(UPLOAD_ID))
     assert dead is not None
     assert dead.status is MediaJobStatus.DEAD
     assert dead.dead_at is not None
     assert dead.last_error == "still broken"
-    (source,) = await repository.terminal_sources(limit=10)
+    (source,) = await transact(repository, lambda uow: uow.media_jobs.terminal_sources(limit=10))
     assert source.upload_id == UPLOAD_ID
-    assert await repository.mark_source_deleted(source) is True
-    assert await repository.terminal_sources(limit=10) == ()
-    cleaned = await repository.get(UPLOAD_ID)
+    assert await transact(repository, lambda uow: uow.media_jobs.mark_source_deleted(source), commit=True) is True
+    assert await transact(repository, lambda uow: uow.media_jobs.terminal_sources(limit=10)) == ()
+    cleaned = await transact(repository, lambda uow: uow.media_jobs.get(UPLOAD_ID))
     assert cleaned is not None
     assert cleaned.upload.raw_deleted_at is not None
 
@@ -599,23 +661,23 @@ async def test_retry_backoff_then_dead_state_and_raw_cleanup_acknowledgment(
 async def test_draft_capacity_and_discard_are_serialized(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     limits = MediaLimits(max_images=1)
     first = upload()
     second = upload(upload_id=uuid4(), source=b"second")
 
-    await repository.enqueue(first, limits)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(first, limits), commit=True)
     with pytest.raises(MediaLimitExceededError):
-        await repository.enqueue(second, limits)
+        await transact(repository, lambda uow: uow.media_jobs.enqueue(second, limits), commit=True)
 
-    assert await repository.discard(DRAFT_ID, first.id)
-    assert (await repository.enqueue(second, limits)).created
-    snapshots = await repository.list_for_draft(DRAFT_ID)
+    assert await transact(repository, lambda uow: uow.media_jobs.discard(DRAFT_ID, first.id), commit=True)
+    assert (await transact(repository, lambda uow: uow.media_jobs.enqueue(second, limits), commit=True)).created
+    snapshots = await transact(repository, lambda uow: uow.media_jobs.list_for_draft(DRAFT_ID))
     assert {snapshot.upload.id: snapshot.status for snapshot in snapshots} == {
         first.id: MediaJobStatus.DISCARDED,
         second.id: MediaJobStatus.PENDING,
     }
-    assert tuple(await repository.terminal_sources(limit=10)) == (
+    assert tuple(await transact(repository, lambda uow: uow.media_jobs.terminal_sources(limit=10))) == (
         TerminalMediaSource(first.id, first.source_object_key),
     )
 
@@ -625,22 +687,26 @@ async def test_real_submission_draft_lifecycle_fences_new_media_and_discard(
     async_session_factory: async_sessionmaker[AsyncSession],
     status: DraftStatus,
 ) -> None:
-    repository = PostgresMediaJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     first = upload()
-    await repository.enqueue(first, LIMITS)
+    await transact(repository, lambda uow: uow.media_jobs.enqueue(first, LIMITS), commit=True)
     async with async_session_factory.begin() as session:
         await session.execute(update(SubmissionDraft).where(SubmissionDraft.id == DRAFT_ID).values(status=status))
 
-    replay = await repository.enqueue(first, LIMITS)
+    replay = await transact(repository, lambda uow: uow.media_jobs.enqueue(first, LIMITS), commit=True)
     assert replay.created is False
     with pytest.raises(MediaDraftStateConflictError) as enqueue_error:
-        await repository.enqueue(upload(upload_id=uuid4(), source=b"new"), LIMITS)
+        await transact(
+            repository,
+            lambda uow: uow.media_jobs.enqueue(upload(upload_id=uuid4(), source=b"new"), LIMITS),
+            commit=True,
+        )
     with pytest.raises(MediaDraftStateConflictError) as discard_error:
-        await repository.discard(DRAFT_ID, first.id)
+        await transact(repository, lambda uow: uow.media_jobs.discard(DRAFT_ID, first.id), commit=True)
 
     assert enqueue_error.value.public_context == {"reason": "draft_state", "status": status.value}
     assert discard_error.value.public_context == {"reason": "draft_state", "status": status.value}
-    snapshot = await repository.get(first.id)
+    snapshot = await transact(repository, lambda uow: uow.media_jobs.get(first.id))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.PENDING
 
@@ -648,10 +714,10 @@ async def test_real_submission_draft_lifecycle_fences_new_media_and_discard(
 async def test_delete_tombstones_media_and_post_delete_mutations_fail_closed(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    media = PostgresMediaJobRepository(async_session_factory)
+    media = partial(SqlAlchemyUnitOfWork, async_session_factory)
     drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
-    await media.enqueue(metadata, LIMITS)
+    await transact(media, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True)
     async with async_session_factory() as session:
         account_id = await session.scalar(
             select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == DRAFT_ID)
@@ -663,22 +729,24 @@ async def test_delete_tombstones_media_and_post_delete_mutations_fail_closed(
         is True
     )
 
-    snapshot = await media.get(metadata.id)
+    snapshot = await transact(media, lambda uow: uow.media_jobs.get(metadata.id))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.DISCARDED
-    assert tuple(await media.terminal_sources(limit=10)) == (
+    assert tuple(await transact(media, lambda uow: uow.media_jobs.terminal_sources(limit=10))) == (
         TerminalMediaSource(metadata.id, metadata.source_object_key),
     )
     with pytest.raises(MediaDraftNotFoundError):
-        await media.enqueue(upload(upload_id=uuid4(), source=b"new"), LIMITS)
+        await transact(
+            media, lambda uow: uow.media_jobs.enqueue(upload(upload_id=uuid4(), source=b"new"), LIMITS), commit=True
+        )
     with pytest.raises(MediaDraftNotFoundError):
-        await media.discard(DRAFT_ID, metadata.id)
+        await transact(media, lambda uow: uow.media_jobs.discard(DRAFT_ID, metadata.id), commit=True)
 
 
 async def test_concurrent_delete_and_enqueue_never_leave_live_or_untracked_media(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    media = PostgresMediaJobRepository(async_session_factory)
+    media = partial(SqlAlchemyUnitOfWork, async_session_factory)
     drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
     async with async_session_factory() as session:
@@ -688,7 +756,7 @@ async def test_concurrent_delete_and_enqueue_never_leave_live_or_untracked_media
     assert account_id is not None
 
     enqueue_result, delete_result = await asyncio.gather(
-        media.enqueue(metadata, LIMITS),
+        transact(media, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True),
         transact(drafts, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True),
         return_exceptions=True,
     )
@@ -696,10 +764,10 @@ async def test_concurrent_delete_and_enqueue_never_leave_live_or_untracked_media
     assert delete_result is True
     if isinstance(enqueue_result, BaseException):
         assert isinstance(enqueue_result, MediaDraftNotFoundError)
-        assert await media.get(metadata.id) is None
+        assert await transact(media, lambda uow: uow.media_jobs.get(metadata.id)) is None
     else:
         assert enqueue_result.created is True
-        snapshot = await media.get(metadata.id)
+        snapshot = await transact(media, lambda uow: uow.media_jobs.get(metadata.id))
         assert snapshot is not None
         assert snapshot.status is MediaJobStatus.DISCARDED
 
@@ -707,13 +775,13 @@ async def test_concurrent_delete_and_enqueue_never_leave_live_or_untracked_media
 async def test_deleting_completed_media_retains_normalized_keys_in_tombstone(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    media = PostgresMediaJobRepository(async_session_factory)
+    media = partial(SqlAlchemyUnitOfWork, async_session_factory)
     drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
-    await media.enqueue(metadata, LIMITS)
-    (claim,) = await media.claim(limit=1)
+    await transact(media, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True)
+    (claim,) = await transact(media, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    assert await media.complete(claim, artifacts, LIMITS) is True
+    assert await transact(media, lambda uow: uow.media_jobs.complete(claim, artifacts, LIMITS), commit=True) is True
     async with async_session_factory() as session:
         account_id = await session.scalar(
             select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == DRAFT_ID)
@@ -725,7 +793,7 @@ async def test_deleting_completed_media_retains_normalized_keys_in_tombstone(
         is True
     )
 
-    snapshot = await media.get(metadata.id)
+    snapshot = await transact(media, lambda uow: uow.media_jobs.get(metadata.id))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.DISCARDED
     assert {artifact.object_key for artifact in snapshot.artifacts} == {artifact.object_key for artifact in artifacts}
@@ -734,18 +802,18 @@ async def test_deleting_completed_media_retains_normalized_keys_in_tombstone(
 async def test_deleting_one_draft_keeps_objects_referenced_by_another_draft(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    media = PostgresMediaJobRepository(async_session_factory)
+    media = partial(SqlAlchemyUnitOfWork, async_session_factory)
     drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     await create_submission_draft(async_session_factory, draft_id=OTHER_DRAFT_ID)
     first = upload()
     second = upload(upload_id=uuid4(), draft_id=OTHER_DRAFT_ID, source=b"second-source")
     artifacts = completed_artifacts()
-    await media.enqueue(first, LIMITS)
-    await media.enqueue(second, LIMITS)
-    first_claim, second_claim = await media.claim(limit=2)
+    await transact(media, lambda uow: uow.media_jobs.enqueue(first, LIMITS), commit=True)
+    await transact(media, lambda uow: uow.media_jobs.enqueue(second, LIMITS), commit=True)
+    first_claim, second_claim = await transact(media, lambda uow: uow.media_jobs.claim(limit=2), commit=True)
     claims = {claim.upload.id: claim for claim in (first_claim, second_claim)}
-    assert await media.complete(claims[first.id], artifacts, LIMITS)
-    assert await media.complete(claims[second.id], artifacts, LIMITS)
+    assert await transact(media, lambda uow: uow.media_jobs.complete(claims[first.id], artifacts, LIMITS), commit=True)
+    assert await transact(media, lambda uow: uow.media_jobs.complete(claims[second.id], artifacts, LIMITS), commit=True)
     async with async_session_factory() as session:
         account_id = await session.scalar(
             select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == DRAFT_ID)
@@ -758,11 +826,29 @@ async def test_deleting_one_draft_keeps_objects_referenced_by_another_draft(
     async def delete(object_key: str) -> None:
         deleted.append(object_key)
 
-    cleanup = await media.cleanup_artifacts(delete, limit=10)
-    retained = await media.get(second.id)
+    cleanup = await cleanup_artifacts(media, delete, limit=10)
+    retained = await transact(media, lambda uow: uow.media_jobs.get(second.id))
 
     assert cleanup.attempted == 0
     assert deleted == []
     assert retained is not None
     assert retained.status is MediaJobStatus.COMPLETED
     assert {artifact.object_key for artifact in retained.artifacts} == {artifact.object_key for artifact in artifacts}
+
+
+class CleanupArtifacts(LocalArtifactStore):
+    def __init__(self, directory: Path, delete: Callable[[str], Awaitable[None]]) -> None:
+        super().__init__(directory)
+        self._delete = delete
+
+    @override
+    async def delete(self, key: str) -> None:
+        await self._delete(key)
+
+
+async def cleanup_artifacts(
+    factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork], delete: Callable[[str], Awaitable[None]], *, limit: int
+) -> MediaArtifactCleanupOutcome:
+    with TemporaryDirectory() as directory:
+        service = MediaNormalizationJobService(CleanupArtifacts(Path(directory), delete), uow_factory=factory)
+        return await service.cleanup_artifacts(limit=limit)

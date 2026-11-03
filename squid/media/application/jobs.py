@@ -8,7 +8,7 @@ import logging
 import os
 import stat
 import tempfile
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import partial
@@ -46,6 +46,7 @@ from squid.media.errors import (
     MediaProcessingError,
     MediaUploadConflictError,
 )
+from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +257,14 @@ class TerminalMediaSource:
     object_key: str
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactCleanupClaim:
+    """Authority to delete one unreferenced media object."""
+
+    object_key: str
+    claim_token: UUID
+
+
 class MediaJobRepository(Protocol):
     """Durable metadata and claim-fenced queue operations."""
 
@@ -313,12 +322,11 @@ class MediaJobRepository(Protocol):
         artifacts: Sequence[StoredMediaArtifact],
     ) -> None: ...
 
-    async def cleanup_artifacts(
-        self,
-        delete: Callable[[str], Awaitable[None]],
-        *,
-        limit: int,
-    ) -> MediaArtifactCleanupOutcome: ...
+    async def claim_artifact_cleanup(self, *, limit: int) -> tuple[ArtifactCleanupClaim, ...]: ...
+
+    async def resolve_artifact_cleanup(
+        self, resolutions: Sequence[tuple[ArtifactCleanupClaim, str | None]]
+    ) -> None: ...
 
 
 class MediaNormalizationJobService:
@@ -326,16 +334,16 @@ class MediaNormalizationJobService:
 
     def __init__(
         self,
-        repository: MediaJobRepository,
         artifacts: ArtifactStore,
         *,
+        uow_factory: UnitOfWorkFactory[MediaUnitOfWork],
         limits: MediaLimits | None = None,
         max_attempts: int = DEFAULT_MEDIA_JOB_ATTEMPTS,
     ) -> None:
         if max_attempts < 1:
             msg = tr(t"Media normalization attempts must be positive.")
             raise InvalidStateError(msg)
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._artifacts = artifacts
         self._limits = limits or MediaLimits()
         self._max_attempts = max_attempts
@@ -419,7 +427,9 @@ class MediaNormalizationJobService:
         object_key = upload.source_object_key
         upload_id = upload.id
         try:
-            outcome = await self._repository.enqueue(upload, self._limits, authorization=authorization)
+            async with self._uow_factory() as uow:
+                outcome = await uow.media_jobs.enqueue(upload, self._limits, authorization=authorization)
+                await uow.commit()
         except (
             MediaLimitExceededError,
             MediaDraftNotFoundError,
@@ -433,45 +443,65 @@ class MediaNormalizationJobService:
             if not same_key or error.existing_status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD}:
                 await self._artifacts.delete(object_key)
             if same_key and error.existing_status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD}:
-                await self._repository.mark_source_deleted(TerminalMediaSource(upload_id, object_key))
+                await self.mark_source_deleted(TerminalMediaSource(upload_id, object_key))
             raise
         if outcome.status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD, MediaJobStatus.DISCARDED}:
             source = TerminalMediaSource(upload_id, object_key)
             await self._artifacts.delete(object_key)
-            await self._repository.mark_source_deleted(source)
+            await self.mark_source_deleted(source)
         return upload_id
 
     async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
-        return await self._repository.get(upload_id)
+        async with self._uow_factory() as uow:
+            return await uow.media_jobs.get(upload_id)
 
     async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
         """List retained upload state for one draft in creation order."""
-        return await self._repository.list_for_draft(draft_id)
+        async with self._uow_factory() as uow:
+            return await uow.media_jobs.list_for_draft(draft_id)
 
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         """Withdraw one upload and schedule any remaining raw source for cleanup."""
-        return await self._repository.discard(draft_id, upload_id)
+        async with self._uow_factory() as uow:
+            result = await uow.media_jobs.discard(draft_id, upload_id)
+            await uow.commit()
+            return result
 
     async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
         """Share an existing normalization job under the repository's ownership fence."""
-        return await self._repository.attach(source_id, target_id, upload_id, self._limits)
+        async with self._uow_factory() as uow:
+            result = await uow.media_jobs.attach(source_id, target_id, upload_id, self._limits)
+            await uow.commit()
+            return result
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
-        if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
-            maximum = MAX_MEDIA_JOB_CLAIM
-            raise InvalidStateError(tr(t"Media job claim limit must be between 1 and {maximum}."))
-        return await self._repository.claim(limit=limit)
+        async with self._uow_factory() as uow:
+            if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
+                maximum = MAX_MEDIA_JOB_CLAIM
+                raise InvalidStateError(tr(t"Media job claim limit must be between 1 and {maximum}."))
+            result = await uow.media_jobs.claim(limit=limit)
+            await uow.commit()
+            return result
 
     async def heartbeat(self, job: ClaimedMediaJob) -> bool:
         """Renew a current media claim and every publication lease it owns."""
-        return await self._repository.heartbeat(job)
+        async with self._uow_factory() as uow:
+            result = await uow.media_jobs.heartbeat(job)
+            await uow.commit()
+            return result
 
     async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
         """Release a current claim without consuming a normalization attempt."""
-        return await self._repository.defer(job, until=until)
+        async with self._uow_factory() as uow:
+            result = await uow.media_jobs.defer(job, until=until)
+            await uow.commit()
+            return result
 
     async def complete(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool:
-        return await self._repository.complete(job, artifacts, self._limits)
+        async with self._uow_factory() as uow:
+            result = await uow.media_jobs.complete(job, artifacts, self._limits)
+            await uow.commit()
+            return result
 
     async def fail(
         self,
@@ -480,22 +510,29 @@ class MediaNormalizationJobService:
         *,
         terminal: bool,
     ) -> MediaJobFailureOutcome:
-        message = str(error) if isinstance(error, SquidError | MediaJobSourceError) else type(error).__name__
-        return await self._repository.fail(
-            job,
-            message,
-            max_attempts=self._max_attempts,
-            terminal=terminal,
-        )
+        async with self._uow_factory() as uow:
+            message = str(error) if isinstance(error, SquidError | MediaJobSourceError) else type(error).__name__
+            result = await uow.media_jobs.fail(
+                job,
+                message,
+                max_attempts=self._max_attempts,
+                terminal=terminal,
+            )
+            await uow.commit()
+            return result
 
     async def terminal_sources(self, *, limit: int = 100) -> Sequence[TerminalMediaSource]:
-        if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
-            maximum = MAX_MEDIA_JOB_CLEANUP
-            raise InvalidStateError(tr(t"Media source cleanup limit must be between 1 and {maximum}."))
-        return await self._repository.terminal_sources(limit=limit)
+        async with self._uow_factory() as uow:
+            if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
+                maximum = MAX_MEDIA_JOB_CLEANUP
+                raise InvalidStateError(tr(t"Media source cleanup limit must be between 1 and {maximum}."))
+            return await uow.media_jobs.terminal_sources(limit=limit)
 
     async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
-        return await self._repository.mark_source_deleted(source)
+        async with self._uow_factory() as uow:
+            result = await uow.media_jobs.mark_source_deleted(source)
+            await uow.commit()
+            return result
 
     async def track_artifacts(
         self,
@@ -503,7 +540,10 @@ class MediaNormalizationJobService:
         artifacts: Sequence[StoredMediaArtifact],
     ) -> bool:
         """Register possible object keys before publishing bytes to storage."""
-        return await self._repository.track_artifacts(job, artifacts)
+        async with self._uow_factory() as uow:
+            result = await uow.media_jobs.track_artifacts(job, artifacts)
+            await uow.commit()
+            return result
 
     async def release_artifacts(
         self,
@@ -511,14 +551,33 @@ class MediaNormalizationJobService:
         artifacts: Sequence[StoredMediaArtifact],
     ) -> None:
         """Release only this claim's per-object publication leases."""
-        await self._repository.release_artifacts(job, artifacts)
+        async with self._uow_factory() as uow:
+            await uow.media_jobs.release_artifacts(job, artifacts)
+            await uow.commit()
 
     async def cleanup_artifacts(self, *, limit: int = 100) -> MediaArtifactCleanupOutcome:
         """Delete due unreferenced artifacts through the durable repository fence."""
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
             maximum = MAX_MEDIA_JOB_CLEANUP
             raise InvalidStateError(tr(t"Media artifact cleanup limit must be between 1 and {maximum}."))
-        return await self._repository.cleanup_artifacts(self._artifacts.delete, limit=limit)
+        async with self._uow_factory() as uow:
+            claims = await uow.media_jobs.claim_artifact_cleanup(limit=limit)
+            await uow.commit()
+        resolutions: list[tuple[ArtifactCleanupClaim, str | None]] = []
+        deleted = 0
+        for claim in claims:
+            try:
+                await self._artifacts.delete(claim.object_key)
+            except Exception as error:
+                resolutions.append((claim, type(error).__name__[:4000]))
+            else:
+                deleted += 1
+                resolutions.append((claim, None))
+        if resolutions:
+            async with self._uow_factory() as uow:
+                await uow.media_jobs.resolve_artifact_cleanup(resolutions)
+                await uow.commit()
+        return MediaArtifactCleanupOutcome(len(claims), deleted, len(claims) - deleted)
 
 
 class MediaStorageCleanup:
@@ -889,3 +948,8 @@ def _require_content_type(value: str) -> None:
     if value != value.strip() or not value or len(value) > 255 or any(ord(character) < 32 for character in value):
         msg = tr(t"Media content types must be 1-255 printable characters without surrounding whitespace.")
         raise ValidationError(msg)
+
+
+class MediaUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def media_jobs(self) -> MediaJobRepository: ...

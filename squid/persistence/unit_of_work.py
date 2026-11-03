@@ -17,6 +17,7 @@ from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepos
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency.infrastructure.crypto import IdempotencyResponseCipher
 from squid.idempotency.infrastructure.repository import PostgresIdempotencyRepository
+from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
@@ -63,6 +64,7 @@ class SqlAlchemyUnitOfWork:
         self._attachment_intake = PostgresAttachmentIntake(self._active_session)
         self._draft_schematics = PostgresDraftSchematics(self._active_session)
         self._inference_runs = PostgresInferenceRuns(self._active_session)
+        self._media_jobs = PostgresMediaJobRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -229,6 +231,11 @@ class SqlAlchemyUnitOfWork:
     def inference_runs(self) -> PostgresInferenceRuns:
         self._active_session()
         return self._inference_runs
+
+    @property
+    def media_jobs(self) -> PostgresMediaJobRepository:
+        self._active_session()
+        return self._media_jobs
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

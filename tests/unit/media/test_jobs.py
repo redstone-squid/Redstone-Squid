@@ -4,8 +4,10 @@ import asyncio
 import hashlib
 import json
 import threading
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
+from copy import copy
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import override
 from uuid import UUID, uuid4
@@ -19,9 +21,9 @@ from squid.artifacts import ArtifactMetadata
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.jobs import (
     MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
+    ArtifactCleanupClaim,
     ClaimedMediaJob,
     MediaArtifactCleanupInProgressError,
-    MediaArtifactCleanupOutcome,
     MediaDraftUploadAuthorization,
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
@@ -55,6 +57,7 @@ from squid.media.errors import (
     MediaFailureReason,
     MediaLimitExceededError,
 )
+from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
 DRAFT_ID = UUID("84ab2da9-c27e-4d37-98c6-973bcc92f5e4")
@@ -334,12 +337,7 @@ class MemoryMediaJobs:
         for artifact in artifacts:
             self.artifact_publications.discard((artifact.object_key, job.upload.id, job.claim_token))
 
-    async def cleanup_artifacts(
-        self,
-        delete: Callable[[str], Awaitable[None]],
-        *,
-        limit: int,
-    ) -> MediaArtifactCleanupOutcome:
+    async def claim_artifact_cleanup(self, *, limit: int) -> tuple[ArtifactCleanupClaim, ...]:
         self.artifact_cleanup_calls += 1
         referenced = {
             artifact.object_key
@@ -354,17 +352,12 @@ class MemoryMediaJobs:
             and key not in referenced
             and not any(publication[0] == key for publication in self.artifact_publications)
         ][:limit]
-        deleted_count = 0
-        failures = 0
-        for key in candidates:
-            try:
-                await delete(key)
-            except Exception:
-                failures += 1
-            else:
-                deleted_count += 1
-                self.artifact_objects[key] = True
-        return MediaArtifactCleanupOutcome(len(candidates), deleted_count, failures)
+        return tuple(ArtifactCleanupClaim(key, uuid4()) for key in candidates)
+
+    async def resolve_artifact_cleanup(self, resolutions: Sequence[tuple[ArtifactCleanupClaim, str | None]]) -> None:
+        for claim, error in resolutions:
+            if error is None:
+                self.artifact_objects[claim.object_key] = True
 
 
 class RejectingMediaJobs(MemoryMediaJobs):
@@ -536,7 +529,7 @@ class BlockingNormalizer(WritingNormalizer):
 async def test_submit_is_retry_safe_and_does_not_overwrite_conflicting_source() -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     submission = MediaUploadSubmission(
         draft_id=DRAFT_ID,
         kind=MediaKind.IMAGE,
@@ -561,7 +554,7 @@ async def test_submit_is_retry_safe_and_does_not_overwrite_conflicting_source() 
 async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     source = tmp_path / "source"
     source.write_bytes(b"image")
 
@@ -596,7 +589,7 @@ async def test_submit_staged_cancellation_settles_metadata_reader_before_returni
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    jobs = MediaNormalizationJobService(MemoryMediaJobs(), MemoryArtifacts())
+    jobs = MediaNormalizationJobService(MemoryArtifacts(), uow_factory=partial(MediaScope, MemoryMediaJobs()))
     source = tmp_path / "source"
     source.write_bytes(b"image")
     started = threading.Event()
@@ -649,7 +642,7 @@ async def test_submit_removes_staged_source_when_draft_rejects_registration(
     error: MediaDraftNotFoundError | MediaDraftStateConflictError,
 ) -> None:
     artifacts = MemoryArtifacts()
-    jobs = MediaNormalizationJobService(RejectingMediaJobs(error), artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, RejectingMediaJobs(error)))
 
     with pytest.raises(type(error)):
         await jobs.submit(
@@ -668,7 +661,9 @@ async def test_submit_removes_staged_source_when_draft_rejects_registration(
 async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts, limits=MediaLimits(max_images=1))
+    jobs = MediaNormalizationJobService(
+        artifacts, limits=MediaLimits(max_images=1), uow_factory=partial(MediaScope, repository)
+    )
     first_id = await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -707,7 +702,7 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
 async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     submission = MediaUploadSubmission(
         draft_id=DRAFT_ID,
         kind=MediaKind.VIDEO,
@@ -757,7 +752,7 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
 async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -786,7 +781,7 @@ async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: 
 async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -818,7 +813,7 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
 async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -847,7 +842,7 @@ async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree
 async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = CleanupContendingMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts, max_attempts=1)
+    jobs = MediaNormalizationJobService(artifacts, max_attempts=1, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -874,7 +869,7 @@ async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: 
 async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = DiscardingCompletionMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -903,7 +898,7 @@ async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path)
 async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metadata(tmp_path: Path) -> None:
     artifacts = FailingDeleteArtifacts()
     repository = MemoryMediaJobs()
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
@@ -942,7 +937,7 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
     ):
         artifacts = MemoryArtifacts()
         repository = MemoryMediaJobs()
-        jobs = MediaNormalizationJobService(repository, artifacts, max_attempts=2)
+        jobs = MediaNormalizationJobService(artifacts, max_attempts=2, uow_factory=partial(MediaScope, repository))
         upload_id = uuid4()
         await jobs.submit(
             MediaUploadSubmission(
@@ -1012,7 +1007,7 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
     sibling_id = uuid4()
     artifacts = MemoryArtifacts()
     repository = BrokenFailurePathJobs(broken_id)
-    jobs = MediaNormalizationJobService(repository, artifacts)
+    jobs = MediaNormalizationJobService(artifacts, uow_factory=partial(MediaScope, repository))
     for upload_id, source in ((broken_id, b"broken-image"), (sibling_id, b"raw-image")):
         await jobs.submit(
             MediaUploadSubmission(
@@ -1035,3 +1030,12 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
     assert sibling is not None
     assert sibling.status is MediaJobStatus.COMPLETED
     assert not any(tmp_path.iterdir())
+
+
+class MediaScope(PublishingFakeUnitOfWork[MemoryMediaJobs]):
+    def __init__(self, repository: MemoryMediaJobs) -> None:
+        super().__init__(repository, clone=copy)
+
+    @property
+    def media_jobs(self) -> MemoryMediaJobs:
+        return self.state
