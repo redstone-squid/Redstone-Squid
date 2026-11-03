@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from squid.core.errors import InvalidStateError
 from squid.media.application.jobs import MEDIA_VIDEO_THUMBNAIL_ROLES, MediaJobSnapshot, StoredMediaArtifact
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
@@ -35,10 +36,10 @@ class DraftSchematicSnapshot:
     def __post_init__(self) -> None:
         if (self.state is SchematicArtifactState.READY) != (self.artifact_id is not None):
             msg = "Only a ready schematic state may carry a stored artifact ID."
-            raise ValueError(msg)
+            raise InvalidStateError(msg)
         if self.artifact_id is not None and self.artifact_id.int == 0:
             msg = "Schematic artifact identifiers cannot be nil UUIDs."
-            raise ValueError(msg)
+            raise InvalidStateError(msg)
 
 
 class DraftSchematicReader(Protocol):

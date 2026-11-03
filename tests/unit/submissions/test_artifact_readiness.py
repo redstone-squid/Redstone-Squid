@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
+from squid.core.errors import InvalidStateError
 from squid.media.application.jobs import MediaJobSnapshot, MediaUploadMetadata, StoredMediaArtifact
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
@@ -303,10 +304,10 @@ async def test_empty_reader_reports_absent_until_draft_uploads_are_implemented()
 
 
 def test_schematic_snapshot_cannot_claim_ready_without_a_stored_artifact() -> None:
-    with pytest.raises(ValueError, match="ready schematic state"):
+    with pytest.raises(InvalidStateError, match="ready schematic state"):
         DraftSchematicSnapshot(SchematicArtifactState.READY)
 
 
 def test_schematic_snapshot_rejects_a_nil_artifact_identifier() -> None:
-    with pytest.raises(ValueError, match="nil UUIDs"):
+    with pytest.raises(InvalidStateError, match="nil UUIDs"):
         DraftSchematicSnapshot(SchematicArtifactState.READY, UUID(int=0))

@@ -9,8 +9,8 @@ class UnitOfWork(Protocol):
     """Track mapped changes until commit; leaving without commit rolls back.
 
     Each scope belongs to one task. Commit is terminal, and repositories may only
-    be used inside an active scope. Successfully committed entities are detached
-    when the scope closes; entities from a rolled-back scope should be discarded.
+    be used inside an active scope. Loaded entities detach when the scope closes;
+    edits persist only after a successful commit.
     """
 
     async def __aenter__(self) -> Self: ...
