@@ -13,5 +13,6 @@
    across insertion and update; also cover omission versus clearing and retained payload compatibility where
    applicable. Run focused tests with `--no-cov`, `just typecheck`, and `git diff --check`.
 
-Repository reads return loaded, detached entities. Make changes through an explicit repository write;
-use `copy_for_edit()` when preparing an isolated build preview.
+Entities are tracked within an application unit of work and detached when its scope closes. Prepare build previews
+with `copy_for_edit()`, then apply edits through the build service, which rechecks permissions and the expected revision
+before committing. Replace JSON and array values when editing them so SQLAlchemy tracks the change.

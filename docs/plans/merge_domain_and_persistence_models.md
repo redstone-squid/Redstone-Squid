@@ -2,9 +2,8 @@
 
 ## Status
 
-Phase 1 is implemented. Phase 2 is at a review checkpoint: settings, messages, posts, versions, tags, diagnostics,
-starboard, permissions (resolution, administration, and epoch polling), and API-key authentication use application-owned
-transactions. The larger aggregate and worker workflows remain; this is a checkpoint by service area, not by lines of code.
+Both phases are implemented. Persisted entities are unified, and application operations now own business transactions
+through units of work. Database listeners and queue-health monitoring remain infrastructure connection owners.
 See [Entities and persistence](../models.md) for the current model boundary.
 
 ## Goal and boundaries
@@ -18,7 +17,9 @@ Deliver two independently valid phases:
 1. Unify models while preserving current transaction boundaries.
 2. Move transaction ownership into application-level units of work.
 
-Both phases preserve database structure, public API shapes, stored payload formats, and business behavior. The earlier field-binding framework is outside this plan.
+Preserve public API shapes, stored payload formats, and business behavior. Phase 1 preserves structural DDL; phase 2
+adds a preview cleanup claim so object deletion can run outside a database transaction. The earlier field-binding
+framework is outside this plan.
 
 ## Phase 1: Unify entities
 
@@ -65,11 +66,13 @@ through a protocol extending the shared transaction lifecycle. The factory remai
 
 The application API becomes:
 
+```python
 async with self._uow_factory() as uow:
     build = await uow.builds.get_for_update(build_id)
     authorize_edit(actor, build)
     patch.apply(build)
     await uow.commit()
+```
 
 - Repository methods query, add, delete, and flush; they do not open independent sessions or commit. Mutating an attached entity persists through the unit of work.
 - The outer application operation owns the transaction. Internal operations receive the same unit of work or its repositories explicitly. Avoid ambient sessions and nested independent commits.
@@ -83,22 +86,20 @@ async with self._uow_factory() as uow:
 
 Start with one simple write service, then build edits, submission finalization, account merging, and the remaining application workflows. Infrastructure-only connection lifetimes, such as database listeners, remain separately owned.
 
-## Phase 2 review checkpoint
+## Phase 2 outcome
 
-The completed services share one concrete SQLAlchemy UoW. Repository methods no longer create sessions or commit.
-Permission administration passes the same UoW to internal checks. API-key issuance uses transaction-local permission
-reads, so a cached grant cannot authorize issuance after that grant has been revoked. Ordinary permission checks keep
-their cache, and epoch polling opens a fresh read scope.
+All business repositories are bound to one application-owned scope. This includes authentication and account merging,
+build edits, voting and records, submissions and finalization, notifications, media and schematics, search and
+suggestions, and worker claim/completion operations. The shared queue requires the caller's session. Architecture
+checks prevent repository-owned commits and new session-factory owners.
 
-The useful distinctions so far are tracked field edits versus conditional SQL operations, and standalone service
-operations versus helpers participating in an existing transaction. Upserts and UPDATE RETURNING refresh loaded
-entities when stored values need to replace their in-memory values. Test fakes share commit snapshots; PostgreSQL
-checks cover locks, rollback, constraints, audit records, cache isolation, and projection requests.
+Build edits prepare detached previews, then reload, authorize, check the revision, and save inside a short transaction.
+Submission finalization and account merging keep their dependent writes atomic. Record publication commits all
+requested scopes together. External storage, inference, embedding, and rendering work happens between transactions;
+completion rechecks the relevant authority or claim. Concurrent suggestion providers use independent read scopes.
 
-Remaining work includes accounts and merging; browser, CLI, and Minecraft authentication; builds and edit previews;
-records and voting; notifications; submission finalization; schematics and media jobs; search and suggestions; and
-worker claim/completion transitions. Keep external calls outside database scopes and preserve each existing atomic
-operation when those areas move. Infrastructure connection owners, such as listeners, remain separate.
+Preview cleanup uses a durable claim token to exclude publishers while bytes are deleted outside the database.
+Revision `b3d7f0a5c8e1` adds the claim timestamp, token, and paired-null constraint in one reversible migration.
 
 ## Verification and completion
 
@@ -114,7 +115,7 @@ operation when those areas move. Infrastructure connection owners, such as liste
 ## Phase 1 verification
 
 The model move preserves structural DDL and indexes. Revision `a2c6e9f4b7d0` collects the documentation changes
-in one reversible migration: four table comments and seventeen column comments. It is the single migration head.
+in one reversible migration: four table comments and seventeen column comments. It was the phase-one migration head.
 
 - Unit, architecture, and workspace package suite: 5,798 passed, 1 skipped.
 - PostgreSQL integration suite: 532 passed, 4 skipped, 5 existing failures reproduced on pre-refactor revision `3082bbd0f`.
@@ -136,3 +137,12 @@ tests; the Docker lifecycle test and 23 environment unit tests also passed. The 
 closes controller connections, compares host addresses without network masks, and authenticates with a valid seeded
 service key. Historical schema tests isolate unrelated delivery triggers; applied migration files remain unchanged.
 Pyrefly, formatting, linting, and `git diff --check` pass.
+
+## Phase 2 verification
+
+- Unit, architecture, and workspace suite: 5,812 passed, 2 skipped. The typing contract test passed when rerun
+  with the installed checker on PATH; the remaining skip covers PostgreSQL arrays on SQLite.
+- PostgreSQL integration suite: 574 passed, 4 skipped because ffmpeg/ffprobe are unavailable.
+- Final focused checks after import cleanup pass. Project Pyrefly reports no errors; formatting, linting, and
+  `git diff --check` pass.
+- Clean migration upgrade, schema drift, downgrade, and re-upgrade checks pass. `b3d7f0a5c8e1` is the single head.
