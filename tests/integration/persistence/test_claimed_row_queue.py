@@ -264,14 +264,9 @@ async def test_failing_at_the_attempt_ceiling_dead_letters_the_row(
 async def test_a_caller_owned_claim_is_not_committed(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """With `session=`, the claim joins the caller's transaction instead of ending it.
-
-    The previous helper committed a session it did not own, which dropped the
-    caller's row locks and excluded the one adapter that had a transaction worth
-    joining.
-    """
+    """Claims remain invisible to other connections until their caller commits."""
     await _seed_sync_job(migrated_session_factory)
-    queue = ClaimedRowQueue(DISCORD_SYNC_QUEUE_SPEC, migrated_session_factory)
+    queue = ClaimedRowQueue(DISCORD_SYNC_QUEUE_SPEC)
 
     async with migrated_session_factory() as session:
         claimed = await queue.claim(limit=10, session=session)
@@ -296,14 +291,16 @@ async def test_completing_with_values_retains_the_row(
                 )
             )
         ).scalar_one()
-    queue = ClaimedRowQueue(SCHEMATIC_JOB_SPEC, migrated_session_factory)
+    queue = ClaimedRowQueue(SCHEMATIC_JOB_SPEC)
 
-    (row,) = await queue.claim(limit=10)
-    outcome = await queue.complete(
-        (SCHEMATIC_JOB_SPEC.key[0] == job_id,),
-        queue.token_of(row),
-        values={"completed_at": text("now()")},
-    )
+    async with migrated_session_factory.begin() as session:
+        (row,) = await queue.claim(limit=10, session=session)
+        outcome = await queue.complete(
+            (SCHEMATIC_JOB_SPEC.key[0] == job_id,),
+            queue.token_of(row),
+            session=session,
+            values={"completed_at": text("now()")},
+        )
 
     assert outcome.applied is True
     completed, claimed_at, token = await _row(
@@ -312,7 +309,8 @@ async def test_completing_with_values_retains_the_row(
     )
     assert (completed, claimed_at, token) == (True, None, None)
     # Retained but no longer pending, so it is not handed out again.
-    assert await queue.claim(limit=10) == ()
+    async with migrated_session_factory.begin() as session:
+        assert await queue.claim(limit=10, session=session) == ()
 
 
 @pytest.mark.parametrize("attempts", range(13))

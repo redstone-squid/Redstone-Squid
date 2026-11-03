@@ -202,18 +202,17 @@ lose from drift.
 **`FenceOutcome`** — `applied: bool`, `dead_lettered: bool`. Returned, logged, and counted; never
 discarded silently (defect 5).
 
-**`ClaimedRowQueue(spec, session_factory=None)`**:
+**`ClaimedRowQueue(spec)`** (updated for application-owned transactions):
 
 - `ready()`, `held_by(token)`, `held_by_any(tokens)` — predicates, so the reclaim rule exists once.
-- `claim(*, limit, where=(), session=None)` — issues
+- `claim(*, limit, where=(), session)` — issues
   `UPDATE ... WHERE key IN (SELECT key ... FOR UPDATE SKIP LOCKED) RETURNING *`. The timestamp and
   token are minted by the database in the same statement that locks the rows, so there is no window
   in which a row is selected but unstamped and no dependence on the worker's clock (defects 2, 3).
-  With `session=` it joins the caller's transaction and does **not** commit — this is what lets
-  `SearchProjectionStore` in. Without, it opens and commits its own (defect 1).
-- `complete(identity, token, *, values=None, session=None)` — deletes, or updates when `values` is
+  Every operation requires the caller's session and leaves commit to the application unit of work.
+- `complete(identity, token, *, values=None, session)` — deletes, or updates when `values` is
   given, which is the retain-terminal-row shape `schematic_jobs` needs.
-- `fail(identity, token, *, attempts, error, max_attempts, terminal=False, values=None, dead_values=None, session=None)`
+- `fail(identity, token, *, attempts, error, max_attempts, terminal=False, values=None, dead_values=None, session)`
   — `max_attempts=None` means this queue never stops retrying, which is only correct where a
   permanently stuck row is louder than a silently dropped one.
 - `complete_batch(tokens, ...)` / `fail_batch(tokens, ...)` — set-based ack for scope leases.

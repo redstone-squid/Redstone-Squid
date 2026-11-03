@@ -1,25 +1,8 @@
-"""The claim protocol shared by the durable work tables.
+"""Shared claim and acknowledgement operations for durable work queues.
 
-Seven tables in this codebase are work queues, and they all do the same three
-things: claim a bounded batch of ready rows without two workers taking the same
-row, hold that claim long enough to survive a process death, then acknowledge,
-retry with backoff, or dead-letter.
-
-What is shared here is the **claim** half -- the readiness predicate, the
-database-minted fencing token, the backoff and the dead-letter policy. The
-**acknowledgement** half is allowed to vary, because it genuinely does: some
-queues delete the acknowledged row, `schematic_jobs` retains it with terminal
-values, and `record_recompute_queue` leases whole scopes and acknowledges a set
-of them at once. Splitting it there is what lets all seven use this; the previous
-split, which shared acknowledgement and left every caller to hand-write the
-select, was small enough that two adapters re-implemented the fence anyway.
-
-Both clocks and the token come from PostgreSQL, never from the worker. A claim
-stamps `now()` and `gen_random_uuid()` in the same statement that locks the rows,
-so there is no window in which a row is selected but unstamped, no dependence on
-worker clock skew against the database's, and -- because `gen_random_uuid()` is
-volatile and therefore evaluated per row -- no chance of two rows in one batch
-sharing a token.
+Every operation uses the caller's transaction. PostgreSQL timestamps each claim
+and generates a token per row; completion and retry require that token. Queue
+specifications supply readiness, retry, and terminal-state rules.
 """
 
 import logging
@@ -43,7 +26,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql import FromClause
 from whenever import Instant
@@ -212,23 +195,10 @@ class FenceOutcome:
 
 
 class ClaimedRowQueue[ModelT]:
-    """Claim and acknowledge rows of one work table.
+    """Claim and acknowledge rows in the caller's transaction."""
 
-    Constructed without a `session_factory`, every method requires an explicit
-    `session=` and joins the caller's transaction instead of committing. That is
-    what lets an adapter which hands live ORM rows to its caller -- the search
-    projector -- share this protocol; the previous version committed a session it
-    did not own, which both dropped the caller's row locks and excluded the one
-    caller that had a transaction worth joining.
-    """
-
-    def __init__(
-        self,
-        spec: QueueSpec[ModelT],
-        session_factory: async_sessionmaker[AsyncSession] | None = None,
-    ) -> None:
+    def __init__(self, spec: QueueSpec[ModelT]) -> None:
         self._spec = spec
-        self._session_factory = session_factory
 
     @property
     def spec(self) -> QueueSpec[ModelT]:
@@ -264,7 +234,7 @@ class ClaimedRowQueue[ModelT]:
         *,
         limit: int,
         where: Sequence[ColumnElement[bool]] = (),
-        session: AsyncSession | None = None,
+        session: AsyncSession,
     ) -> tuple[ModelT, ...]:
         """Take ownership of up to `limit` ready rows and return them.
 
@@ -294,10 +264,7 @@ class ClaimedRowQueue[ModelT]:
             .returning(spec.model)
             .execution_options(synchronize_session=False)
         )
-        if session is not None:
-            return tuple((await session.scalars(statement)).all())
-        async with self._require_factory().begin() as owned:
-            return tuple((await owned.scalars(statement)).all())
+        return tuple((await session.scalars(statement)).all())
 
     def token_of(self, row: ModelT) -> uuid.UUID:
         """Read the fence off a row `claim` just returned.
@@ -318,7 +285,7 @@ class ClaimedRowQueue[ModelT]:
         token: uuid.UUID,
         *,
         values: Mapping[str, Any] | None = None,
-        session: AsyncSession | None = None,
+        session: AsyncSession,
     ) -> FenceOutcome:
         """Acknowledge a row this worker still owns.
 
@@ -348,7 +315,7 @@ class ClaimedRowQueue[ModelT]:
         terminal: bool = False,
         values: Mapping[str, Any] | None = None,
         dead_values: Mapping[str, Any] | None = None,
-        session: AsyncSession | None = None,
+        session: AsyncSession,
     ) -> FenceOutcome:
         """Release a failed row for retry, or dead-letter it.
 
@@ -373,7 +340,7 @@ class ClaimedRowQueue[ModelT]:
         tokens: Sequence[uuid.UUID],
         *,
         values: Mapping[str, Any] | None = None,
-        session: AsyncSession | None = None,
+        session: AsyncSession,
     ) -> int:
         """Acknowledge every row of a leased set this worker still owns.
 
@@ -395,7 +362,7 @@ class ClaimedRowQueue[ModelT]:
         tokens: Sequence[uuid.UUID],
         *,
         error: str,
-        session: AsyncSession | None = None,
+        session: AsyncSession,
     ) -> int:
         """Release every row of a leased set for retry, each on its own backoff."""
         if not tokens:
@@ -455,16 +422,6 @@ class ClaimedRowQueue[ModelT]:
             released[self._spec.last_error.key] = error[:MAX_ERROR_LENGTH]
         return released
 
-    async def _rowcount(self, statement: Any, session: AsyncSession | None) -> int:
-        if session is not None:
-            result = cast(CursorResult[Any], await session.execute(statement))
-            return result.rowcount
-        async with self._require_factory().begin() as owned:
-            result = cast(CursorResult[Any], await owned.execute(statement))
-            return result.rowcount
-
-    def _require_factory(self) -> async_sessionmaker[AsyncSession]:
-        if self._session_factory is None:
-            msg = f"The {self._spec.name} queue was built without a session factory, so it needs an explicit session."
-            raise RuntimeError(msg)
-        return self._session_factory
+    async def _rowcount(self, statement: Any, session: AsyncSession) -> int:
+        result = cast(CursorResult[Any], await session.execute(statement))
+        return result.rowcount
