@@ -107,7 +107,6 @@ from squid.submissions.infrastructure.finalization_repository import PostgresFin
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
@@ -418,10 +417,10 @@ class _ServiceGraph:
     @cached_property
     def submission_drafts(self) -> SubmissionDraftService:
         return SubmissionDraftService(
-            PostgresDraftRepository(self.db.async_session),
             self.submission_manifests,
             inferred_capacity=self.config.submissions.inferred_draft_capacity,
             permissions=self.permissions,
+            uow_factory=self.uow_factory,
         )
 
     @cached_property

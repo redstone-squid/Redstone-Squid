@@ -1,12 +1,12 @@
 """PostgreSQL persistence for synchronized submission drafts."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import cast, override
 from uuid import UUID
 
 from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.builds.domain import SourceMessage
@@ -50,8 +50,8 @@ _ACTIVE_STATUSES = (DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEE
 class PostgresDraftRepository(DraftRepository):
     """Serialize mutations per draft and retain immutable accepted changes."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
     @override
     async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
@@ -67,8 +67,8 @@ class PostgresDraftRepository(DraftRepository):
         )
         if after is not None:
             statement = statement.where(SubmissionDraft.id > after)
-        async with self._session_factory() as session:
-            return tuple(_to_stored(model) for model in await session.scalars(statement))
+        session = self._session()
+        return tuple(_to_stored(model) for model in await session.scalars(statement))
 
     @override
     async def list_active_for_account(
@@ -81,21 +81,21 @@ class PostgresDraftRepository(DraftRepository):
         if not 1 <= limit <= 10:
             msg = "active draft list limit must be between 1 and 10"
             raise ValueError(msg)
-        async with self._session_factory() as session:
-            models = tuple(
-                (
-                    await session.scalars(
-                        select(SubmissionDraft)
-                        .where(
-                            SubmissionDraft.owner_account_id == account_id,
-                            SubmissionDraft.status.in_(_ACTIVE_STATUSES),
-                            SubmissionDraft.expires_at > now,
-                        )
-                        .order_by(SubmissionDraft.updated_at.desc(), SubmissionDraft.id)
-                        .limit(limit)
+        session = self._session()
+        models = tuple(
+            (
+                await session.scalars(
+                    select(SubmissionDraft)
+                    .where(
+                        SubmissionDraft.owner_account_id == account_id,
+                        SubmissionDraft.status.in_(_ACTIVE_STATUSES),
+                        SubmissionDraft.expires_at > now,
                     )
-                ).all()
-            )
+                    .order_by(SubmissionDraft.updated_at.desc(), SubmissionDraft.id)
+                    .limit(limit)
+                )
+            ).all()
+        )
         return tuple(_to_stored(model) for model in models)
 
     @override
@@ -105,67 +105,67 @@ class PostgresDraftRepository(DraftRepository):
             message = "Draft capacity must be positive."
             raise ValueError(message)
         model = _to_model(draft)
-        async with self._session_factory.begin() as session:
-            await lock_key(
-                session,
-                "inferred" if draft.inferred else f"account:{draft.snapshot.owner_account_id}",
-                namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_CAPACITY,
+        session = self._session()
+        await lock_key(
+            session,
+            "inferred" if draft.inferred else f"account:{draft.snapshot.owner_account_id}",
+            namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_CAPACITY,
+        )
+        existing = await session.get(SubmissionDraft, model.id)
+        if existing is not None:
+            if existing.owner_account_id != model.owner_account_id:
+                raise DraftAccessDeniedError
+            if (
+                existing.schema_id,
+                existing.schema_revision,
+                existing.origin,
+                existing.inferred,
+                existing.category,
+                existing.source_installation_id,
+                existing.source_messages,
+                existing.source_files,
+                existing.inference_run_id,
+            ) != (
+                model.schema_id,
+                model.schema_revision,
+                model.origin,
+                model.inferred,
+                model.category,
+                model.source_installation_id,
+                model.source_messages,
+                model.source_files,
+                model.inference_run_id,
+            ):
+                raise DraftStateConflictError(existing.status.value, operation="create")
+            return _to_stored(existing)
+        count_query = (
+            select(func.count())
+            .select_from(SubmissionDraft)
+            .where(
+                SubmissionDraft.status.in_(_ACTIVE_STATUSES),
+                SubmissionDraft.expires_at > func.now(),
+                SubmissionDraft.inferred.is_(draft.inferred),
             )
-            existing = await session.get(SubmissionDraft, model.id)
-            if existing is not None:
-                if existing.owner_account_id != model.owner_account_id:
-                    raise DraftAccessDeniedError
-                if (
-                    existing.schema_id,
-                    existing.schema_revision,
-                    existing.origin,
-                    existing.inferred,
-                    existing.category,
-                    existing.source_installation_id,
-                    existing.source_messages,
-                    existing.source_files,
-                    existing.inference_run_id,
-                ) != (
-                    model.schema_id,
-                    model.schema_revision,
-                    model.origin,
-                    model.inferred,
-                    model.category,
-                    model.source_installation_id,
-                    model.source_messages,
-                    model.source_files,
-                    model.inference_run_id,
-                ):
-                    raise DraftStateConflictError(existing.status.value, operation="create")
-                return _to_stored(existing)
-            count_query = (
-                select(func.count())
-                .select_from(SubmissionDraft)
-                .where(
-                    SubmissionDraft.status.in_(_ACTIVE_STATUSES),
-                    SubmissionDraft.expires_at > func.now(),
-                    SubmissionDraft.inferred.is_(draft.inferred),
-                )
+        )
+        if not draft.inferred:
+            count_query = count_query.where(SubmissionDraft.owner_account_id == draft.snapshot.owner_account_id)
+        if (await session.scalar(count_query) or 0) >= capacity:
+            raise DraftCapacityExceededError(capacity)
+        session.add(model)
+        session.add(
+            SubmissionDraftAccess(
+                draft_id=model.id,
+                account_id=model.owner_account_id,
+                role="owner",
             )
-            if not draft.inferred:
-                count_query = count_query.where(SubmissionDraft.owner_account_id == draft.snapshot.owner_account_id)
-            if (await session.scalar(count_query) or 0) >= capacity:
-                raise DraftCapacityExceededError(capacity)
-            session.add(model)
-            session.add(
-                SubmissionDraftAccess(
-                    draft_id=model.id,
-                    account_id=model.owner_account_id,
-                    role="owner",
-                )
-            )
+        )
         return _to_stored(model)
 
     @override
     async def get(self, draft_id: UUID) -> StoredDraft | None:
-        async with self._session_factory() as session:
-            model = await session.get(SubmissionDraft, draft_id)
-            return _to_stored(model) if model is not None else None
+        session = self._session()
+        model = await session.get(SubmissionDraft, draft_id)
+        return _to_stored(model) if model is not None else None
 
     @override
     async def replayed_change(
@@ -174,18 +174,18 @@ class PostgresDraftRepository(DraftRepository):
         account_id: int,
         idempotency_key: DraftChangeKey,
     ) -> AppliedDraftChange | None:
-        async with self._session_factory() as session:
-            row = (
-                await session.execute(
-                    select(SubmissionDraft, SubmissionDraftChange.id)
-                    .join(SubmissionDraftChange, SubmissionDraftChange.draft_id == SubmissionDraft.id)
-                    .where(
-                        SubmissionDraft.id == draft_id,
-                        SubmissionDraft.owner_account_id == account_id,
-                        SubmissionDraftChange.idempotency_key == idempotency_key,
-                    )
+        session = self._session()
+        row = (
+            await session.execute(
+                select(SubmissionDraft, SubmissionDraftChange.id)
+                .join(SubmissionDraftChange, SubmissionDraftChange.draft_id == SubmissionDraft.id)
+                .where(
+                    SubmissionDraft.id == draft_id,
+                    SubmissionDraft.owner_account_id == account_id,
+                    SubmissionDraftChange.idempotency_key == idempotency_key,
                 )
-            ).one_or_none()
+            )
+        ).one_or_none()
         if row is None:
             return None
         return AppliedDraftChange(_to_stored(row[0]), replayed=True)
@@ -201,43 +201,43 @@ class PostgresDraftRepository(DraftRepository):
         expires_at: Instant,
         actor_account_id: int | None = None,
     ) -> AppliedDraftChange:
-        async with self._session_factory.begin() as session:
-            model = await self._locked(session, draft_id)
-            self._require_owner(model, account_id)
-            replay = await session.scalar(
-                select(SubmissionDraftChange.id).where(
-                    SubmissionDraftChange.draft_id == draft_id,
-                    SubmissionDraftChange.idempotency_key == change.idempotency_key,
-                )
+        session = self._session()
+        model = await self._locked(session, draft_id)
+        self._require_owner(model, account_id)
+        replay = await session.scalar(
+            select(SubmissionDraftChange.id).where(
+                SubmissionDraftChange.draft_id == draft_id,
+                SubmissionDraftChange.idempotency_key == change.idempotency_key,
             )
-            if replay is not None:
-                return AppliedDraftChange(_to_stored(model), replayed=True)
+        )
+        if replay is not None:
+            return AppliedDraftChange(_to_stored(model), replayed=True)
 
-            candidate = _to_stored(model).snapshot.apply(change)
-            model.revision = candidate.revision
-            model.status = candidate.status
-            model.preparation_issues = []
-            model.preparation_retry_at = None
-            model.source_issues = [
-                issue
-                for issue in model.source_issues
-                if issue not in {operation.field_id for operation in change.operations}
-            ]
-            model.answers = _json_object(candidate.answers)
-            model.updated_at = updated_at
-            model.expires_at = expires_at
-            session.add(
-                SubmissionDraftChange(
-                    draft_id=draft_id,
-                    actor_account_id=account_id if actor_account_id is None else actor_account_id,
-                    base_revision=change.base_revision,
-                    resulting_revision=candidate.revision,
-                    client_instance_id=change.client_instance_id,
-                    idempotency_key=str(change.idempotency_key),
-                    operations=_operations_to_json(change.operations),
-                    applied_at=updated_at,
-                )
+        candidate = _to_stored(model).snapshot.apply(change)
+        model.revision = candidate.revision
+        model.status = candidate.status
+        model.preparation_issues = []
+        model.preparation_retry_at = None
+        model.source_issues = [
+            issue
+            for issue in model.source_issues
+            if issue not in {operation.field_id for operation in change.operations}
+        ]
+        model.answers = _json_object(candidate.answers)
+        model.updated_at = updated_at
+        model.expires_at = expires_at
+        session.add(
+            SubmissionDraftChange(
+                draft_id=draft_id,
+                actor_account_id=account_id if actor_account_id is None else actor_account_id,
+                base_revision=change.base_revision,
+                resulting_revision=candidate.revision,
+                client_instance_id=change.client_instance_id,
+                idempotency_key=str(change.idempotency_key),
+                operations=_operations_to_json(change.operations),
+                applied_at=updated_at,
             )
+        )
         return AppliedDraftChange(_to_stored(model))
 
     @override
@@ -252,43 +252,101 @@ class PostgresDraftRepository(DraftRepository):
         updated_at: Instant,
         expires_at: Instant,
     ) -> AppliedDraftUpgrade:
-        async with self._session_factory.begin() as session:
-            model = await self._locked(session, draft_id)
-            self._require_owner(model, account_id)
-            if model.schema_revision == target_schema_revision:
-                return AppliedDraftUpgrade(_to_stored(model), replayed=True)
-            if model.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
-                raise DraftStateConflictError(model.status.value, operation="upgrade_manifest")
-            if model.revision != expected_revision:
-                raise DraftRevisionConflictError(expected=expected_revision, actual=model.revision)
-            if target_schema_revision != model.schema_revision + 1:
-                msg = "draft manifests must be upgraded by one revision"
-                raise ValueError(msg)
-            model.schema_revision = target_schema_revision
-            model.revision += 1
-            model.preparation_issues = []
-            model.preparation_retry_at = None
-            model.answers = _json_object(answers)
-            model.updated_at = updated_at
-            model.expires_at = expires_at
+        session = self._session()
+        model = await self._locked(session, draft_id)
+        self._require_owner(model, account_id)
+        if model.schema_revision == target_schema_revision:
+            return AppliedDraftUpgrade(_to_stored(model), replayed=True)
+        if model.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+            raise DraftStateConflictError(model.status.value, operation="upgrade_manifest")
+        if model.revision != expected_revision:
+            raise DraftRevisionConflictError(expected=expected_revision, actual=model.revision)
+        if target_schema_revision != model.schema_revision + 1:
+            msg = "draft manifests must be upgraded by one revision"
+            raise ValueError(msg)
+        model.schema_revision = target_schema_revision
+        model.revision += 1
+        model.preparation_issues = []
+        model.preparation_retry_at = None
+        model.answers = _json_object(answers)
+        model.updated_at = updated_at
+        model.expires_at = expires_at
         return AppliedDraftUpgrade(_to_stored(model))
 
     @override
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
         """Delete an editable owned draft behind the shared lifecycle fence."""
-        async with self._session_factory.begin() as session:
+        session = self._session()
+        await lock_uuid(session, draft_id, namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE)
+        model = await session.scalar(select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update())
+        if model is None:
+            return False
+        self._require_owner(model, account_id)
+        status = model.status
+        if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+            raise DraftStateConflictError(status.value, operation="delete")
+        # Retain artifact rows and object keys: normalized content is addressable by hash and may be shared,
+        # so deleting it safely requires reference-aware garbage collection rather than a draft cascade.
+        await session.execute(
+            update(MediaNormalizationJobRecord)
+            .where(
+                MediaNormalizationJobRecord.upload_id.in_(
+                    select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
+                ),
+                MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
+            )
+            .values(
+                status=MediaJobStatus.DISCARDED,
+                claimed_at=None,
+                claim_token=None,
+                completed_at=None,
+                dead_at=None,
+                discarded_at=func.now(),
+                last_error=None,
+            )
+        )
+        await session.delete(model)
+        return True
+
+    @override
+    async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
+        """Expire a fenced batch and cancel every unfinished artifact workflow."""
+        if not 1 <= limit <= 1_000:
+            msg = "draft expiry limit must be between 1 and 1000"
+            raise ValueError(msg)
+        session = self._session()
+        due = tuple(
+            (
+                await session.scalars(
+                    select(SubmissionDraft.id)
+                    .where(
+                        SubmissionDraft.status.in_(_ACTIVE_STATUSES),
+                        SubmissionDraft.expires_at <= now,
+                    )
+                    .order_by(SubmissionDraft.expires_at, SubmissionDraft.id)
+                    .limit(limit)
+                )
+            ).all()
+        )
+        expired = 0
+        for draft_id in due:
             await lock_uuid(session, draft_id, namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE)
             model = await session.scalar(
                 select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update()
             )
-            if model is None:
-                return False
-            self._require_owner(model, account_id)
-            status = model.status
-            if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
-                raise DraftStateConflictError(status.value, operation="delete")
-            # Retain artifact rows and object keys: normalized content is addressable by hash and may be shared,
-            # so deleting it safely requires reference-aware garbage collection rather than a draft cascade.
+            if model is None or model.status not in _ACTIVE_STATUSES or model.expires_at > now:
+                continue
+            await session.execute(
+                delete(SubmissionFinalizationJob).where(
+                    SubmissionFinalizationJob.draft_id == draft_id,
+                    SubmissionFinalizationJob.status != "completed",
+                )
+            )
+            await session.execute(
+                update(SubmissionDraft)
+                .where(SubmissionDraft.id == draft_id)
+                .values(status=DraftStatus.EXPIRED, updated_at=now, preparation_retry_at=None)
+            )
             await session.execute(
                 update(MediaNormalizationJobRecord)
                 .where(
@@ -303,71 +361,11 @@ class PostgresDraftRepository(DraftRepository):
                     claim_token=None,
                     completed_at=None,
                     dead_at=None,
-                    discarded_at=func.now(),
+                    discarded_at=now,
                     last_error=None,
                 )
             )
-            await session.delete(model)
-        return True
-
-    @override
-    async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
-        """Expire a fenced batch and cancel every unfinished artifact workflow."""
-        if not 1 <= limit <= 1_000:
-            msg = "draft expiry limit must be between 1 and 1000"
-            raise ValueError(msg)
-        async with self._session_factory.begin() as session:
-            due = tuple(
-                (
-                    await session.scalars(
-                        select(SubmissionDraft.id)
-                        .where(
-                            SubmissionDraft.status.in_(_ACTIVE_STATUSES),
-                            SubmissionDraft.expires_at <= now,
-                        )
-                        .order_by(SubmissionDraft.expires_at, SubmissionDraft.id)
-                        .limit(limit)
-                    )
-                ).all()
-            )
-            expired = 0
-            for draft_id in due:
-                await lock_uuid(session, draft_id, namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE)
-                model = await session.scalar(
-                    select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update()
-                )
-                if model is None or model.status not in _ACTIVE_STATUSES or model.expires_at > now:
-                    continue
-                await session.execute(
-                    delete(SubmissionFinalizationJob).where(
-                        SubmissionFinalizationJob.draft_id == draft_id,
-                        SubmissionFinalizationJob.status != "completed",
-                    )
-                )
-                await session.execute(
-                    update(SubmissionDraft)
-                    .where(SubmissionDraft.id == draft_id)
-                    .values(status=DraftStatus.EXPIRED, updated_at=now, preparation_retry_at=None)
-                )
-                await session.execute(
-                    update(MediaNormalizationJobRecord)
-                    .where(
-                        MediaNormalizationJobRecord.upload_id.in_(
-                            select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
-                        ),
-                        MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
-                    )
-                    .values(
-                        status=MediaJobStatus.DISCARDED,
-                        claimed_at=None,
-                        claim_token=None,
-                        completed_at=None,
-                        dead_at=None,
-                        discarded_at=now,
-                        last_error=None,
-                    )
-                )
-                expired += 1
+            expired += 1
         return expired
 
     @staticmethod

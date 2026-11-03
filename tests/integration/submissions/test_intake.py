@@ -1,16 +1,19 @@
 """Supplied-file intent survives failed downloads and draft corrections."""
 
+from functools import partial
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import ConflictError
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application.intake import SuppliedAttachment
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from tests.integration.submissions.test_schematics import create_draft, reload
 from tests.support.submission_targets import seed_account_and_version
+from tests.support.unit_of_work import transact
 
 
 async def test_interrupted_download_blocks_submission_until_explicit_resolution(
@@ -59,14 +62,15 @@ async def test_source_manifest_blocks_even_if_process_dies_before_reserving_down
     from dataclasses import replace
 
     from squid.submissions.domain.source_files import SubmissionSourceFile
-    from squid.submissions.infrastructure.repository import PostgresDraftRepository
 
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
     initial = await create_draft(sessions, owner)
     source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://cdn.discordapp.com/source.png", 4)
     draft = replace(initial, snapshot=replace(initial.snapshot, id=uuid4()), source_files=(source,))
-    await PostgresDraftRepository(sessions).create(draft)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.create(draft), commit=True
+    )
     intake = PostgresAttachmentIntake(sessions)
     assert await intake.issues_for_draft(draft.snapshot.id)
     pending = (await intake.list(draft.snapshot.id))[0]

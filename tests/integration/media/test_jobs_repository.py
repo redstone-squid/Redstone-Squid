@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 from collections.abc import AsyncGenerator
 from datetime import timedelta
+from functools import partial
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -33,9 +34,10 @@ from squid.media.models import (
     MediaUploadRecord,
 )
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.entities import SubmissionDraft
+from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
@@ -647,7 +649,7 @@ async def test_delete_tombstones_media_and_post_delete_mutations_fail_closed(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     media = PostgresMediaJobRepository(async_session_factory)
-    drafts = PostgresDraftRepository(async_session_factory)
+    drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
     await media.enqueue(metadata, LIMITS)
     async with async_session_factory() as session:
@@ -656,7 +658,10 @@ async def test_delete_tombstones_media_and_post_delete_mutations_fail_closed(
         )
     assert account_id is not None
 
-    assert await drafts.delete_owned(DRAFT_ID, account_id) is True
+    assert (
+        await transact(drafts, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True)
+        is True
+    )
 
     snapshot = await media.get(metadata.id)
     assert snapshot is not None
@@ -674,7 +679,7 @@ async def test_concurrent_delete_and_enqueue_never_leave_live_or_untracked_media
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     media = PostgresMediaJobRepository(async_session_factory)
-    drafts = PostgresDraftRepository(async_session_factory)
+    drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
     async with async_session_factory() as session:
         account_id = await session.scalar(
@@ -684,7 +689,7 @@ async def test_concurrent_delete_and_enqueue_never_leave_live_or_untracked_media
 
     enqueue_result, delete_result = await asyncio.gather(
         media.enqueue(metadata, LIMITS),
-        drafts.delete_owned(DRAFT_ID, account_id),
+        transact(drafts, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True),
         return_exceptions=True,
     )
 
@@ -703,7 +708,7 @@ async def test_deleting_completed_media_retains_normalized_keys_in_tombstone(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     media = PostgresMediaJobRepository(async_session_factory)
-    drafts = PostgresDraftRepository(async_session_factory)
+    drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     metadata = upload()
     await media.enqueue(metadata, LIMITS)
     (claim,) = await media.claim(limit=1)
@@ -715,7 +720,10 @@ async def test_deleting_completed_media_retains_normalized_keys_in_tombstone(
         )
     assert account_id is not None
 
-    assert await drafts.delete_owned(DRAFT_ID, account_id) is True
+    assert (
+        await transact(drafts, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True)
+        is True
+    )
 
     snapshot = await media.get(metadata.id)
     assert snapshot is not None
@@ -727,7 +735,7 @@ async def test_deleting_one_draft_keeps_objects_referenced_by_another_draft(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     media = PostgresMediaJobRepository(async_session_factory)
-    drafts = PostgresDraftRepository(async_session_factory)
+    drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     await create_submission_draft(async_session_factory, draft_id=OTHER_DRAFT_ID)
     first = upload()
     second = upload(upload_id=uuid4(), draft_id=OTHER_DRAFT_ID, source=b"second-source")
@@ -744,7 +752,7 @@ async def test_deleting_one_draft_keeps_objects_referenced_by_another_draft(
         )
     assert account_id is not None
 
-    assert await drafts.delete_owned(DRAFT_ID, account_id)
+    assert await transact(drafts, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True)
     deleted: list[str] = []
 
     async def delete(object_key: str) -> None:

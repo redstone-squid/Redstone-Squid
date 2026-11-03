@@ -16,6 +16,7 @@ from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.submissions.domain import (
@@ -31,7 +32,6 @@ from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
     complete_in_session,
 )
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.finalization import SubmissionFinalizationResult, SubmissionReceiptMedia
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
 from tests.support.unit_of_work import transact
@@ -55,7 +55,9 @@ async def claimed_submission(
         updated_at=now,
         expires_at=now.add(days=7, days_assumed_24h_ok=True),
     )
-    await PostgresDraftRepository(sessions).create(draft)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.create(draft), commit=True
+    )
     jobs = PostgresFinalizationJobRepository(sessions)
     payload = normalized_submission(owner, draft_id, "Java 1.21.0")
     if with_media:
@@ -188,7 +190,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     class Permissions:
         allowed = True
 
-        async def allows(self, subject: Subject, node: PermissionNode) -> bool:
+        async def allows_in(self, uow: PermissionUnitOfWork, subject: Subject, node: PermissionNode) -> bool:
             return self.allowed
 
     permissions = Permissions()
@@ -200,9 +202,9 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
             return await super().prepare(submission)
 
     drafts = SubmissionDraftService(
-        PostgresDraftRepository(migrated_session_factory),
         CheckedInFormManifestRegistry(),
         permissions=permissions,
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
     )
     executor = PostgresSubmissionExecutor(migrated_session_factory, RevokingPreparation(), drafts=drafts)
     result = await executor.execute(claim, now=Instant.now())
@@ -250,7 +252,9 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
     assert replacement.requested_by_account_id == survivor.id
     assert replacement.payload.owner_account_id == claim.payload.owner_account_id
     assert replacement.claim_token != claim.claim_token
-    draft = await PostgresDraftRepository(migrated_session_factory).get(claim.draft_id)
+    draft = await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.submission_drafts.get(claim.draft_id)
+    )
     assert draft is not None
     assert draft.snapshot.owner_account_id == claim.payload.owner_account_id
     assert draft.submission_actor_account_id == survivor.id

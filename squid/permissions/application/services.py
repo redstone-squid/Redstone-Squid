@@ -118,6 +118,10 @@ class PermissionService:
             self._cache.put(key, rules, epoch=records.epoch)
         return rules
 
+    async def allows_in(self, uow: PermissionUnitOfWork, subject: Subject, node: PermissionNode) -> bool:
+        """Check one permission using the caller's transaction and current stored rules."""
+        return node.name in await self.capabilities_in(uow, subject, (node,))
+
     async def capabilities_in(
         self, uow: PermissionUnitOfWork, subject: Subject, nodes: Iterable[PermissionNode | str]
     ) -> frozenset[str]:

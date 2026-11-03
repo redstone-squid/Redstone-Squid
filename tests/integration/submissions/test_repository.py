@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import replace
+from functools import partial
 from typing import cast
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from squid.builds.domain import SourceMessage
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -30,13 +32,13 @@ from squid.submissions.domain import (
 )
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftStateConflictError
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
 from squid.submissions.models.finalization import SubmissionFinalizationJob
+from tests.support.unit_of_work import transact
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000201")
 NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
@@ -117,23 +119,31 @@ async def test_create_adds_owner_grant_and_replays_change(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
-    created = await repository.create(_stored(account_id))
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    created = await transact(repository, lambda uow: uow.submission_drafts.create(_stored(account_id)), commit=True)
     change = _change(key="operation-a", operation_id="00000000-0000-4000-8000-000000000202")
 
-    applied = await repository.apply_change(
-        DRAFT_ID,
-        account_id,
-        change,
-        updated_at=NOW.add(seconds=1),
-        expires_at=NOW.add(days=7, seconds=1, days_assumed_24h_ok=True),
+    applied = await transact(
+        repository,
+        lambda uow: uow.submission_drafts.apply_change(
+            DRAFT_ID,
+            account_id,
+            change,
+            updated_at=NOW.add(seconds=1),
+            expires_at=NOW.add(days=7, seconds=1, days_assumed_24h_ok=True),
+        ),
+        commit=True,
     )
-    replayed = await repository.apply_change(
-        DRAFT_ID,
-        account_id,
-        change,
-        updated_at=NOW.add(seconds=2),
-        expires_at=NOW.add(days=7, seconds=2, days_assumed_24h_ok=True),
+    replayed = await transact(
+        repository,
+        lambda uow: uow.submission_drafts.apply_change(
+            DRAFT_ID,
+            account_id,
+            change,
+            updated_at=NOW.add(seconds=2),
+            expires_at=NOW.add(days=7, seconds=2, days_assumed_24h_ok=True),
+        ),
+        commit=True,
     )
 
     assert created.snapshot.revision == 0
@@ -152,10 +162,14 @@ async def test_paper_draft_round_trip_retains_server_derived_installation(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
 
-    created = await repository.create(_stored(account_id, origin=SubmissionOrigin.PAPER))
-    loaded = await repository.get(created.snapshot.id)
+    created = await transact(
+        repository,
+        lambda uow: uow.submission_drafts.create(_stored(account_id, origin=SubmissionOrigin.PAPER)),
+        commit=True,
+    )
+    loaded = await transact(repository, lambda uow: uow.submission_drafts.get(created.snapshot.id))
 
     assert loaded is not None
     assert loaded.origin is SubmissionOrigin.PAPER
@@ -167,26 +181,34 @@ async def test_manifest_upgrade_is_optimistic_and_idempotent_by_target(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
-    await repository.create(_stored(account_id))
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.submission_drafts.create(_stored(account_id)), commit=True)
 
-    upgraded = await repository.upgrade_manifest(
-        DRAFT_ID,
-        account_id,
-        expected_revision=0,
-        target_schema_revision=3,
-        answers={"completion": "Built at spawn"},
-        updated_at=NOW.add(seconds=1),
-        expires_at=NOW.add(days=7, seconds=1, days_assumed_24h_ok=True),
+    upgraded = await transact(
+        repository,
+        lambda uow: uow.submission_drafts.upgrade_manifest(
+            DRAFT_ID,
+            account_id,
+            expected_revision=0,
+            target_schema_revision=3,
+            answers={"completion": "Built at spawn"},
+            updated_at=NOW.add(seconds=1),
+            expires_at=NOW.add(days=7, seconds=1, days_assumed_24h_ok=True),
+        ),
+        commit=True,
     )
-    replayed = await repository.upgrade_manifest(
-        DRAFT_ID,
-        account_id,
-        expected_revision=0,
-        target_schema_revision=3,
-        answers={"completion": "ignored replay payload"},
-        updated_at=NOW.add(seconds=2),
-        expires_at=NOW.add(days=7, seconds=2, days_assumed_24h_ok=True),
+    replayed = await transact(
+        repository,
+        lambda uow: uow.submission_drafts.upgrade_manifest(
+            DRAFT_ID,
+            account_id,
+            expected_revision=0,
+            target_schema_revision=3,
+            answers={"completion": "ignored replay payload"},
+            updated_at=NOW.add(seconds=2),
+            expires_at=NOW.add(days=7, seconds=2, days_assumed_24h_ok=True),
+        ),
+        commit=True,
     )
 
     assert upgraded.draft.snapshot.schema_revision == 3
@@ -201,7 +223,7 @@ async def test_active_draft_discovery_is_newest_first_and_excludes_inactive_rows
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     first = replace(
         _stored(account_id),
         snapshot=replace(_stored(account_id).snapshot, id=UUID("00000000-0000-4000-8000-000000000210")),
@@ -225,13 +247,17 @@ async def test_active_draft_discovery_is_newest_first_and_excludes_inactive_rows
         ),
     )
     for draft in (first, newest, expired, submitted):
-        await repository.create(draft)
+        await transact(repository, lambda uow, draft=draft: uow.submission_drafts.create(draft), commit=True)
 
     discovery_time = NOW.add(seconds=2)
-    discovered = await repository.list_active_for_account(account_id, now=discovery_time, limit=10)
+    discovered = await transact(
+        repository, lambda uow: uow.submission_drafts.list_active_for_account(account_id, now=discovery_time, limit=10)
+    )
 
     assert tuple(draft.snapshot.id for draft in discovered) == (newest.snapshot.id, first.snapshot.id)
-    assert await repository.list_active_for_account(account_id, now=discovery_time, limit=1) == (newest,)
+    assert await transact(
+        repository, lambda uow: uow.submission_drafts.list_active_for_account(account_id, now=discovery_time, limit=1)
+    ) == (newest,)
 
 
 @pytest.mark.asyncio
@@ -239,8 +265,8 @@ async def test_concurrent_same_revision_changes_have_one_winner(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
-    await repository.create(_stored(account_id))
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.submission_drafts.create(_stored(account_id)), commit=True)
     changes = (
         _change(key="operation-a", operation_id="00000000-0000-4000-8000-000000000203"),
         _change(key="operation-b", operation_id="00000000-0000-4000-8000-000000000204"),
@@ -248,12 +274,16 @@ async def test_concurrent_same_revision_changes_have_one_winner(
 
     results = await asyncio.gather(
         *(
-            repository.apply_change(
-                DRAFT_ID,
-                account_id,
-                change,
-                updated_at=NOW.add(seconds=index),
-                expires_at=NOW.add(days=7, seconds=index, days_assumed_24h_ok=True),
+            transact(
+                repository,
+                lambda uow, change=change, index=index: uow.submission_drafts.apply_change(
+                    DRAFT_ID,
+                    account_id,
+                    change,
+                    updated_at=NOW.add(seconds=index),
+                    expires_at=NOW.add(days=7, seconds=index, days_assumed_24h_ok=True),
+                ),
+                commit=True,
             )
             for index, change in enumerate(changes, start=1)
         ),
@@ -269,7 +299,7 @@ async def test_expired_drafts_stop_consuming_capacity_and_can_be_marked_expired(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     stored = _stored(account_id)
     stored = StoredDraft(
         snapshot=stored.snapshot,
@@ -278,11 +308,20 @@ async def test_expired_drafts_stop_consuming_capacity_and_can_be_marked_expired(
         updated_at=stored.updated_at,
         expires_at=NOW.add(seconds=1),
     )
-    await repository.create(stored)
+    await transact(repository, lambda uow: uow.submission_drafts.create(stored), commit=True)
 
-    assert await repository.expire_due(now=NOW) == 0
-    assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
-    assert await repository.list_active_for_account(account_id, now=NOW.add(seconds=2), limit=10) == ()
+    assert await transact(repository, lambda uow: uow.submission_drafts.expire_due(now=NOW), commit=True) == 0
+    assert (
+        await transact(repository, lambda uow: uow.submission_drafts.expire_due(now=NOW.add(seconds=2)), commit=True)
+        == 1
+    )
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.submission_drafts.list_active_for_account(account_id, now=NOW.add(seconds=2), limit=10),
+        )
+        == ()
+    )
 
 
 @pytest.mark.asyncio
@@ -290,14 +329,14 @@ async def test_expiry_fences_finalization_and_discards_media(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     stored = _stored(account_id)
     stored = replace(
         stored,
         snapshot=replace(stored.snapshot, status=DraftStatus.NEEDS_ATTENTION),
         expires_at=NOW.add(seconds=1),
     )
-    await repository.create(stored)
+    await transact(repository, lambda uow: uow.submission_drafts.create(stored), commit=True)
     upload_id = UUID("00000000-0000-4000-8000-000000000205")
     async with async_session_factory.begin() as session:
         for attempt_number in (1, 2):
@@ -332,7 +371,10 @@ async def test_expiry_fences_finalization_and_discards_media(
         await session.flush()
         session.add(MediaNormalizationJobRecord(upload_id=upload_id, status=MediaJobStatus.PENDING, available_at=NOW))
 
-    assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
+    assert (
+        await transact(repository, lambda uow: uow.submission_drafts.expire_due(now=NOW.add(seconds=2)), commit=True)
+        == 1
+    )
     async with async_session_factory() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
         finalization = await session.scalar(
@@ -355,18 +397,18 @@ async def test_delete_owned_rechecks_noneditable_status_under_repository_lock(
     async_session_factory: async_sessionmaker[AsyncSession],
     status: DraftStatus,
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
-    await repository.create(_stored(account_id))
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.submission_drafts.create(_stored(account_id)), commit=True)
     async with async_session_factory.begin() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
         assert draft is not None
         draft.status = status
 
     with pytest.raises(DraftStateConflictError) as exc_info:
-        await repository.delete_owned(DRAFT_ID, account_id)
+        await transact(repository, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True)
 
     assert exc_info.value.public_context == {"status": status.value, "operation": "delete"}
-    assert await repository.get(DRAFT_ID) is not None
+    assert await transact(repository, lambda uow: uow.submission_drafts.get(DRAFT_ID)) is not None
 
 
 @pytest.mark.asyncio
@@ -374,15 +416,18 @@ async def test_delete_owned_accepts_needs_attention(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
-    await repository.create(_stored(account_id))
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(repository, lambda uow: uow.submission_drafts.create(_stored(account_id)), commit=True)
     async with async_session_factory.begin() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
         assert draft is not None
         draft.status = DraftStatus.NEEDS_ATTENTION
 
-    assert await repository.delete_owned(DRAFT_ID, account_id) is True
-    assert await repository.get(DRAFT_ID) is None
+    assert (
+        await transact(repository, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True)
+        is True
+    )
+    assert await transact(repository, lambda uow: uow.submission_drafts.get(DRAFT_ID)) is None
 
 
 @pytest.mark.parametrize("inferred", [False, True])
@@ -395,7 +440,7 @@ async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
 
     from squid.submissions.errors import DraftCapacityExceededError
 
-    repository = PostgresDraftRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     now = Instant.now()
     template = replace(
         _stored(account_id, origin=SubmissionOrigin.DISCORD),
@@ -410,7 +455,9 @@ async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
     async def create(identifier: int) -> None:
         draft = replace(template, snapshot=replace(template.snapshot, id=UUID(int=identifier)))
         try:
-            accepted.append(await repository.create(draft, capacity=1))
+            accepted.append(
+                await transact(repository, lambda uow: uow.submission_drafts.create(draft, capacity=1), commit=True)
+            )
         except DraftCapacityExceededError as error:
             rejected.append(error)
 
@@ -419,18 +466,22 @@ async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
         tasks.start_soon(create, 801)
     assert len(accepted) == 1
     assert len(rejected) == 1
-    replayed = await repository.create(accepted[0], capacity=1)
+    replayed = await transact(
+        repository, lambda uow: uow.submission_drafts.create(accepted[0], capacity=1), commit=True
+    )
     assert replayed.snapshot.id == accepted[0].snapshot.id
 
     other_pool = replace(template, inferred=not inferred, snapshot=replace(template.snapshot, id=UUID(int=802)))
-    assert (await repository.create(other_pool, capacity=1)).inferred is not inferred
+    assert (
+        await transact(repository, lambda uow: uow.submission_drafts.create(other_pool, capacity=1), commit=True)
+    ).inferred is not inferred
 
 
 async def test_stable_draft_identity_rejects_changed_inference_provenance(
     account_id: int,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresDraftRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     source = SubmissionSourceFile(
         UUID(int=804),
         "source.png",
@@ -445,12 +496,22 @@ async def test_stable_draft_identity_rejects_changed_inference_provenance(
         source_files=(source,),
         inference_run_id=UUID(int=805),
     )
-    await repository.create(retained)
+    await transact(repository, lambda uow: uow.submission_drafts.create(retained), commit=True)
 
     with pytest.raises(DraftStateConflictError):
-        await repository.create(replace(retained, source_messages=(SourceMessage(40, content="changed"),)))
+        await transact(
+            repository,
+            lambda uow: uow.submission_drafts.create(
+                replace(retained, source_messages=(SourceMessage(40, content="changed"),))
+            ),
+            commit=True,
+        )
     with pytest.raises(DraftStateConflictError):
-        await repository.create(replace(retained, inference_run_id=UUID(int=806)))
+        await transact(
+            repository,
+            lambda uow: uow.submission_drafts.create(replace(retained, inference_run_id=UUID(int=806))),
+            commit=True,
+        )
 
 
 async def test_inferred_capacity_is_global_and_expiry_releases_it(
@@ -459,7 +520,7 @@ async def test_inferred_capacity_is_global_and_expiry_releases_it(
 ) -> None:
     from squid.submissions.errors import DraftCapacityExceededError
 
-    repository = PostgresDraftRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     async with async_session_factory.begin() as session:
         other = Account()
         session.add(other)
@@ -473,12 +534,14 @@ async def test_inferred_capacity_is_global_and_expiry_releases_it(
         updated_at=now,
         expires_at=now.add(days=7, days_assumed_24h_ok=True),
     )
-    await repository.create(first, capacity=1)
+    await transact(repository, lambda uow: uow.submission_drafts.create(first, capacity=1), commit=True)
     second = replace(first, snapshot=replace(first.snapshot, id=UUID(int=803), owner_account_id=other_id))
     with pytest.raises(DraftCapacityExceededError):
-        await repository.create(second, capacity=1)
-    await repository.expire_due(now=first.expires_at)
-    assert (await repository.create(second, capacity=1)).snapshot.owner_account_id == other_id
+        await transact(repository, lambda uow: uow.submission_drafts.create(second, capacity=1), commit=True)
+    await transact(repository, lambda uow: uow.submission_drafts.expire_due(now=first.expires_at), commit=True)
+    assert (
+        await transact(repository, lambda uow: uow.submission_drafts.create(second, capacity=1), commit=True)
+    ).snapshot.owner_account_id == other_id
 
 
 async def test_staff_edit_retains_owner_and_records_actual_actor(
@@ -490,22 +553,33 @@ async def test_staff_edit_retains_owner_and_records_actual_actor(
         session.add(staff)
         await session.flush()
         staff_id = staff.id
-    drafts = PostgresDraftRepository(async_session_factory)
+    drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     stored = replace(
         _stored(account_id), snapshot=replace(_stored(account_id).snapshot, status=DraftStatus.NEEDS_ATTENTION)
     )
-    await drafts.create(stored)
-    assert [draft.snapshot.id for draft in await drafts.list_attention(after=None, limit=1, now=NOW)] == [DRAFT_ID]
-    assert await drafts.list_attention(after=DRAFT_ID, limit=1, now=NOW) == ()
-    changed = await drafts.apply_change(
-        DRAFT_ID,
-        account_id,
-        _change(key="staff-correction", operation_id="00000000-0000-4000-8000-000000000299"),
-        updated_at=NOW,
-        expires_at=stored.expires_at,
-        actor_account_id=staff_id,
+    await transact(drafts, lambda uow: uow.submission_drafts.create(stored), commit=True)
+    assert [
+        draft.snapshot.id
+        for draft in await transact(
+            drafts, lambda uow: uow.submission_drafts.list_attention(after=None, limit=1, now=NOW)
+        )
+    ] == [DRAFT_ID]
+    assert (
+        await transact(drafts, lambda uow: uow.submission_drafts.list_attention(after=DRAFT_ID, limit=1, now=NOW)) == ()
+    )
+    changed = await transact(
+        drafts,
+        lambda uow: uow.submission_drafts.apply_change(
+            DRAFT_ID,
+            account_id,
+            _change(key="staff-correction", operation_id="00000000-0000-4000-8000-000000000299"),
+            updated_at=NOW,
+            expires_at=stored.expires_at,
+            actor_account_id=staff_id,
+        ),
+        commit=True,
     )
     assert changed.draft.snapshot.owner_account_id == account_id
     async with async_session_factory() as session:
         assert await session.scalar(select(SubmissionDraftChange.actor_account_id)) == staff_id
-    assert await drafts.list_attention(after=None, limit=1, now=NOW) == ()
+    assert await transact(drafts, lambda uow: uow.submission_drafts.list_attention(after=None, limit=1, now=NOW)) == ()

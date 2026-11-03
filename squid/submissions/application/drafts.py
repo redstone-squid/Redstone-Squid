@@ -10,6 +10,7 @@ from whenever import Instant
 from squid.builds.domain import SourceMessage
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain import PermissionNode, Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.submissions.application.forms import FormManifestRegistry
@@ -30,6 +31,7 @@ from squid.submissions.errors import (
     DraftStateConflictError,
     DraftValidationError,
 )
+from squid.unit_of_work import UnitOfWorkFactory
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
 DEFAULT_ACCOUNT_DRAFT_CAPACITY = 10
@@ -49,7 +51,7 @@ def draft_actor_id(actor: DraftActor) -> int:
 class DraftPermissions(Protocol):
     """Live permission checks used for staff correction of account-owned drafts."""
 
-    async def allows(self, subject: Subject, node: PermissionNode) -> bool: ...
+    async def allows_in(self, uow: PermissionUnitOfWork, subject: Subject, node: PermissionNode) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,11 +221,11 @@ class SubmissionDraftService:
 
     def __init__(
         self,
-        repository: DraftRepository,
         manifests: FormManifestRegistry,
         capacity: AccountDraftCapacity | None = None,
         revision_migration: FormRevisionMigration | None = None,
         *,
+        uow_factory: UnitOfWorkFactory[DraftUnitOfWork],
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
         now: Callable[[], Instant] = Instant.now,
         inferred_capacity: int = DEFAULT_INFERRED_DRAFT_CAPACITY,
@@ -232,7 +234,7 @@ class SubmissionDraftService:
         if retention_days < 1 or inferred_capacity < 1:
             msg = tr(t"draft retention must be positive")
             raise InvalidStateError(msg)
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._manifests = manifests
         self._capacity = capacity or FixedAccountDraftCapacity()
         self._revision_migration = revision_migration or CheckedInFormRevisionMigration()
@@ -291,14 +293,18 @@ class SubmissionDraftService:
             source_issues=source_issues,
             inference_run_id=inference_run_id,
         )
-        return await self._repository.create(stored, capacity=limit)
+        async with self._uow_factory() as uow:
+            result = await uow.submission_drafts.create(stored, capacity=limit)
+            await uow.commit()
+            return result
 
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         """List a bounded newest-first view of one account's unexpired active drafts."""
-        if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
-            maximum = DEFAULT_ACCOUNT_DRAFT_CAPACITY
-            raise InvalidStateError(tr(t"draft discovery limit must be between 1 and {maximum}"))
-        return await self._repository.list_active_for_account(account_id, now=self._now(), limit=limit)
+        async with self._uow_factory() as uow:
+            if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
+                maximum = DEFAULT_ACCOUNT_DRAFT_CAPACITY
+                raise InvalidStateError(tr(t"draft discovery limit must be between 1 and {maximum}"))
+            return await uow.submission_drafts.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def attention_inbox(
         self,
@@ -308,14 +314,15 @@ class SubmissionDraftService:
         limit: int = 20,
     ) -> tuple[StoredDraft, ...]:
         """Page correction work by stable ID after checking current staff permission."""
-        draft_actor_id(actor)
-        subject = Subject(account_id=actor) if isinstance(actor, int) else actor
-        if self._permissions is None or not await self._permissions.allows(subject, BUILD_SUBMISSION_EDIT):
-            raise DraftAccessDeniedError
-        if not 1 <= limit <= 100:
-            message = "Draft inbox limit must be between 1 and 100."
-            raise InvalidStateError(message)
-        return await self._repository.list_attention(after=after, limit=limit, now=self._now())
+        async with self._uow_factory() as uow:
+            draft_actor_id(actor)
+            subject = Subject(account_id=actor) if isinstance(actor, int) else actor
+            if self._permissions is None or not await self._permissions.allows_in(uow, subject, BUILD_SUBMISSION_EDIT):
+                raise DraftAccessDeniedError
+            if not 1 <= limit <= 100:
+                message = "Draft inbox limit must be between 1 and 100."
+                raise InvalidStateError(message)
+            return await uow.submission_drafts.list_attention(after=after, limit=limit, now=self._now())
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
         """Return one unexpired draft under strict owner authority."""
@@ -325,13 +332,18 @@ class SubmissionDraftService:
 
     async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
         """Return one unexpired draft after checking owner or current staff authority."""
-        draft = await self._repository.get(draft_id)
+        async with self._uow_factory() as uow:
+            return await self.get_accessible_in(uow, draft_id, actor)
+
+    async def get_accessible_in(self, uow: DraftUnitOfWork, draft_id: UUID, actor: DraftActor) -> StoredDraft:
+        """Check draft access within the caller's read or write operation."""
+        draft = await uow.submission_drafts.get(draft_id)
         if draft is None:
             raise DraftNotFoundError(draft_id)
         account_id = draft_actor_id(actor)
         if draft.snapshot.owner_account_id != account_id:
             subject = Subject(account_id=actor) if isinstance(actor, int) else actor
-            if self._permissions is None or not await self._permissions.allows(subject, BUILD_SUBMISSION_EDIT):
+            if self._permissions is None or not await self._permissions.allows_in(uow, subject, BUILD_SUBMISSION_EDIT):
                 raise DraftAccessDeniedError
         if draft.snapshot.status is DraftStatus.EXPIRED or (
             draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
@@ -342,18 +354,24 @@ class SubmissionDraftService:
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         """Delete an owned draft only while it remains user-editable."""
-        current = await self.get_owned(draft_id, account_id)
-        if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
-            raise DraftStateConflictError(current.snapshot.status.value, operation="delete")
-        if not await self._repository.delete_owned(draft_id, account_id):
-            raise DraftNotFoundError(draft_id)
+        async with self._uow_factory() as uow:
+            current = await self.get_accessible_in(uow, draft_id, account_id)
+            self._require_owner(current, account_id)
+            if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+                raise DraftStateConflictError(current.snapshot.status.value, operation="delete")
+            if not await uow.submission_drafts.delete_owned(draft_id, account_id):
+                raise DraftNotFoundError(draft_id)
+            await uow.commit()
 
     async def expire_due(self, *, limit: int = 100, now: Instant | None = None) -> int:
         """Expire one bounded batch using the same authoritative service clock."""
-        if not 1 <= limit <= 1_000:
-            msg = tr(t"draft expiry limit must be between 1 and 1000")
-            raise InvalidStateError(msg)
-        return await self._repository.expire_due(now=now or self._now(), limit=limit)
+        async with self._uow_factory() as uow:
+            if not 1 <= limit <= 1_000:
+                msg = tr(t"draft expiry limit must be between 1 and 1000")
+                raise InvalidStateError(msg)
+            result = await uow.submission_drafts.expire_due(now=now or self._now(), limit=limit)
+            await uow.commit()
+            return result
 
     async def apply_change(
         self,
@@ -365,11 +383,12 @@ class SubmissionDraftService:
         now: Instant | None = None,
     ) -> AppliedDraftChange:
         """Validate field IDs/types and atomically persist one optimistic edit."""
-        current = await self.get_accessible(draft_id, account_id)
-        owner_id = current.snapshot.owner_account_id
-        replayed = await self._repository.replayed_change(draft_id, owner_id, change.idempotency_key)
-        if replayed is not None:
-            return replayed
+        async with self._uow_factory() as uow:
+            current = await self.get_accessible_in(uow, draft_id, account_id)
+            owner_id = current.snapshot.owner_account_id
+            replayed = await uow.submission_drafts.replayed_change(draft_id, owner_id, change.idempotency_key)
+            if replayed is not None:
+                return replayed
         manifest = await self._pinned_manifest(current, locale)
         candidate = current.snapshot.apply(change)
         errors = manifest.validate_answers(
@@ -381,15 +400,18 @@ class SubmissionDraftService:
         if errors:
             raise DraftValidationError(errors)
         touched_at = now or self._now()
-        await self.get_accessible(draft_id, account_id)
-        return await self._repository.apply_change(
-            draft_id,
-            owner_id,
-            change,
-            updated_at=touched_at,
-            expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
-            actor_account_id=draft_actor_id(account_id),
-        )
+        async with self._uow_factory() as uow:
+            await self.get_accessible_in(uow, draft_id, account_id)
+            result = await uow.submission_drafts.apply_change(
+                draft_id,
+                owner_id,
+                change,
+                updated_at=touched_at,
+                expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
+                actor_account_id=draft_actor_id(account_id),
+            )
+            await uow.commit()
+            return result
 
     async def upgrade_manifest(
         self,
@@ -413,15 +435,20 @@ class SubmissionDraftService:
             raise DraftSchemaUnsupportedError((f"{current.snapshot.schema_id}@{target_revision}",))
         answers = self._revision_migration.migrate(current, source, target)
         touched_at = now or self._now()
-        return await self._repository.upgrade_manifest(
-            draft_id,
-            account_id,
-            expected_revision=expected_revision,
-            target_schema_revision=target_revision,
-            answers=answers,
-            updated_at=touched_at,
-            expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
-        )
+        async with self._uow_factory() as uow:
+            latest = await self.get_accessible_in(uow, draft_id, account_id)
+            self._require_owner(latest, account_id)
+            result = await uow.submission_drafts.upgrade_manifest(
+                draft_id,
+                account_id,
+                expected_revision=expected_revision,
+                target_schema_revision=target_revision,
+                answers=answers,
+                updated_at=touched_at,
+                expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
+            )
+            await uow.commit()
+            return result
 
     async def validate_for_finalization(
         self,
@@ -465,3 +492,8 @@ class SubmissionDraftService:
     def _require_owner(draft: StoredDraft, account_id: int) -> None:
         if draft.snapshot.owner_account_id != account_id:
             raise DraftAccessDeniedError
+
+
+class DraftUnitOfWork(PermissionUnitOfWork, Protocol):
+    @property
+    def submission_drafts(self) -> DraftRepository: ...

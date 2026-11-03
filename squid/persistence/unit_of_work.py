@@ -25,6 +25,7 @@ from squid.posts.infrastructure.repository import PostRepository
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
+from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.infrastructure.repository import VersionRepository
@@ -51,6 +52,7 @@ class SqlAlchemyUnitOfWork:
         self._idempotency = PostgresIdempotencyRepository(self._active_session, idempotency_cipher)
         self._builds = BuildRepository(self._active_session)
         self._build_locks = PostgresBuildLockRepository(self._active_session)
+        self._submission_drafts = PostgresDraftRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -187,6 +189,11 @@ class SqlAlchemyUnitOfWork:
     def build_locks(self) -> PostgresBuildLockRepository:
         self._active_session()
         return self._build_locks
+
+    @property
+    def submission_drafts(self) -> PostgresDraftRepository:
+        self._active_session()
+        return self._submission_drafts
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

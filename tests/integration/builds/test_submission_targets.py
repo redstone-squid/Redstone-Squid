@@ -63,7 +63,6 @@ from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
     complete_in_session,
 )
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.entities import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
 from squid.submissions.models.finalization import SubmissionFinalizationInput, SubmissionFinalizationJob
 from squid.submissions.payload_integrity import submission_payload_digest
@@ -230,7 +229,9 @@ async def _claim_submission(
         current.add(days=7, days_assumed_24h_ok=True),
         source_installation_id=payload.source_installation_id,
     )
-    await PostgresDraftRepository(sessions).create(draft)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.create(draft), commit=True
+    )
     jobs = PostgresFinalizationJobRepository(sessions)
     await jobs.enqueue(draft, payload, now=current, expires_at=draft.expires_at)
     (claim,) = await jobs.claim(now=current, limit=1)
@@ -726,9 +727,9 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
 
     pending_draft = draft(pending_draft_id)
     claimed_draft = draft(claimed_draft_id)
-    drafts = PostgresDraftRepository(migrated_session_factory)
-    await drafts.create(pending_draft)
-    await drafts.create(claimed_draft)
+    drafts = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    await transact(drafts, lambda uow: uow.submission_drafts.create(pending_draft), commit=True)
+    await transact(drafts, lambda uow: uow.submission_drafts.create(claimed_draft), commit=True)
     pending_payload = replace(
         normalized_submission(absorbed.id, pending_draft_id, "Java 1.21.0"),
         origin=SubmissionOrigin.PAPER,
@@ -856,7 +857,11 @@ async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
         updated_at=queued_at,
         expires_at=queued_at.add(days=7, days_assumed_24h_ok=True),
     )
-    await PostgresDraftRepository(migrated_session_factory).create(draft)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.submission_drafts.create(draft),
+        commit=True,
+    )
     await PostgresFinalizationJobRepository(migrated_session_factory).enqueue(
         draft,
         normalized_submission(absorbed.id, draft_id, "Java 1.21.0"),

@@ -1,5 +1,6 @@
 """Private schematic retention, selection, and shared-reference cleanup."""
 
+from functools import partial
 from uuid import uuid4
 
 import pytest
@@ -8,14 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.errors import ConflictError
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.domain.finalization import SchematicArtifactState, SubmissionAttentionReason
 from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.submissions.models.schematics import DraftSchematicSource
 from tests.support.submission_targets import seed_account_and_version
+from tests.support.unit_of_work import transact
 
 
 async def create_draft(sessions: async_sessionmaker[AsyncSession], owner: int) -> StoredDraft:
@@ -27,11 +29,15 @@ async def create_draft(sessions: async_sessionmaker[AsyncSession], owner: int) -
         updated_at=now,
         expires_at=now.add(days=7, days_assumed_24h_ok=True),
     )
-    return await PostgresDraftRepository(sessions).create(draft)
+    return await transact(
+        partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.create(draft), commit=True
+    )
 
 
 async def reload(sessions: async_sessionmaker[AsyncSession], draft: StoredDraft) -> StoredDraft:
-    current = await PostgresDraftRepository(sessions).get(draft.snapshot.id)
+    current = await transact(
+        partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.get(draft.snapshot.id)
+    )
     assert current is not None
     return current
 

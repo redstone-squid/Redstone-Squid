@@ -1,6 +1,7 @@
 """Submission progress participates in durable Discord reconciliation."""
 
 from dataclasses import replace
+from functools import partial
 from uuid import uuid4
 
 from pydantic import TypeAdapter
@@ -10,14 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.errors import JSONValue
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application.inference_runs import candidate_id
 from squid.submissions.domain import DraftStatus
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.entities import SubmissionDraft
 from squid.sync.models import DiscordSyncQueueItem
 from tests.integration.submissions.test_schematics import create_draft
 from tests.support.submission_targets import seed_account_and_version
+from tests.support.unit_of_work import transact
 
 
 async def test_run_and_draft_changes_enqueue_minimal_status(
@@ -44,7 +46,9 @@ async def test_run_and_draft_changes_enqueue_minimal_status(
     await runs.complete(run, claim.token, (BuildDraft(category=BuildCategory.OTHER),))
     initial = await create_draft(sessions, owner)
     draft = replace(initial, snapshot=replace(initial.snapshot, id=candidate_id(run, 0)), inference_run_id=run)
-    await PostgresDraftRepository(sessions).create(draft)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.create(draft), commit=True
+    )
     async with sessions.begin() as session:
         row = await session.get(SubmissionDraft, draft.snapshot.id)
         assert row is not None

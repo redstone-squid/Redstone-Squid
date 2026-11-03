@@ -1,5 +1,6 @@
 """Shared normalization identity survives independent draft discard and expiry."""
 
+from functools import partial
 from uuid import uuid4
 
 import pytest
@@ -12,10 +13,11 @@ from squid.media.domain.jobs import MediaJobStatus
 from squid.media.errors import MediaDraftNotFoundError
 from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.media.models import MediaNormalizationJobRecord
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import DraftStatus
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.entities import SubmissionDraft
 from tests.integration.media.test_jobs_repository import completed_artifacts, create_submission_draft, upload
+from tests.support.unit_of_work import transact
 
 
 async def test_shared_media_is_normalized_once_and_discarded_independently(
@@ -77,7 +79,14 @@ async def test_expiring_birth_draft_preserves_other_candidate(
                 expires_at=Instant.now().subtract(hours=1),
             )
         )
-    assert await PostgresDraftRepository(sessions).expire_due(now=Instant.now()) == 1
+    assert (
+        await transact(
+            partial(SqlAlchemyUnitOfWork, sessions),
+            lambda uow: uow.submission_drafts.expire_due(now=Instant.now()),
+            commit=True,
+        )
+        == 1
+    )
     assert (await jobs.list_for_draft(second))[0].status is MediaJobStatus.PENDING
     (claim,) = await jobs.claim(limit=10)
     assert await jobs.complete(claim, completed_artifacts(), MediaLimits())

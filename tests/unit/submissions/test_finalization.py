@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from functools import partial
 from uuid import UUID
 
 import pytest
@@ -47,6 +48,7 @@ from squid.submissions.domain import (
 from squid.submissions.errors import DraftAccessDeniedError
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.submissions.payload_integrity import submission_payload_digest
+from tests.support.draft_uow import DraftScope
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000401")
 JOB_ID = UUID("00000000-0000-4000-8000-000000000402")
@@ -302,7 +304,9 @@ def _stored(
 
 def _drafts(repository: FakeDraftRepository) -> SubmissionDraftService:
     """A draft service frozen at `NOW`, so a fixture's expiry never depends on the wall clock."""
-    return SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    return SubmissionDraftService(
+        CheckedInFormManifestRegistry(), now=lambda: NOW, uow_factory=partial(DraftScope, repository)
+    )
 
 
 def _snapshot(status: FinalizationJobStatus) -> FinalizationJobSnapshot:

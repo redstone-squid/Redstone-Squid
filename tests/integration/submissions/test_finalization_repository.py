@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import replace
+from functools import partial
 from typing import cast
 from uuid import UUID
 
@@ -17,6 +18,7 @@ from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import DraftPreparationSnapshot, StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -44,7 +46,6 @@ from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
     complete_in_session,
 )
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -55,6 +56,7 @@ from squid.submissions.models.finalization import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
+from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
@@ -106,7 +108,11 @@ async def stored_draft(async_session_factory: async_sessionmaker[AsyncSession]) 
         updated_at=NOW,
         expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
     )
-    await PostgresDraftRepository(async_session_factory).create(draft)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, async_session_factory),
+        lambda uow: uow.submission_drafts.create(draft),
+        commit=True,
+    )
     return draft
 
 
@@ -303,7 +309,7 @@ async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     finalizations = PostgresFinalizationJobRepository(async_session_factory)
-    drafts = PostgresDraftRepository(async_session_factory)
+    drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     enqueue_result, delete_result = await asyncio.gather(
         finalizations.enqueue(
             stored_draft,
@@ -311,7 +317,11 @@ async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
             now=NOW,
             expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
         ),
-        drafts.delete_owned(DRAFT_ID, stored_draft.snapshot.owner_account_id),
+        transact(
+            drafts,
+            lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, stored_draft.snapshot.owner_account_id),
+            commit=True,
+        ),
         return_exceptions=True,
     )
 
@@ -322,7 +332,7 @@ async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
     else:
         assert enqueue_result.status is FinalizationJobStatus.PENDING
         assert isinstance(delete_result, DraftStateConflictError)
-        assert await drafts.get(DRAFT_ID) is not None
+        assert await transact(drafts, lambda uow: uow.submission_drafts.get(DRAFT_ID)) is not None
 
 
 async def test_preparation_attention_can_be_repaired_without_changing_revision(
@@ -355,7 +365,9 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
     assert pending.status is FinalizationJobStatus.PENDING
     assert pending.issues == ()
     assert pending.attempt_number == 1
-    current = await PostgresDraftRepository(async_session_factory).get(DRAFT_ID)
+    current = await transact(
+        partial(SqlAlchemyUnitOfWork, async_session_factory), lambda uow: uow.submission_drafts.get(DRAFT_ID)
+    )
     assert current is not None
     assert current.preparation_issues == ()
     assert current.preparation_retry_at is None
@@ -443,7 +455,9 @@ async def test_status_translates_malformed_attention_entries_to_data_integrity_e
         )
 
     with pytest.raises(DataIntegrityError, match="attention issues"):
-        await PostgresDraftRepository(async_session_factory).get(DRAFT_ID)
+        await transact(
+            partial(SqlAlchemyUnitOfWork, async_session_factory), lambda uow: uow.submission_drafts.get(DRAFT_ID)
+        )
 
 
 async def test_unexpected_failures_dead_letter_without_deleting_draft(
@@ -507,17 +521,21 @@ async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt
     recovered = await jobs.reserve_preparations(now=NOW.add(seconds=60), limit=1)
     assert len(recovered) == 1
     assert await jobs.list_attempts(DRAFT_ID, before=None, limit=10) == ()
-    changed = await PostgresDraftRepository(async_session_factory).apply_change(
-        DRAFT_ID,
-        stored_draft.snapshot.owner_account_id,
-        DraftChange(
-            base_revision=0,
-            client_instance_id="test",
-            idempotency_key=DraftChangeKey("edit-waiting-draft"),
-            operations=(FieldOperation(UUID(int=10), "source_version", FieldOperationKind.SET, "26.1.2"),),
+    changed = await transact(
+        partial(SqlAlchemyUnitOfWork, async_session_factory),
+        lambda uow: uow.submission_drafts.apply_change(
+            DRAFT_ID,
+            stored_draft.snapshot.owner_account_id,
+            DraftChange(
+                base_revision=0,
+                client_instance_id="test",
+                idempotency_key=DraftChangeKey("edit-waiting-draft"),
+                operations=(FieldOperation(UUID(int=10), "source_version", FieldOperationKind.SET, "26.1.2"),),
+            ),
+            updated_at=NOW.add(seconds=61),
+            expires_at=stored_draft.expires_at,
         ),
-        updated_at=NOW.add(seconds=61),
-        expires_at=stored_draft.expires_at,
+        commit=True,
     )
     assert changed.draft.preparation_retry_at is None
     assert changed.draft.preparation_issues == ()
