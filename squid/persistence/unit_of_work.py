@@ -25,7 +25,9 @@ from squid.posts.infrastructure.repository import PostRepository
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
+from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.infrastructure.repository import VersionRepository
@@ -53,6 +55,8 @@ class SqlAlchemyUnitOfWork:
         self._builds = BuildRepository(self._active_session)
         self._build_locks = PostgresBuildLockRepository(self._active_session)
         self._submission_drafts = PostgresDraftRepository(self._active_session)
+        self._finalization_jobs = PostgresFinalizationJobRepository(self._active_session)
+        self._revision_proposals = PostgresRevisionProposals(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -194,6 +198,16 @@ class SqlAlchemyUnitOfWork:
     def submission_drafts(self) -> PostgresDraftRepository:
         self._active_session()
         return self._submission_drafts
+
+    @property
+    def finalization_jobs(self) -> PostgresFinalizationJobRepository:
+        self._active_session()
+        return self._finalization_jobs
+
+    @property
+    def revision_proposals(self) -> PostgresRevisionProposals:
+        self._active_session()
+        return self._revision_proposals
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

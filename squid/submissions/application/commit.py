@@ -1,16 +1,14 @@
 """Atomic build, artifact-reference, receipt, and database-event submission writes."""
 
 from typing import Protocol
+from uuid import UUID
 
-from pydantic import TypeAdapter
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.builds.domain import SourceMessage
-from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.models import Build
 from squid.core.errors import InvalidStateError
-from squid.submissions.application.drafts import SubmissionDraftService
+from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.application.finalization import ClaimedFinalizationJob
 from squid.submissions.domain import (
     BuildSubmissionRejected,
@@ -21,13 +19,7 @@ from squid.submissions.domain import (
     SubmissionAttentionReason,
 )
 from squid.submissions.errors import DraftAccessDeniedError
-from squid.submissions.infrastructure.finalization_repository import (
-    _claimed_job,
-    _locked_draft,
-    _require_current_media,
-    complete_in_session,
-)
-from squid.submissions.models.finalization import SubmissionReceiptMedia
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 class SubmissionBuildPreparer(Protocol):
@@ -36,16 +28,17 @@ class SubmissionBuildPreparer(Protocol):
     async def prepare(self, submission: NormalizedSubmission) -> Build | BuildSubmissionRejected: ...
 
 
-class PostgresSubmissionExecutor:
+class BuildSubmissionExecutor:
     """Commit a prepared source build and its receipt under the active claim fence."""
 
     def __init__(
         self,
-        sessions: async_sessionmaker[AsyncSession],
         preparation: SubmissionBuildPreparer,
         drafts: SubmissionDraftService | None = None,
+        *,
+        uow_factory: UnitOfWorkFactory[SubmissionCommitUnitOfWork],
     ) -> None:
-        self._sessions = sessions
+        self._uow_factory = uow_factory
         self._preparation = preparation
         self._drafts = drafts
 
@@ -70,26 +63,26 @@ class PostgresSubmissionExecutor:
         ):
             message = "Prepared build does not match its submission provenance."
             raise InvalidStateError(message)
-        async with self._sessions.begin() as session:
-            draft = await _locked_draft(session, job.draft_id)
-            if await _claimed_job(session, job) is None:
+        async with self._uow_factory() as uow:
+            draft = await uow.finalization_jobs.lock_claim(job)
+            if draft is None:
                 return None
-            if not await self._authorized(job):
+            if not await self._authorized(job, uow):
                 return BuildSubmissionRejected(
                     (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),)
                 )
             if (
-                draft.status is not DraftStatus.PROCESSING
-                or draft.owner_account_id != job.payload.owner_account_id
-                or draft.revision != job.draft_revision
+                draft.snapshot.status is not DraftStatus.PROCESSING
+                or draft.snapshot.owner_account_id != job.payload.owner_account_id
+                or draft.snapshot.revision != job.draft_revision
             ):
                 message = "Submission claim no longer matches its source draft."
                 raise InvalidStateError(message)
-            candidate = candidate.copy_for_edit(
-                source_messages=TypeAdapter(tuple[SourceMessage, ...]).validate_python(draft.source_messages)
+            candidate = candidate.copy_for_edit(source_messages=draft.source_messages)
+            await uow.finalization_jobs.require_current_media(
+                job.draft_id, job.payload.artifacts.normalized_media_upload_ids
             )
-            await _require_current_media(session, job.draft_id, job.payload.artifacts.normalized_media_upload_ids)
-            existing = await BuildRepository(lambda: session).get_by_source_submission_draft_id(job.draft_id)
+            existing = await uow.builds.get_by_source_submission_draft_id(job.draft_id)
             if existing is not None:
                 if (
                     existing.submitter_account_id != job.payload.owner_account_id
@@ -99,25 +92,35 @@ class PostgresSubmissionExecutor:
                     raise InvalidStateError(message)
                 candidate = existing
             else:
-                await BuildRepository(lambda: session).save(candidate)
+                await uow.builds.save(candidate)
             assert candidate.id is not None
             result = FinalizedBuild(candidate.id)
-            if not await complete_in_session(session, job, result, now=now):
+            if not await uow.finalization_jobs.complete(job, result, now=now):
                 message = "Submission authority changed inside its locked transaction."
                 raise InvalidStateError(message)
-            await session.flush()
-            session.add_all(
-                SubmissionReceiptMedia(job_id=job.job_id, upload_id=upload_id, created_at=now)
-                for upload_id in job.payload.artifacts.normalized_media_upload_ids
-            )
+            await uow.commit()
         return result
 
-    async def _authorized(self, job: ClaimedFinalizationJob) -> bool:
+    async def _authorized(self, job: ClaimedFinalizationJob, uow: DraftUnitOfWork | None = None) -> bool:
         actor = job.requested_by_account_id or job.payload.owner_account_id
         if self._drafts is None:
             return actor == job.payload.owner_account_id
         try:
-            await self._drafts.get_accessible(job.draft_id, actor)
+            if uow is None:
+                await self._drafts.get_accessible(job.draft_id, actor)
+            else:
+                await self._drafts.get_accessible_in(uow, job.draft_id, actor)
         except DraftAccessDeniedError:
             return False
         return True
+
+
+class SubmissionCommitRepository(Protocol):
+    async def lock_claim(self, job: ClaimedFinalizationJob) -> StoredDraft | None: ...
+    async def require_current_media(self, draft_id: UUID, upload_ids: tuple[UUID, ...]) -> None: ...
+    async def complete(self, job: ClaimedFinalizationJob, result: FinalizedBuild, *, now: Instant) -> bool: ...
+
+
+class SubmissionCommitUnitOfWork(BuildUnitOfWork, DraftUnitOfWork, Protocol):
+    @property
+    def finalization_jobs(self) -> SubmissionCommitRepository: ...

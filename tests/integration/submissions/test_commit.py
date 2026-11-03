@@ -19,6 +19,7 @@ from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
+from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.domain import (
     DraftSnapshot,
     FinalizationJobStatus,
@@ -26,11 +27,9 @@ from squid.submissions.domain import (
     NormalizedSubmission,
     SubmissionOrigin,
 )
-from squid.submissions.infrastructure import commit as commit_module
-from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
+from squid.submissions.infrastructure import finalization_repository as commit_module
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
-    complete_in_session,
 )
 from squid.submissions.models.finalization import SubmissionFinalizationResult, SubmissionReceiptMedia
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
@@ -58,7 +57,7 @@ async def claimed_submission(
     await transact(
         partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.create(draft), commit=True
     )
-    jobs = PostgresFinalizationJobRepository(sessions)
+    jobs = partial(SqlAlchemyUnitOfWork, sessions)
     payload = normalized_submission(owner, draft_id, "Java 1.21.0")
     if with_media:
         upload_id = UUID(int=992)
@@ -80,8 +79,12 @@ async def claimed_submission(
                 MediaNormalizationJobRecord(upload_id=upload_id, status=MediaJobStatus.COMPLETED, completed_at=now)
             )
         payload = replace(payload, artifacts=replace(payload.artifacts, normalized_media_upload_ids=(upload_id,)))
-    await jobs.enqueue(draft, payload, now=now, expires_at=draft.expires_at)
-    (claim,) = await jobs.claim(now=now, limit=1)
+    await transact(
+        jobs,
+        lambda uow: uow.finalization_jobs.enqueue(draft, payload, now=now, expires_at=draft.expires_at),
+        commit=True,
+    )
+    (claim,) = await transact(jobs, lambda uow: uow.finalization_jobs.claim(now=now, limit=1), commit=True)
     return claim
 
 
@@ -91,7 +94,9 @@ async def test_executor_commits_build_receipt_and_event_once(
     with_media: bool,
 ) -> None:
     claim = await claimed_submission(migrated_session_factory, with_media=with_media)
-    executor = PostgresSubmissionExecutor(migrated_session_factory, PreparedBuilds())
+    executor = BuildSubmissionExecutor(
+        PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    )
     result = await executor.execute(claim, now=Instant.now())
     assert isinstance(result, FinalizedBuild)
     assert await executor.execute(claim, now=Instant.now()) is None
@@ -118,13 +123,15 @@ async def test_receipt_failure_rolls_back_build_and_events(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     claim = await claimed_submission(migrated_session_factory)
-    executor = PostgresSubmissionExecutor(migrated_session_factory, PreparedBuilds())
+    executor = BuildSubmissionExecutor(
+        PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    )
 
     async def fail_receipt(*args: object, **kwargs: object) -> bool:
         raise RuntimeError("receipt unavailable")
 
     with monkeypatch.context() as patch:
-        patch.setattr(commit_module, "complete_in_session", fail_receipt)
+        patch.setattr(commit_module, "_complete", fail_receipt)
         with pytest.raises(RuntimeError, match="receipt unavailable"):
             await executor.execute(claim, now=Instant.now())
     async with migrated_session_factory() as session:
@@ -140,7 +147,9 @@ async def test_receipt_failure_rolls_back_build_and_events(
             == 0
         )
         assert await session.get(SubmissionFinalizationResult, claim.job_id) is None
-    job = await PostgresFinalizationJobRepository(migrated_session_factory).get(claim.draft_id)
+    job = await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.finalization_jobs.get(claim.draft_id)
+    )
     assert job is not None
     assert job.status is FinalizationJobStatus.CLAIMED
     assert isinstance(await executor.execute(claim, now=Instant.now()), FinalizedBuild)
@@ -150,9 +159,13 @@ async def test_reclaimed_worker_cannot_create_a_build(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     claim = await claimed_submission(migrated_session_factory)
-    jobs = PostgresFinalizationJobRepository(migrated_session_factory)
-    (replacement,) = await jobs.claim(now=claim.claimed_at.add(minutes=6), limit=1)
-    executor = PostgresSubmissionExecutor(migrated_session_factory, PreparedBuilds())
+    jobs = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (replacement,) = await transact(
+        jobs, lambda uow: uow.finalization_jobs.claim(now=claim.claimed_at.add(minutes=6), limit=1), commit=True
+    )
+    executor = BuildSubmissionExecutor(
+        PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    )
     assert await executor.execute(claim, now=Instant.now()) is None
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Build)) == 0
@@ -182,9 +195,10 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
             )
             .values(requested_by_account_id=staff.id)
         )
-    (claim,) = await PostgresFinalizationJobRepository(migrated_session_factory).claim(
-        now=original.claimed_at.add(minutes=6),
-        limit=1,
+    (claim,) = await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.finalization_jobs.claim(now=original.claimed_at.add(minutes=6), limit=1),
+        commit=True,
     )
 
     class Permissions:
@@ -206,7 +220,9 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
         permissions=permissions,
         uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
     )
-    executor = PostgresSubmissionExecutor(migrated_session_factory, RevokingPreparation(), drafts=drafts)
+    executor = BuildSubmissionExecutor(
+        RevokingPreparation(), drafts=drafts, uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    )
     result = await executor.execute(claim, now=Instant.now())
     assert isinstance(result, BuildSubmissionRejected)
     assert result.issues[0].reason is SubmissionAttentionReason.PERMISSION_REVOKED
@@ -245,10 +261,17 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
         )
     claim = replace(claim, requested_by_account_id=staff.id)
     await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, staff.id), commit=True)
-    jobs = PostgresFinalizationJobRepository(migrated_session_factory)
+    jobs = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     async with migrated_session_factory.begin() as session:
-        assert await complete_in_session(session, claim, FinalizedBuild(99), now=Instant.now()) is False
-    (replacement,) = await jobs.claim(now=Instant.now(), limit=1)
+        assert (
+            await PostgresFinalizationJobRepository(lambda: session).complete(
+                claim, FinalizedBuild(99), now=Instant.now()
+            )
+            is False
+        )
+    (replacement,) = await transact(
+        jobs, lambda uow: uow.finalization_jobs.claim(now=Instant.now(), limit=1), commit=True
+    )
     assert replacement.requested_by_account_id == survivor.id
     assert replacement.payload.owner_account_id == claim.payload.owner_account_id
     assert replacement.claim_token != claim.claim_token
@@ -276,7 +299,9 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
         assert draft is not None
         draft.source_messages = TypeAdapter(tuple[SourceMessage, ...]).dump_python((source,), mode="json")
     builds = partial(SqlAlchemyUnitOfWork, sessions)
-    result = await PostgresSubmissionExecutor(sessions, PreparedBuilds()).execute(claim, now=Instant.now())
+    result = await BuildSubmissionExecutor(
+        PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, sessions)
+    ).execute(claim, now=Instant.now())
     assert isinstance(result, FinalizedBuild)
     saved = await transact(builds, lambda uow: uow.builds.get_by_id(result.build_id))
     assert saved is not None
@@ -299,7 +324,9 @@ async def test_executor_recovers_a_loaded_source_build(
             assert loaded is not None
             return loaded
 
-    executor = PostgresSubmissionExecutor(migrated_session_factory, ExistingBuilds())
+    executor = BuildSubmissionExecutor(
+        ExistingBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    )
     result = await executor.execute(claim, now=Instant.now())
     assert isinstance(result, FinalizedBuild)
     assert result.build_id == existing.id

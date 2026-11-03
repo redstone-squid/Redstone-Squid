@@ -94,6 +94,7 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
+from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
@@ -102,12 +103,9 @@ from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
-from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
-from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
-from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
@@ -447,9 +445,9 @@ class _ServiceGraph:
     @cached_property
     def submission_revisions(self) -> RevisionProposalService:
         return RevisionProposalService(
-            PostgresRevisionProposals(self.db.async_session, self.builds),
             self.builds,
             self.permissions,
+            uow_factory=self.uow_factory,
         )
 
     @cached_property
@@ -459,10 +457,6 @@ class _ServiceGraph:
     @cached_property
     def submission_schematics(self) -> DraftSchematicService:
         return DraftSchematicService(self.submission_drafts, self.submission_schematic_repository, self.artifacts)
-
-    @cached_property
-    def submission_finalization_jobs(self) -> PostgresFinalizationJobRepository:
-        return PostgresFinalizationJobRepository(self.db.async_session)
 
     @cached_property
     def submission_finalization(self) -> SubmissionFinalizationService:
@@ -480,19 +474,19 @@ class _ServiceGraph:
         return SubmissionFinalizationService(
             self.submission_drafts,
             SubmissionPreparation(readiness, sponsors),
-            self.submission_finalization_jobs,
+            uow_factory=self.uow_factory,
         )
 
     @cached_property
     def submission_finalization_worker(self) -> SubmissionFinalizationWorker:
         return SubmissionFinalizationWorker(
-            self.submission_finalization_jobs,
-            PostgresSubmissionExecutor(
-                self.db.async_session,
+            BuildSubmissionExecutor(
                 SubmissionBuildPreparation(self.builds, self.tags, self.version_service),
                 drafts=self.submission_drafts,
+                uow_factory=self.uow_factory,
             ),
             preparation=self.submission_finalization,
+            uow_factory=self.uow_factory,
         )
 
     @cached_property

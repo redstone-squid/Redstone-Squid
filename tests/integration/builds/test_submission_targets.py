@@ -46,6 +46,7 @@ from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
+from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.domain import (
     BuildSubmissionRejected,
     DraftSnapshot,
@@ -58,10 +59,8 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
-from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
-    complete_in_session,
 )
 from squid.submissions.models.entities import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
 from squid.submissions.models.finalization import SubmissionFinalizationInput, SubmissionFinalizationJob
@@ -232,9 +231,13 @@ async def _claim_submission(
     await transact(
         partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.submission_drafts.create(draft), commit=True
     )
-    jobs = PostgresFinalizationJobRepository(sessions)
-    await jobs.enqueue(draft, payload, now=current, expires_at=draft.expires_at)
-    (claim,) = await jobs.claim(now=current, limit=1)
+    jobs = partial(SqlAlchemyUnitOfWork, sessions)
+    await transact(
+        jobs,
+        lambda uow: uow.finalization_jobs.enqueue(draft, payload, now=current, expires_at=draft.expires_at),
+        commit=True,
+    )
+    (claim,) = await transact(jobs, lambda uow: uow.finalization_jobs.claim(now=current, limit=1), commit=True)
     return claim
 
 
@@ -242,7 +245,9 @@ async def _execute_submission(
     preparation: SubmissionBuildPreparation, sessions: async_sessionmaker[AsyncSession], payload: NormalizedSubmission
 ) -> FinalizedBuild | BuildSubmissionRejected:
     claim = await _claim_submission(sessions, payload)
-    result = await PostgresSubmissionExecutor(sessions, preparation).execute(claim, now=Instant.now())
+    result = await BuildSubmissionExecutor(preparation, uow_factory=partial(SqlAlchemyUnitOfWork, sessions)).execute(
+        claim, now=Instant.now()
+    )
     assert result is not None
     return result
 
@@ -316,7 +321,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     claim = await _claim_submission(
         migrated_session_factory, normalized_submission(account_id, draft_id, "Java 1.21.0")
     )
-    executor = PostgresSubmissionExecutor(migrated_session_factory, writer)
+    executor = BuildSubmissionExecutor(writer, uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     results: list[FinalizedBuild | BuildSubmissionRejected | None] = []
 
     async def create() -> None:
@@ -742,20 +747,27 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
         source_installation_id=installation_id,
         sponsor=sponsor,
     )
-    finalizations = PostgresFinalizationJobRepository(migrated_session_factory)
-    await finalizations.enqueue(
-        pending_draft,
-        pending_payload,
-        now=queued_at.add(days=1, days_assumed_24h_ok=True),
-        expires_at=pending_draft.expires_at,
+    finalizations = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    await transact(
+        finalizations,
+        lambda uow: uow.finalization_jobs.enqueue(
+            pending_draft,
+            pending_payload,
+            now=queued_at.add(days=1, days_assumed_24h_ok=True),
+            expires_at=pending_draft.expires_at,
+        ),
+        commit=True,
     )
-    await finalizations.enqueue(
-        claimed_draft,
-        claimed_payload,
-        now=queued_at,
-        expires_at=claimed_draft.expires_at,
+    await transact(
+        finalizations,
+        lambda uow: uow.finalization_jobs.enqueue(
+            claimed_draft, claimed_payload, now=queued_at, expires_at=claimed_draft.expires_at
+        ),
+        commit=True,
     )
-    (stale_claim,) = await finalizations.claim(now=queued_at, limit=1)
+    (stale_claim,) = await transact(
+        finalizations, lambda uow: uow.finalization_jobs.claim(now=queued_at, limit=1), commit=True
+    )
     assert stale_claim.draft_id == claimed_draft_id
 
     build = submission_build(BuildCategory.OTHER, absorbed.id, draft_id=claimed_draft_id, sponsor=sponsor)
@@ -770,13 +782,23 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
 
     result = FinalizedBuild(build_id)
     async with migrated_session_factory.begin() as session:
-        assert await complete_in_session(session, stale_claim, result, now=Instant.now()) is False
-    (replacement_claim,) = await finalizations.claim(now=Instant.now().add(minutes=1), limit=1)
+        assert (
+            await PostgresFinalizationJobRepository(lambda: session).complete(stale_claim, result, now=Instant.now())
+            is False
+        )
+    (replacement_claim,) = await transact(
+        finalizations, lambda uow: uow.finalization_jobs.claim(now=Instant.now().add(minutes=1), limit=1), commit=True
+    )
     assert replacement_claim.draft_id == claimed_draft_id
     assert replacement_claim.payload.owner_account_id == survivor.id
     assert replacement_claim.payload.sponsor == sponsor
     async with migrated_session_factory.begin() as session:
-        assert await complete_in_session(session, replacement_claim, result, now=Instant.now()) is True
+        assert (
+            await PostgresFinalizationJobRepository(lambda: session).complete(
+                replacement_claim, result, now=Instant.now()
+            )
+            is True
+        )
 
     async with migrated_session_factory() as session:
         jobs = {
@@ -862,11 +884,15 @@ async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
         lambda uow: uow.submission_drafts.create(draft),
         commit=True,
     )
-    await PostgresFinalizationJobRepository(migrated_session_factory).enqueue(
-        draft,
-        normalized_submission(absorbed.id, draft_id, "Java 1.21.0"),
-        now=queued_at,
-        expires_at=draft.expires_at,
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.finalization_jobs.enqueue(
+            draft,
+            normalized_submission(absorbed.id, draft_id, "Java 1.21.0"),
+            now=queued_at,
+            expires_at=draft.expires_at,
+        ),
+        commit=True,
     )
     async with migrated_session_factory.begin() as session:
         await session.execute(

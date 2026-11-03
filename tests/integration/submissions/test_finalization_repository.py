@@ -44,7 +44,6 @@ from squid.submissions.domain import (
 from squid.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
-    complete_in_session,
 )
 from squid.submissions.models.entities import (
     SubmissionDraft,
@@ -148,28 +147,36 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     payload = _payload(stored_draft)
     expires_at = NOW.add(days=7, days_assumed_24h_ok=True)
 
-    first = await repository.enqueue(stored_draft, payload, now=NOW, expires_at=expires_at)
-    replay = await repository.enqueue(
-        replace(stored_draft, snapshot=replace(stored_draft.snapshot, status=DraftStatus.PROCESSING)),
-        payload,
-        now=NOW,
-        expires_at=expires_at,
+    first = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(stored_draft, payload, now=NOW, expires_at=expires_at),
+        commit=True,
     )
-    (claim,) = await repository.claim(now=NOW, limit=1)
+    replay = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(
+            replace(stored_draft, snapshot=replace(stored_draft.snapshot, status=DraftStatus.PROCESSING)),
+            payload,
+            now=NOW,
+            expires_at=expires_at,
+        ),
+        commit=True,
+    )
+    (claim,) = await transact(repository, lambda uow: uow.finalization_jobs.claim(now=NOW, limit=1), commit=True)
     stale = replace(claim, claim_token=UUID("00000000-0000-4000-8000-000000000599"))
     result = FinalizedBuild(41)
 
     assert first.job_id == replay.job_id
     assert claim.payload == payload
     async with async_session_factory.begin() as session:
-        assert await complete_in_session(session, stale, result, now=NOW) is False
-        assert await complete_in_session(session, claim, result, now=NOW) is True
+        assert await PostgresFinalizationJobRepository(lambda: session).complete(stale, result, now=NOW) is False
+        assert await PostgresFinalizationJobRepository(lambda: session).complete(claim, result, now=NOW) is True
 
-    completed = await repository.get(DRAFT_ID)
+    completed = await transact(repository, lambda uow: uow.finalization_jobs.get(DRAFT_ID))
     assert completed is not None
     assert completed.status is FinalizationJobStatus.COMPLETED
     assert completed.result == result
@@ -185,12 +192,13 @@ async def test_claim_refuses_a_payload_with_a_conflicting_digest(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
-    await repository.enqueue(
-        stored_draft,
-        _payload(stored_draft),
-        now=NOW,
-        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(
+            stored_draft, _payload(stored_draft), now=NOW, expires_at=NOW.add(days=7, days_assumed_24h_ok=True)
+        ),
+        commit=True,
     )
     async with async_session_factory.begin() as session:
         await session.execute(
@@ -200,7 +208,7 @@ async def test_claim_refuses_a_payload_with_a_conflicting_digest(
         )
 
     with pytest.raises(DataIntegrityError, match="payload integrity"):
-        await repository.claim(now=NOW, limit=1)
+        await transact(repository, lambda uow: uow.finalization_jobs.claim(now=NOW, limit=1), commit=True)
 
     async with async_session_factory() as session:
         job = await session.scalar(
@@ -248,20 +256,24 @@ async def test_enqueue_rechecks_exact_completed_media_set_after_assessment(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     media_id = UUID("00000000-0000-4000-8000-000000000511")
     payload_before_concurrent_upload = _payload(stored_draft)
     await _store_media(async_session_factory, media_id, MediaJobStatus.COMPLETED)
 
     with pytest.raises(DraftArtifactsChangedError):
-        await repository.enqueue(
-            stored_draft,
-            payload_before_concurrent_upload,
-            now=NOW,
-            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        await transact(
+            repository,
+            lambda uow: uow.finalization_jobs.enqueue(
+                stored_draft,
+                payload_before_concurrent_upload,
+                now=NOW,
+                expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+            ),
+            commit=True,
         )
 
-    assert await repository.get(DRAFT_ID) is None
+    assert await transact(repository, lambda uow: uow.finalization_jobs.get(DRAFT_ID)) is None
     async with async_session_factory() as session:
         status = await session.scalar(select(SubmissionDraft.status).where(SubmissionDraft.id == DRAFT_ID))
     assert status == DraftStatus.EDITING.value
@@ -273,16 +285,20 @@ async def test_enqueue_requires_every_payload_media_id_to_remain_completed(
     async_session_factory: async_sessionmaker[AsyncSession],
     status: MediaJobStatus | None,
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     media_id = UUID("00000000-0000-4000-8000-000000000512")
     await _store_media(async_session_factory, media_id, status)
 
     with pytest.raises(DraftArtifactsChangedError):
-        await repository.enqueue(
-            stored_draft,
-            _payload(stored_draft, media_id),
-            now=NOW,
-            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        await transact(
+            repository,
+            lambda uow: uow.finalization_jobs.enqueue(
+                stored_draft,
+                _payload(stored_draft, media_id),
+                now=NOW,
+                expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+            ),
+            commit=True,
         )
 
 
@@ -290,15 +306,19 @@ async def test_enqueue_accepts_an_exact_completed_media_snapshot(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     media_id = UUID("00000000-0000-4000-8000-000000000513")
     await _store_media(async_session_factory, media_id, MediaJobStatus.COMPLETED)
 
-    result = await repository.enqueue(
-        stored_draft,
-        _payload(stored_draft, media_id),
-        now=NOW,
-        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    result = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(
+            stored_draft,
+            _payload(stored_draft, media_id),
+            now=NOW,
+            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        ),
+        commit=True,
     )
 
     assert result.status is FinalizationJobStatus.PENDING
@@ -308,14 +328,15 @@ async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    finalizations = PostgresFinalizationJobRepository(async_session_factory)
+    finalizations = partial(SqlAlchemyUnitOfWork, async_session_factory)
     drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
     enqueue_result, delete_result = await asyncio.gather(
-        finalizations.enqueue(
-            stored_draft,
-            _payload(stored_draft),
-            now=NOW,
-            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        transact(
+            finalizations,
+            lambda uow: uow.finalization_jobs.enqueue(
+                stored_draft, _payload(stored_draft), now=NOW, expires_at=NOW.add(days=7, days_assumed_24h_ok=True)
+            ),
+            commit=True,
         ),
         transact(
             drafts,
@@ -328,7 +349,7 @@ async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
     if isinstance(enqueue_result, BaseException):
         assert isinstance(enqueue_result, DraftNotFoundError)
         assert delete_result is True
-        assert await finalizations.get(DRAFT_ID) is None
+        assert await transact(finalizations, lambda uow: uow.finalization_jobs.get(DRAFT_ID)) is None
     else:
         assert enqueue_result.status is FinalizationJobStatus.PENDING
         assert isinstance(delete_result, DraftStateConflictError)
@@ -339,25 +360,27 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     expires_at = NOW.add(days=7, days_assumed_24h_ok=True)
     issue = SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING)
 
-    attention = await repository.record_preparation_attention(
-        stored_draft,
-        (issue,),
-        now=NOW,
-        expires_at=expires_at,
+    attention = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.record_preparation_attention(
+            stored_draft, (issue,), now=NOW, expires_at=expires_at
+        ),
+        commit=True,
     )
     repaired_draft = replace(
         stored_draft,
         snapshot=replace(stored_draft.snapshot, status=DraftStatus.NEEDS_ATTENTION),
     )
-    pending = await repository.enqueue(
-        repaired_draft,
-        _payload(repaired_draft),
-        now=NOW.add(seconds=1),
-        expires_at=expires_at.add(seconds=1),
+    pending = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(
+            repaired_draft, _payload(repaired_draft), now=NOW.add(seconds=1), expires_at=expires_at.add(seconds=1)
+        ),
+        commit=True,
     )
 
     assert isinstance(attention, DraftPreparationSnapshot)
@@ -377,31 +400,53 @@ async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     expiry = NOW.add(days=7, days_assumed_24h_ok=True)
     payload = _payload(stored_draft)
-    first = await repository.enqueue(stored_draft, payload, now=NOW, expires_at=expiry)
-    (claim,) = await repository.claim(now=NOW, limit=1)
+    first = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(stored_draft, payload, now=NOW, expires_at=expiry),
+        commit=True,
+    )
+    (claim,) = await transact(repository, lambda uow: uow.finalization_jobs.claim(now=NOW, limit=1), commit=True)
     issue = SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION)
-    await repository.needs_attention(claim, (issue,), now=NOW, expires_at=expiry)
+    await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.needs_attention(claim, (issue,), now=NOW, expires_at=expiry),
+        commit=True,
+    )
 
     repaired = replace(stored_draft, snapshot=replace(stored_draft.snapshot, status=DraftStatus.NEEDS_ATTENTION))
-    second = await repository.enqueue(repaired, replace(payload, description="corrected"), now=NOW, expires_at=expiry)
+    second = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(
+            repaired, replace(payload, description="corrected"), now=NOW, expires_at=expiry
+        ),
+        commit=True,
+    )
 
     assert second.job_id != first.job_id
     async with async_session_factory.begin() as session:
-        assert await complete_in_session(session, claim, FinalizedBuild(41), now=NOW) is False
-    latest = await repository.get(DRAFT_ID)
+        assert (
+            await PostgresFinalizationJobRepository(lambda: session).complete(claim, FinalizedBuild(41), now=NOW)
+            is False
+        )
+    latest = await transact(repository, lambda uow: uow.finalization_jobs.get(DRAFT_ID))
     assert latest is not None
     assert latest.job_id == second.job_id
-    history = await repository.list_attempts(DRAFT_ID, before=None, limit=1)
+    history = await transact(
+        repository, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, before=None, limit=1)
+    )
     assert [item.job_id for item in history] == [second.job_id]
-    older = await repository.list_attempts(DRAFT_ID, before=history[-1].attempt_number, limit=1)
+    older = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, before=history[-1].attempt_number, limit=1),
+    )
     assert [item.job_id for item in older] == [first.job_id]
-    retained = await repository.get_attempt(DRAFT_ID, first.job_id)
+    retained = await transact(repository, lambda uow: uow.finalization_jobs.get_attempt(DRAFT_ID, first.job_id))
     assert retained is not None
     assert retained.issues == (issue,)
-    assert await repository.get_attempt(UUID(int=1), first.job_id) is None
+    assert await transact(repository, lambda uow: uow.finalization_jobs.get_attempt(UUID(int=1), first.job_id)) is None
     async with async_session_factory() as session:
         previous = await session.get(SubmissionFinalizationJob, first.job_id)
         current = await session.get(SubmissionFinalizationJob, second.job_id)
@@ -427,26 +472,45 @@ async def test_repeated_preparation_issue_does_not_append_history(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     expiry = NOW.add(days=7, days_assumed_24h_ok=True)
     issues = (SubmissionAttentionIssue("creators", SubmissionAttentionReason.REQUIRED),)
-    first = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
-    second = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
+    first = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.record_preparation_attention(
+            stored_draft, issues, now=NOW, expires_at=expiry
+        ),
+        commit=True,
+    )
+    second = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.record_preparation_attention(
+            stored_draft, issues, now=NOW, expires_at=expiry
+        ),
+        commit=True,
+    )
 
     assert first == second
-    assert await repository.list_attempts(DRAFT_ID, before=None, limit=10) == ()
+    assert (
+        await transact(repository, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, before=None, limit=10))
+        == ()
+    )
 
 
 async def test_status_translates_malformed_attention_entries_to_data_integrity_error(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
-    await repository.record_preparation_attention(
-        stored_draft,
-        (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
-        now=NOW,
-        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.record_preparation_attention(
+            stored_draft,
+            (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+            now=NOW,
+            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+        ),
+        commit=True,
     )
     async with async_session_factory.begin() as session:
         # Deliberately bypass the typed shape to test corrupt persisted JSON.
@@ -464,33 +528,47 @@ async def test_unexpected_failures_dead_letter_without_deleting_draft(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     expires_at = NOW.add(days=7, days_assumed_24h_ok=True)
-    await repository.enqueue(stored_draft, _payload(stored_draft), now=NOW, expires_at=expires_at)
-    (first,) = await repository.claim(now=NOW, limit=1)
+    await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.enqueue(stored_draft, _payload(stored_draft), now=NOW, expires_at=expires_at),
+        commit=True,
+    )
+    (first,) = await transact(repository, lambda uow: uow.finalization_jobs.claim(now=NOW, limit=1), commit=True)
 
-    retry = await repository.fail(
-        first,
-        "RuntimeError",
-        now=NOW,
-        retry_at=NOW.add(seconds=2),
-        expires_at=expires_at,
-        max_attempts=2,
+    retry = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.fail(
+            first, "RuntimeError", now=NOW, retry_at=NOW.add(seconds=2), expires_at=expires_at, max_attempts=2
+        ),
+        commit=True,
     )
     assert retry.dead is False
-    assert await repository.claim(now=NOW.add(seconds=1), limit=1) == ()
-    (second,) = await repository.claim(now=NOW.add(seconds=2), limit=1)
-    dead = await repository.fail(
-        second,
-        "RuntimeError",
-        now=NOW.add(seconds=2),
-        retry_at=NOW.add(seconds=4),
-        expires_at=expires_at,
-        max_attempts=2,
+    assert (
+        await transact(
+            repository, lambda uow: uow.finalization_jobs.claim(now=NOW.add(seconds=1), limit=1), commit=True
+        )
+        == ()
+    )
+    (second,) = await transact(
+        repository, lambda uow: uow.finalization_jobs.claim(now=NOW.add(seconds=2), limit=1), commit=True
+    )
+    dead = await transact(
+        repository,
+        lambda uow: uow.finalization_jobs.fail(
+            second,
+            "RuntimeError",
+            now=NOW.add(seconds=2),
+            retry_at=NOW.add(seconds=4),
+            expires_at=expires_at,
+            max_attempts=2,
+        ),
+        commit=True,
     )
 
     assert dead.dead is True
-    snapshot = await repository.get(DRAFT_ID)
+    snapshot = await transact(repository, lambda uow: uow.finalization_jobs.get(DRAFT_ID))
     assert snapshot is not None
     assert snapshot.status is FinalizationJobStatus.DEAD
     assert snapshot.issues == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED),)
@@ -504,23 +582,39 @@ async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    jobs = PostgresFinalizationJobRepository(async_session_factory)
-    await jobs.record_preparation_attention(
-        stored_draft,
-        (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
-        now=NOW,
-        expires_at=stored_draft.expires_at,
-        waiting_for_artifacts=True,
+    jobs = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    await transact(
+        jobs,
+        lambda uow: uow.finalization_jobs.record_preparation_attention(
+            stored_draft,
+            (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+            now=NOW,
+            expires_at=stored_draft.expires_at,
+            waiting_for_artifacts=True,
+        ),
+        commit=True,
     )
-    assert await jobs.reserve_preparations(now=NOW, limit=1) == ()
-    (reserved,) = await jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1)
+    assert (
+        await transact(jobs, lambda uow: uow.finalization_jobs.reserve_preparations(now=NOW, limit=1), commit=True)
+        == ()
+    )
+    (reserved,) = await transact(
+        jobs, lambda uow: uow.finalization_jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1), commit=True
+    )
     assert reserved.snapshot.id == DRAFT_ID
     assert reserved.preparation_retry_at == NOW.add(seconds=60)
     assert reserved.expires_at == stored_draft.expires_at
-    assert await jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1) == ()
-    recovered = await jobs.reserve_preparations(now=NOW.add(seconds=60), limit=1)
+    assert (
+        await transact(
+            jobs, lambda uow: uow.finalization_jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1), commit=True
+        )
+        == ()
+    )
+    recovered = await transact(
+        jobs, lambda uow: uow.finalization_jobs.reserve_preparations(now=NOW.add(seconds=60), limit=1), commit=True
+    )
     assert len(recovered) == 1
-    assert await jobs.list_attempts(DRAFT_ID, before=None, limit=10) == ()
+    assert await transact(jobs, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, before=None, limit=10)) == ()
     changed = await transact(
         partial(SqlAlchemyUnitOfWork, async_session_factory),
         lambda uow: uow.submission_drafts.apply_change(
@@ -539,5 +633,17 @@ async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt
     )
     assert changed.draft.preparation_retry_at is None
     assert changed.draft.preparation_issues == ()
-    assert await jobs.reserve_preparations(now=NOW.add(seconds=90), limit=1) == ()
-    assert await jobs.reserve_preparations(now=stored_draft.expires_at, limit=1) == ()
+    assert (
+        await transact(
+            jobs, lambda uow: uow.finalization_jobs.reserve_preparations(now=NOW.add(seconds=90), limit=1), commit=True
+        )
+        == ()
+    )
+    assert (
+        await transact(
+            jobs,
+            lambda uow: uow.finalization_jobs.reserve_preparations(now=stored_draft.expires_at, limit=1),
+            commit=True,
+        )
+        == ()
+    )

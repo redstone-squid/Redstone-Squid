@@ -1,11 +1,11 @@
 """PostgreSQL persistence for durable submission finalization."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import override
 from uuid import UUID, uuid4
 
 from sqlalchemy import Select, and_, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
@@ -40,6 +40,7 @@ from squid.submissions.models.finalization import (
     SubmissionFinalizationInput,
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
+    SubmissionReceiptMedia,
 )
 from squid.submissions.payload_integrity import submission_payload_digest
 
@@ -49,8 +50,8 @@ _CLAIM_MINUTES = 5
 class PostgresFinalizationJobRepository(FinalizationJobRepository):
     """Atomically coordinate draft state and UUID-fenced finalization jobs."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
     @override
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None:
@@ -60,9 +61,9 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
     @override
     async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None:
         statement = _attempts_for_draft(draft_id).where(SubmissionFinalizationJob.id == attempt_id)
-        async with self._session_factory() as session:
-            row = (await session.execute(statement)).one_or_none()
-            return None if row is None else _snapshot(*row)
+        session = self._session()
+        row = (await session.execute(statement)).one_or_none()
+        return None if row is None else _snapshot(*row)
 
     @override
     async def list_attempts(
@@ -71,8 +72,8 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         statement = _attempts_for_draft(draft_id).order_by(SubmissionFinalizationJob.attempt_number.desc()).limit(limit)
         if before is not None:
             statement = statement.where(SubmissionFinalizationJob.attempt_number < before)
-        async with self._session_factory() as session:
-            return tuple(_snapshot(*row) for row in await session.execute(statement))
+        session = self._session()
+        return tuple(_snapshot(*row) for row in await session.execute(statement))
 
     @override
     async def enqueue(
@@ -98,57 +99,57 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             raise ValueError(msg)
         encoded = encode_submission(payload)
         digest = submission_payload_digest(encoded)
-        async with self._session_factory.begin() as session:
-            draft_model = await _locked_draft(session, draft.snapshot.id)
-            _require_expected_draft(draft_model, draft)
-            await _require_current_media(session, draft.snapshot.id, payload.artifacts.normalized_media_upload_ids)
-            job = await _locked_job(session, draft.snapshot.id)
-            status = draft_model.status
-            if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
-                if job is None or job.payload_sha256 != digest:
-                    msg = f"{status.value} draft has no matching finalization job"
-                    raise InvalidStateError(msg)
-                expected_job_statuses = (
-                    {FinalizationJobStatus.PENDING, FinalizationJobStatus.CLAIMED}
-                    if status is DraftStatus.PROCESSING
-                    else {FinalizationJobStatus.COMPLETED}
-                )
-                if job.status not in expected_job_statuses:
-                    msg = f"{status.value} draft has an incompatible {job.status} finalization job"
-                    raise InvalidStateError(msg)
-                original_input = await session.get(SubmissionFinalizationInput, job.id)
-                result = await session.get(SubmissionFinalizationResult, job.id)
-                return _snapshot(job, original_input, result)
-            if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
-                msg = f"drafts in {status.value} state cannot be finalized"
-                raise ValidationError(msg, resource="submission_draft")
+        session = self._session()
+        draft_model = await _locked_draft(session, draft.snapshot.id)
+        _require_expected_draft(draft_model, draft)
+        await _require_current_media(session, draft.snapshot.id, payload.artifacts.normalized_media_upload_ids)
+        job = await _locked_job(session, draft.snapshot.id)
+        status = draft_model.status
+        if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
+            if job is None or job.payload_sha256 != digest:
+                msg = f"{status.value} draft has no matching finalization job"
+                raise InvalidStateError(msg)
+            expected_job_statuses = (
+                {FinalizationJobStatus.PENDING, FinalizationJobStatus.CLAIMED}
+                if status is DraftStatus.PROCESSING
+                else {FinalizationJobStatus.COMPLETED}
+            )
+            if job.status not in expected_job_statuses:
+                msg = f"{status.value} draft has an incompatible {job.status} finalization job"
+                raise InvalidStateError(msg)
+            original_input = await session.get(SubmissionFinalizationInput, job.id)
+            result = await session.get(SubmissionFinalizationResult, job.id)
+            return _snapshot(job, original_input, result)
+        if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+            msg = f"drafts in {status.value} state cannot be finalized"
+            raise ValidationError(msg, resource="submission_draft")
 
-            draft_model.preparation_issues = []
-            draft_model.preparation_retry_at = None
-            draft_model.status = DraftStatus.PROCESSING
-            draft_model.updated_at = now
-            draft_model.expires_at = expires_at
-            job = SubmissionFinalizationJob(
-                draft_id=draft.snapshot.id,
-                attempt_number=1 if job is None else job.attempt_number + 1,
-                requested_by_account_id=actor_account_id or draft.snapshot.owner_account_id,
-                draft_revision=draft.snapshot.revision,
-                payload=encoded,
-                payload_sha256=digest,
-                status=FinalizationJobStatus.PENDING,
-                available_at=now,
-                created_at=now,
-                updated_at=now,
-            )
-            session.add(job)
-            await session.flush()
-            original_input = SubmissionFinalizationInput(
-                job_id=job.id,
-                payload=encoded,
-                payload_sha256=digest,
-                created_at=now,
-            )
-            session.add(original_input)
+        draft_model.preparation_issues = []
+        draft_model.preparation_retry_at = None
+        draft_model.status = DraftStatus.PROCESSING
+        draft_model.updated_at = now
+        draft_model.expires_at = expires_at
+        job = SubmissionFinalizationJob(
+            draft_id=draft.snapshot.id,
+            attempt_number=1 if job is None else job.attempt_number + 1,
+            requested_by_account_id=actor_account_id or draft.snapshot.owner_account_id,
+            draft_revision=draft.snapshot.revision,
+            payload=encoded,
+            payload_sha256=digest,
+            status=FinalizationJobStatus.PENDING,
+            available_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(job)
+        await session.flush()
+        original_input = SubmissionFinalizationInput(
+            job_id=job.id,
+            payload=encoded,
+            payload_sha256=digest,
+            created_at=now,
+        )
+        session.add(original_input)
         return _snapshot(job, original_input, None)
 
     @override
@@ -167,28 +168,28 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         if not normalized_issues:
             msg = "preparation attention requires at least one issue"
             raise ValueError(msg)
-        async with self._session_factory.begin() as session:
-            draft_model = await _locked_draft(session, draft.snapshot.id)
-            _require_expected_draft(draft_model, draft)
-            job = await _locked_job(session, draft.snapshot.id)
-            status = draft_model.status
-            if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
-                if job is None:
-                    msg = f"{status.value} draft has no finalization job"
-                    raise InvalidStateError(msg)
-                original_input = await session.get(SubmissionFinalizationInput, job.id)
-                result = await session.get(SubmissionFinalizationResult, job.id)
-                return _snapshot(job, original_input, result)
-            if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
-                msg = f"drafts in {status.value} state cannot request finalization"
-                raise ValidationError(msg, resource="submission_draft")
+        session = self._session()
+        draft_model = await _locked_draft(session, draft.snapshot.id)
+        _require_expected_draft(draft_model, draft)
+        job = await _locked_job(session, draft.snapshot.id)
+        status = draft_model.status
+        if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
+            if job is None:
+                msg = f"{status.value} draft has no finalization job"
+                raise InvalidStateError(msg)
+            original_input = await session.get(SubmissionFinalizationInput, job.id)
+            result = await session.get(SubmissionFinalizationResult, job.id)
+            return _snapshot(job, original_input, result)
+        if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+            msg = f"drafts in {status.value} state cannot request finalization"
+            raise ValidationError(msg, resource="submission_draft")
 
-            draft_model.status = DraftStatus.NEEDS_ATTENTION
-            draft_model.updated_at = now
-            draft_model.expires_at = expires_at
-            draft_model.preparation_issues = encode_issues(normalized_issues)
-            draft_model.preparation_retry_at = now.add(seconds=30) if waiting_for_artifacts else None
-            draft_model.submission_actor_account_id = actor_account_id or draft.snapshot.owner_account_id
+        draft_model.status = DraftStatus.NEEDS_ATTENTION
+        draft_model.updated_at = now
+        draft_model.expires_at = expires_at
+        draft_model.preparation_issues = encode_issues(normalized_issues)
+        draft_model.preparation_retry_at = now.add(seconds=30) if waiting_for_artifacts else None
+        draft_model.submission_actor_account_id = actor_account_id or draft.snapshot.owner_account_id
         return DraftPreparationSnapshot(
             draft.snapshot.id, draft.snapshot.revision, normalized_issues, waiting_for_artifacts
         )
@@ -199,23 +200,23 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
             message = "Invalid preparation batch limit."
             raise ValueError(message)
-        async with self._session_factory.begin() as session:
-            drafts = tuple(
-                await session.scalars(
-                    select(SubmissionDraft)
-                    .where(
-                        SubmissionDraft.preparation_retry_at <= now,
-                        SubmissionDraft.expires_at > now,
-                        SubmissionDraft.status == DraftStatus.NEEDS_ATTENTION,
-                    )
-                    .order_by(SubmissionDraft.preparation_retry_at, SubmissionDraft.id)
-                    .limit(limit)
-                    .with_for_update(skip_locked=True)
+        session = self._session()
+        drafts = tuple(
+            await session.scalars(
+                select(SubmissionDraft)
+                .where(
+                    SubmissionDraft.preparation_retry_at <= now,
+                    SubmissionDraft.expires_at > now,
+                    SubmissionDraft.status == DraftStatus.NEEDS_ATTENTION,
                 )
+                .order_by(SubmissionDraft.preparation_retry_at, SubmissionDraft.id)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
             )
-            for draft in drafts:
-                draft.preparation_retry_at = now.add(seconds=30)
-            return tuple(_to_stored(draft) for draft in drafts)
+        )
+        for draft in drafts:
+            draft.preparation_retry_at = now.add(seconds=30)
+        return tuple(_to_stored(draft) for draft in drafts)
 
     @override
     async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]:
@@ -233,55 +234,55 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 SubmissionFinalizationJob.claim_expires_at <= now,
             ),
         )
-        async with self._session_factory() as session:
-            rows = tuple(
-                (
-                    await session.execute(
-                        select(SubmissionFinalizationJob, SubmissionFinalizationInput)
-                        .outerjoin(
-                            SubmissionFinalizationInput,
-                            SubmissionFinalizationInput.job_id == SubmissionFinalizationJob.id,
-                        )
-                        .where(ready)
-                        .order_by(SubmissionFinalizationJob.available_at, SubmissionFinalizationJob.id)
-                        .limit(limit)
-                        .with_for_update(of=SubmissionFinalizationJob, skip_locked=True)
+        session = self._session()
+        rows = tuple(
+            (
+                await session.execute(
+                    select(SubmissionFinalizationJob, SubmissionFinalizationInput)
+                    .outerjoin(
+                        SubmissionFinalizationInput,
+                        SubmissionFinalizationInput.job_id == SubmissionFinalizationJob.id,
                     )
-                ).all()
-            )
-            claims: list[ClaimedFinalizationJob] = []
-            for job, original_input in rows:
-                payload = job.payload
-                if not isinstance(payload, dict):
-                    msg = "claimable finalization job has no JSON object payload"
-                    raise DataIntegrityError(msg)
-                if job.payload_sha256 != submission_payload_digest(payload):
-                    msg = "claimable finalization job failed its payload integrity check"
-                    raise DataIntegrityError(msg)
-                if original_input is None:
-                    msg = "claimable finalization job has no retained original input"
-                    raise DataIntegrityError(msg)
-                _input_digest(original_input)
-                token = uuid4()
-                job.status = FinalizationJobStatus.CLAIMED
-                job.attempts += 1
-                job.claimed_at = now
-                job.claim_token = token
-                job.claim_expires_at = now.add(minutes=_CLAIM_MINUTES)
-                job.updated_at = now
-                claims.append(
-                    ClaimedFinalizationJob(
-                        job_id=job.id,
-                        draft_id=job.draft_id,
-                        draft_revision=job.draft_revision,
-                        payload=decode_submission(payload),
-                        attempts=job.attempts,
-                        claimed_at=now,
-                        claim_token=token,
-                        requested_by_account_id=job.requested_by_account_id,
-                    )
+                    .where(ready)
+                    .order_by(SubmissionFinalizationJob.available_at, SubmissionFinalizationJob.id)
+                    .limit(limit)
+                    .with_for_update(of=SubmissionFinalizationJob, skip_locked=True)
                 )
-            await session.commit()
+            ).all()
+        )
+        claims: list[ClaimedFinalizationJob] = []
+        for job, original_input in rows:
+            payload = job.payload
+            if not isinstance(payload, dict):
+                msg = "claimable finalization job has no JSON object payload"
+                raise DataIntegrityError(msg)
+            if job.payload_sha256 != submission_payload_digest(payload):
+                msg = "claimable finalization job failed its payload integrity check"
+                raise DataIntegrityError(msg)
+            if original_input is None:
+                msg = "claimable finalization job has no retained original input"
+                raise DataIntegrityError(msg)
+            _input_digest(original_input)
+            token = uuid4()
+            job.status = FinalizationJobStatus.CLAIMED
+            job.attempts += 1
+            job.claimed_at = now
+            job.claim_token = token
+            job.claim_expires_at = now.add(minutes=_CLAIM_MINUTES)
+            job.updated_at = now
+            claims.append(
+                ClaimedFinalizationJob(
+                    job_id=job.id,
+                    draft_id=job.draft_id,
+                    draft_revision=job.draft_revision,
+                    payload=decode_submission(payload),
+                    attempts=job.attempts,
+                    claimed_at=now,
+                    claim_token=token,
+                    requested_by_account_id=job.requested_by_account_id,
+                )
+            )
+        await session.flush()
         return tuple(claims)
 
     @override
@@ -298,27 +299,27 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         if not normalized_issues:
             msg = "target attention requires at least one issue"
             raise ValueError(msg)
-        async with self._session_factory.begin() as session:
-            draft = await _locked_draft(session, job.draft_id)
-            model = await _claimed_job(session, job)
-            if model is None:
-                return False
-            if draft.status is not DraftStatus.PROCESSING:
-                msg = "claimed finalization job does not own a processing draft"
-                raise InvalidStateError(msg)
-            model.status = FinalizationJobStatus.NEEDS_ATTENTION
-            model.attention_at = now
-            model.dead_at = None
-            model.completed_at = None
-            model.last_error = "actionable"
-            model.attention_issues = encode_issues(normalized_issues)
-            _clear_claim(model)
-            model.updated_at = now
-            draft.preparation_issues = model.attention_issues
-            draft.preparation_retry_at = None
-            draft.status = DraftStatus.NEEDS_ATTENTION
-            draft.updated_at = now
-            draft.expires_at = expires_at
+        session = self._session()
+        draft = await _locked_draft(session, job.draft_id)
+        model = await _claimed_job(session, job)
+        if model is None:
+            return False
+        if draft.status is not DraftStatus.PROCESSING:
+            msg = "claimed finalization job does not own a processing draft"
+            raise InvalidStateError(msg)
+        model.status = FinalizationJobStatus.NEEDS_ATTENTION
+        model.attention_at = now
+        model.dead_at = None
+        model.completed_at = None
+        model.last_error = "actionable"
+        model.attention_issues = encode_issues(normalized_issues)
+        _clear_claim(model)
+        model.updated_at = now
+        draft.preparation_issues = model.attention_issues
+        draft.preparation_retry_at = None
+        draft.status = DraftStatus.NEEDS_ATTENTION
+        draft.updated_at = now
+        draft.expires_at = expires_at
         return True
 
     @override
@@ -336,34 +337,55 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         if max_attempts < 1:
             msg = "finalization attempts must be positive"
             raise ValueError(msg)
-        async with self._session_factory.begin() as session:
-            draft = await _locked_draft(session, job.draft_id)
-            model = await _claimed_job(session, job)
-            if model is None:
-                return FinalizationFailureOutcome(applied=False, dead=False)
-            dead = model.attempts >= max_attempts
-            model.last_error = error[:4000]
-            model.completed_at = None
-            _clear_claim(model)
-            model.updated_at = now
-            if dead:
-                issue = SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED)
-                model.status = FinalizationJobStatus.DEAD
-                model.dead_at = now
-                model.attention_at = None
-                model.attention_issues = encode_issues((issue,))
-                draft.preparation_issues = model.attention_issues
-                draft.preparation_retry_at = None
-                draft.status = DraftStatus.NEEDS_ATTENTION
-                draft.updated_at = now
-                draft.expires_at = expires_at
-            else:
-                model.status = FinalizationJobStatus.PENDING
-                model.available_at = retry_at
-                model.dead_at = None
-                model.attention_at = None
-                model.attention_issues = []
+        session = self._session()
+        draft = await _locked_draft(session, job.draft_id)
+        model = await _claimed_job(session, job)
+        if model is None:
+            return FinalizationFailureOutcome(applied=False, dead=False)
+        dead = model.attempts >= max_attempts
+        model.last_error = error[:4000]
+        model.completed_at = None
+        _clear_claim(model)
+        model.updated_at = now
+        if dead:
+            issue = SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED)
+            model.status = FinalizationJobStatus.DEAD
+            model.dead_at = now
+            model.attention_at = None
+            model.attention_issues = encode_issues((issue,))
+            draft.preparation_issues = model.attention_issues
+            draft.preparation_retry_at = None
+            draft.status = DraftStatus.NEEDS_ATTENTION
+            draft.updated_at = now
+            draft.expires_at = expires_at
+        else:
+            model.status = FinalizationJobStatus.PENDING
+            model.available_at = retry_at
+            model.dead_at = None
+            model.attention_at = None
+            model.attention_issues = []
         return FinalizationFailureOutcome(applied=True, dead=dead)
+
+    async def lock_claim(self, job: ClaimedFinalizationJob) -> StoredDraft | None:
+        session = self._session()
+        draft = await _locked_draft(session, job.draft_id)
+        if await _claimed_job(session, job) is None:
+            return None
+        return _to_stored(draft)
+
+    async def require_current_media(self, draft_id: UUID, upload_ids: tuple[UUID, ...]) -> None:
+        await _require_current_media(self._session(), draft_id, upload_ids)
+
+    async def complete(self, job: ClaimedFinalizationJob, result: FinalizedBuild, *, now: Instant) -> bool:
+        session = self._session()
+        if not await _complete(session, job, result, now=now):
+            return False
+        await session.flush()
+        session.add_all(
+            SubmissionReceiptMedia(job_id=job.job_id, upload_id=upload_id, created_at=now)
+            for upload_id in job.payload.artifacts.normalized_media_upload_ids
+        )
+        return True
 
 
 def _attempts_for_draft(
@@ -496,7 +518,7 @@ def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[Submissi
     return tuple(dict.fromkeys(issues))
 
 
-async def complete_in_session(
+async def _complete(
     session: AsyncSession,
     job: ClaimedFinalizationJob,
     result: FinalizedBuild,

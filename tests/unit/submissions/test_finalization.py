@@ -9,6 +9,7 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, JSONValue
+from squid.permissions.application.ports import PermissionStore
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     AppliedDraftChange,
@@ -49,6 +50,7 @@ from squid.submissions.errors import DraftAccessDeniedError
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.submissions.payload_integrity import submission_payload_digest
 from tests.support.draft_uow import DraftScope
+from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000401")
 JOB_ID = UUID("00000000-0000-4000-8000-000000000402")
@@ -334,7 +336,7 @@ async def _submit(
     service = SubmissionFinalizationService(
         drafts,
         SubmissionPreparation(FakeArtifacts(readiness), FakeSponsors(sponsor)),
-        jobs,
+        uow_factory=partial(FinalizationScope, jobs, repository),
     )
     return await service.submit(DRAFT_ID, 7, locale="en", now=NOW), jobs
 
@@ -562,7 +564,7 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
     service = SubmissionFinalizationService(
         drafts,
         SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
-        jobs,
+        uow_factory=partial(FinalizationScope, jobs, repository),
     )
 
     assert await service.status(DRAFT_ID, 7) == jobs.snapshot
@@ -584,7 +586,7 @@ async def _payload() -> NormalizedSubmission:
     service = SubmissionFinalizationService(
         drafts,
         SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
-        jobs,
+        uow_factory=partial(FinalizationScope, jobs, repository),
     )
 
     await service.submit(DRAFT_ID, 7, locale="en", now=NOW)
@@ -669,7 +671,7 @@ async def test_worker_delegates_successful_completion_to_the_executor() -> None:
     jobs.claimed = (_claim(payload),)
     target_result = FinalizedBuild(41)
     executor = FakeWriter(target_result)
-    worker = SubmissionFinalizationWorker(jobs, executor)
+    worker = SubmissionFinalizationWorker(executor, uow_factory=partial(FinalizationScope, jobs))
 
     await worker.process_batch(now=NOW)
 
@@ -685,8 +687,8 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
     worker = SubmissionFinalizationWorker(
-        jobs,
         FakeWriter(BuildSubmissionRejected((issue,))),
+        uow_factory=partial(FinalizationScope, jobs),
     )
 
     await worker.process_batch(now=NOW)
@@ -699,7 +701,9 @@ async def test_unexpected_failure_retries_then_dead_letters() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload, attempts=3),)
-    worker = SubmissionFinalizationWorker(jobs, FakeWriter(RuntimeError("secret")))
+    worker = SubmissionFinalizationWorker(
+        FakeWriter(RuntimeError("secret")), uow_factory=partial(FinalizationScope, jobs)
+    )
 
     await worker.process_batch(now=NOW)
 
@@ -715,7 +719,9 @@ async def test_attachment_wait_resumes_without_extending_retention() -> None:
             issues=(SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_PROCESSING),),
         )
     )
-    service = SubmissionFinalizationService(_drafts(repository), SubmissionPreparation(artifacts), jobs)
+    service = SubmissionFinalizationService(
+        _drafts(repository), SubmissionPreparation(artifacts), uow_factory=partial(FinalizationScope, jobs, repository)
+    )
     waiting = await service.submit(DRAFT_ID, 7, locale="en", now=NOW)
     assert isinstance(waiting, DraftPreparationSnapshot)
     assert waiting.waiting_for_artifacts is True
@@ -736,7 +742,26 @@ async def test_edit_after_wait_reservation_prevents_automatic_submission() -> No
     service = SubmissionFinalizationService(
         _drafts(repository),
         SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
-        jobs,
+        uow_factory=partial(FinalizationScope, jobs, repository),
     )
     await service.resume_waiting(now=NOW)
     assert jobs.enqueued is None
+
+
+class FinalizationScope(PublishingFakeUnitOfWork[FakeFinalizationJobs]):
+    def __init__(self, jobs: FakeFinalizationJobs, drafts: FakeDraftRepository | None = None) -> None:
+        super().__init__(jobs)
+        self._drafts = drafts
+
+    @property
+    def finalization_jobs(self) -> FakeFinalizationJobs:
+        return self.state
+
+    @property
+    def submission_drafts(self) -> FakeDraftRepository:
+        assert self._drafts is not None
+        return self._drafts
+
+    @property
+    def permissions(self) -> PermissionStore:
+        raise AssertionError("These finalization tests use owner authority.")
