@@ -1,6 +1,9 @@
 """Error report capture and reference resolution."""
 
 from collections.abc import Sequence
+from copy import deepcopy
+from dataclasses import replace
+from functools import partial
 
 import pytest
 from whenever import Instant
@@ -10,6 +13,7 @@ from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.domain import ErrorReportNotFoundError
 from squid.diagnostics.models import ErrorReport
 from squid.records.errors import RecordNotFoundError
+from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 FROZEN = Instant.from_utc(2026, 8, 17, 12, 0, 0)
 
@@ -58,14 +62,32 @@ class FakeRepository:
         ]
 
 
+class FakeErrorReportUnitOfWork(FakeUnitOfWork[FakeRepository]):
+    @property
+    def error_reports(self) -> FakeRepository:
+        return self.state
+
+
+def _copy_repository(repository: FakeRepository) -> FakeRepository:
+    copied = FakeRepository(failing=repository._failing)
+    copied.saved = [
+        replace(report, context=deepcopy(report.context), log_tail=list(report.log_tail)) for report in repository.saved
+    ]
+    return copied
+
+
+def _state(*, failing: bool = False) -> CommittedState[FakeRepository]:
+    return CommittedState(FakeRepository(failing=failing), clone=_copy_repository)
+
+
 def build_service(
-    repository: FakeRepository,
+    repository: CommittedState[FakeRepository],
     *,
     retention_hours: int = 168,
     max_traceback_chars: int = 20000,
 ) -> ErrorReportService:
     return ErrorReportService(
-        repository,
+        uow_factory=partial(FakeErrorReportUnitOfWork, repository),
         retention_hours=retention_hours,
         max_traceback_chars=max_traceback_chars,
         now=lambda: FROZEN,
@@ -87,7 +109,7 @@ def raised(error: Exception) -> Exception:
 
 
 async def test_record_captures_the_traceback_and_classification() -> None:
-    repository = FakeRepository()
+    repository = _state()
     service = build_service(repository)
 
     await service.record(
@@ -100,7 +122,7 @@ async def test_record_captures_the_traceback_and_classification() -> None:
         log_tail=("first", "second"),
     )
 
-    (report,) = repository.saved
+    (report,) = repository.value.saved
     assert report.correlation_id == "a" * 32
     assert report.reference == "a" * 12
     assert report.exception_type == "RecordNotFoundError"
@@ -118,7 +140,7 @@ async def test_record_swallows_a_storage_failure(caplog: pytest.LogCaptureFixtur
     A report that cannot be written is a lost diagnostic; one that raises turns a handled error
     into a command that silently does nothing.
     """
-    service = build_service(FakeRepository(failing=True))
+    service = build_service(_state(failing=True))
 
     with caplog.at_level("ERROR"):
         await service.record(raised(RuntimeError("boom")), correlation_id="c" * 32, reference="c" * 12, surface="http")
@@ -128,7 +150,7 @@ async def test_record_swallows_a_storage_failure(caplog: pytest.LogCaptureFixtur
 
 async def test_record_truncates_a_runaway_traceback_from_the_front() -> None:
     """The frames nearest the failure are the ones worth reading."""
-    repository = FakeRepository()
+    repository = _state()
     service = build_service(repository, max_traceback_chars=200)
 
     def recurse(depth: int) -> None:
@@ -142,14 +164,14 @@ async def test_record_truncates_a_runaway_traceback_from_the_front() -> None:
     except RuntimeError as error:
         await service.record(error, correlation_id="d" * 32, reference="d" * 12, surface="worker")
 
-    (report,) = repository.saved
+    (report,) = repository.value.saved
     assert len(report.traceback) <= 204
     assert report.traceback.startswith("...\n")
     assert "RuntimeError: bottom" in report.traceback
 
 
 async def test_lookup_resolves_either_width_of_the_reference() -> None:
-    repository = FakeRepository()
+    repository = _state()
     service = build_service(repository)
     await service.record(raised(RuntimeError("boom")), correlation_id="e" * 32, reference="e" * 12, surface="http")
 
@@ -160,7 +182,7 @@ async def test_lookup_resolves_either_width_of_the_reference() -> None:
 
 
 async def test_lookup_strips_the_backticks_the_error_card_rendered() -> None:
-    repository = FakeRepository()
+    repository = _state()
     service = build_service(repository)
     await service.record(raised(RuntimeError("boom")), correlation_id="f" * 32, reference="f" * 12, surface="http")
 
@@ -171,7 +193,7 @@ async def test_lookup_strips_the_backticks_the_error_card_rendered() -> None:
 
 async def test_lookup_reports_how_many_share_a_reference() -> None:
     """A 48-bit prefix is not a key, and a moderator may be reading the wrong traceback."""
-    repository = FakeRepository()
+    repository = _state()
     service = build_service(repository)
     for correlation in ("1" * 12 + "a" * 20, "1" * 12 + "b" * 20):
         await service.record(
@@ -184,21 +206,21 @@ async def test_lookup_reports_how_many_share_a_reference() -> None:
 
 
 async def test_lookup_rejects_an_unknown_or_expired_reference() -> None:
-    service = build_service(FakeRepository())
+    service = build_service(_state())
 
     with pytest.raises(ErrorReportNotFoundError):
         await service.lookup("0" * 12)
 
 
 async def test_lookup_rejects_an_empty_reference() -> None:
-    service = build_service(FakeRepository())
+    service = build_service(_state())
 
     with pytest.raises(ErrorReportNotFoundError):
         await service.lookup("  ``  ")
 
 
 async def test_clear_all_deletes_every_report_expired_or_not() -> None:
-    repository = FakeRepository()
+    repository = _state()
     service = build_service(repository)
     await service.record(raised(RuntimeError("boom")), correlation_id="a" * 32, reference="a" * 12, surface="http")
     await service.record(raised(RuntimeError("boom")), correlation_id="b" * 32, reference="b" * 12, surface="http")
@@ -206,9 +228,22 @@ async def test_clear_all_deletes_every_report_expired_or_not() -> None:
     deleted = await service.clear_all()
 
     assert deleted == 2
-    assert repository.saved == []
+    assert repository.value.saved == []
 
 
 async def test_retention_must_be_at_least_an_hour() -> None:
     with pytest.raises(InvalidStateError, match="at least one hour"):
-        ErrorReportService(FakeRepository(), retention_hours=0)
+        build_service(_state(), retention_hours=0)
+
+
+async def test_record_swallows_commit_failure_without_publishing_state(caplog: pytest.LogCaptureFixture) -> None:
+    class FailingCommit(FakeErrorReportUnitOfWork):
+        async def commit(self) -> None:
+            raise RuntimeError("commit failed")
+
+    committed = _state()
+    service = ErrorReportService(uow_factory=partial(FailingCommit, committed), now=lambda: FROZEN)
+    with caplog.at_level("ERROR"):
+        await service.record(RuntimeError("original"), correlation_id="a" * 32, reference="a" * 12, surface="http")
+    assert committed.value.saved == []
+    assert "commit failed" in caplog.text

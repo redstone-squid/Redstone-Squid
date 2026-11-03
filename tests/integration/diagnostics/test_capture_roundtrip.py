@@ -7,6 +7,7 @@ the row is actually filed under, through real serialization and a real database.
 
 import logging
 from collections.abc import AsyncGenerator
+from functools import partial
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -14,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.core.errors import InternalError
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.domain import ErrorReportNotFoundError
-from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.observability import (
     CorrelatedLogBuffer,
     bind_correlation_id,
@@ -23,6 +23,7 @@ from squid.observability import (
     unbind_correlation_id,
 )
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 _TABLES = [Base.metadata.tables["error_reports"]]
 
@@ -35,7 +36,7 @@ async def service(
     async with async_engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:
-        yield ErrorReportService(PostgresErrorReportRepository(async_session_factory))
+        yield ErrorReportService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     finally:
         async with async_engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))

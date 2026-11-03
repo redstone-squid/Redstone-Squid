@@ -11,6 +11,7 @@ from squid.core.errors import ErrorCode
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.diagnostics.models import ErrorReport
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 _TABLES = [Base.metadata.tables["error_reports"]]
 
@@ -29,11 +30,12 @@ async def error_report_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]
 
 
 @pytest.fixture
-def repository(
+async def repository(
     error_report_tables: None,
     async_session_factory: async_sessionmaker[AsyncSession],
-) -> PostgresErrorReportRepository:
-    return PostgresErrorReportRepository(async_session_factory)
+) -> AsyncGenerator[PostgresErrorReportRepository]:
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        yield uow.error_reports
 
 
 def make_report(
@@ -60,11 +62,16 @@ def make_report(
     )
 
 
-async def test_round_trips_every_field(repository: PostgresErrorReportRepository) -> None:
+async def test_round_trips_every_field(
+    error_report_tables: None, async_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
     stored = make_report(correlation_id="a" * 32)
 
-    await repository.save(stored)
-    found = await repository.find("a" * 12, now=NOW)
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        await uow.error_reports.save(stored)
+        await uow.commit()
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        found = await uow.error_reports.find("a" * 12, now=NOW)
 
     assert found is not None
     assert found.id == stored.id

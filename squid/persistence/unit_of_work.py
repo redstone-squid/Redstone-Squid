@@ -7,6 +7,7 @@ from anyio import CancelScope
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import InvalidStateError
+from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
@@ -21,6 +22,7 @@ class SqlAlchemyUnitOfWork:
         self._sessions = sessions
         self._session: AsyncSession | None = None
         self._tags = PostgresTagDefinitionRepository(self._active_session)
+        self._error_reports = PostgresErrorReportRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._messages = MessageRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
@@ -51,6 +53,11 @@ class SqlAlchemyUnitOfWork:
     def tags(self) -> PostgresTagDefinitionRepository:
         self._active_session()
         return self._tags
+
+    @property
+    def error_reports(self) -> PostgresErrorReportRepository:
+        self._active_session()
+        return self._error_reports
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

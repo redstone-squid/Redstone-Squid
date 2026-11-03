@@ -37,7 +37,6 @@ from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
@@ -678,7 +677,7 @@ class _ServiceGraph:
     @cached_property
     def error_reports(self) -> ErrorReportService:
         return ErrorReportService(
-            PostgresErrorReportRepository(self.db.async_session),
+            uow_factory=self.uow_factory,
             retention_hours=self.config.diagnostics.retention_hours,
             max_traceback_chars=self.config.diagnostics.max_traceback_chars,
         )

@@ -12,6 +12,7 @@ from squid.core.errors import InvalidStateError, JSONValue, SquidError
 from squid.core.i18n import tr
 from squid.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportNotFoundError
 from squid.diagnostics.models import ErrorReport
+from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,11 @@ class ErrorReportRepository(Protocol):
     async def clear_all(self) -> int: ...
 
 
+class ErrorReportUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def error_reports(self) -> ErrorReportRepository: ...
+
+
 class ErrorReportService:
     """Store what failed, and hand it back to whoever is allowed to ask.
 
@@ -43,8 +49,8 @@ class ErrorReportService:
 
     def __init__(
         self,
-        repository: ErrorReportRepository,
         *,
+        uow_factory: UnitOfWorkFactory[ErrorReportUnitOfWork],
         retention_hours: int = 168,
         max_traceback_chars: int = 20000,
         now: Callable[[], Instant] = Instant.now,
@@ -52,7 +58,7 @@ class ErrorReportService:
         if retention_hours < 1:
             msg = tr(t"Error report retention must be at least one hour.")
             raise InvalidStateError(msg)
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._retention_hours = retention_hours
         self._max_traceback_chars = max_traceback_chars
         self._now = now
@@ -88,7 +94,9 @@ class ErrorReportService:
                 log_tail=list(log_tail),
                 work_lost=work_lost,
             )
-            await self._repository.save(report)
+            async with self._uow_factory() as uow:
+                await uow.error_reports.save(report)
+                await uow.commit()
         except Exception:
             logger.exception("Could not store an error report [correlation_id=%s]", correlation_id)
 
@@ -99,13 +107,14 @@ class ErrorReportService:
         not a key: a second match is astronomically unlikely but not impossible, and a moderator
         reading a traceback deserves to know they may be reading the wrong one.
         """
-        normalized = self.normalize(reference)
-        now = self._now()
-        report = await self._repository.find(normalized, now=now)
-        if report is None:
-            raise ErrorReportNotFoundError(context={"reference": normalized})
-        matches = await self._repository.count_matching(normalized, now=now)
-        return report, matches
+        async with self._uow_factory() as uow:
+            normalized = self.normalize(reference)
+            now = self._now()
+            report = await uow.error_reports.find(normalized, now=now)
+            if report is None:
+                raise ErrorReportNotFoundError(context={"reference": normalized})
+            matches = await uow.error_reports.count_matching(normalized, now=now)
+            return report, matches
 
     async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
         """List the newest unexpired reports, for looking around without a reference.
@@ -114,11 +123,17 @@ class ErrorReportService:
         reports are failures something recovered from, and those can bury the ones that cost
         something.
         """
-        return await self._repository.list_recent(limit=max(1, limit), now=self._now(), work_lost_only=work_lost_only)
+        async with self._uow_factory() as uow:
+            return await uow.error_reports.list_recent(
+                limit=max(1, limit), now=self._now(), work_lost_only=work_lost_only
+            )
 
     async def purge_expired(self) -> int:
         """Delete reports past their retention window."""
-        return await self._repository.purge_expired(now=self._now())
+        async with self._uow_factory() as uow:
+            result = await uow.error_reports.purge_expired(now=self._now())
+            await uow.commit()
+            return result
 
     async def clear_all(self) -> int:
         """Delete every stored report, expired or not.
@@ -126,7 +141,10 @@ class ErrorReportService:
         Unlike `purge_expired`, this is an operator action rather than routine housekeeping, so
         it is gated on `diagnostics.error.clear` rather than running unattended.
         """
-        return await self._repository.clear_all()
+        async with self._uow_factory() as uow:
+            result = await uow.error_reports.clear_all()
+            await uow.commit()
+            return result
 
     @staticmethod
     def normalize(reference: str) -> str:
