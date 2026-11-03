@@ -37,7 +37,7 @@ from squid.diagnostics.application import ErrorReportService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
-from squid.idempotency.infrastructure import IdempotencyResponseCipher, PostgresIdempotencyRepository
+from squid.idempotency.infrastructure import IdempotencyResponseCipher
 from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService, MediaStorageCleanup
 from squid.media.application.services import MediaNormalizationService
 from squid.media.domain import MediaLimits
@@ -213,7 +213,15 @@ class _ServiceGraph:
             SqlAlchemyUnitOfWork,
             self.db.async_session,
             verification_code_pepper=self.config.verification_code_pepper.get_secret_value(),
+            idempotency_cipher=self.idempotency_cipher,
         )
+
+    @cached_property
+    def idempotency_cipher(self) -> IdempotencyResponseCipher | None:
+        encryption = self.config.idempotency_encryption
+        if encryption is None:
+            return None
+        return IdempotencyResponseCipher(active_key_id=encryption.active_key_id, keys=encryption.decoded_keys())
 
     @cached_property
     def restriction_repository(self) -> RestrictionRepository:
@@ -672,17 +680,13 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
     if encryption is None:
         msg = "The API runtime requires an idempotency response-encryption keyring."
         raise RuntimeError(msg)
-    idempotency_cipher = IdempotencyResponseCipher(
-        active_key_id=encryption.active_key_id,
-        keys=encryption.decoded_keys(),
-    )
     return ApiServices(
         builds=graph.builds,
         error_reports=graph.error_reports,
         api_keys=graph.api_keys,
         web_auth=graph.web_auth,
         cli_authorization=graph.cli_authorization,
-        idempotency=IdempotencyService(PostgresIdempotencyRepository(db.async_session, idempotency_cipher)),
+        idempotency=IdempotencyService(uow_factory=graph.uow_factory),
         notifications=graph.notifications,
         build_queries=graph.build_queries,
         permissions=graph.permissions,
@@ -765,7 +769,7 @@ def create_worker_services(
 ) -> WorkerServices:
     """Create only capabilities used by background jobs, which serve no request."""
     graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
-    idempotency = IdempotencyService(PostgresIdempotencyRepository(db.async_session))
+    idempotency = IdempotencyService(uow_factory=graph.uow_factory)
     return WorkerServices(
         builds=graph.builds,
         error_reports=graph.error_reports,

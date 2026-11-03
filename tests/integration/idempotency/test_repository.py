@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
+from functools import partial
 
 import pytest
 from sqlalchemy import select, update
@@ -10,9 +11,11 @@ from whenever import Instant
 
 from squid.idempotency.domain import ExistingRequest, PendingRequest, Reservation, StoredResponse, UnsafeHttpMethod
 from squid.idempotency.infrastructure.crypto import IdempotencyCiphertextError, IdempotencyResponseCipher
-from squid.idempotency.infrastructure.repository import PostgresIdempotencyRepository
 from squid.idempotency.models import IdempotencyRequest
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 _TABLE = Base.metadata.tables["idempotency_requests"]
 _OLD_KEY = b"o" * 32
@@ -24,10 +27,11 @@ def encrypted_repository(
     *,
     active_key_id: str = "old",
     keys: dict[str, bytes] | None = None,
-) -> PostgresIdempotencyRepository:
-    return PostgresIdempotencyRepository(
+) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
+    return partial(
+        SqlAlchemyUnitOfWork,
         session_factory,
-        IdempotencyResponseCipher(active_key_id=active_key_id, keys=keys or {"old": _OLD_KEY}),
+        idempotency_cipher=IdempotencyResponseCipher(active_key_id=active_key_id, keys=keys or {"old": _OLD_KEY}),
     )
 
 
@@ -43,20 +47,24 @@ async def idempotency_table(async_engine: AsyncEngine) -> AsyncGenerator[None]:
 
 
 async def reserve(
-    repository: PostgresIdempotencyRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     *,
     now: Instant,
     expires_at: Instant | None = None,
     key: str = "build-submission-1",
 ) -> Reservation:
-    return await repository.reserve(
-        caller="user:1",
-        key=key,
-        fingerprint=b"request-fingerprint",
-        method=UnsafeHttpMethod.POST,
-        route="/v1/builds",
-        expires_at=expires_at or now.add(hours=24),
-        now=now,
+    return await transact(
+        repository,
+        lambda uow: uow.idempotency.reserve(
+            caller="user:1",
+            key=key,
+            fingerprint=b"request-fingerprint",
+            method=UnsafeHttpMethod.POST,
+            route="/v1/builds",
+            expires_at=expires_at or now.add(hours=24),
+            now=now,
+        ),
+        commit=True,
     )
 
 
@@ -79,7 +87,9 @@ async def test_completed_request_is_replayed(
         ),
         b'{"secret":"one-time-credential"}',
     )
-    await repository.complete(pending, response, now=now.add(seconds=1))
+    await transact(
+        repository, lambda uow: uow.idempotency.complete(pending, response, now=now.add(seconds=1)), commit=True
+    )
 
     async with async_session_factory() as session:
         stored = await session.scalar(select(IdempotencyRequest))
@@ -140,7 +150,9 @@ async def test_rotated_keyring_replays_responses_written_with_retained_key(
     pending = await reserve(old_repository, now=now)
     assert isinstance(pending, PendingRequest)
     response = StoredResponse(201, (("cache-control", "no-store"),), b"credential")
-    await old_repository.complete(pending, response, now=now.add(seconds=1))
+    await transact(
+        old_repository, lambda uow: uow.idempotency.complete(pending, response, now=now.add(seconds=1)), commit=True
+    )
 
     rotated_repository = encrypted_repository(
         async_session_factory,
@@ -164,8 +176,16 @@ async def test_ciphertext_swapped_between_records_fails_authentication(
     second = await reserve(repository, now=now, key="second-request")
     assert isinstance(first, PendingRequest)
     assert isinstance(second, PendingRequest)
-    await repository.complete(first, StoredResponse(200, (("etag", "first"),), b"first"), now=now)
-    await repository.complete(second, StoredResponse(200, (("etag", "second"),), b"second"), now=now)
+    await transact(
+        repository,
+        lambda uow: uow.idempotency.complete(first, StoredResponse(200, (("etag", "first"),), b"first"), now=now),
+        commit=True,
+    )
+    await transact(
+        repository,
+        lambda uow: uow.idempotency.complete(second, StoredResponse(200, (("etag", "second"),), b"second"), now=now),
+        commit=True,
+    )
 
     async with async_session_factory.begin() as session:
         second_record = await session.scalar(
@@ -195,6 +215,8 @@ async def test_explicit_purge_removes_expired_rows_without_api_traffic(
     now = Instant.parse_iso("2026-08-10T10:00:00Z")
     await reserve(repository, now=now, expires_at=now.add(seconds=1))
 
-    assert await repository.purge_expired(now=now.add(seconds=2)) == 1
+    assert (
+        await transact(repository, lambda uow: uow.idempotency.purge_expired(now=now.add(seconds=2)), commit=True) == 1
+    )
     async with async_session_factory() as session:
         assert await session.scalar(select(IdempotencyRequest)) is None

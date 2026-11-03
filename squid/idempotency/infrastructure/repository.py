@@ -1,12 +1,13 @@
 """PostgreSQL idempotency repository."""
 
+from collections.abc import Callable
 from typing import Any, cast, override
 from uuid import uuid4
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.idempotency.application import IdempotencyRepository
@@ -33,10 +34,10 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
 
     def __init__(
         self,
-        session_factory: async_sessionmaker[AsyncSession],
+        session: Callable[[], AsyncSession],
         cipher: IdempotencyResponseCipher | None = None,
     ) -> None:
-        self._session_factory = session_factory
+        self._session = session
         self._cipher = cipher
 
     @override
@@ -52,31 +53,31 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
         now: Instant,
     ) -> Reservation:
         candidate_id = uuid4()
-        async with self._session_factory.begin() as session:
-            await session.execute(delete(IdempotencyRequest).where(IdempotencyRequest.expires_at <= now))
-            request_id = await session.scalar(
-                insert(IdempotencyRequest)
-                .values(
-                    id=candidate_id,
-                    caller=caller,
-                    principal=caller,
-                    idempotency_key=key,
-                    request_fingerprint=fingerprint,
-                    method=method,
-                    route=route,
-                    expires_at=expires_at,
-                )
-                .on_conflict_do_nothing(index_elements=[IdempotencyRequest.caller, IdempotencyRequest.idempotency_key])
-                .returning(IdempotencyRequest.id)
+        session = self._session()
+        await session.execute(delete(IdempotencyRequest).where(IdempotencyRequest.expires_at <= now))
+        request_id = await session.scalar(
+            insert(IdempotencyRequest)
+            .values(
+                id=candidate_id,
+                caller=caller,
+                principal=caller,
+                idempotency_key=key,
+                request_fingerprint=fingerprint,
+                method=method,
+                route=route,
+                expires_at=expires_at,
             )
-            if request_id is not None:
-                return PendingRequest(request_id)
-            existing = await session.scalar(
-                select(IdempotencyRequest).where(
-                    IdempotencyRequest.caller == caller,
-                    IdempotencyRequest.idempotency_key == key,
-                )
+            .on_conflict_do_nothing(index_elements=[IdempotencyRequest.caller, IdempotencyRequest.idempotency_key])
+            .returning(IdempotencyRequest.id)
+        )
+        if request_id is not None:
+            return PendingRequest(request_id)
+        existing = await session.scalar(
+            select(IdempotencyRequest).where(
+                IdempotencyRequest.caller == caller,
+                IdempotencyRequest.idempotency_key == key,
             )
+        )
         assert existing is not None
         response = self._stored_response(existing) if existing.state is IdempotencyState.COMPLETED else None
         return ExistingRequest(bytes(existing.request_fingerprint), response)
@@ -84,33 +85,33 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
     @override
     async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None:
         headers = dict(response.headers)
-        async with self._session_factory.begin() as session:
-            existing = await session.scalar(
-                select(IdempotencyRequest).where(IdempotencyRequest.id == request.request_id).with_for_update()
-            )
-            if existing is None or existing.state is not IdempotencyState.IN_PROGRESS:
-                msg = f"Idempotency request {request.request_id} was not pending."
-                raise RuntimeError(msg)
-            encrypted = self._cipher_or_raise().encrypt(
-                response.body,
-                self._metadata(existing, response.status_code, headers),
-            )
-            existing.state = IdempotencyState.COMPLETED
-            existing.response_status = response.status_code
-            existing.response_headers = headers
-            existing.response_body_ciphertext = encrypted.ciphertext
-            existing.response_body_key_id = encrypted.key_id
-            existing.response_body_nonce = encrypted.nonce
-            existing.completed_at = now
+        session = self._session()
+        existing = await session.scalar(
+            select(IdempotencyRequest).where(IdempotencyRequest.id == request.request_id).with_for_update()
+        )
+        if existing is None or existing.state is not IdempotencyState.IN_PROGRESS:
+            msg = f"Idempotency request {request.request_id} was not pending."
+            raise RuntimeError(msg)
+        encrypted = self._cipher_or_raise().encrypt(
+            response.body,
+            self._metadata(existing, response.status_code, headers),
+        )
+        existing.state = IdempotencyState.COMPLETED
+        existing.response_status = response.status_code
+        existing.response_headers = headers
+        existing.response_body_ciphertext = encrypted.ciphertext
+        existing.response_body_key_id = encrypted.key_id
+        existing.response_body_nonce = encrypted.nonce
+        existing.completed_at = now
 
     @override
     async def purge_expired(self, *, now: Instant) -> int:
         """Delete expired reservations independently of incoming API traffic."""
-        async with self._session_factory.begin() as session:
-            result = cast(
-                CursorResult[Any],
-                await session.execute(delete(IdempotencyRequest).where(IdempotencyRequest.expires_at <= now)),
-            )
+        session = self._session()
+        result = cast(
+            CursorResult[Any],
+            await session.execute(delete(IdempotencyRequest).where(IdempotencyRequest.expires_at <= now)),
+        )
         return result.rowcount
 
     def _stored_response(self, request: IdempotencyRequest) -> StoredResponse:

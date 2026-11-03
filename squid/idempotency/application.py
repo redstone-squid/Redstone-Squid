@@ -16,6 +16,7 @@ from squid.idempotency.domain import (
     StoredResponse,
     UnsafeHttpMethod,
 )
+from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class IdempotencyRepository(Protocol):
@@ -43,15 +44,15 @@ class IdempotencyService:
 
     def __init__(
         self,
-        repository: IdempotencyRepository,
         *,
+        uow_factory: UnitOfWorkFactory[IdempotencyUnitOfWork],
         ttl_hours: int = 24,
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if ttl_hours < 1:
             msg = tr(t"Idempotency retention must be at least one hour.")
             raise InvalidStateError(msg)
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._ttl_hours = ttl_hours
         self._now = now
 
@@ -66,15 +67,17 @@ class IdempotencyService:
     ) -> PendingRequest | StoredResponse:
         """Reserve a new key or return its completed response for replay."""
         now = self._now()
-        reservation = await self._repository.reserve(
-            caller=caller,
-            key=key,
-            fingerprint=fingerprint,
-            method=method,
-            route=route,
-            expires_at=now.add(hours=self._ttl_hours),
-            now=now,
-        )
+        async with self._uow_factory() as uow:
+            reservation = await uow.idempotency.reserve(
+                caller=caller,
+                key=key,
+                fingerprint=fingerprint,
+                method=method,
+                route=route,
+                expires_at=now.add(hours=self._ttl_hours),
+                now=now,
+            )
+            await uow.commit()
         if isinstance(reservation, PendingRequest):
             return reservation
         self._validate_existing(reservation, fingerprint)
@@ -84,13 +87,23 @@ class IdempotencyService:
 
     async def complete(self, request: PendingRequest, response: StoredResponse) -> None:
         """Make a buffered response available to later equivalent requests."""
-        await self._repository.complete(request, response, now=self._now())
+        async with self._uow_factory() as uow:
+            await uow.idempotency.complete(request, response, now=self._now())
+            await uow.commit()
 
     async def purge_expired(self) -> int:
         """Remove replay state whose bounded retention window has elapsed."""
-        return await self._repository.purge_expired(now=self._now())
+        async with self._uow_factory() as uow:
+            result = await uow.idempotency.purge_expired(now=self._now())
+            await uow.commit()
+            return result
 
     @staticmethod
     def _validate_existing(existing: ExistingRequest, fingerprint: bytes) -> None:
         if existing.fingerprint != fingerprint:
             raise IdempotencyConflictError
+
+
+class IdempotencyUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def idempotency(self) -> IdempotencyRepository: ...

@@ -13,6 +13,8 @@ from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
+from squid.idempotency.infrastructure.crypto import IdempotencyResponseCipher
+from squid.idempotency.infrastructure.repository import PostgresIdempotencyRepository
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
@@ -31,7 +33,11 @@ class SqlAlchemyUnitOfWork:
     """Own one session and expose repositories that share its transaction."""
 
     def __init__(
-        self, sessions: async_sessionmaker[AsyncSession], *, verification_code_pepper: str | None = None
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        *,
+        verification_code_pepper: str | None = None,
+        idempotency_cipher: IdempotencyResponseCipher | None = None,
     ) -> None:
         self._sessions = sessions
         self._session: AsyncSession | None = None
@@ -40,6 +46,7 @@ class SqlAlchemyUnitOfWork:
         self._notifications = PostgresNotificationRepository(self._active_session)
         self._votes = VoteRepository(self._active_session)
         self._records = PostgresRecordRepository(self._active_session)
+        self._idempotency = PostgresIdempotencyRepository(self._active_session, idempotency_cipher)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -161,6 +168,11 @@ class SqlAlchemyUnitOfWork:
     def record_candidates(self) -> PostgresRecordRepository:
         self._active_session()
         return self._records
+
+    @property
+    def idempotency(self) -> PostgresIdempotencyRepository:
+        self._active_session()
+        return self._idempotency
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

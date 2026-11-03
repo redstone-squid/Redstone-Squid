@@ -25,6 +25,7 @@ from squid.core.errors import ErrorCode
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 from squid.idempotency.application import IdempotencyRepository
 from squid.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation, UnsafeHttpMethod
+from tests.support.unit_of_work import PublishingFakeUnitOfWork
 from tests.unit.api.fakes import (
     TEST_CONFIG,
     TEST_SYNERGY_SECRET,
@@ -73,6 +74,12 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
     async def purge_expired(self, *, now: Instant) -> int:
         del now
         return 0
+
+
+class MemoryIdempotencyUnitOfWork(PublishingFakeUnitOfWork[MemoryIdempotencyRepository]):
+    @property
+    def idempotency(self) -> MemoryIdempotencyRepository:
+        return self.state
 
 
 class CountingAccounts(MockAccountManager):
@@ -147,7 +154,8 @@ async def run_completion_middleware(
 @pytest.fixture
 def idempotent_client() -> Iterator[tuple[TestClient, CountingAccounts]]:
     accounts = CountingAccounts()
-    service = IdempotencyService(MemoryIdempotencyRepository())
+    repository = MemoryIdempotencyRepository()
+    service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
     app, database = build_app(idempotency=service, accounts=accounts)
     with TestClient(app, headers={"Authorization": TEST_SYNERGY_SECRET}) as client:
         yield client, accounts
@@ -189,7 +197,8 @@ def test_reusing_key_for_different_payload_returns_conflict(
 
 
 def test_resource_path_is_part_of_the_request_fingerprint() -> None:
-    service = IdempotencyService(MemoryIdempotencyRepository())
+    repository = MemoryIdempotencyRepository()
+    service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
     app, _database = build_app(idempotency=service)
     mutations: list[int] = []
 
@@ -249,7 +258,8 @@ def test_request_without_key_retains_normal_non_idempotent_behavior(
 
 @pytest.mark.asyncio
 async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller() -> None:
-    service = IdempotencyService(MemoryIdempotencyRepository())
+    repository = MemoryIdempotencyRepository()
+    service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
 
     async def reserve_for(caller: str) -> PendingRequest | StoredResponse:
         return await service.reserve(
@@ -383,7 +393,8 @@ async def test_response_body_limit_stops_capturing_at_the_first_oversized_chunk(
 
 def test_configured_response_body_limit_is_applied() -> None:
     accounts = CountingAccounts()
-    service = IdempotencyService(MemoryIdempotencyRepository())
+    repository = MemoryIdempotencyRepository()
+    service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
     config = TEST_CONFIG.model_copy(
         update={"api": TEST_CONFIG.api.model_copy(update={"idempotency_max_response_bytes": 1})}
     )
