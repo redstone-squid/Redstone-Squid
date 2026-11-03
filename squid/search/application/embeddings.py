@@ -10,6 +10,8 @@ import anyio
 
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
+from squid.search.application.ports import SearchVectorRepository, SemanticCandidate
+from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
 """Backstop for one embedding call, sized above the OpenAI adapter's own budget.
@@ -53,12 +55,18 @@ class SearchEmbeddingQueue(Protocol):
 class SearchEmbeddingService:
     """Drain changed search documents into pgvector."""
 
-    def __init__(self, model: SearchEmbeddingModel, queue: SearchEmbeddingQueue, *, max_attempts: int = 5) -> None:
+    def __init__(
+        self,
+        model: SearchEmbeddingModel,
+        *,
+        uow_factory: UnitOfWorkFactory[SearchEmbeddingUnitOfWork],
+        max_attempts: int = 5,
+    ) -> None:
         if max_attempts < 1:
             msg = tr(t"Embedding max_attempts must be positive.")
             raise InvalidStateError(msg)
         self._model = model
-        self._queue = queue
+        self._uow_factory = uow_factory
         self._max_attempts = max_attempts
 
     async def process_batch(self, *, limit: int = 8) -> tuple[int, int]:
@@ -67,7 +75,10 @@ class SearchEmbeddingService:
             msg = tr(t"Embedding claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
         succeeded = failed = 0
-        for job in await self._queue.claim(limit=limit):
+        async with self._uow_factory() as uow:
+            jobs = await uow.search_embeddings.claim(limit=limit)
+            await uow.commit()
+        for job in jobs:
             try:
                 # The model port is a Protocol, so the adapter's own timeout is not
                 # something this loop can rely on. Without a bound here a hung
@@ -77,12 +88,17 @@ class SearchEmbeddingService:
                 with anyio.fail_after(EMBEDDING_CALL_TIMEOUT_SECONDS):
                     embedding = await self._model.embed(job.text)
                 embedding = _require_embedding(embedding)
-                if await self._queue.complete(job, embedding, self._model.model_name):
+                async with self._uow_factory() as uow:
+                    applied = await uow.search_embeddings.complete(job, embedding, self._model.model_name)
+                    await uow.commit()
+                if applied:
                     succeeded += 1
             except asyncio.CancelledError:
                 raise
             except Exception as error:
-                await self._queue.fail(job, str(error), max_attempts=self._max_attempts)
+                async with self._uow_factory() as uow:
+                    await uow.search_embeddings.fail(job, str(error), max_attempts=self._max_attempts)
+                    await uow.commit()
                 failed += 1
         return succeeded, failed
 
@@ -92,3 +108,28 @@ def _require_embedding(embedding: list[float] | None) -> list[float]:
         msg = tr(t"The configured embedding provider did not return a vector.")
         raise InvalidStateError(msg)
     return embedding
+
+
+class SearchEmbeddingUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def search_embeddings(self) -> SearchEmbeddingQueue: ...
+
+
+class SemanticCandidateService:
+    """Generate the query vector before opening its database lookup scope."""
+
+    def __init__(self, model: SearchEmbeddingModel, *, uow_factory: UnitOfWorkFactory[SearchVectorUnitOfWork]) -> None:
+        self._model = model
+        self._uow_factory = uow_factory
+
+    async def candidates(self, query: str, *, limit: int) -> Sequence[SemanticCandidate]:
+        embedding = await self._model.embed(query)
+        if embedding is None:
+            return ()
+        async with self._uow_factory() as uow:
+            return await uow.search_vectors.candidates(embedding, self._model.model_name, limit=limit)
+
+
+class SearchVectorUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def search_vectors(self) -> SearchVectorRepository: ...

@@ -4,13 +4,13 @@ import hashlib
 import json
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 
 from sqlalchemy import case, delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
@@ -605,14 +605,12 @@ class SearchProjectionWorker:
         return succeeded, failed
 
 
-async def run_projection_batch(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    limit: int = 50,
-) -> tuple[int, int]:
-    """Run and commit one bounded worker batch using an application session factory."""
-    async with session_factory() as session, session.begin():
-        return await SearchProjectionWorker(session).process_batch(limit=limit)
+class PostgresSearchProjection:
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+
+    async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:
+        return await SearchProjectionWorker(self._session()).process_batch(limit=limit)
 
 
 def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int] | None:

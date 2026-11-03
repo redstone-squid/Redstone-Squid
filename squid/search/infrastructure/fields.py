@@ -1,9 +1,10 @@
 """Database-backed search fields for approved data-tags."""
 
+from collections.abc import Callable
 from decimal import Decimal
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.search.application.fields import (
     DEFAULT_FIELD_REGISTRY,
@@ -17,23 +18,23 @@ from squid.tags.models import TagDefinition, UnitDefinition
 class PostgresFieldRegistryProvider:
     """Build a current search registry from approved tag definitions."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
     async def registry(self) -> FieldRegistry:
-        async with self._session_factory() as session:
-            definitions = tuple(
-                (
-                    await session.scalars(
-                        select(TagDefinition).where(
-                            TagDefinition.moderation_status == "approved",
-                            TagDefinition.query_name.is_not(None),
-                            TagDefinition.value_type != "none",
-                        )
+        session = self._session()
+        definitions = tuple(
+            (
+                await session.scalars(
+                    select(TagDefinition).where(
+                        TagDefinition.moderation_status == "approved",
+                        TagDefinition.query_name.is_not(None),
+                        TagDefinition.value_type != "none",
                     )
-                ).all()
-            )
-            units = {unit.key: unit for unit in (await session.scalars(select(UnitDefinition))).all()}
+                )
+            ).all()
+        )
+        units = {unit.key: unit for unit in (await session.scalars(select(UnitDefinition))).all()}
         dynamic = tuple(_field_definition(definition, units) for definition in definitions)
         return FieldRegistry((*DEFAULT_FIELD_REGISTRY.definitions, *dynamic))
 

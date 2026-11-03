@@ -1,7 +1,7 @@
 """PostgreSQL search predicate compiler tests."""
 
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.search.application import SearchQueryParser
 from squid.search.domain import SearchRequest, SearchScope
@@ -83,7 +83,7 @@ def test_compiler_treats_injection_text_as_a_bound_value() -> None:
 
 def test_backend_predicate_defaults_builds_to_confirmed() -> None:
     parser = SearchQueryParser()
-    backend = PostgresSearchBackend(async_sessionmaker())
+    backend = PostgresSearchBackend(unused_session)
     request = SearchRequest("door", scope=SearchScope.BUILDS)
 
     compiled = backend.compile_predicate(request, parser.parse(request.query)).compile(dialect=postgresql.dialect())
@@ -95,7 +95,7 @@ def test_backend_predicate_defaults_builds_to_confirmed() -> None:
 
 def test_explicit_status_cannot_override_confirmed_visibility_default() -> None:
     parser = SearchQueryParser()
-    backend = PostgresSearchBackend(async_sessionmaker())
+    backend = PostgresSearchBackend(unused_session)
     request = SearchRequest("status:denied", scope=SearchScope.BUILDS)
 
     compiled = backend.compile_predicate(request, parser.parse(request.query)).compile(dialect=postgresql.dialect())
@@ -106,7 +106,7 @@ def test_explicit_status_cannot_override_confirmed_visibility_default() -> None:
 
 def test_explicit_visibility_policy_is_applied_independently_of_query() -> None:
     parser = SearchQueryParser()
-    backend = PostgresSearchBackend(async_sessionmaker())
+    backend = PostgresSearchBackend(unused_session)
     request = SearchRequest(
         "status:denied",
         scope=SearchScope.BUILDS,
@@ -118,3 +118,7 @@ def test_explicit_visibility_policy_is_applied_independently_of_query() -> None:
     parameters = compiled.params.values()
     assert "denied" in parameters
     assert any(set(value) == {"pending", "confirmed"} for value in parameters if isinstance(value, list))
+
+
+def unused_session() -> AsyncSession:
+    raise AssertionError("Query compilation must not execute SQL.")

@@ -7,16 +7,19 @@ invisible against an in-memory fake, because the duplication happens in the join
 
 from collections.abc import AsyncGenerator
 from decimal import Decimal
+from functools import partial
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.search.application import SearchQueryParser
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
-from squid.search.infrastructure.repository import PostgresSearchBackend
 from squid.search.models import SearchDocument, SearchDocumentFacet
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
@@ -80,11 +83,14 @@ def request(query: str, *, offset: int = 0, page_size: int = 2, sort: SearchSort
 
 
 async def search(
-    backend: PostgresSearchBackend,
+    backend: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     search_request: SearchRequest,
 ):
-    return await backend.search(
-        search_request, SearchQueryParser().parse(search_request.query), offset=search_request.offset
+    return await transact(
+        backend,
+        lambda uow: uow.search.search(
+            search_request, SearchQueryParser().parse(search_request.query), offset=search_request.offset
+        ),
     )
 
 
@@ -93,7 +99,7 @@ async def test_filter_only_offsets_partition_the_matches_without_overlap(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed_builds(async_session_factory, ["Alpha door", "Bravo door", "Charlie door", "Delta door"])
-    backend = PostgresSearchBackend(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
 
     first = await search(backend, request("status:confirmed"))
     second = await search(backend, request("status:confirmed", offset=2))
@@ -120,7 +126,7 @@ async def test_a_document_with_several_sort_values_is_paged_once(
         ["Alpha door", "Bravo door", "Charlie door"],
         widths={"Alpha door": [2, 9], "Bravo door": [4], "Charlie door": [6]},
     )
-    backend = PostgresSearchBackend(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
     sort = SearchSort("width", SortDirection.ASCENDING)
 
     first = await search(backend, request("status:confirmed", sort=sort))
@@ -141,7 +147,7 @@ async def test_sort_direction_picks_the_extreme_value_it_orders_by(
         ["Alpha door", "Bravo door"],
         widths={"Alpha door": [1, 9], "Bravo door": [5]},
     )
-    backend = PostgresSearchBackend(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
 
     ascending = await search(backend, request("status:confirmed", sort=SearchSort("width", SortDirection.ASCENDING)))
     descending = await search(backend, request("status:confirmed", sort=SearchSort("width", SortDirection.DESCENDING)))
@@ -159,7 +165,7 @@ async def test_documents_without_the_sort_field_come_last(
         ["Alpha door", "Bravo door", "Charlie door"],
         widths={"Bravo door": [4], "Charlie door": [2]},
     )
-    backend = PostgresSearchBackend(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
     sort = SearchSort("width", SortDirection.ASCENDING)
 
     page = await search(backend, request("status:confirmed", page_size=3, sort=sort))
@@ -173,7 +179,7 @@ async def test_ranked_offsets_are_stable_across_requests(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed_builds(async_session_factory, ["Piston door", "Piston trapdoor", "Piston hipster door"])
-    backend = PostgresSearchBackend(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
 
     whole = await search(backend, request("piston", page_size=3))
     first = await search(backend, request("piston"))
@@ -212,11 +218,11 @@ async def test_public_title_suggestions_share_search_visibility(
             )
             for index, (kind, status, title) in enumerate(documents)
         )
-    backend = PostgresSearchBackend(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
     query = SearchQueryParser().parse("piston")
     public_titles = {"Piston confirmed", "Piston uppercase", "Piston record", "Piston metadata"}
 
-    assert set(await backend.suggest(query, limit=25)) == public_titles
+    assert set(await transact(backend, lambda uow: uow.search.suggest(query, limit=25))) == public_titles
     public = await search(backend, SearchRequest(query="piston", scope=SearchScope.ALL, page_size=25))
     assert {hit.title for hit in public.hits} == public_titles
     staff = await search(

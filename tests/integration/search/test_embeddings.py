@@ -1,15 +1,20 @@
 """Integration coverage for pgvector embedding ownership and fencing."""
 
 from collections.abc import AsyncGenerator
+from dataclasses import replace
+from functools import partial
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.search.application import SearchEmbeddingService
-from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue, PostgresSemanticCandidateProvider
+from squid.search.application.embeddings import SemanticCandidateService
 from squid.search.models import SearchDocument, SearchEmbeddingQueueItem
+from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
@@ -64,7 +69,7 @@ async def test_worker_embeds_the_exact_claimed_source_revision(
     async with async_session_factory.begin() as session:
         session.add(SearchEmbeddingQueueItem(document_id=document_id, source_hash="v1"))
     model = FakeEmbeddingModel([1.0] + [0.0] * 1535)
-    service = SearchEmbeddingService(model, PostgresSearchEmbeddingQueue(async_session_factory))
+    service = SearchEmbeddingService(model, uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
     assert await service.process_batch() == (1, 0)
 
@@ -87,8 +92,8 @@ async def test_source_changes_fence_a_stale_embedding_completion(
     document_id = await _document(async_session_factory, "2", source_hash="v1")
     async with async_session_factory.begin() as session:
         session.add(SearchEmbeddingQueueItem(document_id=document_id, source_hash="v1"))
-    queue = PostgresSearchEmbeddingQueue(async_session_factory)
-    stale = (await queue.claim(limit=1))[0]
+    queue = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    stale = (await transact(queue, lambda uow: uow.search_embeddings.claim(limit=1), commit=True))[0]
     async with async_session_factory.begin() as session:
         await session.execute(update(SearchDocument).where(SearchDocument.id == document_id).values(source_hash="v2"))
         await session.execute(
@@ -97,7 +102,12 @@ async def test_source_changes_fence_a_stale_embedding_completion(
             .values(source_hash="v2", locked_at=None)
         )
 
-    assert await queue.complete(stale, [1.0] + [0.0] * 1535, "test-model") is False
+    assert (
+        await transact(
+            queue, lambda uow: uow.search_embeddings.complete(stale, [1.0] + [0.0] * 1535, "test-model"), commit=True
+        )
+        is False
+    )
     async with async_session_factory() as session:
         document = await session.get(SearchDocument, document_id)
     assert document is not None
@@ -113,9 +123,7 @@ async def test_exhausted_embedding_work_is_retained_as_a_dead_letter(
     async with async_session_factory.begin() as session:
         session.add(SearchEmbeddingQueueItem(document_id=document_id, source_hash="v1"))
     service = SearchEmbeddingService(
-        FakeEmbeddingModel(None),
-        PostgresSearchEmbeddingQueue(async_session_factory),
-        max_attempts=1,
+        FakeEmbeddingModel(None), uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory), max_attempts=1
     )
 
     assert await service.process_batch() == (0, 1)
@@ -145,11 +153,41 @@ async def test_semantic_candidates_are_ranked_by_postgres_cosine_distance(
             .where(SearchDocument.id == second)
             .values(embedding=[0.0, 1.0] + [0.0] * 1534, embedding_model="test-model")
         )
-    provider = PostgresSemanticCandidateProvider(
-        async_session_factory,
-        FakeEmbeddingModel([1.0] + [0.0] * 1535),
+    provider = SemanticCandidateService(
+        FakeEmbeddingModel([1.0] + [0.0] * 1535), uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)
     )
 
     candidates = await provider.candidates("nearest", limit=2)
 
     assert [candidate.source_key for candidate in candidates] == ["near", "far"]
+
+
+async def test_stale_completion_preserves_other_writes_in_the_unit_of_work(
+    search_embedding_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    first = await _document(async_session_factory, "first", source_hash="v1")
+    second = await _document(async_session_factory, "second", source_hash="v1")
+    async with async_session_factory.begin() as session:
+        session.add_all(
+            SearchEmbeddingQueueItem(document_id=identifier, source_hash="v1") for identifier in (first, second)
+        )
+    factory = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    claims = await transact(factory, lambda uow: uow.search_embeddings.claim(limit=2), commit=True)
+    by_id = {job.document_id: job for job in claims}
+    vector = [1.0] + [0.0] * 1535
+    async with factory() as uow:
+        assert await uow.search_embeddings.complete(by_id[first], vector, "test-model")
+        assert not await uow.search_embeddings.complete(
+            replace(by_id[second], claim_token=uuid4()), vector, "test-model"
+        )
+        await uow.commit()
+    async with async_session_factory() as session:
+        saved = await session.get(SearchDocument, first)
+        stale = await session.get(SearchDocument, second)
+        assert saved is not None
+        assert saved.embedding is not None
+        assert stale is not None
+        assert stale.embedding is None
+        assert await session.get(SearchEmbeddingQueueItem, first) is None
+        assert await session.get(SearchEmbeddingQueueItem, second) is not None

@@ -27,6 +27,10 @@ from squid.notifications.infrastructure.repository import PostgresNotificationRe
 from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.records.infrastructure.repository import PostgresRecordRepository
+from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue, PostgresSearchVectors
+from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
+from squid.search.infrastructure.projection import PostgresSearchProjection
+from squid.search.infrastructure.repository import PostgresSearchBackend
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
@@ -71,6 +75,11 @@ class SqlAlchemyUnitOfWork:
         self._restrictions = RestrictionRepository(self._active_session)
         self._build_taxonomy = PostgresBuildTaxonomy(self._active_session)
         self._build_vectors = PostgresBuildIndex(self._active_session)
+        self._search = PostgresSearchBackend(self._active_session)
+        self._search_fields = PostgresFieldRegistryProvider(self._active_session)
+        self._search_embeddings = PostgresSearchEmbeddingQueue(self._active_session)
+        self._search_vectors = PostgresSearchVectors(self._active_session)
+        self._search_projection = PostgresSearchProjection(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -257,6 +266,31 @@ class SqlAlchemyUnitOfWork:
     def build_vectors(self) -> PostgresBuildIndex:
         self._active_session()
         return self._build_vectors
+
+    @property
+    def search(self) -> PostgresSearchBackend:
+        self._active_session()
+        return self._search
+
+    @property
+    def search_fields(self) -> PostgresFieldRegistryProvider:
+        self._active_session()
+        return self._search_fields
+
+    @property
+    def search_embeddings(self) -> PostgresSearchEmbeddingQueue:
+        self._active_session()
+        return self._search_embeddings
+
+    @property
+    def search_vectors(self) -> PostgresSearchVectors:
+        self._active_session()
+        return self._search_vectors
+
+    @property
+    def search_projection(self) -> PostgresSearchProjection:
+        self._active_session()
+        return self._search_projection
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

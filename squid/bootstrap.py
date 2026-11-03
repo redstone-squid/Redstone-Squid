@@ -74,14 +74,9 @@ from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJ
 from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
-from squid.search.application import SearchEmbeddingService, SearchQueryParser, SearchService
-from squid.search.infrastructure import (
-    PostgresSearchBackend,
-    PostgresSearchEmbeddingQueue,
-    PostgresSemanticCandidateProvider,
-)
-from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
-from squid.search.infrastructure.projection import run_projection_batch
+from squid.search.application import SearchEmbeddingService, SearchService
+from squid.search.application.embeddings import SemanticCandidateService
+from squid.search.application.projection import SearchProjectionService
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
 from squid.submissions.application import (
@@ -477,20 +472,15 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def search_fields(self) -> PostgresFieldRegistryProvider:
-        return PostgresFieldRegistryProvider(self.db.async_session)
-
-    @cached_property
     def search(self) -> SearchService:
         return SearchService(
-            PostgresSearchBackend(
-                self.db.async_session,
-                fields=self.search_fields,
-                semantic_provider=PostgresSemanticCandidateProvider(self.db.async_session, self.embedding_model),
-            ),
-            SearchQueryParser(),
-            self.search_fields,
+            uow_factory=self.uow_factory,
+            semantic_provider=SemanticCandidateService(self.embedding_model, uow_factory=self.uow_factory),
         )
+
+    @cached_property
+    def search_projection(self) -> SearchProjectionService:
+        return SearchProjectionService(uow_factory=self.uow_factory)
 
     @cached_property
     def suggestions(self) -> SuggestionService:
@@ -530,7 +520,7 @@ class _ServiceGraph:
     def search_embeddings(self) -> SearchEmbeddingService:
         return SearchEmbeddingService(
             self.embedding_model,
-            PostgresSearchEmbeddingQueue(self.db.async_session),
+            uow_factory=self.uow_factory,
         )
 
     @cached_property
@@ -759,7 +749,7 @@ def create_worker_services(
         media_cleanup=graph.media_cleanup,
         submission_finalization=graph.submission_finalization_worker,
         search_embeddings=graph.search_embeddings,
-        refresh_search_index=partial(run_projection_batch, db.async_session),
+        refresh_search_index=graph.search_projection.process_batch,
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
         purge_idempotency=idempotency.purge_expired,
         expire_submission_drafts=graph.submission_drafts.expire_due,

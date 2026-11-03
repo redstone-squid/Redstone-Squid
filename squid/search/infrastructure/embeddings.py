@@ -1,15 +1,13 @@
 """PostgreSQL embedding queue and semantic candidate adapters."""
 
-from collections.abc import Sequence
-from typing import Any, cast
+from collections.abc import Callable, Sequence
 
-from sqlalchemy import ColumnElement, select, update
-from sqlalchemy.engine import CursorResult
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import ColumnElement, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
-from squid.search.application.embeddings import SearchEmbeddingJob, SearchEmbeddingModel
-from squid.search.infrastructure.repository import SemanticCandidate
+from squid.search.application.embeddings import SearchEmbeddingJob
+from squid.search.application.ports import SemanticCandidate
 from squid.search.models import SearchDocument, SearchEmbeddingQueueItem
 
 SEARCH_EMBEDDING_QUEUE_SPEC = QueueSpec(
@@ -29,26 +27,26 @@ SEARCH_EMBEDDING_QUEUE_SPEC = QueueSpec(
 class PostgresSearchEmbeddingQueue:
     """Claim changed search documents and fence vector writes by source hash."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
-        self._queue = ClaimedRowQueue(SEARCH_EMBEDDING_QUEUE_SPEC, session_factory)
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+        self._queue = ClaimedRowQueue(SEARCH_EMBEDDING_QUEUE_SPEC)
 
     async def claim(self, *, limit: int) -> Sequence[SearchEmbeddingJob]:
-        rows = await self._queue.claim(limit=limit)
+        rows = await self._queue.claim(limit=limit, session=self._session())
         if not rows:
             return ()
         # The document text is not on the queue row, so it is read after the claim
         # rather than joined into it. A document cannot change underneath the job:
         # `source_hash` is part of the fence, and any edit re-enqueues a new hash.
-        async with self._session_factory() as session:
-            documents = {
-                document.id: document
-                for document in (
-                    await session.scalars(
-                        select(SearchDocument).where(SearchDocument.id.in_([row.document_id for row in rows]))
-                    )
-                ).all()
-            }
+        session = self._session()
+        documents = {
+            document.id: document
+            for document in (
+                await session.scalars(
+                    select(SearchDocument).where(SearchDocument.id.in_([row.document_id for row in rows]))
+                )
+            ).all()
+        }
         return tuple(
             SearchEmbeddingJob(
                 document_id=row.document_id,
@@ -62,24 +60,21 @@ class PostgresSearchEmbeddingQueue:
         )
 
     async def complete(self, job: SearchEmbeddingJob, embedding: list[float], model: str) -> bool:
-        async with self._session_factory.begin() as session:
-            # The vector write and the acknowledgement have to agree, so both run
-            # under this transaction and the document write gates the delete.
-            updated = cast(
-                CursorResult[Any],
-                await session.execute(
-                    update(SearchDocument)
-                    .where(SearchDocument.id == job.document_id, SearchDocument.source_hash == job.source_hash)
-                    .values(embedding=embedding, embedding_model=model)
-                ),
-            )
-            if not updated.rowcount:
-                await session.rollback()
-                return False
-            outcome = await self._queue.complete(self._identity(job), job.claim_token, session=session)
-            if not outcome.applied:
-                await session.rollback()
-            return outcome.applied
+        session = self._session()
+        # Projection updates lock documents before queue rows. Keep that order.
+        document = await session.scalar(
+            select(SearchDocument)
+            .where(SearchDocument.id == job.document_id, SearchDocument.source_hash == job.source_hash)
+            .with_for_update()
+        )
+        if document is None:
+            return False
+        outcome = await self._queue.complete(self._identity(job), job.claim_token, session=session)
+        if not outcome.applied:
+            return False
+        document.embedding = embedding
+        document.embedding_model = model
+        return True
 
     async def fail(self, job: SearchEmbeddingJob, error: str, *, max_attempts: int) -> bool:
         outcome = await self._queue.fail(
@@ -88,6 +83,7 @@ class PostgresSearchEmbeddingQueue:
             attempts=job.attempts,
             error=error,
             max_attempts=max_attempts,
+            session=self._session(),
         )
         return outcome.dead_lettered
 
@@ -99,32 +95,27 @@ class PostgresSearchEmbeddingQueue:
         )
 
 
-class PostgresSemanticCandidateProvider:
+class PostgresSearchVectors:
     """Generate a query vector and rank search documents with pgvector cosine distance."""
 
     def __init__(
         self,
-        session_factory: async_sessionmaker[AsyncSession],
-        model: SearchEmbeddingModel,
+        session: Callable[[], AsyncSession],
     ) -> None:
-        self._session_factory = session_factory
-        self._model = model
+        self._session = session
 
-    async def candidates(self, query: str, *, limit: int) -> Sequence[SemanticCandidate]:
-        embedding = await self._model.embed(query)
-        if embedding is None:
-            return ()
+    async def candidates(self, embedding: list[float], model: str, *, limit: int) -> Sequence[SemanticCandidate]:
         statement = (
             select(SearchDocument.resource_kind, SearchDocument.source_key)
             .where(
                 SearchDocument.embedding.is_not(None),
-                SearchDocument.embedding_model == self._model.model_name,
+                SearchDocument.embedding_model == model,
             )
             .order_by(SearchDocument.embedding.cosine_distance(embedding))
             .limit(limit)
         )
-        async with self._session_factory() as session:
-            rows = (await session.execute(statement)).all()
+        session = self._session()
+        rows = (await session.execute(statement)).all()
         return tuple(SemanticCandidate(row.resource_kind, row.source_key) for row in rows)
 
 

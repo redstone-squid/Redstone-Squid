@@ -1,12 +1,11 @@
 """PostgreSQL search backend."""
 
 import logging
-from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Literal, Protocol, cast, override
+from collections.abc import Callable, Sequence
+from typing import Literal, cast, override
 
 from sqlalchemy import case, func, or_, select, true
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from squid.core.errors import ErrorCode, ValidationError
@@ -15,13 +14,13 @@ from squid.search.application import (
     RankedCandidate,
     RankingBranch,
     SearchBackend,
-    SearchFieldRegistryProvider,
     SearchSlice,
     is_filter_only,
     positive_text_expressions,
     reciprocal_rank_fusion,
 )
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldType
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
+from squid.search.application.ports import SemanticCandidate
 from squid.search.domain import (
     BuildSearchHit,
     MetadataSearchHit,
@@ -44,35 +43,17 @@ ResourceKind = Literal["record", "build", "metadata"]
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True, slots=True)
-class SemanticCandidate:
-    """A semantic provider result ordered from most to least relevant."""
-
-    resource_kind: str
-    source_key: str
-
-
-class SemanticCandidateProvider(Protocol):
-    """Optional vector-query provider."""
-
-    async def candidates(self, query: str, *, limit: int) -> Sequence[SemanticCandidate]: ...
-
-
 class PostgresSearchBackend(SearchBackend):
     """Execute filtered lexical search against indexed projection documents."""
 
     def __init__(
         self,
-        session_factory: async_sessionmaker[AsyncSession],
+        session: Callable[[], AsyncSession],
         *,
         compiler: PostgresSearchQueryCompiler | None = None,
-        semantic_provider: SemanticCandidateProvider | None = None,
-        fields: SearchFieldRegistryProvider | None = None,
     ) -> None:
-        self._session_factory = session_factory
+        self._session = session
         self._compiler = compiler or PostgresSearchQueryCompiler()
-        self._semantic_provider = semantic_provider
-        self._fields = fields
 
     @override
     async def search(
@@ -81,26 +62,27 @@ class PostgresSearchBackend(SearchBackend):
         query: SearchQuery,
         *,
         offset: int,
+        registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
+        semantic_candidates: Sequence[SemanticCandidate] | None = None,
     ) -> SearchSlice:
         """Search indexed documents and return the window starting at `offset`."""
-        registry = DEFAULT_FIELD_REGISTRY if self._fields is None else await self._fields.registry()
-        compiler = self._compiler if self._fields is None else PostgresSearchQueryCompiler(registry)
+        compiler = self._compiler if registry is DEFAULT_FIELD_REGISTRY else PostgresSearchQueryCompiler(registry)
         predicate = self.compile_predicate(request, query, compiler=compiler)
-        async with self._session_factory() as session:
-            if request.sort is not None:
-                field = registry.resolve(request.sort.field)
-                if field is None or not field.supports_sort:
-                    # User input on both transports, so a message rather than a 500.
-                    field_name = request.sort.field
-                    raise ValidationError(
-                        tr(t"Search results cannot be sorted by {field_name}."),
-                        code=ErrorCode.INVALID_QUERY,
-                        public_context={"field": "sort", "value": request.sort.field},
-                    )
-                return await self._sorted(session, request, predicate, offset, field)
-            if is_filter_only(query):
-                return await self._filter_only(session, request, predicate, offset)
-            return await self._ranked(session, request, query, predicate, offset)
+        session = self._session()
+        if request.sort is not None:
+            field = registry.resolve(request.sort.field)
+            if field is None or not field.supports_sort:
+                # User input on both transports, so a message rather than a 500.
+                field_name = request.sort.field
+                raise ValidationError(
+                    tr(t"Search results cannot be sorted by {field_name}."),
+                    code=ErrorCode.INVALID_QUERY,
+                    public_context={"field": "sort", "value": request.sort.field},
+                )
+            return await self._sorted(session, request, predicate, offset, field)
+        if is_filter_only(query):
+            return await self._filter_only(session, request, predicate, offset)
+        return await self._ranked(session, request, query, predicate, offset, semantic_candidates)
 
     def compile_predicate(
         self,
@@ -178,17 +160,17 @@ class PostgresSearchBackend(SearchBackend):
         terms = _ranking_text(query)
         if not terms:
             return ()
-        async with self._session_factory() as session:
-            statement = (
-                select(SearchDocument.title)
-                .where(
-                    _visible_builds(_PUBLIC_BUILD_STATUSES),
-                    func.similarity(SearchDocument.fuzzy_text, terms) > 0.1,
-                )
-                .order_by(func.similarity(SearchDocument.fuzzy_text, terms).desc(), SearchDocument.normalized_title)
-                .limit(limit)
+        session = self._session()
+        statement = (
+            select(SearchDocument.title)
+            .where(
+                _visible_builds(_PUBLIC_BUILD_STATUSES),
+                func.similarity(SearchDocument.fuzzy_text, terms) > 0.1,
             )
-            return tuple((await session.scalars(statement)).all())
+            .order_by(func.similarity(SearchDocument.fuzzy_text, terms).desc(), SearchDocument.normalized_title)
+            .limit(limit)
+        )
+        return tuple((await session.scalars(statement)).all())
 
     async def _ranked(
         self,
@@ -197,6 +179,7 @@ class PostgresSearchBackend(SearchBackend):
         query: SearchQuery,
         predicate: ColumnElement[bool],
         offset: int,
+        semantic_candidates: Sequence[SemanticCandidate] | None,
     ) -> SearchSlice:
         """Page the fused relevance ranking.
 
@@ -213,16 +196,12 @@ class PostgresSearchBackend(SearchBackend):
         }
         warnings: tuple[str, ...] = ()
         if request.mode is SearchMode.SEMANTIC:
-            if self._semantic_provider is None:
+            if semantic_candidates is None:
                 warnings = (_SEMANTIC_WARNING,)
             else:
-                try:
-                    branches[RankingBranch.SEMANTIC] = await self._semantic_candidates(
-                        session, predicate, request.query
-                    )
-                except Exception:
-                    logger.exception("Semantic search candidate generation failed")
-                    warnings = (_SEMANTIC_WARNING,)
+                branches[RankingBranch.SEMANTIC] = await self._semantic_candidates(
+                    session, predicate, semantic_candidates
+                )
         ranked = reciprocal_rank_fusion(branches)
         page_candidates = ranked[offset : offset + request.page_size]
         documents = await self._documents_by_candidate(session, page_candidates)
@@ -318,11 +297,8 @@ class PostgresSearchBackend(SearchBackend):
         self,
         session: AsyncSession,
         predicate: ColumnElement[bool],
-        query: str,
+        candidates: Sequence[SemanticCandidate],
     ) -> tuple[RankedCandidate, ...]:
-        if self._semantic_provider is None:
-            return ()
-        candidates = tuple(await self._semantic_provider.candidates(query, limit=_CANDIDATE_LIMIT))
         if not candidates:
             return ()
         identities = tuple((candidate.resource_kind, candidate.source_key) for candidate in candidates)
