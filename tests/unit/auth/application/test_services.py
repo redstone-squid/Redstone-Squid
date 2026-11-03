@@ -1,6 +1,7 @@
 """API-key service tests."""
 
 from dataclasses import replace
+from functools import partial
 from typing import Literal
 
 import pytest
@@ -10,10 +11,11 @@ from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, Ap
 from squid.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import SubjectRecords
+from squid.permissions.application.ports import PermissionStore, SubjectRecords
 from squid.permissions.domain import InvalidPatternError, Pattern
 from squid.permissions.models import PermissionGrant
 from tests.support.permissions import permission_uow_factory
+from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 NOW = Instant.from_utc(2026, 8, 8, 12)
 
@@ -68,13 +70,47 @@ class FakeApiKeyRepository:
         self.touches.append((key_id, used_at, used_ip, older_than))
 
 
-def service(repository: FakeApiKeyRepository) -> ApiKeyService:
-    return ApiKeyService(repository, "test-api-key-pepper", now=lambda: NOW, token_bytes=lambda size: b"x" * size)
+class FakeApiKeyUnitOfWork(FakeUnitOfWork[FakeApiKeyRepository]):
+    def __init__(
+        self, committed: CommittedState[FakeApiKeyRepository], permissions: PermissionStore | None = None
+    ) -> None:
+        super().__init__(committed)
+        self._permissions = permissions
+
+    @property
+    def api_keys(self) -> FakeApiKeyRepository:
+        return self.state
+
+    @property
+    def permissions(self) -> PermissionStore:
+        assert self._permissions is not None
+        return self._permissions
+
+
+def _copy_repository(repository: FakeApiKeyRepository) -> FakeApiKeyRepository:
+    copied = FakeApiKeyRepository()
+    copied.keys = {key: replace(value) for key, value in repository.keys.items()}
+    copied.lookups = repository.lookups
+    copied.touches = list(repository.touches)
+    return copied
+
+
+def _state() -> CommittedState[FakeApiKeyRepository]:
+    return CommittedState(FakeApiKeyRepository(), clone=_copy_repository)
+
+
+def service(repository: CommittedState[FakeApiKeyRepository]) -> ApiKeyService:
+    return ApiKeyService(
+        "test-api-key-pepper",
+        uow_factory=partial(FakeApiKeyUnitOfWork, repository),
+        now=lambda: NOW,
+        token_bytes=lambda size: b"x" * size,
+    )
 
 
 @pytest.mark.asyncio
 async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
-    repository = FakeApiKeyRepository()
+    repository = _state()
 
     issued = await service(repository).issue(
         label="Minecraft server",
@@ -94,14 +130,15 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
 
 @pytest.mark.asyncio
 async def test_authenticate_returns_active_key_and_records_throttled_use() -> None:
-    repository = FakeApiKeyRepository()
+    repository = _state()
     api_keys = service(repository)
     issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
 
     authenticated = await api_keys.authenticate(issued.token, used_ip="192.0.2.4")
 
-    assert authenticated == issued.key
-    assert repository.touches == [
+    assert authenticated is not None
+    assert authenticated.id == issued.key.id
+    assert repository.value.touches == [
         (
             issued.key.key_id,
             NOW,
@@ -113,17 +150,19 @@ async def test_authenticate_returns_active_key_and_records_throttled_use() -> No
 
 @pytest.mark.parametrize("entropy", [b"\xff", b"\xfb", b"x"])
 async def test_issued_keys_round_trip_with_base64url_separators(entropy: bytes) -> None:
-    repository = FakeApiKeyRepository()
+    repository = _state()
     api_keys = ApiKeyService(
-        repository,
         "test-api-key-pepper",
+        uow_factory=partial(FakeApiKeyUnitOfWork, repository),
         now=lambda: NOW,
         token_bytes=lambda size: entropy * size,
     )
     issued = await api_keys.issue(label="Round trip", scopes={"account.verify.relay"})
 
-    assert await api_keys.authenticate(issued.token) == issued.key
-    assert repository.lookups == [issued.key.key_id]
+    authenticated = await api_keys.authenticate(issued.token)
+    assert authenticated is not None
+    assert authenticated.id == issued.key.id
+    assert repository.value.lookups == [issued.key.key_id]
 
 
 @pytest.mark.asyncio
@@ -142,20 +181,20 @@ async def test_issued_keys_round_trip_with_base64url_separators(entropy: bytes) 
     ],
 )
 async def test_malformed_tokens_do_not_reach_persistence(token: str) -> None:
-    repository = FakeApiKeyRepository()
+    repository = _state()
 
     assert await service(repository).authenticate(token) is None
-    assert repository.lookups == []
+    assert repository.value.lookups == []
 
 
 @pytest.mark.asyncio
 async def test_wrong_secret_is_rejected_without_recording_use() -> None:
-    repository = FakeApiKeyRepository()
+    repository = _state()
     api_keys = service(repository)
     issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
 
     assert await api_keys.authenticate(f"sq_{issued.key.key_id}_wrong") is None
-    assert repository.touches == []
+    assert repository.value.touches == []
 
 
 @pytest.mark.asyncio
@@ -168,21 +207,21 @@ async def test_wrong_secret_is_rejected_without_recording_use() -> None:
     ],
 )
 async def test_inactive_keys_are_rejected(field: Literal["expires_at", "revoked_at"], value: Instant) -> None:
-    repository = FakeApiKeyRepository()
+    repository = _state()
     api_keys = service(repository)
     issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
     if field == "revoked_at":
-        repository.keys[issued.key.key_id] = replace(issued.key, revoked_at=value)
+        repository.value.keys[issued.key.key_id] = replace(issued.key, revoked_at=value)
     else:
-        repository.keys[issued.key.key_id] = replace(issued.key, expires_at=value)
+        repository.value.keys[issued.key.key_id] = replace(issued.key, expires_at=value)
 
     assert await api_keys.authenticate(issued.token) is None
-    assert repository.touches == []
+    assert repository.value.touches == []
 
 
 @pytest.mark.asyncio
 async def test_unexpired_key_remains_active() -> None:
-    repository = FakeApiKeyRepository()
+    repository = _state()
     api_keys = service(repository)
     issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"}, expires_at=NOW.add(seconds=1))
 
@@ -191,7 +230,7 @@ async def test_unexpired_key_remains_active() -> None:
 
 def test_empty_pepper_is_rejected() -> None:
     with pytest.raises(InvalidStateError, match="must not be empty"):
-        ApiKeyService(FakeApiKeyRepository(), "")
+        ApiKeyService("", uow_factory=partial(FakeApiKeyUnitOfWork, _state()))
 
 
 class TestDigestConstruction:
@@ -206,19 +245,21 @@ class TestDigestConstruction:
         stored digest, so it should fail here rather than in production."""
         expected = bytes.fromhex("e85a71116346fb122fbf70bda5503f9d4afd28fd940c40b651ed37784439ed7b")
 
-        assert service(FakeApiKeyRepository()).hash_secret("a-known-secret") == expected
+        assert service(_state()).hash_secret("a-known-secret") == expected
         assert hash_api_key_secret(b"test-api-key-pepper", "a-known-secret") == expected
 
     @pytest.mark.asyncio
     async def test_a_rotated_pepper_stops_authenticating_old_tokens(self) -> None:
         """The pepper is a key, not a salt: rotating it revokes every credential
         it protected, which is the property that makes leaking the table safe."""
-        repository = FakeApiKeyRepository()
+        repository = _state()
         issued = await service(repository).issue(label="CI", scopes={"account.verify.relay"})
-        rotated = ApiKeyService(repository, "a-different-pepper", now=lambda: NOW)
+        rotated = ApiKeyService(
+            "a-different-pepper", uow_factory=partial(FakeApiKeyUnitOfWork, repository), now=lambda: NOW
+        )
 
         assert await rotated.authenticate(issued.token) is None
-        assert repository.touches == []
+        assert repository.value.touches == []
 
 
 class TestScopeValidation:
@@ -229,18 +270,18 @@ class TestScopeValidation:
         """The owner-authority check is skipped on the CLI bootstrap path, so it
         cannot be the thing that catches a typo: `buildsubmission.raed` used to
         persist happily and then match nothing."""
-        repository = FakeApiKeyRepository()
+        repository = _state()
 
         with pytest.raises(InvalidPatternError):
             await service(repository).issue(label="CI", scopes={"buildsubmission.raed."})
 
-        assert repository.keys == {}
+        assert repository.value.keys == {}
 
     @pytest.mark.asyncio
     async def test_equivalent_patterns_are_stored_once(self) -> None:
         """Parsing strips before de-duplicating, so surrounding whitespace does
         not smuggle a second copy of one pattern into the array."""
-        repository = FakeApiKeyRepository()
+        repository = _state()
 
         issued = await service(repository).issue(label="CI", scopes=["build.**", " build.** ", "build.**"])
 
@@ -251,7 +292,7 @@ class TestIssuanceBoundary:
     """A key may never carry authority its owner does not hold."""
 
     @staticmethod
-    def _permissions(*held: str) -> PermissionService:
+    def _authorized_service(repository: CommittedState[FakeApiKeyRepository], *held: str) -> ApiKeyService:
         class Store:
             async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
                 return SubjectRecords(
@@ -262,11 +303,16 @@ class TestIssuanceBoundary:
             async def epoch(self) -> int:
                 return 1
 
-        return PermissionService(uow_factory=permission_uow_factory(Store()))
+        store = Store()
+        return ApiKeyService(
+            "test-api-key-pepper",
+            uow_factory=partial(FakeApiKeyUnitOfWork, repository, store),
+            permissions=PermissionService(uow_factory=permission_uow_factory(store)),
+        )
 
     async def test_a_pattern_the_owner_holds_is_issued(self) -> None:
-        repository = FakeApiKeyRepository()
-        api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions("build.**"))
+        repository = _state()
+        api_keys = self._authorized_service(repository, "build.**")
 
         issued = await api_keys.issue(label="CI", scopes={"build.submission.create"}, owner_account_id=4)
 
@@ -275,19 +321,19 @@ class TestIssuanceBoundary:
     async def test_a_pattern_beyond_the_owner_is_refused(self) -> None:
         """Enforced at issue time as well as at request time, so an over-broad key
         cannot be minted now and quietly wait for its owner to be promoted."""
-        repository = FakeApiKeyRepository()
-        api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions("build.**"))
+        repository = _state()
+        api_keys = self._authorized_service(repository, "build.**")
 
         with pytest.raises(AuthorizationError):
             await api_keys.issue(label="CI", scopes={"bot.tree.sync"}, owner_account_id=4)
 
-        assert repository.keys == {}
+        assert repository.value.keys == {}
 
     async def test_an_ownerless_key_is_bounded_only_by_its_own_nodes(self) -> None:
         """There is nobody to intersect with, and the machine-to-machine case
         would otherwise be impossible to serve."""
-        repository = FakeApiKeyRepository()
-        api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions())
+        repository = _state()
+        api_keys = self._authorized_service(repository)
 
         issued = await api_keys.issue(label="CI", scopes={"bot.tree.sync"})
 

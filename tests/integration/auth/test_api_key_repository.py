@@ -1,6 +1,7 @@
 """PostgreSQL coverage for the API-key persistence boundary."""
 
 from collections.abc import AsyncGenerator
+from functools import partial
 from typing import cast
 
 import pytest
@@ -9,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
 from squid.auth.application import ApiKeyService
-from squid.auth.infrastructure.repository import PostgresApiKeyRepository
 from squid.auth.models.entities import ApiKey
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 _TABLES = [cast(Table, Account.__table__), cast(Table, ApiKey.__table__)]
 
@@ -33,8 +34,8 @@ async def test_issue_persists_one_sorted_array_for_duplicate_unsorted_scopes(
 ) -> None:
     del api_key_tables
     service = ApiKeyService(
-        PostgresApiKeyRepository(async_session_factory),
         "test-api-key-pepper",
+        uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory),
         token_bytes=lambda size: b"x" * size,
     )
 

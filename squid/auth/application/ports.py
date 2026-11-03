@@ -7,6 +7,7 @@ from whenever import Instant
 from squid.auth.domain.sessions import WebSessionIdentity
 from squid.auth.models.entities import ApiKey
 from squid.auth.models.sessions import OAuthState
+from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain import Pattern
 
 
@@ -58,3 +59,8 @@ class ApiKeyRepository(Protocol):
     ) -> None:
         """Record use only when the prior timestamp predates *older_than*."""
         ...
+
+
+class ApiKeyUnitOfWork(PermissionUnitOfWork, Protocol):
+    @property
+    def api_keys(self) -> ApiKeyRepository: ...

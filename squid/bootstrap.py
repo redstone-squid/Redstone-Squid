@@ -17,7 +17,7 @@ from squid.artifacts.infrastructure import create_artifact_store
 from squid.auth.application import ApiKeyService
 from squid.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
 from squid.auth.application.web import WebSessionService
-from squid.auth.infrastructure import PostgresApiKeyRepository, PostgresWebSessionRepository
+from squid.auth.infrastructure import PostgresWebSessionRepository
 from squid.builds.application import (
     BuildEmbeddingService,
     BuildInferenceService,
@@ -680,8 +680,8 @@ class _ServiceGraph:
         if self.config.api_key_pepper is None:
             return None
         return ApiKeyService(
-            PostgresApiKeyRepository(self.db.async_session),
             self.config.api_key_pepper.get_secret_value(),
+            uow_factory=self.uow_factory,
             permissions=self.permissions,
         )
 

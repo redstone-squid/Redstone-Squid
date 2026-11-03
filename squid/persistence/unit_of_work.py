@@ -6,6 +6,7 @@ from typing import Literal, Self
 from anyio import CancelScope
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.auth.infrastructure.repository import PostgresApiKeyRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.messages.infrastructure.repository import MessageRepository
@@ -28,6 +29,7 @@ class SqlAlchemyUnitOfWork:
         self._starboards = PostgresStarboardRepository(self._active_session)
         self._permissions = PermissionRepository(self._active_session)
         self._permission_admin = PermissionAdminRepository(self._active_session)
+        self._api_keys = PostgresApiKeyRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._messages = MessageRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
@@ -78,6 +80,11 @@ class SqlAlchemyUnitOfWork:
     def permission_admin(self) -> PermissionAdminRepository:
         self._active_session()
         return self._permission_admin
+
+    @property
+    def api_keys(self) -> PostgresApiKeyRepository:
+        self._active_session()
+        return self._api_keys
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:
