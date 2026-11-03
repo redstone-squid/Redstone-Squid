@@ -7,9 +7,9 @@ from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
 from squid.voting.application.ports import VoteWeightPolicy
-from squid.voting.domain import RoleWeight, VoteActor, VoteSessionSnapshot
+from squid.voting.domain import RoleWeight, VoteActor, VoteKind, VoteSessionSnapshot
 
-type RoleWeightProvider = Callable[[int, str], Awaitable[Sequence[RoleWeight]]]
+type RoleWeightProvider = Callable[[int, VoteKind], Awaitable[Sequence[RoleWeight]]]
 
 
 class RoleVoteWeightPolicy(VoteWeightPolicy):
@@ -17,7 +17,7 @@ class RoleVoteWeightPolicy(VoteWeightPolicy):
 
     def __init__(self, provider: RoleWeightProvider):
         async def multipliers(scope: WeightScope) -> tuple[RoleMultiplier, ...]:
-            weights = await provider(scope.guild_id, scope.kind)
+            weights = await provider(scope.guild_id, VoteKind(scope.kind))
             return tuple(RoleMultiplier(scope, weight.role_id, weight.multiplier) for weight in weights)
 
         self._policy = RoleWeightPolicy(

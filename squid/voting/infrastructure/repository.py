@@ -1,11 +1,11 @@
 """SQLAlchemy voting repository."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from sqlalchemy import Text, delete, func, insert, or_, select, update
 from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
@@ -56,8 +56,8 @@ class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
 class VoteRepository:
     """Store selections while serializing refresh, mutation, and closure per session."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]):
+        self._session = session
 
     async def get_or_create_build_submission_session(
         self,
@@ -71,25 +71,25 @@ class VoteRepository:
     ) -> int:
         """Serialize initial-review creation and return the existing session on retry."""
         options = normalize_vote_options(options, kind=VoteKind.BUILD)
-        async with self._session_factory.begin() as session:
-            lock_key = f"build-submission-vote:{build_id}"
-            await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(lock_key, 0))))
-            existing = await session.scalar(
-                select(BuildVoteSession.vote_session_id)
-                .join(VoteSession, VoteSession.id == BuildVoteSession.vote_session_id)
-                .where(BuildVoteSession.build_id == build_id, VoteSession.kind == VoteKind.BUILD)
-                .order_by(BuildVoteSession.vote_session_id)
-                .limit(1)
-            )
-            if existing is not None:
-                return existing
-            session_id = await self._create_session(
-                session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, options
-            )
-            await session.execute(
-                insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
-            )
-            return session_id
+        session = self._session()
+        lock_key = f"build-submission-vote:{build_id}"
+        await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(lock_key, 0))))
+        existing = await session.scalar(
+            select(BuildVoteSession.vote_session_id)
+            .join(VoteSession, VoteSession.id == BuildVoteSession.vote_session_id)
+            .where(BuildVoteSession.build_id == build_id, VoteSession.kind == VoteKind.BUILD)
+            .order_by(BuildVoteSession.vote_session_id)
+            .limit(1)
+        )
+        if existing is not None:
+            return existing
+        session_id = await self._create_session(
+            session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, options
+        )
+        await session.execute(
+            insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
+        )
+        return session_id
 
     async def create_build_session(
         self,
@@ -102,14 +102,14 @@ class VoteRepository:
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
         options = normalize_vote_options(options, kind=VoteKind.BUILD)
-        async with self._session_factory.begin() as session:
-            session_id = await self._create_session(
-                session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, options
-            )
-            await session.execute(
-                insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
-            )
-            return session_id
+        session = self._session()
+        session_id = await self._create_session(
+            session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, options
+        )
+        await session.execute(
+            insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
+        )
+        return session_id
 
     async def create_delete_log_session(
         self,
@@ -123,19 +123,19 @@ class VoteRepository:
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
         options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
-        async with self._session_factory.begin() as session:
-            session_id = await self._create_session(
-                session, author_account_id, VoteKind.DELETE_LOG, pass_threshold, fail_threshold, options
+        session = self._session()
+        session_id = await self._create_session(
+            session, author_account_id, VoteKind.DELETE_LOG, pass_threshold, fail_threshold, options
+        )
+        await session.execute(
+            insert(DeleteLogVoteSession).values(
+                vote_session_id=session_id,
+                target_message_id=message_id,
+                target_channel_id=channel_id,
+                target_server_id=server_id,
             )
-            await session.execute(
-                insert(DeleteLogVoteSession).values(
-                    vote_session_id=session_id,
-                    target_message_id=message_id,
-                    target_channel_id=channel_id,
-                    target_server_id=server_id,
-                )
-            )
-            return session_id
+        )
+        return session_id
 
     async def create_generic_session(
         self,
@@ -149,19 +149,19 @@ class VoteRepository:
         scope: PollScope = PollScope.GUILD,
     ) -> int:
         options = normalize_vote_options(options, kind=VoteKind.GENERIC)
-        async with self._session_factory.begin() as session:
-            session_id = await self._create_session(session, author_account_id, VoteKind.GENERIC, None, None, options)
-            await session.execute(
-                insert(GenericVoteSession).values(
-                    vote_session_id=session_id,
-                    guild_id=guild_id,
-                    question=question,
-                    visibility=visibility,
-                    scope=scope,
-                    deadline=deadline,
-                )
+        session = self._session()
+        session_id = await self._create_session(session, author_account_id, VoteKind.GENERIC, None, None, options)
+        await session.execute(
+            insert(GenericVoteSession).values(
+                vote_session_id=session_id,
+                guild_id=guild_id,
+                question=question,
+                visibility=visibility,
+                scope=scope,
+                deadline=deadline,
             )
-            return session_id
+        )
+        return session_id
 
     async def attach_message(self, vote_session_id: int, message_id: int) -> None:
         """Attach one recorded message to a vote session, tolerating an exact replay.
@@ -172,65 +172,65 @@ class VoteRepository:
         resource for the same message would make the caller believe the wrong card was
         attached, so that case is rejected explicitly.
         """
-        async with self._session_factory.begin() as session:
-            if await session.scalar(select(VoteSession.id).where(VoteSession.id == vote_session_id)) is None:
-                raise VoteSessionNotFoundError(vote_session_id)
-            channel_id = await session.scalar(select(MessageRecord.channel_id).where(MessageRecord.id == message_id))
-            if channel_id is None:
-                raise MessageNotFoundError(message_id)
+        session = self._session()
+        if await session.scalar(select(VoteSession.id).where(VoteSession.id == vote_session_id)) is None:
+            raise VoteSessionNotFoundError(vote_session_id)
+        channel_id = await session.scalar(select(MessageRecord.channel_id).where(MessageRecord.id == message_id))
+        if channel_id is None:
+            raise MessageNotFoundError(message_id)
 
-            expected = (channel_id, "vote_session", str(vote_session_id), "vote_card")
-            existing = await session.execute(
-                select(
-                    DiscordPost.channel_id,
-                    DiscordPost.resource_kind,
-                    DiscordPost.resource_key,
-                    DiscordPost.surface,
-                ).where(DiscordPost.message_id == message_id)
-            )
-            existing_values = existing.tuples().one_or_none()
-            if existing_values is not None:
-                if existing_values == expected:
-                    return
-                msg = "Discord message is already attached to a different resource."
-                raise DataIntegrityError(
-                    msg,
-                    context={"message_id": message_id, "vote_session_id": vote_session_id},
-                )
-
-            attached = await session.scalar(
-                pg_insert(DiscordPost)
-                .values(
-                    message_id=message_id,
-                    channel_id=channel_id,
-                    resource_kind="vote_session",
-                    resource_key=str(vote_session_id),
-                    surface="vote_card",
-                    applied_revision=0,
-                )
-                .on_conflict_do_nothing(index_elements=[DiscordPost.message_id])
-                .returning(DiscordPost.message_id)
-            )
-            if attached is not None:
+        expected = (channel_id, "vote_session", str(vote_session_id), "vote_card")
+        existing = await session.execute(
+            select(
+                DiscordPost.channel_id,
+                DiscordPost.resource_kind,
+                DiscordPost.resource_key,
+                DiscordPost.surface,
+            ).where(DiscordPost.message_id == message_id)
+        )
+        existing_values = existing.tuples().one_or_none()
+        if existing_values is not None:
+            if existing_values == expected:
                 return
-
-            # A concurrent exact replay may have won after the read above. The
-            # primary-key conflict is the only one the insert suppresses; the live
-            # resource/channel uniqueness constraint still rejects a second card.
-            raced = await session.execute(
-                select(
-                    DiscordPost.channel_id,
-                    DiscordPost.resource_kind,
-                    DiscordPost.resource_key,
-                    DiscordPost.surface,
-                ).where(DiscordPost.message_id == message_id)
+            msg = "Discord message is already attached to a different resource."
+            raise DataIntegrityError(
+                msg,
+                context={"message_id": message_id, "vote_session_id": vote_session_id},
             )
-            if raced.tuples().one_or_none() != expected:
-                msg = "Discord message was concurrently attached to a different resource."
-                raise DataIntegrityError(
-                    msg,
-                    context={"message_id": message_id, "vote_session_id": vote_session_id},
-                )
+
+        attached = await session.scalar(
+            pg_insert(DiscordPost)
+            .values(
+                message_id=message_id,
+                channel_id=channel_id,
+                resource_kind="vote_session",
+                resource_key=str(vote_session_id),
+                surface="vote_card",
+                applied_revision=0,
+            )
+            .on_conflict_do_nothing(index_elements=[DiscordPost.message_id])
+            .returning(DiscordPost.message_id)
+        )
+        if attached is not None:
+            return
+
+        # A concurrent exact replay may have won after the read above. The
+        # primary-key conflict is the only one the insert suppresses; the live
+        # resource/channel uniqueness constraint still rejects a second card.
+        raced = await session.execute(
+            select(
+                DiscordPost.channel_id,
+                DiscordPost.resource_kind,
+                DiscordPost.resource_key,
+                DiscordPost.surface,
+            ).where(DiscordPost.message_id == message_id)
+        )
+        if raced.tuples().one_or_none() != expected:
+            msg = "Discord message was concurrently attached to a different resource."
+            raise DataIntegrityError(
+                msg,
+                context={"message_id": message_id, "vote_session_id": vote_session_id},
+            )
 
     @staticmethod
     async def _create_session(
@@ -274,35 +274,35 @@ class VoteRepository:
         return session_id
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
-        async with self._session_factory() as session:
-            row = await self._get_session_row(session, message_id)
-            return None if row is None else await self._to_snapshot(session, row)
+        session = self._session()
+        row = await self._get_session_row(session, message_id)
+        return None if row is None else await self._to_snapshot(session, row)
 
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
-        async with self._session_factory() as session:
-            row = await _VoteSessionModelRepository(
-                session=session, load=[selectinload(VoteSession.options)]
-            ).get_one_or_none(id=vote_session_id)
-            return None if row is None else await self._to_snapshot(session, row)
+        session = self._session()
+        row = await _VoteSessionModelRepository(
+            session=session, load=[selectinload(VoteSession.options)]
+        ).get_one_or_none(id=vote_session_id)
+        return None if row is None else await self._to_snapshot(session, row)
 
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
-        async with self._session_factory() as session:
-            rows = await _VoteSessionModelRepository(
-                session=session, load=[selectinload(VoteSession.options)]
-            ).get_many(VoteSession.status == VoteStatus.OPEN, VoteSession.kind == kind)
-            return [await self._to_snapshot(session, row) for row in rows]
+        session = self._session()
+        rows = await _VoteSessionModelRepository(session=session, load=[selectinload(VoteSession.options)]).get_many(
+            VoteSession.status == VoteStatus.OPEN, VoteSession.kind == kind
+        )
+        return [await self._to_snapshot(session, row) for row in rows]
 
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
-        async with self._session_factory() as session:
-            rows = (
-                await session.scalars(
-                    select(VoteSession)
-                    .options(selectinload(VoteSession.options))
-                    .join(GenericVoteSession, GenericVoteSession.vote_session_id == VoteSession.id)
-                    .where(VoteSession.status == VoteStatus.OPEN, GenericVoteSession.deadline <= now)
-                )
-            ).all()
-            return [await self._to_snapshot(session, row) for row in rows]
+        session = self._session()
+        rows = (
+            await session.scalars(
+                select(VoteSession)
+                .options(selectinload(VoteSession.options))
+                .join(GenericVoteSession, GenericVoteSession.vote_session_id == VoteSession.id)
+                .where(VoteSession.status == VoteStatus.OPEN, GenericVoteSession.deadline <= now)
+            )
+        ).all()
+        return [await self._to_snapshot(session, row) for row in rows]
 
     async def cast_vote(
         self,
@@ -314,75 +314,73 @@ class VoteRepository:
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
-        async with self._session_factory() as session, session.begin():
-            row = await self._get_session_row(session, message_id, for_update=True)
-            if row is None or row.status is not VoteStatus.OPEN:
-                return None
-            await self._apply_refresh(session, row, refreshed_weights or {})
-            previous = await session.scalar(
-                select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
-            )
-            previous_weight = previous.weight if previous is not None else None
-            toggled_off = previous is not None and previous.option_id == option_id
-            if toggled_off:
-                await session.delete(previous)
-                current_weight = None
-            else:
-                await session.execute(
-                    pg_insert(Vote)
-                    .values(
-                        vote_session_id=row.id,
-                        account_id=account_id,
-                        guild_id=guild_id,
-                        option_id=option_id,
-                        emoji=emoji,
-                        weight=desired_weight,
-                    )
-                    .on_conflict_do_update(
-                        index_elements=[Vote.vote_session_id, Vote.account_id],
-                        set_={
-                            "guild_id": guild_id,
-                            "option_id": option_id,
-                            "emoji": emoji,
-                            "weight": desired_weight,
-                        },
-                    )
+        session = self._session()
+        row = await self._get_session_row(session, message_id, for_update=True)
+        if row is None or row.status is not VoteStatus.OPEN:
+            return None
+        await self._apply_refresh(session, row, refreshed_weights or {})
+        previous = await session.scalar(
+            select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
+        )
+        previous_weight = previous.weight if previous is not None else None
+        toggled_off = previous is not None and previous.option_id == option_id
+        if toggled_off:
+            await session.delete(previous)
+            current_weight = None
+        else:
+            await session.execute(
+                pg_insert(Vote)
+                .values(
+                    vote_session_id=row.id,
+                    account_id=account_id,
+                    guild_id=guild_id,
+                    option_id=option_id,
+                    emoji=emoji,
+                    weight=desired_weight,
                 )
-                current_weight = desired_weight
-            just_closed = await self._close_at_threshold(session, row)
-            return StoredVoteMutation(
-                await self._to_snapshot(session, row), previous_weight, current_weight, just_closed
+                .on_conflict_do_update(
+                    index_elements=[Vote.vote_session_id, Vote.account_id],
+                    set_={
+                        "guild_id": guild_id,
+                        "option_id": option_id,
+                        "emoji": emoji,
+                        "weight": desired_weight,
+                    },
+                )
             )
+            current_weight = desired_weight
+        just_closed = await self._close_at_threshold(session, row)
+        return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, current_weight, just_closed)
 
     async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
-        async with self._session_factory() as session, session.begin():
-            row = await session.scalar(
-                select(VoteSession)
-                .options(selectinload(VoteSession.options))
-                .where(VoteSession.id == vote_session_id)
-                .with_for_update()
-            )
-            if row is None:
-                return None
-            await self._apply_refresh(session, row, weights)
-            just_closed = await self._close_at_threshold(session, row)
-            return StoredVoteMutation(await self._to_snapshot(session, row), None, None, just_closed)
+        session = self._session()
+        row = await session.scalar(
+            select(VoteSession)
+            .options(selectinload(VoteSession.options))
+            .where(VoteSession.id == vote_session_id)
+            .with_for_update()
+        )
+        if row is None:
+            return None
+        await self._apply_refresh(session, row, weights)
+        just_closed = await self._close_at_threshold(session, row)
+        return StoredVoteMutation(await self._to_snapshot(session, row), None, None, just_closed)
 
     async def close(self, message_id: int) -> StoredVoteMutation | None:
-        async with self._session_factory() as session, session.begin():
-            row = await self._get_session_row(session, message_id, for_update=True)
-            return await self._close_row(session, row)
+        session = self._session()
+        row = await self._get_session_row(session, message_id, for_update=True)
+        return await self._close_row(session, row)
 
     async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None:
         """Close a session by aggregate ID for the deadline scheduler."""
-        async with self._session_factory() as session, session.begin():
-            row = await session.scalar(
-                select(VoteSession)
-                .options(selectinload(VoteSession.options))
-                .where(VoteSession.id == vote_session_id)
-                .with_for_update()
-            )
-            return await self._close_row(session, row)
+        session = self._session()
+        row = await session.scalar(
+            select(VoteSession)
+            .options(selectinload(VoteSession.options))
+            .where(VoteSession.id == vote_session_id)
+            .with_for_update()
+        )
+        return await self._close_row(session, row)
 
     @staticmethod
     async def _close_row(session: AsyncSession, row: VoteSession | None) -> StoredVoteMutation | None:
@@ -444,105 +442,103 @@ class VoteRepository:
         return True
 
     async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
-        async with self._session_factory() as session:
-            rows = (
-                await session.scalars(
-                    select(GuildVoteEmoji)
-                    .where(GuildVoteEmoji.guild_id == guild_id, GuildVoteEmoji.kind == kind)
-                    .order_by(GuildVoteEmoji.position)
-                )
-            ).all()
-            if not rows:
-                return None
-            return EmojiPreset(
-                guild_id,
-                kind,
-                tuple(
-                    VoteOption(
-                        row.emoji,
-                        row.choice,
-                        identifier=row.identifier,
-                        guild_id=guild_id,
-                        label=row.label,
-                        position=row.position,
-                    )
-                    for row in rows
-                ),
+        session = self._session()
+        rows = (
+            await session.scalars(
+                select(GuildVoteEmoji)
+                .where(GuildVoteEmoji.guild_id == guild_id, GuildVoteEmoji.kind == kind)
+                .order_by(GuildVoteEmoji.position)
             )
+        ).all()
+        if not rows:
+            return None
+        return EmojiPreset(
+            guild_id,
+            kind,
+            tuple(
+                VoteOption(
+                    row.emoji,
+                    row.choice,
+                    identifier=row.identifier,
+                    guild_id=guild_id,
+                    label=row.label,
+                    position=row.position,
+                )
+                for row in rows
+            ),
+        )
 
     async def set_emoji_preset(self, preset: EmojiPreset) -> None:
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                delete(GuildVoteEmoji).where(
-                    GuildVoteEmoji.guild_id == preset.guild_id, GuildVoteEmoji.kind == preset.kind
-                )
-            )
-            await session.execute(
-                insert(GuildVoteEmoji),
-                [
-                    {
-                        "guild_id": preset.guild_id,
-                        "kind": preset.kind.value,
-                        "identifier": option.identifier,
-                        "emoji": option.emoji,
-                        "choice": option.choice.value,
-                        "label": option.label,
-                        "position": position,
-                    }
-                    for position, option in enumerate(preset.options)
-                ],
-            )
+        session = self._session()
+        await session.execute(
+            delete(GuildVoteEmoji).where(GuildVoteEmoji.guild_id == preset.guild_id, GuildVoteEmoji.kind == preset.kind)
+        )
+        await session.execute(
+            insert(GuildVoteEmoji),
+            [
+                {
+                    "guild_id": preset.guild_id,
+                    "kind": preset.kind.value,
+                    "identifier": option.identifier,
+                    "emoji": option.emoji,
+                    "choice": option.choice.value,
+                    "label": option.label,
+                    "position": position,
+                }
+                for position, option in enumerate(preset.options)
+            ],
+        )
 
     async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]:
-        async with self._session_factory() as session:
-            rows = (
-                await session.scalars(
-                    select(GuildVoteRoleWeight).where(
-                        GuildVoteRoleWeight.guild_id == guild_id, GuildVoteRoleWeight.kind == kind
-                    )
+        session = self._session()
+        rows = (
+            await session.scalars(
+                select(GuildVoteRoleWeight).where(
+                    GuildVoteRoleWeight.guild_id == guild_id, GuildVoteRoleWeight.kind == kind
                 )
-            ).all()
-            return [RoleWeight(row.guild_id, row.kind, row.role_id, row.multiplier) for row in rows]
+            )
+        ).all()
+        return [RoleWeight(row.guild_id, row.kind, row.role_id, row.multiplier) for row in rows]
 
     async def set_role_weight(self, weight: RoleWeight) -> None:
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                pg_insert(GuildVoteRoleWeight)
-                .values(
-                    guild_id=weight.guild_id,
-                    kind=weight.kind.value,
-                    role_id=weight.role_id,
-                    multiplier=weight.multiplier,
-                )
-                .on_conflict_do_update(
-                    index_elements=[
-                        GuildVoteRoleWeight.guild_id,
-                        GuildVoteRoleWeight.kind,
-                        GuildVoteRoleWeight.role_id,
-                    ],
-                    set_={"multiplier": weight.multiplier},
-                )
+        session = self._session()
+        await session.execute(
+            pg_insert(GuildVoteRoleWeight)
+            .values(
+                guild_id=weight.guild_id,
+                kind=weight.kind.value,
+                role_id=weight.role_id,
+                multiplier=weight.multiplier,
             )
+            .on_conflict_do_update(
+                index_elements=[
+                    GuildVoteRoleWeight.guild_id,
+                    GuildVoteRoleWeight.kind,
+                    GuildVoteRoleWeight.role_id,
+                ],
+                set_={"multiplier": weight.multiplier},
+            )
+        )
 
     async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                delete(GuildVoteRoleWeight).where(
-                    GuildVoteRoleWeight.guild_id == guild_id,
-                    GuildVoteRoleWeight.kind == kind,
-                    GuildVoteRoleWeight.role_id == role_id,
-                )
+        session = self._session()
+        await session.execute(
+            delete(GuildVoteRoleWeight).where(
+                GuildVoteRoleWeight.guild_id == guild_id,
+                GuildVoteRoleWeight.kind == kind,
+                GuildVoteRoleWeight.role_id == role_id,
             )
+        )
 
     async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
-        async with self._session_factory.begin() as session:
-            emoji = delete(GuildVoteEmoji).where(GuildVoteEmoji.guild_id == guild_id)
-            weights = delete(GuildVoteRoleWeight).where(GuildVoteRoleWeight.guild_id == guild_id)
-            if kind is not None:
-                emoji = emoji.where(GuildVoteEmoji.kind == kind)
-                weights = weights.where(GuildVoteRoleWeight.kind == kind)
-            await session.execute(emoji)
-            await session.execute(weights)
+        session = self._session()
+        emoji = delete(GuildVoteEmoji).where(GuildVoteEmoji.guild_id == guild_id)
+        weights = delete(GuildVoteRoleWeight).where(GuildVoteRoleWeight.guild_id == guild_id)
+        if kind is not None:
+            emoji = emoji.where(GuildVoteEmoji.kind == kind)
+            weights = weights.where(GuildVoteRoleWeight.kind == kind)
+        await session.execute(emoji)
+        await session.execute(weights)
 
     @staticmethod
     async def _get_session_row(

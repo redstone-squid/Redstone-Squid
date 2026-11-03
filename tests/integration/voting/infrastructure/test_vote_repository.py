@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
+from functools import partial
 from typing import cast
 
 import pytest
@@ -17,8 +18,10 @@ from squid.core.errors import DataIntegrityError
 from squid.messages.models import MessageRecord
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.posts.models import DiscordPost
 from squid.settings.models import ServerSetting
+from squid.unit_of_work import UnitOfWorkFactory
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     DeleteLogVoteTarget,
@@ -30,7 +33,6 @@ from squid.voting.domain import (
     VoteStatus,
     VoteVisibility,
 )
-from squid.voting.infrastructure.repository import VoteRepository
 from squid.voting.models import (
     BuildVoteSession,
     DeleteLogVoteSession,
@@ -40,6 +42,7 @@ from squid.voting.models import (
     VoteSessionOption,
 )
 from tests.support.schema import with_foreign_key_targets
+from tests.support.unit_of_work import transact
 from tests.support.voting import (
     AUTHOR_ACCOUNT_IDS,
     BUILD_ID,
@@ -131,13 +134,13 @@ async def referenced_rows(vote_schema: None, async_session_factory: async_sessio
 
 
 @pytest.fixture
-def repository(async_session_factory: async_sessionmaker[AsyncSession]) -> VoteRepository:
-    return VoteRepository(async_session_factory)
+def repository(async_session_factory: async_sessionmaker[AsyncSession]) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
+    return partial(SqlAlchemyUnitOfWork, async_session_factory)
 
 
 async def seed_generic_poll(
     session_factory: async_sessionmaker[AsyncSession],
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     *,
     question: str,
     visibility: VoteVisibility,
@@ -151,13 +154,17 @@ async def seed_generic_poll(
     Every value a test asserts on stays in the caller's hands; only the message row,
     which no assertion reads, lives here.
     """
-    session_id = await repository.create_generic_session(
-        author_account_id=AUTHOR_ACCOUNT_IDS[0],
-        question=question,
-        visibility=visibility,
-        deadline=deadline,
-        options=options,
-        guild_id=guild_id,
+    session_id = await transact(
+        repository,
+        lambda uow: uow.votes.create_generic_session(
+            author_account_id=AUTHOR_ACCOUNT_IDS[0],
+            question=question,
+            visibility=visibility,
+            deadline=deadline,
+            options=options,
+            guild_id=guild_id,
+        ),
+        commit=True,
     )
     if not attach:
         return session_id, None
@@ -168,27 +175,35 @@ async def seed_generic_poll(
 
 
 async def test_vote_aggregates_are_persisted_by_repository(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    build_session_id = await repository.create_build_session(
-        author_account_id=99,
-        pass_threshold=3,
-        fail_threshold=-3,
-        build_id=BUILD_ID,
-        changes=[("submission_status", "pending", "confirmed")],
+    build_session_id = await transact(
+        repository,
+        lambda uow: uow.votes.create_build_session(
+            author_account_id=99,
+            pass_threshold=3,
+            fail_threshold=-3,
+            build_id=BUILD_ID,
+            changes=[("submission_status", "pending", "confirmed")],
+        ),
+        commit=True,
     )
-    delete_session_id = await repository.create_delete_log_session(
-        author_account_id=100,
-        pass_threshold=4,
-        fail_threshold=-2,
-        message_id=TARGET_MESSAGE_ID,
-        channel_id=CHANNEL_ID,
-        server_id=GUILD_ID,
+    delete_session_id = await transact(
+        repository,
+        lambda uow: uow.votes.create_delete_log_session(
+            author_account_id=100,
+            pass_threshold=4,
+            fail_threshold=-2,
+            message_id=TARGET_MESSAGE_ID,
+            channel_id=CHANNEL_ID,
+            server_id=GUILD_ID,
+        ),
+        commit=True,
     )
 
-    build = await repository.get_by_id(build_session_id)
-    delete = await repository.get_by_id(delete_session_id)
+    build = await transact(repository, lambda uow: uow.votes.get_by_id(build_session_id))
+    delete = await transact(repository, lambda uow: uow.votes.get_by_id(delete_session_id))
 
     assert build is not None
     assert delete is not None
@@ -204,22 +219,30 @@ async def test_vote_aggregates_are_persisted_by_repository(
 
 
 async def test_initial_build_vote_creation_is_idempotent(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    first = await repository.get_or_create_build_submission_session(
-        author_account_id=99,
-        pass_threshold=3,
-        fail_threshold=-3,
-        build_id=BUILD_ID,
-        changes=[("submission_status", "pending", "confirmed")],
+    first = await transact(
+        repository,
+        lambda uow: uow.votes.get_or_create_build_submission_session(
+            author_account_id=99,
+            pass_threshold=3,
+            fail_threshold=-3,
+            build_id=BUILD_ID,
+            changes=[("submission_status", "pending", "confirmed")],
+        ),
+        commit=True,
     )
-    second = await repository.get_or_create_build_submission_session(
-        author_account_id=100,
-        pass_threshold=4,
-        fail_threshold=-2,
-        build_id=BUILD_ID,
-        changes=[("submission_status", "pending", "confirmed")],
+    second = await transact(
+        repository,
+        lambda uow: uow.votes.get_or_create_build_submission_session(
+            author_account_id=100,
+            pass_threshold=4,
+            fail_threshold=-2,
+            build_id=BUILD_ID,
+            changes=[("submission_status", "pending", "confirmed")],
+        ),
+        commit=True,
     )
 
     async with async_session_factory() as session:
@@ -230,7 +253,7 @@ async def test_initial_build_vote_creation_is_idempotent(
 
 
 async def test_target_failure_rolls_back_vote_root(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The build exists, so the only thing that can fail here is the unserializable payload.
@@ -239,12 +262,16 @@ async def test_target_failure_rolls_back_vote_root(
     would then pass without ever reaching the two-insert sequence it is about.
     """
     with pytest.raises(StatementError):
-        await repository.create_build_session(
-            author_account_id=99,
-            pass_threshold=3,
-            fail_threshold=-3,
-            build_id=BUILD_ID,
-            changes=[("invalid", object(), object())],
+        await transact(
+            repository,
+            lambda uow: uow.votes.create_build_session(
+                author_account_id=99,
+                pass_threshold=3,
+                fail_threshold=-3,
+                build_id=BUILD_ID,
+                changes=[("invalid", object(), object())],
+            ),
+            commit=True,
         )
 
     async with async_session_factory() as session:
@@ -253,12 +280,12 @@ async def test_target_failure_rolls_back_vote_root(
 
 
 async def test_get_by_message_maps_votes_messages_and_delete_target(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     vote_session_id, message_id = await seed_delete_log_vote(async_session_factory, votes={7: 1.0, 8: -1.0})
 
-    snapshot = await repository.get_by_message(message_id)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_message(message_id))
 
     assert snapshot is not None
     assert snapshot.id == vote_session_id
@@ -268,23 +295,27 @@ async def test_get_by_message_maps_votes_messages_and_delete_target(
     assert snapshot.target == DeleteLogVoteTarget(TARGET_MESSAGE_ID, CHANNEL_ID, GUILD_ID)
 
 
-async def test_custom_vote_options_are_persisted_in_order(repository: VoteRepository) -> None:
+async def test_custom_vote_options_are_persisted_in_order(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     options = (
         VoteOption("<:strong_yes:123>", VoteChoice.APPROVE, 2.0),
         VoteOption("👎", VoteChoice.DENY),
     )
 
-    vote_session_id = await repository.create_delete_log_session(
-        author_account_id=100,
-        pass_threshold=4,
-        fail_threshold=-2,
-        message_id=TARGET_MESSAGE_ID,
-        channel_id=CHANNEL_ID,
-        server_id=GUILD_ID,
-        options=options,
+    vote_session_id = await transact(
+        repository,
+        lambda uow: uow.votes.create_delete_log_session(
+            author_account_id=100,
+            pass_threshold=4,
+            fail_threshold=-2,
+            message_id=TARGET_MESSAGE_ID,
+            channel_id=CHANNEL_ID,
+            server_id=GUILD_ID,
+            options=options,
+        ),
+        commit=True,
     )
 
-    snapshot = await repository.get_by_id(vote_session_id)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(vote_session_id))
 
     assert snapshot is not None
     assert [(option.emoji, option.choice, option.multiplier) for option in snapshot.options] == [
@@ -294,14 +325,20 @@ async def test_custom_vote_options_are_persisted_in_order(repository: VoteReposi
 
 
 async def test_cast_vote_replaces_then_toggles_the_same_choice(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
 
-    inserted = await repository.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0)
-    replaced = await repository.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0)
-    removed = await repository.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0)
+    inserted = await transact(
+        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+    )
+    replaced = await transact(
+        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
+    )
+    removed = await transact(
+        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
+    )
 
     assert inserted is not None
     assert (inserted.previous_weight, inserted.current_weight) == (None, 1.0)
@@ -321,7 +358,7 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
 )
 @pytest.mark.parametrize("refreshed_weight", [0.0, 4.0], ids=["remove-ballot", "reweigh-ballot"])
 async def test_threshold_closure_freezes_the_deciding_ballot(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
     option_id: str,
     emoji: str,
@@ -330,30 +367,38 @@ async def test_threshold_closure_freezes_the_deciding_ballot(
 ) -> None:
     session_id, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
 
-    mutation = await repository.cast_vote(message_id, 7, GUILD_ID, option_id, emoji, 1.0)
+    mutation = await transact(
+        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, option_id, emoji, 1.0), commit=True
+    )
 
     assert mutation is not None
     assert mutation.just_closed
     assert mutation.session.status is VoteStatus.CLOSED
     assert mutation.session.result is expected_result
 
-    refreshed = await repository.refresh_weights(session_id, {7: refreshed_weight})
+    refreshed = await transact(
+        repository, lambda uow: uow.votes.refresh_weights(session_id, {7: refreshed_weight}), commit=True
+    )
 
     assert refreshed is not None
     assert not refreshed.just_closed
     assert refreshed.session == mutation.session
-    assert await repository.get_by_id(session_id) == mutation.session
+    assert await transact(repository, lambda uow: uow.votes.get_by_id(session_id)) == mutation.session
 
 
 async def test_refresh_can_remove_and_reweigh_ballots_until_the_threshold_is_reached(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     session_id, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=3, fail_threshold=-3)
-    await repository.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0)
-    await repository.cast_vote(message_id, 8, GUILD_ID, "deny", "👎", 1.0)
+    await transact(
+        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+    )
+    await transact(repository, lambda uow: uow.votes.cast_vote(message_id, 8, GUILD_ID, "deny", "👎", 1.0), commit=True)
 
-    refreshed = await repository.refresh_weights(session_id, {7: 3.0, 8: 0.0})
+    refreshed = await transact(
+        repository, lambda uow: uow.votes.refresh_weights(session_id, {7: 3.0, 8: 0.0}), commit=True
+    )
 
     assert refreshed is not None
     assert refreshed.just_closed
@@ -362,15 +407,19 @@ async def test_refresh_can_remove_and_reweigh_ballots_until_the_threshold_is_rea
 
 
 async def test_concurrent_votes_report_exactly_one_closure(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Row-level locking, not the application, is what makes the second vote a no-op."""
     _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-10)
 
     results = await asyncio.gather(
-        repository.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0),
-        repository.cast_vote(message_id, 8, GUILD_ID, "approve", "👍", 1.0),
+        transact(
+            repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+        ),
+        transact(
+            repository, lambda uow: uow.votes.cast_vote(message_id, 8, GUILD_ID, "approve", "👍", 1.0), commit=True
+        ),
     )
 
     mutations = [result for result in results if isinstance(result, StoredVoteMutation)]
@@ -378,14 +427,14 @@ async def test_concurrent_votes_report_exactly_one_closure(
     assert mutations[0].just_closed
     assert sum(result is None for result in results) == 1
 
-    snapshot = await repository.get_by_message(message_id)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_message(message_id))
     assert snapshot is not None
     assert snapshot.status is VoteStatus.CLOSED
     assert len(snapshot.votes) == 1
 
 
 async def test_generic_poll_persists_choices_tallies_and_due_closure(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     session_id, message_id = await seed_generic_poll(
@@ -402,33 +451,37 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
     )
     assert message_id is not None
 
-    await repository.cast_vote(message_id, 7, GUILD_ID, "one", "1️⃣", 3)
-    await repository.cast_vote(message_id, 8, GUILD_ID, "two", "2️⃣", 1)
-    snapshot = await repository.get_by_message(message_id)
+    await transact(repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "one", "1️⃣", 3), commit=True)
+    await transact(repository, lambda uow: uow.votes.cast_vote(message_id, 8, GUILD_ID, "two", "2️⃣", 1), commit=True)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_message(message_id))
 
     assert snapshot is not None
     assert snapshot.poll is not None
     assert snapshot.poll.question == "Choose one"
     assert snapshot.raw_tallies() == {"one": 1, "two": 1}
     assert snapshot.weighted_tallies() == {"one": 3, "two": 1}
-    assert [item.id for item in await repository.list_due(Instant.now())] == [session_id]
+    assert [item.id for item in await transact(repository, lambda uow: uow.votes.list_due(Instant.now()))] == [
+        session_id
+    ]
 
-    closed = await repository.close_by_id(session_id)
+    closed = await transact(repository, lambda uow: uow.votes.close_by_id(session_id), commit=True)
     assert closed is not None
     assert closed.just_closed
     assert closed.session.status is VoteStatus.CLOSED
-    assert await repository.list_due(Instant.now()) == []
+    assert await transact(repository, lambda uow: uow.votes.list_due(Instant.now())) == []
 
-    refreshed = await repository.refresh_weights(session_id, {7: 0.0, 8: 4.0})
+    refreshed = await transact(
+        repository, lambda uow: uow.votes.refresh_weights(session_id, {7: 0.0, 8: 4.0}), commit=True
+    )
 
     assert refreshed is not None
     assert not refreshed.just_closed
     assert refreshed.session == closed.session
-    assert await repository.get_by_id(session_id) == closed.session
+    assert await transact(repository, lambda uow: uow.votes.get_by_id(session_id)) == closed.session
 
 
 async def test_generic_polls_store_null_thresholds_rather_than_sentinels(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Read with raw SQL because the domain refuses to represent the sentinels at all."""
@@ -460,7 +513,7 @@ async def test_generic_polls_store_null_thresholds_rather_than_sentinels(
 
 
 async def test_a_poll_can_be_created_before_it_belongs_to_any_guild(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Creation must not require the transport that will eventually publish it."""
@@ -478,7 +531,7 @@ async def test_a_poll_can_be_created_before_it_belongs_to_any_guild(
         attach=False,
     )
 
-    snapshot = await repository.get_by_id(session_id)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
 
     assert snapshot is not None
     assert snapshot.poll is not None
@@ -487,7 +540,7 @@ async def test_a_poll_can_be_created_before_it_belongs_to_any_guild(
 
 
 async def test_a_guild_less_poll_becomes_addressable_once_a_card_is_attached(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Creation and publication are separate steps, so this is the second one."""
@@ -504,21 +557,21 @@ async def test_a_guild_less_poll_becomes_addressable_once_a_card_is_attached(
         guild_id=None,
         attach=False,
     )
-    assert await repository.get_by_message(7_001) is None
+    assert await transact(repository, lambda uow: uow.votes.get_by_message(7_001)) is None
 
     async with async_session_factory.begin() as session:
         await record_vote_message(session, message_id=7_001)
-    await repository.attach_message(session_id, 7_001)
-    await repository.attach_message(session_id, 7_001)
+    await transact(repository, lambda uow: uow.votes.attach_message(session_id, 7_001), commit=True)
+    await transact(repository, lambda uow: uow.votes.attach_message(session_id, 7_001), commit=True)
 
-    snapshot = await repository.get_by_message(7_001)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_message(7_001))
     assert snapshot is not None
     assert snapshot.id == session_id
     assert snapshot.message_ids == (7_001,)
 
 
 async def test_a_message_cannot_be_attached_to_two_vote_sessions(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     first_id, _ = await seed_generic_poll(
@@ -550,13 +603,13 @@ async def test_a_message_cannot_be_attached_to_two_vote_sessions(
     async with async_session_factory.begin() as session:
         await record_vote_message(session, message_id=7_002)
 
-    await repository.attach_message(first_id, 7_002)
+    await transact(repository, lambda uow: uow.votes.attach_message(first_id, 7_002), commit=True)
     with pytest.raises(DataIntegrityError, match="different resource"):
-        await repository.attach_message(second_id, 7_002)
+        await transact(repository, lambda uow: uow.votes.attach_message(second_id, 7_002), commit=True)
 
 
 async def test_a_poll_shown_in_two_places_tracks_both_locations(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     session_id, message_id = await seed_generic_poll(
@@ -574,9 +627,9 @@ async def test_a_poll_shown_in_two_places_tracks_both_locations(
 
     async with async_session_factory.begin() as session:
         await record_vote_message(session, message_id=8_002, channel_id=CHANNEL_ID + 1)
-    await repository.attach_message(session_id, 8_002)
+    await transact(repository, lambda uow: uow.votes.attach_message(session_id, 8_002), commit=True)
 
-    snapshot = await repository.get_by_id(session_id)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
     assert snapshot is not None
     assert sorted(snapshot.message_ids) == sorted((message_id, 8_002))
 
@@ -638,15 +691,15 @@ async def _insert_vote_root(session: AsyncSession, kind: str) -> int:
 
 
 async def test_kind_and_subtype_can_transition_atomically(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    vote_session_id = await repository.create_build_session(
-        author_account_id=AUTHOR_ACCOUNT_IDS[0],
-        pass_threshold=3,
-        fail_threshold=-3,
-        build_id=BUILD_ID,
-        changes=[],
+    vote_session_id = await transact(
+        repository,
+        lambda uow: uow.votes.create_build_session(
+            author_account_id=AUTHOR_ACCOUNT_IDS[0], pass_threshold=3, fail_threshold=-3, build_id=BUILD_ID, changes=[]
+        ),
+        commit=True,
     )
 
     async with async_session_factory.begin() as session:
@@ -674,7 +727,7 @@ async def test_kind_and_subtype_can_transition_atomically(
             .values(choice=VoteChoice.GENERIC, identifier=VoteSessionOption.emoji, label=VoteSessionOption.emoji)
         )
 
-    transitioned = await repository.get_by_id(vote_session_id)
+    transitioned = await transact(repository, lambda uow: uow.votes.get_by_id(vote_session_id))
     assert transitioned is not None
     assert transitioned.kind is VoteKind.GENERIC
     assert transitioned.poll is not None
@@ -729,15 +782,15 @@ async def test_deferred_kind_subtype_invariant_rejects_invalid_final_shapes(
 
 
 async def test_changing_only_the_kind_cannot_strand_the_existing_subtype(
-    repository: VoteRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    vote_session_id = await repository.create_build_session(
-        author_account_id=AUTHOR_ACCOUNT_IDS[0],
-        pass_threshold=3,
-        fail_threshold=-3,
-        build_id=BUILD_ID,
-        changes=[],
+    vote_session_id = await transact(
+        repository,
+        lambda uow: uow.votes.create_build_session(
+            author_account_id=AUTHOR_ACCOUNT_IDS[0], pass_threshold=3, fail_threshold=-3, build_id=BUILD_ID, changes=[]
+        ),
+        commit=True,
     )
 
     with pytest.raises(IntegrityError):
@@ -747,6 +800,6 @@ async def test_changing_only_the_kind_cannot_strand_the_existing_subtype(
                 {"id": vote_session_id},
             )
 
-    unchanged = await repository.get_by_id(vote_session_id)
+    unchanged = await transact(repository, lambda uow: uow.votes.get_by_id(vote_session_id))
     assert unchanged is not None
     assert unchanged.kind is VoteKind.BUILD

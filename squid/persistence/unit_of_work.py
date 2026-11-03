@@ -23,6 +23,7 @@ from squid.starboard.infrastructure.repository import PostgresStarboardRepositor
 from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.infrastructure.repository import VersionRepository
+from squid.voting.infrastructure.repository import VoteRepository
 
 
 class SqlAlchemyUnitOfWork:
@@ -36,6 +37,7 @@ class SqlAlchemyUnitOfWork:
         self._domain_events = PostgresDomainEventRepository(self._active_session)
         self._reconciliation = PostgresDiscordSyncQueue(self._active_session)
         self._notifications = PostgresNotificationRepository(self._active_session)
+        self._votes = VoteRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -142,6 +144,11 @@ class SqlAlchemyUnitOfWork:
     def notifications(self) -> PostgresNotificationRepository:
         self._active_session()
         return self._notifications
+
+    @property
+    def votes(self) -> VoteRepository:
+        self._active_session()
+        return self._votes
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

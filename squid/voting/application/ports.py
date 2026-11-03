@@ -5,6 +5,7 @@ from typing import Protocol
 
 from whenever import Instant
 
+from squid.unit_of_work import UnitOfWork
 from squid.voting.domain import (
     EmojiPreset,
     PollScope,
@@ -136,3 +137,8 @@ class VoteRepository(Protocol):
     async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None: ...
 
     async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None: ...
+
+
+class VoteUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def votes(self) -> VoteRepository: ...

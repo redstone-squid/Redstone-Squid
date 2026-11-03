@@ -121,9 +121,8 @@ from squid.tags.application import TagService
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
-from squid.voting.infrastructure.accounts import PostgresVoterDiscordIdLookup
+from squid.voting.infrastructure.accounts import AccountVoterDiscordIdLookup
 from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
-from squid.voting.infrastructure.repository import VoteRepository
 from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)
@@ -566,7 +565,7 @@ class _ServiceGraph:
         # weights answer to the network's own server. BotIdentityConfig is
         # code-owned, so reading it here matches what the bot itself uses.
         return VoteService(
-            VoteRepository(self.db.async_session),
+            uow_factory=self.uow_factory,
             build_owner_guild_id=BotIdentityConfig().owner_server_id,
         )
 
@@ -577,7 +576,7 @@ class _ServiceGraph:
         resolver = DiscordRestActorResolver(
             self.config.discord_bot_token.get_secret_value(),
             capabilities=self.permissions,
-            discord_ids=PostgresVoterDiscordIdLookup(self.db.async_session),
+            discord_ids=AccountVoterDiscordIdLookup(self.accounts),
             api_url=str(self.config.upstream_http.discord_api_url),
         )
         self.resources.push_async_callback(resolver.aclose)

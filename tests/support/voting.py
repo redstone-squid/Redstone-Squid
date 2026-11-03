@@ -6,6 +6,7 @@ one set of builders here means a field added to the domain is added once.
 """
 
 from collections.abc import Mapping, Sequence
+from copy import copy
 from typing import cast
 
 from sqlalchemy import insert
@@ -32,6 +33,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.models import DeleteLogVoteSession, Vote, VoteSession, VoteSessionOption
+from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 GUILD_ID = 503
 CHANNEL_ID = 502
@@ -252,3 +254,12 @@ async def seed_delete_log_vote(
                 ],
             )
     return vote_session_id, message_id
+
+
+class VoteUnitOfWork[RepositoryT](PublishingFakeUnitOfWork[RepositoryT]):
+    def __init__(self, repository: RepositoryT) -> None:
+        super().__init__(repository, clone=copy)
+
+    @property
+    def votes(self) -> RepositoryT:
+        return self.state

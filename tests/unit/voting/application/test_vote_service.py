@@ -30,7 +30,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from tests.support.voting import DEFAULT_BUILD_TARGET, GENERIC_OPTIONS, build_snapshot, poll_snapshot
+from tests.support.voting import DEFAULT_BUILD_TARGET, GENERIC_OPTIONS, VoteUnitOfWork, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
@@ -243,7 +243,7 @@ class RecordingActorResolver:
 
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
     repository = FakeVoteRepository(None)
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
     changes: list[VoteChange] = [("status", "pending", "confirmed")]
 
     build_session_id = await service.start_build_vote(
@@ -270,7 +270,7 @@ async def test_vote_creation_delegates_complete_aggregate_to_repository() -> Non
 
 async def test_initial_build_vote_creation_uses_idempotent_repository_operation() -> None:
     repository = FakeVoteRepository(None)
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
     changes: list[VoteChange] = [("submission_status", 0, 1)]
 
     session_id = await service.ensure_build_submission_vote(
@@ -287,7 +287,7 @@ async def test_initial_build_vote_creation_uses_idempotent_repository_operation(
 
 async def test_message_attachment_stays_an_explicit_application_operation() -> None:
     repository = FakeVoteRepository(None)
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     await service.attach_message(26, 9001)
     await service.attach_message(26, 9001)
@@ -300,7 +300,9 @@ async def test_refresh_log_carries_session_id_without_user_attributes(caplog: py
         snapshot(),
         selections=(VoteSelection(account_id=9, guild_id=10, option_id="approve", emoji="👍", weight=1.0),),
     )
-    service = VoteService(FakeVoteRepository(initial), actor_resolver=MissingActorResolver())
+    service = VoteService(
+        actor_resolver=MissingActorResolver(), uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(initial))
+    )
 
     with caplog.at_level(logging.WARNING, logger="squid.voting.application.services"):
         await service.refresh(100)
@@ -332,7 +334,7 @@ async def test_cast_vote_applies_choice_and_staff_weight(
         current_weight=expected_weight,
         just_closed=False,
     )
-    service = VoteService(repository, build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -383,7 +385,7 @@ async def test_cast_vote_by_session_resolves_a_stable_option_to_each_guild_alias
         current_weight=1.0,
         just_closed=False,
     )
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=guild_id), "approve")
 
@@ -402,7 +404,7 @@ async def test_cast_vote_by_session_resolves_a_stable_option_to_each_guild_alias
 
 
 async def test_cast_vote_by_session_rejects_missing_session() -> None:
-    service = VoteService(FakeVoteRepository(None))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
 
     result = await service.cast_vote_by_session(404, VoteActor(7, 70, guild_id=10), "approve")
 
@@ -412,7 +414,7 @@ async def test_cast_vote_by_session_rejects_missing_session() -> None:
 
 async def test_cast_vote_by_session_rejects_guild_without_message() -> None:
     repository = FakeVoteRepository(snapshot())
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=999), "approve")
 
@@ -422,7 +424,7 @@ async def test_cast_vote_by_session_rejects_guild_without_message() -> None:
 
 async def test_cast_vote_by_session_rejects_unknown_option_identifier() -> None:
     repository = FakeVoteRepository(snapshot())
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=10), "missing")
 
@@ -432,7 +434,7 @@ async def test_cast_vote_by_session_rejects_unknown_option_identifier() -> None:
 
 async def test_delete_log_vote_requires_the_delete_log_capability() -> None:
     repository = FakeVoteRepository(snapshot(kind=VoteKind.DELETE_LOG))
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -453,7 +455,7 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
         current_weight=3.0,
         just_closed=False,
     )
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -477,7 +479,7 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
 
 async def test_closed_vote_is_rejected_before_mutation() -> None:
     repository = FakeVoteRepository(snapshot(status=VoteStatus.CLOSED, result=VoteSessionResult.APPROVED))
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -499,7 +501,7 @@ async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
         current_weight=1.0,
         just_closed=True,
     )
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -518,7 +520,7 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
     repository = FakeVoteRepository(initial)
     repository.mutation = None
     repository.session = initial
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     async def get_after_mutation(message_id: int) -> VoteSessionSnapshot:
         if repository.cast_calls:
@@ -549,7 +551,7 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
         current_weight=6.0,
         just_closed=False,
     )
-    service = VoteService(repository, build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -573,7 +575,7 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
 
 async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
     repository = FakeVoteRepository(snapshot())
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -587,7 +589,7 @@ async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
 
 async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
     repository = FakeVoteRepository(None)
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     with pytest.raises(InvalidVoteConfigurationError, match="unique"):
         await service.start_build_vote(
@@ -622,7 +624,7 @@ def test_vote_option_rejects_non_positive_or_non_finite_multiplier(multiplier: f
 async def test_poll_creation_needs_no_guild_and_no_publication_target() -> None:
     """A poll is a database row before it is a Discord message."""
     repository = FakeVoteRepository(None)
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
     options = (
         VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
         VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
@@ -643,7 +645,7 @@ async def test_poll_creation_needs_no_guild_and_no_publication_target() -> None:
 
 @pytest.mark.parametrize("duration_seconds", [59, 30 * 86400 + 1])
 async def test_poll_creation_rejects_durations_outside_the_supported_range(duration_seconds: int) -> None:
-    service = VoteService(FakeVoteRepository(None))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
 
     with pytest.raises(InvalidVoteConfigurationError, match="between 1 minute and 30 days"):
         await service.create_generic_poll(
@@ -659,7 +661,7 @@ async def test_poll_creation_rejects_durations_outside_the_supported_range(durat
 
 
 async def test_poll_creation_rejects_an_empty_question() -> None:
-    service = VoteService(FakeVoteRepository(None))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
 
     with pytest.raises(InvalidVoteConfigurationError, match="question cannot be empty"):
         await service.create_generic_poll(
@@ -683,7 +685,7 @@ async def test_closing_a_poll_requires_the_creator_or_the_close_any_capability()
         current_weight=None,
         just_closed=True,
     )
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     stranger = await service.close(100, VoteActor(8, 80, guild_id=10))
     creator = await service.close(100, VoteActor(7, 70, guild_id=10))
@@ -705,7 +707,9 @@ async def test_build_vote_weighs_by_the_owner_guild_not_the_voting_guild() -> No
     resolver = RecordingActorResolver(
         {(7, OWNER_GUILD_ID): VoteActor(7, 70, guild_id=OWNER_GUILD_ID, role_ids=frozenset({55}))}
     )
-    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(
+        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
+    )
 
     result = await service.cast_vote(
         101,
@@ -727,9 +731,9 @@ async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> Non
     }
     repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
     service = VoteService(
-        repository,
         actor_resolver=RecordingActorResolver(),
         build_owner_guild_id=OWNER_GUILD_ID,
+        uow_factory=lambda: VoteUnitOfWork(repository),
     )
 
     result = await service.cast_vote(
@@ -753,9 +757,9 @@ async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
     service = VoteService(
-        repository,
         actor_resolver=MissingActorResolver(),
         build_owner_guild_id=OWNER_GUILD_ID,
+        uow_factory=lambda: VoteUnitOfWork(repository),
     )
 
     result = await service.cast_vote(
@@ -772,7 +776,7 @@ async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() ->
     initial = snapshot()
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         100,
@@ -798,7 +802,9 @@ async def test_refresh_reweighs_every_ballot_against_the_owner_guild() -> None:
     resolver = RecordingActorResolver(
         {(8, OWNER_GUILD_ID): VoteActor(8, 80, guild_id=OWNER_GUILD_ID, role_ids=frozenset({55}))}
     )
-    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(
+        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
+    )
 
     weights, unresolved = await service._calculate_refresh(initial)
 
@@ -809,7 +815,9 @@ async def test_refresh_reweighs_every_ballot_against_the_owner_guild() -> None:
 
 
 async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
-    service = VoteService(FakeVoteRepository(None), build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(
+        build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None))
+    )
     poll = poll_snapshot(guild_id=77)
     assert poll.poll is not None
 
@@ -822,7 +830,7 @@ async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
     assert service._owner_guild_id(delete_log) == 64
     assert service._owner_guild_id(poll) == 77
     assert service._owner_guild_id(replace(poll, poll=replace(poll.poll, guild_id=None))) is None
-    assert VoteService(FakeVoteRepository(None))._owner_guild_id(snapshot()) is None
+    assert VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))._owner_guild_id(snapshot()) is None
 
 
 @pytest.mark.parametrize(
@@ -841,7 +849,9 @@ def test_kind_visibility_target_matrix_reaches_application_policy(
     owner_guild_id: int,
 ) -> None:
     """Every valid domain payload keeps its discriminator at the service boundary."""
-    service = VoteService(FakeVoteRepository(session), build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(
+        build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(session))
+    )
 
     assert (type(session.target) if session.target is not None else None) is target_type
     assert session.visibility is visibility
@@ -852,7 +862,9 @@ async def test_a_weight_edit_reaches_only_the_sessions_that_guild_owns() -> None
     initial = shared_snapshot()
     repository = FakeVoteRepository(initial)
     resolver = RecordingActorResolver()
-    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(
+        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
+    )
 
     # A guild that merely hosts a card for the shared review.
     await service.set_role_weight(RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0))
@@ -865,7 +877,9 @@ async def test_a_weight_edit_in_the_owner_guild_reweighs_its_sessions() -> None:
     initial = replace(shared_snapshot(), selections=selections)
     repository = FakeVoteRepository(initial)
     resolver = RecordingActorResolver()
-    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+    service = VoteService(
+        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
+    )
 
     await service.set_role_weight(RoleWeight(OWNER_GUILD_ID, VoteKind.BUILD, 55, 4.0))
 
@@ -878,7 +892,7 @@ async def test_a_due_poll_without_a_card_still_has_its_weights_recomputed() -> N
     repository = FakeVoteRepository(poll)
     repository.due = [poll]
     resolver = RecordingActorResolver()
-    service = VoteService(repository, actor_resolver=resolver)
+    service = VoteService(actor_resolver=resolver, uow_factory=lambda: VoteUnitOfWork(repository))
 
     await service.close_due()
 
@@ -886,7 +900,7 @@ async def test_a_due_poll_without_a_card_still_has_its_weights_recomputed() -> N
 
 
 async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> None:
-    service = VoteService(FakeVoteRepository(None))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
     unscoped = (
         VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
         VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
@@ -916,7 +930,7 @@ async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> No
 
 async def test_a_network_poll_records_its_scope() -> None:
     repository = FakeVoteRepository(None)
-    service = VoteService(repository)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     await service.create_generic_poll(
         author_account_id=7,
