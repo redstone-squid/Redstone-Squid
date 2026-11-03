@@ -1,8 +1,9 @@
 """How the durable schematic runner reports a job's own failures."""
 
 import uuid
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.config import SchematicConfig
 from squid.schematics.application.jobs import (
     ClaimedSchematicJob,
+    SchematicCleanupClaim,
     SchematicJobErrorKind,
     SchematicJobOperation,
     SchematicJobService,
@@ -19,6 +21,7 @@ from squid.schematics.application.jobs import (
 )
 from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
 from squid.schematics.infrastructure.durable import SchematicJobRunner, _job_failure
+from tests.support.schematic_job_uow import JobScope
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer
 
 
@@ -79,8 +82,14 @@ class RecordingJobRepository:
         self.failures.append(RecordedFailure(error, error_kind, error_context, terminal))
         return terminal
 
-    async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int) -> int:
+    async def claim_cleanup(self, *, limit: int) -> tuple[SchematicCleanupClaim, ...]:
+        return ()
+
+    async def complete_cleanup(self, jobs: Sequence[SchematicCleanupClaim]) -> int:
         return 0
+
+    async def release_cleanup(self, jobs: Sequence[SchematicCleanupClaim]) -> None:
+        pass
 
 
 async def test_a_missing_input_artifact_is_classified_and_failed_terminally(tmp_path: Path) -> None:
@@ -95,7 +104,7 @@ async def test_a_missing_input_artifact_is_classified_and_failed_terminally(tmp_
     )
     repository = RecordingJobRepository(job)
     runner = SchematicJobRunner(
-        SchematicJobService(repository),
+        SchematicJobService(uow_factory=partial(JobScope, repository)),
         LocalArtifactStore(tmp_path / "objects"),
         FakeSchematicAnalyzer(),
         SchematicConfig(),

@@ -68,9 +68,7 @@ from squid.schematics.application import (
 )
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
-from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
-from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
@@ -374,7 +372,7 @@ class _ServiceGraph:
     @cached_property
     def schematic_jobs(self) -> SchematicJobService:
         return SchematicJobService(
-            PostgresSchematicJobRepository(self.db.async_session),
+            uow_factory=self.uow_factory,
             max_attempts=self.config.schematics.job_max_attempts,
             retention_hours=self.config.schematics.job_retention_hours,
         )
@@ -749,7 +747,7 @@ def create_worker_services(
         notifications=graph.notifications,
         schematics=graph.schematics,
         schematic_jobs=graph.schematic_jobs,
-        schematic_renders=SchematicRenderJobService(PostgresSchematicRenderJobRepository(db.async_session)),
+        schematic_renders=SchematicRenderJobService(uow_factory=graph.uow_factory),
         media_runner=graph.media_runner,
         media_cleanup=graph.media_cleanup,
         submission_finalization=graph.submission_finalization_worker,

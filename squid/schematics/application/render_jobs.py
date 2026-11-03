@@ -7,6 +7,7 @@ from typing import Protocol
 
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
+from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,21 +33,35 @@ class SchematicRenderJobRepository(Protocol):
 class SchematicRenderJobService:
     """Claim and acknowledge durable build-preview publication intents."""
 
-    def __init__(self, repository: SchematicRenderJobRepository, *, max_attempts: int = 5) -> None:
+    def __init__(self, *, uow_factory: UnitOfWorkFactory[SchematicRenderUnitOfWork], max_attempts: int = 5) -> None:
         if max_attempts < 1:
             msg = tr(t"Render max_attempts must be positive.")
             raise InvalidStateError(msg)
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._max_attempts = max_attempts
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedRenderJob]:
-        if not 1 <= limit <= 32:
-            msg = tr(t"Render claim limit must be between 1 and 32.")
-            raise InvalidStateError(msg)
-        return await self._repository.claim(limit=limit)
+        async with self._uow_factory() as uow:
+            if not 1 <= limit <= 32:
+                msg = tr(t"Render claim limit must be between 1 and 32.")
+                raise InvalidStateError(msg)
+            result = await uow.schematic_renders.claim(limit=limit)
+            await uow.commit()
+            return result
 
     async def complete(self, job: ClaimedRenderJob) -> bool:
-        return await self._repository.complete(job)
+        async with self._uow_factory() as uow:
+            result = await uow.schematic_renders.complete(job)
+            await uow.commit()
+            return result
 
     async def fail(self, job: ClaimedRenderJob, error: Exception) -> bool:
-        return await self._repository.fail(job, str(error)[:4000], max_attempts=self._max_attempts)
+        async with self._uow_factory() as uow:
+            result = await uow.schematic_renders.fail(job, str(error)[:4000], max_attempts=self._max_attempts)
+            await uow.commit()
+            return result
+
+
+class SchematicRenderUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def schematic_renders(self) -> SchematicRenderJobRepository: ...

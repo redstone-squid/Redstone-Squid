@@ -1,6 +1,7 @@
 """PostgreSQL lifecycle coverage for durable schematic preview publication."""
 
 from collections.abc import AsyncGenerator
+from functools import partial
 from typing import Any, cast
 
 import pytest
@@ -8,13 +9,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.application import (
     RenderPreparation,
     RenderSkipReason,
     SchematicRenderJobService,
     SkippedRender,
 )
-from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.worker.rendering import SchematicPreviewWorker
 
 pytestmark = pytest.mark.asyncio
@@ -68,7 +69,7 @@ def _preview_worker(
     session_factory: async_sessionmaker[AsyncSession],
     outcome: RenderPreparation | Exception,
 ) -> SchematicPreviewWorker:
-    jobs = SchematicRenderJobService(PostgresSchematicRenderJobRepository(session_factory), max_attempts=2)
+    jobs = SchematicRenderJobService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory), max_attempts=2)
     return SchematicPreviewWorker(
         jobs,
         cast(Any, PreparedSchematics(outcome)),

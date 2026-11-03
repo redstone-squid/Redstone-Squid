@@ -1,6 +1,8 @@
 """PostgreSQL adapter for durable build-preview publication intents."""
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from collections.abc import Callable
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.schematics.application.render_jobs import ClaimedRenderJob
@@ -23,17 +25,19 @@ SCHEMATIC_RENDER_QUEUE_SPEC = QueueSpec(
 class PostgresSchematicRenderJobRepository:
     """Claim-fenced queue adapter for render enrichment."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._queue = ClaimedRowQueue(SCHEMATIC_RENDER_QUEUE_SPEC, session_factory)
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+        self._queue = ClaimedRowQueue(SCHEMATIC_RENDER_QUEUE_SPEC)
 
     async def claim(self, *, limit: int) -> tuple[ClaimedRenderJob, ...]:
-        rows = await self._queue.claim(limit=limit)
+        rows = await self._queue.claim(limit=limit, session=self._session())
         return tuple(ClaimedRenderJob(row.build_id, row.attempts, self._queue.token_of(row)) for row in rows)
 
     async def complete(self, job: ClaimedRenderJob) -> bool:
         outcome = await self._queue.complete(
             (SchematicRenderQueueItem.build_id == job.build_id,),
             job.claim_token,
+            session=self._session(),
         )
         return outcome.applied
 
@@ -41,6 +45,7 @@ class PostgresSchematicRenderJobRepository:
         outcome = await self._queue.fail(
             (SchematicRenderQueueItem.build_id == job.build_id,),
             job.claim_token,
+            session=self._session(),
             attempts=job.attempts,
             error=error,
             max_attempts=max_attempts,

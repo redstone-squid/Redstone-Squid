@@ -1,6 +1,7 @@
 """Real-PostgreSQL coverage for durable schematic execution."""
 
 from collections.abc import AsyncGenerator, Coroutine, Mapping
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal, override
 
@@ -13,6 +14,7 @@ from squid.artifacts.application import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.config import SchematicConfig
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
 from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
@@ -20,7 +22,6 @@ from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer, SchematicJobRunner
-from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.models import SchematicJob
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer
 
@@ -49,7 +50,7 @@ def durable_components(
     del schematic_job_table
     config = SchematicConfig(job_poll_interval_seconds=0.005, job_wait_timeout_seconds=3)
     artifacts = LocalArtifactStore(tmp_path / "objects")
-    jobs = SchematicJobService(PostgresSchematicJobRepository(async_session_factory))
+    jobs = SchematicJobService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     native = FakeSchematicAnalyzer()
     return (
         QueuedSchematicAnalyzer(jobs, artifacts, config),
@@ -122,7 +123,7 @@ async def test_invalid_payloads_enter_a_retained_dead_state(
     del schematic_job_table
     config = SchematicConfig(job_poll_interval_seconds=0.005, job_wait_timeout_seconds=3)
     artifacts = LocalArtifactStore(tmp_path / "objects")
-    jobs = SchematicJobService(PostgresSchematicJobRepository(async_session_factory))
+    jobs = SchematicJobService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     runner = SchematicJobRunner(jobs, artifacts, FakeSchematicAnalyzer(failure=InvalidSchematicError()), config)
     client = QueuedSchematicAnalyzer(jobs, artifacts, config)
 
@@ -189,8 +190,8 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
 
     artifacts = DelayedUpload(tmp_path / "objects")
     await artifacts.put("input", b"schematic", content_type="application/octet-stream")
-    repository = PostgresSchematicJobRepository(async_session_factory)
-    jobs = SchematicJobService(repository)
+    repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    jobs = SchematicJobService(uow_factory=repository)
     job_id = await jobs.submit("render", {"request": wire.encode_render_request(RenderRequest())}, ("input",))
     stale_native = FakeSchematicAnalyzer()
     stale_native.render_output = b"stale render"
@@ -236,7 +237,7 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
     sessions = migrated_session_factory
     completion_started = anyio.Event()
 
-    class InterruptedCompletion(PostgresSchematicJobRepository):
+    class InterruptedCompletion(SchematicJobService):
         interrupted: bool = False
         first_claim: ClaimedSchematicJob | None = None
 
@@ -246,8 +247,6 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
             job: ClaimedSchematicJob,
             result: Mapping[str, Any],
             result_object_key: str | None,
-            *,
-            retention_hours: int,
         ) -> bool:
             if not self.interrupted:
                 self.interrupted = True
@@ -256,9 +255,9 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
                     completion_started.set()
                     await anyio.sleep_forever()
                 if interruption == "after_commit":
-                    await super().complete(job, result, result_object_key, retention_hours=retention_hours)
+                    await super().complete(job, result, result_object_key)
                 raise OSError("completion acknowledgement lost")
-            return await super().complete(job, result, result_object_key, retention_hours=retention_hours)
+            return await super().complete(job, result, result_object_key)
 
     class InterruptedDeletion(LocalArtifactStore):
         fail_key: str | None = None
@@ -272,8 +271,7 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
 
     artifacts = InterruptedDeletion(tmp_path / "objects")
     await artifacts.put("input", b"schematic", content_type="application/octet-stream")
-    repository = InterruptedCompletion(sessions)
-    jobs = SchematicJobService(repository)
+    jobs = InterruptedCompletion(uow_factory=partial(SqlAlchemyUnitOfWork, sessions))
     job_id = await jobs.submit("render", {"request": wire.encode_render_request(RenderRequest())}, ("input",))
     native = FakeSchematicAnalyzer()
     runner = SchematicJobRunner(jobs, artifacts, native, SchematicConfig())
@@ -306,8 +304,8 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
     winning_key = completed.result_object_key
     assert (first_key == winning_key) is (interruption == "after_commit")
     assert await artifacts.get(winning_key, max_bytes=1024) == native.render_output
-    assert repository.first_claim is not None
-    assert not await jobs.register_result_object(repository.first_claim, "stale-output")
+    assert jobs.first_claim is not None
+    assert not await jobs.register_result_object(jobs.first_claim, "stale-output")
 
     # Old worker versions only wrote the winning key, without an attempt inventory.
     legacy_id = await jobs.submit("render", {}, ())

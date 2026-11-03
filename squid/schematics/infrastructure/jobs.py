@@ -1,16 +1,19 @@
 """PostgreSQL adapter for durable schematic jobs."""
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from typing import Any, cast
+from uuid import uuid4
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
+from whenever import Instant
 
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.schematics.application.jobs import (
     ClaimedSchematicJob,
+    SchematicCleanupClaim,
     SchematicJobErrorKind,
     SchematicJobOperation,
     SchematicJobSnapshot,
@@ -36,9 +39,9 @@ SCHEMATIC_JOB_SPEC = QueueSpec(
 class PostgresSchematicJobRepository:
     """Claim, fence, and retain native-engine jobs in PostgreSQL."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
-        self._queue = ClaimedRowQueue(SCHEMATIC_JOB_SPEC, session_factory)
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+        self._queue = ClaimedRowQueue(SCHEMATIC_JOB_SPEC)
 
     async def submit(
         self,
@@ -51,14 +54,14 @@ class PostgresSchematicJobRepository:
             .values(operation=operation, params=dict(params), input_keys=list(input_keys), error_context={})
             .returning(SchematicJob.id)
         )
-        async with self._session_factory.begin() as session:
-            job_id = await session.scalar(statement)
+        session = self._session()
+        job_id = await session.scalar(statement)
         assert job_id is not None
         return job_id
 
     async def get(self, job_id: int) -> SchematicJobSnapshot | None:
-        async with self._session_factory() as session:
-            row = await session.get(SchematicJob, job_id)
+        session = self._session()
+        row = await session.get(SchematicJob, job_id)
         if row is None:
             return None
         return SchematicJobSnapshot(
@@ -82,7 +85,7 @@ class PostgresSchematicJobRepository:
                 attempts=row.attempts,
                 claim_token=self._queue.token_of(row),
             )
-            for row in await self._queue.claim(limit=limit)
+            for row in await self._queue.claim(limit=limit, session=self._session())
         )
 
     async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
@@ -96,8 +99,8 @@ class PostgresSchematicJobRepository:
             )
             .returning(SchematicJob.id)
         )
-        async with self._session_factory.begin() as session:
-            return await session.scalar(statement) is not None
+        session = self._session()
+        return await session.scalar(statement) is not None
 
     async def complete(
         self,
@@ -112,6 +115,7 @@ class PostgresSchematicJobRepository:
         outcome = await self._queue.complete(
             (SchematicJob.id == job.id,),
             job.claim_token,
+            session=self._session(),
             values={
                 "result": dict(result),
                 "result_object_key": result_object_key,
@@ -139,6 +143,7 @@ class PostgresSchematicJobRepository:
         outcome = await self._queue.fail(
             (SchematicJob.id == job.id,),
             job.claim_token,
+            session=self._session(),
             attempts=job.attempts,
             error=error,
             max_attempts=max_attempts,
@@ -148,23 +153,51 @@ class PostgresSchematicJobRepository:
         )
         return outcome.dead_lettered
 
-    async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int) -> int:
-        """Retain cleanup inventory until every external deletion succeeds."""
-        statement = (
-            select(SchematicJob)
-            .where(SchematicJob.expires_at <= func.now())
-            .order_by(SchematicJob.expires_at)
-            .limit(limit)
-            .with_for_update(skip_locked=True)
-        )
-        async with self._session_factory.begin() as session:
-            jobs = (await session.scalars(statement)).all()
-            # Include the legacy key: jobs completed by an older worker have no inventory.
-            keys = dict.fromkeys(
-                key for job in jobs for key in (*job.result_object_keys, job.result_object_key) if key is not None
+    async def claim_cleanup(self, *, limit: int) -> tuple[SchematicCleanupClaim, ...]:
+        session = self._session()
+        jobs = (
+            await session.scalars(
+                select(SchematicJob)
+                .where(SchematicJob.expires_at <= func.now(), self._queue.reclaimable())
+                .order_by(SchematicJob.expires_at, SchematicJob.id)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
             )
-            for key in keys:
-                await delete_object(key)
-            if jobs:
-                await session.execute(delete(SchematicJob).where(SchematicJob.id.in_([job.id for job in jobs])))
-            return len(jobs)
+        ).all()
+        claims = []
+        for job in jobs:
+            token = uuid4()
+            job.claim_token = token
+            job.claimed_at = Instant.now()
+            keys = tuple(
+                dict.fromkeys(key for key in (*job.result_object_keys, job.result_object_key) if key is not None)
+            )
+            claims.append(SchematicCleanupClaim(job.id, token, keys))
+        return tuple(claims)
+
+    async def complete_cleanup(self, jobs: Sequence[SchematicCleanupClaim]) -> int:
+        session = self._session()
+        removed = 0
+        for job in jobs:
+            removed += int(
+                await session.scalar(
+                    delete(SchematicJob)
+                    .where(
+                        SchematicJob.id == job.id,
+                        SchematicJob.claim_token == job.claim_token,
+                        SchematicJob.expires_at <= func.now(),
+                    )
+                    .returning(SchematicJob.id)
+                )
+                is not None
+            )
+        return removed
+
+    async def release_cleanup(self, jobs: Sequence[SchematicCleanupClaim]) -> None:
+        session = self._session()
+        for job in jobs:
+            await session.execute(
+                update(SchematicJob)
+                .where(SchematicJob.id == job.id, SchematicJob.claim_token == job.claim_token)
+                .values(claim_token=None, claimed_at=None)
+            )

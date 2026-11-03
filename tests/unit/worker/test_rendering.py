@@ -4,6 +4,7 @@ import hashlib
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import override
 
@@ -22,6 +23,7 @@ from squid.schematics.application.previews import (
 )
 from squid.worker.rendering import SchematicPreviewWorker
 from squid_reactivity import LocalTopicBus, Topic
+from tests.support.schematic_job_uow import RenderScope
 
 PNG = b"\x89PNG\r\n\x1a\npreview"
 RECIPE_HASH = "a" * 64
@@ -122,7 +124,7 @@ class PreviewScenario:
 
     def worker(self, *, enabled: bool = True) -> SchematicPreviewWorker:
         return SchematicPreviewWorker(
-            SchematicRenderJobService(self.jobs),
+            SchematicRenderJobService(uow_factory=partial(RenderScope, self.jobs)),
             self.schematics,
             self.artifacts,
             "https://api.example/" if enabled else None,

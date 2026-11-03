@@ -27,6 +27,8 @@ from squid.notifications.infrastructure.repository import PostgresNotificationRe
 from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.records.infrastructure.repository import PostgresRecordRepository
+from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
+from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue, PostgresSearchVectors
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import PostgresSearchProjection
@@ -82,6 +84,8 @@ class SqlAlchemyUnitOfWork:
         self._search_vectors = PostgresSearchVectors(self._active_session)
         self._search_projection = PostgresSearchProjection(self._active_session)
         self._suggestions = PostgresSuggestionRepository(self._active_session)
+        self._schematic_jobs = PostgresSchematicJobRepository(self._active_session)
+        self._schematic_renders = PostgresSchematicRenderJobRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -298,6 +302,16 @@ class SqlAlchemyUnitOfWork:
     def suggestions(self) -> PostgresSuggestionRepository:
         self._active_session()
         return self._suggestions
+
+    @property
+    def schematic_jobs(self) -> PostgresSchematicJobRepository:
+        self._active_session()
+        return self._schematic_jobs
+
+    @property
+    def schematic_renders(self) -> PostgresSchematicRenderJobRepository:
+        self._active_session()
+        return self._schematic_renders
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:
