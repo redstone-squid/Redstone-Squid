@@ -6,6 +6,7 @@ a write rather than a read, it is also what gives the attempt cap something to c
 """
 
 from collections.abc import AsyncIterator
+from functools import partial
 from uuid import UUID
 
 import anyio
@@ -15,13 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, LinkReservation
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account as AccountModel
 from squid.accounts.models import AccountIdentity, CreatorAlias
 from squid.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.builds import models as _build_models  # noqa: F401 — registers `builds` in metadata
 from squid.builds.infrastructure import taxonomy as _taxonomy  # noqa: F401 — and its relationship targets
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
@@ -48,27 +51,33 @@ _TABLES = [
 async def repository(
     async_engine: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
-) -> AsyncIterator[AccountRepository]:
+) -> AsyncIterator[UnitOfWorkFactory[SqlAlchemyUnitOfWork]]:
     async with async_engine.begin() as connection:
         # `builds` carries an embedding column; the container ships pgvector but only the migration
         # chain creates the extension, and this fixture uses `create_all`.
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:
-        yield AccountRepository(async_session_factory, "pepper")
+        yield partial(SqlAlchemyUnitOfWork, async_session_factory, verification_code_pepper="pepper")
     finally:
         async with async_engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
 
 
-async def _seed_code(repository: AccountRepository, *, username: str = "Notch") -> None:
-    await repository.replace_verification_code(minecraft_uuid=JAVA_UUID, code=CODE, username=username)
+async def _seed_code(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], *, username: str = "Notch") -> None:
+    await transact(
+        repository,
+        lambda uow: uow.accounts.replace_verification_code(minecraft_uuid=JAVA_UUID, code=CODE, username=username),
+        commit=True,
+    )
 
 
-async def test_reserving_previews_the_java_identity(repository: AccountRepository) -> None:
+async def test_reserving_previews_the_java_identity(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     await _seed_code(repository)
 
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
 
     assert reservation is not None
     assert reservation.preview.java_uuid == JAVA_UUID
@@ -79,38 +88,59 @@ async def test_reserving_previews_the_java_identity(repository: AccountRepositor
     assert reservation.token
 
 
-async def test_reserving_does_not_spend_the_code(repository: AccountRepository) -> None:
+async def test_reserving_does_not_spend_the_code(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     """The hold must freeze the code, not consume it, or the preview would cost the redemption."""
     await _seed_code(repository)
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert reservation is not None
 
-    account = await repository.create(identities=[AccountIdentity.discord(1)])
+    account = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(1)]), commit=True
+    )
     assert account.id is not None
-    result = await repository.consume_code_and_link_account(
-        account_id=account.id, code=CODE, consent=CONSENT, reservation_token=reservation.token
+    result = await transact(
+        repository,
+        lambda uow: uow.accounts.consume_code_and_link_account(
+            account_id=account.id, code=CODE, consent=CONSENT, reservation_token=reservation.token
+        ),
+        commit=True,
     )
 
     assert result.account is not None
     assert result.refresh is not None
 
 
-async def test_a_held_code_cannot_be_reserved_twice(repository: AccountRepository) -> None:
+async def test_a_held_code_cannot_be_reserved_twice(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     await _seed_code(repository)
-    first = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    first = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert first is not None
 
-    assert await repository.reserve_verification_code(CODE, ttl_seconds=TTL) is None
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+        )
+        is None
+    )
 
 
-async def test_concurrent_reservations_issue_exactly_one_hold(repository: AccountRepository) -> None:
+async def test_concurrent_reservations_issue_exactly_one_hold(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
     await _seed_code(repository)
     start = anyio.Event()
     reservations: list[LinkReservation | None] = []
 
     async def reserve() -> None:
         await start.wait()
-        reservations.append(await repository.reserve_verification_code(CODE, ttl_seconds=TTL))
+        reservations.append(
+            await transact(
+                repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+            )
+        )
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(reserve)
@@ -121,97 +151,164 @@ async def test_concurrent_reservations_issue_exactly_one_hold(repository: Accoun
     assert sum(reservation is not None for reservation in reservations) == 1
 
 
-async def test_releasing_frees_the_code_immediately(repository: AccountRepository) -> None:
+async def test_releasing_frees_the_code_immediately(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     await _seed_code(repository)
-    first = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    first = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert first is not None
 
-    assert await repository.release_verification_code(CODE, first.token) is True
-    assert await repository.reserve_verification_code(CODE, ttl_seconds=TTL) is not None
+    assert (
+        await transact(repository, lambda uow: uow.accounts.release_verification_code(CODE, first.token), commit=True)
+        is True
+    )
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+        )
+        is not None
+    )
 
 
-async def test_releasing_is_idempotent_and_ignores_a_foreign_token(repository: AccountRepository) -> None:
+async def test_releasing_is_idempotent_and_ignores_a_foreign_token(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
     await _seed_code(repository)
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert reservation is not None
 
-    assert await repository.release_verification_code(CODE, "not-the-token") is False
-    assert await repository.release_verification_code(CODE, reservation.token) is True
-    assert await repository.release_verification_code(CODE, reservation.token) is False
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.release_verification_code(CODE, "not-the-token"), commit=True
+        )
+        is False
+    )
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.release_verification_code(CODE, reservation.token), commit=True
+        )
+        is True
+    )
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.release_verification_code(CODE, reservation.token), commit=True
+        )
+        is False
+    )
 
 
-async def test_a_lapsed_hold_frees_the_code_without_a_sweeper(repository: AccountRepository) -> None:
+async def test_a_lapsed_hold_frees_the_code_without_a_sweeper(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
     await _seed_code(repository)
-    lapsed = await repository.reserve_verification_code(CODE, ttl_seconds=-1)
+    lapsed = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=-1), commit=True
+    )
     assert lapsed is not None
 
-    assert await repository.reserve_verification_code(CODE, ttl_seconds=TTL) is not None
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+        )
+        is not None
+    )
 
 
-async def test_committing_with_a_lapsed_hold_is_reported_as_such(repository: AccountRepository) -> None:
+async def test_committing_with_a_lapsed_hold_is_reported_as_such(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
     await _seed_code(repository)
-    lapsed = await repository.reserve_verification_code(CODE, ttl_seconds=-1)
+    lapsed = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=-1), commit=True
+    )
     assert lapsed is not None
-    account = await repository.create(identities=[AccountIdentity.discord(1)])
+    account = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(1)]), commit=True
+    )
     assert account.id is not None
 
-    result = await repository.consume_code_and_link_account(
-        account_id=account.id, code=CODE, consent=CONSENT, reservation_token=lapsed.token
+    result = await transact(
+        repository,
+        lambda uow: uow.accounts.consume_code_and_link_account(
+            account_id=account.id, code=CODE, consent=CONSENT, reservation_token=lapsed.token
+        ),
+        commit=True,
     )
 
     assert result.reservation_expired is True
     assert result.account is None
 
 
-async def test_committing_with_a_foreign_token_is_refused(repository: AccountRepository) -> None:
+async def test_committing_with_a_foreign_token_is_refused(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     await _seed_code(repository)
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert reservation is not None
-    account = await repository.create(identities=[AccountIdentity.discord(1)])
+    account = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(1)]), commit=True
+    )
     assert account.id is not None
 
-    result = await repository.consume_code_and_link_account(
-        account_id=account.id, code=CODE, consent=CONSENT, reservation_token="wrong"
+    result = await transact(
+        repository,
+        lambda uow: uow.accounts.consume_code_and_link_account(
+            account_id=account.id, code=CODE, consent=CONSENT, reservation_token="wrong"
+        ),
+        commit=True,
     )
 
     assert result.reservation_expired is True
 
 
-async def test_the_token_is_stored_only_as_a_digest(repository: AccountRepository) -> None:
+async def test_the_token_is_stored_only_as_a_digest(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], async_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
     await _seed_code(repository)
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert reservation is not None
 
-    async with repository._session_factory() as session:
+    async with async_session_factory() as session:
         stored = await session.scalar(select(Base.metadata.tables["verification_codes"].c.reserved_token))
 
     assert stored is not None
     assert stored != reservation.token
-    assert stored == repository.hash_verification_code(reservation.token)
+    async with repository() as uow:
+        assert stored == uow.accounts.hash_verification_code(reservation.token)
 
 
-async def test_a_cancelled_prompt_stores_nothing_about_the_user(repository: AccountRepository) -> None:
+async def test_a_cancelled_prompt_stores_nothing_about_the_user(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], async_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
     """The notice promises exactly this, so it is asserted rather than assumed.
 
     Nothing here identifies the reserver, which is why the hold is keyed on a token instead of on an
     account: keying it on an account would have had to mint one in order to show a privacy prompt.
     """
     await _seed_code(repository)
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert reservation is not None
-    await repository.release_verification_code(CODE, reservation.token)
+    await transact(repository, lambda uow: uow.accounts.release_verification_code(CODE, reservation.token), commit=True)
 
-    async with repository._session_factory() as session:
+    async with async_session_factory() as session:
         assert (await session.scalars(select(AccountModel))).all() == []
         assert (await session.scalars(select(AccountIdentityModel))).all() == []
 
 
 async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_code(repository, username="Notch")
-    submitter = await repository.create(identities=[AccountIdentity.discord(7)])
+    submitter = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(7)]), commit=True
+    )
     async with async_session_factory.begin() as session:
         alias = CreatorAlias(name="Notch")
         session.add(alias)
@@ -230,7 +327,9 @@ async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
             [{"build_id": build_id, "alias_id": alias.id} for build_id in build_ids],
         )
 
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
 
     assert reservation is not None
     credit = reservation.preview.credit
@@ -241,12 +340,14 @@ async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
 
 
 async def test_the_preview_reports_a_contested_credit_by_public_creator(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Agreeing would move nothing here, so the prompt has to say so before the button is pressed."""
     await _seed_code(repository, username="Notch")
-    holder = await repository.create(identities=[AccountIdentity.discord(999)])
+    holder = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(999)]), commit=True
+    )
     assert holder.id is not None
     async with async_session_factory.begin() as session:
         session.add(
@@ -258,7 +359,9 @@ async def test_the_preview_reports_a_contested_credit_by_public_creator(
             )
         )
 
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
 
     assert reservation is not None
     credit = reservation.preview.credit
@@ -267,33 +370,42 @@ async def test_the_preview_reports_a_contested_credit_by_public_creator(
     assert credit.held_by_public_creator_id == holder.public_creator_id
 
 
-async def test_an_unclaimed_preview_can_become_contested_before_commit(repository: AccountRepository) -> None:
+async def test_an_unclaimed_preview_can_become_contested_before_commit(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], async_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
     """The atomic commit must re-evaluate ownership changed while the reader considered the preview."""
     await _seed_code(repository, username="Notch")
-    claimant = await repository.create(identities=[AccountIdentity.discord(1)])
-    holder = await repository.create(identities=[AccountIdentity.discord(2)])
+    claimant = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(1)]), commit=True
+    )
+    holder = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(2)]), commit=True
+    )
     assert claimant.id is not None
     assert holder.id is not None
-    async with repository._session_factory.begin() as session:
+    async with async_session_factory.begin() as session:
         session.add(CreatorAlias(name="Notch"))
 
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert reservation is not None
     assert reservation.preview.credit is not None
     assert not reservation.preview.credit.is_contested
 
-    async with repository._session_factory.begin() as session:
+    async with async_session_factory.begin() as session:
         await session.execute(
             update(CreatorAlias)
             .where(CreatorAlias.name == "Notch")
             .values(account_id=holder.id, claimed_at=Instant.now(), claim_method=ClaimMethod.STAFF_APPROVED)
         )
 
-    result = await repository.consume_code_and_link_account(
-        account_id=claimant.id,
-        code=CODE,
-        consent=CONSENT,
-        reservation_token=reservation.token,
+    result = await transact(
+        repository,
+        lambda uow: uow.accounts.consume_code_and_link_account(
+            account_id=claimant.id, code=CODE, consent=CONSENT, reservation_token=reservation.token
+        ),
+        commit=True,
     )
 
     assert result.refresh is not None
@@ -303,40 +415,70 @@ async def test_an_unclaimed_preview_can_become_contested_before_commit(repositor
     assert result.refresh.opened_claim.account_id == claimant.id
 
 
-async def test_the_preview_reports_a_java_uuid_already_linked_elsewhere(repository: AccountRepository) -> None:
+async def test_the_preview_reports_a_java_uuid_already_linked_elsewhere(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
     await _seed_code(repository)
-    await repository.create(identities=[AccountIdentity.java(JAVA_UUID, username="Notch")])
+    await transact(
+        repository,
+        lambda uow: uow.accounts.create(identities=[AccountIdentity.java(JAVA_UUID, username="Notch")]),
+        commit=True,
+    )
 
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
 
     assert reservation is not None
     assert reservation.preview.java_uuid_held_elsewhere is True
 
 
-async def test_the_preview_folds_the_username_to_find_the_credit(repository: AccountRepository) -> None:
+async def test_the_preview_folds_the_username_to_find_the_credit(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], async_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
     """The credit is matched by the same folding that defines creator identity, not by spelling."""
     await _seed_code(repository, username="NOTCH")
-    async with repository._session_factory.begin() as session:
+    async with async_session_factory.begin() as session:
         session.add(CreatorAlias(name="notch"))
 
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
 
     assert reservation is not None
     assert reservation.preview.credit is not None
     assert reservation.preview.credit.name == "notch"
 
 
-async def test_an_unknown_or_spent_code_cannot_be_reserved(repository: AccountRepository) -> None:
-    assert await repository.reserve_verification_code(CODE, ttl_seconds=TTL) is None
+async def test_an_unknown_or_spent_code_cannot_be_reserved(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+        )
+        is None
+    )
 
     await _seed_code(repository)
-    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    reservation = await transact(
+        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+    )
     assert reservation is not None
-    account = await repository.create(identities=[AccountIdentity.discord(1)])
+    account = await transact(
+        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(1)]), commit=True
+    )
     assert account.id is not None
-    await repository.consume_code_and_link_account(
-        account_id=account.id, code=CODE, consent=CONSENT, reservation_token=reservation.token
+    await transact(
+        repository,
+        lambda uow: uow.accounts.consume_code_and_link_account(
+            account_id=account.id, code=CODE, consent=CONSENT, reservation_token=reservation.token
+        ),
+        commit=True,
     )
 
     # Spent codes are invalidated, so the hold cannot be retaken to replay the link.
-    assert await repository.reserve_verification_code(CODE, ttl_seconds=TTL) is None
+    assert (
+        await transact(
+            repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
+        )
+        is None
+    )

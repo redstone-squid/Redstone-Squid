@@ -11,13 +11,11 @@ import httpx
 from squid.accounts.application import AccountService
 from squid.accounts.application.services import generate_verification_code
 from squid.accounts.infrastructure.mojang import MojangClient
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.artifacts import ArtifactStore
 from squid.artifacts.infrastructure import create_artifact_store
 from squid.auth.application import ApiKeyService
 from squid.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
 from squid.auth.application.web import WebSessionService
-from squid.auth.infrastructure import PostgresWebSessionRepository
 from squid.builds.application import (
     BuildEmbeddingService,
     BuildInferenceService,
@@ -32,7 +30,6 @@ from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import BuildTagsManager, OfficialTagResolver
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
-from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
@@ -50,7 +47,6 @@ from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
-from squid.minecraft_auth.infrastructure import PostgresMinecraftAuthorizationRepository
 from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import (
@@ -218,7 +214,11 @@ class _ServiceGraph:
 
     @cached_property
     def uow_factory(self) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
-        return partial(SqlAlchemyUnitOfWork, self.db.async_session)
+        return partial(
+            SqlAlchemyUnitOfWork,
+            self.db.async_session,
+            verification_code_pepper=self.config.verification_code_pepper.get_secret_value(),
+        )
 
     @cached_property
     def restriction_repository(self) -> RestrictionRepository:
@@ -588,22 +588,14 @@ class _ServiceGraph:
         return resolver
 
     @cached_property
-    def account_repository(self) -> AccountRepository:
-        return AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value())
-
-    @cached_property
     def accounts(self) -> AccountService:
         mojang = MojangClient(profile_url=str(self.config.upstream_http.mojang_profile_url))
         self.resources.push_async_callback(mojang.aclose)
         return AccountService(
-            self.account_repository,
             mojang.get_username,
             generate_verification_code,
+            uow_factory=self.uow_factory,
         )
-
-    @cached_property
-    def minecraft_repository(self) -> PostgresMinecraftAuthorizationRepository:
-        return PostgresMinecraftAuthorizationRepository(self.db.async_session)
 
     @cached_property
     def minecraft_installations(self) -> InstallationCredentialService | None:
@@ -611,9 +603,8 @@ class _ServiceGraph:
         if pepper is None:
             return None
         return InstallationCredentialService(
-            self.minecraft_repository,
-            self.account_repository,
             MinecraftSecretCodec(pepper.get_secret_value().encode()),
+            uow_factory=self.uow_factory,
         )
 
     @cached_property
@@ -622,9 +613,8 @@ class _ServiceGraph:
         if pepper is None:
             return None
         return PlayerAuthorizationService(
-            self.minecraft_repository,
-            self.account_repository,
             MinecraftSecretCodec(pepper.get_secret_value().encode()),
+            uow_factory=self.uow_factory,
         )
 
     @cached_property
@@ -649,11 +639,10 @@ class _ServiceGraph:
             adapter = factory(credentials, http, upstreams=self.config.upstream_http)
             providers[adapter.slug] = adapter
         return WebSessionService(
-            PostgresWebSessionRepository(self.db.async_session),
-            self.accounts,
             providers,
             self.config.oauth.session_ttl_hours,
             self.config.session_pepper.get_secret_value(),
+            uow_factory=self.uow_factory,
         )
 
     @cached_property
@@ -662,9 +651,8 @@ class _ServiceGraph:
         if pepper is None:
             return None
         return CliAuthorizationService(
-            PostgresCliAuthorizationRepository(self.db.async_session),
-            self.account_repository,
             CliSecretCodec(pepper.get_secret_value().encode()),
+            uow_factory=self.uow_factory,
         )
 
     @cached_property

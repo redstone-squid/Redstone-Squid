@@ -16,6 +16,7 @@ from squid.auth.application.providers import DiscordOAuthProvider
 from squid.auth.application.web import WebSessionService
 from squid.config import OAuthClientCredentials
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
+from tests.support.identity_uow import WebScope
 from tests.unit.api.fakes import TEST_CONFIG, build_app
 from tests.unit.auth.application.fakes import AccountServiceRecorder, SessionRepository
 
@@ -66,7 +67,9 @@ def login() -> Iterator[BrowserLogin]:
     provider = DiscordOAuthProvider(credentials, upstream)
     sessions = SessionRepository()
     accounts = AccountServiceRecorder()
-    auth = WebSessionService(sessions, accounts, {provider.slug: provider}, 336, "test-session-pepper")
+    auth = WebSessionService(
+        {provider.slug: provider}, 336, "test-session-pepper", uow_factory=lambda: WebScope(sessions, accounts)
+    )
     idempotency = IdempotencyRecorder()
     config = TEST_CONFIG.model_copy(
         update={"api": TEST_CONFIG.api.model_copy(update={"cors_origins": ("https://catalogue.test",)})}

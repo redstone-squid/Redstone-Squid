@@ -6,10 +6,14 @@ from typing import Literal, Self
 from anyio import CancelScope
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.accounts.infrastructure.repository import AccountRepository
 from squid.auth.infrastructure.repository import PostgresApiKeyRepository
+from squid.auth.infrastructure.sessions import PostgresWebSessionRepository
+from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.messages.infrastructure.repository import MessageRepository
+from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
@@ -21,10 +25,17 @@ from squid.versions.infrastructure.repository import VersionRepository
 class SqlAlchemyUnitOfWork:
     """Own one session and expose repositories that share its transaction."""
 
-    def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self, sessions: async_sessionmaker[AsyncSession], *, verification_code_pepper: str | None = None
+    ) -> None:
         self._sessions = sessions
         self._session: AsyncSession | None = None
         self._state: Literal["new", "active", "finished"] = "new"
+        self._verification_code_pepper = verification_code_pepper
+        self._accounts: AccountRepository | None = None
+        self._cli_authorization = PostgresCliAuthorizationRepository(self._active_session)
+        self._minecraft_authorization = PostgresMinecraftAuthorizationRepository(self._active_session)
+        self._web_sessions = PostgresWebSessionRepository(self._active_session)
         self._api_keys = PostgresApiKeyRepository(self._active_session)
         self._error_reports = PostgresErrorReportRepository(self._active_session)
         self._messages = MessageRepository(self._active_session)
@@ -85,6 +96,31 @@ class SqlAlchemyUnitOfWork:
     def api_keys(self) -> PostgresApiKeyRepository:
         self._active_session()
         return self._api_keys
+
+    @property
+    def accounts(self) -> AccountRepository:
+        self._active_session()
+        if self._accounts is None:
+            if self._verification_code_pepper is None:
+                message = "Account verification requires a configured pepper."
+                raise InvalidStateError(message)
+            self._accounts = AccountRepository(self._active_session, self._verification_code_pepper)
+        return self._accounts
+
+    @property
+    def cli_authorization(self) -> PostgresCliAuthorizationRepository:
+        self._active_session()
+        return self._cli_authorization
+
+    @property
+    def minecraft_authorization(self) -> PostgresMinecraftAuthorizationRepository:
+        self._active_session()
+        return self._minecraft_authorization
+
+    @property
+    def web_sessions(self) -> PostgresWebSessionRepository:
+        self._active_session()
+        return self._web_sessions
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

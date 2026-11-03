@@ -47,6 +47,7 @@ from squid.accounts.errors import (
 )
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
 from squid.core.errors import ValidationError
+from tests.support.identity_uow import AccountScope
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_JAVA_UUID = UUID("22222222-2222-2222-2222-222222222222")
@@ -376,7 +377,7 @@ def username_lookup(username: str | None) -> Callable[[UUID], Awaitable[str | No
 
 
 def service(repository: FakeAccountRepository, username: str | None = "Player") -> AccountService:
-    return AccountService(repository, username_lookup(username), lambda: 123456)
+    return AccountService(username_lookup(username), lambda: 123456, uow_factory=lambda: AccountScope(repository))
 
 
 def test_identity_factories_use_canonical_provider_subjects() -> None:
@@ -432,7 +433,8 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
         account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT
     )
 
-    assert refresh.claimed_alias == alias
+    assert refresh.claimed_alias is not None
+    assert refresh.claimed_alias.id == alias.id
 
 
 def _linked(account: Account, *, claimed_alias: CreatorAlias | None = None) -> VerificationLinkResult:
@@ -781,7 +783,8 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
 
     linked = await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
 
-    assert linked.claimed_alias == alias
+    assert linked.claimed_alias is not None
+    assert linked.claimed_alias.id == alias.id
     java = repository.accounts[account.id].identity_for(IdentityProvider.JAVA, str(JAVA_UUID))
     assert java is not None
     assert java.id is not None

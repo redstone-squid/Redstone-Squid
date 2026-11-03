@@ -1,5 +1,6 @@
 """Integration coverage for the composed public creator read."""
 
+from functools import partial
 from uuid import UUID
 
 import pytest
@@ -15,12 +16,14 @@ from squid.accounts.domain import (
     ProfileUpdate,
     present_public_profile,
 )
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import CreatorAlias
 from squid.builds import models as _build_models  # noqa: F401 — registers `builds` in metadata
 from squid.builds.infrastructure import taxonomy as _taxonomy  # noqa: F401 — and its relationship targets
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
@@ -39,8 +42,8 @@ def async_session_factory(
 
 
 @pytest.fixture
-def repository(async_session_factory: async_sessionmaker[AsyncSession]) -> AccountRepository:
-    return AccountRepository(async_session_factory, "pepper")
+def repository(async_session_factory: async_sessionmaker[AsyncSession]) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
+    return partial(SqlAlchemyUnitOfWork, async_session_factory, verification_code_pepper="pepper")
 
 
 async def _credit_builds(
@@ -66,23 +69,39 @@ async def _credit_builds(
 
 
 async def test_record_carries_profile_identities_and_credit_counts(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account = await repository.create(
-        consent=CONSENT,
-        identities=(
-            AccountIdentityValue.discord(1),
-            AccountIdentityValue.java(JAVA_UUID, username="Notch"),
+    account = await transact(
+        repository,
+        lambda uow: uow.accounts.create(
+            consent=CONSENT,
+            identities=(
+                AccountIdentityValue.discord(1),
+                AccountIdentityValue.java(JAVA_UUID, username="Notch"),
+            ),
         ),
+        commit=True,
     )
     assert account.id is not None
     assert account.public_creator_id is not None
     await _credit_builds(async_session_factory, alias_name="Notch", submitter_id=account.id, count=3)
-    await repository.claim_unclaimed_alias(account_id=account.id, name="Notch", method=ClaimMethod.VERIFIED_IGN)
-    await repository.upsert_profile(account.id, ProfileUpdate(display_name="Notch", bio="I build").validated())
+    await transact(
+        repository,
+        lambda uow: uow.accounts.claim_unclaimed_alias(
+            account_id=account.id, name="Notch", method=ClaimMethod.VERIFIED_IGN
+        ),
+        commit=True,
+    )
+    await transact(
+        repository,
+        lambda uow: uow.accounts.upsert_profile(
+            account.id, ProfileUpdate(display_name="Notch", bio="I build").validated()
+        ),
+        commit=True,
+    )
 
-    record = await repository.get_creator_profile_record(account.public_creator_id)
+    record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(account.public_creator_id))
 
     assert record is not None
     assert record.profile.display_name == "Notch"
@@ -97,33 +116,51 @@ async def test_record_carries_profile_identities_and_credit_counts(
 
 
 async def test_unclaimed_names_do_not_appear_and_uncredited_names_count_zero(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),))
+    account = await transact(
+        repository,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),)),
+        commit=True,
+    )
     assert account.id is not None
     assert account.public_creator_id is not None
     await _credit_builds(async_session_factory, alias_name="Someone Else", submitter_id=account.id, count=2)
     async with async_session_factory.begin() as session:
         session.add(CreatorAlias(name="Uncredited"))
-    await repository.claim_unclaimed_alias(account_id=account.id, name="Uncredited", method=ClaimMethod.STAFF_APPROVED)
+    await transact(
+        repository,
+        lambda uow: uow.accounts.claim_unclaimed_alias(
+            account_id=account.id, name="Uncredited", method=ClaimMethod.STAFF_APPROVED
+        ),
+        commit=True,
+    )
 
-    record = await repository.get_creator_profile_record(account.public_creator_id)
+    record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(account.public_creator_id))
 
     assert record is not None
     assert [(alias.name, alias.build_count) for alias in record.aliases] == [("Uncredited", 0)]
 
 
-async def test_record_follows_a_merge_redirect(repository: AccountRepository) -> None:
-    surviving = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),))
-    absorbed = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
+async def test_record_follows_a_merge_redirect(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
+    surviving = await transact(
+        repository,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),)),
+        commit=True,
+    )
+    absorbed = await transact(
+        repository,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
+        commit=True,
+    )
     assert surviving.id is not None
     assert absorbed.id is not None
     retired_id = absorbed.public_creator_id
     assert retired_id is not None
 
-    await repository.merge(surviving.id, absorbed.id)
-    record = await repository.get_creator_profile_record(retired_id)
+    await transact(repository, lambda uow: uow.accounts.merge(surviving.id, absorbed.id), commit=True)
+    record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(retired_id))
 
     assert record is not None
     assert record.account_id == surviving.id
@@ -132,22 +169,38 @@ async def test_record_follows_a_merge_redirect(repository: AccountRepository) ->
     assert present_public_profile(record).was_redirected
 
 
-async def test_merge_leaves_the_surviving_profile_intact(repository: AccountRepository) -> None:
-    surviving = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),))
-    absorbed = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
+async def test_merge_leaves_the_surviving_profile_intact(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
+    surviving = await transact(
+        repository,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),)),
+        commit=True,
+    )
+    absorbed = await transact(
+        repository,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
+        commit=True,
+    )
     assert surviving.id is not None
     assert absorbed.id is not None
-    await repository.upsert_profile(surviving.id, ProfileUpdate(display_name="Keeper").validated())
-    await repository.upsert_profile(absorbed.id, ProfileUpdate(display_name="Absorbed").validated())
+    await transact(
+        repository,
+        lambda uow: uow.accounts.upsert_profile(surviving.id, ProfileUpdate(display_name="Keeper").validated()),
+        commit=True,
+    )
+    await transact(
+        repository,
+        lambda uow: uow.accounts.upsert_profile(absorbed.id, ProfileUpdate(display_name="Absorbed").validated()),
+        commit=True,
+    )
 
-    await repository.merge(surviving.id, absorbed.id)
+    await transact(repository, lambda uow: uow.accounts.merge(surviving.id, absorbed.id), commit=True)
 
-    profile = await repository.get_profile(surviving.id)
+    profile = await transact(repository, lambda uow: uow.accounts.get_profile(surviving.id))
     assert profile is not None
     assert profile.display_name == "Keeper"
     # The absorbed account is gone, and its profile row went with it.
-    assert await repository.get_profile(absorbed.id) is None
+    assert await transact(repository, lambda uow: uow.accounts.get_profile(absorbed.id)) is None
 
 
-async def test_unknown_public_id_returns_none(repository: AccountRepository) -> None:
-    assert await repository.get_creator_profile_record(UUID(int=0)) is None
+async def test_unknown_public_id_returns_none(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
+    assert await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(UUID(int=0))) is None

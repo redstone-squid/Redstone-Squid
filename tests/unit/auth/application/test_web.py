@@ -10,6 +10,7 @@ from squid.auth.application.providers import DiscordOAuthProvider, OAuthProvider
 from squid.auth.application.web import WebSessionService
 from squid.config import OAuthClientCredentials, OAuthConfig, UpstreamHttpConfig
 from squid.core.errors import AuthenticationError, NotFoundError
+from tests.support.identity_uow import WebScope
 from tests.unit.auth.application.fakes import AccountServiceRecorder, FakeXboxOAuthProvider, SessionRepository
 
 NOW = Instant.from_utc(2026, 8, 5)
@@ -39,12 +40,11 @@ def discord_provider(
 
 def service(repository: SessionRepository, *providers: OAuthProvider) -> WebSessionService:
     return WebSessionService(
-        repository,
-        AccountServiceRecorder(),
         {provider.slug: provider for provider in providers},
         336,
         "session-pepper-for-tests",
         now=lambda: NOW,
+        uow_factory=lambda: WebScope(repository, AccountServiceRecorder()),
     )
 
 
@@ -105,7 +105,13 @@ async def test_a_second_provider_logs_in_and_lands_its_own_identity_namespace() 
     repository = SessionRepository()
     fake = FakeXboxOAuthProvider()
     accounts = AccountServiceRecorder(account_id=7)
-    web = WebSessionService(repository, accounts, {fake.slug: fake}, 336, "session-pepper-for-tests", now=lambda: NOW)
+    web = WebSessionService(
+        {fake.slug: fake},
+        336,
+        "session-pepper-for-tests",
+        now=lambda: NOW,
+        uow_factory=lambda: WebScope(repository, accounts),
+    )
 
     authorize_url = await web.authorize_url("bedrock", "/account")
     assert authorize_url.startswith("https://xbox.example/authorize?")
@@ -160,6 +166,8 @@ def test_partial_credentials_are_rejected_rather_than_silently_disabling_login()
 
 
 def test_a_deployment_with_no_providers_reports_itself_unconfigured() -> None:
-    web = WebSessionService(SessionRepository(), AccountServiceRecorder(), {}, 336, "pepper", now=lambda: NOW)
+    web = WebSessionService(
+        {}, 336, "pepper", now=lambda: NOW, uow_factory=lambda: WebScope(SessionRepository(), AccountServiceRecorder())
+    )
 
     assert web.configured is False

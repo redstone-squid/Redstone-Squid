@@ -21,7 +21,7 @@ from squid.auth.domain.sessions import WebSessionIdentity
 from squid.auth.models.sessions import OAuthState
 
 
-@dataclass(slots=True)
+@dataclass
 class AccountServiceRecorder(AccountService):
     account_id: int = 42
     identities: list[tuple[IdentityProvider, str]] = field(default_factory=list)

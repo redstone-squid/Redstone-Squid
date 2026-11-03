@@ -26,9 +26,10 @@ from squid.cli_auth.errors import (
     InvalidCliSessionError,
 )
 from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
-from squid.cli_auth.ports import AccountConsentReader, CliAuthorizationRepository
+from squid.cli_auth.ports import CliAuthorizationUnitOfWork
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
+from squid.unit_of_work import UnitOfWorkFactory
 
 CLI_SESSION_TOKEN_PREFIX = "squid_cli_v1"
 ENROLLMENT_LIFETIME_SECONDS = 10 * 60
@@ -104,10 +105,9 @@ class CliAuthorizationService:
 
     def __init__(
         self,
-        repository: CliAuthorizationRepository,
-        accounts: AccountConsentReader,
         codec: CliSecretCodec,
         *,
+        uow_factory: UnitOfWorkFactory[CliAuthorizationUnitOfWork],
         now: Callable[[], Instant] = Instant.now,
         new_uuid: Callable[[], UUID] = uuid4,
         enrollment_lifetime_seconds: int = ENROLLMENT_LIFETIME_SECONDS,
@@ -126,8 +126,7 @@ class CliAuthorizationService:
         ):
             msg = tr(t"CLI authorization limits must be positive.")
             raise InvalidStateError(msg)
-        self._repository = repository
-        self._accounts = accounts
+        self._uow_factory = uow_factory
         self._codec = codec
         self._now = now
         self._new_uuid = new_uuid
@@ -144,95 +143,108 @@ class CliAuthorizationService:
         label: str,
     ) -> IssuedCliEnrollment:
         """Start a browser-approved enrollment for one Ed25519 public key."""
-        normalized_label = _device_label(label)
-        _validate_public_key(public_key)
-        now = self._now()
-        device_code = self._codec.random_secret()
-        user_code = self._codec.random_user_code()
-        enrollment = await self._repository.add_enrollment(
-            CliDeviceEnrollment(
-                id=self._new_uuid(),
-                device_code_hash=self._codec.digest(CliSecretPurpose.DEVICE_CODE, device_code),
-                user_code_hash=self._codec.digest(
-                    CliSecretPurpose.USER_CODE,
-                    self._codec.normalize_user_code(user_code),
+        async with self._uow_factory() as uow:
+            normalized_label = _device_label(label)
+            _validate_public_key(public_key)
+            now = self._now()
+            device_code = self._codec.random_secret()
+            user_code = self._codec.random_user_code()
+            enrollment = await uow.cli_authorization.add_enrollment(
+                CliDeviceEnrollment(
+                    id=self._new_uuid(),
+                    device_code_hash=self._codec.digest(CliSecretPurpose.DEVICE_CODE, device_code),
+                    user_code_hash=self._codec.digest(
+                        CliSecretPurpose.USER_CODE,
+                        self._codec.normalize_user_code(user_code),
+                    ),
+                    public_key=public_key,
+                    client_instance_id=client_instance_id,
+                    label=normalized_label,
+                    created_at=now,
+                    expires_at=now.add(seconds=self._enrollment_lifetime_seconds),
                 ),
-                public_key=public_key,
-                client_instance_id=client_instance_id,
-                label=normalized_label,
-                created_at=now,
-                expires_at=now.add(seconds=self._enrollment_lifetime_seconds),
-            ),
-            max_active=self._max_active_authorizations,
-        )
-        return IssuedCliEnrollment(enrollment, device_code, user_code, POLLING_INTERVAL_SECONDS)
+                max_active=self._max_active_authorizations,
+            )
+            result = IssuedCliEnrollment(enrollment, device_code, user_code, POLLING_INTERVAL_SECONDS)
+            await uow.commit()
+            return result
 
     async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
         """Return safe device metadata for an authenticated approval screen."""
-        enrollment = await self._enrollment_for_user_code(user_code)
-        self._ensure_approvable(enrollment, self._now())
-        return enrollment
+        async with self._uow_factory() as uow:
+            enrollment = await self._enrollment_for_user_code(uow, user_code)
+            self._ensure_approvable(enrollment, self._now())
+            return enrollment
 
     async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
         """Bind one still-live enrollment to the approving browser account."""
-        enrollment = await self._enrollment_for_user_code(user_code)
-        self._ensure_approvable(enrollment, self._now(), account_id=account_id)
-        return await self._repository.approve_enrollment(
-            enrollment_id=enrollment.id,
-            account_id=account_id,
-            approved_at=self._now(),
-        )
+        async with self._uow_factory() as uow:
+            enrollment = await self._enrollment_for_user_code(uow, user_code)
+            self._ensure_approvable(enrollment, self._now(), account_id=account_id)
+            result = await uow.cli_authorization.approve_enrollment(
+                enrollment_id=enrollment.id,
+                account_id=account_id,
+                approved_at=self._now(),
+            )
+            await uow.commit()
+            return result
 
     async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
         """Prove the enrolled private key and exchange browser approval for a session."""
-        enrollment = await self._enrollment_for_device_code(device_code)
-        now = self._now()
-        self._ensure_exchangeable(enrollment, now)
-        _verify_signature(
-            enrollment.public_key,
-            signature,
-            enrollment_proof_message(enrollment.id, device_code),
-        )
-        account_id = enrollment.approved_by_account_id
-        if account_id is None:
-            raise CliAuthorizationPendingError
-        device = CliDevice(
-            id=self._new_uuid(),
-            account_id=account_id,
-            public_key=enrollment.public_key,
-            client_instance_id=enrollment.client_instance_id,
-            label=enrollment.label,
-            created_at=now,
-            last_used_at=now,
-        )
-        session, token = self._new_session(device.id, now)
-        persisted_device, persisted_session = await self._repository.exchange_enrollment(
-            enrollment_id=enrollment.id,
-            device_code_hash=self._codec.digest(CliSecretPurpose.DEVICE_CODE, device_code),
-            device=device,
-            session=session,
-            exchanged_at=now,
-        )
-        if persisted_session.device_id != persisted_device.id:
-            msg = tr(t"Persisted CLI session does not belong to its device.")
-            raise DataIntegrityError(msg)
-        return IssuedCliSession(persisted_device, persisted_session, token)
+        async with self._uow_factory() as uow:
+            enrollment = await self._enrollment_for_device_code(uow, device_code)
+            now = self._now()
+            self._ensure_exchangeable(enrollment, now)
+            _verify_signature(
+                enrollment.public_key,
+                signature,
+                enrollment_proof_message(enrollment.id, device_code),
+            )
+            account_id = enrollment.approved_by_account_id
+            if account_id is None:
+                raise CliAuthorizationPendingError
+            device = CliDevice(
+                id=self._new_uuid(),
+                account_id=account_id,
+                public_key=enrollment.public_key,
+                client_instance_id=enrollment.client_instance_id,
+                label=enrollment.label,
+                created_at=now,
+                last_used_at=now,
+            )
+            session, token = self._new_session(device.id, now)
+            persisted_device, persisted_session = await uow.cli_authorization.exchange_enrollment(
+                enrollment_id=enrollment.id,
+                device_code_hash=self._codec.digest(CliSecretPurpose.DEVICE_CODE, device_code),
+                device=device,
+                session=session,
+                exchanged_at=now,
+            )
+            if persisted_session.device_id != persisted_device.id:
+                msg = tr(t"Persisted CLI session does not belong to its device.")
+                raise DataIntegrityError(msg)
+            result = IssuedCliSession(persisted_device, persisted_session, token)
+            await uow.commit()
+            return result
 
     async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
         """Issue a one-time nonce for an enrolled device to sign."""
-        now = self._now()
-        nonce = self._codec.random_secret()
-        challenge = await self._repository.add_session_challenge(
-            CliSessionChallenge(
-                id=self._new_uuid(),
-                device_id=device_id,
-                nonce_hash=self._codec.digest(CliSecretPurpose.SESSION_NONCE, nonce),
-                created_at=now,
-                expires_at=now.add(seconds=self._session_challenge_lifetime_seconds),
-            ),
-            max_active=self._max_active_authorizations,
-        )
-        return IssuedCliSessionChallenge(challenge, nonce)
+        async with self._uow_factory() as uow:
+            now = self._now()
+            nonce = self._codec.random_secret()
+            challenge = await uow.cli_authorization.add_session_challenge(
+                CliSessionChallenge(
+                    id=self._new_uuid(),
+                    device_id=device_id,
+                    nonce_hash=self._codec.digest(CliSecretPurpose.SESSION_NONCE, nonce),
+                    created_at=now,
+                    expires_at=now.add(seconds=self._session_challenge_lifetime_seconds),
+                ),
+                max_active=self._max_active_authorizations,
+            )
+            result = IssuedCliSessionChallenge(challenge, nonce)
+            await uow.commit()
+            return result
 
     async def exchange_session_challenge(
         self,
@@ -243,82 +255,97 @@ class CliAuthorizationService:
         signature: bytes,
     ) -> IssuedCliSession:
         """Verify a device proof and consume its nonce into a short-lived session."""
-        if not nonce:
-            raise InvalidCliSessionChallengeError
-        device = await self._repository.get_device(device_id)
-        if device is None or not device.is_active():
-            raise CliDeviceUnavailableError
-        _verify_signature(device.public_key, signature, session_proof_message(device_id, challenge_id, nonce))
-        now = self._now()
-        session, token = self._new_session(device.id, now)
-        persisted_device, persisted_session = await self._repository.consume_session_challenge(
-            challenge_id=challenge_id,
-            device_id=device_id,
-            nonce_hash=self._codec.digest(CliSecretPurpose.SESSION_NONCE, nonce),
-            session=session,
-            consumed_at=now,
-        )
-        return IssuedCliSession(persisted_device, persisted_session, token)
+        async with self._uow_factory() as uow:
+            if not nonce:
+                raise InvalidCliSessionChallengeError
+            device = await uow.cli_authorization.get_device(device_id)
+            if device is None or not device.is_active():
+                raise CliDeviceUnavailableError
+            _verify_signature(device.public_key, signature, session_proof_message(device_id, challenge_id, nonce))
+            now = self._now()
+            session, token = self._new_session(device.id, now)
+            persisted_device, persisted_session = await uow.cli_authorization.consume_session_challenge(
+                challenge_id=challenge_id,
+                device_id=device_id,
+                nonce_hash=self._codec.digest(CliSecretPurpose.SESSION_NONCE, nonce),
+                session=session,
+                consumed_at=now,
+            )
+            result = IssuedCliSession(persisted_device, persisted_session, token)
+            await uow.commit()
+            return result
 
     async def authenticate(self, token: str) -> CliIdentity:
         """Authenticate a short-lived CLI bearer token and active device."""
-        parsed = self._codec.parse_session_token(token)
-        if parsed is None:
-            raise InvalidCliSessionError
-        session_id, secret = parsed
-        stored = await self._repository.get_session_with_device(session_id)
-        now = self._now()
-        if stored is None:
-            raise InvalidCliSessionError
-        session, device = stored
-        if (
-            not session.is_active_at(now)
-            or not device.is_active()
-            or session.device_id != device.id
-            or not hmac.compare_digest(
-                session.token_hash,
-                self._codec.digest(CliSecretPurpose.SESSION_TOKEN, secret),
+        async with self._uow_factory() as uow:
+            parsed = self._codec.parse_session_token(token)
+            if parsed is None:
+                raise InvalidCliSessionError
+            session_id, secret = parsed
+            stored = await uow.cli_authorization.get_session_with_device(session_id)
+            now = self._now()
+            if stored is None:
+                raise InvalidCliSessionError
+            session, device = stored
+            if (
+                not session.is_active_at(now)
+                or not device.is_active()
+                or session.device_id != device.id
+                or not hmac.compare_digest(
+                    session.token_hash,
+                    self._codec.digest(CliSecretPurpose.SESSION_TOKEN, secret),
+                )
+            ):
+                raise InvalidCliSessionError
+            return CliIdentity(
+                account_id=device.account_id,
+                device_id=device.id,
+                session_id=session.id,
+                consent_pending=not await uow.accounts.has_current_consent(device.account_id),
             )
-        ):
-            raise InvalidCliSessionError
-        return CliIdentity(
-            account_id=device.account_id,
-            device_id=device.id,
-            session_id=session.id,
-            consent_pending=not await self._accounts.has_current_consent(device.account_id),
-        )
 
     async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
         """List devices belonging to one browser-authenticated account."""
-        return await self._repository.list_devices(account_id)
+        async with self._uow_factory() as uow:
+            return await uow.cli_authorization.list_devices(account_id)
 
     async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
         """Revoke an account-owned device and all sessions beneath it."""
-        return await self._repository.revoke_device(device_id=device_id, account_id=account_id, revoked_at=self._now())
+        async with self._uow_factory() as uow:
+            result = await uow.cli_authorization.revoke_device(
+                device_id=device_id, account_id=account_id, revoked_at=self._now()
+            )
+            await uow.commit()
+            return result
 
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
         """Revoke the exact session represented by a CLI caller."""
-        return await self._repository.revoke_session(
-            session_id=identity.session_id,
-            device_id=identity.device_id,
-            revoked_at=self._now(),
-        )
+        async with self._uow_factory() as uow:
+            result = await uow.cli_authorization.revoke_session(
+                session_id=identity.session_id,
+                device_id=identity.device_id,
+                revoked_at=self._now(),
+            )
+            await uow.commit()
+            return result
 
-    async def _enrollment_for_user_code(self, user_code: str) -> CliDeviceEnrollment:
+    async def _enrollment_for_user_code(self, uow: CliAuthorizationUnitOfWork, user_code: str) -> CliDeviceEnrollment:
         normalized = self._codec.normalize_user_code(user_code)
         if not normalized:
             raise InvalidCliEnrollmentError
-        enrollment = await self._repository.get_enrollment_by_user_code_hash(
+        enrollment = await uow.cli_authorization.get_enrollment_by_user_code_hash(
             self._codec.digest(CliSecretPurpose.USER_CODE, normalized)
         )
         if enrollment is None:
             raise InvalidCliEnrollmentError
         return enrollment
 
-    async def _enrollment_for_device_code(self, device_code: str) -> CliDeviceEnrollment:
+    async def _enrollment_for_device_code(
+        self, uow: CliAuthorizationUnitOfWork, device_code: str
+    ) -> CliDeviceEnrollment:
         if not device_code:
             raise InvalidCliEnrollmentError
-        enrollment = await self._repository.get_enrollment_by_device_code_hash(
+        enrollment = await uow.cli_authorization.get_enrollment_by_device_code_hash(
             self._codec.digest(CliSecretPurpose.DEVICE_CODE, device_code)
         )
         if enrollment is None:

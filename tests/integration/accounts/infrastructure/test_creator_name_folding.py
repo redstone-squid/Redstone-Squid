@@ -9,6 +9,8 @@ skip, plus a check constraint for the paths that bypass the ORM entirely.
 # ruff: noqa: RUF001  Confusable and compatibility characters are the subject
 # matter here: they are the inputs whose folding this file exists to pin.
 
+from functools import partial
+
 import pytest
 from sqlalchemy import Table, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -16,13 +18,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import fold_creator_name
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import CreatorAlias
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 
 @pytest.fixture
-def repository(migrated_session_factory: async_sessionmaker[AsyncSession]) -> AccountRepository:
-    return AccountRepository(migrated_session_factory, "pepper")
+def repository(migrated_session_factory: async_sessionmaker[AsyncSession]) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
+    return partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="pepper")
 
 
 async def _stored_fold(session_factory: async_sessionmaker[AsyncSession], name: str) -> str | None:
@@ -93,7 +97,7 @@ async def test_check_constraint_rejects_an_unfolded_raw_write(
 
 
 async def test_names_that_only_casefold_unifies_are_one_creator(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """`lower(btrim(...))` kept these apart; casefold does not, and the index now agrees."""
@@ -107,7 +111,7 @@ async def test_names_that_only_casefold_unifies_are_one_creator(
 
     # And the alias is reachable by either spelling, which it was not before.
     for spelling in ("ΣΣ", "Σς", "σσ"):
-        alias = await repository.get_alias_by_name(spelling)
+        alias = await transact(repository, lambda uow, spelling=spelling: uow.accounts.get_alias_by_name(spelling))
         assert alias is not None, f"{spelling!r} did not resolve"
         assert alias.name == "ΣΣ"
 

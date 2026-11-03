@@ -20,6 +20,7 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
+from squid.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,3 +156,8 @@ class AccountRepository(Protocol):
     ) -> Instant | None: ...
 
     async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None: ...
+
+
+class AccountUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def accounts(self) -> AccountRepository: ...

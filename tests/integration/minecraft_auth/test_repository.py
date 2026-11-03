@@ -3,6 +3,7 @@
 import base64
 import hashlib
 from collections.abc import AsyncGenerator
+from functools import partial
 from typing import cast
 from uuid import UUID
 
@@ -13,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account, AccountIdentity
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
@@ -24,7 +24,6 @@ from squid.minecraft_auth.errors import (
     InvalidPlayerTokenError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.minecraft_auth.models import (
     PaperInstallation,
     PlayerAuthorizationChallenge,
@@ -32,7 +31,9 @@ from squid.minecraft_auth.models import (
 )
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
@@ -86,15 +87,15 @@ def services(
     *,
     max_active_challenges: int = 5,
 ) -> tuple[InstallationCredentialService, PlayerAuthorizationService]:
-    repository = PostgresMinecraftAuthorizationRepository(session_factory)
-    accounts = AccountRepository(session_factory, "unused-verification-code-pepper")
+    accounts = partial(
+        SqlAlchemyUnitOfWork, session_factory, verification_code_pepper="unused-verification-code-pepper"
+    )
     codec = MinecraftSecretCodec("integration-test-pepper")
     return (
-        InstallationCredentialService(repository, accounts, codec, clock=lambda: NOW),
+        InstallationCredentialService(codec, clock=lambda: NOW, uow_factory=accounts),
         PlayerAuthorizationService(
-            repository,
-            accounts,
             codec,
+            uow_factory=accounts,
             clock=lambda: NOW,
             max_active_challenges=max_active_challenges,
         ),
@@ -322,7 +323,9 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await consenting_account(async_session_factory)
-    authorizer = AccountRepository(async_session_factory, "unused-verification-code-pepper")
+    authorizer = partial(
+        SqlAlchemyUnitOfWork, async_session_factory, verification_code_pepper="unused-verification-code-pepper"
+    )
     second_java_uuid = UUID("24d86f82-6193-4886-94af-8bc62994192d")
     async with async_session_factory.begin() as session:
         session.add(
@@ -334,25 +337,36 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
             )
         )
 
-    assert await authorizer.has_current_consent(account_id)
-    assert await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
-    assert await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=second_java_uuid)
-    assert not await authorizer.can_approve_minecraft_identity(
-        account_id=account_id,
-        java_uuid=UUID("041873ab-65e9-4f44-a225-89d621df8e90"),
+    assert await transact(authorizer, lambda uow: uow.accounts.has_current_consent(account_id))
+    assert await transact(
+        authorizer, lambda uow: uow.accounts.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
     )
-    assert not await authorizer.has_current_consent(999_999)
-    assert not await authorizer.can_approve_minecraft_identity(account_id=999_999, java_uuid=JAVA_UUID)
+    assert await transact(
+        authorizer,
+        lambda uow: uow.accounts.can_approve_minecraft_identity(account_id=account_id, java_uuid=second_java_uuid),
+    )
+    assert not await transact(
+        authorizer,
+        lambda uow: uow.accounts.can_approve_minecraft_identity(
+            account_id=account_id, java_uuid=UUID("041873ab-65e9-4f44-a225-89d621df8e90")
+        ),
+    )
+    assert not await transact(authorizer, lambda uow: uow.accounts.has_current_consent(999_999))
+    assert not await transact(
+        authorizer, lambda uow: uow.accounts.can_approve_minecraft_identity(account_id=999_999, java_uuid=JAVA_UUID)
+    )
 
     unverified_java_uuid = UUID("44444444-4444-4444-8444-444444444444")
     async with async_session_factory.begin() as session:
         unverified = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=NOW)
         session.add(unverified)
         await session.flush()
-    assert await authorizer.has_current_consent(unverified.id)
-    assert not await authorizer.can_approve_minecraft_identity(
-        account_id=unverified.id,
-        java_uuid=unverified_java_uuid,
+    assert await transact(authorizer, lambda uow: uow.accounts.has_current_consent(unverified.id))
+    assert not await transact(
+        authorizer,
+        lambda uow: uow.accounts.can_approve_minecraft_identity(
+            account_id=unverified.id, java_uuid=unverified_java_uuid
+        ),
     )
 
     async with async_session_factory.begin() as session:
@@ -360,5 +374,7 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
         assert account is not None
         account.consent_version = "outdated"
 
-    assert not await authorizer.has_current_consent(account_id)
-    assert not await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
+    assert not await transact(authorizer, lambda uow: uow.accounts.has_current_consent(account_id))
+    assert not await transact(
+        authorizer, lambda uow: uow.accounts.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
+    )

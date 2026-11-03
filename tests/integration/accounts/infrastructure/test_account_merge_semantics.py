@@ -1,6 +1,7 @@
 """Transaction-level account merge semantics across persistence contexts."""
 
 import uuid
+from functools import partial
 
 import anyio
 import pytest
@@ -10,7 +11,6 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, ClaimStatus, IdentityProvider
 from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.core.errors import DataIntegrityError
 from squid.events.models import DomainEvent
@@ -28,10 +28,12 @@ from squid.notifications.models import (
     NotificationSubscription,
 )
 from squid.persistence.types import now
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
 from squid.voting.domain import PollScope, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
 from squid.voting.models import GenericVoteSession, Vote, VoteSession
+from tests.support.unit_of_work import transact
 
 
 @pytest.mark.parametrize(
@@ -42,9 +44,9 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
     migrated_session_factory: async_sessionmaker[AsyncSession],
     corruption: str,
 ) -> None:
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    survivor = await accounts.create()
-    absorbed = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
     draft_id = uuid.UUID("f0000000-0000-4000-8000-000000000001")
@@ -92,7 +94,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
             )
 
     with pytest.raises(DataIntegrityError, match=r"source key|incompatible"):
-        await accounts.merge(survivor.id, absorbed.id)
+        await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
 
     async with migrated_session_factory() as session:
         owner_id = await session.scalar(select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == draft_id))
@@ -109,9 +111,9 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
     migrated_session_factory: async_sessionmaker[AsyncSession],
     profile_state: str,
 ) -> None:
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    survivor = await accounts.create()
-    absorbed = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
     suspended_at = now()
@@ -136,7 +138,7 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
             ]
         )
 
-    await accounts.merge(survivor.id, absorbed.id)
+    await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
 
     async with migrated_session_factory() as session:
         profile = await session.get(NotificationProfile, survivor.id)
@@ -148,15 +150,15 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
 async def test_profile_merge_inserts_an_absorbed_only_profile_for_the_survivor(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    survivor = await accounts.create()
-    absorbed = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
     async with migrated_session_factory.begin() as session:
         session.add(NotificationProfile(account_id=absorbed.id, web_enabled=True, dm_enabled=False))
 
-    await accounts.merge(survivor.id, absorbed.id)
+    await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
 
     async with migrated_session_factory() as session:
         profile = await session.get(NotificationProfile, survivor.id)
@@ -171,9 +173,9 @@ async def test_profile_merge_inserts_an_absorbed_only_profile_for_the_survivor(
 async def test_no_collision_notification_and_delivery_move_together_at_merge_commit(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    survivor = await accounts.create()
-    absorbed = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
     async with migrated_session_factory.begin() as session:
@@ -192,7 +194,7 @@ async def test_no_collision_notification_and_delivery_move_together_at_merge_com
         await session.flush()
         session.add(NotificationDeliveryRecord(notification_id=notification.id, account_id=absorbed.id))
 
-    await accounts.merge(survivor.id, absorbed.id)
+    await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
 
     async with migrated_session_factory() as session:
         merged_notification = (await session.scalars(select(InboxNotification))).one()
@@ -206,9 +208,9 @@ async def test_no_collision_notification_and_delivery_move_together_at_merge_com
 async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempotent(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    survivor = await accounts.create()
-    absorbed = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
     async with migrated_session_factory.begin() as session:
@@ -267,7 +269,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
 
     notifications = PostgresNotificationRepository(migrated_session_factory)
     (stale_claim,) = await notifications.claim_deliveries(limit=1)
-    await accounts.merge(survivor.id, absorbed.id)
+    await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
     assert await notifications.complete_delivery(stale_claim) is False
     async with migrated_session_factory.begin() as session:
         await notifications._insert_candidates(
@@ -297,16 +299,16 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
 async def test_simultaneous_reversed_merges_lock_in_one_order_and_choose_one_winner(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    first = await accounts.create()
-    second = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    first = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    second = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert first.id is not None
     assert second.id is not None
     outcomes: list[tuple[str, int]] = []
 
     async def merge(survivor_id: int, absorbed_id: int) -> None:
         try:
-            await accounts.merge(survivor_id, absorbed_id)
+            await transact(accounts, lambda uow: uow.accounts.merge(survivor_id, absorbed_id), commit=True)
         except AccountNotFoundError as exc:
             outcomes.append(("missing", -1 if exc.account_id is None else exc.account_id))
         else:
@@ -326,9 +328,9 @@ async def test_simultaneous_reversed_merges_lock_in_one_order_and_choose_one_win
 async def test_core_conflict_statements_collapse_claim_vote_and_subscription_collisions(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    survivor = await accounts.create()
-    absorbed = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
     subject_id = uuid.UUID("f0000000-0000-4000-8000-000000000002")
@@ -426,7 +428,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
             ]
         )
 
-    await accounts.merge(survivor.id, absorbed.id)
+    await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
 
     async with migrated_session_factory() as session:
         claims = tuple(

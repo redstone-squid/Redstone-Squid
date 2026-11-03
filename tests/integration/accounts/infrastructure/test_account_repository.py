@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
+from functools import partial
 from uuid import UUID
 
 import pytest
@@ -18,7 +19,6 @@ from squid.accounts.domain import (
     IdentityProvider,
 )
 from squid.accounts.errors import AccountNotFoundError, AliasAlreadyClaimedError, CreatorAliasNotFoundError
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import (
     Account as AccountModel,
 )
@@ -31,6 +31,9 @@ from squid.accounts.models import (
 )
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -63,9 +66,9 @@ async def account_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngin
 def repository(
     account_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
-) -> AccountRepository:
+) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
     del account_tables
-    return AccountRepository(async_session_factory, "pepper")
+    return partial(SqlAlchemyUnitOfWork, async_session_factory, verification_code_pepper="pepper")
 
 
 async def _add_alias(session_factory: async_sessionmaker[AsyncSession], name: str) -> int:
@@ -76,12 +79,18 @@ async def _add_alias(session_factory: async_sessionmaker[AsyncSession], name: st
         return alias.id
 
 
-async def _create_discord_account(repository: AccountRepository, discord_id: int):
-    return await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(discord_id),))
+async def _create_discord_account(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], discord_id: int):
+    return await transact(
+        repository,
+        lambda uow, discord_id=discord_id: uow.accounts.create(
+            consent=CONSENT, identities=(AccountIdentityValue.discord(discord_id),)
+        ),
+        commit=True,
+    )
 
 
 async def test_normalized_name_collapses_case_variants(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """`Foo` and `foo` are the same creator alias."""
@@ -92,31 +101,37 @@ async def test_normalized_name_collapses_case_variants(
         with pytest.raises(IntegrityError):
             await session.commit()
 
-    alias = await repository.get_alias_by_name("FOO")
+    alias = await transact(repository, lambda uow: uow.accounts.get_alias_by_name("FOO"))
     assert alias is not None
     assert alias.name == "  Foo  "
 
 
-async def test_provider_subject_is_globally_unique(repository: AccountRepository) -> None:
+async def test_provider_subject_is_globally_unique(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     await _create_discord_account(repository, 1)
 
     with pytest.raises(IntegrityError):
         await _create_discord_account(repository, 1)
 
 
-async def test_account_can_hold_discord_java_and_bedrock_identities(repository: AccountRepository) -> None:
-    account = await repository.create(
-        consent=CONSENT,
-        identities=(
-            AccountIdentityValue.discord(1),
-            AccountIdentityValue.java(MINECRAFT_UUID, username="JavaPlayer"),
-            AccountIdentityValue.bedrock(2**63, gamertag="BedrockPlayer"),
+async def test_account_can_hold_discord_java_and_bedrock_identities(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
+    account = await transact(
+        repository,
+        lambda uow: uow.accounts.create(
+            consent=CONSENT,
+            identities=(
+                AccountIdentityValue.discord(1),
+                AccountIdentityValue.java(MINECRAFT_UUID, username="JavaPlayer"),
+                AccountIdentityValue.bedrock(2**63, gamertag="BedrockPlayer"),
+            ),
         ),
+        commit=True,
     )
 
     assert account.id is not None
     assert {identity.provider for identity in account.identities} == set(IdentityProvider)
-    loaded = await repository.get_by_identity(IdentityProvider.BEDROCK, str(2**63))
+    loaded = await transact(repository, lambda uow: uow.accounts.get_by_identity(IdentityProvider.BEDROCK, str(2**63)))
     assert loaded is not None
     assert loaded.id == account.id
 
@@ -124,13 +139,13 @@ async def test_account_can_hold_discord_java_and_bedrock_identities(repository: 
 @pytest.mark.parametrize("provider", [IdentityProvider.DISCORD, IdentityProvider.BEDROCK])
 async def test_concurrent_identity_resolution_creates_one_account(
     provider: IdentityProvider,
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The race-safe insert is per-namespace, not Discord's alone."""
     first, second = await asyncio.gather(
-        repository.get_or_create_identity(provider, "1"),
-        repository.get_or_create_identity(provider, "1"),
+        transact(repository, lambda uow: uow.accounts.get_or_create_identity(provider, "1"), commit=True),
+        transact(repository, lambda uow: uow.accounts.get_or_create_identity(provider, "1"), commit=True),
     )
 
     assert first.id == second.id
@@ -140,17 +155,19 @@ async def test_concurrent_identity_resolution_creates_one_account(
 
 
 async def test_claim_unclaimed_alias_matches_ignoring_case(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account = await _create_discord_account(repository, 1)
     alias_id = await _add_alias(async_session_factory, "player")
     assert account.id is not None
 
-    claimed = await repository.claim_unclaimed_alias(
-        account_id=account.id,
-        name="PLAYER",
-        method=ClaimMethod.VERIFIED_IGN,
+    claimed = await transact(
+        repository,
+        lambda uow: uow.accounts.claim_unclaimed_alias(
+            account_id=account.id, name="PLAYER", method=ClaimMethod.VERIFIED_IGN
+        ),
+        commit=True,
     )
 
     assert claimed is not None
@@ -159,13 +176,13 @@ async def test_claim_unclaimed_alias_matches_ignoring_case(
     assert claimed.claim_method is ClaimMethod.VERIFIED_IGN
     assert claimed.public_creator_id == account.public_creator_id
     assert account.public_creator_id is not None
-    profile = await repository.get_creator_profile(account.public_creator_id)
+    profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile(account.public_creator_id))
     assert profile is not None
     assert profile.aliases == ("player",)
 
 
 async def test_concurrent_claims_leave_exactly_one_winner(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The `account_id IS NULL` predicate in the update prevents an overwrite."""
@@ -176,8 +193,20 @@ async def test_concurrent_claims_leave_exactly_one_winner(
     assert second.id is not None
 
     results = await asyncio.gather(
-        repository.claim_unclaimed_alias(account_id=first.id, name="Player", method=ClaimMethod.VERIFIED_IGN),
-        repository.claim_unclaimed_alias(account_id=second.id, name="Player", method=ClaimMethod.VERIFIED_IGN),
+        transact(
+            repository,
+            lambda uow: uow.accounts.claim_unclaimed_alias(
+                account_id=first.id, name="Player", method=ClaimMethod.VERIFIED_IGN
+            ),
+            commit=True,
+        ),
+        transact(
+            repository,
+            lambda uow: uow.accounts.claim_unclaimed_alias(
+                account_id=second.id, name="Player", method=ClaimMethod.VERIFIED_IGN
+            ),
+            commit=True,
+        ),
     )
 
     winners = [result for result in results if result is not None]
@@ -186,13 +215,15 @@ async def test_concurrent_claims_leave_exactly_one_winner(
 
 
 async def test_verification_code_is_consumed_by_exactly_one_link(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await repository.replace_verification_code(
-        minecraft_uuid=MINECRAFT_UUID,
-        code="123456",
-        username="Player",
+    await transact(
+        repository,
+        lambda uow: uow.accounts.replace_verification_code(
+            minecraft_uuid=MINECRAFT_UUID, code="123456", username="Player"
+        ),
+        commit=True,
     )
 
     one = await _create_discord_account(repository, 1)
@@ -201,8 +232,16 @@ async def test_verification_code_is_consumed_by_exactly_one_link(
     assert two.id is not None
 
     first, second = await asyncio.gather(
-        repository.consume_code_and_link_account(account_id=one.id, code="123456", consent=CONSENT),
-        repository.consume_code_and_link_account(account_id=two.id, code="123456", consent=CONSENT),
+        transact(
+            repository,
+            lambda uow: uow.accounts.consume_code_and_link_account(account_id=one.id, code="123456", consent=CONSENT),
+            commit=True,
+        ),
+        transact(
+            repository,
+            lambda uow: uow.accounts.consume_code_and_link_account(account_id=two.id, code="123456", consent=CONSENT),
+            commit=True,
+        ),
     )
 
     # Both callers now have an account, so both results carry one; exactly one link lands.
@@ -223,7 +262,7 @@ async def test_verification_code_is_consumed_by_exactly_one_link(
 
 
 async def test_linking_a_code_mints_no_identity_outside_the_java_namespace(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Redeeming a code is evidence of a Java subject and of nothing else.
@@ -231,11 +270,25 @@ async def test_linking_a_code_mints_no_identity_outside_the_java_namespace(
     A Bedrock-only account can therefore link, which was impossible while the redemption
     looked its caller up by Discord identity and minted one when absent.
     """
-    account = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.bedrock(99),))
+    account = await transact(
+        repository,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.bedrock(99),)),
+        commit=True,
+    )
     assert account.id is not None
-    await repository.replace_verification_code(minecraft_uuid=MINECRAFT_UUID, code="123456", username="Player")
+    await transact(
+        repository,
+        lambda uow: uow.accounts.replace_verification_code(
+            minecraft_uuid=MINECRAFT_UUID, code="123456", username="Player"
+        ),
+        commit=True,
+    )
 
-    result = await repository.consume_code_and_link_account(account_id=account.id, code="123456", consent=CONSENT)
+    result = await transact(
+        repository,
+        lambda uow: uow.accounts.consume_code_and_link_account(account_id=account.id, code="123456", consent=CONSENT),
+        commit=True,
+    )
 
     assert result.account is not None
     assert {identity.provider for identity in result.account.identities} == {
@@ -252,26 +305,40 @@ async def test_linking_a_code_mints_no_identity_outside_the_java_namespace(
 
 
 async def test_linking_a_code_for_a_missing_account_creates_nothing(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await repository.replace_verification_code(minecraft_uuid=MINECRAFT_UUID, code="123456", username="Player")
+    await transact(
+        repository,
+        lambda uow: uow.accounts.replace_verification_code(
+            minecraft_uuid=MINECRAFT_UUID, code="123456", username="Player"
+        ),
+        commit=True,
+    )
 
     with pytest.raises(AccountNotFoundError):
-        await repository.consume_code_and_link_account(account_id=999, code="123456", consent=CONSENT)
+        await transact(
+            repository,
+            lambda uow: uow.accounts.consume_code_and_link_account(account_id=999, code="123456", consent=CONSENT),
+            commit=True,
+        )
 
     async with async_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(AccountModel)) == 0
 
 
-async def test_unlink_removes_all_java_identities(repository: AccountRepository) -> None:
-    account = await repository.create(
-        consent=CONSENT,
-        identities=(
-            AccountIdentityValue.discord(1),
-            AccountIdentityValue.java(MINECRAFT_UUID),
-            AccountIdentityValue.java(SECOND_MINECRAFT_UUID),
+async def test_unlink_removes_all_java_identities(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
+    account = await transact(
+        repository,
+        lambda uow: uow.accounts.create(
+            consent=CONSENT,
+            identities=(
+                AccountIdentityValue.discord(1),
+                AccountIdentityValue.java(MINECRAFT_UUID),
+                AccountIdentityValue.java(SECOND_MINECRAFT_UUID),
+            ),
         ),
+        commit=True,
     )
 
     assert account.id is not None
@@ -281,14 +348,21 @@ async def test_unlink_removes_all_java_identities(repository: AccountRepository)
     # holding two Java identities makes ambiguous.
     for identity in java:
         assert identity.id is not None
-        assert await repository.unlink_identity(account.id, identity.id) is not None
-    reloaded = await repository.get_by_id(account.id)
+        assert (
+            await transact(
+                repository,
+                lambda uow, identity=identity: uow.accounts.unlink_identity(account.id, identity.id),
+                commit=True,
+            )
+            is not None
+        )
+    reloaded = await transact(repository, lambda uow: uow.accounts.get_by_id(account.id))
     assert reloaded is not None
     assert all(identity.provider is not IdentityProvider.JAVA for identity in reloaded.identities)
 
 
 async def test_claim_request_and_approval_credits_the_claimant(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account = await _create_discord_account(repository, 1)
@@ -297,19 +371,25 @@ async def test_claim_request_and_approval_credits_the_claimant(
     assert account.id is not None
     assert staff.id is not None
 
-    claim = await repository.request_claim(name="oldname", account_id=account.id)
+    claim = await transact(
+        repository, lambda uow: uow.accounts.request_claim(name="oldname", account_id=account.id), commit=True
+    )
     assert claim.alias_name == "OldName"
-    assert [pending.id for pending in await repository.pending_claims()] == [claim.id]
+    assert [pending.id for pending in await transact(repository, lambda uow: uow.accounts.pending_claims())] == [
+        claim.id
+    ]
 
-    resolved = await repository.resolve_claim(
-        claim_id=claim.id,
-        status=ClaimStatus.APPROVED,
-        resolved_by_account_id=staff.id,
+    resolved = await transact(
+        repository,
+        lambda uow: uow.accounts.resolve_claim(
+            claim_id=claim.id, status=ClaimStatus.APPROVED, resolved_by_account_id=staff.id
+        ),
+        commit=True,
     )
 
     assert resolved.status is ClaimStatus.APPROVED
     assert resolved.resolved_by_account_id == staff.id
-    assert await repository.pending_claims() == ()
+    assert await transact(repository, lambda uow: uow.accounts.pending_claims()) == ()
     async with async_session_factory() as session:
         alias = await session.get(CreatorAlias, alias_id)
         assert alias is not None
@@ -318,15 +398,19 @@ async def test_claim_request_and_approval_credits_the_claimant(
 
 
 async def test_repeated_claim_requests_reuse_the_pending_row(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account = await _create_discord_account(repository, 1)
     await _add_alias(async_session_factory, "OldName")
     assert account.id is not None
 
-    first = await repository.request_claim(name="OldName", account_id=account.id)
-    second = await repository.request_claim(name="OldName", account_id=account.id)
+    first = await transact(
+        repository, lambda uow: uow.accounts.request_claim(name="OldName", account_id=account.id), commit=True
+    )
+    second = await transact(
+        repository, lambda uow: uow.accounts.request_claim(name="OldName", account_id=account.id), commit=True
+    )
 
     assert first.id == second.id
     async with async_session_factory() as session:
@@ -334,7 +418,7 @@ async def test_repeated_claim_requests_reuse_the_pending_row(
 
 
 async def test_claiming_a_held_credit_is_rejected(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     holder = await _create_discord_account(repository, 1)
@@ -342,26 +426,34 @@ async def test_claiming_a_held_credit_is_rejected(
     await _add_alias(async_session_factory, "Player")
     assert holder.id is not None
     assert other.id is not None
-    await repository.claim_unclaimed_alias(
-        account_id=holder.id,
-        name="Player",
-        method=ClaimMethod.VERIFIED_IGN,
+    await transact(
+        repository,
+        lambda uow: uow.accounts.claim_unclaimed_alias(
+            account_id=holder.id, name="Player", method=ClaimMethod.VERIFIED_IGN
+        ),
+        commit=True,
     )
 
     with pytest.raises(AliasAlreadyClaimedError):
-        await repository.request_claim(name="Player", account_id=other.id)
+        await transact(
+            repository, lambda uow: uow.accounts.request_claim(name="Player", account_id=other.id), commit=True
+        )
 
 
-async def test_claim_request_for_an_uncredited_name_is_rejected(repository: AccountRepository) -> None:
+async def test_claim_request_for_an_uncredited_name_is_rejected(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+) -> None:
     account = await _create_discord_account(repository, 1)
     assert account.id is not None
 
     with pytest.raises(CreatorAliasNotFoundError):
-        await repository.request_claim(name="NeverCredited", account_id=account.id)
+        await transact(
+            repository, lambda uow: uow.accounts.request_claim(name="NeverCredited", account_id=account.id), commit=True
+        )
 
 
 async def test_public_creator_redirect_resolves_to_the_surviving_profile(
-    repository: AccountRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account = await _create_discord_account(repository, 1)
@@ -369,15 +461,17 @@ async def test_public_creator_redirect_resolves_to_the_surviving_profile(
     assert account.public_creator_id is not None
     retired_id = UUID("33333333-3333-3333-3333-333333333333")
     await _add_alias(async_session_factory, "Builder")
-    await repository.claim_unclaimed_alias(
-        account_id=account.id,
-        name="Builder",
-        method=ClaimMethod.MIGRATED,
+    await transact(
+        repository,
+        lambda uow: uow.accounts.claim_unclaimed_alias(
+            account_id=account.id, name="Builder", method=ClaimMethod.MIGRATED
+        ),
+        commit=True,
     )
     async with async_session_factory.begin() as session:
         session.add(PublicCreatorRedirect(retired_public_creator_id=retired_id, target_account_id=account.id))
 
-    profile = await repository.get_creator_profile(retired_id)
+    profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile(retired_id))
 
     assert profile is not None
     assert profile.public_id == retired_id

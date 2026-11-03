@@ -19,6 +19,7 @@ from squid.cli_auth.application import (
 )
 from squid.cli_auth.errors import InvalidCliDeviceProofError, InvalidCliSessionError
 from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
+from tests.support.identity_uow import CliScope
 
 NOW = Instant.parse_iso("2026-08-11T22:00:00Z")
 PEPPER = b"test-cli-authorization-pepper-32-bytes"
@@ -155,7 +156,9 @@ async def _enrolled_service() -> tuple[
     str,
 ]:
     repository = FakeCliAuthorizationRepository()
-    service = CliAuthorizationService(repository, FakeConsentReader(), CliSecretCodec(PEPPER), now=lambda: NOW)
+    service = CliAuthorizationService(
+        CliSecretCodec(PEPPER), now=lambda: NOW, uow_factory=lambda: CliScope(repository, FakeConsentReader())
+    )
     private_key, public_key = _key_pair()
     issued = await service.start_enrollment(
         public_key=public_key,
@@ -186,7 +189,9 @@ async def test_enrollment_proves_private_key_and_issues_authenticated_session() 
 
 async def test_enrollment_rejects_signature_from_another_key() -> None:
     repository = FakeCliAuthorizationRepository()
-    service = CliAuthorizationService(repository, FakeConsentReader(), CliSecretCodec(PEPPER), now=lambda: NOW)
+    service = CliAuthorizationService(
+        CliSecretCodec(PEPPER), now=lambda: NOW, uow_factory=lambda: CliScope(repository, FakeConsentReader())
+    )
     _private_key, public_key = _key_pair()
     wrong_key, _wrong_public_key = _key_pair()
     issued = await service.start_enrollment(public_key=public_key, client_instance_id=uuid4(), label="Laptop")

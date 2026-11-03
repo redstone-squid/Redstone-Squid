@@ -1,6 +1,7 @@
 """Integration coverage for profile storage, visibility, and identity unlinking."""
 
 from collections.abc import AsyncGenerator
+from functools import partial
 from uuid import UUID
 
 import anyio
@@ -20,12 +21,14 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountIdentityNotFoundError, LastIdentityError
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import AccountProfile as AccountProfileModel
 from squid.accounts.models import CreatorAlias as CreatorAliasModel
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -56,13 +59,17 @@ async def account_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngin
 def repository(
     account_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
-) -> AccountRepository:
+) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
     del account_tables
-    return AccountRepository(async_session_factory, "pepper")
+    return partial(SqlAlchemyUnitOfWork, async_session_factory, verification_code_pepper="pepper")
 
 
-async def _account(repository: AccountRepository, discord_id: int = 1):
-    return await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(discord_id),))
+async def _account(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], discord_id: int = 1):
+    return await transact(
+        repository,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(discord_id),)),
+        commit=True,
+    )
 
 
 async def _wait_for_blocked_sessions(
@@ -89,99 +96,145 @@ async def _wait_for_blocked_sessions(
 
 
 class TestProfileRow:
-    async def test_creating_an_account_creates_its_profile(self, repository: AccountRepository) -> None:
+    async def test_creating_an_account_creates_its_profile(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
         account = await _account(repository)
         assert account.id is not None
-        profile = await repository.get_profile(account.id)
+        profile = await transact(repository, lambda uow: uow.accounts.get_profile(account.id))
         assert profile is not None
         assert profile.display_name is None
         assert not profile.hidden
         assert profile.links == ()
 
-    async def test_get_or_create_identity_creates_a_profile(self, repository: AccountRepository) -> None:
-        account = await repository.get_or_create_identity(IdentityProvider.DISCORD, "42")
+    async def test_get_or_create_identity_creates_a_profile(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
+        account = await transact(
+            repository, lambda uow: uow.accounts.get_or_create_identity(IdentityProvider.DISCORD, "42"), commit=True
+        )
         assert account.id is not None
-        assert await repository.get_profile(account.id) is not None
+        assert await transact(repository, lambda uow: uow.accounts.get_profile(account.id)) is not None
 
     async def test_losing_the_identity_race_leaves_no_orphan_profile(
         self,
-        repository: AccountRepository,
+        repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
         async_session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
         """The candidate account is deleted on the lose path; its profile must go with it."""
-        first = await repository.get_or_create_identity(IdentityProvider.DISCORD, "7")
-        second = await repository.get_or_create_identity(IdentityProvider.DISCORD, "7")
+        first = await transact(
+            repository, lambda uow: uow.accounts.get_or_create_identity(IdentityProvider.DISCORD, "7"), commit=True
+        )
+        second = await transact(
+            repository, lambda uow: uow.accounts.get_or_create_identity(IdentityProvider.DISCORD, "7"), commit=True
+        )
         assert first.id == second.id
 
         async with async_session_factory() as session:
             profile_ids = (await session.scalars(select(AccountProfileModel.account_id))).all()
         assert list(profile_ids) == [first.id]
 
-    async def test_profile_is_none_for_an_unknown_account(self, repository: AccountRepository) -> None:
-        assert await repository.get_profile(9999) is None
+    async def test_profile_is_none_for_an_unknown_account(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
+        assert await transact(repository, lambda uow: uow.accounts.get_profile(9999)) is None
 
 
 class TestProfileWrites:
-    async def test_partial_update_leaves_other_fields_alone(self, repository: AccountRepository) -> None:
+    async def test_partial_update_leaves_other_fields_alone(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
         account = await _account(repository)
         assert account.id is not None
-        await repository.upsert_profile(account.id, ProfileUpdate(display_name="Notch", bio="builder").validated())
-        updated = await repository.upsert_profile(account.id, ProfileUpdate(pronouns="they/them").validated())
+        await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(
+                account.id, ProfileUpdate(display_name="Notch", bio="builder").validated()
+            ),
+            commit=True,
+        )
+        updated = await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(account.id, ProfileUpdate(pronouns="they/them").validated()),
+            commit=True,
+        )
 
         assert updated.display_name == "Notch"
         assert updated.bio == "builder"
         assert updated.pronouns == "they/them"
 
-    async def test_explicit_null_clears_a_field(self, repository: AccountRepository) -> None:
+    async def test_explicit_null_clears_a_field(self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
         account = await _account(repository)
         assert account.id is not None
-        await repository.upsert_profile(account.id, ProfileUpdate(bio="gone").validated())
-        cleared = await repository.upsert_profile(account.id, ProfileUpdate(bio=None).validated())
+        await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="gone").validated()),
+            commit=True,
+        )
+        cleared = await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(account.id, ProfileUpdate(bio=None).validated()),
+            commit=True,
+        )
         assert cleared.bio is None
 
-    async def test_links_round_trip_through_jsonb(self, repository: AccountRepository) -> None:
+    async def test_links_round_trip_through_jsonb(self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
         account = await _account(repository)
         assert account.id is not None
         links = (ProfileLink("Site", "https://example.com"), ProfileLink("Videos", "https://youtube.com/@x"))
-        stored = await repository.upsert_profile(account.id, ProfileUpdate(links=links).validated())
-        assert stored.links == links
-        assert (await repository.get_profile(account.id)).links == links  # type: ignore[union-attr]
-
-    async def test_hidden_flag_persists(self, repository: AccountRepository) -> None:
-        account = await _account(repository)
-        assert account.id is not None
-        await repository.upsert_profile(account.id, ProfileUpdate(hidden=True).validated())
-        assert (await repository.get_profile(account.id)).hidden  # type: ignore[union-attr]
-
-    async def test_clear_profile_resets_content_but_leaves_it_visible(self, repository: AccountRepository) -> None:
-        account = await _account(repository)
-        assert account.id is not None
-        await repository.upsert_profile(
-            account.id,
-            ProfileUpdate(
-                display_name="Spam",
-                bio="spam",
-                pronouns="spam",
-                links=(ProfileLink("Spam", "https://spam.example"),),
-                hidden=True,
-                avatar_identity_id=account.identities[0].id,
-            ).validated(),
+        stored = await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(account.id, ProfileUpdate(links=links).validated()),
+            commit=True,
         )
-        cleared = await repository.clear_profile(account.id)
+        assert stored.links == links
+        assert (await transact(repository, lambda uow: uow.accounts.get_profile(account.id))).links == links  # type: ignore[union-attr]
+
+    async def test_hidden_flag_persists(self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
+        account = await _account(repository)
+        assert account.id is not None
+        await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(account.id, ProfileUpdate(hidden=True).validated()),
+            commit=True,
+        )
+        assert (await transact(repository, lambda uow: uow.accounts.get_profile(account.id))).hidden  # type: ignore[union-attr]
+
+    async def test_clear_profile_resets_content_but_leaves_it_visible(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
+        account = await _account(repository)
+        assert account.id is not None
+        await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(
+                account.id,
+                ProfileUpdate(
+                    display_name="Spam",
+                    bio="spam",
+                    pronouns="spam",
+                    links=(ProfileLink("Spam", "https://spam.example"),),
+                    hidden=True,
+                    avatar_identity_id=account.identities[0].id,
+                ).validated(),
+            ),
+            commit=True,
+        )
+        cleared = await transact(repository, lambda uow: uow.accounts.clear_profile(account.id), commit=True)
         assert cleared.display_name is None
         assert cleared.bio is None
         assert cleared.pronouns is None
         assert cleared.links == ()
         assert not cleared.hidden
         assert cleared.avatar_identity_id is None
-        loaded = await repository.get_profile(account.id)
+        loaded = await transact(repository, lambda uow: uow.accounts.get_profile(account.id))
         assert loaded is not None
         assert (loaded.display_name, loaded.bio, loaded.links, loaded.hidden) == (None, None, (), False)
         assert loaded.updated_at == cleared.updated_at
 
     async def test_database_refuses_an_overlong_display_name(
         self,
-        repository: AccountRepository,
+        repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
         async_session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
         """The CHECK is a guard against writes that bypass the domain, so test it directly."""
@@ -195,7 +248,7 @@ class TestProfileWrites:
 
     async def test_database_refuses_more_than_ten_links(
         self,
-        repository: AccountRepository,
+        repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
         async_session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
         account = await _account(repository)
@@ -208,104 +261,160 @@ class TestProfileWrites:
 
 
 class TestAvatars:
-    async def test_avatar_must_reference_an_identity_of_the_same_account(self, repository: AccountRepository) -> None:
+    async def test_avatar_must_reference_an_identity_of_the_same_account(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
         owner = await _account(repository, discord_id=1)
-        stranger = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
+        stranger = await transact(
+            repository,
+            lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
+            commit=True,
+        )
         assert owner.id is not None
         foreign_identity = stranger.identities[0]
         assert foreign_identity.id is not None
 
         with pytest.raises(AccountIdentityNotFoundError):
-            await repository.upsert_profile(owner.id, ProfileUpdate(avatar_identity_id=foreign_identity.id).validated())
+            await transact(
+                repository,
+                lambda uow: uow.accounts.upsert_profile(
+                    owner.id, ProfileUpdate(avatar_identity_id=foreign_identity.id).validated()
+                ),
+                commit=True,
+            )
 
-    async def test_unlinking_the_avatar_identity_clears_the_avatar(self, repository: AccountRepository) -> None:
-        account = await repository.create(
-            consent=CONSENT,
-            identities=(
-                AccountIdentityValue.discord(1),
-                AccountIdentityValue.java(MINECRAFT_UUID, username="Notch"),
+    async def test_unlinking_the_avatar_identity_clears_the_avatar(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
+        account = await transact(
+            repository,
+            lambda uow: uow.accounts.create(
+                consent=CONSENT,
+                identities=(
+                    AccountIdentityValue.discord(1),
+                    AccountIdentityValue.java(MINECRAFT_UUID, username="Notch"),
+                ),
             ),
+            commit=True,
         )
         assert account.id is not None
         java = next(i for i in account.identities if i.provider is IdentityProvider.JAVA)
         assert java.id is not None
-        await repository.upsert_profile(account.id, ProfileUpdate(avatar_identity_id=java.id).validated())
+        await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(account.id, ProfileUpdate(avatar_identity_id=java.id).validated()),
+            commit=True,
+        )
 
-        await repository.unlink_identity(account.id, java.id)
+        await transact(repository, lambda uow: uow.accounts.unlink_identity(account.id, java.id), commit=True)
 
-        profile = await repository.get_profile(account.id)
+        profile = await transact(repository, lambda uow: uow.accounts.get_profile(account.id))
         assert profile is not None
         assert profile.avatar_identity_id is None
 
 
 class TestIdentityVisibilityAndUnlink:
-    async def test_identities_are_public_by_default(self, repository: AccountRepository) -> None:
+    async def test_identities_are_public_by_default(self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
         account = await _account(repository)
         assert all(identity.is_public for identity in account.identities)
 
-    async def test_visibility_toggles_and_reads_back(self, repository: AccountRepository) -> None:
+    async def test_visibility_toggles_and_reads_back(self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
         account = await _account(repository)
         assert account.id is not None
         identity_id = account.identities[0].id
         assert identity_id is not None
 
-        hidden = await repository.set_identity_visibility(account.id, identity_id, is_public=False)
+        hidden = await transact(
+            repository,
+            lambda uow: uow.accounts.set_identity_visibility(account.id, identity_id, is_public=False),
+            commit=True,
+        )
         assert not hidden.is_public
 
-        reloaded = await repository.get_by_id(account.id)
+        reloaded = await transact(repository, lambda uow: uow.accounts.get_by_id(account.id))
         assert reloaded is not None
         assert not reloaded.identities[0].is_public
 
-    async def test_visibility_refuses_another_accounts_identity(self, repository: AccountRepository) -> None:
+    async def test_visibility_refuses_another_accounts_identity(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
         owner = await _account(repository, discord_id=1)
-        stranger = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
+        stranger = await transact(
+            repository,
+            lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
+            commit=True,
+        )
         assert owner.id is not None
         stranger_identity_id = stranger.identities[0].id
         assert stranger_identity_id is not None
 
         with pytest.raises(AccountIdentityNotFoundError):
-            await repository.set_identity_visibility(owner.id, stranger_identity_id, is_public=False)
+            await transact(
+                repository,
+                lambda uow: uow.accounts.set_identity_visibility(owner.id, stranger_identity_id, is_public=False),
+                commit=True,
+            )
 
-    async def test_unlink_removes_only_the_named_identity(self, repository: AccountRepository) -> None:
-        account = await repository.create(
-            consent=CONSENT,
-            identities=(
-                AccountIdentityValue.discord(1),
-                AccountIdentityValue.java(MINECRAFT_UUID, username="Notch"),
+    async def test_unlink_removes_only_the_named_identity(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
+        account = await transact(
+            repository,
+            lambda uow: uow.accounts.create(
+                consent=CONSENT,
+                identities=(
+                    AccountIdentityValue.discord(1),
+                    AccountIdentityValue.java(MINECRAFT_UUID, username="Notch"),
+                ),
             ),
+            commit=True,
         )
         assert account.id is not None
         java = next(i for i in account.identities if i.provider is IdentityProvider.JAVA)
         assert java.id is not None
 
-        removed = await repository.unlink_identity(account.id, java.id)
+        removed = await transact(repository, lambda uow: uow.accounts.unlink_identity(account.id, java.id), commit=True)
         assert removed is not None
         assert removed.provider is IdentityProvider.JAVA
 
-        reloaded = await repository.get_by_id(account.id)
+        reloaded = await transact(repository, lambda uow: uow.accounts.get_by_id(account.id))
         assert reloaded is not None
         assert [identity.provider for identity in reloaded.identities] == [IdentityProvider.DISCORD]
 
-    async def test_unlink_refuses_another_accounts_identity(self, repository: AccountRepository) -> None:
+    async def test_unlink_refuses_another_accounts_identity(
+        self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]
+    ) -> None:
         owner = await _account(repository, discord_id=1)
-        stranger = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
+        stranger = await transact(
+            repository,
+            lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
+            commit=True,
+        )
         assert owner.id is not None
         stranger_identity_id = stranger.identities[0].id
         assert stranger_identity_id is not None
 
-        assert await repository.unlink_identity(owner.id, stranger_identity_id) is None
-        reloaded = await repository.get_by_id(stranger.id)  # type: ignore[arg-type]
+        assert (
+            await transact(
+                repository, lambda uow: uow.accounts.unlink_identity(owner.id, stranger_identity_id), commit=True
+            )
+            is None
+        )
+        reloaded = await transact(repository, lambda uow: uow.accounts.get_by_id(stranger.id))  # type: ignore[arg-type]
         assert reloaded is not None
         assert len(reloaded.identities) == 1
 
     async def test_concurrent_unlinks_keep_a_login_and_creator_credit(
         self,
-        repository: AccountRepository,
+        repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
         async_session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
-        account = await repository.create(
-            consent=CONSENT,
-            identities=(AccountIdentityValue.discord(1), AccountIdentityValue.java(MINECRAFT_UUID)),
+        account = await transact(
+            repository,
+            lambda uow: uow.accounts.create(
+                consent=CONSENT, identities=(AccountIdentityValue.discord(1), AccountIdentityValue.java(MINECRAFT_UUID))
+            ),
+            commit=True,
         )
         assert account.id is not None
         account_id = account.id
@@ -322,7 +431,7 @@ class TestIdentityVisibilityAndUnlink:
         async def unused_username_lookup(_uuid: UUID) -> str | None:
             return None
 
-        service = AccountService(repository, unused_username_lookup, lambda: 123456)
+        service = AccountService(unused_username_lookup, lambda: 123456, uow_factory=repository)
         outcomes: list[AccountIdentityValue | LastIdentityError] = []
 
         async def unlink(identity_id: int) -> None:
@@ -347,18 +456,24 @@ class TestIdentityVisibilityAndUnlink:
 
         assert sum(isinstance(outcome, AccountIdentityValue) for outcome in outcomes) == 1
         assert sum(isinstance(outcome, LastIdentityError) for outcome in outcomes) == 1
-        reloaded = await repository.get_by_id(account_id)
+        reloaded = await transact(repository, lambda uow: uow.accounts.get_by_id(account_id))
         assert reloaded is not None
         (remaining,) = reloaded.identities
         assert remaining.id is not None
-        alias = await repository.get_alias_by_name("Player")
+        alias = await transact(repository, lambda uow: uow.accounts.get_alias_by_name("Player"))
         assert alias is not None
         assert alias.account_id == account_id
 
-        await repository.upsert_profile(account_id, ProfileUpdate(avatar_identity_id=remaining.id).validated())
+        await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(
+                account_id, ProfileUpdate(avatar_identity_id=remaining.id).validated()
+            ),
+            commit=True,
+        )
         with pytest.raises(LastIdentityError):
             await service.unlink_identity(account_id, remaining.id)
-        profile = await repository.get_profile(account_id)
+        profile = await transact(repository, lambda uow: uow.accounts.get_profile(account_id))
         assert profile is not None
         assert profile.avatar_identity_id == remaining.id
         assert [identity.id for identity in await service.list_identities(account_id)] == [remaining.id]
@@ -367,28 +482,45 @@ class TestIdentityVisibilityAndUnlink:
 
     async def test_avatar_edit_serializes_with_identity_unlink(
         self,
-        repository: AccountRepository,
+        repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
         async_session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
-        account = await repository.create(
-            consent=CONSENT,
-            identities=(AccountIdentityValue.discord(1), AccountIdentityValue.java(MINECRAFT_UUID)),
+        account = await transact(
+            repository,
+            lambda uow: uow.accounts.create(
+                consent=CONSENT, identities=(AccountIdentityValue.discord(1), AccountIdentityValue.java(MINECRAFT_UUID))
+            ),
+            commit=True,
         )
         assert account.id is not None
         account_id = account.id
         java = next(identity for identity in account.identities if identity.provider is IdentityProvider.JAVA)
         assert java.id is not None
         identity_id = java.id
-        await repository.upsert_profile(account_id, ProfileUpdate(display_name="Builder").validated())
+        await transact(
+            repository,
+            lambda uow: uow.accounts.upsert_profile(account_id, ProfileUpdate(display_name="Builder").validated()),
+            commit=True,
+        )
         removed: list[AccountIdentityValue | None] = []
         rejected: list[AccountIdentityNotFoundError] = []
 
         async def unlink() -> None:
-            removed.append(await repository.unlink_identity(account_id, identity_id))
+            removed.append(
+                await transact(
+                    repository, lambda uow: uow.accounts.unlink_identity(account_id, identity_id), commit=True
+                )
+            )
 
         async def edit_avatar() -> None:
             try:
-                await repository.upsert_profile(account_id, ProfileUpdate(avatar_identity_id=identity_id).validated())
+                await transact(
+                    repository,
+                    lambda uow: uow.accounts.upsert_profile(
+                        account_id, ProfileUpdate(avatar_identity_id=identity_id).validated()
+                    ),
+                    commit=True,
+                )
             except AccountIdentityNotFoundError as error:
                 rejected.append(error)
 
@@ -409,19 +541,23 @@ class TestIdentityVisibilityAndUnlink:
         assert removed[0].id == java.id
         assert len(rejected) == 1
         assert rejected[0].identity_id == identity_id
-        profile = await repository.get_profile(account_id)
+        profile = await transact(repository, lambda uow: uow.accounts.get_profile(account_id))
         assert profile is not None
         assert profile.avatar_identity_id is None
         assert profile.display_name == "Builder"
 
-    async def test_avatar_key_is_stored_for_discord(self, repository: AccountRepository) -> None:
+    async def test_avatar_key_is_stored_for_discord(self, repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
         account = await _account(repository)
         assert account.id is not None
         identity_id = account.identities[0].id
         assert identity_id is not None
 
-        await repository.set_identity_avatar_key(account.id, identity_id, "deadbeef")
+        await transact(
+            repository,
+            lambda uow: uow.accounts.set_identity_avatar_key(account.id, identity_id, "deadbeef"),
+            commit=True,
+        )
 
-        reloaded = await repository.get_by_id(account.id)
+        reloaded = await transact(repository, lambda uow: uow.accounts.get_by_id(account.id))
         assert reloaded is not None
         assert reloaded.identities[0].avatar_key == "deadbeef"

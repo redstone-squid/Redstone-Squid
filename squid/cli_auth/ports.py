@@ -6,6 +6,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
+from squid.unit_of_work import UnitOfWork
 
 
 class AccountConsentReader(Protocol):
@@ -67,3 +68,11 @@ class CliAuthorizationRepository(Protocol):
     async def revoke_device(self, *, device_id: UUID, account_id: int, revoked_at: Instant) -> bool: ...
 
     async def revoke_session(self, *, session_id: UUID, device_id: UUID, revoked_at: Instant) -> bool: ...
+
+
+class CliAuthorizationUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def cli_authorization(self) -> CliAuthorizationRepository: ...
+
+    @property
+    def accounts(self) -> AccountConsentReader: ...

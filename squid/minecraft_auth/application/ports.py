@@ -5,6 +5,7 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.accounts.application.ports import AccountMinecraftAuthorization
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     MinecraftClientOrigin,
@@ -13,6 +14,7 @@ from squid.minecraft_auth.domain import (
     PublishedPaperServer,
 )
 from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
+from squid.unit_of_work import UnitOfWork
 
 
 class MinecraftAuthorizationRepository(Protocol):
@@ -105,3 +107,11 @@ class MinecraftPlayerTokenAuthenticator(Protocol):
     async def authenticate_fabric_player(self, token: str) -> MinecraftPlayerContext:
         """Authenticate a player grant on the Fabric transport."""
         ...
+
+
+class MinecraftAuthorizationUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def minecraft_authorization(self) -> MinecraftAuthorizationRepository: ...
+
+    @property
+    def accounts(self) -> AccountMinecraftAuthorization: ...

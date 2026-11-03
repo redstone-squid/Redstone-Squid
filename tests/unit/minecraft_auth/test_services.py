@@ -22,6 +22,7 @@ from squid.minecraft_auth.errors import (
     InvalidPlayerTokenError,
     TooManyActiveChallengesError,
 )
+from tests.support.identity_uow import MinecraftScope
 from tests.unit.minecraft_auth.fakes import FakeAccounts, FakeMinecraftAuthorizationRepository
 
 pytestmark = pytest.mark.asyncio
@@ -79,14 +80,15 @@ def services(
     clock = Clock()
     ids = uuid_source((INSTALLATION_ID, *CHALLENGE_IDS))
     codec = MinecraftSecretCodec(b"test-pepper", token_bytes=ByteSource())
-    installations = InstallationCredentialService(repository, accounts, codec, clock=clock, new_uuid=lambda: next(ids))
+    installations = InstallationCredentialService(
+        codec, clock=clock, new_uuid=lambda: next(ids), uow_factory=lambda: MinecraftScope(repository, accounts)
+    )
     players = PlayerAuthorizationService(
-        repository,
-        accounts,
         codec,
         clock=clock,
         new_uuid=lambda: next(ids),
         max_active_challenges=max_active_challenges,
+        uow_factory=lambda: MinecraftScope(repository, accounts),
     )
     return repository, accounts, clock, installations, players
 

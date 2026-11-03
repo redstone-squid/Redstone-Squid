@@ -1,6 +1,7 @@
 """PostgreSQL transaction and claim-fence coverage for submission execution."""
 
 from dataclasses import replace
+from functools import partial
 from typing import override
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.submissions.domain import (
     DraftSnapshot,
@@ -33,6 +35,7 @@ from squid.submissions.infrastructure.finalization_repository import (
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.finalization import SubmissionFinalizationResult, SubmissionReceiptMedia
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
+from tests.support.unit_of_work import transact
 
 
 class PreparedBuilds:
@@ -226,14 +229,13 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
 ) -> None:
     from sqlalchemy import update
 
-    from squid.accounts.infrastructure.repository import AccountRepository
     from squid.submissions.models.entities import SubmissionDraft
     from squid.submissions.models.finalization import SubmissionFinalizationJob
 
     claim = await claimed_submission(migrated_session_factory)
-    accounts = AccountRepository(migrated_session_factory, "test-pepper")
-    staff = await accounts.create()
-    survivor = await accounts.create()
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    staff = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert staff.id is not None
     assert survivor.id is not None
     async with migrated_session_factory.begin() as session:
@@ -252,7 +254,7 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
             .values(submission_actor_account_id=staff.id)
         )
     claim = replace(claim, requested_by_account_id=staff.id)
-    await accounts.merge(survivor.id, staff.id)
+    await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, staff.id), commit=True)
     jobs = PostgresFinalizationJobRepository(migrated_session_factory)
     async with migrated_session_factory.begin() as session:
         assert await complete_in_session(session, claim, FinalizedBuild(99), now=Instant.now()) is False

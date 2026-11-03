@@ -8,7 +8,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.accounts.application.ports import AccountRepository
+from squid.accounts.application.ports import AccountUnitOfWork
 from squid.accounts.domain import (
     MERGE_CODE_BYTES,
     MERGE_TICKET_TTL_SECONDS,
@@ -42,6 +42,7 @@ from squid.accounts.errors import (
 )
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
 from squid.core.errors import InvalidStateError
+from squid.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 
@@ -85,21 +86,24 @@ class AccountService:
 
     def __init__(
         self,
-        repository: AccountRepository,
         minecraft_username_lookup: Callable[[UUID], Awaitable[str | None]],
         verification_code_factory: Callable[[], int],
+        *,
+        uow_factory: UnitOfWorkFactory[AccountUnitOfWork],
     ):
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._minecraft_username_lookup = minecraft_username_lookup
         self._verification_code_factory = verification_code_factory
 
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         """Return the account holding one canonical provider subject, or ``None``."""
-        return await self._repository.get_by_identity(provider, subject)
+        async with self._uow_factory() as uow:
+            return await uow.accounts.get_by_identity(provider, subject)
 
     async def get_account_by_id(self, account_id: int) -> Account | None:
         """Return an account by its internal identifier."""
-        return await self._repository.get_by_id(account_id)
+        async with self._uow_factory() as uow:
+            return await uow.accounts.get_by_id(account_id)
 
     async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
         """Return several accounts, with their identities, at a fixed query cost.
@@ -107,7 +111,8 @@ class AccountService:
         Anything rendering a list of account-keyed rows needs this rather than a
         `get_account_by_id` per row.
         """
-        return await self._repository.get_many(account_ids)
+        async with self._uow_factory() as uow:
+            return await uow.accounts.get_many(account_ids)
 
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
@@ -122,11 +127,17 @@ class AccountService:
         one write. Creating the row first and recording consent second leaves a receipt-less
         account behind whenever the second call fails.
         """
-        return await self._repository.get_or_create_identity(provider, subject, consent=consent)
+        async with self._uow_factory() as uow:
+            result = await uow.accounts.get_or_create_identity(provider, subject, consent=consent)
+            await uow.commit()
+            return result
 
     async def grant_current_consent(self, account_id: int) -> Account:
         """Record consent for any authenticated caller, however they proved their identity."""
-        return await self._repository.update_consent(account_id, AccountConsent.grant_current())
+        async with self._uow_factory() as uow:
+            result = await uow.accounts.update_consent(account_id, AccountConsent.grant_current())
+            await uow.commit()
+            return result
 
     async def merge_accounts(
         self,
@@ -143,7 +154,10 @@ class AccountService:
             or not absorbed_proof.is_recent_at(checked_at)
         ):
             raise InvalidMergeProofError
-        return await self._repository.merge(surviving_proof.account_id, absorbed_proof.account_id)
+        async with self._uow_factory() as uow:
+            result = await uow.accounts.merge(surviving_proof.account_id, absorbed_proof.account_id)
+            await uow.commit()
+            return result
 
     async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
         """Mint a single-use code offering this account up to be absorbed.
@@ -154,11 +168,14 @@ class AccountService:
 
         The plaintext is returned once and never stored.
         """
-        code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
-        # The pepper stays in infrastructure: the repository hashes, exactly as it does for a
-        # verification code, so no application-layer value is ever the stored one.
-        ticket = await self._repository.replace_merge_ticket(account_id, code, MERGE_TICKET_TTL_SECONDS)
-        return code, ticket
+        async with self._uow_factory() as uow:
+            code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
+            # The pepper stays in infrastructure: the repository hashes, exactly as it does for a
+            # verification code, so no application-layer value is ever the stored one.
+            ticket = await uow.accounts.replace_merge_ticket(account_id, code, MERGE_TICKET_TTL_SECONDS)
+            result = code, ticket
+            await uow.commit()
+            return result
 
     async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
         """Describe what redeeming *code* would move, without spending it.
@@ -166,22 +183,23 @@ class AccountService:
         A merge cannot be undone -- the absorbed public creator id becomes a permanent redirect --
         so both surfaces show this before the irreversible button.
         """
-        ticket = await self._repository.peek_merge_ticket(code)
-        if ticket is None or ticket.account_id == surviving_account_id:
-            # Self-merge is refused here as well as in `merge_accounts`, so the preview never
-            # renders a confirmation for something that cannot commit.
-            raise InvalidMergeCodeError
-        absorbed = await self._repository.get_by_id(ticket.account_id)
-        if absorbed is None or absorbed.public_creator_id is None:
-            raise InvalidMergeCodeError
-        record = await self._repository.get_creator_profile_record(absorbed.public_creator_id)
-        aliases = () if record is None else record.aliases
-        return MergePreview(
-            absorbed_public_creator_id=absorbed.public_creator_id,
-            alias_names=tuple(alias.name for alias in aliases),
-            identity_count=len(absorbed.identities),
-            build_count=sum(alias.build_count for alias in aliases),
-        )
+        async with self._uow_factory() as uow:
+            ticket = await uow.accounts.peek_merge_ticket(code)
+            if ticket is None or ticket.account_id == surviving_account_id:
+                # Self-merge is refused here as well as in `merge_accounts`, so the preview never
+                # renders a confirmation for something that cannot commit.
+                raise InvalidMergeCodeError
+            absorbed = await uow.accounts.get_by_id(ticket.account_id)
+            if absorbed is None or absorbed.public_creator_id is None:
+                raise InvalidMergeCodeError
+            record = await uow.accounts.get_creator_profile_record(absorbed.public_creator_id)
+            aliases = () if record is None else record.aliases
+            return MergePreview(
+                absorbed_public_creator_id=absorbed.public_creator_id,
+                alias_names=tuple(alias.name for alias in aliases),
+                identity_count=len(absorbed.identities),
+                build_count=sum(alias.build_count for alias in aliases),
+            )
 
     async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
         """Absorb the account that minted *code* into the caller's.
@@ -191,23 +209,28 @@ class AccountService:
         accepted, so its creation timestamp is the proof timestamp. The caller authenticating now
         is the surviving side's.
         """
-        ticket = await self._repository.consume_merge_ticket(code)
-        if ticket is None:
-            raise InvalidMergeCodeError
-        checked_at = now or Instant.now()
-        return await self.merge_accounts(
-            RecentAccountProof(surviving_account_id, checked_at),
-            RecentAccountProof(ticket.account_id, ticket.created_at),
-            now=checked_at,
-        )
+        async with self._uow_factory() as uow:
+            ticket = await uow.accounts.consume_merge_ticket(code)
+            checked_at = now or Instant.now()
+            if ticket is None:
+                raise InvalidMergeCodeError
+            if ticket.account_id == surviving_account_id or not RecentAccountProof(
+                ticket.account_id, ticket.created_at
+            ).is_recent_at(checked_at):
+                raise InvalidMergeProofError
+            result = await uow.accounts.merge(surviving_account_id, ticket.account_id)
+            await uow.commit()
+            return result
 
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         """Return a creator credit by name without loading its linked account."""
-        return await self._repository.get_alias_by_name(name)
+        async with self._uow_factory() as uow:
+            return await uow.accounts.get_alias_by_name(name)
 
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
         """Return a public creator profile, following permanent merge redirects."""
-        return await self._repository.get_creator_profile(public_id)
+        async with self._uow_factory() as uow:
+            return await uow.accounts.get_creator_profile(public_id)
 
     async def guard_verification_attempts(self, attempted_by: tuple[IdentityProvider, str]) -> None:
         """Refuse a redemption while *attempted_by* is in its cooling-off period.
@@ -215,18 +238,19 @@ class AccountService:
         Separate from the redemption itself so anything that tests a code — a redemption now, a
         reservation later — passes through one cap instead of each surface growing its own.
         """
-        provider, subject = attempted_by
-        locked_until = await self._repository.verification_lockout(provider, subject)
-        if locked_until is not None:
-            retry_after = max(1, round((locked_until - Instant.now()).total("seconds")))
-            # The subject is deliberately not logged: for Discord it is a user ID, which
-            # `_safe_log_context` strips everywhere else. The provider and the wait are what an
-            # operator needs to tell abuse from a confused user.
-            logger.warning(
-                "verification.locked_out",
-                extra={"provider": provider.value, "retry_after": retry_after},
-            )
-            raise VerificationAttemptsExhaustedError(retry_after)
+        async with self._uow_factory() as uow:
+            provider, subject = attempted_by
+            locked_until = await uow.accounts.verification_lockout(provider, subject)
+            if locked_until is not None:
+                retry_after = max(1, round((locked_until - Instant.now()).total("seconds")))
+                # The subject is deliberately not logged: for Discord it is a user ID, which
+                # `_safe_log_context` strips everywhere else. The provider and the wait are what an
+                # operator needs to tell abuse from a confused user.
+                logger.warning(
+                    "verification.locked_out",
+                    extra={"provider": provider.value, "retry_after": retry_after},
+                )
+                raise VerificationAttemptsExhaustedError(retry_after)
 
     async def reserve_minecraft_link(
         self,
@@ -242,7 +266,9 @@ class AccountService:
         without that, reserving would be an uncapped oracle sitting beside a capped one.
         """
         await self.guard_verification_attempts(attempted_by)
-        reservation = await self._repository.reserve_verification_code(code, ttl_seconds=ttl_seconds)
+        async with self._uow_factory() as uow:
+            reservation = await uow.accounts.reserve_verification_code(code, ttl_seconds=ttl_seconds)
+            await uow.commit()
         if reservation is None:
             await self._record_verification_failure(attempted_by)
             raise InvalidVerificationCodeError
@@ -254,7 +280,9 @@ class AccountService:
         Best-effort by design: if this never runs, `reserved_until` lapses on its own, so a crash
         costs one prompt's delay rather than a permanently stuck code.
         """
-        await self._repository.release_verification_code(code, reservation.token)
+        async with self._uow_factory() as uow:
+            await uow.accounts.release_verification_code(code, reservation.token)
+            await uow.commit()
 
     async def link_minecraft_account(
         self,
@@ -281,12 +309,16 @@ class AccountService:
         """
         if reservation is None:
             await self.guard_verification_attempts(attempted_by)
-        result = await self._repository.consume_code_and_link_account(
-            account_id=account_id,
-            code=code,
-            consent=consent,
-            reservation_token=None if reservation is None else reservation.token,
-        )
+        async with self._uow_factory() as uow:
+            result = await uow.accounts.consume_code_and_link_account(
+                account_id=account_id,
+                code=code,
+                consent=consent,
+                reservation_token=None if reservation is None else reservation.token,
+            )
+            if result.account is not None and result.conflicting_java_uuid is None:
+                await uow.accounts.clear_verification_failures(*attempted_by)
+            await uow.commit()
         if result.reservation_expired:
             raise LinkReservationExpiredError
         if result.account is None:
@@ -301,7 +333,6 @@ class AccountService:
                 account_id=account_id,
                 minecraft_uuid=result.conflicting_java_uuid,
             )
-        await self._repository.clear_verification_failures(*attempted_by)
         if result.refresh is None:
             # The repository sets `refresh` on every path that consumed a code, so this is a broken
             # adapter rather than a reachable state.
@@ -311,18 +342,20 @@ class AccountService:
 
     async def _record_verification_failure(self, attempted_by: tuple[IdentityProvider, str]) -> None:
         """Charge one refused code against an identity's budget and log a resulting lockout."""
-        provider, subject = attempted_by
-        locked_until = await self._repository.record_verification_failure(
-            provider,
-            subject,
-            max_failures=VERIFICATION_MAX_CONSECUTIVE_FAILURES,
-            lockout_seconds=VERIFICATION_LOCKOUT_SECONDS,
-        )
-        if locked_until is not None:
-            logger.warning(
-                "verification.lockout_started",
-                extra={"provider": provider.value, "locked_until": str(locked_until)},
+        async with self._uow_factory() as uow:
+            provider, subject = attempted_by
+            locked_until = await uow.accounts.record_verification_failure(
+                provider,
+                subject,
+                max_failures=VERIFICATION_MAX_CONSECUTIVE_FAILURES,
+                lockout_seconds=VERIFICATION_LOCKOUT_SECONDS,
             )
+            if locked_until is not None:
+                logger.warning(
+                    "verification.lockout_started",
+                    extra={"provider": provider.value, "locked_until": str(locked_until)},
+                )
+            await uow.commit()
 
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         """Return every identity linked to an account, hidden ones included.
@@ -330,10 +363,11 @@ class AccountService:
         This is the self view, so visibility does not filter it: you can only unhide what you can
         see listed.
         """
-        account = await self._repository.get_by_id(account_id)
-        if account is None:
-            raise AccountNotFoundError(account_id)
-        return account.identities
+        async with self._uow_factory() as uow:
+            account = await uow.accounts.get_by_id(account_id)
+            if account is None:
+                raise AccountNotFoundError(account_id)
+            return account.identities
 
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
         """Remove one linked identity, refusing to strand the account without any.
@@ -342,25 +376,33 @@ class AccountService:
         attribution is a fact about the build and should not change when someone tidies up how
         they sign in.
         """
-        removed = await self._repository.unlink_identity(account_id, identity_id)
-        if removed is None:
-            raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
-        return removed
+        async with self._uow_factory() as uow:
+            removed = await uow.accounts.unlink_identity(account_id, identity_id)
+            if removed is None:
+                raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
+            await uow.commit()
+            return removed
 
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         """Publish or withhold one linked identity on the account's public profile."""
-        return await self._repository.set_identity_visibility(account_id, identity_id, is_public=is_public)
+        async with self._uow_factory() as uow:
+            result = await uow.accounts.set_identity_visibility(account_id, identity_id, is_public=is_public)
+            await uow.commit()
+            return result
 
     async def record_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
         """Store the provider key an avatar URL needs, when a caller happens to hold a fresh one."""
-        await self._repository.set_identity_avatar_key(account_id, identity_id, avatar_key)
+        async with self._uow_factory() as uow:
+            await uow.accounts.set_identity_avatar_key(account_id, identity_id, avatar_key)
+            await uow.commit()
 
     async def get_profile(self, account_id: int) -> AccountProfile:
         """Return an account's own profile, including anything it has chosen to hide."""
-        profile = await self._repository.get_profile(account_id)
-        if profile is None:
-            raise AccountNotFoundError(account_id)
-        return profile
+        async with self._uow_factory() as uow:
+            profile = await uow.accounts.get_profile(account_id)
+            if profile is None:
+                raise AccountNotFoundError(account_id)
+            return profile
 
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         """Apply a partial profile edit after validating it.
@@ -368,12 +410,15 @@ class AccountService:
         Consent-gated like every other write that publishes something about a person: a profile is
         the most public thing an account owns.
         """
-        account = await self._repository.get_by_id(account_id)
-        if account is None:
-            raise AccountNotFoundError(account_id)
-        if account.needs_consent_refresh:
-            raise ConsentRequiredError(account_id=account_id)
-        return await self._repository.upsert_profile(account_id, update.validated())
+        async with self._uow_factory() as uow:
+            account = await uow.accounts.get_by_id(account_id)
+            if account is None:
+                raise AccountNotFoundError(account_id)
+            if account.needs_consent_refresh:
+                raise ConsentRequiredError(account_id=account_id)
+            result = await uow.accounts.upsert_profile(account_id, update.validated())
+            await uow.commit()
+            return result
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
         """Reset a profile to its empty state, for staff handling abuse.
@@ -381,12 +426,16 @@ class AccountService:
         Deliberately does not hide the profile: `hidden` belongs to its owner, and a moderation
         action that also flipped it would take that decision away from them.
         """
-        return await self._repository.clear_profile(account_id)
+        async with self._uow_factory() as uow:
+            result = await uow.accounts.clear_profile(account_id)
+            await uow.commit()
+            return result
 
     async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
         """Return what a stranger may see of one creator, following merge redirects."""
-        record = await self._repository.get_creator_profile_record(public_id)
-        return None if record is None else present_public_profile(record)
+        async with self._uow_factory() as uow:
+            record = await uow.accounts.get_creator_profile_record(public_id)
+            return None if record is None else present_public_profile(record)
 
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Re-read the linked Java name from Mojang and reconcile the creator credit.
@@ -399,7 +448,7 @@ class AccountService:
         Raises `MinecraftAccountNotFoundError` when no Java identity is linked or the UUID no
         longer resolves, and `MinecraftServiceUnavailableError` when Mojang cannot be reached.
         """
-        account = await self._repository.get_by_id(account_id)
+        account = await self.get_account_by_id(account_id)
         if account is None:
             raise AccountNotFoundError(account_id)
         identity = (
@@ -412,25 +461,33 @@ class AccountService:
         username = await self._minecraft_username_lookup(identity.java_uuid)
         if username is None:
             raise MinecraftAccountNotFoundError(identity.java_uuid)
-        return await self._repository.refresh_java_identity(
-            account_id=account_id,
-            java_uuid=identity.java_uuid,
-            username=username,
-        )
+        async with self._uow_factory() as uow:
+            result = await uow.accounts.refresh_java_identity(
+                account_id=account_id,
+                java_uuid=identity.java_uuid,
+                username=username,
+            )
+            await uow.commit()
+            return result
 
     async def request_alias_claim(self, account_id: int, name: str) -> AliasClaim:
         """Open a staff-reviewed request to be credited under a creator name."""
-        account = await self._repository.get_by_id(account_id)
-        if account is None or account.id is None:
-            raise AccountNotFoundError(account_id)
-        if account.needs_consent_refresh:
-            raise ConsentRequiredError(account_id=account_id)
-        try:
-            return await self._repository.request_claim(name=name, account_id=account.id)
-        except AliasAlreadyClaimedError as conflict:
-            raise await self._name_the_holder(conflict) from None
+        async with self._uow_factory() as uow:
+            account = await uow.accounts.get_by_id(account_id)
+            if account is None or account.id is None:
+                raise AccountNotFoundError(account_id)
+            if account.needs_consent_refresh:
+                raise ConsentRequiredError(account_id=account_id)
+            try:
+                result = await uow.accounts.request_claim(name=name, account_id=account.id)
+            except AliasAlreadyClaimedError as conflict:
+                raise await self._name_the_holder(uow, conflict) from None
+            await uow.commit()
+            return result
 
-    async def _name_the_holder(self, conflict: AliasAlreadyClaimedError) -> AliasAlreadyClaimedError:
+    async def _name_the_holder(
+        self, uow: AccountUnitOfWork, conflict: AliasAlreadyClaimedError
+    ) -> AliasAlreadyClaimedError:
         """Resolve a conflicting holder's public creator name, when there is one to resolve.
 
         Enriched here rather than in the repository so the extra query happens only on the error
@@ -439,7 +496,7 @@ class AccountService:
         """
         if conflict.holder_public_creator_id is None:
             return conflict
-        profile = await self._repository.get_creator_profile(conflict.holder_public_creator_id)
+        profile = await uow.accounts.get_creator_profile(conflict.holder_public_creator_id)
         if profile is None or not profile.aliases:
             return conflict
         return conflict.with_holder_name(profile.aliases[0])
@@ -450,7 +507,8 @@ class AccountService:
         *with_claimants* loads each claimant's account for presentation, at a fixed cost
         rather than one query per claim.
         """
-        return await self._repository.pending_claims(with_claimants=with_claimants)
+        async with self._uow_factory() as uow:
+            return await uow.accounts.pending_claims(with_claimants=with_claimants)
 
     async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
         """Credit the claimant with the alias and close the request.
@@ -467,19 +525,22 @@ class AccountService:
     async def _resolve_claim(
         self, claim_id: int, status: ClaimStatus, staff_account_id: int, *, reassign: bool = False
     ) -> AliasClaim:
-        claim = await self._repository.get_claim(claim_id)
-        if claim is None or claim.status is not ClaimStatus.PENDING:
-            raise ClaimNotFoundError(claim_id)
-        try:
-            return await self._repository.resolve_claim(
-                claim_id=claim_id,
-                status=status,
-                resolved_by_account_id=staff_account_id,
-                reassign=reassign,
-            )
-        except AliasAlreadyClaimedError as conflict:
-            # A reviewer needs to know who holds the name they are being stopped from granting.
-            raise await self._name_the_holder(conflict) from None
+        async with self._uow_factory() as uow:
+            claim = await uow.accounts.get_claim(claim_id)
+            if claim is None or claim.status is not ClaimStatus.PENDING:
+                raise ClaimNotFoundError(claim_id)
+            try:
+                result = await uow.accounts.resolve_claim(
+                    claim_id=claim_id,
+                    status=status,
+                    resolved_by_account_id=staff_account_id,
+                    reassign=reassign,
+                )
+            except AliasAlreadyClaimedError as conflict:
+                # A reviewer needs to know who holds the name they are being stopped from granting.
+                raise await self._name_the_holder(uow, conflict) from None
+            await uow.commit()
+            return result
 
     async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
         """Generate a verification code after validating the Java account."""
@@ -487,9 +548,11 @@ class AccountService:
         if minecraft_username is None:
             raise MinecraftAccountNotFoundError(minecraft_uuid)
         code = self._verification_code_factory()
-        await self._repository.replace_verification_code(
-            minecraft_uuid=minecraft_uuid,
-            code=str(code),
-            username=minecraft_username,
-        )
+        async with self._uow_factory() as uow:
+            await uow.accounts.replace_verification_code(
+                minecraft_uuid=minecraft_uuid,
+                code=str(code),
+                username=minecraft_username,
+            )
+            await uow.commit()
         return code

@@ -1,6 +1,7 @@
 """PostgreSQL coverage for CLI device and session fencing."""
 
 from collections.abc import AsyncGenerator
+from functools import partial
 from typing import cast
 from uuid import UUID
 
@@ -12,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.cli_auth.application import enrollment_proof_message, session_proof_message
@@ -23,8 +23,8 @@ from squid.cli_auth.models import (
     CliSession,
     CliSessionChallenge,
 )
-from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.persistence.base import Base
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 pytestmark = pytest.mark.asyncio
 
@@ -60,10 +60,11 @@ async def consenting_account(session_factory: async_sessionmaker[AsyncSession]) 
 
 def service(session_factory: async_sessionmaker[AsyncSession]) -> CliAuthorizationService:
     return CliAuthorizationService(
-        PostgresCliAuthorizationRepository(session_factory),
-        AccountRepository(session_factory, "unused-verification-code-pepper"),
         CliSecretCodec(b"integration-cli-auth-pepper-32-bytes"),
         now=lambda: NOW,
+        uow_factory=partial(
+            SqlAlchemyUnitOfWork, session_factory, verification_code_pepper="unused-verification-code-pepper"
+        ),
     )
 
 

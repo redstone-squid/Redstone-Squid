@@ -4,11 +4,14 @@ from typing import Protocol
 
 from whenever import Instant
 
+from squid.accounts.domain import AccountConsent, IdentityProvider
+from squid.accounts.models import Account
 from squid.auth.domain.sessions import WebSessionIdentity
 from squid.auth.models.entities import ApiKey
 from squid.auth.models.sessions import OAuthState
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain import Pattern
+from squid.unit_of_work import UnitOfWork
 
 
 class WebSessionRepository(Protocol):
@@ -64,3 +67,17 @@ class ApiKeyRepository(Protocol):
 class ApiKeyUnitOfWork(PermissionUnitOfWork, Protocol):
     @property
     def api_keys(self) -> ApiKeyRepository: ...
+
+
+class BrowserAccountRepository(Protocol):
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account: ...
+
+
+class WebSessionUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def accounts(self) -> BrowserAccountRepository: ...
+
+    @property
+    def web_sessions(self) -> WebSessionRepository: ...
