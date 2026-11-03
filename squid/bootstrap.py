@@ -96,7 +96,6 @@ from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import run_projection_batch
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
-from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.submissions.application import (
     CheckedInFormManifestRegistry,
     SubmissionDraftService,
@@ -561,7 +560,7 @@ class _ServiceGraph:
 
     @cached_property
     def starboards(self) -> StarboardService:
-        return StarboardService(PostgresStarboardRepository(self.db.async_session))
+        return StarboardService(uow_factory=self.uow_factory)
 
     @cached_property
     def search_embeddings(self) -> SearchEmbeddingService:

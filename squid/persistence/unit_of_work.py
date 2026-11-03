@@ -11,6 +11,7 @@ from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepos
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
+from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.infrastructure.repository import VersionRepository
 
@@ -23,6 +24,7 @@ class SqlAlchemyUnitOfWork:
         self._session: AsyncSession | None = None
         self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._error_reports = PostgresErrorReportRepository(self._active_session)
+        self._starboards = PostgresStarboardRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._messages = MessageRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
@@ -58,6 +60,11 @@ class SqlAlchemyUnitOfWork:
     def error_reports(self) -> PostgresErrorReportRepository:
         self._active_session()
         return self._error_reports
+
+    @property
+    def starboards(self) -> PostgresStarboardRepository:
+        self._active_session()
+        return self._starboards
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

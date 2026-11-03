@@ -6,6 +6,7 @@ from typing import Protocol
 
 from squid.starboard.domain import StarboardDirection
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji, StarboardEntry
+from squid.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,10 +73,13 @@ class StarboardRepository(Protocol):
 
     async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
 
-    async def get(self, guild_id: int, name: str) -> StarboardConfig | None: ...
-
-    async def update(self, guild_id: int, name: str, settings: Mapping[str, object]) -> StarboardConfig | None: ...
+    async def get(self, guild_id: int, name: str, *, for_update: bool = False) -> StarboardConfig | None: ...
 
     async def set_emojis(self, starboard_id: int, emojis: Sequence[StarboardEmoji]) -> None: ...
 
     async def set_role_multiplier(self, starboard_id: int, role_id: int, multiplier: float | None) -> None: ...
+
+
+class StarboardUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def starboards(self) -> StarboardRepository: ...
