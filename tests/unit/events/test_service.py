@@ -9,6 +9,7 @@ from whenever import Instant
 
 from squid.core.errors import InvalidStateError
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventRepository, DomainEventService
+from tests.support.delivery_uow import DomainEventUnitOfWork
 
 
 def _delivery() -> DomainEventDelivery:
@@ -51,7 +52,12 @@ async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
     repository = EventRepositoryRecorder()
     delivery = _delivery()
 
-    assert await DomainEventService(repository, max_attempts=3).fail(delivery, RuntimeError("x" * 5000)) is False
+    assert (
+        await DomainEventService(max_attempts=3, uow_factory=lambda: DomainEventUnitOfWork(repository)).fail(
+            delivery, RuntimeError("x" * 5000)
+        )
+        is False
+    )
     assert repository.failures == [(delivery, "x" * 4000, 3)]
 
 
@@ -59,21 +65,28 @@ async def test_service_truncates_permanent_rejection_details() -> None:
     repository = EventRepositoryRecorder()
     delivery = _delivery()
 
-    assert await DomainEventService(repository).reject(delivery, ValueError("x" * 5000)) is True
+    assert (
+        await DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(repository)).reject(
+            delivery, ValueError("x" * 5000)
+        )
+        is True
+    )
     assert repository.rejections == [(delivery, "x" * 4000)]
 
 
 @pytest.mark.parametrize("limit", [0, 101])
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
     with pytest.raises(InvalidStateError, match="between 1 and 100"):
-        await DomainEventService(EventRepositoryRecorder()).claim("discord", limit)
+        await DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder())).claim(
+            "discord", limit
+        )
 
 
 async def test_claim_rejects_an_empty_consumer() -> None:
     with pytest.raises(InvalidStateError, match="non-empty name"):
-        await DomainEventService(EventRepositoryRecorder()).claim("")
+        await DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder())).claim("")
 
 
 def test_service_rejects_a_non_positive_attempt_ceiling() -> None:
     with pytest.raises(InvalidStateError, match="must be positive"):
-        DomainEventService(EventRepositoryRecorder(), max_attempts=0)
+        DomainEventService(max_attempts=0, uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder()))

@@ -12,12 +12,15 @@ from squid.auth.infrastructure.sessions import PostgresWebSessionRepository
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
+from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
+from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
+from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.infrastructure.repository import VersionRepository
 
@@ -30,6 +33,9 @@ class SqlAlchemyUnitOfWork:
     ) -> None:
         self._sessions = sessions
         self._session: AsyncSession | None = None
+        self._domain_events = PostgresDomainEventRepository(self._active_session)
+        self._reconciliation = PostgresDiscordSyncQueue(self._active_session)
+        self._notifications = PostgresNotificationRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -121,6 +127,21 @@ class SqlAlchemyUnitOfWork:
     def web_sessions(self) -> PostgresWebSessionRepository:
         self._active_session()
         return self._web_sessions
+
+    @property
+    def domain_events(self) -> PostgresDomainEventRepository:
+        self._active_session()
+        return self._domain_events
+
+    @property
+    def reconciliation(self) -> PostgresDiscordSyncQueue:
+        self._active_session()
+        return self._reconciliation
+
+    @property
+    def notifications(self) -> PostgresNotificationRepository:
+        self._active_session()
+        return self._notifications
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

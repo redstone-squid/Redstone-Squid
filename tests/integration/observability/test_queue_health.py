@@ -5,11 +5,14 @@ path uses, so what this pins is that the generator covers every queue and that t
 predicate it emits is the one the adapters actually claim on.
 """
 
+from functools import partial
+
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
+from tests.support.unit_of_work import transact
 
 EXPECTED_QUEUES = {
     "discord_sync",
@@ -43,7 +46,11 @@ async def test_a_claim_moves_a_queue_from_ready_to_in_flight(
     before = (await _health(migrated_session_factory))["discord_sync"]
     assert (before.ready, before.in_flight) == (1, 0)
 
-    await PostgresDiscordSyncQueue(migrated_session_factory).claim(limit=10)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.reconciliation.claim(limit=10),
+        commit=True,
+    )
 
     after = (await _health(migrated_session_factory))["discord_sync"]
     assert (after.ready, after.in_flight) == (0, 1)
@@ -58,9 +65,9 @@ async def test_a_backed_off_row_ages_from_when_it_was_enqueued(
     """
     async with migrated_session_factory.begin() as session:
         await session.execute(text("INSERT INTO discord_sync_queue (resource_kind, source_key) VALUES ('build', '1')"))
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (job,) = await queue.claim(limit=10)
-    await queue.fail(job, "boom", max_attempts=8)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
+    await transact(queue, lambda uow: uow.reconciliation.fail(job, "boom", max_attempts=8), commit=True)
 
     row = (await _health(migrated_session_factory))["discord_sync"]
     assert (row.ready, row.in_flight, row.dead_letters) == (0, 0, 0)

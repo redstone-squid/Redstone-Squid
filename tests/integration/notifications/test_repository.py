@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from dataclasses import replace
+from functools import partial
 from uuid import UUID
 
 import anyio
@@ -23,7 +24,6 @@ from squid.notifications.domain import (
     SubscriptionKind,
 )
 from squid.notifications.infrastructure.repository import (
-    PostgresNotificationRepository,
     _is_durable_staff_notification_recipient,
 )
 from squid.notifications.models import (
@@ -40,7 +40,10 @@ from squid.permissions.models import (
 )
 from squid.persistence.base import Base
 from squid.persistence.types import now
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.database import record_queries
+from tests.support.unit_of_work import transact
 
 _TABLES = [
     Base.metadata.tables["accounts"],
@@ -76,8 +79,8 @@ async def notification_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]
 def repository(
     notification_tables: None,
     async_session_factory: async_sessionmaker[AsyncSession],
-) -> PostgresNotificationRepository:
-    return PostgresNotificationRepository(async_session_factory)
+) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
+    return partial(SqlAlchemyUnitOfWork, async_session_factory)
 
 
 async def _seed_delivery(
@@ -127,23 +130,23 @@ async def _seed_delivery(
 
 
 async def test_delivery_claims_use_uuid_fencing_and_database_attempt_counts(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     delivery_id = await _seed_delivery(async_session_factory)
 
-    claimed = await repository.claim_deliveries(limit=10)
+    claimed = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True)
 
     assert len(claimed) == 1
     assert claimed[0].id == delivery_id
     assert claimed[0].attempts == 1
     assert claimed[0].claim_token is not None
-    assert await repository.complete_delivery(claimed[0]) is True
-    assert await repository.complete_delivery(claimed[0]) is False
+    assert await transact(repository, lambda uow: uow.notifications.complete_delivery(claimed[0]), commit=True) is True
+    assert await transact(repository, lambda uow: uow.notifications.complete_delivery(claimed[0]), commit=True) is False
 
 
 async def test_delivery_batch_returns_each_recipients_details_in_one_statement(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     expected = {}
@@ -152,7 +155,7 @@ async def test_delivery_batch_returns_each_recipients_details_in_one_statement(
         expected[delivery_id] = (discord_id, {"build_id": discord_id + 1})
 
     with record_queries(async_session_factory) as statements:
-        claimed = await repository.claim_deliveries(limit=10)
+        claimed = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True)
 
     assert len(statements) == 1
     assert {delivery.id: (delivery.discord_id, delivery.payload) for delivery in claimed} == expected
@@ -160,14 +163,14 @@ async def test_delivery_batch_returns_each_recipients_details_in_one_statement(
 
 
 async def test_concurrent_delivery_claims_are_disjoint(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     expected = {await _seed_delivery(async_session_factory, discord_id=discord_id) for discord_id in (123, 456, 789)}
     claimed: list[PendingNotificationDelivery] = []
 
     async def claim_one() -> None:
-        claimed.extend(await repository.claim_deliveries(limit=1))
+        claimed.extend(await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True))
 
     async with anyio.create_task_group() as tasks:
         for _ in expected:
@@ -175,17 +178,19 @@ async def test_concurrent_delivery_claims_are_disjoint(
 
     assert len(claimed) == len(expected)
     assert {delivery.id for delivery in claimed} == expected
-    assert await repository.claim_deliveries(limit=10) == ()
+    assert await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True) == ()
 
 
 async def test_delivery_retry_and_terminal_failure_release_the_claim(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     delivery_id = await _seed_delivery(async_session_factory)
-    (first,) = await repository.claim_deliveries(limit=1)
+    (first,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True)
 
-    assert not await repository.fail_delivery(first, "temporary failure", max_attempts=2)
+    assert not await transact(
+        repository, lambda uow: uow.notifications.fail_delivery(first, "temporary failure", max_attempts=2), commit=True
+    )
     async with async_session_factory.begin() as session:
         row = await session.get(NotificationDeliveryRecord, delivery_id)
         assert row is not None
@@ -194,28 +199,34 @@ async def test_delivery_retry_and_terminal_failure_release_the_claim(
         assert row.last_error == "temporary failure"
         await session.execute(update(NotificationDeliveryRecord).values(available_at=func.now()))
 
-    (second,) = await repository.claim_deliveries(limit=1)
+    (second,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True)
     assert second.attempts == 2
-    assert await repository.fail_delivery(second, "x" * 5000, max_attempts=2)
+    assert await transact(
+        repository, lambda uow: uow.notifications.fail_delivery(second, "x" * 5000, max_attempts=2), commit=True
+    )
     async with async_session_factory() as session:
         row = await session.get(NotificationDeliveryRecord, delivery_id)
         assert row is not None
         assert row.dead_at is not None
         assert (row.claimed_at, row.claim_token, row.last_error) == (None, None, "x" * 4000)
-    assert await repository.claim_deliveries(limit=1) == ()
+    assert await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True) == ()
 
 
 async def test_stale_delivery_cannot_complete_fail_or_suspend_the_current_claim(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_delivery(async_session_factory)
-    (current,) = await repository.claim_deliveries(limit=1)
+    (current,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True)
     stale = replace(current, generation=current.generation + 1)
 
-    assert not await repository.complete_delivery(stale)
-    assert not await repository.fail_delivery(stale, "stale failure", max_attempts=1)
-    assert not await repository.suspend_dm(stale, "stale forbidden")
+    assert not await transact(repository, lambda uow: uow.notifications.complete_delivery(stale), commit=True)
+    assert not await transact(
+        repository, lambda uow: uow.notifications.fail_delivery(stale, "stale failure", max_attempts=1), commit=True
+    )
+    assert not await transact(
+        repository, lambda uow: uow.notifications.suspend_dm(stale, "stale forbidden"), commit=True
+    )
     async with async_session_factory() as session:
         row = await session.get(NotificationDeliveryRecord, current.id)
         profile = await session.scalar(select(NotificationProfile))
@@ -224,11 +235,11 @@ async def test_stale_delivery_cannot_complete_fail_or_suspend_the_current_claim(
         assert row.claim_token == current.claim_token
         assert (row.sent_at, row.dead_at, row.last_error) == (None, None, None)
         assert profile.dm_enabled
-    assert await repository.complete_delivery(current)
+    assert await transact(repository, lambda uow: uow.notifications.complete_delivery(current), commit=True)
 
 
 async def test_delivery_claim_selects_most_recent_discord_identity_and_completes(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     delivery_id = await _seed_delivery(async_session_factory)
@@ -246,26 +257,30 @@ async def test_delivery_claim_selects_most_recent_discord_identity_and_completes
             )
         )
 
-    (claimed,) = await repository.claim_deliveries(limit=10)
+    (claimed,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True)
 
     assert claimed.id == delivery_id
     assert claimed.discord_id == 456
     assert render_delivery(claimed, None) == "Your build was confirmed."
-    assert await repository.complete_delivery(claimed) is True
+    assert await transact(repository, lambda uow: uow.notifications.complete_delivery(claimed), commit=True) is True
 
 
 async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_delivery(async_session_factory)
     async with async_session_factory.begin() as session:
         account_id = (await session.scalars(select(Account.id))).one()
-    await repository.add_subscription(
-        account_id,
-        kind=SubscriptionKind.CREATOR,
-        subject_id=UUID("11111111-1111-1111-1111-111111111111"),
-        record_filter=None,
+    await transact(
+        repository,
+        lambda uow: uow.notifications.add_subscription(
+            account_id,
+            kind=SubscriptionKind.CREATOR,
+            subject_id=UUID("11111111-1111-1111-1111-111111111111"),
+            record_filter=None,
+        ),
+        commit=True,
     )
 
     async with async_session_factory() as session:
@@ -277,13 +292,15 @@ async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums
 
 
 async def test_forbidden_delivery_suspends_only_the_dm_channel(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_delivery(async_session_factory)
-    delivery = (await repository.claim_deliveries(limit=1))[0]
+    delivery = (await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True))[0]
 
-    assert await repository.suspend_dm(delivery, "forbidden") is True
+    assert (
+        await transact(repository, lambda uow: uow.notifications.suspend_dm(delivery, "forbidden"), commit=True) is True
+    )
 
     async with async_session_factory() as session:
         profile = await session.scalar(select(NotificationProfile))
@@ -294,14 +311,18 @@ async def test_forbidden_delivery_suspends_only_the_dm_channel(
 
 
 async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_delivery(async_session_factory)
     async with async_session_factory() as session:
         account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
 
-    preferences = await repository.update_preferences(account_id, web_enabled=True, dm_enabled=False)
+    preferences = await transact(
+        repository,
+        lambda uow: uow.notifications.update_preferences(account_id, web_enabled=True, dm_enabled=False),
+        commit=True,
+    )
 
     assert preferences is not None
     assert preferences.web_enabled is True
@@ -316,7 +337,7 @@ async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox
 
 
 async def test_read_state_changes_are_idempotent_and_visibility_safe(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_delivery(async_session_factory)
@@ -340,18 +361,63 @@ async def test_read_state_changes_are_idempotent_and_visibility_safe(
 
     ordinary = InboxVisibility()
     staff = InboxVisibility(include_staff=True)
-    assert await repository.mark_read(account_id, ordinary_id, visibility=ordinary) is True
-    assert await repository.mark_read(account_id, ordinary_id, visibility=ordinary) is True
-    assert await repository.mark_unread(account_id, ordinary_id, visibility=ordinary) is True
-    assert await repository.mark_unread(account_id, ordinary_id, visibility=ordinary) is True
-    assert await repository.mark_read(account_id, staff_id, visibility=ordinary) is False
-    assert await repository.mark_read(account_id + 1, ordinary_id, visibility=staff) is False
-    assert await repository.mark_read(account_id, staff_id, visibility=staff) is True
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.notifications.mark_read(account_id, ordinary_id, visibility=ordinary),
+            commit=True,
+        )
+        is True
+    )
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.notifications.mark_read(account_id, ordinary_id, visibility=ordinary),
+            commit=True,
+        )
+        is True
+    )
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.notifications.mark_unread(account_id, ordinary_id, visibility=ordinary),
+            commit=True,
+        )
+        is True
+    )
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.notifications.mark_unread(account_id, ordinary_id, visibility=ordinary),
+            commit=True,
+        )
+        is True
+    )
+    assert (
+        await transact(
+            repository, lambda uow: uow.notifications.mark_read(account_id, staff_id, visibility=ordinary), commit=True
+        )
+        is False
+    )
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.notifications.mark_read(account_id + 1, ordinary_id, visibility=staff),
+            commit=True,
+        )
+        is False
+    )
+    assert (
+        await transact(
+            repository, lambda uow: uow.notifications.mark_read(account_id, staff_id, visibility=staff), commit=True
+        )
+        is True
+    )
 
 
 @pytest.mark.parametrize("gate", ["web", "consent"])
 async def test_read_state_changes_require_current_inbox_eligibility(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
     gate: str,
 ) -> None:
@@ -366,11 +432,18 @@ async def test_read_state_changes_require_current_inbox_eligibility(
             account.consent_version = None
             account.consented_at = None
 
-    assert await repository.mark_read(account.id, notification_id, visibility=InboxVisibility()) is False
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.notifications.mark_read(account.id, notification_id, visibility=InboxVisibility()),
+            commit=True,
+        )
+        is False
+    )
 
 
 async def test_inbox_count_and_both_keyset_directions_share_visibility(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
@@ -394,40 +467,40 @@ async def test_inbox_count_and_both_keyset_directions_share_visibility(
         )
 
     ordinary = InboxVisibility()
-    newest = await repository.list_inbox(
-        account.id,
-        offset=0,
-        after_id=None,
-        before_id=None,
-        limit=2,
-        visibility=ordinary,
+    newest = await transact(
+        repository,
+        lambda uow: uow.notifications.list_inbox(
+            account.id, offset=0, after_id=None, before_id=None, limit=2, visibility=ordinary
+        ),
     )
-    older = await repository.list_inbox(
-        account.id,
-        offset=0,
-        after_id=newest[-1].id,
-        before_id=None,
-        limit=2,
-        visibility=ordinary,
+    older = await transact(
+        repository,
+        lambda uow: uow.notifications.list_inbox(
+            account.id, offset=0, after_id=newest[-1].id, before_id=None, limit=2, visibility=ordinary
+        ),
     )
-    newer = await repository.list_inbox(
-        account.id,
-        offset=0,
-        after_id=None,
-        before_id=older[0].id,
-        limit=2,
-        visibility=ordinary,
+    newer = await transact(
+        repository,
+        lambda uow: uow.notifications.list_inbox(
+            account.id, offset=0, after_id=None, before_id=older[0].id, limit=2, visibility=ordinary
+        ),
     )
 
     assert [item.payload["build_id"] for item in newest] == [4, 3]
     assert [item.payload["build_id"] for item in older] == [2, 1]
     assert [item.payload["build_id"] for item in newer] == [4, 3]
-    assert await repository.count_inbox(account.id, visibility=ordinary) == 4
-    assert await repository.count_inbox(account.id, visibility=InboxVisibility(include_staff=True)) == 5
+    assert await transact(repository, lambda uow: uow.notifications.count_inbox(account.id, visibility=ordinary)) == 4
+    assert (
+        await transact(
+            repository,
+            lambda uow: uow.notifications.count_inbox(account.id, visibility=InboxVisibility(include_staff=True)),
+        )
+        == 5
+    )
 
 
 async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_readers(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     del repository
@@ -469,7 +542,7 @@ async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_r
 
 @pytest.mark.parametrize("recipient_count", [0, 1, 100])
 async def test_durable_staff_audience_discovery_has_constant_query_count(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
     recipient_count: int,
 ) -> None:
@@ -507,7 +580,7 @@ async def test_durable_staff_audience_discovery_has_constant_query_count(
 
 
 async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_delivery(async_session_factory)
@@ -516,7 +589,7 @@ async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
         await session.execute(update(InboxNotification).values(created_at=expired_at))
         await session.execute(update(DomainEvent).values(occurred_at=expired_at))
 
-    assert await repository.cleanup(retention_days=90) == 1
+    assert await transact(repository, lambda uow: uow.notifications.cleanup(retention_days=90), commit=True) == 1
 
     async with async_session_factory() as session:
         assert await session.scalar(select(InboxNotification)) is None
@@ -525,7 +598,7 @@ async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
 
 
 async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
@@ -534,29 +607,45 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
         await session.flush()
         account_id = account.id
 
-    first = await repository.add_subscription(
-        account_id,
-        kind=SubscriptionKind.CREATOR,
-        subject_id=UUID("11111111-1111-1111-1111-111111111111"),
-        record_filter=None,
+    first = await transact(
+        repository,
+        lambda uow: uow.notifications.add_subscription(
+            account_id,
+            kind=SubscriptionKind.CREATOR,
+            subject_id=UUID("11111111-1111-1111-1111-111111111111"),
+            record_filter=None,
+        ),
+        commit=True,
     )
-    second = await repository.add_subscription(
-        account_id,
-        kind=SubscriptionKind.CREATOR,
-        subject_id=UUID("11111111-1111-1111-1111-111111111111"),
-        record_filter=None,
+    second = await transact(
+        repository,
+        lambda uow: uow.notifications.add_subscription(
+            account_id,
+            kind=SubscriptionKind.CREATOR,
+            subject_id=UUID("11111111-1111-1111-1111-111111111111"),
+            record_filter=None,
+        ),
+        commit=True,
     )
-    filtered = await repository.add_subscription(
-        account_id,
-        kind=SubscriptionKind.RECORD_FILTER,
-        subject_id=None,
-        record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
+    filtered = await transact(
+        repository,
+        lambda uow: uow.notifications.add_subscription(
+            account_id,
+            kind=SubscriptionKind.RECORD_FILTER,
+            subject_id=None,
+            record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
+        ),
+        commit=True,
     )
-    filtered_again = await repository.add_subscription(
-        account_id,
-        kind=SubscriptionKind.RECORD_FILTER,
-        subject_id=None,
-        record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
+    filtered_again = await transact(
+        repository,
+        lambda uow: uow.notifications.add_subscription(
+            account_id,
+            kind=SubscriptionKind.RECORD_FILTER,
+            subject_id=None,
+            record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
+        ),
+        commit=True,
     )
 
     assert first.id == second.id
@@ -567,7 +656,7 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
 
 @pytest.mark.parametrize(("recipient_count", "expected_statements"), [(0, 0), (1, 3), (100, 3)])
 async def test_candidate_materialization_has_constant_query_count(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
     recipient_count: int,
     expected_statements: int,
@@ -603,13 +692,18 @@ async def test_candidate_materialization_has_constant_query_count(
 
     with record_queries(async_session_factory) as statements:
         async with async_session_factory.begin() as session:
-            await repository._insert_candidates(session, event=materialized_event, candidates=candidates)
+            await transact(
+                repository,
+                lambda uow: uow.notifications._insert_candidates(
+                    session, event=materialized_event, candidates=candidates
+                ),
+            )
 
     assert len(statements) == expected_statements
 
 
 async def test_candidate_materialization_is_unique_under_concurrent_replay(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
@@ -637,7 +731,12 @@ async def test_candidate_materialization_is_unique_under_concurrent_replay(
 
     async def replay() -> None:
         async with async_session_factory.begin() as session:
-            await repository._insert_candidates(session, event=materialized_event, candidates=(candidate,))
+            await transact(
+                repository,
+                lambda uow: uow.notifications._insert_candidates(
+                    session, event=materialized_event, candidates=(candidate,)
+                ),
+            )
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(replay)
@@ -649,7 +748,7 @@ async def test_candidate_materialization_is_unique_under_concurrent_replay(
 
 
 async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The gate moved onto `accounts`; it did not disappear.
@@ -664,11 +763,11 @@ async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(
     """
     await _seed_delivery(async_session_factory, consented=False)
 
-    assert await repository.claim_deliveries(limit=10) == ()
+    assert await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True) == ()
 
 
 async def test_a_consented_account_can_set_channels_without_a_separate_accept_step(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """There is no profile row to create first: accepting the notice is the only precondition."""
@@ -678,7 +777,11 @@ async def test_a_consented_account_can_set_channels_without_a_separate_accept_st
         await session.flush()
         account_id = account.id
 
-    preferences = await repository.update_preferences(account_id, web_enabled=True, dm_enabled=False)
+    preferences = await transact(
+        repository,
+        lambda uow: uow.notifications.update_preferences(account_id, web_enabled=True, dm_enabled=False),
+        commit=True,
+    )
 
     assert preferences is not None
     assert preferences.web_enabled is True
@@ -687,7 +790,7 @@ async def test_a_consented_account_can_set_channels_without_a_separate_accept_st
 
 
 async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
-    repository: PostgresNotificationRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The batched fan-out honours the same per-account gates the single insert did."""
@@ -721,17 +824,20 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
             occurred_at=Instant.now(),
         )
 
-        await repository._insert_candidates(  # pyright: ignore[reportPrivateUsage]
-            session,
-            event=event,
-            candidates=tuple(
-                NotificationCandidate(
-                    account_id=account_id,
-                    kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-                    source_key=f"event:{event.id}:staff:{account_id}",
-                    payload={"build_id": 7},
-                )
-                for account_id in sorted(accounts.values())
+        await transact(
+            repository,
+            lambda uow: uow.notifications._insert_candidates(
+                session,
+                event=event,
+                candidates=tuple(
+                    NotificationCandidate(
+                        account_id=account_id,
+                        kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+                        source_key=f"event:{event.id}:staff:{account_id}",
+                        payload={"build_id": 7},
+                    )
+                    for account_id in sorted(accounts.values())
+                ),
             ),
         )
 

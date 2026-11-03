@@ -17,6 +17,7 @@ from squid.sync import (
 )
 from squid.sync.infrastructure.repository import _job as map_row
 from squid.sync.models import DiscordSyncQueueItem
+from tests.support.delivery_uow import ReconciliationUnitOfWork
 
 CLAIM_TOKEN = uuid.UUID("00000000-0000-4000-8000-000000000001")
 
@@ -47,14 +48,19 @@ async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
     queue = QueueRecorder()
     job = _job()
 
-    assert await DiscordReconciliationService(queue, max_attempts=3).fail(job, RuntimeError("x" * 5000)) is False
+    assert (
+        await DiscordReconciliationService(max_attempts=3, uow_factory=lambda: ReconciliationUnitOfWork(queue)).fail(
+            job, RuntimeError("x" * 5000)
+        )
+        is False
+    )
     assert queue.failures == [(job, "x" * 4000, 3)]
 
 
 @pytest.mark.parametrize("limit", [0, 101])
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
     with pytest.raises(InvalidStateError, match="between 1 and 100"):
-        await DiscordReconciliationService(QueueRecorder()).claim(limit)
+        await DiscordReconciliationService(uow_factory=lambda: ReconciliationUnitOfWork(QueueRecorder())).claim(limit)
 
 
 class TestRowMapping:

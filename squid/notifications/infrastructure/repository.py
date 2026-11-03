@@ -1,7 +1,7 @@
 """PostgreSQL notification persistence and domain-event materialization."""
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -9,7 +9,7 @@ from uuid import UUID
 
 from sqlalchemy import ColumnElement, Select, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.infrastructure.consent import account_consent_current
@@ -99,13 +99,13 @@ class _RecordGain:
 class PostgresNotificationRepository:
     """Persist opt-ins and project durable events into channel-specific work."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
     async def get_preferences(self, account_id: int) -> NotificationPreferences:
-        async with self._session_factory() as session:
-            profile = await session.get(NotificationProfile, account_id)
-            return _preferences(account_id, profile, await self._consent_pending(session, account_id))
+        session = self._session()
+        profile = await session.get(NotificationProfile, account_id)
+        return _preferences(account_id, profile, await self._consent_pending(session, account_id))
 
     @staticmethod
     async def _consent_pending(session: AsyncSession, account_id: int) -> bool:
@@ -123,49 +123,49 @@ class PostgresNotificationRepository:
         call. The gate is read first and separately because an UPDATE cannot join to `accounts`,
         and this runs when a human toggles a switch, so a second round trip costs nothing.
         """
-        async with self._session_factory() as session, session.begin():
-            if await self._consent_pending(session, account_id):
-                return None
-            profile = (
-                await session.scalars(
-                    insert(NotificationProfile)
-                    .values(
-                        account_id=account_id,
-                        web_enabled=web_enabled,
-                        dm_enabled=dm_enabled,
-                        dm_suspended_at=None,
-                        updated_at=func.now(),
-                    )
-                    .on_conflict_do_update(
-                        index_elements=[NotificationProfile.account_id],
-                        set_={
-                            "web_enabled": web_enabled,
-                            "dm_enabled": dm_enabled,
-                            # Re-enabling DMs clears a suspension; leaving them off preserves it,
-                            # so a bounce is not forgotten by an unrelated web-inbox toggle.
-                            "dm_suspended_at": None if dm_enabled else NotificationProfile.dm_suspended_at,
-                            "updated_at": func.now(),
-                        },
-                    )
-                    .returning(NotificationProfile)
+        session = self._session()
+        if await self._consent_pending(session, account_id):
+            return None
+        profile = (
+            await session.scalars(
+                insert(NotificationProfile)
+                .values(
+                    account_id=account_id,
+                    web_enabled=web_enabled,
+                    dm_enabled=dm_enabled,
+                    dm_suspended_at=None,
+                    updated_at=func.now(),
                 )
-            ).one()
-            if not dm_enabled:
-                await self._cancel_pending_deliveries(session, account_id)
-            return _preferences(account_id, profile, consent_pending=False)
+                .on_conflict_do_update(
+                    index_elements=[NotificationProfile.account_id],
+                    set_={
+                        "web_enabled": web_enabled,
+                        "dm_enabled": dm_enabled,
+                        # Re-enabling DMs clears a suspension; leaving them off preserves it,
+                        # so a bounce is not forgotten by an unrelated web-inbox toggle.
+                        "dm_suspended_at": None if dm_enabled else NotificationProfile.dm_suspended_at,
+                        "updated_at": func.now(),
+                    },
+                )
+                .returning(NotificationProfile)
+            )
+        ).one()
+        if not dm_enabled:
+            await self._cancel_pending_deliveries(session, account_id)
+        return _preferences(account_id, profile, consent_pending=False)
 
     async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
-        async with self._session_factory() as session:
-            if kind is SubscriptionKind.CREATOR:
-                statement = select(
-                    exists().where(
-                        Account.public_creator_id == subject_id,
-                        CreatorAlias.account_id == Account.id,
-                    )
+        session = self._session()
+        if kind is SubscriptionKind.CREATOR:
+            statement = select(
+                exists().where(
+                    Account.public_creator_id == subject_id,
+                    CreatorAlias.account_id == Account.id,
                 )
-            else:
-                statement = select(exists().where(RecordSeries.public_id == subject_id))
-            return bool(await session.scalar(statement))
+            )
+        else:
+            statement = select(exists().where(RecordSeries.public_id == subject_id))
+        return bool(await session.scalar(statement))
 
     async def add_subscription(
         self,
@@ -175,68 +175,69 @@ class PostgresNotificationRepository:
         subject_id: UUID | None,
         record_filter: RecordSubscriptionFilter | None,
     ) -> NotificationSubscription:
+        self._session()
         filter_value = record_filter
-        async with self._session_factory() as session, session.begin():
-            predicates = [
-                NotificationSubscription.account_id == account_id,
-                NotificationSubscription.kind == kind,
-                NotificationSubscription.enabled.is_(True),
-            ]
-            if subject_id is None:
-                predicates.extend(
-                    [
-                        NotificationSubscription.subject_id.is_(None),
-                        NotificationSubscription.record_filter == filter_value,
-                    ]
-                )
-            else:
-                predicates.append(NotificationSubscription.subject_id == subject_id)
-            existing = await session.scalar(select(NotificationSubscription).where(*predicates))
-            if existing is not None:
-                return existing
-            row = await session.scalar(
-                insert(NotificationSubscription)
-                .values(
-                    account_id=account_id,
-                    kind=kind,
-                    subject_id=subject_id,
-                    record_filter=filter_value,
-                )
-                .on_conflict_do_nothing()
-                .returning(NotificationSubscription)
+        session = self._session()
+        predicates = [
+            NotificationSubscription.account_id == account_id,
+            NotificationSubscription.kind == kind,
+            NotificationSubscription.enabled.is_(True),
+        ]
+        if subject_id is None:
+            predicates.extend(
+                [
+                    NotificationSubscription.subject_id.is_(None),
+                    NotificationSubscription.record_filter == filter_value,
+                ]
             )
-            if row is None:
-                row = await session.scalar(select(NotificationSubscription).where(*predicates))
-            if row is None:
-                msg = "notification subscription conflict did not resolve to an equivalent row"
-                raise RuntimeError(msg)
-            return row
+        else:
+            predicates.append(NotificationSubscription.subject_id == subject_id)
+        existing = await session.scalar(select(NotificationSubscription).where(*predicates))
+        if existing is not None:
+            return existing
+        row = await session.scalar(
+            insert(NotificationSubscription)
+            .values(
+                account_id=account_id,
+                kind=kind,
+                subject_id=subject_id,
+                record_filter=filter_value,
+            )
+            .on_conflict_do_nothing()
+            .returning(NotificationSubscription)
+        )
+        if row is None:
+            row = await session.scalar(select(NotificationSubscription).where(*predicates))
+        if row is None:
+            msg = "notification subscription conflict did not resolve to an equivalent row"
+            raise RuntimeError(msg)
+        return row
 
     async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
-        async with self._session_factory() as session:
-            rows = (
-                await session.scalars(
-                    select(NotificationSubscription)
-                    .where(
-                        NotificationSubscription.account_id == account_id,
-                        NotificationSubscription.enabled.is_(True),
-                    )
-                    .order_by(NotificationSubscription.created_at, NotificationSubscription.id)
+        session = self._session()
+        rows = (
+            await session.scalars(
+                select(NotificationSubscription)
+                .where(
+                    NotificationSubscription.account_id == account_id,
+                    NotificationSubscription.enabled.is_(True),
                 )
-            ).all()
-            return tuple(row for row in rows)
+                .order_by(NotificationSubscription.created_at, NotificationSubscription.id)
+            )
+        ).all()
+        return tuple(row for row in rows)
 
     async def delete_subscription(self, account_id: int, subscription_id: int) -> bool:
-        async with self._session_factory() as session, session.begin():
-            removed = await session.scalar(
-                delete(NotificationSubscription)
-                .where(
-                    NotificationSubscription.id == subscription_id,
-                    NotificationSubscription.account_id == account_id,
-                )
-                .returning(NotificationSubscription.id)
+        session = self._session()
+        removed = await session.scalar(
+            delete(NotificationSubscription)
+            .where(
+                NotificationSubscription.id == subscription_id,
+                NotificationSubscription.account_id == account_id,
             )
-            return removed is not None
+            .returning(NotificationSubscription.id)
+        )
+        return removed is not None
 
     async def list_inbox(
         self,
@@ -249,36 +250,38 @@ class PostgresNotificationRepository:
         visibility: InboxVisibility,
     ) -> Sequence[InboxNotification]:
         """List one newest-first inbox page; a `before_id` page carries its overfetch at the front."""
-        async with self._session_factory() as session:
-            statement = _inbox_filter(select(InboxNotification), account_id=account_id, visibility=visibility)
-            reverse = before_id is not None
-            if before_id is not None:
-                # Walk away from the anchor in reversed display order; the page is flipped back below.
-                statement = statement.where(InboxNotification.id > before_id).order_by(InboxNotification.id.asc())
-            else:
-                if after_id is not None:
-                    statement = statement.where(InboxNotification.id < after_id)
-                statement = statement.order_by(InboxNotification.id.desc())
-            if offset:
-                statement = statement.offset(offset)
-            rows = (await session.scalars(statement.limit(limit))).all()
-            ordered = reversed(rows) if reverse else rows
-            return tuple(row for row in ordered)
+        session = self._session()
+        statement = _inbox_filter(select(InboxNotification), account_id=account_id, visibility=visibility)
+        reverse = before_id is not None
+        if before_id is not None:
+            # Walk away from the anchor in reversed display order; the page is flipped back below.
+            statement = statement.where(InboxNotification.id > before_id).order_by(InboxNotification.id.asc())
+        else:
+            if after_id is not None:
+                statement = statement.where(InboxNotification.id < after_id)
+            statement = statement.order_by(InboxNotification.id.desc())
+        if offset:
+            statement = statement.offset(offset)
+        rows = (await session.scalars(statement.limit(limit))).all()
+        ordered = reversed(rows) if reverse else rows
+        return tuple(row for row in ordered)
 
     async def count_inbox(self, account_id: int, *, visibility: InboxVisibility) -> int:
         """Count web-visible inbox items, mirroring the visibility rules of `list_inbox`."""
-        async with self._session_factory() as session:
-            statement = _inbox_filter(
-                select(func.count()).select_from(InboxNotification),
-                account_id=account_id,
-                visibility=visibility,
-            )
-            return await session.scalar(statement) or 0
+        session = self._session()
+        statement = _inbox_filter(
+            select(func.count()).select_from(InboxNotification),
+            account_id=account_id,
+            visibility=visibility,
+        )
+        return await session.scalar(statement) or 0
 
     async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
+        self._session()
         return await self._set_read_state(account_id, notification_id, visibility=visibility, read=True)
 
     async def mark_unread(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
+        self._session()
         return await self._set_read_state(account_id, notification_id, visibility=visibility, read=False)
 
     async def _set_read_state(
@@ -289,133 +292,134 @@ class PostgresNotificationRepository:
         visibility: InboxVisibility,
         read: bool,
     ) -> bool:
-        async with self._session_factory() as session, session.begin():
-            updated = await session.scalar(
-                update(InboxNotification)
-                .where(InboxNotification.id == notification_id, *_inbox_predicates(account_id, visibility))
-                .values(read_at=func.coalesce(InboxNotification.read_at, func.now()) if read else None)
-                .returning(InboxNotification.id)
-            )
-            return updated is not None
+        session = self._session()
+        updated = await session.scalar(
+            update(InboxNotification)
+            .where(InboxNotification.id == notification_id, *_inbox_predicates(account_id, visibility))
+            .values(read_at=func.coalesce(InboxNotification.read_at, func.now()) if read else None)
+            .returning(InboxNotification.id)
+        )
+        return updated is not None
 
     async def materialize(self, event: DomainEvent) -> None:
-        async with self._session_factory() as session, session.begin():
-            if event.event_type == "build.submitted":
-                await self._materialize_staff_submission(session, event)
-            elif event.event_type in {"build.confirmed", "build.denied"}:
-                await self._materialize_build_outcome(session, event)
-            elif event.event_type == "record_run.activated":
-                await self._materialize_record_gains(session, event)
+        session = self._session()
+        if event.event_type == "build.submitted":
+            await self._materialize_staff_submission(session, event)
+        elif event.event_type in {"build.confirmed", "build.denied"}:
+            await self._materialize_build_outcome(session, event)
+        elif event.event_type == "record_run.activated":
+            await self._materialize_record_gains(session, event)
 
     async def cleanup(self, *, retention_days: int) -> int:
-        async with self._session_factory() as session, session.begin():
-            cutoff = func.now() - func.make_interval(0, 0, 0, retention_days)
-            removed_rows = (
-                delete(InboxNotification)
-                .where(InboxNotification.created_at < cutoff)
-                .returning(InboxNotification.id)
-                .cte("removed_notifications")
+        session = self._session()
+        cutoff = func.now() - func.make_interval(0, 0, 0, retention_days)
+        removed_rows = (
+            delete(InboxNotification)
+            .where(InboxNotification.created_at < cutoff)
+            .returning(InboxNotification.id)
+            .cte("removed_notifications")
+        )
+        removed = await session.scalar(select(func.count()).select_from(removed_rows))
+        await session.execute(
+            delete(DomainEvent).where(
+                DomainEvent.occurred_at < cutoff,
+                ~exists().where(InboxNotification.event_id == DomainEvent.id),
+                ~exists().where(DomainEventDeliveryRecord.event_id == DomainEvent.id),
             )
-            removed = await session.scalar(select(func.count()).select_from(removed_rows))
-            await session.execute(
-                delete(DomainEvent).where(
-                    DomainEvent.occurred_at < cutoff,
-                    ~exists().where(InboxNotification.event_id == DomainEvent.id),
-                    ~exists().where(DomainEventDeliveryRecord.event_id == DomainEvent.id),
-                )
-            )
-            return int(removed or 0)
+        )
+        return int(removed or 0)
 
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
-        async with self._session_factory() as session, session.begin():
-            claimable_staff = _is_durable_staff_notification_recipient(NotificationDeliveryRecord.account_id)
-            # The DM address is read at claim time rather than copied onto the delivery
-            # row at enqueue time. The write path already made this join to decide
-            # whether to enqueue at all, so the cost moves rather than appearing -- and
-            # the inner join means unlinking Discord suppresses a pending DM, which is
-            # the correct reading of an unlink.
-            candidates = (
-                select(
-                    NotificationDeliveryRecord.id,
-                    AccountIdentity.subject,
-                    InboxNotification.kind,
-                    InboxNotification.payload,
-                )
-                .join(NotificationProfile, NotificationProfile.account_id == NotificationDeliveryRecord.account_id)
-                .join(
-                    InboxNotification,
-                    (InboxNotification.id == NotificationDeliveryRecord.notification_id)
-                    & (InboxNotification.account_id == NotificationDeliveryRecord.account_id),
-                )
-                .join(Account, Account.id == NotificationDeliveryRecord.account_id)
-                .join(
-                    AccountIdentity,
-                    AccountIdentity.id == _most_recent_discord_identity_id(NotificationDeliveryRecord.account_id),
-                )
-                .where(
-                    NotificationDeliveryRecord.available_at <= func.now(),
-                    NotificationDeliveryRecord.dead_at.is_(None),
-                    NotificationDeliveryRecord.sent_at.is_(None),
-                    or_(
-                        NotificationDeliveryRecord.claimed_at.is_(None),
-                        NotificationDeliveryRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
-                    ),
-                    account_consent_current(),
-                    NotificationProfile.dm_enabled.is_(True),
-                    NotificationProfile.dm_suspended_at.is_(None),
-                    or_(InboxNotification.kind != NotificationKind.STAFF_BUILD_SUBMITTED, claimable_staff),
-                )
-                .order_by(NotificationDeliveryRecord.available_at, NotificationDeliveryRecord.id)
-                .limit(limit)
-                .with_for_update(skip_locked=True, of=NotificationDeliveryRecord)
-                .cte("claimable_deliveries")
+        session = self._session()
+        claimable_staff = _is_durable_staff_notification_recipient(NotificationDeliveryRecord.account_id)
+        # The DM address is read at claim time rather than copied onto the delivery
+        # row at enqueue time. The write path already made this join to decide
+        # whether to enqueue at all, so the cost moves rather than appearing -- and
+        # the inner join means unlinking Discord suppresses a pending DM, which is
+        # the correct reading of an unlink.
+        candidates = (
+            select(
+                NotificationDeliveryRecord.id,
+                AccountIdentity.subject,
+                InboxNotification.kind,
+                InboxNotification.payload,
             )
-            claimed = await session.execute(
-                update(NotificationDeliveryRecord)
-                .where(NotificationDeliveryRecord.id == candidates.c.id)
-                .values(
-                    claimed_at=func.now(),
-                    claim_token=func.gen_random_uuid(),
-                    attempts=NotificationDeliveryRecord.attempts + 1,
-                )
-                .returning(NotificationDeliveryRecord, candidates.c.subject, candidates.c.kind, candidates.c.payload)
+            .join(NotificationProfile, NotificationProfile.account_id == NotificationDeliveryRecord.account_id)
+            .join(
+                InboxNotification,
+                (InboxNotification.id == NotificationDeliveryRecord.notification_id)
+                & (InboxNotification.account_id == NotificationDeliveryRecord.account_id),
             )
-            return tuple(
-                PendingNotificationDelivery(
-                    id=delivery.id,
-                    generation=delivery.generation,
-                    discord_id=int(subject),
-                    nonce=delivery.nonce,
-                    claim_token=_claim_token(delivery),
-                    attempts=delivery.attempts,
-                    kind=kind,
-                    payload=dict(payload),
-                )
-                for delivery, subject, kind, payload in claimed
+            .join(Account, Account.id == NotificationDeliveryRecord.account_id)
+            .join(
+                AccountIdentity,
+                AccountIdentity.id == _most_recent_discord_identity_id(NotificationDeliveryRecord.account_id),
             )
+            .where(
+                NotificationDeliveryRecord.available_at <= func.now(),
+                NotificationDeliveryRecord.dead_at.is_(None),
+                NotificationDeliveryRecord.sent_at.is_(None),
+                or_(
+                    NotificationDeliveryRecord.claimed_at.is_(None),
+                    NotificationDeliveryRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
+                ),
+                account_consent_current(),
+                NotificationProfile.dm_enabled.is_(True),
+                NotificationProfile.dm_suspended_at.is_(None),
+                or_(InboxNotification.kind != NotificationKind.STAFF_BUILD_SUBMITTED, claimable_staff),
+            )
+            .order_by(NotificationDeliveryRecord.available_at, NotificationDeliveryRecord.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True, of=NotificationDeliveryRecord)
+            .cte("claimable_deliveries")
+        )
+        claimed = await session.execute(
+            update(NotificationDeliveryRecord)
+            .where(NotificationDeliveryRecord.id == candidates.c.id)
+            .values(
+                claimed_at=func.now(),
+                claim_token=func.gen_random_uuid(),
+                attempts=NotificationDeliveryRecord.attempts + 1,
+            )
+            .returning(NotificationDeliveryRecord, candidates.c.subject, candidates.c.kind, candidates.c.payload)
+        )
+        return tuple(
+            PendingNotificationDelivery(
+                id=delivery.id,
+                generation=delivery.generation,
+                discord_id=int(subject),
+                nonce=delivery.nonce,
+                claim_token=_claim_token(delivery),
+                attempts=delivery.attempts,
+                kind=kind,
+                payload=dict(payload),
+            )
+            for delivery, subject, kind, payload in claimed
+        )
 
     async def complete_delivery(self, delivery: PendingNotificationDelivery) -> bool:
-        async with self._session_factory() as session, session.begin():
-            return await self._settle_delivery(session, delivery, sent_at=func.now()) is not None
+        session = self._session()
+        return await self._settle_delivery(session, delivery, sent_at=func.now()) is not None
 
     async def fail_delivery(self, delivery: PendingNotificationDelivery, error: str, *, max_attempts: int) -> bool:
+        self._session()
         dead = delivery.attempts >= max_attempts
         values = {"dead_at": func.now()} if dead else {"available_at": func.now() + retry_delay(delivery.attempts)}
-        async with self._session_factory() as session, session.begin():
-            account_id = await self._settle_delivery(session, delivery, error=error, **values)
-            return dead and account_id is not None
+        session = self._session()
+        account_id = await self._settle_delivery(session, delivery, error=error, **values)
+        return dead and account_id is not None
 
     async def suspend_dm(self, delivery: PendingNotificationDelivery, error: str) -> bool:
-        async with self._session_factory() as session, session.begin():
-            account_id = await self._settle_delivery(session, delivery, error=error, dead_at=func.now())
-            if account_id is None:
-                return False
-            await session.execute(
-                update(NotificationProfile)
-                .where(NotificationProfile.account_id == account_id)
-                .values(dm_enabled=False, dm_suspended_at=func.now(), updated_at=func.now())
-            )
-            return True
+        session = self._session()
+        account_id = await self._settle_delivery(session, delivery, error=error, dead_at=func.now())
+        if account_id is None:
+            return False
+        await session.execute(
+            update(NotificationProfile)
+            .where(NotificationProfile.account_id == account_id)
+            .values(dm_enabled=False, dm_suspended_at=func.now(), updated_at=func.now())
+        )
+        return True
 
     @staticmethod
     async def _settle_delivery(

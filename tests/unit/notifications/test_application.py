@@ -1,6 +1,6 @@
 """Notification application policy contracts."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from squid.notifications.application import NotificationRepository
 from squid.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.errors import NotificationSubscriptionNotFoundError
 from squid.notifications.models import NotificationSubscription
+from tests.support.delivery_uow import NotificationUnitOfWork
 
 SUBJECT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -21,7 +22,7 @@ class NotificationRepositoryFake:
     preferences: NotificationPreferences
     target_exists: bool = True
     attempted_add: bool = False
-    target_checks: int = 0
+    target_checks: list[UUID] = field(default_factory=list)
 
     async def get_preferences(self, account_id: int) -> NotificationPreferences:
         return self.preferences
@@ -32,7 +33,7 @@ class NotificationRepositoryFake:
         return None
 
     async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
-        self.target_checks += 1
+        self.target_checks.append(subject_id)
         return self.target_exists
 
     async def add_subscription(
@@ -60,7 +61,7 @@ def _repository(*, consent_pending: bool, target_exists: bool = True) -> Notific
 
 
 def _service(repository: NotificationRepositoryFake) -> NotificationService:
-    return NotificationService(cast(NotificationRepository, repository))
+    return NotificationService(uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository)))
 
 
 async def test_channels_cannot_be_enabled_before_the_privacy_notice_is_accepted() -> None:
@@ -74,7 +75,7 @@ async def test_subscriptions_require_the_privacy_notice_before_target_lookup() -
     with pytest.raises(ConsentRequiredError):
         await _service(repository).subscribe(7, kind=SubscriptionKind.CREATOR, subject_id=SUBJECT_ID)
 
-    assert repository.target_checks == 0
+    assert repository.target_checks == []
     assert not repository.attempted_add
 
 
@@ -84,7 +85,7 @@ async def test_public_subscription_targets_are_validated_before_persistence() ->
     with pytest.raises(NotificationSubscriptionNotFoundError):
         await _service(repository).subscribe(7, kind=SubscriptionKind.RECORD, subject_id=SUBJECT_ID)
 
-    assert repository.target_checks == 1
+    assert repository.target_checks == [SUBJECT_ID]
     assert not repository.attempted_add
 
 

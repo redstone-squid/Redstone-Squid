@@ -15,6 +15,7 @@ from squid.runtime import BackgroundTaskSupervisor
 from squid.sync import DiscordReconciliationService, ReconciliationAction, ReconciliationJob, ReconciliationResource
 from squid.topics import resource_topic
 from squid_reactivity import LocalTopicBus
+from tests.support.delivery_uow import ReconciliationUnitOfWork
 
 
 def _job(
@@ -68,7 +69,7 @@ class ReconciliationHarness:
         self.events: list[object] = []
         self.queue = QueueRecorder(self.events)
         self.post_reconciler = Renderer(self.events)
-        self.services = Services(DiscordReconciliationService(self.queue))
+        self.services = Services(DiscordReconciliationService(uow_factory=lambda: ReconciliationUnitOfWork(self.queue)))
         self.background_tasks = BackgroundTaskSupervisor()
         self.topic_publisher = LocalTopicBus()
         self.ready = anyio.Event()

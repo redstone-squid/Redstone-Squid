@@ -36,7 +36,6 @@ from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
-from squid.events.infrastructure.repository import PostgresDomainEventRepository
 from squid.idempotency import IdempotencyService
 from squid.idempotency.infrastructure import IdempotencyResponseCipher, PostgresIdempotencyRepository
 from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNormalizationJobService, MediaStorageCleanup
@@ -48,7 +47,6 @@ from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.notifications import NotificationService
-from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import (
     PermissionAdministrationService,
     PermissionEpochWatcher,
@@ -119,7 +117,6 @@ from squid.submissions.infrastructure.suggestion_options import SuggestionFormOp
 from squid.suggestions.application import SuggestionService
 from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
 from squid.sync import DiscordReconciliationService
-from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
@@ -315,7 +312,7 @@ class _ServiceGraph:
     @cached_property
     def notifications(self) -> NotificationService:
         return NotificationService(
-            PostgresNotificationRepository(self.db.async_session),
+            uow_factory=self.uow_factory,
             retention_days=self.config.notifications.retention_days,
         )
 
@@ -751,8 +748,8 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
-        discord_reconciliation=DiscordReconciliationService(PostgresDiscordSyncQueue(db.async_session)),
-        domain_events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
+        discord_reconciliation=DiscordReconciliationService(uow_factory=graph.uow_factory),
+        domain_events=DomainEventService(uow_factory=graph.uow_factory),
         notifications=graph.notifications,
         redstoner=RedstonerService(
             RedstonerPolicy(
@@ -781,7 +778,7 @@ def create_worker_services(
         artifacts=graph.artifacts,
         votes=graph.votes,
         records=graph.record_computation,
-        events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
+        events=DomainEventService(uow_factory=graph.uow_factory),
         event_wake_listener=(
             None if config.database.listener_url is None else DomainEventWakeListener(config.database.listener_url)
         ),

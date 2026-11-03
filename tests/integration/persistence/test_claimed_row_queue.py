@@ -6,6 +6,7 @@ which is precisely the class of regression these tests exist to catch.
 """
 
 import logging
+from functools import partial
 from typing import Any
 from unittest.mock import patch
 
@@ -14,9 +15,11 @@ from sqlalchemy import literal, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.persistence.queue import ClaimedRowQueue, retry_delay, retry_delay_sql
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.infrastructure.jobs import SCHEMATIC_JOB_SPEC
-from squid.sync.application import ReconciliationJob
-from squid.sync.infrastructure.repository import DISCORD_SYNC_QUEUE_SPEC, PostgresDiscordSyncQueue
+from squid.sync.application import DiscordReconciliationService, ReconciliationJob
+from squid.sync.infrastructure.repository import DISCORD_SYNC_QUEUE_SPEC
+from tests.support.unit_of_work import transact
 
 
 async def _seed_sync_job(session_factory: async_sessionmaker[AsyncSession], source_key: str = "1") -> None:
@@ -41,11 +44,11 @@ async def test_claiming_stamps_a_token_and_completing_removes_the_row(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
-    (job,) = await queue.claim(limit=10)
+    (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
     assert job.claim_token is not None
-    assert await queue.complete(job) is True
+    assert await transact(queue, lambda uow: uow.reconciliation.complete(job), commit=True) is True
     assert await _count(migrated_session_factory, "discord_sync_queue") == 0
 
 
@@ -55,9 +58,9 @@ async def test_each_claimed_row_gets_its_own_token(
     """`gen_random_uuid()` is volatile, so one UPDATE still mints a token per row."""
     for key in ("1", "2", "3"):
         await _seed_sync_job(migrated_session_factory, key)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
-    jobs = await queue.claim(limit=10)
+    jobs = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
     assert len({job.claim_token for job in jobs}) == 3
 
     async with migrated_session_factory() as session:
@@ -73,14 +76,14 @@ async def test_a_reclaimed_row_cannot_be_completed_by_the_previous_holder(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (stale,) = await queue.claim(limit=10)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (stale,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
 
     await _expire_the_claim(migrated_session_factory)
-    (fresh,) = await queue.claim(limit=10)
+    (fresh,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
     assert fresh.claim_token != stale.claim_token
 
-    assert await queue.complete(stale) is False
+    assert await transact(queue, lambda uow: uow.reconciliation.complete(stale), commit=True) is False
     assert await _count(migrated_session_factory, "discord_sync_queue") == 1
 
 
@@ -88,13 +91,15 @@ async def test_a_reclaimed_row_cannot_be_failed_by_the_previous_holder(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (stale,) = await queue.claim(limit=10)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (stale,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
 
     await _expire_the_claim(migrated_session_factory)
-    await queue.claim(limit=10)
+    await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
 
-    assert await queue.fail(stale, "boom", max_attempts=8) is False
+    assert (
+        await transact(queue, lambda uow: uow.reconciliation.fail(stale, "boom", max_attempts=8), commit=True) is False
+    )
     attempts, last_error, claimed = await _row(
         migrated_session_factory,
         "SELECT attempts, last_error, claim_token IS NOT NULL FROM discord_sync_queue",
@@ -110,16 +115,16 @@ async def test_a_lost_fence_is_logged_and_counted(
 ) -> None:
     """A queue that has begun doing its work twice must not look like a healthy one."""
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (stale,) = await queue.claim(limit=10)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (stale,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
     await _expire_the_claim(migrated_session_factory)
-    await queue.claim(limit=10)
+    await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
 
     with (
         caplog.at_level(logging.WARNING, logger="squid.persistence.queue"),
         patch("squid.persistence.queue.add_counter") as counter,
     ):
-        assert await queue.complete(stale) is False
+        assert await transact(queue, lambda uow: uow.reconciliation.complete(stale), commit=True) is False
 
     assert "claim was already lost" in caplog.text
     counter.assert_called_once_with("squid.queue.lost_fences", attributes={"squid.queue.name": "discord_sync"})
@@ -129,22 +134,22 @@ async def test_a_claimed_row_is_not_handed_to_a_second_worker(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
-    assert len(await queue.claim(limit=10)) == 1
-    assert await queue.claim(limit=10) == ()
+    assert len(await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)) == 1
+    assert await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True) == ()
 
 
 async def test_a_claim_abandoned_past_the_visibility_timeout_is_reclaimed(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    await queue.claim(limit=10)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
 
     await _expire_the_claim(migrated_session_factory)
 
-    assert len(await queue.claim(limit=10)) == 1
+    assert len(await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)) == 1
 
 
 async def test_a_retry_backs_off_available_at_and_leaves_enqueued_at_alone(
@@ -156,17 +161,17 @@ async def test_a_retry_backs_off_available_at_and_leaves_enqueued_at_alone(
     failing for an hour report as fresh to `squid.queue.oldest_ready_age`.
     """
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (job,) = await queue.claim(limit=10)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
 
-    assert await queue.fail(job, "boom", max_attempts=8) is False
+    assert await transact(queue, lambda uow: uow.reconciliation.fail(job, "boom", max_attempts=8), commit=True) is False
     attempts, claimed_at, token, backed_off, requested_now = await _row(
         migrated_session_factory,
         "SELECT attempts, claimed_at, claim_token, available_at > now(), enqueued_at <= now() FROM discord_sync_queue",
     )
     assert (attempts, claimed_at, token, backed_off, requested_now) == (1, None, None, True, True)
     # Backed-off work is not ready yet, so a drain right now must not pick it up.
-    assert await queue.claim(limit=10) == ()
+    assert await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True) == ()
 
 
 async def test_a_retry_leaves_the_sync_generation_alone(
@@ -180,11 +185,11 @@ async def test_a_retry_leaves_the_sync_generation_alone(
     creeping back onto the retry path.
     """
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (job,) = await queue.claim(limit=10)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
     before = (await _row(migrated_session_factory, "SELECT generation FROM discord_sync_queue"))[0]
 
-    await queue.fail(job, "boom", max_attempts=8)
+    await transact(queue, lambda uow: uow.reconciliation.fail(job, "boom", max_attempts=8), commit=True)
 
     after = (await _row(migrated_session_factory, "SELECT generation FROM discord_sync_queue"))[0]
     assert after == before == job.generation
@@ -213,9 +218,9 @@ async def test_a_reenqueue_clears_the_claim_and_the_backoff(
             ),
             {"id": session_id},
         )
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (job,) = await queue.claim(limit=10)
-    await queue.fail(job, "boom", max_attempts=8)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
+    await transact(queue, lambda uow: uow.reconciliation.fail(job, "boom", max_attempts=8), commit=True)
 
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE vote_sessions SET status = 'closed' WHERE id = :id"), {"id": session_id})
@@ -225,15 +230,15 @@ async def test_a_reenqueue_clears_the_claim_and_the_backoff(
         "SELECT claimed_at, claim_token, available_at <= now() FROM discord_sync_queue",
     )
     assert (claimed_at, token, ready) == (None, None, True)
-    assert await queue.fail(job, "boom", max_attempts=8) is False
+    assert await transact(queue, lambda uow: uow.reconciliation.fail(job, "boom", max_attempts=8), commit=True) is False
 
 
 async def test_failing_at_the_attempt_ceiling_dead_letters_the_row(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_sync_job(migrated_session_factory)
-    queue = PostgresDiscordSyncQueue(migrated_session_factory)
-    (job,) = await queue.claim(limit=10)
+    queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
     ceiling_job = ReconciliationJob(
         id=job.id,
         resource_kind=job.resource_kind,
@@ -244,13 +249,16 @@ async def test_failing_at_the_attempt_ceiling_dead_letters_the_row(
         claim_token=job.claim_token,
     )
 
-    assert await queue.fail(ceiling_job, "boom", max_attempts=8) is True
+    assert (
+        await transact(queue, lambda uow: uow.reconciliation.fail(ceiling_job, "boom", max_attempts=8), commit=True)
+        is True
+    )
     attempts, claimed_at, token, dead, error = await _row(
         migrated_session_factory,
         "SELECT attempts, claimed_at, claim_token, dead_at IS NOT NULL, last_error FROM discord_sync_queue",
     )
     assert (attempts, claimed_at, token, dead, error) == (8, None, None, True, "boom")
-    assert await queue.claim(limit=10) == ()
+    assert await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True) == ()
 
 
 async def test_a_caller_owned_claim_is_not_committed(
@@ -377,3 +385,21 @@ async def _count_unclaimed(session_factory: async_sessionmaker[AsyncSession]) ->
         return (
             await session.execute(text("SELECT count(*) FROM discord_sync_queue WHERE claim_token IS NULL"))
         ).scalar_one()
+
+
+async def test_service_claim_is_not_published_when_commit_fails(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    class FailingUnitOfWork(SqlAlchemyUnitOfWork):
+        async def commit(self) -> None:
+            raise RuntimeError("claim commit failed")
+
+    await _seed_sync_job(migrated_session_factory)
+    service = DiscordReconciliationService(uow_factory=partial(FailingUnitOfWork, migrated_session_factory))
+    with pytest.raises(RuntimeError, match="claim commit failed"):
+        await service.claim()
+
+    service = DiscordReconciliationService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    claimed = await service.claim()
+    assert len(claimed) == 1
+    assert await service.complete(claimed[0])

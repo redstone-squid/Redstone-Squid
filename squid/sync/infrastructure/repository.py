@@ -1,9 +1,10 @@
 """PostgreSQL Discord reconciliation queue adapter."""
 
 import uuid
+from collections.abc import Callable
 
 from sqlalchemy import ColumnElement
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.errors import DataIntegrityError
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
@@ -55,24 +56,29 @@ def _job(row: DiscordSyncQueueItem, token: uuid.UUID) -> ReconciliationJob:
 class PostgresDiscordSyncQueue:
     """Claim coalesced reconciliation work with crash-safe claim tokens."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._queue = ClaimedRowQueue(DISCORD_SYNC_QUEUE_SPEC, session_factory)
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+        self._queue = ClaimedRowQueue(DISCORD_SYNC_QUEUE_SPEC)
 
     async def claim(self, *, limit: int) -> tuple[ReconciliationJob, ...]:
-        rows = await self._queue.claim(limit=limit)
+        self._session()
+        rows = await self._queue.claim(limit=limit, session=self._session())
         return tuple(_job(row, self._queue.token_of(row)) for row in rows)
 
     async def complete(self, job: ReconciliationJob) -> bool:
-        outcome = await self._queue.complete(self._identity(job), job.claim_token)
+        self._session()
+        outcome = await self._queue.complete(self._identity(job), job.claim_token, session=self._session())
         return outcome.applied
 
     async def fail(self, job: ReconciliationJob, error: str, *, max_attempts: int) -> bool:
+        self._session()
         outcome = await self._queue.fail(
             self._identity(job),
             job.claim_token,
             attempts=job.attempts,
             error=error,
             max_attempts=max_attempts,
+            session=self._session(),
         )
         return outcome.dead_lettered
 

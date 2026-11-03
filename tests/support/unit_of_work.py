@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from types import TracebackType
 from typing import Self
 
@@ -51,10 +51,15 @@ async def transact[UowT: UnitOfWork, ResultT](
 class PublishingFakeUnitOfWork[StateT](FakeUnitOfWork[StateT]):
     """Publish committed snapshots into the fixture object assertions inspect."""
 
-    def __init__(self, state: StateT) -> None:
+    def __init__(self, state: StateT, *, clone: Callable[[StateT], StateT] = deepcopy) -> None:
         self._published = state
-        super().__init__(CommittedState(state))
+        super().__init__(CommittedState(state, clone=clone))
 
     async def commit(self) -> None:
         await super().commit()
-        vars(self._published).update(vars(self._committed.value))
+        snapshot = self._committed.value
+        if is_dataclass(snapshot) and not isinstance(snapshot, type):
+            for field in fields(snapshot):
+                setattr(self._published, field.name, getattr(snapshot, field.name))
+        else:
+            vars(self._published).update(vars(snapshot))

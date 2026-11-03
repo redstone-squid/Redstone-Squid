@@ -1,7 +1,9 @@
 """PostgreSQL domain-event delivery adapter."""
 
+from collections.abc import Callable
+
 from sqlalchemy import ColumnElement, join, literal, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.events.application import DomainEventDelivery
 from squid.events.models import DomainEvent, DomainEventConsumer, DomainEventDeliveryRecord
@@ -44,40 +46,42 @@ queue whose gauges are keyed by something other than the table.
 class PostgresDomainEventRepository:
     """Claim per-consumer deliveries with database-clock UUID fencing tokens."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
-        self._queue = ClaimedRowQueue(DOMAIN_EVENT_DELIVERY_SPEC, session_factory)
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+        self._queue = ClaimedRowQueue(DOMAIN_EVENT_DELIVERY_SPEC)
 
     async def claim(self, *, consumer: str, limit: int) -> tuple[DomainEventDelivery, ...]:
-        async with self._session_factory() as session, session.begin():
-            deliveries = await self._queue.claim(
-                limit=limit,
-                where=(DomainEventDeliveryRecord.consumer == consumer,),
-                session=session,
-            )
-            if not deliveries:
-                return ()
-            events = {
-                event.id: event
-                for event in (
-                    await session.scalars(
-                        select(DomainEvent).where(DomainEvent.id.in_([delivery.event_id for delivery in deliveries]))
-                    )
-                ).all()
-            }
-            return tuple(
-                _delivery(delivery, event)
-                for delivery in deliveries
-                if (event := events.get(delivery.event_id)) is not None
-            )
+        session = self._session()
+        deliveries = await self._queue.claim(
+            limit=limit,
+            where=(DomainEventDeliveryRecord.consumer == consumer,),
+            session=session,
+        )
+        if not deliveries:
+            return ()
+        events = {
+            event.id: event
+            for event in (
+                await session.scalars(
+                    select(DomainEvent).where(DomainEvent.id.in_([delivery.event_id for delivery in deliveries]))
+                )
+            ).all()
+        }
+        return tuple(
+            _delivery(delivery, event)
+            for delivery in deliveries
+            if (event := events.get(delivery.event_id)) is not None
+        )
 
     async def complete(self, delivery: DomainEventDelivery) -> bool:
+        self._session()
         if delivery.claim_token is None:
             return False
-        outcome = await self._queue.complete(_identity(delivery), delivery.claim_token)
+        outcome = await self._queue.complete(_identity(delivery), delivery.claim_token, session=self._session())
         return outcome.applied
 
     async def fail(self, delivery: DomainEventDelivery, error: str, *, max_attempts: int) -> bool:
+        self._session()
         if delivery.claim_token is None:
             return False
         outcome = await self._queue.fail(
@@ -86,11 +90,13 @@ class PostgresDomainEventRepository:
             attempts=delivery.attempts,
             error=error,
             max_attempts=max_attempts,
+            session=self._session(),
         )
         return outcome.dead_lettered
 
     async def reject(self, delivery: DomainEventDelivery, error: str) -> bool:
         """Dead-letter a delivery this consumer will never accept."""
+        self._session()
         if delivery.claim_token is None:
             return False
         outcome = await self._queue.fail(
@@ -100,6 +106,7 @@ class PostgresDomainEventRepository:
             error=error,
             max_attempts=None,
             terminal=True,
+            session=self._session(),
         )
         return outcome.dead_lettered
 

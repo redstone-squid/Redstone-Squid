@@ -28,7 +28,6 @@ from squid.core.errors import DataIntegrityError
 from squid.events.models import DomainEvent
 from squid.minecraft_auth.domain.models import MinecraftClientOrigin
 from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
-from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.notifications.models import (
     InboxNotification,
     NotificationDeliveryRecord,
@@ -365,10 +364,10 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
         payload=event.payload,
         schema_version=event.schema_version,
     )
-    notifications = PostgresNotificationRepository(migrated_session_factory)
+    notifications = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
-    await notifications.materialize(notification_event)
-    await notifications.materialize(notification_event)
+    await transact(notifications, lambda uow: uow.notifications.materialize(notification_event), commit=True)
+    await transact(notifications, lambda uow: uow.notifications.materialize(notification_event), commit=True)
 
     async with migrated_session_factory() as session:
         materialized = tuple(
@@ -432,9 +431,9 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
             schema_version=event.schema_version,
         )
 
-    notifications = PostgresNotificationRepository(migrated_session_factory)
-    await notifications.materialize(notification_event)
-    claimed = await notifications.claim_deliveries(limit=10)
+    notifications = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    await transact(notifications, lambda uow: uow.notifications.materialize(notification_event), commit=True)
+    claimed = await transact(notifications, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True)
     assert len(claimed) == 2
     stale_absorbed_claim = next(delivery for delivery in claimed if delivery.discord_id == 700000000000000002)
     seeded_at = now()
@@ -470,8 +469,13 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
         lambda uow: uow.accounts.merge(survivor_id, absorbed_id),
         commit=True,
     )
-    assert await notifications.complete_delivery(stale_absorbed_claim) is False
-    await notifications.materialize(notification_event)
+    assert (
+        await transact(
+            notifications, lambda uow: uow.notifications.complete_delivery(stale_absorbed_claim), commit=True
+        )
+        is False
+    )
+    await transact(notifications, lambda uow: uow.notifications.materialize(notification_event), commit=True)
 
     async with migrated_session_factory() as session:
         merged = tuple(

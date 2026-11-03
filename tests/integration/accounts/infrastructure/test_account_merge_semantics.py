@@ -20,7 +20,6 @@ from squid.notifications.domain import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.notifications.models import (
     InboxNotification,
     NotificationDeliveryRecord,
@@ -267,20 +266,26 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
             schema_version=event.schema_version,
         )
 
-    notifications = PostgresNotificationRepository(migrated_session_factory)
-    (stale_claim,) = await notifications.claim_deliveries(limit=1)
+    notifications = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    (stale_claim,) = await transact(notifications, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True)
     await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
-    assert await notifications.complete_delivery(stale_claim) is False
+    assert (
+        await transact(notifications, lambda uow: uow.notifications.complete_delivery(stale_claim), commit=True)
+        is False
+    )
     async with migrated_session_factory.begin() as session:
-        await notifications._insert_candidates(
-            session,
-            event=event_value,
-            candidates=(
-                NotificationCandidate(
-                    account_id=survivor.id,
-                    kind=NotificationKind.RECORD_GAINED,
-                    source_key=f"event:{event_value.id}:record-build:42:account:{survivor.id}",
-                    payload={"build_id": 42, "records": []},
+        await transact(
+            notifications,
+            lambda uow: uow.notifications._insert_candidates(
+                session,
+                event=event_value,
+                candidates=(
+                    NotificationCandidate(
+                        account_id=survivor.id,
+                        kind=NotificationKind.RECORD_GAINED,
+                        source_key=f"event:{event_value.id}:record-build:42:account:{survivor.id}",
+                        payload={"build_id": 42, "records": []},
+                    ),
                 ),
             ),
         )

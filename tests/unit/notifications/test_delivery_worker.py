@@ -17,6 +17,7 @@ from squid.bot.notifications import NotificationCog
 from squid.notifications import NotificationService, PendingNotificationDelivery
 from squid.notifications.application import NotificationRepository
 from squid.notifications.domain import NotificationKind
+from tests.support.delivery_uow import NotificationUnitOfWork
 
 
 @dataclass
@@ -89,7 +90,11 @@ async def worker(mocker: MockerFixture) -> AsyncIterator[DeliveryWorker]:
         mocker.patch.object(
             client,
             "services",
-            SimpleNamespace(notifications=NotificationService(cast(NotificationRepository, repository))),
+            SimpleNamespace(
+                notifications=NotificationService(
+                    uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository))
+                )
+            ),
             create=True,
         )
         mocker.patch.object(client, "notification_site_url", "https://example.test", create=True)
