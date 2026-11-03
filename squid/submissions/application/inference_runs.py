@@ -12,9 +12,11 @@ from squid.builds.application.inference import BuildInferenceInput, BuildInferen
 from squid.builds.domain import BuildDraft
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue, NotFoundError
 from squid.permissions.application import PermissionService
+from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,15 +84,15 @@ class SubmissionInferenceRuns:
 
     def __init__(
         self,
-        repository: InferenceRunRepository,
         inference: BuildInferenceService,
         artifacts: ArtifactStore,
         codec: InferenceRunCodec,
         *,
+        uow_factory: UnitOfWorkFactory[InferenceUnitOfWork],
         capacity: int = 1_000,
         permissions: PermissionService | None = None,
     ) -> None:
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._inference = inference
         self._artifacts = artifacts
         self._codec = codec
@@ -127,7 +129,9 @@ class SubmissionInferenceRuns:
                 for index, image in enumerate(bundle.images)
             ],
         }
-        claim = await self._repository.begin(run_id, owner, inputs, capacity=self._capacity)
+        async with self._uow_factory() as uow:
+            claim = await uow.inference_runs.begin(run_id, owner, inputs, capacity=self._capacity)
+            await uow.commit()
         if claim.token is None:
             return claim.candidates
         try:
@@ -137,25 +141,31 @@ class SubmissionInferenceRuns:
                         f"submission-inference/{run_id}/{index}", image.data, content_type=image.content_type
                     )
                 drafts = await self._inference.infer(bundle, model=model, reasoning_effort=reasoning_effort)
-                return await self._repository.complete(run_id, claim.token, tuple(drafts))
+                async with self._uow_factory() as uow:
+                    result = await uow.inference_runs.complete(run_id, claim.token, tuple(drafts))
+                    await uow.commit()
+                    return result
         except Exception:
-            await self._repository.fail(run_id, claim.token)
+            async with self._uow_factory() as uow:
+                await uow.inference_runs.fail(run_id, claim.token)
+                await uow.commit()
             raise
 
     async def resume(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...] | None:
         """Retry retained inputs, or return completed candidates without rereading the source message."""
-        retained = await self._repository.retained(run_id)
-        if retained is None:
-            return None
-        owner, inputs, completed, candidates = retained
-        if inputs.get("purpose") != "submission":
-            raise AuthorizationError
-        if actor.account_id != owner and not (
-            self._permissions is not None and await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT)
-        ):
-            raise AuthorizationError
-        if completed:
-            return candidates
+        async with self._uow_factory() as uow:
+            retained = await uow.inference_runs.retained(run_id)
+            if retained is None:
+                return None
+            owner, inputs, completed, candidates = retained
+            if inputs.get("purpose") != "submission":
+                raise AuthorizationError
+            if actor.account_id != owner and not (
+                self._permissions is not None and await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
+            ):
+                raise AuthorizationError
+            if completed:
+                return candidates
         bundle = self._codec.decode_bundle(inputs["bundle"])
         descriptors = inputs.get("images", [])
         assert isinstance(descriptors, list)
@@ -182,35 +192,42 @@ class SubmissionInferenceRuns:
 
     async def get(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...]:
         """Reopen retained candidates under the current owner or staff authority."""
-        result = await self._repository.get(run_id)
-        if result is None:
-            raise NotFoundError
-        owner, candidates = result
-        if actor.account_id != owner and not (
-            self._permissions is not None and await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT)
-        ):
-            raise AuthorizationError
-        return candidates
+        async with self._uow_factory() as uow:
+            result = await uow.inference_runs.get(run_id)
+            if result is None:
+                raise NotFoundError
+            owner, candidates = result
+            if actor.account_id != owner and not (
+                self._permissions is not None and await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
+            ):
+                raise AuthorizationError
+            return candidates
 
     async def list_active(self, actor: Subject, *, inbox: bool = False) -> tuple[UUID, ...]:
-        if actor.account_id is None:
-            raise AuthorizationError
-        if inbox and not (
-            self._permissions is not None and await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT)
-        ):
-            raise AuthorizationError
-        return await self._repository.list_active(None if inbox else actor.account_id)
+        async with self._uow_factory() as uow:
+            if actor.account_id is None:
+                raise AuthorizationError
+            if inbox and not (
+                self._permissions is not None and await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT)
+            ):
+                raise AuthorizationError
+            return await uow.inference_runs.list_active(None if inbox else actor.account_id)
 
     async def public_status(self, run_id: UUID) -> InferenceStatus | None:
         """Read minimal status for the source-channel reconciler without exposing inferred facts."""
-        return await self._repository.public_status(run_id)
+        async with self._uow_factory() as uow:
+            return await uow.inference_runs.public_status(run_id)
 
     async def cleanup(self) -> None:
         """Delete expired private images before releasing their retained database inventory."""
-        for run_id, image_count in await self._repository.expired():
+        async with self._uow_factory() as uow:
+            expired = await uow.inference_runs.expired()
+        for run_id, image_count in expired:
             for index in range(image_count):
                 await self._artifacts.delete(f"submission-inference/{run_id}/{index}")
-            await self._repository.delete_expired(run_id)
+            async with self._uow_factory() as uow:
+                await uow.inference_runs.delete_expired(run_id)
+                await uow.commit()
 
 
 def candidate_id(run_id: UUID, index: int) -> UUID:
@@ -220,3 +237,8 @@ def candidate_id(run_id: UUID, index: int) -> UUID:
 
 def inference_busy() -> ConflictError:
     return ConflictError("This inference run is already processing; its retained result can be reopened later.")
+
+
+class InferenceUnitOfWork(PermissionUnitOfWork, Protocol):
+    @property
+    def inference_runs(self) -> InferenceRunRepository: ...

@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, call
@@ -13,6 +14,7 @@ from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.builds.domain import BuildDraft
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
+from squid.permissions.application.ports import PermissionStore
 from squid.permissions.domain import Subject
 from squid.submissions.application.inference_runs import (
     InferenceCandidate,
@@ -22,6 +24,7 @@ from squid.submissions.application.inference_runs import (
     candidate_id,
 )
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
+from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 
 @dataclass
@@ -99,7 +102,7 @@ async def recovery(tmp_path: Path) -> Recovery:
         images=(InlineImage(b"private image", "image/png", 1, "attachment"),),
     )
     service = SubmissionInferenceRuns(
-        cast(InferenceRunRepository, repository), inference, artifacts, PydanticInferenceRunCodec()
+        inference, artifacts, PydanticInferenceRunCodec(), uow_factory=partial(InferenceScope, repository)
     )
     with pytest.raises(RuntimeError, match="model unavailable"):
         await service.infer(repository.id, repository.owner, bundle, model="original-model", reasoning_effort="low")
@@ -141,3 +144,13 @@ async def test_failed_run_checks_owner_and_image_integrity_before_invoking_model
     await recovery.artifacts.put(recovery.image_key, image.data, content_type=image.content_type)
     assert await recovery.resume()
     assert recovery.repository.completed
+
+
+class InferenceScope(PublishingFakeUnitOfWork[RetainedRun]):
+    @property
+    def inference_runs(self) -> InferenceRunRepository:
+        return cast(InferenceRunRepository, self.state)
+
+    @property
+    def permissions(self) -> PermissionStore:
+        raise AssertionError("Inference recovery tests use owner authority.")

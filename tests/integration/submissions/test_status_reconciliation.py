@@ -14,7 +14,6 @@ from squid.core.errors import JSONValue
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application.inference_runs import candidate_id
 from squid.submissions.domain import DraftStatus
-from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
 from squid.submissions.models.entities import SubmissionDraft
 from squid.sync.models import DiscordSyncQueueItem
 from tests.integration.submissions.test_schematics import create_draft
@@ -40,10 +39,14 @@ async def test_run_and_draft_changes_enqueue_minimal_status(
         "purpose": "submission",
         "bundle": TypeAdapter(BuildInferenceInput).dump_python(bundle, mode="json"),
     }
-    runs = PostgresInferenceRuns(sessions)
-    claim = await runs.begin(run, owner, inputs, capacity=1000)
+    runs = partial(SqlAlchemyUnitOfWork, sessions)
+    claim = await transact(runs, lambda uow: uow.inference_runs.begin(run, owner, inputs, capacity=1000), commit=True)
     assert claim.token is not None
-    await runs.complete(run, claim.token, (BuildDraft(category=BuildCategory.OTHER),))
+    await transact(
+        runs,
+        lambda uow: uow.inference_runs.complete(run, claim.token, (BuildDraft(category=BuildCategory.OTHER),)),
+        commit=True,
+    )
     initial = await create_draft(sessions, owner)
     draft = replace(initial, snapshot=replace(initial.snapshot, id=candidate_id(run, 0)), inference_run_id=run)
     await transact(
@@ -53,7 +56,7 @@ async def test_run_and_draft_changes_enqueue_minimal_status(
         row = await session.get(SubmissionDraft, draft.snapshot.id)
         assert row is not None
         row.status = DraftStatus.NEEDS_ATTENTION
-    status = await runs.public_status(run)
+    status = await transact(runs, lambda uow: uow.inference_runs.public_status(run))
     assert status is not None
     assert status.candidates == ("needs attention",)
     assert status.source_message_id == 123

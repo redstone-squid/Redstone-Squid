@@ -94,19 +94,16 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
+from squid.submissions.application.artifact_readiness import (
+    AuthoritativeDraftArtifactReadiness,
+)
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.infrastructure.artifact_readiness import (
-    AuthoritativeDraftArtifactReadiness,
-)
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
-from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
-from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
-from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.suggestions.application import SuggestionService
@@ -424,22 +421,18 @@ class _ServiceGraph:
     @cached_property
     def submission_inference(self) -> SubmissionInferenceRuns:
         return SubmissionInferenceRuns(
-            PostgresInferenceRuns(self.db.async_session),
             self.build_inference,
             self.artifacts,
             PydanticInferenceRunCodec(),
+            uow_factory=self.uow_factory,
             capacity=self.config.submissions.inferred_draft_capacity,
             permissions=self.permissions,
         )
 
     @cached_property
-    def submission_intake_repository(self) -> PostgresAttachmentIntake:
-        return PostgresAttachmentIntake(self.db.async_session)
-
-    @cached_property
     def submission_intake(self) -> SubmissionAttachmentIntake:
         return SubmissionAttachmentIntake(
-            self.submission_drafts, self.submission_intake_repository, self.submission_schematics, self.media_jobs
+            self.submission_drafts, self.submission_schematics, self.media_jobs, uow_factory=self.uow_factory
         )
 
     @cached_property
@@ -451,19 +444,15 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def submission_schematic_repository(self) -> PostgresDraftSchematics:
-        return PostgresDraftSchematics(self.db.async_session)
-
-    @cached_property
     def submission_schematics(self) -> DraftSchematicService:
-        return DraftSchematicService(self.submission_drafts, self.submission_schematic_repository, self.artifacts)
+        return DraftSchematicService(self.submission_drafts, self.artifacts, uow_factory=self.uow_factory)
 
     @cached_property
     def submission_finalization(self) -> SubmissionFinalizationService:
         readiness = AuthoritativeDraftArtifactReadiness(
             self.media_repository,
-            self.submission_schematic_repository,
-            intake=self.submission_intake_repository,
+            self.submission_schematics,
+            intake=self.submission_intake,
             media_limits=MediaLimits(),
         )
         sponsors = (

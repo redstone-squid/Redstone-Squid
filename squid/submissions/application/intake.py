@@ -14,10 +14,12 @@ from squid.media.application.jobs import (
 )
 from squid.media.domain import MediaKind
 from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
-from squid.submissions.application.drafts import DraftActor, StoredDraft, SubmissionDraftService
+from squid.submissions.application.drafts import DraftActor, DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.application.schematics import DraftSchematicService
+from squid.submissions.domain import SubmissionAttentionIssue
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +36,7 @@ class SuppliedAttachment:
 class AttachmentIntakeRepository(Protocol):
     """Persist intake intent independently of the eventual processor."""
 
+    async def issues_for_draft(self, draft_id: UUID) -> tuple[SubmissionAttentionIssue, ...]: ...
     async def reserve(self, draft: StoredDraft, attachment: SuppliedAttachment) -> None: ...
     async def list(self, draft_id: UUID) -> tuple[SuppliedAttachment, ...]: ...
     async def set_status(self, draft_id: UUID, source_id: UUID, status: IntakeStatus) -> None: ...
@@ -45,12 +48,13 @@ class SubmissionAttachmentIntake:
     def __init__(
         self,
         drafts: SubmissionDraftService,
-        repository: AttachmentIntakeRepository,
         schematics: DraftSchematicService,
         media: MediaNormalizationJobService | None,
+        *,
+        uow_factory: UnitOfWorkFactory[AttachmentIntakeUnitOfWork],
     ) -> None:
         self._drafts = drafts
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._schematics = schematics
         self._media = media
 
@@ -58,20 +62,25 @@ class SubmissionAttachmentIntake:
         self, draft_id: UUID, actor: DraftActor, source_id: UUID, filename: str, content_type: str | None
     ) -> SuppliedAttachment:
         """Register intent before a transport performs its first download."""
-        if source_id.int == 0 or not filename.strip() or len(filename) > 255:
-            message = "A supplied attachment needs a valid identifier and filename."
-            raise ValidationError(message)
-        kind = classify_supplied_file(filename, content_type)
-        attachment = SuppliedAttachment(source_id, filename, kind, IntakeStatus.PENDING)
-        await self._repository.reserve(await self._drafts.get_accessible(draft_id, actor), attachment)
-        return attachment
+        async with self._uow_factory() as uow:
+            if source_id.int == 0 or not filename.strip() or len(filename) > 255:
+                message = "A supplied attachment needs a valid identifier and filename."
+                raise ValidationError(message)
+            kind = classify_supplied_file(filename, content_type)
+            attachment = SuppliedAttachment(source_id, filename, kind, IntakeStatus.PENDING)
+            await uow.attachment_intake.reserve(await self._drafts.get_accessible_in(uow, draft_id, actor), attachment)
+            await uow.commit()
+            return attachment
 
     async def register_file(
         self, draft_id: UUID, actor: DraftActor, source_id: UUID, path: Path, content_type: str | None
     ) -> None:
         """Register downloaded bytes with the existing durable processor and retain failures."""
-        draft = await self._drafts.get_accessible(draft_id, actor)
-        attachment = next((item for item in await self._repository.list(draft_id) if item.id == source_id), None)
+        async with self._uow_factory() as uow:
+            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+            attachment = next(
+                (item for item in await uow.attachment_intake.list(draft_id) if item.id == source_id), None
+            )
         if attachment is None:
             raise NotFoundError
         if attachment.status is IntakeStatus.DISCARDED:
@@ -82,9 +91,9 @@ class SubmissionAttachmentIntake:
         try:
             await self._register(draft, actor, attachment, path, content_type)
         except Exception:
-            await self._repository.set_status(draft_id, source_id, IntakeStatus.FAILED)
+            await self._set_status(draft_id, source_id, IntakeStatus.FAILED)
             raise
-        await self._repository.set_status(draft_id, source_id, IntakeStatus.READY)
+        await self._set_status(draft_id, source_id, IntakeStatus.READY)
 
     async def _register(
         self,
@@ -129,12 +138,15 @@ class SubmissionAttachmentIntake:
 
     async def fail(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
         """Retain a download failure for explicit retry or discard."""
-        await self._drafts.get_accessible(draft_id, actor)
-        await self._repository.set_status(draft_id, source_id, IntakeStatus.FAILED)
+        async with self._uow_factory() as uow:
+            await self._drafts.get_accessible_in(uow, draft_id, actor)
+            await uow.attachment_intake.set_status(draft_id, source_id, IntakeStatus.FAILED)
+            await uow.commit()
 
     async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
-        await self._drafts.get_accessible(draft_id, actor)
-        return await self._repository.list(draft_id)
+        async with self._uow_factory() as uow:
+            await self._drafts.get_accessible_in(uow, draft_id, actor)
+            return await uow.attachment_intake.list(draft_id)
 
     async def discard(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
         """Discard processor references before resolving the supplied-file requirement."""
@@ -150,7 +162,22 @@ class SubmissionAttachmentIntake:
                 await self._schematics.discard(draft_id, actor, source_id)
         elif attachment.kind in {"image", "video"} and self._media is not None:
             await self._media.discard(draft_id, source_id)
-        await self._repository.set_status(draft_id, source_id, IntakeStatus.DISCARDED)
+        await self._set_status(draft_id, source_id, IntakeStatus.DISCARDED)
+
+    async def _set_status(self, draft_id: UUID, source_id: UUID, status: IntakeStatus) -> None:
+        async with self._uow_factory() as uow:
+            await uow.attachment_intake.set_status(draft_id, source_id, status)
+            await uow.commit()
+
+    async def issues_for_draft(self, draft_id: UUID) -> tuple[SubmissionAttentionIssue, ...]:
+        """Read unresolved attachment requirements for submission preparation."""
+        async with self._uow_factory() as uow:
+            return await uow.attachment_intake.issues_for_draft(draft_id)
+
+
+class AttachmentIntakeUnitOfWork(DraftUnitOfWork, Protocol):
+    @property
+    def attachment_intake(self) -> AttachmentIntakeRepository: ...
 
 
 def classify_supplied_file(filename: str, content_type: str | None) -> str:

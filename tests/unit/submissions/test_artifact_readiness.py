@@ -8,15 +8,15 @@ from whenever import Instant
 from squid.media.application.jobs import MediaJobSnapshot, MediaUploadMetadata, StoredMediaArtifact
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.submissions.application.artifact_readiness import (
+    AuthoritativeDraftArtifactReadiness,
+    DraftSchematicSnapshot,
+    EmptyDraftSchematicReader,
+)
 from squid.submissions.domain import (
     SchematicArtifactState,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
-)
-from squid.submissions.infrastructure.artifact_readiness import (
-    AuthoritativeDraftArtifactReadiness,
-    DraftSchematicSnapshot,
-    EmptyDraftSchematicReader,
 )
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000601")
