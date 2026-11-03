@@ -11,6 +11,7 @@ from squid.core.i18n import tr
 from squid.tags.domain import TagModerationStatus, TagValue, TagValueType
 from squid.tags.errors import TagNotFoundError
 from squid.tags.models import TagDefinition
+from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -47,11 +48,16 @@ class TagDefinitionRepository(Protocol):
     ) -> bool: ...
 
 
+class TagUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def tags(self) -> TagDefinitionRepository: ...
+
+
 class TagService:
     """Create user showcase tags and moderate their publication state."""
 
-    def __init__(self, repository: TagDefinitionRepository) -> None:
-        self._repository = repository
+    def __init__(self, *, uow_factory: UnitOfWorkFactory[TagUnitOfWork]) -> None:
+        self._uow_factory = uow_factory
 
     async def propose_showcase(
         self,
@@ -61,42 +67,50 @@ class TagService:
         query_name: str | None,
         created_by_account_id: int,
     ) -> TagDefinition:
-        normalized_name = " ".join(display_name.casefold().split())
-        if not 1 <= len(normalized_name) <= 80:
-            msg = tr(t"Tag names must contain between 1 and 80 characters.")
-            raise ValidationError(msg)
-        normalized_query = query_name.casefold().strip() if query_name is not None else None
-        if normalized_query == "":
-            normalized_query = None
-        if normalized_query is not None and _QUERY_NAME.fullmatch(normalized_query) is None:
-            msg = tr(t"query names must start with a letter and contain only lowercase letters, digits, or underscores")
-            raise ValidationError(msg)
-        return await self._repository.create_showcase(
-            # No submitter identity in the key. It is never parsed -- the only literal
-            # comparison anywhere is against an official key -- so publishing a proposer
-            # in `BuildTag.key` bought nothing and leaked who proposed a tag.
-            stable_key=f"user_{uuid4().hex}",
-            display_name=" ".join(display_name.split()),
-            normalized_name=normalized_name,
-            value_type=value_type,
-            query_name=normalized_query,
-            created_by_account_id=created_by_account_id,
-        )
+        async with self._uow_factory() as uow:
+            normalized_name = " ".join(display_name.casefold().split())
+            if not 1 <= len(normalized_name) <= 80:
+                msg = tr(t"Tag names must contain between 1 and 80 characters.")
+                raise ValidationError(msg)
+            normalized_query = query_name.casefold().strip() if query_name is not None else None
+            if normalized_query == "":
+                normalized_query = None
+            if normalized_query is not None and _QUERY_NAME.fullmatch(normalized_query) is None:
+                msg = tr(
+                    t"query names must start with a letter and contain only lowercase letters, digits, or underscores"
+                )
+                raise ValidationError(msg)
+            result = await uow.tags.create_showcase(
+                # No submitter identity in the key. It is never parsed -- the only literal
+                # comparison anywhere is against an official key -- so publishing a proposer
+                # in `BuildTag.key` bought nothing and leaked who proposed a tag.
+                stable_key=f"user_{uuid4().hex}",
+                display_name=" ".join(display_name.split()),
+                normalized_name=normalized_name,
+                value_type=value_type,
+                query_name=normalized_query,
+                created_by_account_id=created_by_account_id,
+            )
+            await uow.commit()
+            return result
 
     async def pending(self) -> Sequence[TagDefinition]:
         """List user definitions awaiting staff review."""
-        return await self._repository.pending()
+        async with self._uow_factory() as uow:
+            return await uow.tags.pending()
 
     async def public_definitions(self) -> Sequence[TagDefinition]:
         """List tag definitions available to public search and build clients."""
-        return await self._repository.approved()
+        async with self._uow_factory() as uow:
+            return await uow.tags.approved()
 
     async def public_definition(self, tag_id: int) -> TagDefinition | None:
         """Return an approved public tag definition by identifier."""
-        definition = await self._repository.get(tag_id)
-        if definition is None or definition.moderation_status is not TagModerationStatus.APPROVED:
-            return None
-        return definition
+        async with self._uow_factory() as uow:
+            definition = await uow.tags.get(tag_id)
+            if definition is None or definition.moderation_status is not TagModerationStatus.APPROVED:
+                return None
+            return definition
 
     async def approve(self, tag_id: int) -> TagDefinition:
         """Publish a pending tag."""
@@ -119,32 +133,36 @@ class TagService:
         actor_account_id: int,
     ) -> TagDefinition:
         """Attach an approved showcase tag to a build submitted by the caller."""
-        definition = await self._repository.get(tag_id)
-        if (
-            definition is None
-            or definition.authority.value != "user"
-            or definition.semantic_kind.value != "showcase"
-            or definition.moderation_status is not TagModerationStatus.APPROVED
-        ):
-            msg = tr(t"An approved user showcase tag is required.")
-            raise ValidationError(msg)
-        value = _coerce_assignment_value(definition, raw_value)
-        assigned = await self._repository.assign_showcase(
-            build_id=build_id,
-            tag_id=tag_id,
-            value=value,
-            actor_account_id=actor_account_id,
-        )
-        if not assigned:
-            msg = tr(t"The build does not exist or was not submitted by you.")
-            raise ValidationError(msg)
-        return definition
+        async with self._uow_factory() as uow:
+            definition = await uow.tags.get(tag_id)
+            if (
+                definition is None
+                or definition.authority.value != "user"
+                or definition.semantic_kind.value != "showcase"
+                or definition.moderation_status is not TagModerationStatus.APPROVED
+            ):
+                msg = tr(t"An approved user showcase tag is required.")
+                raise ValidationError(msg)
+            value = _coerce_assignment_value(definition, raw_value)
+            assigned = await uow.tags.assign_showcase(
+                build_id=build_id,
+                tag_id=tag_id,
+                value=value,
+                actor_account_id=actor_account_id,
+            )
+            if not assigned:
+                msg = tr(t"The build does not exist or was not submitted by you.")
+                raise ValidationError(msg)
+            await uow.commit()
+            return definition
 
     async def _set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition:
-        definition = await self._repository.set_status(tag_id, status)
-        if definition is None:
-            raise TagNotFoundError(tag_id)
-        return definition
+        async with self._uow_factory() as uow:
+            definition = await uow.tags.set_status(tag_id, status)
+            if definition is None:
+                raise TagNotFoundError(tag_id)
+            await uow.commit()
+            return definition
 
 
 def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -> TagValue:

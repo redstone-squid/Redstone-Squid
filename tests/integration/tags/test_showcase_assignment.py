@@ -1,7 +1,9 @@
 """Showcase tag ownership, which is now an account comparison rather than a snowflake one."""
 
+from collections.abc import AsyncIterator
+
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
@@ -9,14 +11,15 @@ from squid.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.builds.domain import Status
 from squid.builds.models import OtherBuild
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.tags.models import TagAssignment, TagDefinition
 
 
 @pytest.fixture
-def repository(migrated_session_factory: async_sessionmaker[AsyncSession]) -> PostgresTagDefinitionRepository:
-    return PostgresTagDefinitionRepository(migrated_session_factory)
+async def uow(migrated_session_factory: async_sessionmaker[AsyncSession]) -> AsyncIterator[SqlAlchemyUnitOfWork]:
+    async with SqlAlchemyUnitOfWork(migrated_session_factory) as work:
+        yield work
 
 
 async def _account(session_factory: async_sessionmaker[AsyncSession], *, bedrock_xuid: int) -> int:
@@ -73,7 +76,7 @@ async def _approved_tag(session_factory: async_sessionmaker[AsyncSession], *, cr
 
 
 async def test_an_account_without_discord_can_tag_its_own_build(
-    repository: PostgresTagDefinitionRepository,
+    uow: SqlAlchemyUnitOfWork,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Impossible before: ownership joined `account_identities` to compare two snowflakes."""
@@ -81,10 +84,9 @@ async def test_an_account_without_discord_can_tag_its_own_build(
     build_id = await _build(migrated_session_factory, submitter_account_id=account_id)
     tag_id = await _approved_tag(migrated_session_factory, created_by_account_id=account_id)
 
-    assigned = await repository.assign_showcase(
-        build_id=build_id, tag_id=tag_id, value=None, actor_account_id=account_id
-    )
+    assigned = await uow.tags.assign_showcase(build_id=build_id, tag_id=tag_id, value=None, actor_account_id=account_id)
 
+    await uow.commit()
     assert assigned is True
     async with migrated_session_factory() as session:
         stored = await session.scalar(select(TagAssignment).where(TagAssignment.build_id == build_id))
@@ -93,7 +95,7 @@ async def test_an_account_without_discord_can_tag_its_own_build(
 
 
 async def test_an_account_cannot_tag_someone_elses_build(
-    repository: PostgresTagDefinitionRepository,
+    uow: SqlAlchemyUnitOfWork,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     owner_id = await _account(migrated_session_factory, bedrock_xuid=2535465049322445)
@@ -101,10 +103,35 @@ async def test_an_account_cannot_tag_someone_elses_build(
     build_id = await _build(migrated_session_factory, submitter_account_id=owner_id)
     tag_id = await _approved_tag(migrated_session_factory, created_by_account_id=owner_id)
 
-    assigned = await repository.assign_showcase(
+    assigned = await uow.tags.assign_showcase(
         build_id=build_id, tag_id=tag_id, value=None, actor_account_id=stranger_id
     )
 
+    await uow.commit()
     assert assigned is False
     async with migrated_session_factory() as session:
         assert await session.scalar(select(TagAssignment)) is None
+
+
+@pytest.mark.parametrize("commit", [False, True])
+async def test_moderation_and_projection_request_share_a_transaction(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+    commit: bool,
+) -> None:
+    account_id = await _account(migrated_session_factory, bedrock_xuid=2535465049322445)
+    tag_id = await _approved_tag(migrated_session_factory, created_by_account_id=account_id)
+    async with SqlAlchemyUnitOfWork(migrated_session_factory) as work:
+        updated = await work.tags.set_status(tag_id, TagModerationStatus.ARCHIVED)
+        assert updated is not None
+        assert updated.moderation_status is TagModerationStatus.ARCHIVED
+        if commit:
+            await work.commit()
+    async with migrated_session_factory() as session:
+        stored = await session.get(TagDefinition, tag_id)
+        assert stored is not None
+        assert stored.moderation_status is (TagModerationStatus.ARCHIVED if commit else TagModerationStatus.APPROVED)
+        queued = await session.scalar(
+            text("SELECT action FROM search_projection_queue WHERE resource_kind = 'metadata' AND source_key = :key"),
+            {"key": f"tag:{tag_id}"},
+        )
+        assert queued == ("delete" if commit else "upsert")

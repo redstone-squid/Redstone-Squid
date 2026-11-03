@@ -3,12 +3,14 @@
 import re
 from dataclasses import replace
 from decimal import Decimal
+from functools import partial
 
 import pytest
 
 from squid.tags.application import TagService
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagDefinition
+from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
 class FakeRepository:
@@ -69,10 +71,26 @@ class FakeRepository:
         return actor_account_id == 42
 
 
+class FakeTagUnitOfWork(FakeUnitOfWork[FakeRepository]):
+    @property
+    def tags(self) -> FakeRepository:
+        return self.state
+
+
+def _copy_repository(repository: FakeRepository) -> FakeRepository:
+    copied = FakeRepository()
+    copied.definition = None if repository.definition is None else replace(repository.definition)
+    return copied
+
+
+def _service() -> TagService:
+    committed = CommittedState(FakeRepository(), clone=_copy_repository)
+    return TagService(uow_factory=partial(FakeTagUnitOfWork, committed))
+
+
 @pytest.mark.asyncio
 async def test_user_can_propose_only_showcase_definition_for_review() -> None:
-    repository = FakeRepository()
-    service = TagService(repository)
+    service = _service()
 
     tag = await service.propose_showcase(
         "  Closing   Showcase ",
@@ -89,8 +107,7 @@ async def test_user_can_propose_only_showcase_definition_for_review() -> None:
 
 @pytest.mark.asyncio
 async def test_staff_moderation_retains_definition_identity() -> None:
-    repository = FakeRepository()
-    service = TagService(repository)
+    service = _service()
     proposed = await service.propose_showcase(
         "Compact",
         value_type=TagValueType.NONE,
@@ -107,8 +124,7 @@ async def test_staff_moderation_retains_definition_identity() -> None:
 
 @pytest.mark.asyncio
 async def test_public_queries_only_return_approved_definitions() -> None:
-    repository = FakeRepository()
-    service = TagService(repository)
+    service = _service()
     proposed = await service.propose_showcase(
         "Compact",
         value_type=TagValueType.NONE,
@@ -120,14 +136,16 @@ async def test_public_queries_only_return_approved_definitions() -> None:
     assert await service.public_definition(proposed.id) is None
 
     approved = await service.approve(proposed.id)
-    assert await service.public_definitions() == (approved,)
-    assert await service.public_definition(proposed.id) == approved
+    assert [tag.id for tag in await service.public_definitions()] == [approved.id]
+    public = await service.public_definition(proposed.id)
+    assert public is not None
+    assert public.id == approved.id
 
 
 @pytest.mark.asyncio
 async def test_invalid_public_query_name_is_rejected_before_persistence() -> None:
     with pytest.raises(ValueError, match="query names"):
-        await TagService(FakeRepository()).propose_showcase(
+        await _service().propose_showcase(
             "Compact",
             value_type=TagValueType.NONE,
             query_name="not-valid!",
@@ -137,8 +155,7 @@ async def test_invalid_public_query_name_is_rejected_before_persistence() -> Non
 
 @pytest.mark.asyncio
 async def test_submitter_can_attach_approved_typed_showcase_tag() -> None:
-    repository = FakeRepository()
-    service = TagService(repository)
+    service = _service()
     proposed = await service.propose_showcase(
         "Closing showcase",
         value_type=TagValueType.NUMERIC,

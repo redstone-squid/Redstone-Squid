@@ -129,7 +129,6 @@ from squid.suggestions.infrastructure.catalogue import build_registry as build_s
 from squid.sync import DiscordReconciliationService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
-from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
@@ -423,7 +422,7 @@ class _ServiceGraph:
 
     @cached_property
     def tags(self) -> TagService:
-        return TagService(PostgresTagDefinitionRepository(self.db.async_session))
+        return TagService(uow_factory=self.uow_factory)
 
     @cached_property
     def submission_manifests(self) -> CheckedInFormManifestRegistry:

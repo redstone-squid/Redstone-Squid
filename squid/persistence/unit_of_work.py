@@ -10,6 +10,7 @@ from squid.core.errors import InvalidStateError
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
+from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.infrastructure.repository import VersionRepository
 
 
@@ -19,6 +20,7 @@ class SqlAlchemyUnitOfWork:
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = sessions
         self._session: AsyncSession | None = None
+        self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._messages = MessageRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
@@ -44,6 +46,11 @@ class SqlAlchemyUnitOfWork:
     def versions(self) -> VersionRepository:
         self._active_session()
         return self._versions
+
+    @property
+    def tags(self) -> PostgresTagDefinitionRepository:
+        self._active_session()
+        return self._tags
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:
