@@ -6,8 +6,9 @@ from whenever import Instant
 
 from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache, cache_key
 from squid.permissions.application.ports import SubjectRecords
-from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Rule, Subject
+from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Pattern, Rule, Subject
 from squid.permissions.models import PermissionRole, PermissionRoleAssignment
+from tests.support.permissions import permission_uow_factory
 
 GUILD = 555
 
@@ -44,8 +45,6 @@ class CountingStore:
 
 
 def rule(pattern: str = "build.**") -> tuple[Rule, ...]:
-    from squid.permissions.domain import Effect, Pattern
-
     return (Rule(pattern=Pattern.parse(pattern), effect=Effect.ALLOW),)
 
 
@@ -116,7 +115,7 @@ class TestSubjectRuleCache:
 class TestServiceCaching:
     async def test_a_second_check_reuses_the_loaded_rules(self) -> None:
         store = CountingStore()
-        permissions = PermissionService(store, cache=SubjectRuleCache())
+        permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=SubjectRuleCache())
         subject = Subject(account_id=7, guild_id=GUILD)
 
         assert await permissions.allows(subject, "vote.log_delete.cast")
@@ -126,8 +125,8 @@ class TestServiceCaching:
     async def test_a_write_elsewhere_forces_a_reload(self) -> None:
         store = CountingStore()
         cache = SubjectRuleCache()
-        permissions = PermissionService(store, cache=cache)
-        watcher = PermissionEpochWatcher(store, cache)
+        permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=cache)
+        watcher = PermissionEpochWatcher(cache, uow_factory=permission_uow_factory(store))
         subject = Subject(account_id=7, guild_id=GUILD)
 
         await permissions.allows(subject, "vote.log_delete.cast")
@@ -141,7 +140,7 @@ class TestServiceCaching:
         """Nothing is loaded for the owner, so nothing may be stored under their key."""
         store = CountingStore()
         cache = SubjectRuleCache()
-        permissions = PermissionService(store, cache=cache)
+        permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=cache)
 
         assert await permissions.allows(Subject(account_id=1, is_bot_owner=True), "bot.tree.sync")
         assert store.loads == 0
@@ -153,7 +152,7 @@ class TestEpochWatcher:
         store = CountingStore(epoch=9)
         cache = SubjectRuleCache()
 
-        await PermissionEpochWatcher(store, cache).refresh()
+        await PermissionEpochWatcher(cache, uow_factory=permission_uow_factory(store)).refresh()
 
         assert cache.epoch == 9
 
@@ -170,7 +169,7 @@ class TestEpochWatcher:
         cache = SubjectRuleCache()
         listener = OneShotListener()
 
-        await PermissionEpochWatcher(store, cache, listener=listener).listen()
+        await PermissionEpochWatcher(cache, uow_factory=permission_uow_factory(store), listener=listener).listen()
 
         assert listener.wakes == 1
         assert cache.epoch == 3

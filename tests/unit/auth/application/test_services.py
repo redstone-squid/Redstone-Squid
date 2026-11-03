@@ -13,6 +13,7 @@ from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import InvalidPatternError, Pattern
 from squid.permissions.models import PermissionGrant
+from tests.support.permissions import permission_uow_factory
 
 NOW = Instant.from_utc(2026, 8, 8, 12)
 
@@ -261,7 +262,7 @@ class TestIssuanceBoundary:
             async def epoch(self) -> int:
                 return 1
 
-        return PermissionService(Store())
+        return PermissionService(uow_factory=permission_uow_factory(Store()))
 
     async def test_a_pattern_the_owner_holds_is_issued(self) -> None:
         repository = FakeApiKeyRepository()

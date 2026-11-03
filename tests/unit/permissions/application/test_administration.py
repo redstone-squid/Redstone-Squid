@@ -1,6 +1,7 @@
 """The two management gates, and the delegation rules behind `/perm`."""
 
 import dataclasses
+from functools import partial
 
 import pytest
 from hypothesis import given, settings
@@ -21,6 +22,7 @@ from squid.permissions.application.administration import (
 from squid.permissions.application.ports import AuditEntry, SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Subject
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
+from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 from ..domain.strategies import patterns as domain_patterns
 
@@ -207,8 +209,35 @@ class FakeStore:
         return ()
 
 
-def admin(store: FakeStore) -> PermissionAdministrationService:
-    return PermissionAdministrationService(store, PermissionService(store))
+class FakePermissionUnitOfWork(FakeUnitOfWork[FakeStore]):
+    @property
+    def permissions(self) -> FakeStore:
+        return self.state
+
+    @property
+    def permission_admin(self) -> FakeStore:
+        return self.state
+
+
+def _copy_store(store: FakeStore) -> FakeStore:
+    copied = FakeStore()
+    copied.roles = {key: dataclasses.replace(role) for key, role in store.roles.items()}
+    copied.rules = [dataclasses.replace(rule) for rule in store.rules]
+    copied.assignments = [dataclasses.replace(assignment) for assignment in store.assignments]
+    copied.audit_entries = list(store.audit_entries)
+    copied._next_id = store._next_id
+    return copied
+
+
+def stored(
+    *, roles: tuple[PermissionRole, ...] = (), rules: tuple[PermissionGrant, ...] = ()
+) -> CommittedState[FakeStore]:
+    return CommittedState(FakeStore(roles=roles, rules=rules), clone=_copy_store)
+
+
+def admin(store: CommittedState[FakeStore]) -> PermissionAdministrationService:
+    factory = partial(FakePermissionUnitOfWork, store)
+    return PermissionAdministrationService(PermissionService(uow_factory=factory), uow_factory=factory)
 
 
 def granted(*patterns: str, account_id: int = 7) -> tuple[PermissionGrant, ...]:
@@ -220,17 +249,17 @@ def granted(*patterns: str, account_id: int = 7) -> tuple[PermissionGrant, ...]:
 
 class TestAuthorityBoundary:
     async def test_a_held_pattern_can_be_granted(self) -> None:
-        store = FakeStore(rules=granted("perm.grant.global", "build.**"))
+        store = stored(rules=granted("perm.grant.global", "build.**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
         await service.grant(actor, pattern="build.submission.approve", account_id=8, scope_guild_id=None)
 
-        assert any(rule.subject_account_id == 8 for rule in store.rules)
+        assert any(rule.subject_account_id == 8 for rule in store.value.rules)
 
     async def test_a_pattern_beyond_the_actor_is_refused(self) -> None:
         """You cannot mint yourself, or anyone else, something you lack."""
-        store = FakeStore(rules=granted("perm.grant.global", "build.**"))
+        store = stored(rules=granted("perm.grant.global", "build.**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -238,19 +267,19 @@ class TestAuthorityBoundary:
             await service.grant(actor, pattern="bot.tree.sync", account_id=8, scope_guild_id=None)
 
     async def test_the_owner_bypasses_every_gate(self) -> None:
-        store = FakeStore()
+        store = stored()
         service = admin(store)
         actor = await service.actor(Subject(account_id=1, is_bot_owner=True))
 
         await service.grant(actor, pattern="**", account_id=8, scope_guild_id=None)
 
-        assert store.rules
+        assert store.value.rules
 
 
 class TestGuildDelegation:
     async def test_a_guild_granter_cannot_reach_a_global_node(self) -> None:
         """Blocked here, at the resolver, and by a database CHECK."""
-        store = FakeStore(rules=granted("perm.grant.guild", "settings.**", "build.**"))
+        store = stored(rules=granted("perm.grant.guild", "settings.**", "build.**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -258,7 +287,7 @@ class TestGuildDelegation:
             await service.grant(actor, pattern="build.**", account_id=8, scope_guild_id=GUILD)
 
     async def test_a_guild_granter_cannot_write_a_global_rule(self) -> None:
-        store = FakeStore(rules=granted("perm.grant.guild", "settings.**"))
+        store = stored(rules=granted("perm.grant.guild", "settings.**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -266,18 +295,18 @@ class TestGuildDelegation:
             await service.grant(actor, pattern="settings.server.edit", account_id=8, scope_guild_id=None)
 
     async def test_a_guild_scoped_guild_node_is_allowed(self) -> None:
-        store = FakeStore(rules=granted("perm.grant.guild", "settings.**"))
+        store = stored(rules=granted("perm.grant.guild", "settings.**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
         await service.grant(actor, pattern="settings.server.edit", account_id=8, scope_guild_id=GUILD)
 
-        assert store.rules[-1].scope_guild_id == GUILD
+        assert store.value.rules[-1].scope_guild_id == GUILD
 
 
 class TestForbid:
     async def test_forbid_is_owner_only(self) -> None:
-        store = FakeStore(rules=granted("**"))
+        store = stored(rules=granted("**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7))
 
@@ -292,7 +321,7 @@ class TestForbid:
             )
 
     async def test_forbid_requires_a_reason(self) -> None:
-        store = FakeStore()
+        store = stored()
         service = admin(store)
         actor = await service.actor(Subject(account_id=1, is_bot_owner=True))
 
@@ -303,7 +332,7 @@ class TestForbid:
 class TestRankGate:
     async def test_a_peer_role_cannot_be_managed(self) -> None:
         """The boundary alone permits lateral sabotage; rank is what stops it."""
-        store = FakeStore(
+        store = stored(
             roles=(
                 PermissionRole(id=50, slug="moderator", guild_id=GUILD, builtin_key=None, rank=60, protected=False),
             ),
@@ -311,7 +340,7 @@ class TestRankGate:
         )
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
-        store.assignments.append(
+        store.value.assignments.append(
             PermissionRoleAssignment(
                 id=1, role_id=50, role_slug="moderator", subject_account_id=7, scope_guild_id=GUILD
             )
@@ -322,7 +351,7 @@ class TestRankGate:
             await service.set_rank(actor, await service.role("moderator"), 10)
 
     async def test_a_builtin_refuses_structural_edits(self) -> None:
-        store = FakeStore(rules=granted("**"))
+        store = stored(rules=granted("**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -332,7 +361,7 @@ class TestRankGate:
 
 class TestRoles:
     async def test_a_role_resolves_to_its_leaves(self) -> None:
-        store = FakeStore()
+        store = stored()
         service = admin(store)
         roles = await service.roles()
         trusted = await service.role("trusted")
@@ -341,7 +370,7 @@ class TestRoles:
         assert "bot.tree.sync" not in service.resolved_leaves(await service.role("global-admin"), roles)
 
     async def test_composition_cycles_are_refused_at_write_time(self) -> None:
-        store = FakeStore(
+        store = stored(
             roles=(
                 PermissionRole(
                     id=50, slug="a", guild_id=None, builtin_key=None, rank=10, protected=False, includes_roles=(51,)
@@ -359,14 +388,16 @@ class TestRoles:
     async def test_an_exclusion_needs_no_authority_over_what_it_removes(self) -> None:
         """Subtracting can only narrow a role, so requiring the node would stop an
         administrator from removing a capability they cannot themselves hold."""
-        store = FakeStore(
+        store = stored(
             roles=(
                 PermissionRole(id=50, slug="helper", guild_id=None, builtin_key=None, rank=5, protected=False),
                 PermissionRole(id=51, slug="lead", guild_id=None, builtin_key=None, rank=40, protected=False),
             ),
             rules=granted("role.definition.manage", "settings.**"),
         )
-        store.assignments.append(PermissionRoleAssignment(id=1, role_id=51, role_slug="lead", subject_account_id=7))
+        store.value.assignments.append(
+            PermissionRoleAssignment(id=1, role_id=51, role_slug="lead", subject_account_id=7)
+        )
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -375,7 +406,7 @@ class TestRoles:
         assert "bot.**" in (await service.role("helper")).excludes
 
     async def test_show_surfaces_patterns_the_actor_cannot_manage(self) -> None:
-        store = FakeStore(
+        store = stored(
             roles=(
                 PermissionRole(
                     id=50,
@@ -399,7 +430,7 @@ class TestRoles:
 class TestLastGranter:
     async def test_the_last_global_granter_cannot_be_revoked(self) -> None:
         """Owner lockout is the failure nobody can recover from in-product."""
-        store = FakeStore(rules=granted("perm.grant.global", "**"))
+        store = stored(rules=granted("perm.grant.global", "**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7))
 
@@ -408,7 +439,7 @@ class TestLastGranter:
 
 
 async def test_every_mutation_records_an_audit_entry() -> None:
-    store = FakeStore(rules=granted("**"))
+    store = stored(rules=granted("**"))
     service = admin(store)
     actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -421,8 +452,8 @@ async def test_every_mutation_records_an_audit_entry() -> None:
         reason="event weekend",
     )
 
-    assert [entry.action for entry in store.audit_entries] == ["grant"]
-    assert store.audit_entries[0].reason == "event weekend"
+    assert [entry.action for entry in store.value.audit_entries] == ["grant"]
+    assert store.value.audit_entries[0].reason == "event weekend"
 
 
 # ---- P11: the two management gates are non-escalating ------------------------
@@ -530,7 +561,7 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
     that starting set, which is what would let some *other* subject inherit an
     escalation the editor engineered through composition.
     """
-    store = FakeStore(
+    store = stored(
         roles=(
             PermissionRole(
                 id=200,
@@ -559,7 +590,9 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
         ),
         rules=granted(*scenario.initial_patterns),
     )
-    store.assignments.append(PermissionRoleAssignment(id=1, role_id=202, role_slug=SEED_ROLE, subject_account_id=7))
+    store.value.assignments.append(
+        PermissionRoleAssignment(id=1, role_id=202, role_slug=SEED_ROLE, subject_account_id=7)
+    )
     service = admin(store)
     subject = Subject(account_id=7, guild_id=GUILD)
     initial_held = (await service.actor(subject)).held

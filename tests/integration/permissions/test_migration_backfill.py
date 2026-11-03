@@ -6,6 +6,7 @@ change of mechanism rather than a change of who can do what.
 """
 
 from collections.abc import AsyncGenerator, Iterator
+from functools import partial
 
 import psycopg2
 import pytest
@@ -17,7 +18,7 @@ from testcontainers.postgres import PostgresContainer
 from alembic import command
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Subject
-from squid.permissions.infrastructure.repository import PermissionRepository
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 BACKFILL_DATABASE = "redstone_squid_backfill"
 TABLES_REVISION = "d8e9f0a1b2c3"
@@ -151,7 +152,7 @@ async def test_the_new_resolver_matches_the_old_tiers(
     expected: bool,
 ) -> None:
     session_factory, accounts = backfilled
-    permissions = PermissionService(PermissionRepository(session_factory))
+    permissions = PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory))
 
     assert await permissions.allows(_subject(accounts, who), node) is expected
 

@@ -15,7 +15,8 @@ from typing import Protocol
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.permissions.application.cache import SubjectRuleCache
-from squid.permissions.application.ports import PermissionStore
+from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +35,12 @@ class PermissionEpochWatcher:
 
     def __init__(
         self,
-        store: PermissionStore,
         cache: SubjectRuleCache,
         *,
+        uow_factory: UnitOfWorkFactory[PermissionUnitOfWork],
         listener: WakeListener | None = None,
     ) -> None:
-        self._store = store
+        self._uow_factory = uow_factory
         self._cache = cache
         self._listener = listener
 
@@ -50,7 +51,9 @@ class PermissionEpochWatcher:
 
     async def refresh(self) -> None:
         """Read the epoch and invalidate the cache if it moved."""
-        if self._cache.observe_epoch(await self._store.epoch()):
+        async with self._uow_factory() as uow:
+            epoch = await uow.permissions.epoch()
+        if self._cache.observe_epoch(epoch):
             logger.debug("Permission epoch advanced to %d; rule cache cleared", self._cache.epoch)
 
     async def listen(self) -> None:

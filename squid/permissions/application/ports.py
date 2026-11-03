@@ -7,6 +7,7 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
+from squid.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,3 +199,13 @@ class PermissionAdminStore(Protocol):
     ) -> bool: ...
 
     async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]: ...
+
+
+class PermissionUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def permissions(self) -> PermissionStore: ...
+
+
+class PermissionAdminUnitOfWork(PermissionUnitOfWork, Protocol):
+    @property
+    def permission_admin(self) -> PermissionAdminStore: ...

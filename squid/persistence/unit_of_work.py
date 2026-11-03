@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.messages.infrastructure.repository import MessageRepository
+from squid.permissions.infrastructure.repository import PermissionAdminRepository, PermissionRepository
 from squid.posts.infrastructure.repository import PostRepository
 from squid.settings.infrastructure.repository import SettingsRepository
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
@@ -25,6 +26,8 @@ class SqlAlchemyUnitOfWork:
         self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._error_reports = PostgresErrorReportRepository(self._active_session)
         self._starboards = PostgresStarboardRepository(self._active_session)
+        self._permissions = PermissionRepository(self._active_session)
+        self._permission_admin = PermissionAdminRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._messages = MessageRepository(self._active_session)
         self._posts = PostRepository(self._active_session)
@@ -65,6 +68,16 @@ class SqlAlchemyUnitOfWork:
     def starboards(self) -> PostgresStarboardRepository:
         self._active_session()
         return self._starboards
+
+    @property
+    def permissions(self) -> PermissionRepository:
+        self._active_session()
+        return self._permissions
+
+    @property
+    def permission_admin(self) -> PermissionAdminRepository:
+        self._active_session()
+        return self._permission_admin
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

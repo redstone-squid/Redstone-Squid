@@ -8,6 +8,7 @@ from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Origin, Reason, Subject
 from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
+from tests.support.permissions import permission_uow_factory
 
 GUILD = 555
 
@@ -53,7 +54,7 @@ def service(
     assignments: tuple[PermissionRoleAssignment, ...] = (),
 ) -> tuple[PermissionService, FakeStore]:
     store = FakeStore(SubjectRecords(epoch=1, roles=roles, grants=grants, assignments=assignments))
-    return PermissionService(store), store
+    return PermissionService(uow_factory=permission_uow_factory(store)), store
 
 
 async def test_a_builtin_role_uses_the_pattern_list_defined_in_code() -> None:

@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
-from squid.permissions.application.ports import PermissionStore, SubjectRecords
+from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
 from squid.permissions.domain import (
     BUILTIN_ROLES_BY_KEY,
     CATALOGUE,
@@ -26,6 +26,7 @@ from squid.permissions.domain import (
     rules_from_role,
 )
 from squid.permissions.models import PermissionGrant, PermissionRole
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 def _role_specs(roles: Iterable[PermissionRole]) -> dict[str, RoleSpec]:
@@ -76,12 +77,12 @@ class PermissionService:
 
     def __init__(
         self,
-        store: PermissionStore,
         *,
+        uow_factory: UnitOfWorkFactory[PermissionUnitOfWork],
         catalogue: Catalogue = CATALOGUE,
         cache: SubjectRuleCache | None = None,
     ):
-        self._store = store
+        self._uow_factory = uow_factory
         self._catalogue = catalogue
         self._cache = cache
 
@@ -106,15 +107,31 @@ class PermissionService:
         if self._cache is not None and (cached := self._cache.get(key)) is not None:
             return cached
 
-        records = await self._store.load_for_subject(
-            account_id=subject.account_id,
-            discord_role_ids=subject.discord_role_ids,
-            guild_id=subject.guild_id,
-        )
+        async with self._uow_factory() as uow:
+            records = await uow.permissions.load_for_subject(
+                account_id=subject.account_id,
+                discord_role_ids=subject.discord_role_ids,
+                guild_id=subject.guild_id,
+            )
         rules = self.assemble(records, subject)
         if self._cache is not None:
             self._cache.put(key, rules, epoch=records.epoch)
         return rules
+
+    async def capabilities_in(
+        self, uow: PermissionUnitOfWork, subject: Subject, nodes: Iterable[PermissionNode | str]
+    ) -> frozenset[str]:
+        """Resolve authority from the caller's transaction without using or populating the cache."""
+        if subject.is_bot_owner:
+            rules: tuple[Rule, ...] = ()
+        else:
+            records = await uow.permissions.load_for_subject(
+                account_id=subject.account_id,
+                discord_role_ids=subject.discord_role_ids,
+                guild_id=subject.guild_id,
+            )
+            rules = self.assemble(records, subject)
+        return resolve_many(nodes, subject, rules, catalogue=self._catalogue)
 
     def assemble(self, records: SubjectRecords, subject: Subject) -> tuple[Rule, ...]:
         """Turn stored rows into resolver rules. Pure, so it is cheap to test."""

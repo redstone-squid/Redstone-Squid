@@ -23,6 +23,7 @@ from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
 from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
+from tests.support.permissions import permission_uow_factory
 
 BUILTIN_ROWS = tuple(
     PermissionRole(id=index + 1, slug=role.key, guild_id=None, builtin_key=role.key, rank=role.rank, protected=True)
@@ -126,7 +127,7 @@ def _bot(
     guild.member = member
     services = Services(
         accounts=FakeAccountService(),
-        permissions=PermissionService(store or FakePermissionStore()),
+        permissions=PermissionService(uow_factory=permission_uow_factory(store or FakePermissionStore())),
     )
     bot = Bot(owner_id=owner_id, services=services, guild=guild)
     return cast(RedstoneSquid, bot), guild

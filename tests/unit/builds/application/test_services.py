@@ -25,6 +25,7 @@ from squid.permissions.domain import Subject
 from squid.permissions.models import PermissionGrant
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
+from tests.support.permissions import permission_uow_factory
 
 
 class FakeBuildRepository:
@@ -465,7 +466,7 @@ class TestAuthorizedEditing:
             async def epoch(self) -> int:
                 return 1
 
-        return PermissionService(Store())
+        return PermissionService(uow_factory=permission_uow_factory(Store()))
 
     async def test_the_owner_may_edit_their_pending_build(self, existing_build: DoorBuild) -> None:
         repository = FakeBuildRepository(existing_build)

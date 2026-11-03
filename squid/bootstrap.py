@@ -61,8 +61,6 @@ from squid.permissions.application import (
 )
 from squid.permissions.infrastructure.repository import (
     EPOCH_CHANNEL,
-    PermissionAdminRepository,
-    PermissionRepository,
 )
 from squid.persistence.engine import DatabaseEngine
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -227,20 +225,16 @@ class _ServiceGraph:
         return RestrictionRepository(self.db.async_session)
 
     @cached_property
-    def permission_repository(self) -> PermissionRepository:
-        return PermissionRepository(self.db.async_session)
-
-    @cached_property
     def permission_cache(self) -> SubjectRuleCache:
         return SubjectRuleCache()
 
     @cached_property
     def permissions(self) -> PermissionService:
-        return PermissionService(self.permission_repository, cache=self.permission_cache)
+        return PermissionService(uow_factory=self.uow_factory, cache=self.permission_cache)
 
     @cached_property
     def permission_admin(self) -> PermissionAdministrationService:
-        return PermissionAdministrationService(PermissionAdminRepository(self.db.async_session), self.permissions)
+        return PermissionAdministrationService(self.permissions, uow_factory=self.uow_factory)
 
     @cached_property
     def permission_epoch(self) -> PermissionEpochWatcher:
@@ -255,7 +249,7 @@ class _ServiceGraph:
             if self.config.database.listener_url is None
             else PostgresWakeListener(self.config.database.listener_url, channel=EPOCH_CHANNEL)
         )
-        return PermissionEpochWatcher(self.permission_repository, self.permission_cache, listener=listener)
+        return PermissionEpochWatcher(self.permission_cache, uow_factory=self.uow_factory, listener=listener)
 
     @cached_property
     def version_service(self) -> VersionService:

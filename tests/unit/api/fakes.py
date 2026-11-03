@@ -101,6 +101,7 @@ from squid.tags.models import TagDefinition
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.domain.models import VoteSessionSnapshot
+from tests.support.permissions import permission_uow_factory
 
 
 def credential_nodes(*raw: str) -> frozenset[Pattern]:
@@ -830,7 +831,7 @@ def build_services(
         build_queries=MockBuildQueries(),
         # The real service over an empty store, not a double: every node then falls to
         # its catalogue default, which is the answer production gives an unruled subject.
-        permissions=PermissionService(EmptyPermissionStore()),
+        permissions=PermissionService(uow_factory=permission_uow_factory(EmptyPermissionStore())),
         permission_epoch=MockPermissionEpoch(),
         search=MockSearch(),
         # The real service over an empty registry, not a mock: every source id is

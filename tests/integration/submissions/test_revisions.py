@@ -1,6 +1,7 @@
 """Revision approval preserves identity and commits its receipt atomically."""
 
 from dataclasses import replace
+from functools import partial
 from typing import Literal, override
 from uuid import uuid4
 
@@ -18,8 +19,8 @@ from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.permissions.infrastructure.repository import PermissionRepository
 from squid.permissions.models import PermissionGrant
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal, revision_values
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
@@ -170,7 +171,7 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
         "staff": Subject(account_id=staff.id),
     }[role]
     service = RevisionProposalService(
-        repository, builds, PermissionService(PermissionRepository(migrated_session_factory))
+        repository, builds, PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     )
 
     with record_queries(migrated_session_factory) as statements:
@@ -194,7 +195,7 @@ async def test_history_refuses_a_list_containing_another_accounts_proposal(
         replace(proposal, id=uuid4(), owner_account_id=other.id, requested_by_account_id=other.id)
     )
     service = RevisionProposalService(
-        repository, builds, PermissionService(PermissionRepository(migrated_session_factory))
+        repository, builds, PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     )
 
     assert (await service.get(proposal.id, owner.subject)).id == proposal.id
