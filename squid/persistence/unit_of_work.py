@@ -9,8 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.auth.infrastructure.repository import PostgresApiKeyRepository
 from squid.auth.infrastructure.sessions import PostgresWebSessionRepository
+from squid.builds.infrastructure.embeddings import PostgresBuildIndex
 from squid.builds.infrastructure.locks import PostgresBuildLockRepository
 from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.infrastructure.restrictions import RestrictionRepository
+from squid.builds.infrastructure.taxonomy import PostgresBuildTaxonomy
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
@@ -65,6 +68,9 @@ class SqlAlchemyUnitOfWork:
         self._draft_schematics = PostgresDraftSchematics(self._active_session)
         self._inference_runs = PostgresInferenceRuns(self._active_session)
         self._media_jobs = PostgresMediaJobRepository(self._active_session)
+        self._restrictions = RestrictionRepository(self._active_session)
+        self._build_taxonomy = PostgresBuildTaxonomy(self._active_session)
+        self._build_vectors = PostgresBuildIndex(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
         self._accounts: AccountRepository | None = None
@@ -236,6 +242,21 @@ class SqlAlchemyUnitOfWork:
     def media_jobs(self) -> PostgresMediaJobRepository:
         self._active_session()
         return self._media_jobs
+
+    @property
+    def restrictions(self) -> RestrictionRepository:
+        self._active_session()
+        return self._restrictions
+
+    @property
+    def build_taxonomy(self) -> PostgresBuildTaxonomy:
+        self._active_session()
+        return self._build_taxonomy
+
+    @property
+    def build_vectors(self) -> PostgresBuildIndex:
+        self._active_session()
+        return self._build_vectors
 
     def _active_session(self) -> AsyncSession:
         if self._state != "active" or self._session is None:

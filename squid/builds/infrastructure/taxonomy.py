@@ -1,10 +1,9 @@
 """Validation adapter for the unified build taxonomy."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
-from async_lru import alru_cache
 from sqlalchemy import or_, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
@@ -15,37 +14,35 @@ from squid.tags.domain import TagSemanticKind
 from squid.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
 
 
-class BuildTagsManager:
+class PostgresBuildTaxonomy:
     """Validate inferred restriction and pattern names."""
 
-    def __init__(self, session: async_sessionmaker[AsyncSession]):
-        self.session = session
+    def __init__(self, session: Callable[[], AsyncSession]):
+        self._session = session
 
     async def get_restriction_id(self, name_or_alias: str) -> int | None:
-        async with self.session() as session:
-            return await get_restriction_id(session, name_or_alias)
+        session = self._session()
+        return await get_restriction_id(session, name_or_alias)
 
-    @alru_cache
     async def fetch_all_restrictions(self) -> list[TagDefinition]:
-        async with self.session() as session:
-            result = await session.execute(
-                select(TagDefinition)
-                .options(selectinload(TagDefinition.aliases))
-                .where(
-                    TagDefinition.authority == "official",
-                    TagDefinition.semantic_kind == "restriction",
-                    TagDefinition.moderation_status == "approved",
-                )
+        session = self._session()
+        result = await session.execute(
+            select(TagDefinition)
+            .options(selectinload(TagDefinition.aliases))
+            .where(
+                TagDefinition.authority == "official",
+                TagDefinition.semantic_kind == "restriction",
+                TagDefinition.moderation_status == "approved",
             )
-            return list(result.scalars().all())
+        )
+        return list(result.scalars().all())
 
     async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
-        async with self.session() as session:
-            definition = await session.get(TagDefinition, restriction_id)
+        session = self._session()
+        definition = await session.get(TagDefinition, restriction_id)
         if definition is None:
             raise RestrictionNotFoundError(str(restriction_id))
-        await RestrictionRepository(self.session).add_alias(definition.display_name, alias)
-        self.fetch_all_restrictions.cache_clear()
+        await RestrictionRepository(self._session).add_alias(definition.display_name, alias)
 
     async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
         rid = await self.get_restriction_id(name_or_alias)
@@ -59,65 +56,30 @@ class BuildTagsManager:
         await self.add_restriction_alias_by_id(rid, alias)
 
     async def get_valid_restrictions(self, type: RestrictionTypeLiteral) -> Sequence[str]:
-        async with self.session() as session:
-            return (
-                await session.scalars(
-                    select(TagDefinition.display_name).where(
-                        TagDefinition.authority == "official",
-                        TagDefinition.semantic_kind == "restriction",
-                        TagDefinition.restriction_type == type,
-                        TagDefinition.moderation_status == "approved",
-                    )
+        session = self._session()
+        return (
+            await session.scalars(
+                select(TagDefinition.display_name).where(
+                    TagDefinition.authority == "official",
+                    TagDefinition.semantic_kind == "restriction",
+                    TagDefinition.restriction_type == type,
+                    TagDefinition.moderation_status == "approved",
                 )
-            ).all()
+            )
+        ).all()
 
     async def get_valid_door_types(self) -> Sequence[str]:
-        async with self.session() as session:
-            return (
-                await session.scalars(
-                    select(TagDefinition.display_name).where(
-                        TagDefinition.authority == "official",
-                        TagDefinition.semantic_kind == "pattern",
-                        TagDefinition.moderation_status == "approved",
-                        TagDefinition.applicabilities.any(build_kind="Door"),
-                    )
+        session = self._session()
+        return (
+            await session.scalars(
+                select(TagDefinition.display_name).where(
+                    TagDefinition.authority == "official",
+                    TagDefinition.semantic_kind == "pattern",
+                    TagDefinition.moderation_status == "approved",
+                    TagDefinition.applicabilities.any(build_kind="Door"),
                 )
-            ).all()
-
-    async def validate_restrictions(
-        self,
-        restrictions: list[str],
-        type: RestrictionTypeLiteral,
-    ) -> tuple[list[str], list[str]]:
-        valid_by_normalized = {value.casefold(): value for value in await self.get_valid_restrictions(type)}
-        valid = [
-            valid_by_normalized[value.casefold()] for value in restrictions if value.casefold() in valid_by_normalized
-        ]
-        invalid = [value for value in restrictions if value.casefold() not in valid_by_normalized]
-        return valid, invalid
-
-    async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]:
-        valid_by_normalized = {value.casefold(): value for value in await self.get_valid_door_types()}
-        valid = [
-            valid_by_normalized[value.casefold()] for value in door_types if value.casefold() in valid_by_normalized
-        ]
-        invalid = [value for value in door_types if value.casefold() not in valid_by_normalized]
-        return valid, invalid
-
-
-class OfficialTagResolver:
-    """Resolve requested taxonomy names against approved official definitions.
-
-    This is the persistence adapter behind
-    `squid.builds.application.taxonomy.BuildTaxonomyResolver`; the query logic
-    previously lived inside `BuildRepository.save`, which resolved names as a
-    side effect of persistence.
-    """
-
-    __slots__ = ("_session_factory",)
-
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+            )
+        ).all()
 
     async def resolve_official(
         self,
@@ -126,13 +88,13 @@ class OfficialTagResolver:
         restrictions: Sequence[str],
         patterns: Sequence[str],
     ) -> TaxonomyResolution:
-        async with self._session_factory() as session:
-            rows, unknown_restrictions, unknown_patterns = await _resolve_official_tag_rows(
-                session,
-                build_kind=build_kind,
-                restrictions=restrictions,
-                patterns=patterns,
-            )
+        session = self._session()
+        rows, unknown_restrictions, unknown_patterns = await _resolve_official_tag_rows(
+            session,
+            build_kind=build_kind,
+            restrictions=restrictions,
+            patterns=patterns,
+        )
         return TaxonomyResolution(
             assignments=tuple(
                 TagAssignment(

@@ -18,11 +18,11 @@ from squid.accounts.models import Account, AccountIdentity
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.builds.application import BuildService
 from squid.builds.application.locks import BuildLockService
+from squid.builds.application.restrictions import RestrictionService
+from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.builds.infrastructure.restrictions import RestrictionRepository
-from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
 from squid.events.models import DomainEvent
@@ -260,10 +260,10 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     versions = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     builds = BuildService(
         BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
-        RestrictionRepository(migrated_session_factory),
+        RestrictionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         versions,
         NoopEmbeddings(),
-        OfficialTagResolver(migrated_session_factory),
+        BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         uow_factory=repository,
     )
     target = SubmissionBuildPreparation(builds, NoApprovedTags(), versions)
@@ -309,10 +309,10 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     writer = SubmissionBuildPreparation(
         BuildService(
             BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
-            RestrictionRepository(migrated_session_factory),
+            RestrictionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             versions,
             NoopEmbeddings(),
-            OfficialTagResolver(migrated_session_factory),
+            BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             uow_factory=repository,
         ),
         NoApprovedTags(),

@@ -1,7 +1,10 @@
 """Build embedding application tests."""
 
+from functools import partial
+
 from squid.builds.application import BuildEmbeddingService
 from squid.builds.models import OtherBuild
+from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 
 class FakeEmbeddingModel:
@@ -29,7 +32,7 @@ class FakeVectorIndex:
 async def test_prepare_index_and_search_share_embedding_abstractions() -> None:
     model = FakeEmbeddingModel([1.0, 2.0])
     index = FakeVectorIndex()
-    service = BuildEmbeddingService(model, index)
+    service = BuildEmbeddingService(model, uow_factory=partial(VectorScope, index))
     build = OtherBuild(id=7)
 
     await service.prepare(build)
@@ -44,7 +47,7 @@ async def test_prepare_index_and_search_share_embedding_abstractions() -> None:
 
 async def test_missing_embedding_skips_index_and_search() -> None:
     index = FakeVectorIndex()
-    service = BuildEmbeddingService(FakeEmbeddingModel(None), index)
+    service = BuildEmbeddingService(FakeEmbeddingModel(None), uow_factory=partial(VectorScope, index))
     build = OtherBuild(id=7)
 
     await service.prepare(build)
@@ -52,3 +55,9 @@ async def test_missing_embedding_skips_index_and_search() -> None:
 
     assert await service.find_build_id("query") is None
     assert index.upserts == []
+
+
+class VectorScope(PublishingFakeUnitOfWork[FakeVectorIndex]):
+    @property
+    def build_vectors(self) -> FakeVectorIndex:
+        return self.state

@@ -24,9 +24,8 @@ from squid.builds.application import (
     RestrictionService,
 )
 from squid.builds.application.locks import BuildLockService
-from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, PostgresBuildIndex
-from squid.builds.infrastructure.restrictions import RestrictionRepository
-from squid.builds.infrastructure.taxonomy import BuildTagsManager, OfficialTagResolver
+from squid.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.community.application import RedstonerService, WelcomeRelayService
@@ -216,8 +215,12 @@ class _ServiceGraph:
         return IdempotencyResponseCipher(active_key_id=encryption.active_key_id, keys=encryption.decoded_keys())
 
     @cached_property
-    def restriction_repository(self) -> RestrictionRepository:
-        return RestrictionRepository(self.db.async_session)
+    def restrictions(self) -> RestrictionService:
+        return RestrictionService(uow_factory=self.uow_factory)
+
+    @cached_property
+    def build_taxonomy(self) -> BuildTaxonomyService:
+        return BuildTaxonomyService(uow_factory=self.uow_factory)
 
     @cached_property
     def permission_cache(self) -> SubjectRuleCache:
@@ -258,7 +261,7 @@ class _ServiceGraph:
 
     @cached_property
     def embedding_service(self) -> BuildEmbeddingService:
-        return BuildEmbeddingService(self.embedding_model, PostgresBuildIndex(self.db.async_session))
+        return BuildEmbeddingService(self.embedding_model, uow_factory=self.uow_factory)
 
     @cached_property
     def build_locks(self) -> BuildLockService:
@@ -268,10 +271,10 @@ class _ServiceGraph:
     def builds(self) -> BuildService:
         return BuildService(
             self.build_locks,
-            self.restriction_repository,
+            self.restrictions,
             self.version_service,
             self.embedding_service,
-            OfficialTagResolver(self.db.async_session),
+            self.build_taxonomy,
             permissions=self.permissions,
             uow_factory=self.uow_factory,
         )
@@ -291,7 +294,7 @@ class _ServiceGraph:
         prompt = resources.files("squid.builds.infrastructure").joinpath("prompt.txt").read_text(encoding="utf-8")
         return BuildInferenceService(
             self.text_generator,
-            BuildTagsManager(self.db.async_session),
+            self.build_taxonomy,
             self.version_service,
             prompt,
         )
@@ -696,7 +699,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_revisions=graph.submission_revisions,
         submission_intake=graph.submission_intake,
         submission_inference=graph.submission_inference,
-        restrictions=RestrictionService(graph.restriction_repository),
+        restrictions=graph.restrictions,
         build_queries=graph.build_queries,
         messages=MessageService(uow_factory=graph.uow_factory),
         posts=PostService(uow_factory=graph.uow_factory),

@@ -1,11 +1,12 @@
 """Embedding-provider and PostgreSQL vector-index adapters."""
 
 import logging
+from collections.abc import Callable
 from typing import Self
 
 from openai import AsyncOpenAI, OpenAIError
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.builds.models import Build
 from squid.config import EMBEDDING_DIMENSION, OPENAI_MAX_RETRIES, OPENAI_REQUEST_TIMEOUT_SECONDS, EmbeddingConfig
@@ -84,15 +85,15 @@ class OpenAIEmbeddingModel:
 class PostgresBuildIndex:
     """Store and query build vectors in the authoritative PostgreSQL row."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
 
     async def upsert(self, build_id: int, embedding: list[float]) -> None:
         if len(embedding) != EMBEDDING_DIMENSION:
             msg = f"Build embedding must contain exactly {EMBEDDING_DIMENSION} values."
             raise ValueError(msg)
-        async with self._session_factory.begin() as session:
-            await session.execute(update(Build).where(Build.id == build_id).values(embedding=embedding))
+        session = self._session()
+        await session.execute(update(Build).where(Build.id == build_id).values(embedding=embedding))
 
     async def find_nearest(self, embedding: list[float]) -> int | None:
         if len(embedding) != EMBEDDING_DIMENSION:
@@ -103,5 +104,5 @@ class PostgresBuildIndex:
             .order_by(Build.embedding.cosine_distance(embedding))
             .limit(1)
         )
-        async with self._session_factory() as session:
-            return await session.scalar(statement)
+        session = self._session()
+        return await session.scalar(statement)

@@ -28,9 +28,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
+from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, SourceMessage, Status
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -258,7 +258,7 @@ async def _resolve_and_save(
     build: Build,
 ) -> None:
     """Persist the way the application service does: resolve taxonomy, then save."""
-    await apply_build_taxonomy(build, OfficialTagResolver(session_factory))
+    await apply_build_taxonomy(build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory)))
     await transact(repository, lambda uow: uow.builds.save(build), commit=True)
 
 
@@ -507,7 +507,9 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     build.component_restrictions = ["Imaginary Component"]
-    await apply_build_taxonomy(build, OfficialTagResolver(migrated_session_factory))
+    await apply_build_taxonomy(
+        build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    )
 
     # The unresolvable name moved into extra_info before anything was saved,
     # and the typed field was canonicalized, so save→load stays the identity.
@@ -571,7 +573,9 @@ async def test_apply_build_taxonomy_defaults_door_pattern(
 
     build = _make_build(BuildCategory.DOOR, account_id)
     build.patterns = []
-    await apply_build_taxonomy(build, OfficialTagResolver(migrated_session_factory))
+    await apply_build_taxonomy(
+        build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    )
 
     # The default pattern is materialized visibly at edit time.
     assert build.patterns == ["Regular"]
