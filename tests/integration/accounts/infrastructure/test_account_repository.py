@@ -265,11 +265,7 @@ async def test_linking_a_code_mints_no_identity_outside_the_java_namespace(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Redeeming a code is evidence of a Java subject and of nothing else.
-
-    A Bedrock-only account can therefore link, which was impossible while the redemption
-    looked its caller up by Discord identity and minted one when absent.
-    """
+    """A Java verification code links only a Java identity, even when the caller has no Discord identity."""
     account = await transact(
         repository,
         lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.bedrock(99),)),
@@ -344,8 +340,7 @@ async def test_unlink_removes_all_java_identities(repository: UnitOfWorkFactory[
     assert account.id is not None
     java = [identity for identity in account.identities if identity.provider is IdentityProvider.JAVA]
     assert len(java) == 2
-    # Removed one at a time by id: unlinking a whole provider at once is exactly what an account
-    # holding two Java identities makes ambiguous.
+    # Unlink by identity ID so each Java login can be removed independently.
     for identity in java:
         assert identity.id is not None
         assert (

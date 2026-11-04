@@ -125,7 +125,7 @@ async def test_an_expired_ticket_stops_matching(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Nothing reaps a lapsed ticket; it simply stops matching."""
+    """Expired tickets are ignored even while their rows remain in storage."""
     account = await _account(repository, 1)
     assert account.id is not None
     await transact(

@@ -1,4 +1,4 @@
-"""Showcase tag ownership, which is now an account comparison rather than a snowflake one."""
+"""Showcase ownership follows account IDs, including accounts with no Discord identity."""
 
 from collections.abc import AsyncIterator
 
@@ -79,7 +79,6 @@ async def test_an_account_without_discord_can_tag_its_own_build(
     uow: SqlAlchemyUnitOfWork,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Impossible before: ownership joined `account_identities` to compare two snowflakes."""
     account_id = await _account(migrated_session_factory, bedrock_xuid=2535465049322445)
     build_id = await _build(migrated_session_factory, submitter_account_id=account_id)
     tag_id = await _approved_tag(migrated_session_factory, created_by_account_id=account_id)

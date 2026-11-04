@@ -1,12 +1,7 @@
-"""Integration coverage for the Java rename reconcile.
+"""Java identity refresh and linking share creator-name reconciliation.
 
-A Minecraft rename used to be a side effect of relinking: the display name was overwritten and an
-already-existing unclaimed alias was opportunistically claimed. Everything else was silent — a new
-name no build had credited yet produced no credit at all, and a name held by someone else was
-indistinguishable from "nothing to claim".
-
-`refresh_java_identity` makes the four cases exhaustive, and shares `_reconcile_java_name` with the
-link path so both behave identically.
+The cases cover unchanged names, new or unclaimed aliases, retained earlier credits, and
+contested aliases that require a staff decision before ownership can move.
 """
 
 import asyncio
@@ -113,7 +108,6 @@ async def test_rename_creates_and_claims_an_uncredited_name(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The old behaviour left a renamed user with no credit until someone credited the new name."""
     account_id = await _linked_account_id(repository, username="OldName")
 
     refresh = await transact(
@@ -182,7 +176,6 @@ async def test_rename_into_a_held_name_opens_a_claim_and_transfers_nothing(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The case that used to be silent: someone else already owns the new name."""
     account_id = await _linked_account_id(repository, discord_id=1, username="OldName")
     holder = await transact(
         repository,
@@ -418,7 +411,7 @@ async def test_linking_reconciles_the_same_way_a_refresh_does(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The point of sharing `_reconcile_java_name`: linking a renamed account claims the new name."""
+    """Linking a Java identity also creates and claims its available creator alias."""
     await transact(
         repository,
         lambda uow: uow.accounts.replace_verification_code(

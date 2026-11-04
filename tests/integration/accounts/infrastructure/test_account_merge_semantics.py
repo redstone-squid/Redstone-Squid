@@ -92,6 +92,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
                 )
             )
 
+    # Notification validation runs after draft ownership moves; failure must undo those earlier writes too.
     with pytest.raises(DataIntegrityError, match=r"source key|incompatible"):
         await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
 
@@ -453,6 +454,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                 )
             ).all()
         )
+    # Pending duplicates collapse, but resolved claims remain as distinct audit history.
     assert claims == (
         (survivor.id, ClaimStatus.PENDING),
         (survivor.id, ClaimStatus.APPROVED),

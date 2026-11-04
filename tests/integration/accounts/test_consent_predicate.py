@@ -46,11 +46,7 @@ async def test_both_spellings_of_the_consent_gate_agree(
     created_at: Instant,
     consent_version: str | None,
 ) -> None:
-    """Drift between these two is invisible until a caller is refused on one transport only.
-
-    That is exactly what happened before they were unified: a pre-cutoff account was
-    grandfathered in a browser and refused on the CLI, because the SQL had no cutoff.
-    """
+    """SQL filtering and Python authorization must agree, including the pre-cutoff consent exception."""
     del account_tables
     async with async_session_factory.begin() as session:
         account = AccountModel(

@@ -1,9 +1,7 @@
-"""Integration coverage for who computes `creator_aliases.normalized_name`.
+"""Creator aliases use Python normalization consistently across SQLAlchemy insert paths.
 
-The column stopped being `GENERATED ALWAYS AS (lower(btrim(name)))` because Postgres and Python
-could not be made to agree on it, and the disagreement was reachable: a build crediting `ΣΣ` a
-second time crashed. These tests pin the replacement — a column default that no insert path can
-skip, plus a check constraint for the paths that bypass the ORM entirely.
+Unicode case folding differs from SQL lower(); the SQLAlchemy default supplies the folded name,
+while a database CHECK rejects visibly unfolded raw writes.
 """
 
 # ruff: noqa: RUF001  Confusable and compatibility characters are the subject
@@ -100,7 +98,7 @@ async def test_names_that_only_casefold_unifies_are_one_creator(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """`lower(btrim(...))` kept these apart; casefold does not, and the index now agrees."""
+    """Greek sigma variants share a casefolded key and therefore collide at the unique index."""
     async with migrated_session_factory.begin() as session:
         session.add(CreatorAlias(name="ΣΣ"))
 
@@ -109,7 +107,7 @@ async def test_names_that_only_casefold_unifies_are_one_creator(
         with pytest.raises(IntegrityError):
             await session.commit()
 
-    # And the alias is reachable by either spelling, which it was not before.
+    # Lookup must use the same folding as insertion and uniqueness checks.
     for spelling in ("ΣΣ", "Σς", "σσ"):
         alias = await transact(repository, lambda uow, spelling=spelling: uow.accounts.get_alias_by_name(spelling))
         assert alias is not None, f"{spelling!r} did not resolve"
@@ -119,7 +117,7 @@ async def test_names_that_only_casefold_unifies_are_one_creator(
 async def test_dotted_capital_i_stays_a_distinct_creator(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Postgres `lower()` folded `İ` onto `i`; the application deliberately does not."""
+    """Case folding preserves the combining dot in capital dotted I, keeping it distinct from plain I."""
     async with migrated_session_factory.begin() as session:
         session.add_all([CreatorAlias(name="İ"), CreatorAlias(name="I")])
 

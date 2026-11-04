@@ -1,9 +1,7 @@
-"""Query-count coverage for the account read and write paths.
+"""Account reads batch identities and claimants without adding a query for every returned row.
 
-The domain objects are frozen dataclasses that must not learn about SQLAlchemy, so identities are
-mapped explicitly rather than through a relationship. That is deliberate, but it made the *fetch*
-per row too: one identity query per account, and one refresh per identity on insert. These tests
-pin the fixed cost so it cannot regress into an N+1 again.
+Write tests also check that returned timestamps match PostgreSQL microsecond precision without
+refreshing each inserted row.
 """
 
 import uuid
@@ -60,7 +58,6 @@ async def test_create_does_not_scale_with_identity_count(
     async_session_factory: async_sessionmaker[AsyncSession],
     identity_count: int,
 ) -> None:
-    """`create()` used to refresh each inserted identity row individually."""
     identities = (
         AccountIdentityValue.discord(1),
         AccountIdentityValue.java(uuid.UUID(int=1), username="Player"),
@@ -230,11 +227,7 @@ async def test_create_returns_exactly_what_it_persisted(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Dropping the per-row refresh must not let the returned object drift from the row.
-
-    `Instant.now()` carries nanoseconds and `timestamptz` carries microseconds, so the
-    refresh was silently supplying the floored value the database kept.
-    """
+    """Returned timestamps must use PostgreSQL microsecond precision before a reload can normalize them."""
     del async_session_factory
     created = await transact(
         repository,
@@ -266,11 +259,7 @@ async def test_claim_timestamps_survive_a_reload_unchanged(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Same invariant as above, for every timestamp this repository writes.
-
-    `now()` floors to microseconds because `timestamptz` does; without it a claim returned
-    from the write path carries nanoseconds the row does not have.
-    """
+    """The returned claim timestamp must match the microsecond value stored in PostgreSQL."""
     async with async_session_factory.begin() as session:
         session.add(CreatorAlias(name="Name"))
     account = await transact(

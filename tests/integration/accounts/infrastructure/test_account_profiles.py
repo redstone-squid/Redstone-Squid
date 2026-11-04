@@ -121,7 +121,7 @@ class TestProfileRow:
         repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
         async_session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
-        """The candidate account is deleted on the lose path; its profile must go with it."""
+        """Repeated resolution of one identity must leave only its account profile."""
         first = await transact(
             repository, lambda uow: uow.accounts.get_or_create_identity(IdentityProvider.DISCORD, "7"), commit=True
         )
@@ -530,6 +530,7 @@ class TestIdentityVisibilityAndUnlink:
             assert holder_pid is not None
             with anyio.fail_after(5):
                 async with anyio.create_task_group() as tasks:
+                    # Queue unlink first, then the avatar edit, before releasing the identity lock.
                     tasks.start_soon(unlink)
                     await _wait_for_blocked_sessions(async_session_factory, holder_pid, count=1)
                     tasks.start_soon(edit_avatar)

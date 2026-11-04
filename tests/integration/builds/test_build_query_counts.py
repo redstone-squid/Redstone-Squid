@@ -1,10 +1,4 @@
-"""Query-count coverage for the build read paths.
-
-`BuildLoader` loads the values other contexts own with its own SELECTs rather
-than traversing ORM relationships, which cross-context decoupling deliberately
-removed. That made mapping a page O(rows) queries. These tests pin the fixed
-cost so the batching cannot silently regress into an N+1.
-"""
+"""Build reads batch related data so query cost stays bounded as the page grows."""
 
 from functools import partial
 
@@ -20,13 +14,12 @@ from squid.versions.models import Version
 from tests.support.database import record_queries
 from tests.support.unit_of_work import transact
 
-# Row query + tag-assignment and tag-definition eager loads + links eager load,
-# then the creator, submitter-identity, version and source-message batches.
+# Keep the budget independent of page size; fixture data exercises related creator and version loads.
 _EXPECTED_PAGE_QUERIES = 7
 
 
 async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -> tuple[int, list[int]]:
-    """Create *count* builds, each with its own creator, version and submitter."""
+    """Create builds with distinct creators but a shared version and submitter."""
     async with session_factory.begin() as session:
         account = Account()
         session.add(account)
@@ -76,12 +69,6 @@ async def test_list_page_query_count_does_not_grow_with_the_page(
         )
 
     assert len(builds) == count
-    # One row query, two eager loads (tag assignments and their definitions are
-    # one selectin each... links is the second), and the mapper's cross-context
-    # batches for creators, submitter identities, versions and source messages.
-    # Source messages cost one query whether or not the page has any, because
-    # provenance is a link table now rather than a column on the build row. The
-    # point is that none of these scale with the page.
     assert len(statements) == _EXPECTED_PAGE_QUERIES, "\n".join(statements)
 
 

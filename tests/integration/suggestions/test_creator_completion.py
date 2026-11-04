@@ -1,9 +1,6 @@
-"""Creator typeahead against live PostgreSQL.
+"""Creator typeahead uses the stored Unicode folding and an indexable prefix query.
 
-Two things can only be checked against a real server. The prefix has to be folded the same way
-the stored `normalized_name` is, or a query in the wrong case silently misses every creator; and
-the prefix index has to actually be chosen, because the fallback is a sequential scan over every
-alias on every keystroke.
+The EXPLAIN test checks a representative query against a real PostgreSQL planner.
 """
 
 # ruff: noqa: RUF001  Confusable and compatibility characters are the subject
@@ -139,12 +136,7 @@ async def test_wildcards_in_the_query_are_escaped(
 async def test_the_prefix_query_uses_the_prefix_index(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Folding in Python is what lets this stay a plain indexable prefix scan.
-
-    Had the fold moved into SQL, the predicate would have been
-    `normalized_name LIKE lower(btrim($1)) || '%'`, whose prefix the planner has to fold
-    before it can derive index bounds.
-    """
+    """A pre-folded prefix leaves normalized_name directly searchable through its prefix index."""
     await seed(async_session_factory)
     async with async_session_factory() as session:
         plan = "\n".join(

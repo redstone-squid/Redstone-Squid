@@ -33,11 +33,7 @@ CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 def async_session_factory(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> async_sessionmaker[AsyncSession]:
-    """Use the migrated schema, not `create_all`.
-
-    A merge reaches into submission drafts and finalization jobs, so this needs the whole schema;
-    running the real chain also proves the profile migration produces what the models describe.
-    """
+    """Use the full migrated schema because account merges also transfer submission drafts and jobs."""
     return migrated_session_factory
 
 

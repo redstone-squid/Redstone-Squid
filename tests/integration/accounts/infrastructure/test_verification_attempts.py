@@ -1,9 +1,4 @@
-"""The verification-code attempt cap, against real Postgres.
-
-The counter has to hold under concurrency, because the whole point is to bound guessing: a
-read-modify-write would let parallel attempts each read the same count and overwrite one another,
-which makes the cap evadable by simply not waiting for a reply.
-"""
+"""Verification failures increment atomically so concurrent guesses cannot bypass the lockout threshold."""
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -76,13 +71,13 @@ async def test_a_success_clears_the_row(repository: UnitOfWorkFactory[SqlAlchemy
 
     await transact(repository, lambda uow: uow.accounts.clear_verification_failures(DISCORD, SUBJECT), commit=True)
 
-    # Not merely "not locked": the budget must be whole again, so the next cap-1 failures are free.
+    # Clearing failures restores the whole budget, rather than just hiding the current lockout.
     for _ in range(MAX_FAILURES - 1):
         assert await _fail(repository) is None
 
 
 async def test_reaching_the_cap_resets_the_count(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
-    """Otherwise the first failure after a lockout expires would re-lock immediately."""
+    """Explicitly clearing a locked identity restores its failure budget."""
     for _ in range(MAX_FAILURES):
         await _fail(repository)
 
@@ -102,11 +97,7 @@ async def test_the_lockout_is_scoped_to_one_identity(repository: UnitOfWorkFacto
 
 
 async def test_an_expired_lockout_stops_blocking(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
-    """No sweeper reclaims a finished lockout; the read simply stops honouring it.
-
-    A negative `lockout_seconds` is only a device for fabricating an already-elapsed lockout without
-    waiting fifteen minutes -- production always passes `VERIFICATION_LOCKOUT_SECONDS`.
-    """
+    """A negative TTL creates an expired lockout without waiting for the production fifteen-minute interval."""
     for _ in range(MAX_FAILURES - 1):
         await _fail(repository)
     await transact(
@@ -135,12 +126,7 @@ async def test_concurrent_failures_are_all_counted(repository: UnitOfWorkFactory
 async def test_failing_again_while_locked_does_not_report_a_new_lockout(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
 ) -> None:
-    """The return value means "this call started a lockout", so it must not repeat for a running one.
-
-    Unreachable through the service, which refuses before redeeming, but the log line that fires on a
-    non-`None` return would otherwise claim a lockout began every time an already-locked identity
-    tried again.
-    """
+    """Only the call that starts a lockout returns its deadline; later failures must not extend it."""
     for _ in range(MAX_FAILURES - 1):
         await _fail(repository)
     started = await _fail(repository)

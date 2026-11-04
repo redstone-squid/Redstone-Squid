@@ -1,8 +1,6 @@
-"""Holding a verification code so a consent prompt can describe it.
+"""Verification-code reservations support consent previews before account linking.
 
-The prompt runs before the code is redeemed, and the only code path used to be the atomic redemption
-itself. A hold is what lets the prompt name the account it is about to link -- and, because a hold is
-a write rather than a read, it is also what gives the attempt cap something to count.
+A temporary token holds the code without redeeming it or requiring an account for the reserver.
 """
 
 from collections.abc import AsyncIterator
@@ -89,7 +87,7 @@ async def test_reserving_previews_the_java_identity(repository: UnitOfWorkFactor
 
 
 async def test_reserving_does_not_spend_the_code(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
-    """The hold must freeze the code, not consume it, or the preview would cost the redemption."""
+    """The reservation holder can redeem the code after the consent preview."""
     await _seed_code(repository)
     reservation = await transact(
         repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
@@ -284,11 +282,7 @@ async def test_the_token_is_stored_only_as_a_digest(
 async def test_a_cancelled_prompt_stores_nothing_about_the_user(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], async_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    """The notice promises exactly this, so it is asserted rather than assumed.
-
-    Nothing here identifies the reserver, which is why the hold is keyed on a token instead of on an
-    account: keying it on an account would have had to mint one in order to show a privacy prompt.
-    """
+    """Reserving and releasing a code must not create an account or identity for the reserver."""
     await _seed_code(repository)
     reservation = await transact(
         repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
@@ -313,8 +307,7 @@ async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
         alias = CreatorAlias(name="Notch")
         session.add(alias)
         await session.flush()
-        # Core inserts rather than the ORM dataclass: `Build` requires eight keyword arguments that
-        # say nothing about a credit count, and only these two columns are NOT NULL in the table.
+        # Minimal Core inserts keep this credit-count fixture independent of full build construction.
         build_ids = (
             await session.scalars(
                 insert(Base.metadata.tables["builds"])

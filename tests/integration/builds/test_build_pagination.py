@@ -1,9 +1,4 @@
-"""Bidirectional build paging against live PostgreSQL.
-
-A backward page is fetched in reversed display order and flipped back in memory, which is the kind
-of thing that looks right in a fake and is wrong in SQL. These tests pin the ordering the flip
-produces, and that a page's total agrees with what paging through it actually yields.
-"""
+"""Bidirectional build paging preserves display order and agrees with count and offset queries."""
 
 from collections.abc import Sequence
 from functools import partial
@@ -79,8 +74,7 @@ async def test_a_backward_page_comes_back_in_display_order(
     backward = await page_ids(repository, selector=PageSelector(before_id=newest_first[3]))
 
     assert list(forward) == newest_first[2:4]
-    # Walking back from the fourth row returns the two rows above it, newest first, with the
-    # overfetched row at the front rather than the tail.
+    # Walking back from the fourth row returns the preceding two rows, newest first.
     assert list(backward) == newest_first[1:3]
 
 
@@ -107,6 +101,7 @@ async def test_the_total_matches_what_paging_actually_returns(
     walked: list[int] = []
     selector = FIRST_PAGE
     while True:
+        # The third row is a sentinel; display two and advance from the last displayed row.
         rows = list(await page_ids(repository, selector=selector, limit=3))
         if not rows:
             break
