@@ -7,7 +7,7 @@ type JsonArray = list[object]
 
 
 def require_object[ErrorT: Exception](value: object, message: str, error: Callable[[str], ErrorT]) -> JsonObject:
-    """Narrow an unknown decoded value to a JSON object or raise ``error``."""
+    """Copy a decoded dict after checking string keys, or raise the supplied error."""
     if not isinstance(value, dict):
         raise error(message)
     narrowed: dict[str, object] = {}
@@ -45,7 +45,7 @@ def require_string[ErrorT: Exception](raw: JsonObject, key: str, error: Callable
 
 
 def optional_string[ErrorT: Exception](raw: JsonObject, key: str, error: Callable[[str], ErrorT]) -> str | None:
-    """Read a nullable string field."""
+    """Read a string or return `None` for an omitted or null field."""
     value = raw.get(key)
     if value is not None and not isinstance(value, str):
         message = f"{key} must be a string or null"
@@ -63,7 +63,7 @@ def require_integer[ErrorT: Exception](raw: JsonObject, key: str, error: Callabl
 
 
 def optional_integer[ErrorT: Exception](raw: JsonObject, key: str, error: Callable[[str], ErrorT]) -> int | None:
-    """Read a nullable integer field without accepting booleans."""
+    """Read an integer or return `None` for omission or null; reject booleans."""
     value = raw.get(key)
     if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
         message = f"{key} must be an integer or null"

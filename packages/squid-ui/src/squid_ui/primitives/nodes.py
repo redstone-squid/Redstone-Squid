@@ -1,8 +1,9 @@
-"""Widget-level IR: Discord-shaped nodes carrying overflow policies.
+"""Describe exact Discord widgets and the ways their content may shrink to fit.
 
-The semantic layer compiles to these; views needing exact control write them directly. Nodes
-are immutable descriptions. The planner fits them to target budgets and renderers draw the
-resulting scene — authors never do budget arithmetic.
+The Discord planner converts semantic layout nodes into these primitives; applications
+can also author them directly when they need a particular widget arrangement. Overflow
+policies govern text shortening, while Variants offers alternative widget arrangements.
+The planner fits the chosen primitives to target limits and produces a Scene for rendering.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -164,10 +165,10 @@ class Button[ContextT = object](Renderable[DiscordTarget, ContextT]):
 
 @dataclass(frozen=True, slots=True)
 class FormButton[ContextT = object](Button[ContextT]):
-    """A button that presents a form, carrying the binding its handler closes over.
+    """A form-opening button with the form binding its handler uses.
 
-    The handler alone is opaque: a frontend holding it cannot tell which form it presents,
-    so it cannot resolve the newest one for a submission that arrived late. This states it.
+    Keeping the binding separate from the callback lets the frontend resolve the
+    current form when a submission arrives after the form has been refreshed.
     """
 
     form: FormBinding | None = None
@@ -175,12 +176,12 @@ class FormButton[ContextT = object](Button[ContextT]):
 
 @dataclass(frozen=True, slots=True)
 class RoutedButton(Renderable[DiscordTarget]):
-    """A button whose route id *is* its state, dispatched by a router rather than a mount.
+    """A button dispatched by a stable route ID instead of a mounted Python callback.
 
-    Carries no handler, so it needs no binding and survives the process that drew it: a
-    sessionless document may hold one, and a mount's policies (author lock, generation
-    checks) do not reach it even when it sits inside a mounted message. Build the id with
-    a `squid_ui.routing.Route` rather than by hand.
+    The host can register the route after a restart and recover application state from
+    its parameters. A mount's author lock and generation checks do not apply to routed
+    buttons, even inside a mounted message; the route handler must check authorization.
+    Build the ID with squid_ui.routing.Route so its format and length are validated.
     """
 
     label: TextLike | None
@@ -270,7 +271,11 @@ class RawItem(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
-    """A keyed child whose target restriction survives until runtime expansion."""
+    """Place a child component in the layout under its own control and presentation keys.
+
+    The runtime replaces this node with the child's rendered layout before planning.
+    Component.boundary constructs it while preserving the child's target requirements.
+    """
 
     component: Component[RenderTargetT, ContextT]
     key: str
@@ -295,14 +300,11 @@ class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rende
 
 @dataclass(frozen=True, slots=True)
 class Content(Renderable[ClassicTarget]):
-    """The classic message's `content` field: the text a reply preview or push shows.
+    """The classic message's content field, also used in reply previews and notifications.
 
-    A Components V2 message has no `content` at all, which is the whole reason the classic
-    target is a permanent capability rather than a migration ramp. At most one may appear in
-    a document, because a message has exactly one such field.
-
-    Defaults to `Never` because content is usually the part that must survive: it is what a
-    notification quotes, and silently shortening it defeats the reason it was written.
+    At most one may appear in a document, and Components V2 targets reject it.
+    The default `Never` policy reserves its full text and makes shortening visible
+    in planning diagnostics.
     """
 
     content: TextLike
@@ -311,11 +313,10 @@ class Content(Renderable[ClassicTarget]):
 
 
 type CardText = TextLike | Text
-"""A card slot's text: a bare string, or a `Text` carrying an overflow policy.
+"""Text for an embed slot, optionally wrapped in `Text` to choose an overflow policy.
 
-A bare string means `Never` — a title or a field name is written to be read whole, and
-quietly clipping one is worse than telling the author it does not fit. An author who would
-rather it shrank says so by writing `Text(value, overflow=Truncate())`.
+Bare text uses `Never`. Use `Text(value, overflow=Truncate())` when shortening is
+acceptable.
 """
 
 
@@ -446,7 +447,12 @@ class MediaCollection(Renderable[ComponentsV2Target]):
 
 @dataclass(frozen=True, slots=True)
 class Section[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
-    """Up to three text nodes beside an accessory; extra texts are dropped with a note."""
+    """An exact Components V2 section with up to three texts beside an accessory.
+
+    Target planning rejects excess text slots. The lower-level measurement helper
+    can clamp them with a diagnostic, so callers should not rely on that fallback
+    when authoring a document.
+    """
 
     texts: tuple[Text | Heading | Footer, ...]
     accessory: Thumbnail | LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem
@@ -463,7 +469,13 @@ class Panel[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
 
 @dataclass(frozen=True, slots=True)
 class Budget[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
-    """Transparent group carrying an author-sized character reservation and ceiling."""
+    """Group text under an explicit character reservation and preferred size.
+
+    `minimum` reserves space before discretionary allocation. `preferred` is the
+    normal target size; `stretch` permits extra space when the content fits within
+    that allowance. `best_effort` lets the minimum be breached with a degradation
+    note instead of a budget-floor failure.
+    """
 
     children: tuple[Node, ...]
     minimum: int
@@ -482,13 +494,11 @@ class Break[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
 
 
 class Fidelity(StrEnum):
-    """How faithfully one variant reproduces the region it represents.
+    """How much authored content a variant preserves, independently of its position.
 
-    Rung order is a *preference*, not a loss ladder. A later rung may be a perfectly
-    faithful alternative — paginating a long region loses nothing — so the solver must be
-    told which rungs actually cost the reader something rather than inferring it from
-    position. Without this, an exact but late rung would be priced as loss and a lossy
-    early rung would be priced as free, and `strict=True` could reject neither honestly.
+    Later variants can still be exact, such as a paginated representation of all
+    content. Mark reformatted or omitted content explicitly so planning can rank
+    the loss and strict mode can reject it.
     """
 
     EXACT = "exact"
@@ -503,15 +513,11 @@ class Fidelity(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Variant[RenderTargetT = DiscordTarget]:
-    """One structural representation of a region and the capabilities it requires.
+    """One nonempty representation of a region and the capabilities it requires.
 
-    ``nodes`` is a tuple because a variant may lower to several nodes — an ControlGroup becomes
-    one Row per five buttons — and splicing them into the parent is exact where wrapping them
-    in a Panel would invent the very container component the ladder exists to save.
-
-    ``fidelity`` defaults to :attr:`Fidelity.EXACT` because most alternatives are: an author
-    writing a ladder by hand is usually offering a smaller faithful shape. A library adapter
-    offering a rung that reformats or discards content must say so explicitly.
+    `nodes` are spliced into the parent, so a variant can produce several rows
+    without adding a container. `fidelity` defaults to `EXACT`; authors must mark
+    alternatives that reformat or discard content.
     """
 
     nodes: tuple[Node, ...]
@@ -526,26 +532,20 @@ class Variant[RenderTargetT = DiscordTarget]:
 
 @dataclass(frozen=True, slots=True)
 class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
-    """An ordered ladder of structural representations for one region.
+    """Ordered representations the planner can choose to fit one region.
 
-    Overflow policies shrink *text*; nothing they do returns a component, so a document with
-    too many components would otherwise only be reportable. A ladder gives the solver
-    something to give up: a button panel stepping to one select, a gallery to a link row.
+    Text overflow policies shorten text; variants can also change component
+    structure, such as replacing a button panel with a select. Unsupported
+    variants are removed before budget search.
 
-    A rung's *position* prices preference; its :class:`Fidelity` prices loss. A later exact
-    rung therefore beats an earlier reformatted one, and `strict=True` rejects the reformatted
-    or lossy rung it would otherwise have to accept silently.
+    Position expresses preference, while `Fidelity` describes loss. Priority
+    applies across the document: losing lower-priority content is cheaper.
+    Among equally eligible ladders, stepping proceeds breadth-first. A nested
+    ladder participates only while its parent's chosen variant exposes it.
 
-    Rungs unsupported by the target are dropped at planning time; the survivors form a budget
-    ladder. The solver opens every ladder at rung 0 and searches reachable rung assignments
-    best-first under component pressure. Every candidate is measured together with text loss,
-    so an ineffective early ladder cannot force a later sibling to degrade as well.
-
-    Two rules follow from stepping being a whole-tree decision. ``priority`` compares
-    **globally**, not among siblings: lower-priority loss is cheaper, and equal priorities
-    compare breadth-first, each reaching rung 1 before any reaches rung 2. A nested ladder only
-    becomes searchable once its ancestor's *selected* rung exposes it; stepping the ancestor
-    abandons it and opens whatever the new rung holds at rung 0.
+    The planner measures candidate choices together with text degradation. Its
+    search is bounded, so exhausting the search budget can select the best fit
+    found rather than the best possible combination; the plan reports this.
     """
 
     variants: tuple[Variant[Any], ...]

@@ -1,4 +1,16 @@
-"""Immutable, serializable output of target planning."""
+"""The output of layout planning, ready for a target renderer.
+
+An authored layout may allow several representations, such as a group of buttons
+or a select menu. A Scene records the representation the planner chose, with text
+already resolved and controls placed in the target's structure. The renderer
+draws that choice rather than making another layout decision.
+
+Scene nodes contain display values and identifiers that can be serialized. The
+accompanying PlanResult keeps Python callbacks and delivery resources under those
+identifiers, so a frontend can connect a displayed control to its handler without
+putting the handler itself in the scene. Most limits are checked during planning
+or schema validation, rather than by these dataclass constructors.
+"""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -26,6 +38,8 @@ class Text:
 
 @dataclass(frozen=True, slots=True)
 class Time:
+    """An ISO-8601 instant and a target timestamp style, with an optional text prefix."""
+
     KIND: ClassVar[str] = "time"
 
     instant: str
@@ -44,6 +58,8 @@ class ZonedTime:
 
 @dataclass(frozen=True, slots=True)
 class File:
+    """A visible file reference; bytes are supplied separately under `asset_key`."""
+
     KIND: ClassVar[str] = "file"
 
     asset_key: str
@@ -79,6 +95,8 @@ class PremiumButton:
 
 @dataclass(frozen=True, slots=True)
 class Button:
+    """A resolved button whose action key identifies a process-local binding."""
+
     KIND: ClassVar[str] = "button"
 
     label: str | None
@@ -91,11 +109,10 @@ class Button:
 
 @dataclass(frozen=True, slots=True)
 class RoutedButton:
-    """A button carrying its own route id, with no binding for a frontend to wire.
+    """A button carrying a durable route ID instead of a process-local handler.
 
-    That absence is the point: a renderer can draw one without a live session, which is
-    what lets a sessionless document hold a control, and a codec can round-trip one,
-    which a process-local handler could never be.
+    Hosts dispatch the route without a live UI session; the codec preserves the
+    identifier but does not check whether a host has registered it.
     """
 
     KIND: ClassVar[str] = "routed_button"
@@ -203,8 +220,8 @@ class Panel:
     spoiler: bool = False
 
 
-type JsonValue = str | int | float | bool | None | Sequence[JsonValue] | Mapping[str, JsonValue]
-"""What may cross the scene codec. Stated by the type rather than only by prose."""
+type JsonValue = str | int | float | bool | Sequence[JsonValue] | Mapping[str, JsonValue] | None
+"""Recursive JSON-compatible values used in extension payload annotations."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,7 +420,7 @@ class HtmlTimeRef:
 
 @dataclass(frozen=True, slots=True)
 class HtmlColourRef:
-    """An exact sRGB colour, constrained to six hexadecimal digits by its integer type."""
+    """An sRGB colour validated as an integer from 0x000000 through 0xFFFFFF."""
 
     value: Color
 
@@ -470,7 +487,7 @@ type HtmlNode = HtmlText | HtmlElement
 
 @dataclass(frozen=True, slots=True)
 class HtmlBody:
-    """A semantic HTML fragment whose nodes are safe plain data."""
+    """A semantic HTML fragment whose text and typed references are interpreted by a renderer."""
 
     KIND: ClassVar[str] = "html"
 
@@ -480,11 +497,9 @@ class HtmlBody:
 
 # --- Message bodies -------------------------------------------------------------------------
 #
-# A scene resolves to *one* Discord message, and Discord has two kinds. A Components V2
-# message is a component tree and has no content or embeds at all; a classic message is
-# content, embeds, and action rows and cannot hold a component tree. Modelling both as one
-# flat child list would force every consumer to rediscover which kind it was holding, so the
-# body says so once.
+# Discord targets have two distinct body shapes: a Components V2 tree, or classic
+# content, embeds, and action rows. Separate types keep consumers from interpreting
+# a classic message as a V2 tree. HTML and Slack targets have their own body types.
 
 
 @dataclass(frozen=True, slots=True)
@@ -526,11 +541,10 @@ class EmbedMedia:
 
 @dataclass(frozen=True, slots=True)
 class Embed:
-    """One resolved embed. Every grouping and overflow decision is already made.
+    """One resolved embed after grouping and overflow decisions.
 
-    Server-generated properties — provider, video, and the fields Discord fills from a URL
-    it unfurls — are deliberately absent. A scene describes what Squid asked for, and
-    round-tripping something the API invents would make the fingerprint lie.
+    Only authored properties are represented. Provider details, video metadata,
+    and other values Discord derives when unfurling a URL are outside the scene.
     """
 
     title: str | None = None
@@ -609,6 +623,8 @@ del _kind_cls
 
 @dataclass(frozen=True, slots=True)
 class Asset:
+    """An asset declaration keyed to a separately supplied delivery resource."""
+
     key: str
     name: str
     media_type: str
@@ -616,6 +632,8 @@ class Asset:
 
 @dataclass(frozen=True, slots=True)
 class Pager:
+    """A paginator's zero-based selected page, total page count, and content identity."""
+
     key: str
     page: int
     pages: int
@@ -624,7 +642,16 @@ class Pager:
 
 @dataclass(frozen=True, slots=True)
 class Scene[BodyT = Body]:
-    """A target-resolved scene with no callbacks or native frontend objects."""
+    """One planned display, including its target, content, assets, and selected pages.
+
+    The body holds the target's content structure: for example, classic Discord
+    messages have content, embeds, and action rows. Callbacks and native frontend
+    objects belong to PlanResult and do not cross the scene codec.
+
+    Frozen dataclasses prevent attribute reassignment but do not freeze mappings
+    nested in extension payloads. Preserve those values after planning so a scene's
+    fingerprint continues to identify the same content.
+    """
 
     protocol: int
     target: str
@@ -646,7 +673,7 @@ class Scene[BodyT = Body]:
         return self.body
 
     def expect_body[ExpectedT](self, body_type: type[ExpectedT]) -> ExpectedT:
-        """Narrow a broadly decoded scene at an explicit frontend boundary."""
+        """Return the body as the requested type, or raise `LayoutInvariantError`."""
         if not isinstance(self.body, body_type):
             message = (
                 f"scene for target {self.target!r} has a {type(self.body).__name__} body, not {body_type.__name__}"
@@ -700,6 +727,18 @@ class PlanMetrics:
 
 @dataclass(frozen=True, slots=True)
 class PlanResult[BodyT = Body]:
+    """A scene and the Python objects needed to deliver it and handle interactions.
+
+    For example, a scene button names an action; the bindings mapping supplies its
+    handler. The resources mapping supplies objects such as file sources that
+    cannot be included in the scene's serialized description. Only scene crosses
+    the codec.
+
+    The report explains the planner's choices, while metrics measure the work it
+    did. The frontend must apply session_updates after delivery succeeds to keep
+    stored presentation state in step with what the user can see.
+    """
+
     scene: Scene[BodyT]
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
@@ -708,8 +747,9 @@ class PlanResult[BodyT = Body]:
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
     session_updates: tuple[SessionUpdate, ...] = ()
-    """Presentation writes this plan earned but did not make.
+    """Presentation changes to apply only after successful delivery.
 
-    Planning only reads the session. A frontend applies these once the render has
-    actually reached the reader, so a failed delivery leaves them where the message
-    still shows them."""
+    Planning reads session state without committing these changes. The frontend must
+    discard them if delivery fails so planning does not move stored page or selection
+    values ahead of the display the reader received.
+    """

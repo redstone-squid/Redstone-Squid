@@ -1,4 +1,8 @@
-"""Canonical data conversion for Slack scene bodies."""
+"""Convert Slack scene bodies to and from the scene protocol's JSON objects.
+
+These objects use the scene vocabulary, not Slack API request shapes. The Slack
+frontend performs that final conversion after resolving actions and assets.
+"""
 
 from collections.abc import Callable, Iterable
 from typing import TypeIs
@@ -507,7 +511,11 @@ def slack_body_to_dict(body: SlackBody) -> dict[str, object]:
 
 
 def slack_body_from_dict(raw: JsonObject) -> SlackBody:
-    """Decode one Slack body from canonical JSON-compatible data."""
+    """Decode Slack node shapes and validate their supported child unions.
+
+    Unknown fields are ignored. This does not enforce the JSON Schema's length
+    and item limits; enum and model constructor errors propagate unchanged.
+    """
     kind = _string(raw, "kind")
     blocks = tuple(_block_from(block) for block in _array(raw, "blocks"))
     match kind:

@@ -1,4 +1,9 @@
-"""JSON Schema for the experimental resolved-scene protocol."""
+"""Hand-authored JSON Schema for resolved-scene protocol 1.
+
+The documentation artifact is exported from `SCHEMA`; model docstrings do not
+supply schema descriptions. Runtime decoding performs its own checks and does
+not invoke this schema.
+"""
 
 from typing import Any
 

@@ -1,4 +1,10 @@
-"""Immutable Slack Block Kit scene vocabulary."""
+"""Describe a planned Slack message, modal, or App Home view for rendering.
+
+Each body contains Block Kit blocks, which in turn contain text and interactive
+elements. Actions and assets are references into PlanResult; these records contain
+no callbacks or file bytes. The Slack renderer converts them to API request objects.
+Planning and schema validation check most target limits, rather than these constructors.
+"""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -67,7 +73,7 @@ class SlackAssetRef:
 
 @dataclass(frozen=True, slots=True)
 class SlackButton:
-    """A Slack action or URL button."""
+    """A button with exactly one destination: action, route, URL, or delivery asset."""
 
     label: SlackText
     action: SlackActionRef | None = None
@@ -94,7 +100,13 @@ class SlackSelectKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SlackSelect:
-    """A static, user, or conversation selector."""
+    """Let a reader choose declared options, Slack users, or Slack conversations.
+
+    Exactly one action binding, route, or form action ID identifies where the selection
+    goes. A form action ID identifies the field whose value is submitted with the form.
+    Static options are allowed only for `STATIC`; conversation filters only for
+    `CONVERSATIONS`. Other count and length limits are checked outside this model.
+    """
 
     action: SlackActionRef | None = None
     route: SlackRouteRef | None = None
@@ -265,7 +277,7 @@ class SlackTable:
 
 @dataclass(frozen=True, slots=True)
 class SlackCard:
-    """A current-generation Slack card block."""
+    """A Slack card with optional title, description, image, and button actions."""
 
     title: SlackText | None = None
     description: SlackText | None = None

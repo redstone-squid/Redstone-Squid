@@ -25,18 +25,19 @@ class Spill:
 
 @dataclass(frozen=True, slots=True)
 class Paginate:
-    """Split content into pages; the solver adds nav controls and a page footer.
+    """Split content into pages with navigation controls and a page footer.
 
-    Splits at ``boundary`` where possible, hard-splitting single oversized segments.
-    The key gives this paginator independent state and must be explicit when using the planner.
-    ``initial`` picks the page first shown — "end" suits content whose interesting part is its
-    tail, like a traceback whose failing frame is the last one.
+    `boundary` chooses preferred split points; oversized segments are split to fit.
+    Supply a stable `key` when planning so this paginator has independent state.
+    `initial="end"` starts at the final page, useful for a traceback or activity log.
 
-    ``per`` switches to count-based pages: a `Lines` node paginates every ``per`` entries
-    whether or not the budget is tight, which is the "10 results per page" pin a list command
-    wants. A count-page too large for the budget is split further, so a page always fits.
-    ``footer`` overrides `Chrome.page_footer` for this node — how a list keeps "Page 1 of 3 ·
-    40 in total" while the rest of the framework says "Page 1 of 3".
+    For `Lines`, `per` groups that many entries per page even when space remains.
+    Pages that exceed the text budget are split further. `footer` receives the
+    displayed page number and total pages and replaces this node's default footer.
+
+    `min_fill` is a preferred character count on non-final pages. `widows` is the
+    preferred minimum number of fragments on the final page. Both are soft goals:
+    fitting within the page budget takes precedence.
     """
 
     key: str | None = None
@@ -74,13 +75,11 @@ def _validate_ladder(steps: tuple[str, ...], *, of: str = "ladder") -> None:
 
 @dataclass(frozen=True, slots=True)
 class Alts:
-    """A degradation ladder: fallbacks tried in order when the node's content does not fit.
+    """Fallback text tried in order when the node's preferred content does not fit.
 
-    Semantically-aware shrinking beats mid-string trimming: `[all links] → [count + first
-    link] → [count]` degrades meaningfully where an ellipsis would leave `https://exampl…`.
-    The node's own content is the preferred form; the last fallback that still does not fit
-    is ellipsis-trimmed as the final resort. Validated at construction: at least one step,
-    no empty steps, non-increasing lengths.
+    For example, a link list can fall back to a count and one link, then just a
+    count. If no fallback fits, the final one is ellipsis-trimmed. Construction
+    requires one or more nonempty steps with non-increasing character lengths.
     """
 
     ladder: tuple[str, ...]
@@ -125,16 +124,16 @@ class Alt:
 
 @dataclass(frozen=True, slots=True)
 class Condense:
-    """Step every `Lines` entry down its own `Alt` ladder, never dropping one.
+    """Shorten `Lines` entries through their `Alt` fallbacks before trimming the block.
 
-    The policy for a block that may get shorter but may not get *smaller*: a labelled
-    field list keeps every field, at whatever rung of its ladder still fits. Entries with
-    no ladder cannot shrink, so a `Lines` of plain strings degrades to `Never`'s
-    behaviour — the joined result is ellipsis-trimmed once every ladder is exhausted.
+    Entries are retained while their ladders can make the block fit. Once every
+    useful fallback is exhausted, the joined text is ellipsis-trimmed, which may
+    hide trailing entries. Plain strings have no fallbacks and go straight to that
+    final trim when space is insufficient.
 
-    Like `Never`, a condensing node is charged as a fixed cost before flexible nodes see
-    the budget, so a long neighbouring paragraph cannot starve it. The corollary is that
-    the ladders only engage when the fixed share itself overdraws the message.
+    Like `Never`, this policy reserves its content's fixed cost before flexible
+    nodes receive space. Its ladders engage when that fixed share itself exceeds
+    the available budget.
     """
 
 
@@ -145,7 +144,11 @@ class Drop:
 
 @dataclass(frozen=True, slots=True)
 class Never:
-    """Shrinking this node is a bug: overflow raises in strict mode."""
+    """Reserve the full text cost and report any forced shortening.
+
+    Strict planning rejects that degradation. Non-strict measurement may trim the
+    content or drop it when even its formatting cannot fit.
+    """
 
 
 type Overflow = Truncate | Spill | Paginate | Alts | Condense | Drop | Never

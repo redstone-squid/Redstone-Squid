@@ -81,7 +81,21 @@ class CodecError(SquidUiError, ValueError):
 
 
 class Codec:
-    """Encode and decode deterministic resolved-scene protocol 1."""
+    """Encode and decode resolved-scene protocol 1 with deterministic JSON output.
+
+    This is the Scene's transport and storage format, before conversion to a target's
+    native payload. Action keys and asset declarations survive serialization; Python
+    handlers and asset bytes stay in PlanResult. Sorted JSON also gives fingerprint
+    a stable input for comparing planned displays.
+
+    Decoding checks supported node shapes and selected model invariants, but does
+    not run the published JSON Schema or enforce every target limit. Unknown
+    object fields are ignored. Use `schema()` with a JSON Schema validator to
+    check the published structural contract as well.
+
+    Classic rows containing `EntitySelect` can be encoded but are currently
+    rejected during decoding, so those scenes cannot round-trip through this codec.
+    """
 
     protocol = 1
 
@@ -99,10 +113,16 @@ class Codec:
 
     @classmethod
     def dumps(cls, scene: Scene[Any]) -> str:
+        """Serialize a scene as compact JSON with sorted keys and unescaped Unicode."""
         return json.dumps(cls.to_dict(scene), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     @classmethod
     def loads(cls, payload: str) -> Scene:
+        """Parse JSON and decode its scene, rejecting a non-object root.
+
+        Shape and protocol errors raise `CodecError`. Invalid enum values or model
+        invariants can also raise their constructors' `ValueError` or `TypeError`.
+        """
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -114,10 +134,16 @@ class Codec:
 
     @classmethod
     def fingerprint(cls, scene: Scene[Any]) -> str:
+        """Return the 32-character hexadecimal BLAKE2s digest of the canonical scene JSON.
+
+        Asset declarations and pager state contribute to the digest; asset bytes
+        and process-local bindings are not part of the scene.
+        """
         return hashlib.blake2s(cls.dumps(scene).encode(), digest_size=16).hexdigest()
 
     @classmethod
     def to_dict(cls, scene: Scene[Any]) -> dict[str, Any]:
+        """Encode protocol 1 into plain containers without validating target limits."""
         if scene.protocol != cls.protocol:
             msg = f"unsupported scene protocol {scene.protocol}"
             raise CodecError(msg)
@@ -142,6 +168,11 @@ class Codec:
 
     @classmethod
     def from_dict(cls, raw: JsonObject) -> Scene:
+        """Decode supported shapes; omitted asset and pager arrays default to empty.
+
+        Nullable fields generally accept omission as `None`. The `target` name and
+        version are carried through without selecting or validating a renderer.
+        """
         protocol = _integer(raw, "protocol")
         if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"
