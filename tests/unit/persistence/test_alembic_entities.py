@@ -57,11 +57,7 @@ def test_a_constraint_trigger_is_not_silently_dropped() -> None:
     ],
 )
 def test_a_miscounted_definition_is_rejected(functions: int, triggers: int) -> None:
-    """A statement the patterns miss is dropped silently, so the counts are the only guard.
-
-    Without it a migration would replace a shorter list than it believed and leave an entity
-    running its previous definition.
-    """
+    """Expected counts catch statements omitted by the parser before migrations replace an incomplete list."""
     with pytest.raises(RuntimeError, match="must define exactly"):
         parse_entities(_sql(functions=functions, triggers=triggers))
 

@@ -1,4 +1,4 @@
-"""The shared retry policy, and the divergence that was deleted on purpose."""
+"""Shared exponential retry delays and their cap."""
 
 from datetime import timedelta
 
@@ -23,13 +23,7 @@ def test_the_backoff_is_capped_so_a_stuck_job_still_retries_hourly() -> None:
 
 
 def test_a_zeroth_attempt_halves_the_base_delay() -> None:
-    """Pins the clamp that `squid/notifications` used to apply and no longer does.
-
-    Its private copy read `max(attempts - 1, 0)`, which would answer 15s here. The
-    divergence was unreachable -- notification deliveries increment `attempts` at
-    claim time, so every `fail_delivery` passes a value of at least 1, where both
-    formulas agree -- and this keeps it deleted on purpose rather than by accident.
-    """
+    """Zero attempts uses exponent -1; this helper does not clamp the lower bound."""
     assert retry_delay(0) == timedelta(seconds=7.5)
 
 

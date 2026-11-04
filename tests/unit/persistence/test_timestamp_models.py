@@ -1,4 +1,4 @@
-"""Every persisted timestamp column is stored and returned as a whenever `Instant`."""
+"""Check timestamp type declarations across registered models without querying a database."""
 
 from datetime import datetime
 
@@ -12,32 +12,26 @@ from squid.persistence.types import InstantUTC
 
 
 def _mapped_models() -> list[type[DeclarativeBase]]:
-    """Every model the migration metadata knows about."""
+    """Return registered model classes with a local table."""
     return [
         mapper.class_
         for mapper in Base.registry.mappers
-        # Single-table inheritance maps several classes onto one table; the base carries
-        # the columns, so mapping over every class would double-count them.
+        # Include every mapper with a table; inherited columns may appear more than once.
         if mapper.local_table is not None  # pyright: ignore[reportUnnecessaryComparison]
     ]
 
 
 def _stores_naive_datetime(column_type: TypeEngine[object]) -> bool:
-    """Whether the column hands the application a stdlib `datetime` instead of an `Instant`."""
+    """Whether the declared result type is a stdlib datetime, regardless of timezone support."""
     try:
         return column_type.python_type is datetime
     except NotImplementedError:
-        # Types like JSONB and enums do not declare a Python type; they are not timestamps.
+        # Ignore types that do not expose a Python result type.
         return False
 
 
 def test_no_model_stores_a_bare_datetime() -> None:
-    """Read off the registry rather than a hand-maintained list of columns.
-
-    The list this replaces could only fail for columns someone had already remembered to
-    add to it, which is precisely the case that was never going to regress. Sweeping the
-    registry covers every column added from here on, on the day it lands.
-    """
+    """Inspect registered columns so newly mapped timestamps are included automatically."""
     naive = sorted(
         f"{model.__tablename__}.{column.name}"  # pyright: ignore[reportAttributeAccessIssue]
         for model in _mapped_models()
@@ -49,11 +43,7 @@ def test_no_model_stores_a_bare_datetime() -> None:
 
 
 def test_the_registry_sweep_actually_sees_timestamp_columns() -> None:
-    """Guard the sweep above against passing vacuously.
-
-    If model registration or the mapper walk silently produced nothing, the naive-column
-    check would still pass. This fails instead.
-    """
+    """Require known timestamp columns so an empty registry cannot make the check pass."""
     instant_columns = {
         f"{model.__tablename__}.{column.name}"  # pyright: ignore[reportAttributeAccessIssue]
         for model in _mapped_models()

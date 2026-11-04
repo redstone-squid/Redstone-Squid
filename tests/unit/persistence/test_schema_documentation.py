@@ -22,14 +22,13 @@ class SandboxBase(Base):
 
 
 def table_of(model: type[Base]) -> Table:
-    """The model's own table, narrowed from the `FromClause` the declarative API promises."""
+    """Return a mapped model's concrete table for comment assertions."""
     table = model.__table__
     assert isinstance(table, Table)
     return cast(Table, table)
 
 
 def test_attribute_docstrings_become_column_comments() -> None:
-    """The docstring under a `mapped_column()` is what the column is commented with."""
 
     class DocWidget(SandboxBase, kw_only=True):
         """A widget."""
@@ -57,12 +56,7 @@ def test_attribute_docstrings_become_column_comments() -> None:
 
 
 def test_a_subclass_documents_its_own_table() -> None:
-    """A joined-inheritance subclass must not inherit or overwrite its parent's `__table_args__`.
-
-    Reading `__table_args__` by attribute rather than off `__dict__` finds the parent's,
-    whose comment slot is already filled -- so the subclass's own table silently kept no
-    comment at all while the parent's stayed the only one documented.
-    """
+    """Give joined-inheritance tables their own comments without modifying the parent's metadata."""
 
     class DocParent(SandboxBase, kw_only=True):
         """The parent table."""
@@ -93,12 +87,7 @@ def test_a_subclass_documents_its_own_table() -> None:
 
 
 def test_every_attribute_docstring_in_the_schema_reached_its_column() -> None:
-    """Sweep the real registry, so a silently no-op documentation pass cannot pass this.
-
-    The mechanism failed exactly this way once: it looked columns up on an attribute that
-    no longer held one, found nothing, and documented three columns out of the whole schema.
-    Asserting on a sample model would not have noticed.
-    """
+    """Check the real model registry as well as the isolated sample models."""
     undocumented: list[str] = []
     documented = 0
     for mapper in Base.registry.mappers:

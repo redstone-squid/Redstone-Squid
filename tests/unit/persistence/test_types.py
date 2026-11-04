@@ -80,13 +80,7 @@ def test_int_enum_small_int_round_trips_as_a_member() -> None:
 
 
 def test_build_submission_status_column_coerces_to_status() -> None:
-    """`Mapped[Status]` over a bare `SmallInteger` handed every reader a plain `int`.
-
-    Nothing that compared the value noticed, because `Status` is an `IntEnum`. What
-    broke was `.name` in the search projection -- which dropped every build from the
-    index -- and every `is Status.CONFIRMED` identity check, which silently became
-    false for the entire catalogue.
-    """
+    """Return a Status member so callers can use .name and enum identity comparisons."""
     column_type = Build.__table__.c.submission_status.type
 
     assert isinstance(column_type, IntEnumSmallInt)
