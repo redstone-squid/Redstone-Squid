@@ -1,9 +1,8 @@
-"""Smoke contracts for the machines the conformance suite cannot reach.
+"""Check that components outside the StateMachine protocol render without a frontend.
 
-`test_machine_conformance.py` parametrizes every law over the eight pure `StateMachine`s. The
-four below are not state machines -- they are components backed by a resource or keyed by
-actor -- so they have no `initial_state` to enumerate from, and this file keeps the one claim
-that still applies to them: they render.
+test_machine_conformance.py checks widgets through their initial_state, render, and
+transition methods. Resource-backed components and Agreement own their reactive state
+instead, so this file constructs them directly and checks their rendered output.
 """
 
 import squid_ui as sl

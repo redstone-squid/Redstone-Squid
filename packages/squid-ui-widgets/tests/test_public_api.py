@@ -14,7 +14,7 @@ def test_the_confirm_guard_composes_with_portable_guards() -> None:
 
 
 def test_patterns_import_without_a_transport_installed() -> None:
-    """Frontend-neutral in fact, not just in intent."""
+    """Block frontend and host imports to expose accidental package dependencies."""
     engine.assert_imports_without(
         ["squid_ui_widgets", "squid_ui_widgets.guards"], "discord", "anyio", "squid_storage", "squid_ui_discord"
     )

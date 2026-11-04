@@ -1,18 +1,15 @@
-"""Drive a machine's two shells with no frontend attached.
+"""Drive widget state machines by semantic key without a frontend.
 
-A machine owns its state and the tree it describes; a frontend only carries presses back to
-it. `mounted` supplies the component shell and drives it by the same semantic key a Discord
-custom id would carry, and `routed` renders the stateless shell and reports every route it
-asked for. Between them, everything a widget itself owns is reachable without a transport --
-which is what lets these tests live beside the machines rather than beside the adapter.
+``mounted`` creates a bare ComponentDriver; ``driving`` wraps a widget's configured
+component. For example, ``driving(menu.build_component())`` retains the menu's Close
+behavior, while ``mounted(menu)`` tests the transition rules without that finish policy.
+``routed`` records the states a stateless render asks the host to encode.
 
-What is deliberately out of reach: whether the rendered tree fits a target's limits, and
-whether a key survives planning to become a dispatchable id. Both are facts about a frontend,
-and `squid_ui_discord`'s suite is where they are asserted.
+Handlers run directly, without frontend transactions or form validation. These helpers
+also skip target planning; use frontend tests to check fitting and dispatchable IDs.
 
-This module is public and versioned like the rest of the package. It is imported by tests
-rather than by a running application, so it is reachable as `squid_ui_widgets.testing.X` and
-promotes no names to `squid_ui_widgets` itself.
+Import this public API from squid_ui_widgets.testing; it is not re-exported at the
+package root.
 """
 
 from collections.abc import Collection, Mapping
@@ -74,7 +71,7 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget, Context
         return engine.control(self.nodes, key)
 
     async def press(self, key: str, *, actor: str = "1") -> None:
-        """Press the control keyed `key`, the way a frontend's dispatch would."""
+        """Invoke the keyed semantic control handler with a recording responder."""
         await engine.press(self.driver, key, actor=actor, responder=self.responder)
 
     async def choose(self, key: str, *values: str, actor: str = "1") -> None:
@@ -152,11 +149,10 @@ def mounted[StateT, RenderTargetT: RenderTarget, ContextT = object](
 def driving[StateT, RenderTargetT: RenderTarget, ContextT = object](
     driver: ComponentDriver[StateT, RenderTargetT, ContextT],
 ) -> MachineHarness[StateT, RenderTargetT, ContextT]:
-    """A harness around a component a machine built for itself.
+    """Wrap a widget's configured component, preserving its callbacks and finish policy.
 
-    `mounted` constructs the driver directly, which cannot reach a machine's own builder
-    arguments -- `Decision.build_component(on_decide=..., finish_on=...)` and its siblings. A
-    test about those wires the component the way an application does, then drives it here.
+    Use driving(machine.build_component(...)) when testing that widget-specific wiring;
+    mounted builds a bare driver instead.
     """
     return MachineHarness(driver, engine.RecordingResponder())
 
@@ -192,7 +188,7 @@ class RoutedRender[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT 
 
 @dataclass
 class _RouteRecorder[StateT]:
-    """The encoder every routed test used to hand-roll as a list plus a closure."""
+    """Record requested routes and assign stable test IDs."""
 
     routes: list[TransitionRoute[StateT]] = field(default_factory=list)
 
@@ -224,11 +220,7 @@ def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
     *,
     chrome: Chrome = DEFAULT_CHROME,
 ) -> RoutedRender[StateT, RenderTargetT, ContextT]:
-    """Render `machine` in its stateless shell and report the routes it asked for.
-
-    The encoder is supplied rather than taken, because what a test wants to see is *which*
-    routes a render requested and in what order -- not what a particular host spells them.
-    """
+    """Render a machine with test route IDs and record its requested routes."""
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
     driver: RouteDriver[StateT, RenderTargetT, ContextT] = RouteDriver(recorder, chrome)
     result = driver.render(machine, machine.initial_state if isinstance(state, _MissingInitialState) else state)

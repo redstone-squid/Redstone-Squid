@@ -71,7 +71,16 @@ type MultiChoiceCommitHandler = Callable[[TransitionEvent[MultiChoiceState], tup
 
 
 class MultiChoice:
-    """A pure cross-page picker with one explicit Apply boundary."""
+    """Pick across grouped pages with explicit or immediate local commits.
+
+    ``staged`` holds the current selection; ``committed`` holds the last accepted selection.
+    EXPLICIT mode waits for Apply, while IMMEDIATE accepts each valid change. Page changes
+    retain picks from other pages, and choosing from a group clears its exclusive rivals.
+    Invalid changes remain staged so the reader can correct them.
+
+    ``build_component(on_commit=...)`` notifies the host when committed values change.
+    That callback owns persistence; the machine itself performs no durable write.
+    """
 
     def __init__(
         self,
@@ -130,7 +139,10 @@ class MultiChoice:
 
     @property
     def initial_state(self) -> MultiChoiceState:
-        """Return the validated initial staged and committed selections."""
+        """Return initial selections with duplicates removed and unknown keys rejected.
+
+        Cardinality and exclusivity are checked by errors, not during initialization.
+        """
         return self._initial_state
 
     def build_component(
@@ -139,7 +151,7 @@ class MultiChoice:
         initial: MultiChoiceState | None = None,
         on_commit: MultiChoiceCommitHandler | None = None,
     ) -> ComponentDriver[MultiChoiceState]:
-        """Build an in-memory panel shell and dispatch each new commit once."""
+        """Build an in-memory panel and notify when its committed tuple changes."""
 
         async def changed(event: TransitionEvent[MultiChoiceState]) -> None:
             if on_commit is not None and event.state.committed != event.previous.committed:
@@ -344,10 +356,7 @@ class MultiChoice:
         if len(self._choice_order) <= 25:
             modal = self.form_for(state, "modal")
             assert modal is not None
-            # `controls.form` answers either a `FormTrigger`, which is a layout node, or a
-            # `RoutedActionControl`, which is a control and only legal inside a control
-            # container. `fallback` takes layout nodes, so the routed half needs wrapping --
-            # the same narrowing `collection.py` does with the same union.
+            # fallback needs layout nodes, so wrap the routed form control in a container.
             trigger = controls.form(modal, "modal", key=f"{self.key}.modal", label="Select options")
             alternate = (
                 trigger

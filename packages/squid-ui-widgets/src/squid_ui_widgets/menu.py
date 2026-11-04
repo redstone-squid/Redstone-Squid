@@ -1,4 +1,4 @@
-"""A semantic drill-down menu with component and routed shells."""
+"""Navigate nested destinations with either a ComponentDriver or RouteDriver."""
 
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -21,7 +21,12 @@ _MISSING = _Missing()
 
 @dataclass(frozen=True, slots=True, init=False)
 class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
-    """One menu destination, optionally containing a nested submenu."""
+    """One menu destination, optionally containing a nested submenu.
+
+    Use MenuEntry(label, content, key=...) or MenuEntry(key, label, content). Omitting
+    key derives it from the label; supply an explicit key if labels may change.
+    Sibling keys must be unique.
+    """
 
     key: str
     label: TextLike
@@ -70,7 +75,12 @@ class MenuState:
 
 
 class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
-    """A pure keyed drill-down menu."""
+    """Show a destination's content and offer its child destinations.
+
+    MenuState stores the path of selected entry keys. Back removes the last key; Home
+    returns to the top level. ``build_component`` creates the local driver and makes Close
+    finish its presentation. RouteDriver can instead carry the path in routed controls.
+    """
 
     def __init__(
         self,
@@ -105,11 +115,7 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     def _validate_entries[EntryTargetT: RenderTarget, EntryContextT = object](
         entries: tuple[MenuEntry[EntryTargetT, EntryContextT], ...], *, where: str
     ) -> None:
-        """Require unique sibling keys throughout the menu tree.
-
-        The target parameter belongs to the method, not to `Menu`: a static method has no
-        instance to read `Menu`'s own parameter from, and the check reads only keys anyway.
-        """
+        """Require unique sibling keys throughout the menu tree."""
         keys = [entry.key for entry in entries]
         if len(set(keys)) != len(keys):
             message = f"{where} keys must be unique: {keys!r}"

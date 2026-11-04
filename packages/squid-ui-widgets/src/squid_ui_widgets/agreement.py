@@ -33,7 +33,17 @@ type AgreementResolveHandler = Callable[[PressEvent, tuple[str, ...]], Awaitable
 
 
 class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Component[RenderTargetT, ContextT]):
-    """Collect actor-keyed approvals to a declared threshold."""
+    """Collect participant approvals in memory until the declared threshold is met.
+
+    Each participant can approve once and optionally withdraw before resolution. The
+    default threshold requires everyone; ``require`` can choose a smaller count.
+    Participant IDs determine eligibility, separately from frontend access policies.
+
+    ``resolved`` is set before ``on_resolve`` runs. These reactive writes participate in
+    the frontend's transaction, so a callback failure can roll them back. Calling handlers
+    directly without a transaction leaves the new state in place. Applications own
+    persistence of the agreement's result.
+    """
 
     approved: tuple[str, ...] = state((), persist=False)
     resolved: bool = state(default=False, persist=False)

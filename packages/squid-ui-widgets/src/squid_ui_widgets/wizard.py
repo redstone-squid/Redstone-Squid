@@ -1,4 +1,4 @@
-"""Branching multi-step forms over the shared two-shell state machine."""
+"""Branching forms over mounted and routed state-machine drivers."""
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
@@ -19,7 +19,10 @@ REVIEW_STEP = "@review"
 
 @dataclass(frozen=True, slots=True)
 class WizardAnswer:
-    """One retained step submission in route-serializable tuple form."""
+    """One retained step submission stored as key/value pairs.
+
+    Values may be arbitrary objects; a routed host must supply a suitable state codec.
+    """
 
     step: str
     values: tuple[tuple[str, object], ...]
@@ -37,12 +40,10 @@ class WizardReview[RenderTargetT: RenderTarget = RenderTarget, ContextT = object
 
 @dataclass(frozen=True, slots=True)
 class WizardState:
-    """Current step plus every retained answer, including hidden branch orphans.
+    """Current step and retained answers, including answers to hidden branches.
 
-    Where the reader *is* and where the reader *returns to* are two facts, so they are two
-    fields: `current` holds `REVIEW_STEP` while the review screen is up, and `reviewing`
-    says review is home -- it stays set while a jumped edit is in progress, which is what
-    makes that edit come back rather than resuming the march.
+    current is REVIEW_STEP while showing review. reviewing stays true during an edit
+    opened from review so completing or backing out of that edit returns to review.
     """
 
     current: str
@@ -86,7 +87,17 @@ type WizardFinishHandler = Callable[[TransitionEvent[WizardState], WizardAnswers
 
 
 class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
-    """A pure branching wizard whose step list is recomputed after every answer."""
+    """A branching wizard that recomputes its step list from retained answers.
+
+    Supply a fixed step sequence or a function that chooses steps from previous answers.
+    For example, an account-type answer can reveal business details only for business
+    accounts. Hidden answers remain available if the reader switches back; ``live_answers``
+    and the finish callback expose only the current branch.
+
+    ``review=True`` adds a final overview with controls to revisit answers. An iterable of
+    steps must be reusable across renders. Submissions must already be parsed and validated
+    by the form pipeline.
+    """
 
     def __init__(
         self,
@@ -119,7 +130,11 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         initial: WizardState | None = None,
         on_finish: WizardFinishHandler | None = None,
     ) -> ComponentDriver[WizardState, RenderTargetT, ContextT]:
-        """Build an in-memory wizard shell and dispatch Finish once."""
+        """Build an in-memory shell that notifies when incomplete state becomes complete.
+
+        The callback may run again if navigation reopens the wizard. It must request
+        finish_on_success if the presentation should close on completion.
+        """
 
         async def changed(event: TransitionEvent[WizardState]) -> None:
             if on_finish is not None and event.state.complete and not event.previous.complete:
@@ -165,7 +180,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         )
 
     def answered(self, state: WizardState) -> bool:
-        """Whether every live form step has an answer — what gates Finish."""
+        """Return whether every current form step has a retained submission."""
         retained = self._answer_map(state.answers)
         return all(step.key in retained for step in self.live_steps(state) if step.form is not None)
 
@@ -194,8 +209,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         del values
         live = self.live_steps(state)
         at_review = state.current == REVIEW_STEP
-        # Review is home once visited, so an edit reached from it returns there rather than
-        # silently resuming the march and losing the reader's place.
+        # An edit opened from review returns there instead of advancing to the next step.
         returns_to_review = self.review is not None and state.reviewing
         if self.review is not None and action == "review":
             return replace(state, current=REVIEW_STEP, reviewing=True, complete=False)
@@ -216,7 +230,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
                 return replace(state, current=REVIEW_STEP, complete=False)
             return replace(state, current=live[min(len(live) - 1, index + 1)].key, complete=False)
         if action == "finish":
-            # The state machine enforces completeness; the render only reflects it.
+            # Review mode checks completeness here as well as disabling the Finish control.
             if self.review is not None and not self.answered(state):
                 return state
             return replace(state, complete=True)
@@ -338,8 +352,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         index = self._index(live, state.current)
         current = live[index]
         next_step = live[index + 1] if index + 1 < len(live) else None
-        # A step reached by jumping back from review returns there when it is done, so its
-        # primary control says "edit this", not "continue the march".
+        # Editing from review returns there, so use an Edit label for the primary control.
         editing = self.review is not None and state.reviewing
         last_label = controls.chrome.review if self.review is not None else controls.chrome.finish
         last_action = "review" if self.review is not None else "finish"

@@ -47,7 +47,11 @@ type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = 
 class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object](
     Component[RenderTargetT, ContextT]
 ):
-    """Render a ranking whose visible async resource is backed by a window source."""
+    """Render source-ordered ranking windows, retaining the last page during reloads.
+
+    The source's absolute offset determines row numbers. Header and footer callbacks
+    receive None when the source does not supply a total count.
+    """
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
 
@@ -123,9 +127,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render ready, pending, or failed ranking state."""
-        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
-        # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
-        # checker saw a path with no return on a shape that cannot occur.
+        # Match each status before inspecting previous so type checkers can prove exhaustiveness.
         match self.loaded.status:
             case Ready(value=loaded):
                 return self._render_loaded(loaded)

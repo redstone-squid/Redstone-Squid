@@ -60,7 +60,12 @@ type BrowserOverview[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, Contex
 class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object](
     Component[RenderTargetT, ContextT]
 ):
-    """Browse a remote window, open one item, and act within its detail."""
+    """Browse a window source and open one item's detail content.
+
+    The previous page remains usable during loading or failure. detail is called once
+    per open; refreshing the source does not rebuild an already open detail. A detail
+    component must manage any refresh of its own data.
+    """
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
     opened: ItemT | None = state(None, persist=False, opaque=True)
@@ -189,9 +194,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render ready, pending, or failed source state."""
-        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
-        # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
-        # checker saw a path with no return on a shape that cannot occur.
+        # Match each status before inspecting previous so type checkers can prove exhaustiveness.
         match self.window.status:
             case Ready(value=loaded):
                 return self._render_loaded(loaded)

@@ -70,7 +70,12 @@ def _formatted(value: object) -> str:
 
 
 class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
-    """A typed adapter between one editor value and its interactive section state."""
+    """Describe how one editor section turns interaction state into an application value.
+
+    ``load`` builds state from a value; ``dump`` extracts the value to summarize or commit.
+    A nested picker can therefore retain its current page without including that page in
+    the edited value. Use ``from_form`` for a form or ``from_pattern`` for a nested machine.
+    """
 
     def __init__(
         self,
@@ -104,7 +109,11 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
         *,
         summary: Callable[[FormValues], TextLike] | None = None,
     ) -> EditorSection[tuple[tuple[str, object], ...], FormValues, RenderTarget]:
-        """Adapt one form schema into an editor section."""
+        """Adapt a form schema into a section, initially using its prefill and defaults.
+
+        Loading a supplied mapping rejects unknown fields and fills omitted fields with
+        None; it does not merge that mapping with the initial defaults.
+        """
         spec = form.spec() if isinstance(form, Form) else form
         initial_values = {
             field.key: spec.prefill.get(field.key, field.default)
@@ -157,7 +166,11 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
         summary: Callable[[ValueT], TextLike],
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> EditorSection[StateT, ValueT, RenderTargetT, ContextT]:
-        """Adapt a nested pure machine into an editor section."""
+        """Adapt a nested pure machine into an editor section.
+
+        Choose dump to expose the values this editor should commit, such as a nested
+        picker's staged selections. Navigation-only state can remain outside that value.
+        """
         section: EditorSection[StateT, ValueT, RenderTargetT, ContextT] = EditorSection(
             key,
             label,
@@ -171,7 +184,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
         return section
 
     def value(self, state: EditorState) -> ValueT:
-        """Return this section's precisely typed current value."""
+        """Return this section's current projected value."""
         slot = next((candidate for candidate in state.sections if candidate.key == self.key), None)
         if slot is None:
             message = f"Editor state does not contain section {self.key!r}"
@@ -194,7 +207,18 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
 
 
 class Editor[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
-    """A pure editor whose form and nested-machine sections share one commit boundary."""
+    """Edit form and nested-machine sections under one local commit boundary.
+
+    The overview summarizes each section; Edit opens its form or nested machine. Current
+    section state includes unfinished edits and navigation, while each section's ``dump``
+    function extracts the value that Save should accept. ``dirty_sections`` compares those
+    values with their last committed versions.
+
+    Section and aggregate issues block commits. Valid edits commit immediately or on Save,
+    depending on CommitMode. ``build_component(on_commit=...)`` reports accepted value
+    changes for the host to persist. Form submissions must already be parsed and validated
+    by the form pipeline before ``transition`` is called.
+    """
 
     def __init__(
         self,

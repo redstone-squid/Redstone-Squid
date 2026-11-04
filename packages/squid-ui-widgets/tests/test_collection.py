@@ -1,4 +1,4 @@
-"""Editable collections retain only route-serializable form-value mappings."""
+"""Ordered collection changes, identity retention, bounds, and routed forms."""
 
 from collections.abc import Mapping
 

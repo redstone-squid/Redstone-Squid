@@ -34,7 +34,10 @@ def window[T](
     chrome: Chrome,
     identity: Callable[[T], str],
 ) -> tuple[tuple[T, ...], PagePosition, int]:
-    """Slice at an explicit position using the materialized cursor policy."""
+    """Return visible items, the clamped page position, and the total page count.
+
+    An empty collection has one empty page. Callers must supply a positive per_page.
+    """
     pages = max(1, (len(values) + per_page - 1) // per_page)
     request = MaterializedCursorRequest(key, pages, content_fingerprint([identity(value) for value in values]))
     coordinator = CursorCoordinator(PresentationState(), chrome, overrides={key: Position(offset=position.index)})

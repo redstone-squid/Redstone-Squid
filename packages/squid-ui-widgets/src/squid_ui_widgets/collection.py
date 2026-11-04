@@ -1,4 +1,4 @@
-"""Editable form-value collections over component and routed machine shells."""
+"""Add, edit, remove, and reorder records through forms and selection controls."""
 
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
@@ -48,7 +48,12 @@ class _Action(StrEnum):
 
 
 class CollectionEditor:
-    """A pure add/edit/remove/reorder machine whose payloads are form values."""
+    """Add, edit, remove, and reorder form-value records in local state.
+
+    Identities are assigned on creation and retained through edits. The default numeric
+    identity may be reused after deletion. Submitted values must already be parsed and
+    validated by the form pipeline; bounds and identity checks do not validate fields.
+    """
 
     def __init__(
         self,
@@ -91,11 +96,14 @@ class CollectionEditor:
 
     @staticmethod
     def _mapping(entry: CollectionEntry) -> FormValues:
-        """Expose an entry through an immutable mapping."""
+        """Expose an entry through a read-only mapping copy."""
         return MappingProxyType(dict(entry.values))
 
     def initial_from(self, entries: Iterable[FormValues]) -> CollectionState:
-        """Build state from public values and validate their identities."""
+        """Build state from public values, rejecting empty or duplicate identities.
+
+        Initial cardinality may violate the configured bounds; ``errors`` reports those issues.
+        """
         collected: list[CollectionEntry] = []
         keys: set[str] = set()
         for index, values in enumerate(entries, start=1):

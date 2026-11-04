@@ -48,9 +48,7 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
     )
     browser.window.replace(loaded)
 
-    # `browser.open` is one picker over the entries. Discord lowers a two-option single-select
-    # into buttons keyed `browser.open.a`, which is why the mounted version of this test pressed
-    # that id -- but the machine emits a choice, and choosing is what it actually understands.
+    # Drive the semantic picker; adapters may lower its options into separate buttons.
     await engine.choose(browser, "browser.open", "a")
 
     assert browser.opened == Entry("a", "A")
@@ -67,7 +65,7 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
 
 
 async def test_navigating_keeps_the_previous_window_visible_while_the_next_is_pending() -> None:
-    """A reader mid-page should not watch the list empty itself while the source thinks."""
+    """Retain the loaded page until its replacement is ready."""
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
     browser = sp.Browser(
         source,

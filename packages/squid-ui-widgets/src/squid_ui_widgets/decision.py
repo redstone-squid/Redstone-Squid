@@ -1,4 +1,4 @@
-"""One-way decisions and confirmation sugar over the shared machine shells."""
+"""Choose one terminal option, with a helper for Confirm/Cancel prompts."""
 
 from collections.abc import Awaitable, Callable, Collection, Iterable
 from dataclasses import dataclass
@@ -60,7 +60,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         return DecisionState()
 
     def finish_actions(self) -> frozenset[str]:
-        """Return actions configured to finish the component shell."""
+        """Return option actions eligible to finish the component shell."""
         return frozenset(f"choose:{option.key}" for option in self.options)
 
     def build_component(
@@ -69,7 +69,11 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         on_decide: DecisionHandler | None = None,
         finish_on: Collection[str] = (),
     ) -> ComponentDriver[DecisionState, RenderTargetT, ContextT]:
-        """Build a component shell and dispatch the chosen option."""
+        """Build a component shell and dispatch the chosen option.
+
+        The shell stays open unless finish_on includes the option key or its choose:key
+        action. A configured finish runs after the callback succeeds.
+        """
         handlers = {}
         if on_decide is not None:
             handlers = {f"choose:{option.key}": self._handler(on_decide, option.key) for option in self.options}
@@ -126,7 +130,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         )
 
     def _options(self, controls: MachineControls[DecisionState, RenderTargetT, ContextT]) -> tuple[DecisionOption, ...]:
-        """Return the decision options bound to shell callbacks."""
+        """Return the options to render, allowing specializations to localize labels."""
         del controls
         return self.options
 
@@ -156,7 +160,7 @@ class _Confirmation[RenderTargetT: RenderTarget = RenderTarget, ContextT = objec
 
     @override
     def _options(self, controls: MachineControls[DecisionState, RenderTargetT, ContextT]) -> tuple[DecisionOption, ...]:
-        """Bind confirm and cancel options to their configured callbacks."""
+        """Resolve default confirmation labels from the current chrome."""
         return (
             DecisionOption(
                 "confirm",
@@ -178,7 +182,11 @@ def confirm[RenderTargetT: RenderTarget, ContextT = object](
     cancel_label: TextLike | None = None,
     tone: Tone = Tone.DANGER,
 ) -> ComponentDriver[DecisionState, RenderTargetT, ContextT]:
-    """Build a ready two-option decision shell."""
+    """Build a two-option decision shell with confirm and cancel callbacks.
+
+    Choosing disables both options. Callbacks may request finish_on_success to close
+    the presentation; the shell does not close automatically.
+    """
     machine = _Confirmation(
         prompt,
         key=key,

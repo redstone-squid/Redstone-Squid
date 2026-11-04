@@ -1,8 +1,6 @@
-"""Laws every advertised state machine obeys, checked against all of them at once.
+"""Shared transition and render contracts for the machines in MACHINES.
 
-Each widget has its own file for what makes it that widget. This file holds what makes it a
-`StateMachine` at all: the guarantees the two shells rely on and no single widget's tests
-would think to assert. A new machine joins `MACHINES` and inherits every one of them.
+Add each new state-machine widget to the catalogue to apply these checks.
 """
 
 from collections.abc import Callable
@@ -108,8 +106,7 @@ def test_both_shells_render_something(build: MachineFactory) -> None:
 
 @machine
 def test_no_two_controls_in_one_render_share_a_key(build: MachineFactory) -> None:
-    """A duplicate key silently cross-wires two controls through the mount's handler table:
-    the second registration wins, and the first button starts doing the second one's job."""
+    """Duplicate semantic keys make control identity ambiguous."""
     for nodes in (wt.mounted(build()).nodes, wt.routed(build()).nodes):
         keys = _control_keys(nodes)
 
@@ -122,7 +119,11 @@ def test_no_two_controls_in_one_render_share_a_key(build: MachineFactory) -> Non
 def test_every_action_the_routed_shell_encodes_is_one_the_machine_accepts(
     build: MachineFactory,
 ) -> None:
-    """The render and the transition table are written apart; nothing else checks they agree."""
+    """Rendering and transition dispatch are separate; check that their action names agree.
+
+    Every emitted action must return the machine's state type. Widget-specific tests
+    check the resulting values and supply input for forms and pickers.
+    """
     subject = build()
     render = wt.routed(subject)
 
@@ -146,8 +147,7 @@ def test_a_render_encodes_exactly_one_route_per_routed_control(
 def test_an_unknown_action_is_the_identity_rather_than_an_error(
     build: MachineFactory,
 ) -> None:
-    """Discord replays ids from messages that may be older than the current code, so a machine
-    meets actions it no longer has. Ignoring one is recoverable; raising is not."""
+    """Old messages may still carry actions removed from the current machine."""
     subject = build()
     initial = subject.initial_state
 
@@ -170,7 +170,7 @@ def test_a_transition_is_deterministic(build: MachineFactory) -> None:
 @machine
 @given(action=st.text(max_size=40))
 def test_any_string_at_all_is_a_safe_action(build: MachineFactory, action: str) -> None:
-    """The stronger form of the law above, over inputs nobody would think to write down."""
+    """Exercise unknown-action handling with generated strings."""
     subject = build()
     initial = subject.initial_state
 

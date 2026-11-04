@@ -13,11 +13,10 @@ from squid_ui.text import TextLike
 
 @dataclass(frozen=True, slots=True)
 class WindowRequest:
-    """Which way the reader last asked to move, held as component state.
+    """A paging action retained in component state until the resource next loads.
 
-    A request rather than a direct call because the move has to survive until the resource
-    next loads: the control that pressed it returns immediately, and the loader runs under
-    the resource.
+    Handlers record the requested direction and return; the resource performs the I/O.
+    Keeping the request as state lets reactive invalidation trigger that later load.
     """
 
     operation: Literal["refresh", "previous", "next", "seek"] = "refresh"
@@ -26,11 +25,7 @@ class WindowRequest:
 
 @dataclass(frozen=True, slots=True)
 class LoadingCopy:
-    """What a source-backed widget says while its window is in flight or has failed.
-
-    One value rather than three keywords because a host localizes all three together, and
-    a host with several such widgets wants to say it once.
-    """
+    """Localized loading, failure, and retry text shared by source-backed widgets."""
 
     loading: TextLike = "Loading…"
     failed: TextLike = "Could not load entries."

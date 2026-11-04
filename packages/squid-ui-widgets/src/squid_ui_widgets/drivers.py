@@ -1,4 +1,11 @@
-"""The two shells shared by every interactive machine."""
+"""Connect pure widget transitions to local callbacks or routed control IDs.
+
+A machine describes what to show for a state and what state follows an action. Its driver
+supplies the controls that carry actions back: ComponentDriver stores reactive state and
+binds callbacks, while RouteDriver asks the host to encode state into each routed control.
+For example, the same Tabs machine can switch a live component's selection or describe a
+new selected state for a persistent message's route handler.
+"""
 
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -69,7 +76,12 @@ _MISSING_INITIAL_STATE = _MissingInitialState()
 
 
 class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Protocol):
-    """A pure state machine that describes a tree through injected controls."""
+    """A pure state machine that describes a tree through injected controls.
+
+    Transitions must be deterministic and free of side effects: RouteDriver computes
+    button transitions while rendering. Submitted form values must already be parsed
+    and validated by the host's form pipeline.
+    """
 
     @property
     def initial_state(self) -> StateT: ...
@@ -102,7 +114,11 @@ class FormPresentingMachine[StateT, RenderTargetT: RenderTarget = RenderTarget, 
 
 
 class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Protocol):
-    """Control and content construction injected into a pure machine render."""
+    """Control and content construction injected into a pure machine render.
+
+    A mounted form is a layout-level FormTrigger; a routed form is a control that
+    must be placed inside an action-controls container.
+    """
 
     @property
     def chrome(self) -> Chrome: ...
@@ -150,7 +166,16 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
 class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
     Component[RenderTargetT, ContextT]
 ):
-    """Store machine state in ``sl.state`` and inject closure-backed controls."""
+    """Keep machine state in memory and bind controls to transition callbacks.
+
+    State is assigned before ``on_change`` and the action-specific handler run, even when
+    the transition returns unchanged state. The driver opens no transaction itself; a
+    frontend such as MessageRoot can roll back these reactive writes when a callback fails.
+    Direct calls outside a transaction leave the assigned state in place.
+
+    Configured finish actions request closure after both callbacks succeed. Application
+    callbacks own durable persistence and business actions.
+    """
 
     # RouteDriver is the restart boundary; a generic state dataclass has no honest JSON
     # decoder for durable component restoration.
@@ -302,10 +327,15 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
 
 @dataclass(frozen=True, slots=True)
 class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
-    """Inject route-backed controls into a stateless machine render.
+    """Inject routed controls into a stateless machine render.
 
-    A host route decodes ``TransitionRoute.state``, calls :meth:`transition` when the
-    interaction carries input, and replaces the whole message with a fresh render.
+    The host encodes and decodes TransitionRoute.state. A next-phase route already
+    contains the button's resulting state; only input-phase routes need transition
+    with the submitted selection or form values. For forms, the host obtains the
+    schema from form_for and parses the submission before transitioning.
+
+    The host owns authorization, persistence, business callbacks, and replacement
+    of the message with a fresh render. Mounted child components cannot be routed.
     """
 
     route: RouteEncoder[StateT]

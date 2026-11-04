@@ -1,8 +1,9 @@
-"""The two shells themselves: what each injects, and where they deliberately differ.
+"""Run one state machine through ComponentDriver and RouteDriver.
 
-`ComponentDriver` and `RouteDriver` are the whole reason a machine can be written once and run
-both mounted and stateless. Every widget file exercises them incidentally; this one is about
-the shells rather than about any machine.
+The machine asks for controls without choosing how events reach it. ComponentDriver
+attaches handlers to those controls; RouteDriver asks the host to encode transitions
+in routing IDs.
+This probe isolates that wiring from the behavior of individual widgets.
 """
 
 from collections.abc import Mapping
@@ -31,7 +32,7 @@ class Echo(sl.Component[sl.ComponentsV2Target]):
 
 
 class Probe:
-    """A machine that asks its shell for one of everything."""
+    """Request a button, picker, and form from either driver."""
 
     def __init__(self, *, embed: bool = False) -> None:
         self.embed = embed
@@ -46,8 +47,7 @@ class Probe:
         controls: sp.MachineControls[sp.TabsState, sl.ComponentsV2Target],
     ) -> sl.DocumentLike[sl.ComponentsV2Target]:
         content = controls.content([Echo()] if self.embed else [sl.paragraph(state.selected)], prefix="body")
-        # `controls.form` hands back content in one shell and a control in the other, so every
-        # machine in the library branches here exactly like this. See the test below.
+        # Mounted forms are layout nodes; routed forms belong inside action controls.
         trigger = controls.form(_form(), "edit", key="probe.edit", label="Edit")
         return sl.stack(
             *content,
@@ -118,7 +118,7 @@ class TestWhatEachShellInjects:
         assert isinstance(engine.find(nodes, FormTrigger, key="probe.edit"), FormTrigger)
 
     def test_the_routed_shell_injects_id_backed_controls_for_the_very_same_render(self) -> None:
-        """Same machine, same keys, different node types -- that is the whole contract."""
+        """Routing IDs replace handlers without changing the machine's control keys."""
         nodes = wt.routed(Probe()).nodes
 
         assert isinstance(engine.find(nodes, RoutedActionControl, key="probe.go"), RoutedActionControl)
@@ -127,10 +127,12 @@ class TestWhatEachShellInjects:
         assert isinstance(engine.find(nodes, RoutedActionControl, key="probe.edit"), RoutedActionControl)
 
     def test_a_form_trigger_is_content_in_one_shell_and_a_control_in_the_other(self) -> None:
-        """The one place the shells are not interchangeable. A mounted form trigger opens a
-        modal in place, so it is content; a routed one is just a button carrying an id, so it
-        belongs in a control group. Every machine in the library branches on this by hand --
-        `Wizard` included -- and nothing but this test says so."""
+        """Drivers expose forms at different levels of the layout tree.
+
+        ComponentDriver returns a FormTrigger that the frontend can present as a modal.
+        RouteDriver returns a button carrying a routing ID, which needs a control group.
+        Machines that display forms must place each result in the appropriate container.
+        """
         assert isinstance(engine.find(wt.mounted(Probe()).nodes, FormTrigger, key="probe.edit"), FormTrigger)
         assert isinstance(
             engine.find(wt.routed(Probe()).nodes, RoutedActionControl, key="probe.edit"), RoutedActionControl
@@ -147,16 +149,21 @@ class TestWhatEachShellInjects:
 
 class TestRoutePhases:
     def test_a_button_encodes_the_state_its_press_will_produce(self) -> None:
-        """`next`: the transition is deterministic, so the shell applies it up front and the id
-        carries the answer. A restart can then render from the id alone."""
+        """The `next` phase computes the result before the button is pressed.
+
+        No user input is needed, so RouteDriver can encode the resulting state in the ID.
+        A host can decode that state after a restart and render it directly.
+        """
         route = wt.routed(Probe()).route_for("go")
 
         assert route.phase == "next"
         assert route.state == sp.TabsState("went")
 
     def test_a_picker_encodes_the_state_its_selection_applies_to(self) -> None:
-        """`input`: the value arrives with the interaction, so the id cannot carry the result --
-        it carries what the result will be computed from."""
+        """The `input` phase encodes the current state because the choice is not known yet.
+
+        The host applies the transition after the selected values arrive.
+        """
         route = wt.routed(Probe()).route_for("pick")
 
         assert route.phase == "input"

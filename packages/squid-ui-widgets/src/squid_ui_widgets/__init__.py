@@ -1,4 +1,14 @@
-"""Reusable, frontend-neutral state machines."""
+"""Reusable interactions built from layout nodes and component state.
+
+Menu, Tabs, Decision, Wizard, and the editors separate their transition rules from event
+delivery. Call ``build_component`` to keep their state in a ComponentDriver, or use
+RouteDriver to encode state into routed controls for a host to recover on each click.
+Browser, SearchPicker, and SourceRankedList are components that load data through resources;
+Agreement is a component that collects approvals from named participants.
+
+Widget commits accept values within the widget's state. Application callbacks decide how
+to persist those values or perform business actions.
+"""
 
 from squid_ui_widgets import guards
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection

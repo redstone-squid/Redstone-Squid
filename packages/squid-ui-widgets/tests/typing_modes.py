@@ -1,4 +1,4 @@
-"""Pins render-target propagation through widget content and both machine shells.
+"""Check render-target propagation through widget content and both drivers.
 
 Every ignored line is an assertion that the checker rejects a target mismatch. An unused
 suppression means a generic parameter stopped reaching the component or rendered document.

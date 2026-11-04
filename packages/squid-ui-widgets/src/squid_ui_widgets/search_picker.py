@@ -58,7 +58,11 @@ SEARCH_LOADING_COPY = LoadingCopy(failed="Could not load results.")
 
 
 class SearchPicker[ItemT](Component):
-    """Search a windowed domain source and retain the resolved items a reader picks."""
+    """Search a window source and retain picked items across query changes.
+
+    With maximum=1 a new pick replaces the previous one; otherwise picks accumulate.
+    Pick callbacks run after local state changes. The host owns durable persistence.
+    """
 
     query: str | None = state(None)
     picked: tuple[ItemT, ...] = state((), persist=False, opaque=True)
@@ -137,7 +141,7 @@ class SearchPicker[ItemT](Component):
         return _LookupWindow(query, source, loader, loaded)
 
     async def _searched(self, event: SubmitEvent) -> None:
-        """Adopt a submitted query and start a fresh source generation."""
+        """Adopt the trimmed query and request a reload, including for repeated queries."""
         query = str(event.values["query"]).strip()
         self.query = query
         self._request = _LookupRequest(generation=self._request.generation + 1)
@@ -239,9 +243,7 @@ class SearchPicker[ItemT](Component):
         if self.query is None:
             return stack(heading(chrome.search), *self._picked_nodes(), search_control)
 
-        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
-        # Splitting on `previous` in the pattern instead left the match unprovably exhaustive,
-        # so `body` read as possibly unbound on a path that cannot happen.
+        # Match each status before inspecting previous so type checkers can prove exhaustiveness.
         match self.results.status:
             case Ready(value=current):
                 body = self._loaded_nodes(current)

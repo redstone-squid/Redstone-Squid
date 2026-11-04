@@ -1,4 +1,4 @@
-"""Branching Wizard behaviour over the component and router shells."""
+"""Branching Wizard behaviour through ComponentDriver and RouteDriver."""
 
 import pytest
 

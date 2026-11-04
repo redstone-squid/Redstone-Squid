@@ -1,4 +1,4 @@
-"""Staged cross-page selection and explicit commit behaviour."""
+"""Cross-page selection with explicit Apply and immediate commit modes."""
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""A keyed tab machine with component and routed shells."""
+"""Switch among keyed tabs through a ComponentDriver or RouteDriver."""
 
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -35,7 +35,12 @@ class TabsState:
 
 
 class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
-    """A pure keyed tab machine with generic component and router shells."""
+    """Show one tab's content and controls for selecting another.
+
+    TabsState stores the selected tab key; the first tab is the default. Call
+    ``build_component`` for a live component, or render with RouteDriver when the host
+    stores selection in routed control IDs.
+    """
 
     def __init__(
         self,

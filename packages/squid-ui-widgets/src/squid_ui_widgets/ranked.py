@@ -28,7 +28,11 @@ type ContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object
 
 
 class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object]:
-    """Render a fully materialized ranking through either machine shell."""
+    """Page a snapshot of entries in their supplied ranking order.
+
+    Entries are not sorted. top_n caps the snapshot before paging, and page_size=None
+    shows it all. Header and footer callbacks receive the count after the cap.
+    """
 
     def __init__(
         self,

@@ -63,7 +63,7 @@ async def test_the_path_deepens_on_the_way_in_and_home_empties_it() -> None:
 
 
 async def test_closing_finishes_the_shell() -> None:
-    """Close-finishes-the-shell is wired by `Menu.build_component`, not by the bare driver."""
+    """Menu.build_component configures the driver to finish when Close is pressed."""
     harness = wt.driving(_settings().build_component())
 
     await harness.press("settings.close")

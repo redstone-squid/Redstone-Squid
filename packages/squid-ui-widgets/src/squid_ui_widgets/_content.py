@@ -15,18 +15,20 @@ type ContentItem[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] 
 type ContentLike[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
     ContentItem[RenderTargetT, ContextT] | TextLike | Iterable[ContentItem[RenderTargetT, ContextT] | TextLike]
 )
-"""Whatever a caller hands a widget's content slot.
+"""Text, layout nodes, components, or a flat iterable of them.
 
-The render-target parameter survives normalization. A V2-only child therefore makes the
-content slot, its widget, and the component shell V2-only instead of disappearing into
-`AnyLayoutNode` at this boundary.
+The render-target type survives normalization: a V2-only child makes its containing widget
+V2-only as well, so embedding it cannot silently erase that restriction.
 """
 
 
 def normalize_content[RenderTargetT: RenderTarget, ContextT = object](
     value: ContentLike[RenderTargetT, ContextT], *, name: str
 ) -> tuple[ContentItem[RenderTargetT, ContextT], ...]:
-    """Normalize one machine content slot into renderable nodes and child components."""
+    """Normalize text, nodes, components, or a flat iterable into a tuple.
+
+    Iterables are consumed immediately. Mappings and nested iterables are rejected.
+    """
     if isinstance(value, Component):
         return (value,)
     if isinstance(value, str | ResolvedText | Message):
@@ -59,7 +61,7 @@ def _normalize_item[RenderTargetT: RenderTarget, ContextT = object](
 def render_content[RenderTargetT: RenderTarget, ContextT = object](
     owner: Component[RenderTargetT, ContextT], content: Iterable[ContentItem[RenderTargetT, ContextT]], *, prefix: str
 ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
-    """Expand component children under stable embed keys while retaining semantic nodes."""
+    """Embed component children under stable boundary keys and pass layout nodes through."""
     return tuple(
         owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
         for index, item in enumerate(content)
@@ -87,7 +89,7 @@ def slug(value: TextLike) -> str:
 
 
 def display_text(value: object) -> str:
-    """Turn a projected ranking value into display text without exposing dataclass reprs."""
+    """Render text wrappers directly, falling back to str for other values."""
     if isinstance(value, str):
         return value
     if isinstance(value, ResolvedText):

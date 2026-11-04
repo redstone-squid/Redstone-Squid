@@ -1,15 +1,8 @@
-"""The one guard whose refusal is a rendered question.
+"""Ask for confirmation before admitting an action through portable guards.
 
-`squid_ui.guards` is the admission vocabulary and stays portable: it decides whether a
-press is allowed and has no opinion about what a denial looks like. `confirm` is the single
-member that does have one -- its challenge is a `Decision` shell -- so it lives here, beside
-the shells, rather than making the vocabulary import its own rendering.
-
-That inversion is why this module exists. The engine used to reach forward into `machines`
-through a function-local import, with a comment explaining that the vocabulary could not
-depend on the rendering at import time. Moving the guard up removes the edge instead of
-working around it, and `all_of`/`any_of` compose with it exactly as before because they accept
-any `Guard`.
+The guard returns a challenge whose question is a Decision component. It lives with the
+widgets so the core guard vocabulary does not depend on rendering that question. The
+frontend presents it and resumes the original action after approval.
 """
 
 from dataclasses import dataclass
@@ -56,8 +49,7 @@ class _Confirm:
         """Build the private confirmation shell for this challenge."""
 
         async def approved(event: TransitionEvent[DecisionState]) -> None:
-            # Closing first answers the click inside its own deadline, and leaves nothing in
-            # this handler that could fail after the press has been handed on.
+            # Request closure after this callback succeeds, before scheduling the guarded action.
             event.source.finish_on_success()
             await resolver.approve()
 
@@ -80,15 +72,11 @@ def confirm(
     deadline: float | None = 120.0,
     on_decline: TextLike | None = None,
 ) -> Guard:
-    """Admit once the actor reaffirms this press, and ask them when they have not.
+    """Ask the actor to confirm before admitting the guarded action.
 
-    The two-press "are you sure" state machine, declared where the control is rather than
-    hand-rolled in component state: no armed flag, no early return, no relabelling. The
-    first press opens a private confirmation and executes nothing; approving it re-runs the
-    whole funnel, so access lost or a cooldown started while the dialog was open still
-    refuse the press the actor confirmed.
-
-    Put it last in an `all_of`: a chain should not ask a question it is about to deny, and
-    an earlier guard's record is discarded by the pass that ends in the question.
+    Approval reruns the guard chain, including access and cooldown checks that may
+    have changed while the question was open. Place confirm last in all_of so earlier
+    guards can deny without opening a question. A challenged pass discards its writes;
+    the approved pass consumes one confirmation for this actor.
     """
     return _Confirm(prompt, danger, deadline, on_decline)
