@@ -1,4 +1,8 @@
-"""Submission progress participates in durable Discord reconciliation."""
+"""Inference runs and draft changes enqueue Discord status updates.
+
+The public status includes progress and source message IDs, but omits the original
+message content used for inference.
+"""
 
 from dataclasses import replace
 from functools import partial

@@ -1,4 +1,4 @@
-"""Integration coverage for notification opt-ins and fenced DM delivery."""
+"""Notification preferences, inbox visibility, and delivery claim ownership against PostgreSQL."""
 
 from collections.abc import AsyncGenerator
 from dataclasses import replace
@@ -49,8 +49,7 @@ _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
     Base.metadata.tables["account_profiles"],
-    # Replaced `global_administrators` when permissions moved to RBAC; the
-    # notification repository joins it to find who may be notified.
+    # Staff audience discovery reads persistent role assignments and patterns.
     Base.metadata.tables["permission_roles"],
     Base.metadata.tables["permission_role_patterns"],
     Base.metadata.tables["permission_role_assignments"],
@@ -245,6 +244,7 @@ async def test_delivery_claim_selects_most_recent_discord_identity_and_completes
     delivery_id = await _seed_delivery(async_session_factory)
     async with async_session_factory.begin() as session:
         account_id = (await session.scalars(select(Account.id))).one()
+        # Equal verification times exercise the identity-ID tie-breaker.
         verified_at = now()
         existing = (await session.scalars(select(AccountIdentity))).one()
         existing.verified_at = verified_at
@@ -751,16 +751,7 @@ async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The gate moved onto `accounts`; it did not disappear.
-
-    Folding the notification notice left `dm_enabled = true` rows behind whose accounts have not
-    accepted the current privacy notice. The switch survives, because it is the person's stated
-    preference, but nothing may be delivered against it until the notice is accepted -- which is
-    the whole behavioural claim of the migration that dropped the second receipt.
-
-    Seeded through the same helper as the passing case, so the only difference between a delivery
-    that is claimed and one that is not is the account's consent.
-    """
+    """Seed enabled channels and a pending delivery for an account without current consent."""
     await _seed_delivery(async_session_factory, consented=False)
 
     assert await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True) == ()
@@ -770,7 +761,7 @@ async def test_a_consented_account_can_set_channels_without_a_separate_accept_st
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """There is no profile row to create first: accepting the notice is the only precondition."""
+    """Preference updates create the missing notification profile for a consented account."""
     async with async_session_factory.begin() as session:
         account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
         session.add(account)
@@ -793,7 +784,7 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The batched fan-out honours the same per-account gates the single insert did."""
+    """Candidate insertion applies consent and channel preferences for each recipient."""
     async with async_session_factory.begin() as session:
         accounts: dict[str, int] = {}
         for name, consented, web, dm in (

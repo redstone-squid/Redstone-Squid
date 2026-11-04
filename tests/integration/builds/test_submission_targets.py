@@ -217,6 +217,7 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
 async def _claim_submission(
     sessions: async_sessionmaker[AsyncSession], payload: NormalizedSubmission
 ) -> ClaimedFinalizationJob:
+    """Persist a fresh draft and payload, then commit its claim before execution."""
     current = Instant.now()
     draft = StoredDraft(
         DraftSnapshot(
@@ -748,6 +749,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
         sponsor=sponsor,
     )
     finalizations = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    # Delay one job so the pre-merge claim selects only the other draft.
     await transact(
         finalizations,
         lambda uow: uow.finalization_jobs.enqueue(
@@ -826,6 +828,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
             ).all()
         }
 
+    # Execution payloads follow the merged owner; immutable inputs retain the original request.
     pending_job = jobs[pending_draft_id]
     completed_job = jobs[claimed_draft_id]
     assert pending_job.status == FinalizationJobStatus.PENDING.value

@@ -1,16 +1,8 @@
-"""Round-trip coverage pinning the build persistence semantics.
+"""Build persistence and edit-time taxonomy resolution against migrated PostgreSQL.
 
-This is the safety net for the build aggregate redesign. Every test here runs
-against a migrated PostgreSQL database, exercising the real write path
-(`apply_build_taxonomy` + `BuildRepository.save`) and the real read path
-(`BuildLoader.to_domain`), so the one authoritative list of category-specific
-fields is checked in both directions for every category.
-
-Taxonomy names are resolved into tag assignments at edit time by
-``apply_build_taxonomy``, which canonicalizes the typed restriction fields and
-records unresolvable or ambiguous names in ``extra_info``. After it runs,
-save→load is the identity (up to database-generated timestamps), and ``save()``
-itself persists ``build.tags`` verbatim without interpreting the string fields.
+Resolve taxonomy names before saving: known names become tag assignments, while unknown or
+ambiguous names are retained in extra_info. Compare saved and reloaded category fields,
+including the relationships and enum types that ordinary scalar equality can miss.
 """
 
 # ruff: noqa: RUF001, RUF002  The case-folding regression below is about confusable
@@ -42,7 +34,7 @@ from squid.versions.models import Version
 from tests.support.unit_of_work import transact
 
 # Canonical display names of the official taxonomy seeded below, one per
-# restriction bucket plus two patterns. Tests that expect a clean round trip
+# restriction type plus two patterns. Tests that expect a clean round trip
 # must draw restriction/pattern names from these.
 KNOWN_RESTRICTIONS = {
     "wiring-placement": "Seamless",
@@ -207,8 +199,7 @@ def _make_build(category: BuildCategory, account_id: int) -> Build:
     return BUILD_CLASS_BY_CATEGORY[category](**common)
 
 
-# Fields whose lists are rebuilt from tag rows on read; ordering is not part of
-# the contract, so they compare as sets.
+# Compare relationship-derived lists without requiring the database to preserve input order.
 _SET_COMPARED = {
     "wiring_placement_restrictions",
     "animated_restrictions",
@@ -218,10 +209,8 @@ _SET_COMPARED = {
     "creators_ign",
     "links",
 }
-# The ORM fills submission_time at insert (default_factory=now), so a None on the
-# domain object does not survive the trip. edited_time is no longer excluded:
-# save() stamps it at storage precision, so the caller's in-memory value and the
-# stored one are the same value.
+# Require a submission timestamp without comparing its initial value. edited_time
+# is compared normally: save() stamps the supplied build at storage precision.
 _DB_GENERATED = {"submission_time"}
 # Compared structurally below rather than by dataclass equality.
 _TAG_FIELDS = {"tags"}
@@ -324,13 +313,10 @@ async def test_attachment_enrichment_evidence_round_trips_as_nested_json(
 async def test_loaded_status_is_a_status_member(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A loaded build's status must be the enum member, not the integer behind it.
+    """Check identity as well as equality: Status is an IntEnum.
 
-    The round trip above cannot catch this: `Status` is an `IntEnum`, so a bare `0`
-    read back from the `SmallInteger` column compares equal to `Status.PENDING` and
-    every field-for-field assertion passes. The callers that broke are the ones that
-    ask for something only a member has -- `.name` in the search projection, and the
-    `is Status.CONFIRMED` identity checks guarding the public catalogue.
+    A stored integer compares equal to its enum member but lacks .name and fails
+    identity checks used by callers.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
@@ -353,11 +339,7 @@ async def test_loaded_status_is_a_status_member(
 async def test_persisting_a_build_creates_no_account(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The repository used to mint an account from a snowflake when none was supplied.
-
-    That was the last identity-creating path outside the accounts context, and it ran
-    from a persistence layer with no evidence anybody had asked to be remembered.
-    """
+    """Saving a build for an existing account must not create accounts or identities."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     async with migrated_session_factory() as session:
@@ -385,7 +367,6 @@ async def test_update_round_trip_preserves_category_fields(
     migrated_session_factory: async_sessionmaker[AsyncSession],
     category: BuildCategory,
 ) -> None:
-    """The update path (`_update_existing`) copies the same field lists as insert."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
@@ -466,11 +447,7 @@ async def test_source_messages_round_trip(
 async def test_one_message_can_source_several_builds(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A build-log message that yields a bundle links to every build it produced.
-
-    The replaced `builds.original_message_id` could only name one build per message,
-    so half a bundle's provenance was silently dropped.
-    """
+    """A build-log message can supply provenance for every build in a submission bundle."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     shared = SourceMessage(message_id=8000, guild_id=4000, channel_id=5000, author_id=7000, content="two doors")
@@ -511,8 +488,8 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
         build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     )
 
-    # The unresolvable name moved into extra_info before anything was saved,
-    # and the typed field was canonicalized, so save→load stays the identity.
+    # Retain the unrecognized name in extra_info and remove it from the resolved
+    # restriction list before saving, so reloading preserves both representations.
     assert build.extra_info.get("unknown_restrictions") == {"component_restrictions": ["Imaginary Component"]}
     assert build.component_restrictions == []
 
@@ -545,7 +522,7 @@ async def test_ambiguous_restriction_is_recorded_as_unknown(
 async def test_save_persists_tags_verbatim_without_mutating_input(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The repository no longer interprets the restriction string fields."""
+    """Saving alone does not resolve restriction names or supply a default pattern."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
@@ -553,8 +530,8 @@ async def test_save_persists_tags_verbatim_without_mutating_input(
     build.patterns = []
     await transact(repository, lambda uow: uow.builds.save(build), commit=True)
 
-    # Without apply_build_taxonomy, the strings are not resolved, no default
-    # pattern is injected, and the input is not mutated.
+    # Saving does not interpret the restriction names or add a default pattern;
+    # those changes belong to apply_build_taxonomy.
     assert build.patterns == []
     assert build.tags == []
 
@@ -591,12 +568,7 @@ async def test_apply_build_taxonomy_defaults_door_pattern(
 async def test_replacing_links_of_one_media_type_moves_a_shared_url(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The schema keys links by (build_id, url), and the model now matches it.
-
-    Under the five parallel url lists a caller could place one URL under two
-    media types, a state the database rejected only at save time. With a single
-    typed collection, re-adding the URL as a video simply moves it.
-    """
+    """Links are keyed by (build_id, url), so assigning another media type moves the URL."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
@@ -616,12 +588,7 @@ async def test_replacing_links_of_one_media_type_moves_a_shared_url(
 async def test_door_dimension_defaults_are_declared_not_coerced_at_save(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Door dimensions default on the entity, so save has nothing to coerce.
-
-    They used to be optional on the flat model and were silently forced to 1x2
-    during the write; DoorBuild declares them as required ints with those
-    defaults instead.
-    """
+    """Check door dimension defaults before saving as well as after reloading."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
@@ -707,10 +674,10 @@ async def test_round_trip_property(
     seeded_factory: tuple[async_sessionmaker[AsyncSession], int],
     values: tuple[BuildCategory, dict[str, object]],
 ) -> None:
-    """Any build drawn from resolvable taxonomy survives save→load intact.
+    """Compare each generated build after taxonomy resolution and save.
 
-    Examples share one migrated database per test run; every example inserts a
-    fresh row, so state never leaks between examples.
+    Examples share the seeded catalogue and database, but each inserts and reads
+    its own build row.
     """
     session_factory, account_id = seeded_factory
     repository = partial(SqlAlchemyUnitOfWork, session_factory)
@@ -733,16 +700,10 @@ async def test_round_trip_property(
 async def test_repeat_credit_of_a_case_folding_name_resolves_to_one_alias(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Regression: a second build crediting `ΣΣ` used to raise NoResultFound.
+    """Repeat lookup must use the same Unicode fold as alias insertion.
 
-    `_get_or_create_aliases` looked the name up by a Python fold, inserted on a miss, and
-    re-selected by that same fold when the insert hit a conflict. While Postgres computed
-    the stored fold itself the two disagreed — Python `lower` gave `σς`, SQL `lower` gave
-    `σσ` — so the insert conflicted on a row the re-select could not see and `.scalar_one()`
-    raised. Both sides now use `fold_creator_name`.
-
-    `Σς` is credited last to pin the other half: the two spellings are one creator, which
-    the retired SQL fold got wrong in the opposite direction by storing them separately.
+    Python casefold maps both sigma spellings to σσ. Lowercasing can retain final
+    sigma, causing a lookup miss followed by a uniqueness conflict.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
