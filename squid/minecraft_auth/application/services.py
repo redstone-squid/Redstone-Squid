@@ -1,4 +1,19 @@
-"""Paper installation credentials and player device authorization flows."""
+"""Authorize Minecraft clients to act for a verified Java identity.
+
+A Paper installation represents a server plugin registered by a Squid account.
+Its credential authenticates the server, but a separate player grant is needed
+to act for a player. Fabric is a client-side mod and obtains player grants
+without a server installation credential.
+
+Both player flows start a temporary authorization challenge for a Java UUID.
+The player approves its user code through an authenticated account that owns
+that verified UUID. The initiating client exchanges its secret device code for
+a short-lived player token. Paper also proves the same installation credential;
+Fabric supplies the PKCE verifier whose hash it gave when starting the challenge.
+
+A credential version identifies one installation secret. Rotating that secret
+advances the version and invalidates challenges and grants bound to the old one.
+"""
 
 import hmac
 from collections.abc import Callable
@@ -97,7 +112,7 @@ class InstallationCredentialService:
             return result
 
     async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
-        """Fence all old credentials and grants, then disclose one replacement secret."""
+        """Replace the installation secret and invalidate its outstanding challenges and grants."""
         async with self._uow_factory() as uow:
             secret = self._codec.random_secret()
             installation = await uow.minecraft_authorization.rotate_installation(
@@ -129,7 +144,11 @@ class InstallationCredentialService:
             return installation
 
     async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
-        """List an account's installations without exposing credential digests."""
+        """List the account's installations, including revoked entries, oldest first.
+
+        Returned models contain credential digests. Use a response projection before
+        sending them to a client.
+        """
         async with self._uow_factory() as uow:
             return await uow.minecraft_authorization.list_installations(owner_account_id)
 
@@ -181,7 +200,11 @@ class InstallationCredentialService:
         installation_id: str | None,
         installation_secret: str | None,
     ) -> AuthenticatedPaperInstallation:
-        """Authenticate opaque Paper credential headers as one indistinguishable credential."""
+        """Authenticate a Paper installation ID and secret supplied as separate headers.
+
+        Malformed, missing, and incorrect values all raise
+        InvalidInstallationCredentialError.
+        """
         if installation_id is None or installation_secret is None:
             raise InvalidInstallationCredentialError
         if not MIN_INSTALLATION_ID_CHARS <= len(installation_id) <= MAX_INSTALLATION_ID_CHARS:
@@ -206,7 +229,13 @@ class InstallationCredentialService:
 
 
 class PlayerAuthorizationService:
-    """Approve exact Java identities and issue fenced, origin-bound player grants."""
+    """Issue short-lived grants for verified Java identities through Paper or Fabric.
+
+    Approval and authentication check account consent and ownership of the Java
+    UUID. Paper grants also belong to one installation credential version, so
+    rotating that credential invalidates earlier grants. Fabric exchanges require
+    the verifier for the challenge supplied at the start of authorization.
+    """
 
     def __init__(
         self,
@@ -236,7 +265,7 @@ class PlayerAuthorizationService:
         installation: AuthenticatedPaperInstallation,
         java_uuid: UUID,
     ) -> IssuedPlayerChallenge:
-        """Start a challenge bound to an authenticated Paper credential generation."""
+        """Start a challenge bound to an authenticated Paper credential version."""
         return await self._start_challenge(
             origin=MinecraftClientOrigin.PAPER,
             java_uuid=java_uuid,
@@ -260,7 +289,7 @@ class PlayerAuthorizationService:
         )
 
     async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
-        """Approve only when the exact verified Java UUID belongs to a currently consenting account."""
+        """Approve a challenge only if the account owns its verified Java UUID and passes the consent gate."""
         async with self._uow_factory() as uow:
             normalized_code = self._codec.normalize_user_code(user_code)
             if not normalized_code:
@@ -290,7 +319,7 @@ class PlayerAuthorizationService:
         device_code: str,
         installation: AuthenticatedPaperInstallation,
     ) -> IssuedPlayerGrant:
-        """Exchange an approved Paper challenge on the same authenticated installation generation."""
+        """Exchange an approved Paper challenge on the same authenticated installation credential version."""
         async with self._uow_factory() as uow:
             challenge = await self._challenge_for_exchange(uow, device_code)
             if (
@@ -322,7 +351,7 @@ class PlayerAuthorizationService:
         token: str,
         installation: AuthenticatedPaperInstallation,
     ) -> MinecraftPlayerContext:
-        """Authenticate a Paper player token only on its bound server credential generation."""
+        """Authenticate a Paper player token only on its bound installation credential version."""
         async with self._uow_factory() as uow:
             context, grant = await self._authenticate(uow, token)
             if (
@@ -463,6 +492,11 @@ class PlayerAuthorizationService:
     async def _authenticate(
         self, uow: MinecraftAuthorizationUnitOfWork, token: str
     ) -> tuple[MinecraftPlayerContext, PlayerGrant]:
+        """Check the token, grant lifetime, current consent, and continued Java ownership.
+
+        Unlinking the Java identity invalidates existing grants even before they expire.
+        Transport-specific checks run in the public authentication methods.
+        """
         parsed = self._codec.parse_player_token(token)
         if parsed is None:
             raise InvalidPlayerTokenError

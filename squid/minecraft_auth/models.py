@@ -167,7 +167,7 @@ class PlayerAuthorizationChallenge(Base, kw_only=True):
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
     def is_expired_at(self, instant: Instant) -> bool:
-        """Return whether the challenge can no longer be approved or exchanged."""
+        """Return whether the challenge expiry time has passed, regardless of approval or exchange."""
         return self.expires_at <= instant
 
 

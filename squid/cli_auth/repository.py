@@ -24,13 +24,26 @@ from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, Cl
 
 
 class PostgresCliAuthorizationRepository:
-    """Persist CLI credentials with transactional one-time consumption."""
+    """Store CLI credentials and consume challenges in the caller's transaction.
+
+    Approval records the account selected in the browser. Exchange consumes that
+    approval and creates or reuses a device for its public key, then stores a
+    bearer session. Later challenge exchanges create more sessions for that device.
+
+    Row locks make approval, exchange, and revocation take turns, so an enrollment
+    or challenge cannot issue two sessions through concurrent exchanges.
+    CliAuthorizationService commits the unit of work; methods here only flush.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
     async def add_enrollment(self, enrollment: CliDeviceEnrollment, *, max_active: int) -> CliDeviceEnrollment:
-        """Insert an enrollment after serializing the per-client active limit."""
+        """Insert an enrollment without exceeding the client's active-enrollment limit.
+
+        The advisory lock covers both counting and insertion, so concurrent requests
+        for the same client instance cannot each consume the last available slot.
+        """
         session = self._session()
         await session.execute(select(func.pg_advisory_xact_lock(_uuid_lock_key(enrollment.client_instance_id))))
         active = await session.scalar(
@@ -96,7 +109,12 @@ class PostgresCliAuthorizationRepository:
         session: CliSession,
         exchanged_at: Instant,
     ) -> tuple[CliDevice, CliSession]:
-        """Consume browser approval and create its device session atomically."""
+        """Consume approval and create a session for the enrolled public key.
+
+        Reuse an active device with the same key and owner, updating its label and
+        client instance. Reject a key owned by another account or a revoked device.
+        The public-key advisory lock also serializes concurrent first enrollments.
+        """
         db = self._session()
         record = await db.get(CliDeviceEnrollment, enrollment_id, with_for_update=True)
         if (
@@ -165,7 +183,7 @@ class PostgresCliAuthorizationRepository:
         return record
 
     async def get_device(self, device_id: UUID) -> CliDevice | None:
-        """Return one device without sessions or private account data."""
+        """Return the device, including its owner ID and revocation state, or None."""
         session = self._session()
         return await session.get(CliDevice, device_id)
 
@@ -201,7 +219,7 @@ class PostgresCliAuthorizationRepository:
         return device, record
 
     async def get_session_with_device(self, session_id: UUID) -> tuple[CliSession, CliDevice] | None:
-        """Load one session and its active-state authority source."""
+        """Load a session and its device; the caller checks their validity and revocation."""
         session = self._session()
         row = (
             await session.execute(

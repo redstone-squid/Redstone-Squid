@@ -1,4 +1,16 @@
-"""Browser-session orchestration over any authorization-code identity provider."""
+"""Turn an external provider login into a local browser session.
+
+Starting a login stores OAuth state: a one-time identifier linking the callback
+to its chosen provider, a PKCE verifier used to redeem the authorization code,
+and the requested redirect. The provider receives the verifier's hash as its
+challenge; the verifier stays here until the callback.
+
+The callback exchanges the code for a verified provider identity and finds or
+creates its Squid account. It then issues a random browser-session token whose
+digest is stored locally. The API route puts the token in the browser cookie;
+subsequent requests authenticate that local session without contacting the
+provider again. Revoking it therefore does not require a provider logout.
+"""
 
 import base64
 import hashlib
@@ -16,12 +28,10 @@ from squid.unit_of_work import UnitOfWorkFactory
 
 
 def hash_web_session_token(pepper: bytes, token: str) -> bytes:
-    """Return the digest stored for an opaque web-session token.
+    """Return the HMAC-SHA256 digest stored for a browser-session token.
 
-    Exported so test fixtures seeding `web_sessions` reuse the construction
-    instead of re-deriving it. `docs/credential-hashing.md` records why a keyed
-    SHA-256 is right for a `token_urlsafe(32)` secret and why a password KDF is
-    not.
+    Tokens contain 32 random bytes. The deployment pepper is kept outside the
+    database; see `docs/credential-hashing.md` for the hashing rationale.
     """
     # codeql[py/weak-sensitive-data-hashing]
     return hmac.digest(pepper, token.encode(), hashlib.sha256)  # 256-bit random session token
@@ -47,11 +57,15 @@ class WebSessionService:
 
     @property
     def configured(self) -> bool:
-        """Whether this deployment can log anybody in at all."""
+        """Return whether at least one login provider is configured."""
         return bool(self._providers)
 
     async def authorize_url(self, slug: str, redirect_to: str | None) -> str:
-        """Persist one-time PKCE state and return the provider's authorize URL."""
+        """Store a ten-minute login attempt and return the provider's authorization URL.
+
+        `redirect_to` is retained for the callback. The API route must validate it
+        before calling this method; the service does not restrict redirect targets.
+        """
         async with self._uow_factory() as uow:
             provider = self._provider(slug)
             state = secrets.token_urlsafe(24)
@@ -71,7 +85,12 @@ class WebSessionService:
             return result
 
     async def callback(self, slug: str, code: str, state: str, *, user_agent: str | None) -> tuple[str, str | None]:
-        """Consume state, exchange the code, and issue an opaque session token."""
+        """Consume OAuth state, exchange the code, and return a session token and redirect.
+
+        State consumption commits before contacting the provider. A provider mismatch
+        or failed exchange therefore spends the state, and the browser must start a
+        new login. Account creation and session issuance share a second transaction.
+        """
         provider = self._provider(slug)
         async with self._uow_factory() as uow:
             saved = await uow.web_sessions.consume_state(state, now=self._now())
@@ -80,9 +99,7 @@ class WebSessionService:
             msg = "OAuth state is invalid or expired."
             raise AuthenticationError(msg)
         if saved.provider is not provider.provider:
-            # A state minted for provider A must not be redeemable at provider B's
-            # callback: that is the IdP mix-up class, and the state is already spent by
-            # the time we get here, so the only thing left to do is refuse.
+            # Bind the callback to the provider chosen when login started.
             msg = "OAuth state was issued for a different provider."
             raise AuthenticationError(msg)
         identity = await provider.fetch_identity(code=code, code_verifier=saved.code_verifier)
@@ -100,12 +117,14 @@ class WebSessionService:
             return token, saved.redirect_to
 
     async def authenticate(self, token: str):
+        """Return an active session identity and record its use, or None if invalid."""
         async with self._uow_factory() as uow:
             result = await uow.web_sessions.authenticate(self.hash_token(token), now=self._now())
             await uow.commit()
             return result
 
     async def logout(self, token: str) -> None:
+        """Revoke the matching session, doing nothing if the token is unknown."""
         async with self._uow_factory() as uow:
             await uow.web_sessions.revoke(self.hash_token(token), now=self._now())
             await uow.commit()
@@ -114,10 +133,10 @@ class WebSessionService:
         return hash_web_session_token(self._pepper, token)
 
     def _provider(self, slug: str) -> OAuthProvider:
-        """Resolve a URL segment, or say the login does not exist here.
+        """Return a configured provider by URL slug.
 
-        A 404 rather than a credential failure: "this deployment has no GitHub login" is
-        a fact about the resource, not about who is asking.
+        Raise ValidationError when browser login is disabled, or NotFoundError when
+        login is enabled but the requested provider is absent.
         """
         if not self._providers:
             msg = "Browser login is not configured."

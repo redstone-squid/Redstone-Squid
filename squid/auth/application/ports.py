@@ -15,7 +15,12 @@ from squid.unit_of_work import UnitOfWork
 
 
 class WebSessionRepository(Protocol):
-    """Persistence required for OAuth state and opaque browser sessions."""
+    """Store pending OAuth logins and the local browser sessions they create.
+
+    Consuming state removes one login attempt so its callback cannot be reused.
+    Session authentication returns the linked account and current consent status.
+    WebSessionService commits these operations through its unit of work.
+    """
 
     async def save_state(self, state: OAuthState) -> None: ...
 

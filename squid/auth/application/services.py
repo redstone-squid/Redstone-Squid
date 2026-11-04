@@ -25,21 +25,29 @@ LAST_USED_WRITE_INTERVAL_SECONDS = 60
 
 
 def hash_api_key_secret(pepper: bytes, secret: str) -> bytes:
-    """Return the digest stored for an API-key secret.
+    """Return the HMAC-SHA256 digest stored for an API-key secret.
 
-    Exported so nothing re-derives the construction by hand; test fixtures that
-    seed `api_keys` rows call this rather than repeating the `hmac.digest` line.
-    See `docs/credential-hashing.md` for why a keyed SHA-256 rather than a
-    password KDF: the secret is 32 CSPRNG bytes, so there is no low-entropy
-    input space for a work factor to protect, and a KDF here would be reachable
-    per-request by anyone who has seen a key ID.
+    Issued secrets contain 32 random bytes. The deployment pepper is the HMAC key
+    and stays outside the database. Authentication hashes the presented secret
+    and compares it with the stored digest; the digest itself is not a token.
+    See `docs/credential-hashing.md` for the choice of digest over a password KDF.
     """
     # codeql[py/weak-sensitive-data-hashing]
     return hmac.digest(pepper, secret.encode(), hashlib.sha256)  # 256-bit random secret, not a password
 
 
 class ApiKeyService:
-    """Issue and verify high-entropy service credentials."""
+    """Issue API keys for service clients and authenticate their bearer tokens.
+
+    A token contains a public key ID for lookup and a random secret for proof.
+    Only the secret's keyed digest is stored, so issuance is the one opportunity
+    to retrieve the complete token. Successful authentication returns the stored
+    key, including its owner and permission-pattern scopes.
+
+    Scopes limit which operations the credential may perform. The API's
+    caller_allows also checks the owner's current permissions on each request;
+    authentication here establishes the credential, not permission for an action.
+    """
 
     def __init__(
         self,
@@ -68,17 +76,12 @@ class ApiKeyService:
         created_by_account_id: int | None = None,
         expires_at: Instant | None = None,
     ) -> IssuedApiKey:
-        """Create a credential, returning its plaintext token exactly once.
+        """Create a credential and return its plaintext token once.
 
-        A key may never carry authority its owner does not hold: that is AWS's
-        permissions-boundary rule, and enforcing it here as well as at request
-        time means an over-broad key cannot be *created* and then quietly wait
-        for its owner to be promoted.
-
-        Raises `InvalidPatternError` for a malformed pattern. Parsing happens
-        before the boundary check rather than inside it, because the boundary
-        check is skipped on the CLI bootstrap path -- which is how
-        `buildsubmission.raed` used to reach the database and match nothing.
+        All scope strings are parsed before persistence. When a permission service
+        and owner are supplied, reject scopes that reach nodes the owner does not
+        currently hold. Ownerless keys and services without permission checks skip
+        that boundary check; their callers must authorize issuance.
         """
         async with self._uow_factory() as uow:
             requested = frozenset(
@@ -103,12 +106,10 @@ class ApiKeyService:
     async def _reject_beyond_owner_authority(
         self, uow: ApiKeyUnitOfWork, patterns: frozenset[Pattern], owner_account_id: int | None
     ) -> None:
-        """Refuse patterns reaching nodes the owner does not hold.
+        """Reject scopes that reach permission nodes the owner does not hold.
 
-        Skipped when no permission service is wired in, which is the CLI
-        bootstrap path that runs before any owner exists; and an ownerless key is
-        bounded only by its own patterns, since there is nobody to intersect
-        with.
+        Skip the check for ownerless keys or when no permission service is supplied,
+        such as during CLI bootstrap.
         """
         if self._permissions is None or owner_account_id is None:
             return

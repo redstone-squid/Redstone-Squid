@@ -29,11 +29,7 @@ def _identity_context(
     provider: IdentityProvider | None,
     subject: str | None,
 ) -> dict[str, JSONValue]:
-    """Describe whichever identity the caller was known by.
-
-    Every namespace is named explicitly, so an error raised for a CLI device or a
-    Minecraft player says which one it means rather than implying Discord by omission.
-    """
+    """Return available account and provider identifiers for internal error context."""
     context: dict[str, JSONValue] = {}
     if account_id is not None:
         context["account_id"] = account_id
@@ -86,12 +82,7 @@ class AccountIdentityNotFoundError(NotFoundError):
 
 
 class LastIdentityError(ConflictError):
-    """Unlinking the account's only identity would leave nobody able to sign in.
-
-    Nothing else can re-attach an identity to an orphaned account: every sign-in path starts from
-    a provider subject and looks the account up by it. Deleting the account is a different
-    operation with different consequences for build credit, so this refuses rather than guessing.
-    """
+    """Unlinking would leave the account without a sign-in identity."""
 
     default_message = tr(t"You cannot unlink your only remaining identity.")
     default_title = tr(t"Last identity")
@@ -124,7 +115,7 @@ class InvalidMergeCodeError(ValidationError):
 
 
 class InvalidMergeProofError(ValidationError):
-    """Both accounts were not authenticated recently enough for a merge."""
+    """The merge names the same account twice or lacks recent proof for both accounts."""
 
     default_message = tr(t"Both accounts must be authenticated again before they can be merged.")
     default_title = tr(t"Recent account proof required")
@@ -143,11 +134,7 @@ class InvalidVerificationCodeError(ValidationError):
 
 
 class LinkReservationExpiredError(ValidationError):
-    """A held verification code lapsed before its consent prompt was answered.
-
-    Distinct from `InvalidVerificationCodeError` on purpose: the code was correct, and telling
-    someone their good code was invalid sends them to fetch a new one for the wrong reason.
-    """
+    """The reservation token no longer matches a live hold on the verification code."""
 
     default_message = tr(t"The linking prompt expired before you answered it.")
     default_title = tr(t"Prompt expired")
@@ -157,13 +144,10 @@ class LinkReservationExpiredError(ValidationError):
 
 
 class VerificationAttemptsExhaustedError(RateLimitedError):
-    """Too many consecutive verification codes were refused for one identity.
+    """An external identity has reached the wrong-code limit.
 
-    A `RateLimitedError`, so the API answers 429 with `Retry-After` and the bot renders the wait
-    without any transport-specific handling. The lockout exists because a correct guess links
-    somebody else's Minecraft account to the guesser, which is identity takeover rather than a
-    nuisance: the code is the whole binding, and the redemption never mentions the UUID it was
-    issued for.
+    The API exposes this as a rate-limit response with Retry-After. The restriction
+    limits guessing at codes that can link someone else's Minecraft identity.
     """
 
     default_message = tr(t"Too many incorrect verification codes.")
@@ -240,7 +224,7 @@ class StaleConsentNoticeError(ConflictError):
 
 
 class CreatorAliasNotFoundError(NotFoundError):
-    """No build credits a creator under the requested name."""
+    """No creator alias exists with the requested normalized name."""
 
     default_message = tr(t"No build credits a creator by that name.")
     default_title = tr(t"Creator name not found")
@@ -271,10 +255,8 @@ class CreatorNotFoundError(NotFoundError):
 class AliasAlreadyClaimedError(ConflictError):
     """A creator name is already credited to an account.
 
-    Carries *which* creator holds it, not just that somebody does. A creator profile is public data —
-    `GET /v1/creators/{creator_id}` serves it unauthenticated — so naming the holder discloses
-    nothing that was private, and without it the error tells the affected user nothing they can act
-    on. The internal account ID stays in `context`, which is log-only.
+    Public context may identify the holder by public creator ID and display name.
+    The internal account ID remains in diagnostic context.
     """
 
     default_message = tr(t"That creator name is already claimed by another account.")

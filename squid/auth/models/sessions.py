@@ -1,4 +1,10 @@
-"""SQLAlchemy web-session and OAuth state models."""
+"""Store pending provider logins separately from authenticated browser sessions.
+
+OAuthState holds the provider, PKCE verifier, redirect, and expiry until the
+callback consumes it. WebSession is the resulting local login: it references an
+account and stores a digest of the random cookie token, never that token itself.
+The session UUID identifies the database row and is not the browser credential.
+"""
 
 import uuid
 

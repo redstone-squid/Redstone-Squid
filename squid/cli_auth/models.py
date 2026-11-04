@@ -58,7 +58,7 @@ class CliDeviceEnrollment(Base, kw_only=True):
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
     def is_expired_at(self, instant: Instant) -> bool:
-        """Return whether this enrollment can no longer be used."""
+        """Return whether the enrollment expiry time has passed, regardless of other state."""
         return self.expires_at <= instant
 
 
@@ -134,7 +134,7 @@ class CliSessionChallenge(Base, kw_only=True):
     consumed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
     def is_expired_at(self, instant: Instant) -> bool:
-        """Return whether this challenge can no longer be consumed."""
+        """Return whether the challenge expiry time has passed, regardless of consumption."""
         return self.expires_at <= instant
 
 

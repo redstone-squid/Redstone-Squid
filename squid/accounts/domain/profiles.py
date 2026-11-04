@@ -1,12 +1,8 @@
-"""Public creator profiles: what an account chooses to show, and what it hides.
+"""Creator profile content and visibility rules.
 
-from squid.accounts.models import AccountProfile
-A profile is presentation, deliberately separate from `CreatorAlias`, which is build credit.
-Renaming yourself here moves no credit and needs no staff review; the public page shows both, so
-attribution never depends on what somebody calls themself this week.
-
-Visibility lives here rather than in the API layer because three transports read it. The one
-authority is `present_public_profile`: everything else stores flags.
+Profile text is separate from CreatorAlias build credit. Changing a display name
+does not move credit. present_public_profile applies visibility before a profile
+is exposed through any transport.
 """
 
 import unicodedata
@@ -23,7 +19,7 @@ from squid.core.i18n import tr
 from squid_ui.text import Message
 
 MAX_PROFILE_LINKS: Final = 10
-"""Links per profile. A profile is an introduction, not a link tree."""
+"""Maximum number of external links on one profile."""
 
 MAX_LINK_LABEL_LENGTH: Final = 32
 MAX_LINK_URL_LENGTH: Final = 2048
@@ -32,8 +28,8 @@ MAX_BIO_LENGTH: Final = 500
 MAX_PRONOUNS_LENGTH: Final = 40
 
 PROFILE_LINK_SCHEMES: Final = frozenset({"https"})
-"""Only `https`. `http` invites a downgrade on a link we render for other people, and every
-other scheme (`javascript:`, `data:`) is an attack looking for a renderer that forgets to escape."""
+"""Allowed schemes for public links. HTTPS excludes script and data URLs as well as
+unencrypted navigation."""
 
 JAVA_AVATAR_URL_TEMPLATE: Final = "https://mc-heads.net/avatar/{subject}"
 """Java heads derive from the UUID alone, so they need nothing stored."""
@@ -42,18 +38,19 @@ DISCORD_AVATAR_URL_TEMPLATE: Final = "https://cdn.discordapp.com/avatars/{subjec
 """Discord needs the avatar hash, which only the gateway knows: see `AccountIdentity.avatar_key`."""
 
 MERGE_CODE_BYTES: Final = 5
-"""40 bits, rendered as 8 base32 characters. Short enough to retype across two sessions, and
-guessing is bounded well before entropy matters: one live ticket per account, route rate limits,
-and a ten-minute expiry."""
+"""Random bytes in a merge code, rendered as eight base32 characters.
+
+The short code is intended for typing between sessions. One live ticket per
+account, expiry, and route rate limits restrict guessing."""
 
 MERGE_TICKET_TTL_SECONDS: Final = 10 * 60
-"""Deliberately equal to `MERGE_PROOF_MAX_AGE_SECONDS`, so a ticket is redeemable for exactly as
-long as the proof it stands for is accepted. Two windows that could disagree would be a bug
-waiting for someone to tune one of them."""
+"""Lifetime of a merge ticket, matching MERGE_PROOF_MAX_AGE_SECONDS.
+
+Ticket creation supplies the absorbed account's proof timestamp during a merge."""
 
 
 def _reject_control_characters(value: str, *, field_name: str | Message, allow_newlines: bool = False) -> None:
-    """Refuse characters that would let profile text escape whatever renders it."""
+    """Reject Unicode control and format characters, optionally allowing line breaks."""
     for character in value:
         if character in "\n\r" and allow_newlines:
             continue
@@ -65,11 +62,7 @@ def _reject_control_characters(value: str, *, field_name: str | Message, allow_n
 def _normalize_text(
     value: str | None, *, field_name: str | Message, limit: int, allow_newlines: bool = False
 ) -> str | None:
-    """Normalize one free-text profile field, returning `None` when it is effectively empty.
-
-    Empty and absent are the same thing for profile text: somebody who clears their bio wants it
-    gone, not stored as `""` for every reader to special-case.
-    """
+    """Normalize Unicode and trim a profile field; return None for blank or missing text."""
     if value is None:
         return None
     normalized = unicodedata.normalize("NFKC", value).strip()
@@ -152,11 +145,10 @@ class ProfileUpdate:
         )
 
     def validated(self) -> ProfileUpdate:
-        """Return this update with every present field normalized, or raise `ValidationError`.
+        """Return an update with supplied text and links normalized and validated.
 
-        Normalization is the domain's job for the same reason `fold_creator_name` is: the API, the
-        bot, and any future importer must agree on what "the same display name" means, and three
-        transports normalizing independently is three chances to disagree.
+        Omitted fields remain UNSET. Empty text becomes None; links are re-parsed so
+        constructing a ProfileLink directly cannot bypass URL validation.
         """
         changes: dict[str, object] = {}
         if not isinstance(self.display_name, _Unset):
@@ -205,11 +197,7 @@ class CreditedAlias:
 
 @dataclass(frozen=True, slots=True)
 class PublicIdentity:
-    """The public projection of a linked identity.
-
-    Carries no `verified_at` and no internal id: when it was verified is nobody else's business,
-    and the id is the handle used to *change* the identity.
-    """
+    """Public provider identity details, without verification times or internal row IDs."""
 
     provider: IdentityProvider
     subject: str
@@ -218,10 +206,9 @@ class PublicIdentity:
 
 @dataclass(frozen=True, slots=True)
 class CreatorProfileRecord:
-    """Everything persistence knows about one creator, before visibility is applied.
+    """A creator's profile, identities, and credits before visibility is applied.
 
-    Deliberately unfiltered: `present_public_profile` is the single place that decides what a
-    stranger sees, and it can only be the single place if it is handed the whole truth.
+    Pass through present_public_profile before exposing this record publicly.
     """
 
     public_id: UUID
@@ -269,11 +256,11 @@ def avatar_url_for(identity: AccountIdentity) -> str | None:
 
 
 def present_public_profile(record: CreatorProfileRecord) -> PublicCreatorProfile:
-    """Apply visibility to *record*, producing what an anonymous reader may see.
+    """Return the public view of a creator profile.
 
-    Hiding a profile degrades it to aliases and credits rather than removing it. Build credit is a
-    fact about a build, and a creator page that vanished would strand every build crediting it;
-    what hiding withholds is the person behind the name, not the name.
+    A hidden profile still exposes its public ID, aliases, and build counts so
+    build attribution remains available. Other profile fields are omitted. Visible
+    profiles include only public identities, including when choosing an avatar.
     """
     aliases = record.aliases
     if record.profile.hidden:
@@ -312,11 +299,7 @@ def present_public_profile(record: CreatorProfileRecord) -> PublicCreatorProfile
 
 @dataclass(frozen=True, slots=True)
 class MergePreview:
-    """What completing a merge would do, shown before the irreversible button.
-
-    A merge cannot be undone — the absorbed account's public id becomes a permanent redirect — so
-    both surfaces show this first.
-    """
+    """The identities and build credits that a merge would move, shown before confirmation."""
 
     absorbed_public_creator_id: UUID
     alias_names: tuple[str, ...] = ()

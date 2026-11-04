@@ -33,23 +33,11 @@ PRIVACY_NOTICE = tr(
     t"you turn it on.\n\n"
     t"Agreeing records this notice's version and the time. Cancelling stores nothing."
 )
-"""The full notice, served over HTTP and shown behind a button in Discord.
+"""The notice shared by HTTP and Discord, translated as one message.
 
-One message rather than several so the version recorded in a consent receipt refers to a single
-piece of text. It lives in the domain beside the version that names it, because splitting the two
-is how they drift; every transport renders this same msgid in the caller's locale.
-
-It names no command. The notice is served over HTTP as well as in Discord, and the one command
-name it used to carry outlived the command (`/account visibility`, folded into the `/account`
-panel in phase 7). Dropping it changed no fact the receipt covers, so `CURRENT_CONSENT_VERSION`
-did not move -- a bump asks every user to re-accept, and spending that on a cross-reference is
-how the version stops meaning anything.
-
-It describes submission as well as storage because it now fronts many actions rather than one.
-The submission paragraph deliberately *defers* on licensing rather than stating terms: schematics
-already carry a per-submission licence choice (`SubmissionSchematicLicense`), and build text and
-media carry none anywhere in the codebase, so claiming terms for them here would be inventing
-them. What it does say is what actually happens.
+Keep the notice beside its version so receipts identify the text users accepted.
+Licensing is chosen per schematic submission; the notice describes processing
+without choosing a licence on the submitter's behalf.
 """
 
 
@@ -67,16 +55,14 @@ class AccountConsent:
 
 
 def consent_refresh_required(created_at: Instant | None, consent_version: str | None) -> bool:
-    """Whether the current notice must be accepted before more data about this account is stored.
+    """Return whether an account must accept the current privacy notice.
 
-    The one Python spelling of the gate, taking raw columns because the browser-session reader
-    holds those rather than an assembled `Account`. `squid.accounts.infrastructure.consent`
-    carries the SQL spelling, and a test pins that the two agree.
+    An account created before CONSENT_CUTOFF is exempt only while it has no receipt.
+    Once it accepts a notice, it must keep that receipt current like newer accounts.
+    An account without a creation time is never exempt.
 
-    Grandfathering is deliberately narrow. `CONSENT_CUTOFF` means "predates receipts existing at
-    all", not "opted out permanently", so an account that has *ever* consented rejoins the version
-    treadmill even if it predates the cutoff. An unpersisted account has no creation instant to
-    judge and is never grandfathered.
+    The SQL counterpart in accounts.infrastructure.consent selects accounts that
+    pass this gate. Integration tests check agreement for persisted accounts.
     """
     if consent_version == CURRENT_CONSENT_VERSION:
         return False

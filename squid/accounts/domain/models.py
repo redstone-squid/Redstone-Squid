@@ -1,7 +1,18 @@
-"""Account domain values: one account, many identities."""
+"""Connect external sign-in identities and creator credit to one Squid account.
 
-# ruff: noqa: RUF002  Confusable and compatibility characters are the subject
-# matter here: they are the inputs whose folding this file exists to pin.
+An account is the internal owner of submissions, preferences, and permissions.
+An external identity is a provider and its stable subject, such as Discord plus
+a user ID or Java plus a UUID. Several identities can belong to one account.
+
+A creator alias is a name credited on builds. Claiming it associates that credit
+with an account; it is separate from the identities used to sign in and from the
+profile's editable display name. Renaming or unlinking a sign-in identity does
+not remove credit previously claimed under an alias.
+
+Linking adds a verified identity to an account. Merging combines two existing
+accounts: the surviving account keeps its ID, while the absorbed account's public
+creator ID becomes a redirect.
+"""
 
 import re
 import unicodedata
@@ -13,27 +24,24 @@ from uuid import UUID
 from whenever import Instant
 
 _POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]*")
-"""ASCII decimal without a leading zero. Deliberately not `str.isdigit`, which accepts
-non-ASCII digits such as U+0661 that `int()` then happily parses into a different string."""
+"""ASCII decimal without a leading zero.
+
+str.isdigit() also accepts non-ASCII digits, which would give an identifier more
+than one spelling."""
 
 MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
 """Maximum age of an identity proof accepted for a self-service account merge."""
 
 
 def fold_creator_name(name: str) -> str:
-    """Return the comparison form of a creator name.
+    """Return the normalized spelling used to compare creator names.
 
-    NFKC first, so compatibility forms unify and NBSP or ideographic space become U+0020
-    before trimming; then strip; then casefold, which is the Unicode operation for caseless
-    matching that ``str.lower()`` is not — ``lower`` leaves ``ΣΣ`` as ``σς`` while casefold
-    gives ``σσ``.
+    Normalize Unicode compatibility characters with NFKC, trim surrounding space,
+    then casefold. For example, `Straße` and `Strasse` both become `strasse`, and
+    full-width letters become their ordinary-width equivalents.
 
-    This is the only definition of the value, and it is deliberately not reproduced in SQL.
-    Postgres ``lower()`` depends on the database's glibc collation (see
-    ``pg_database.datcollversion``), and the two foldings disagree about *what collides* in
-    both directions: ``Straße``/``Strasse`` collide here but not in SQL, ``I``/``İ`` collide
-    in SQL but not here. A second SQL-side column would therefore be a second, conflicting
-    notion of creator identity rather than a hedge against this one.
+    Store this result rather than recreating it with PostgreSQL lower(). Database
+    lowercasing depends on collation and does not implement the same comparison.
     """
     return unicodedata.normalize("NFKC", name).strip().casefold()
 
@@ -101,10 +109,10 @@ class CreatorProfile:
 
 @dataclass(frozen=True, slots=True)
 class IdentityRefresh:
-    """Outcome of reconciling a Java identity's display name with its creator credit.
+    """The result of updating a Java identity's name and creator credit.
 
-    Every field is filled on every refresh, including one that changed nothing, so callers
-    render one shape rather than inferring what happened from a bare `None`.
+    Retained aliases remain credited after a rename. A name held by another account
+    appears as contested_alias, with opened_claim identifying the staff review request.
     """
 
     account_id: int
@@ -146,10 +154,10 @@ class CreditPreview:
     name: str
     build_count: int
     held_by_public_creator_id: UUID | None = None
-    """`None` means unclaimed, so agreeing attributes the credit to the caller.
+    """Public ID of the current holder, or None if the name is unclaimed.
 
-    Set means another creator holds it, and agreeing moves nothing: the reconcile never transfers a
-    held name, it opens a staff claim. The prompt has to say so before the button is pressed.
+    Linking claims an unclaimed name. If another creator holds it, linking opens
+    a staff claim without moving the credit. Ownership is rechecked at commit.
     """
 
     @property
@@ -160,11 +168,10 @@ class CreditPreview:
 
 @dataclass(frozen=True, slots=True)
 class LinkPreview:
-    """What redeeming a held code will do, knowable without spending it.
+    """The Java identity and creator credit associated with a verification code.
 
-    Everything here is a fact about the *code*, which is what lets the reservation stay anonymous.
-    "You already linked a different Minecraft account" is a fact about the caller instead, so it
-    stays a check at the entry point.
+    The preview contains no caller identity. Callers separately check whether the
+    account receiving the link already has a conflicting Java identity.
     """
 
     java_uuid: UUID
@@ -177,14 +184,11 @@ class LinkPreview:
 
 @dataclass(frozen=True, slots=True)
 class LinkReservation:
-    """A held verification code, plus the one-time token that commits or releases it.
+    """A temporary hold on a verification code and the token needed to release or use it.
 
-    A reservation exists because the consent prompt has to show what it is asking about, and the
-    only way to learn that used to be to spend the code. Holding it means the previewed facts are
-    the facts that commit, and it gives the attempt cap a write to count rather than a free read.
-
-    The token is the whole authority: nothing here identifies the reserver, so cancelling still
-    stores nothing about them.
+    The hold lets a consent prompt show the code's identity before consuming it.
+    It reserves the code, not creator credit: ownership is checked again when the
+    link commits. The token identifies the hold without recording its caller.
     """
 
     token: str

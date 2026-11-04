@@ -13,7 +13,11 @@ DEFAULT_PROFILE_URL = "https://sessionserver.mojang.com/session/minecraft/profil
 
 
 class MojangClient:
-    """Resolve current Minecraft names through one reusable HTTP session."""
+    """Resolve Minecraft names through a reusable HTTP session.
+
+    A supplied session remains the caller's responsibility. Otherwise the first
+    lookup creates a session with timeouts, and aclose closes it.
+    """
 
     def __init__(
         self,
@@ -26,7 +30,11 @@ class MojangClient:
         self._profile_url = profile_url.rstrip("/")
 
     async def get_username(self, minecraft_uuid: UUID) -> str | None:
-        """Return the current username for a Minecraft UUID."""
+        """Return Mojang's current username, or None for a 204 response.
+
+        Other statuses, transport failures, oversized responses, and invalid profile
+        payloads raise MinecraftServiceUnavailableError. Redirects are not followed.
+        """
         session = self._session
         if session is None:
             session = aiohttp.ClientSession(

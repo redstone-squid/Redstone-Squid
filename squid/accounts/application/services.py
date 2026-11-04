@@ -47,11 +47,7 @@ from squid.unit_of_work import UnitOfWorkFactory
 logger = logging.getLogger(__name__)
 
 VERIFICATION_MAX_CONSECUTIVE_FAILURES = 5
-"""Wrong codes tolerated in a row before an identity has to wait.
-
-Generous enough that mistyping a ten-digit code is never the problem, and small enough that the
-guessing budget stays far below the code space even across many windows.
-"""
+"""Number of consecutive wrong codes that triggers an identity's lockout."""
 
 VERIFICATION_LOCKOUT_SECONDS = 15 * 60
 """Longer than a code lives, so a lockout always outlasts the codes it was protecting."""
@@ -59,30 +55,36 @@ VERIFICATION_LOCKOUT_SECONDS = 15 * 60
 VERIFICATION_CODE_DIGITS = 10
 
 LINK_RESERVATION_TTL_SECONDS = 180
-"""How long a held code waits for its consent prompt to be answered.
+"""Reservation lifetime, in seconds, for a code awaiting consent.
 
-Comfortably longer than the prompt's own 120-second timeout, so the view always expires first and
-the user sees a disabled prompt rather than a hold that lapsed underneath a live one.
+This exceeds the Discord prompt's 120-second timeout. The code's own expiry is
+still checked when linking, even if the reservation has time left.
 """
 
 
 def generate_verification_code() -> int:
-    """Mint a ten-digit verification code, about 33 bits.
+    """Return a random ten-digit verification code.
 
-    Six digits was about 19.8 bits, and the redemption looks a code up by code alone across every
-    outstanding code, so the chance per attempt was `outstanding / 900_000` rather than one in
-    900 000 — and a hit links the victim's Minecraft account to the guesser.
-
-    Stays numeric on purpose: `/verify` returns an `int` to the in-game plugin that shows the code
-    to the player, so base32 would be stronger and would also change that response type. Thirty-three
-    bits against a ten-minute window and a capped attempt budget is already decisive.
+    The in-game plugin displays an integer, so the code stays numeric. Redemption
+    looks up the code across all outstanding identities, making the attempt limit
+    and expiry important even with roughly 33 bits of randomness.
     """
     lower = 10 ** (VERIFICATION_CODE_DIGITS - 1)
     return secrets.randbelow(9 * lower) + lower
 
 
 class AccountService:
-    """Orchestrate external identities, account merges, and creator credit claims."""
+    """Manage accounts, their sign-in identities, profiles, and creator credit.
+
+    Callers establish which account is acting; this service coordinates consent,
+    verification-code linking, and staff review of contested creator aliases.
+    A verification code proves a Java identity. A reservation lets a consent
+    prompt preview that link before redemption. A merge code instead authorizes
+    combining two accounts that already exist.
+
+    Repository writes and their related account changes commit together through
+    the unit of work. External username lookups happen before those writes.
+    """
 
     def __init__(
         self,
@@ -106,26 +108,18 @@ class AccountService:
             return await uow.accounts.get_by_id(account_id)
 
     async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
-        """Return several accounts, with their identities, at a fixed query cost.
-
-        Anything rendering a list of account-keyed rows needs this rather than a
-        `get_account_by_id` per row.
-        """
+        """Return accounts with their identities, omitting unknown IDs and batching the reads."""
         async with self._uow_factory() as uow:
             return await uow.accounts.get_many(account_ids)
 
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
     ) -> Account:
-        """Resolve the account established by a verified external identity, creating it if absent.
+        """Resolve a verified provider subject, creating an account if needed.
 
-        Every caller holds evidence of the *provider* subject it passes — an OAuth exchange, a
-        gateway event — which is what makes creating an account here legitimate. Nothing that
-        merely observes a subject may use this; see `AccountIdCache`'s never-create rule.
-
-        A caller that just asked for consent passes the receipt, so the row and its receipt are
-        one write. Creating the row first and recording consent second leaves a receipt-less
-        account behind whenever the second call fails.
+        The caller must have proof of the subject, such as a completed OAuth exchange.
+        Merely observing an ID is not proof. A supplied consent receipt is saved with
+        a newly created account; existing accounts keep their current receipt.
         """
         async with self._uow_factory() as uow:
             result = await uow.accounts.get_or_create_identity(provider, subject, consent=consent)
@@ -160,13 +154,11 @@ class AccountService:
             return result
 
     async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
-        """Mint a single-use code offering this account up to be absorbed.
+        """Create a single-use code for the account that will be absorbed in a merge.
 
-        Called on the account that is going *away*. That direction is deliberate: minting is an
-        act of consent by the side that loses its public creator id, and it is the side that must
-        prove it authenticated recently, since the surviving side proves that by redeeming.
-
-        The plaintext is returned once and never stored.
+        The caller must authenticate that account. Creation replaces any earlier ticket
+        and records the proof timestamp used at redemption. The plaintext code is
+        returned once; only its digest is stored.
         """
         async with self._uow_factory() as uow:
             code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
@@ -178,10 +170,10 @@ class AccountService:
             return result
 
     async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
-        """Describe what redeeming *code* would move, without spending it.
+        """Describe the account and credits a code would merge, without consuming the code.
 
-        A merge cannot be undone -- the absorbed public creator id becomes a permanent redirect --
-        so both surfaces show this before the irreversible button.
+        Show this before confirmation: completion deletes the absorbed account and
+        turns its public creator ID into a permanent redirect.
         """
         async with self._uow_factory() as uow:
             ticket = await uow.accounts.peek_merge_ticket(code)
@@ -202,12 +194,11 @@ class AccountService:
             )
 
     async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
-        """Absorb the account that minted *code* into the caller's.
+        """Merge the account named by the code into the caller's account.
 
-        Consuming the ticket is what supplies the absorbed side's `RecentAccountProof`: the ticket
-        was minted by an authenticated session and lives exactly as long as such a proof is
-        accepted, so its creation timestamp is the proof timestamp. The caller authenticating now
-        is the surviving side's.
+        The caller must authenticate the surviving account. The ticket's creation time
+        supplies recent proof for the absorbed account. Ticket consumption and the merge
+        share a transaction, so a failed merge does not spend the code.
         """
         async with self._uow_factory() as uow:
             ticket = await uow.accounts.consume_merge_ticket(code)
@@ -233,10 +224,10 @@ class AccountService:
             return await uow.accounts.get_creator_profile(public_id)
 
     async def guard_verification_attempts(self, attempted_by: tuple[IdentityProvider, str]) -> None:
-        """Refuse a redemption while *attempted_by* is in its cooling-off period.
+        """Reject a code attempt while the external identity is locked out.
 
-        Separate from the redemption itself so anything that tests a code — a redemption now, a
-        reservation later — passes through one cap instead of each surface growing its own.
+        Reservations and direct redemption share this check, so previewing a code
+        cannot bypass the guessing limit enforced when linking it.
         """
         async with self._uow_factory() as uow:
             provider, subject = attempted_by
@@ -259,11 +250,10 @@ class AccountService:
         attempted_by: tuple[IdentityProvider, str],
         ttl_seconds: int = LINK_RESERVATION_TTL_SECONDS,
     ) -> LinkReservation:
-        """Hold a code so a consent prompt can say what agreeing to it will do.
+        """Reserve a valid code so a consent prompt can preview the link.
 
-        This is where a wrong code now fails — before the notice is read, rather than after it has
-        been agreed to. It is also where the guessing happens, so it is capped like a redemption:
-        without that, reserving would be an uncapped oracle sitting beside a capped one.
+        Apply the same guessing limit as direct redemption and count rejected codes as
+        failures. A reservation records only a token and expiry on the code row.
         """
         await self.guard_verification_attempts(attempted_by)
         async with self._uow_factory() as uow:
@@ -293,19 +283,14 @@ class AccountService:
         attempted_by: tuple[IdentityProvider, str],
         reservation: LinkReservation | None = None,
     ) -> IdentityRefresh:
-        """Attach a verified Java identity to an existing account using a valid one-time code.
+        """Link a verified Java identity and reconcile its creator credit.
 
-        *attempted_by* is the identity being rate-limited, which is not the same thing as
-        *account_id*: the cap has to survive a caller who has no account yet, and it is keyed on the
-        external identity doing the guessing.
+        The target account must exist. attempted_by identifies the external identity
+        whose wrong guesses count toward a lockout. A reservation has already passed
+        that check, so redeeming its token does not charge another attempt.
 
-        Passing the *reservation* taken before the consent prompt commits that hold. The guessing was
-        already charged and capped at reservation time, so this path does not charge again — the
-        caller has demonstrably held a valid code since then.
-
-        Returns the whole reconciliation rather than just the alias it claimed, so linking can describe
-        its outcome in the same words as a refresh — including the contested case, which the alias
-        alone cannot express.
+        The result includes retained aliases and any contested name sent for staff
+        review. Conflicting Java links are rejected without consuming the code.
         """
         if reservation is None:
             await self.guard_verification_attempts(attempted_by)
@@ -358,11 +343,7 @@ class AccountService:
             await uow.commit()
 
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
-        """Return every identity linked to an account, hidden ones included.
-
-        This is the self view, so visibility does not filter it: you can only unhide what you can
-        see listed.
-        """
+        """Return every identity linked to the account, including hidden ones."""
         async with self._uow_factory() as uow:
             account = await uow.accounts.get_by_id(account_id)
             if account is None:
@@ -405,11 +386,7 @@ class AccountService:
             return profile
 
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
-        """Apply a partial profile edit after validating it.
-
-        Consent-gated like every other write that publishes something about a person: a profile is
-        the most public thing an account owns.
-        """
+        """Validate and save a partial profile edit after checking the account's consent."""
         async with self._uow_factory() as uow:
             account = await uow.accounts.get_by_id(account_id)
             if account is None:
@@ -421,10 +398,10 @@ class AccountService:
             return result
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
-        """Reset a profile to its empty state, for staff handling abuse.
+        """Clear profile text, links, and avatar, and make the profile visible.
 
-        Deliberately does not hide the profile: `hidden` belongs to its owner, and a moderation
-        action that also flipped it would take that decision away from them.
+        The caller must authorize this moderation action. Creator aliases and linked
+        identities are retained.
         """
         async with self._uow_factory() as uow:
             result = await uow.accounts.clear_profile(account_id)
@@ -438,15 +415,14 @@ class AccountService:
             return None if record is None else present_public_profile(record)
 
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
-        """Re-read the linked Java name from Mojang and reconcile the creator credit.
+        """Fetch a linked Java identity's current name from Mojang and reconcile its credit.
 
-        Keyed on the account rather than a Discord ID: this is reachable from Discord, from an
-        API session, and from a CLI device, and only the first of those has a Discord ID.
-        Callers with an identity selector pass its exact UUID; account-level refresh actions use
-        the most recently verified Java identity, with persistence order breaking timestamp ties.
+        An explicit java_uuid selects that identity. Otherwise choose the most recently
+        verified Java identity, breaking ties by persistence order.
 
-        Raises `MinecraftAccountNotFoundError` when no Java identity is linked or the UUID no
-        longer resolves, and `MinecraftServiceUnavailableError` when Mojang cannot be reached.
+        Raise NoLinkedMinecraftAccountError if the account has no matching identity,
+        MinecraftAccountNotFoundError if Mojang has no profile for it, or
+        MinecraftServiceUnavailableError if the lookup fails.
         """
         account = await self.get_account_by_id(account_id)
         if account is None:

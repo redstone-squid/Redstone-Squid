@@ -84,14 +84,21 @@ def _with_claimant(claim: AliasClaim, alias_name: str, claimant: Account | None 
 
 
 class AccountRepository:
-    """Persist accounts, external identities, creator aliases, and verification codes."""
+    """Store accounts, external identities, creator credits, and verification codes.
+
+    Methods share the caller's transaction and do not commit. Callers must roll back
+    after an error: for example, unlink_identity deletes before checking whether it
+    removed the last identity, and relies on rollback when that check fails.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession], verification_code_pepper: str):
         self._session = session
         self._verification_code_pepper = verification_code_pepper
 
+    # Account lookup and consent.
+
     async def has_current_consent(self, account_id: int) -> bool:
-        """Return whether an extant account has a complete current consent receipt."""
+        """Return whether an existing account passes the consent gate, including grandfathered accounts."""
         session = self._session()
         result = await session.scalar(
             select(Account.id).where(
@@ -102,7 +109,7 @@ class AccountRepository:
         return result is not None
 
     async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: uuid.UUID) -> bool:
-        """Atomically prove current consent and exact verified Java ownership."""
+        """Check consent and ownership of the verified Java UUID in one query."""
         session = self._session()
         result = await session.scalar(
             select(AccountIdentity.id)
@@ -144,11 +151,7 @@ class AccountRepository:
         return None if model is None else await self._load_account(session, model)
 
     async def get_many(self, account_ids: Sequence[int]) -> dict[int, Account]:
-        """Return several accounts, with their identities, in two queries regardless of count.
-
-        Anything presenting a list of accounts — the staff claim queue, for one — needs this
-        rather than a `get_by_id` per row.
-        """
+        """Return known accounts and their identities in at most two queries."""
         session = self._session()
         if not account_ids:
             return {}
@@ -220,6 +223,8 @@ class AccountRepository:
         model.consented_at = consent.granted_at
         await session.flush()
         return await self._load_account(session, model)
+
+    # Linked identities and the profile fields that may refer to them.
 
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
         """Remove one owned identity, refusing to remove the account's last sign-in method.
@@ -323,22 +328,16 @@ class AccountRepository:
         return model
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
-        """Reset a profile to the state a new account starts with.
-
-        Staff moderation. Clearing leaves the profile *visible*: `hidden` is the owner's control,
-        and a takedown that also hid the page would silently take that decision away from them.
-        """
+        """Clear profile content and avatar selection, resetting hidden to False."""
         return await self.upsert_profile(
             account_id,
             ProfileUpdate(display_name=None, bio=None, pronouns=None, links=(), hidden=False, avatar_identity_id=None),
         )
 
-    async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:
-        """Mint the account's merge ticket, replacing any live one.
+    # Merge tickets authorize moving one existing account into another.
 
-        Replace rather than insert: one live ticket per account is what keeps a short code safe,
-        and minting a second would double a guesser's target surface for no user-visible gain.
-        """
+    async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:
+        """Replace the account's merge ticket so only the newest code remains usable."""
         timestamp = now()
         expires_at = timestamp.add(seconds=ttl_seconds)
         digest = self.hash_verification_code(code)
@@ -368,10 +367,9 @@ class AccountRepository:
         return None if row is None else row
 
     async def consume_merge_ticket(self, code: str) -> MergeTicket | None:
-        """Spend a live ticket, returning it, or `None` when there is nothing to spend.
+        """Delete and return an unexpired ticket, or return None if none matches.
 
-        The delete is the redemption: a code that reaches here twice fails the second time, so a
-        replayed request cannot merge a second account into the survivor.
+        The caller must commit to consume the ticket. Rolling back restores it.
         """
         session = self._session()
         row = await session.scalar(
@@ -389,8 +387,10 @@ class AccountRepository:
         session = self._session()
         return await merge_accounts(session, AccountMergeContext(surviving_account_id, absorbed_account_id))
 
+    # Creator credit and staff review of alias claims.
+
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
-        """Return a case-insensitive creator alias."""
+        """Find an alias using the same Unicode normalization and casefold as stored names."""
         session = self._session()
         row = (
             await session.execute(
@@ -425,10 +425,10 @@ class AccountRepository:
         return CreatorProfile(public_id=public_id, aliases=tuple(aliases), canonical_public_id=canonical_id)
 
     async def get_creator_profile_record(self, public_id: uuid.UUID) -> CreatorProfileRecord | None:
-        """Return everything known about one creator, before visibility is applied.
+        """Load a creator's profile, identities, and credits, following merge redirects.
 
-        Deliberately unfiltered: `present_public_profile` decides what a stranger sees, and it can
-        only be the one authority on that if persistence hands it the whole truth.
+        Visibility has not been applied. Use present_public_profile before exposing the
+        result publicly.
         """
         session = self._session()
         account = await session.scalar(select(Account).where(Account.public_creator_id == public_id))
@@ -533,11 +533,10 @@ class AccountRepository:
         return None if row is None else _with_claimant(row[0], row[1])
 
     async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
-        """List claims awaiting staff review, oldest first.
+        """List pending claims oldest first.
 
-        *with_claimants* loads every claimant's account in the same two extra queries no
-        matter how long the queue is, which is what presenting a claimant as anything better
-        than an internal account ID needs.
+        With with_claimants=True, load the accounts and their identities in at most two
+        extra queries, rather than querying separately for each claim.
         """
         session = self._session()
         rows = (
@@ -603,17 +602,14 @@ class AccountRepository:
         loaded = None if claimant is None else (await self._load_accounts(session, [claimant])).get(claim.account_id)
         return _with_claimant(claim, alias.name, loaded)
 
+    # Verification-code reservations, attempt limits, and Java identity linking.
+
     def hash_verification_code(self, code: str) -> str:
-        """Return the digest stored for a short-lived verification code.
+        """Return a hex HMAC-SHA256 digest using the deployment pepper.
 
-        Keyed, not prefixed. The pepper is a key, and `sha256(pepper || code)` is the weaker
-        construction for no saving. Unlike every other credential in this codebase the input here is
-        human-sized, so see `docs/credential-hashing.md` for why the answer is still a keyed digest
-        rather than a KDF: the code is short-lived and attempt-capped, which is what buys the safety
-        margin a work factor would otherwise have to.
-
-        No dual-read path and no backfill. Codes expire in ten minutes, so a deploy invalidates at
-        most one window and the in-game `/link` reissues.
+        Used for verification codes, merge codes, and reservation tokens. Human-entered
+        codes need expiry and attempt limits in addition to hashing; see
+        `docs/credential-hashing.md`.
         """
         # codeql[py/weak-sensitive-data-hashing]
         return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
@@ -632,12 +628,11 @@ class AccountRepository:
         )
 
     async def reserve_verification_code(self, code: str, *, ttl_seconds: int) -> LinkReservation | None:
-        """Hold a valid code for *ttl_seconds* and describe what redeeming it would do.
+        """Hold a valid code and return its token, deadline, and current link preview.
 
-        Returns `None` for a code that is unknown, expired, spent, or already held by someone else's
-        live prompt. Nothing about the caller is written: the hold is a token digest and a deadline
-        on a row that already existed, so a prompt that is cancelled leaves no trace of whoever saw
-        it.
+        Return None for an unknown, expired, spent, or already reserved code. The hold
+        stores no caller identity. Creator-credit ownership and the code's own expiry
+        are rechecked at redemption; neither is frozen by the reservation.
         """
         timestamp = now()
         session = self._session()
@@ -770,11 +765,8 @@ class AccountRepository:
         )
         session = self._session()
         stored_lockout = await session.scalar(statement)
-        # Only report a lockout *this* call started. Comparing for equality rather than for being in
-        # the future distinguishes "I caused this" from "one was already running", which matters both
-        # for the caller's log line and for a race: two attempts crossing the cap together compute
-        # instants a microsecond apart, so exactly one sees its own value survive. Exact comparison is
-        # sound because `now()` floors to the precision `timestamptz` keeps.
+        # Match the deadline proposed by this call rather than reporting any active
+        # lockout. now() uses PostgreSQL's microsecond precision for this comparison.
         return locked_until if stored_lockout == locked_until else None
 
     async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None:
@@ -795,18 +787,15 @@ class AccountRepository:
         consent: AccountConsent,
         reservation_token: str | None = None,
     ) -> VerificationLinkResult:
-        """Consume one code and attach its Java identity to *account_id* atomically.
+        """Consume a code and link its Java identity within the caller's transaction.
 
-        The account must already exist. Redeeming a code is evidence of a *Java* subject and
-        of nothing else, so this path no longer mints an identity in any other namespace;
-        whoever holds evidence of the caller's own provider creates the account before
-        calling. That is what lets a Minecraft-only or CLI-only caller link at all.
+        The account must already exist. A supplied reservation_token must still match
+        the live hold. Identity conflicts leave the code unconsumed. A successful link
+        records consent and reconciles creator credit without taking a held alias from
+        another account.
 
-        *reservation_token* commits a hold taken by `reserve_verification_code`. The hold is checked
-        after the code is found rather than as part of finding it, so a lapsed prompt can be reported
-        as itself instead of as an invalid code. Everything else is still re-checked under the lock:
-        the reservation freezes the code, not the world, so the creator credit a preview described
-        may have been claimed in the meantime.
+        Creator-credit ownership is checked again under locks because it may have
+        changed since a reservation preview was shown.
         """
         session = self._session()
         verification_code = await session.scalar(
@@ -826,6 +815,7 @@ class AccountRepository:
         account = await session.get(Account, account_id, with_for_update=True)
         if account is None:
             raise AccountNotFoundError(account_id)
+        # Check both directions before consuming the code: the account's link and the UUID's owner.
         java_subject = str(verification_code.minecraft_uuid)
         java_holder = await self._find_account(session, IdentityProvider.JAVA, java_subject, for_update=True)
         existing_java = await session.scalar(
@@ -845,6 +835,7 @@ class AccountRepository:
                 conflicting_java_uuid=verification_code.minecraft_uuid,
             )
 
+        # Save the verified identity and consent receipt, then reconcile its creator credit.
         previous_name = None
         if existing_java is None:
             session.add(
@@ -926,14 +917,11 @@ class AccountRepository:
         username: str,
         previous_name: str | None,
     ) -> IdentityRefresh:
-        """Attach the verified name's creator credit, without ever taking one from someone else.
+        """Claim the verified name's creator credit, or request review if someone else holds it.
 
-        The four cases are exhaustive by design, so a rename can never fall through into
-        "nothing happened": the name is unknown, free, already ours, or someone else's. Only
-        the last needs a human, and it gets a pending claim rather than a silent no-op.
-
-        Aliases claimed under previous names are deliberately left attached. A rename does not
-        retract the credit for work published under the old name.
+        Create unknown aliases, claim unowned ones, and leave an already owned alias in
+        place. A conflicting owner produces a pending claim instead of a transfer.
+        Previously claimed names remain credited to the account after a rename.
         """
         folded = fold_creator_name(username)
         claimed: CreatorAlias | None = None

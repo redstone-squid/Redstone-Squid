@@ -1,4 +1,14 @@
-"""SQLAlchemy account models, keyed by account rather than by identity provider."""
+"""Store Squid accounts, their external identities, and the names credited on builds.
+
+AccountIdentity links a provider subject to one Account; AccountProfile stores
+that account's editable public presentation. CreatorAlias separately associates
+a credited name with an account, and AliasClaim records requests for staff review
+when that association needs approval. Changing profile text does not move credit.
+
+VerificationCode rows support Java identity linking. MergeTicket rows authorize
+combining existing accounts; PublicCreatorRedirect preserves the absorbed
+account's public creator ID after the merge.
+"""
 
 import uuid
 from typing import override
@@ -179,12 +189,12 @@ class AccountIdentity(Base, kw_only=True):
         display_name: str | None = None,
         verified_at: Instant | None = None,
     ) -> AccountIdentity:
-        """Build an identity in *provider*'s canonical subject form.
+        """Build an identity with a validated provider subject.
 
-        This is the only authority on subject format; the database carries no format
-        constraint. The `match` is exhaustive by construction, so adding a member to
-        `IdentityProvider` is a type error here until its subject format is stated — which
-        is the reason the enum stays closed.
+        Discord subjects are positive signed 64-bit decimal IDs; Bedrock subjects are
+        positive unsigned 64-bit XUIDs. Neither accepts leading zeroes. Java subjects
+        are parsed as UUIDs and stored in lowercase, hyphenated form. The database
+        checks provider membership and basic whitespace, not these full formats.
         """
         match provider:
             case IdentityProvider.DISCORD:
@@ -271,8 +281,7 @@ class AccountProfile(Base, kw_only=True):
             "jsonb_typeof(links) = 'array' AND jsonb_array_length(links) <= 10",
             name="account_profiles_links_shape",
         ),
-        # An unindexed foreign key makes deleting an identity scan this table; the same defect
-        # class was closed across the schema in b9d3e6a1f8c5.
+        # Index the foreign key so deleting an identity does not scan every profile.
         Index("account_profiles_avatar_identity_idx", "avatar_identity_id"),
     )
     account_id: Mapped[int] = mapped_column(
@@ -308,7 +317,7 @@ class AccountProfile(Base, kw_only=True):
 
     @classmethod
     def empty(cls, account_id: int) -> AccountProfile:
-        """Return the profile every account starts with: public, and saying nothing."""
+        """Return an empty, visible profile for the account."""
         return cls(account_id=account_id)
 
 
@@ -344,9 +353,8 @@ class CreatorAlias(Base, kw_only=True):
         ),
         CheckConstraint(
             # The application owns the folding (`fold_creator_name`), which Postgres cannot
-            # reproduce. These two conditions hold for any casefold output, so they never
-            # reject a legitimately folded name, but they do catch a raw SQL write that
-            # stored the display spelling verbatim.
+            # reproduce. These checks catch surrounding spaces and ASCII capitals in
+            # raw SQL writes, but do not prove that the full Unicode fold was applied.
             "normalized_name = btrim(normalized_name) AND normalized_name !~ '[A-Z]'",
             name="creator_aliases_normalized_name_folded",
         ),

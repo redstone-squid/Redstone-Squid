@@ -11,15 +11,11 @@ _CUTOFF = Instant.parse_iso(CONSENT_CUTOFF)
 
 
 def account_consent_current() -> ColumnElement[bool]:
-    """Whether more data may be stored about the joined account.
+    """Build a SQL predicate selecting accounts that pass the consent gate.
 
-    The SQL counterpart of `squid.accounts.domain.consent_refresh_required`, negated: this
-    selects the accounts a write may proceed for. Both spellings exist because a session read
-    already holds the row in Python while the notification queries filter thousands of rows in
-    the database, and `tests/integration/accounts/test_consent_predicate.py` pins that they
-    agree.
-
-    Requires `Account` to be joined by the calling statement.
+    Require a complete current receipt, or exempt accounts created before the
+    cutoff that have never recorded consent. The statement must include Account.
+    Integration tests compare this with the Python predicate for persisted rows.
     """
     return or_(
         and_(

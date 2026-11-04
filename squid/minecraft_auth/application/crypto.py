@@ -36,7 +36,7 @@ class SecretPurpose(StrEnum):
 
 
 class MinecraftSecretCodec:
-    """Generate one-time values and persist only domain-separated HMAC digests."""
+    """Generate authorization secrets and hash them with purpose-specific labels."""
 
     def __init__(
         self,
@@ -60,11 +60,11 @@ class MinecraftSecretCodec:
         return "-".join(compact[index : index + 4] for index in range(0, len(compact), 4))
 
     def digest(self, purpose: SecretPurpose, value: str) -> bytes:
-        """Return a keyed digest suitable for persistence and comparison.
+        """Return an HMAC-SHA256 digest using the deployment pepper and purpose label.
 
-        See `docs/credential-hashing.md`: every value reaching here is CSPRNG
-        output (256-bit secrets, an 80-bit user code), so keyed SHA-256 is the
-        right primitive and a password KDF defends entropy that is not at risk.
+        Generated bearer secrets contain 256 random bits; approval codes contain 80.
+        The label separates uses of the same pepper. See `docs/credential-hashing.md`
+        for the choice of digest over a password KDF.
         """
         payload = purpose.value.encode() + b"\0" + value.encode()
         # codeql[py/weak-sensitive-data-hashing]

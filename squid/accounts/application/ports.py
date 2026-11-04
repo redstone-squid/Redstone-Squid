@@ -25,7 +25,12 @@ from squid.unit_of_work import UnitOfWork
 
 @dataclass(frozen=True, slots=True)
 class VerificationLinkResult:
-    """Outcome of atomically consuming a code and linking an account."""
+    """Outcome of attempting to consume a verification code and link its Java identity.
+
+    An empty result means no valid code was found. `reservation_expired` identifies
+    a rejected hold; `conflicting_java_uuid` identifies an existing Java link that
+    prevented redemption. Only a successful link supplies `refresh`.
+    """
 
     account: Account | None = None
     claimed_alias: CreatorAlias | None = None
@@ -38,23 +43,18 @@ class VerificationLinkResult:
     """
 
     refresh: IdentityRefresh | None = None
-    """The full name reconciliation, when the code was consumed.
-
-    `claimed_alias` is the one field of it the original link flow needed and is kept for that
-    caller; everything a rename produced — the previous name, retained credits, a contested
-    name and the claim it opened — is here.
-    """
+    """Name and credit reconciliation after consuming the code, including any contested alias."""
 
 
 class AccountMinecraftAuthorization(Protocol):
     """Account-owned consent and verified Java-identity authorization."""
 
     async def has_current_consent(self, account_id: int) -> bool:
-        """Return whether the account has accepted the current privacy notice."""
+        """Return whether an existing account passes the current consent gate, including exemptions."""
         ...
 
     async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: UUID) -> bool:
-        """Return whether current consent and exact verified Java ownership coexist."""
+        """Return whether the account passes consent checks and owns this verified Java UUID."""
         ...
 
 

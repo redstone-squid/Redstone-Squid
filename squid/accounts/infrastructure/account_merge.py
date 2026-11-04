@@ -1,4 +1,15 @@
-"""Coordinate feature-owned account merge phases in one caller-owned transaction."""
+"""Move an absorbed account's data to the surviving account in one transaction.
+
+Each feature resolves its own collisions: duplicate ballots, subscriptions,
+permission grants, and pending alias claims do not all follow the same policy.
+After those changes, the absorbed account is deleted and its public creator ID
+redirects to the survivor. The survivor's profile and consent receipt remain its
+own; the absorbed account's profile is deleted with that account.
+
+The caller supplies recent proof of both accounts and owns commit or rollback.
+This module locks the account rows in ID order before calling the feature merge
+functions, so concurrent merges use the same lock order.
+"""
 
 from sqlalchemy import Delete, and_, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession

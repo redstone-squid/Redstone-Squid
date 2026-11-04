@@ -26,7 +26,11 @@ from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 
 
 class PostgresMinecraftAuthorizationRepository:
-    """Persist credentials and atomically fence challenge/grant state transitions."""
+    """Store Minecraft credentials and serialize authorization changes with row locks.
+
+    Methods use the caller's transaction and do not commit. Challenge exchange
+    rechecks approval, expiry, and installation version while holding the locks.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -98,7 +102,7 @@ class PostgresMinecraftAuthorizationRepository:
         secret_hash: bytes,
         rotated_at: Instant,
     ) -> PaperInstallation | None:
-        """Replace a secret and revoke every artifact tied to the prior generation."""
+        """Replace the secret and revoke outstanding challenges and grants for the installation."""
         session = self._session()
         record = await self._owned_installation(session, installation_id, owner_account_id)
         if record is None or record.revoked_at is not None:
@@ -155,7 +159,11 @@ class PostgresMinecraftAuthorizationRepository:
         *,
         max_active: int,
     ) -> PlayerAuthorizationChallenge:
-        """Insert under a per-identity lock after enforcing the active bound."""
+        """Add a challenge within the active limit for its origin, Java UUID, and installation.
+
+        The lock covers counting and insertion. Paper challenges also require the
+        installation's current credential version, checked under its row lock.
+        """
         session = self._session()
         # Counting and inserting are one invariant: without this lock, two
         # requests can both observe room and exceed the per-client bound.
@@ -306,7 +314,7 @@ class PostgresMinecraftAuthorizationRepository:
         return True
 
     async def revoke_account_grants(self, *, account_id: int, revoked_at: Instant) -> int:
-        """Revoke all active player grants for one account."""
+        """Revoke all unrevoked grants for the account, including expired ones, and return the count."""
         session = self._session()
         result = cast(
             CursorResult[Any],

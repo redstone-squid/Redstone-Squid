@@ -11,7 +11,7 @@ from squid.permissions.domain import Pattern
 
 
 class PostgresApiKeyRepository:
-    """Persist API keys without ever storing their plaintext secrets."""
+    """Store API-key digests and usage metadata in the caller's transaction."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session

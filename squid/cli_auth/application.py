@@ -77,14 +77,16 @@ class CliSecretCodec:
         return normalized if len(normalized) == 8 else ""
 
     def digest(self, purpose: CliSecretPurpose, secret: str) -> bytes:
-        """Return a purpose-separated keyed SHA-256 digest.
+        """Hash a secret with a CLI purpose label and the deployment pepper.
 
-        See `docs/credential-hashing.md`: the inputs are `token_urlsafe(32)`
-        secrets, so keyed SHA-256 is the right primitive and a password KDF
-        would only add per-request work an unauthenticated caller can trigger.
+        Purpose labels prevent a digest for one use from being reused for another.
+        Bearer secrets are random 256-bit values; human approval codes are shorter
+        and rely on expiry and request limits. See `docs/credential-hashing.md`.
         """
         # codeql[py/weak-sensitive-data-hashing]
-        return hmac.digest(self._pepper, f"cli:{purpose.value}\0{secret}".encode(), "sha256")  # 256-bit random secret
+        return hmac.digest(
+            self._pepper, f"cli:{purpose.value}\0{secret}".encode(), "sha256"
+        )  # Random secret or approval code
 
     @staticmethod
     def session_token(session_id: UUID, secret: str) -> str:
@@ -101,7 +103,19 @@ class CliSecretCodec:
 
 
 class CliAuthorizationService:
-    """Enroll, authenticate, list, and revoke account-owned CLI devices."""
+    """Enroll CLI devices and issue short-lived sessions after proof of their private key.
+
+    A CLI device is an account's enrolled Ed25519 public key, not necessarily a
+    physical computer. Enrollment begins with two codes: the user enters the
+    short user code in an authenticated browser, while the CLI keeps the secret
+    device code. Browser approval selects the account. The CLI then signs an
+    enrollment proof with its private key to receive its first bearer session.
+
+    An enrolled device obtains later sessions by signing a fresh one-time nonce,
+    without repeating browser approval. Sessions expire independently; revoking
+    the device invalidates all of them. The API authenticates the account used
+    for browser approval and device management.
+    """
 
     def __init__(
         self,
@@ -170,7 +184,7 @@ class CliAuthorizationService:
             return result
 
     async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
-        """Return safe device metadata for an authenticated approval screen."""
+        """Return enrollment metadata for an approval screen; the caller authenticates the browser."""
         async with self._uow_factory() as uow:
             enrollment = await self._enrollment_for_user_code(uow, user_code)
             self._ensure_approvable(enrollment, self._now())
@@ -305,12 +319,12 @@ class CliAuthorizationService:
             )
 
     async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
-        """List devices belonging to one browser-authenticated account."""
+        """Return all devices for the account, including revoked devices, newest first."""
         async with self._uow_factory() as uow:
             return await uow.cli_authorization.list_devices(account_id)
 
     async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
-        """Revoke an account-owned device and all sessions beneath it."""
+        """Revoke a device and its sessions; return False if the account does not own it."""
         async with self._uow_factory() as uow:
             result = await uow.cli_authorization.revoke_device(
                 device_id=device_id, account_id=account_id, revoked_at=self._now()

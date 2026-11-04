@@ -15,7 +15,11 @@ from squid.auth.models.sessions import OAuthState, WebSession
 
 
 class PostgresWebSessionRepository(WebSessionRepository):
-    """Persist one-time state and revocable browser sessions."""
+    """Store OAuth state and browser sessions in the caller's transaction.
+
+    Methods flush changes but do not commit. The caller must commit state
+    consumption before performing an external OAuth exchange.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -28,6 +32,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
 
     @override
     async def consume_state(self, state: str, *, now: Instant) -> OAuthState | None:
+        """Delete the state and return it if unexpired; expired state is also deleted."""
         session = self._session()
         model = await session.scalar(delete(OAuthState).where(OAuthState.state == state).returning(OAuthState))
         await session.flush()
@@ -57,6 +62,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
 
     @override
     async def authenticate(self, token_hash: bytes, *, now: Instant) -> WebSessionIdentity | None:
+        """Return an active session identity and update last_seen_at, or None if invalid."""
         session = self._session()
         row = (
             await session.execute(

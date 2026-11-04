@@ -35,8 +35,7 @@ def _reason_context(
     reason: MinecraftAuthReason,
     context: Mapping[str, JSONValue] | None = None,
 ) -> dict[str, JSONValue]:
-    # Keep the established field name for existing clients while replacing the
-    # parallel exception hierarchy with a closed reason vocabulary.
+    # Clients read this field to distinguish Minecraft authorization failures.
     return {"minecraft_auth_code": reason.value, **(context or {})}
 
 
