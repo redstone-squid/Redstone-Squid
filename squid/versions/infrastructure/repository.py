@@ -11,12 +11,13 @@ from squid.versions.models import Version
 
 
 class VersionRepository:
-    """Persist and query Minecraft versions."""
+    """Stage versions and query the catalog in the caller's transaction."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
     async def add(self, version: MinecraftVersion) -> MinecraftVersion:
+        """Stage a new version; the caller must commit to save it."""
         self._session().add(
             Version(
                 edition=version.edition,

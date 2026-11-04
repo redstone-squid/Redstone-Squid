@@ -11,7 +11,9 @@ class VersionRepository(Protocol):
 
     async def add(self, version: MinecraftVersion) -> MinecraftVersion: ...
 
-    async def list(self, edition: Edition) -> list[MinecraftVersion]: ...
+    async def list(self, edition: Edition) -> list[MinecraftVersion]:
+        """Return versions ordered by major, minor, then patch number, ascending."""
+        ...
 
 
 class VersionUnitOfWork(UnitOfWork, Protocol):

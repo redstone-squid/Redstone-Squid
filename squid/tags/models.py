@@ -1,4 +1,14 @@
-"""SQLAlchemy models for unified build tags."""
+"""Store tag definitions and the values assigned to individual builds.
+
+A TagDefinition describes a restriction, pattern, or showcase label and whether
+it accepts a numeric, text, or boolean value. TagAssignment applies that definition
+to one build; a valueless tag records presence alone. Official definitions can
+participate in record rules, while user-defined tags are limited to showcase labels.
+
+The display name is presentation text, the stable key identifies the definition,
+and the optional query name exposes it as a search field. Numeric assignments use
+the definition's canonical unit even when another unit is chosen for display.
+"""
 
 from decimal import Decimal
 
@@ -89,13 +99,8 @@ class TagDefinition(Base, kw_only=True):
             "(semantic_kind <> 'restriction' AND restriction_type IS NULL)",
             name="tag_definitions_restriction_type_check",
         ),
-        # There was a `tag_definitions_numeric_metadata_check` here. Its second disjunct
-        # (`value_type = 'numeric' AND both columns NULL`) made every numeric row pass
-        # regardless, so all it actually enforced was that a non-numeric row carries no
-        # unit and no step -- which `tag_definitions_non_numeric_unit_check` below already
-        # states, and more strictly. Restoring the apparent intent is not an option either:
-        # `TagRepository.create_showcase` deliberately mints numeric user tags with neither
-        # a canonical unit nor a step, so "numeric implies numeric metadata" is not true here.
+        # Numeric user tags may have no unit or step. Only non-numeric tags must
+        # leave all numeric metadata empty.
         CheckConstraint(
             "value_type = 'numeric' OR "
             "(canonical_unit_key IS NULL AND default_display_unit_key IS NULL AND numeric_step IS NULL)",
@@ -329,6 +334,11 @@ class TagAssignment(Base, kw_only=True, init=False):
 
     @value.setter
     def value(self, value: TagValue) -> None:
+        """Replace the stored scalar with a value of the declared type.
+
+        All value columns are cleared before validation. An invalid assignment
+        raises ValueError and leaves those columns empty.
+        """
         self.numeric_value = self.text_value = self.boolean_value = None
         match self.value_type, value:
             case TagValueType.NONE, None:

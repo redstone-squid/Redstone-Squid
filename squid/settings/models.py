@@ -10,11 +10,8 @@ class ServerSetting(Base):
     """Settings for a Discord server."""
 
     __tablename__ = "server_settings"
-    # The Discord guild snowflake, assigned by Discord and never minted here.
-    # `autoincrement=False` keeps the DDL honest: an integer primary key is `SERIAL` by
-    # default, which would attach a sequence the deployed database does not have. A code
-    # comment rather than an attribute docstring, since `Base` turns those into column
-    # comments and adding one here would be a schema change.
+    # Discord assigns guild IDs. Disable autoincrement so SQLAlchemy does not
+    # create a sequence for this integer primary key.
     server_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     smallest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)
     fastest_channel_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, default=None)

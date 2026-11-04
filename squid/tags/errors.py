@@ -5,7 +5,7 @@ from squid.core.i18n import tr
 
 
 class TagNotFoundError(NotFoundError):
-    """No published tag definition exists for the requested identifier."""
+    """No tag definition exists for the requested identifier."""
 
     default_message = tr(t"Tag not found.")
     default_title = tr(t"Tag not found")

@@ -13,6 +13,7 @@ class VersionService:
         self._uow_factory = uow_factory
 
     async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
+        """Parse and store a version, using `edition` to override the parsed edition."""
         parsed_edition, major, minor, patch = parse_version_string(version_string)
         version = MinecraftVersion(edition or parsed_edition, major, minor, patch)
         async with self._uow_factory() as uow:
@@ -21,29 +22,45 @@ class VersionService:
             return stored
 
     async def list_versions(self, edition: Edition) -> list[MinecraftVersion]:
+        """Return catalog versions for one edition, from oldest to newest."""
         async with self._uow_factory() as uow:
             return await uow.versions.list(edition)
 
     async def list_all(self) -> list[MinecraftVersion]:
-        """List recognized versions for both supported editions."""
+        """List Java versions followed by Bedrock versions, oldest first within each edition."""
         async with self._uow_factory() as uow:
             java = await uow.versions.list("Java")
             bedrock = await uow.versions.list("Bedrock")
             return [*java, *bedrock]
 
     async def list_display(self, edition: Edition, *, limit: int | None = None) -> list[str]:
+        """Return oldest-first display strings, optionally sliced to `limit`."""
         versions = await self.list_versions(edition)
         return [str(version) for version in (versions if limit is None else versions[:limit])]
 
     async def newest(self, edition: Edition) -> str:
-        """Return the newest recognized version for an edition."""
+        """Return the newest recognized version as a display string.
+
+        Raise VersionCatalogUnavailableError if the edition has no catalog entries.
+        """
         versions = await self.list_versions(edition)
         if not versions:
             raise VersionCatalogUnavailableError(edition)
         return str(versions[-1])
 
     async def resolve_spec(self, version_spec: str) -> list[str]:
-        """Resolve a version range specification against recognized versions."""
+        """Resolve comma-separated version selections against the catalog.
+
+        `1.19` selects every known patch in that release. `1.19 - 1.20` includes
+        both endpoints and every known patch of 1.20. `1.21+` selects 1.21.0 and
+        later releases. A full version such as `1.21.4` selects only that entry.
+
+        Prefix the selection with `Java` or `Bedrock`; Java is the default.
+        Unlike parse_version_string, these edition names are case-sensitive.
+        Results follow selection order and catalog order within each selection.
+        Overlapping selections can produce duplicates; unknown versions contribute
+        no entries. Malformed numeric input can raise ValueError.
+        """
         edition = self._edition_from_spec(version_spec)
         normalized_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
         versions = await self.list_versions(edition)

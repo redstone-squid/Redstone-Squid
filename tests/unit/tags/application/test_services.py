@@ -27,8 +27,7 @@ class FakeRepository:
         query_name: str | None,
         created_by_account_id: int,
     ) -> TagDefinition:
-        # The key carries no proposer at all: it is published verbatim as `BuildTag.key`,
-        # and the old `user_{discord_id}_{hex}` form leaked a snowflake into the API.
+        # BuildTag.key is public. Its format must not expose the proposer's ID.
         assert re.fullmatch(r"user_[0-9a-f]{32}", stable_key), stable_key
         self.definition = TagDefinition(
             id=1,

@@ -1,4 +1,4 @@
-"""Application services for user-defined and official tag governance."""
+"""Propose, moderate, and assign user showcase tags."""
 
 import re
 from collections.abc import Sequence
@@ -54,7 +54,17 @@ class TagUnitOfWork(UnitOfWork, Protocol):
 
 
 class TagService:
-    """Create user showcase tags and moderate their publication state."""
+    """Create user showcase tags and moderate their publication state.
+
+    A proposal creates a pending definition. Staff approval makes it available
+    publicly, after which a build's submitter can assign it to that build with
+    a value of the declared type. Definitions and assignments are separate: the
+    same approved definition can be used by many builds.
+
+    Callers must authorize moderation requests. Status changes do not require a
+    particular previous status, so an archived or rejected tag can be approved
+    again. Assigning a showcase tag separately checks build ownership.
+    """
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[TagUnitOfWork]) -> None:
         self._uow_factory = uow_factory
@@ -67,6 +77,7 @@ class TagService:
         query_name: str | None,
         created_by_account_id: int,
     ) -> TagDefinition:
+        """Create a pending tag, normalizing whitespace and its optional search name."""
         async with self._uow_factory() as uow:
             normalized_name = " ".join(display_name.casefold().split())
             if not 1 <= len(normalized_name) <= 80:
@@ -81,9 +92,7 @@ class TagService:
                 )
                 raise ValidationError(msg)
             result = await uow.tags.create_showcase(
-                # No submitter identity in the key. It is never parsed -- the only literal
-                # comparison anywhere is against an official key -- so publishing a proposer
-                # in `BuildTag.key` bought nothing and leaked who proposed a tag.
+                # The key is public, so it must not contain the proposer's account ID.
                 stable_key=f"user_{uuid4().hex}",
                 display_name=" ".join(display_name.split()),
                 normalized_name=normalized_name,
@@ -105,7 +114,7 @@ class TagService:
             return await uow.tags.approved()
 
     async def public_definition(self, tag_id: int) -> TagDefinition | None:
-        """Return an approved public tag definition by identifier."""
+        """Return an approved tag, or None if it is missing or has another status."""
         async with self._uow_factory() as uow:
             definition = await uow.tags.get(tag_id)
             if definition is None or definition.moderation_status is not TagModerationStatus.APPROVED:
@@ -113,7 +122,7 @@ class TagService:
             return definition
 
     async def approve(self, tag_id: int) -> TagDefinition:
-        """Publish a pending tag."""
+        """Approve an existing tag for public use."""
         return await self._set_status(tag_id, TagModerationStatus.APPROVED)
 
     async def reject(self, tag_id: int) -> TagDefinition:
@@ -166,6 +175,11 @@ class TagService:
 
 
 def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -> TagValue:
+    """Parse a tag value without converting units.
+
+    Numeric values must be finite decimals in the tag's canonical unit. Boolean
+    values accept true/false, yes/no, or 1/0 without regard to letter case.
+    """
     display_name = definition.display_name
     if definition.value_type is TagValueType.NONE:
         if raw_value not in {None, ""}:

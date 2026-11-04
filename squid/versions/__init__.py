@@ -1,1 +1,1 @@
-"""Minecraft version bounded context."""
+"""Minecraft release parsing and the catalog of supported versions."""

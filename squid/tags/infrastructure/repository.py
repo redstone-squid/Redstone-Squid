@@ -92,6 +92,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         row = await session.get(TagDefinition, tag_id, with_for_update=True)
         if row is None:
             return None
+        # Queue the public search refresh with the status change so neither can commit alone.
         row.moderation_status = status
         row.archived_at = Instant.now() if status is TagModerationStatus.ARCHIVED else None
         row.updated_at = Instant.now()
@@ -124,6 +125,11 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         value: TagValue,
         actor_account_id: int,
     ) -> bool:
+        """Insert or replace a value on a build owned by the actor.
+
+        Return False if the build is missing, belongs to someone else, or the tag
+        is missing. The application service checks tag approval and showcase kind.
+        """
         session = self._session()
         owned_build_id = await session.scalar(
             select(Build.id).where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
@@ -152,9 +158,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                     "numeric_value": statement.excluded.numeric_value,
                     "text_value": statement.excluded.text_value,
                     "boolean_value": statement.excluded.boolean_value,
-                    # An `Instant`, not a stdlib datetime: the column's `InstantUTC`
-                    # decorator does the conversion, and pre-converting made its
-                    # `process_bind_param` raise on every upsert.
+                    # InstantUTC converts the Instant when binding this value to SQL.
                     "updated_at": Instant.now(),
                 },
             )

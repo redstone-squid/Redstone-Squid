@@ -12,7 +12,7 @@ VERSION_PATTERN = re.compile(r"^\W*(Java|Bedrock)? ?(\d+)\.(\d+)(?:\.(\d+))?\W*$
 
 @dataclass(frozen=True, slots=True)
 class MinecraftVersion:
-    """A Minecraft edition and semantic version."""
+    """A Minecraft edition and three release-number components."""
 
     edition: Edition
     major: int
@@ -25,7 +25,13 @@ class MinecraftVersion:
 
 
 def parse_version_string(version_string: str) -> tuple[Edition, int, int, int]:
-    """Parse a Minecraft version, defaulting to Java when the edition is omitted."""
+    """Parse an edition and release number, such as `Bedrock 1.21.50`.
+
+    Edition names are case-insensitive. Missing editions default to Java and
+    missing patch numbers to zero, so `1.21` becomes ("Java", 1, 21, 0).
+    Surrounding punctuation and whitespace are allowed. Invalid syntax raises
+    InvalidVersionError; this function does not check the version catalog.
+    """
     match = VERSION_PATTERN.match(version_string)
     if not match:
         msg = "Invalid version string format."
