@@ -41,7 +41,7 @@ type DraftActor = int | Subject
 
 
 def draft_actor_id(actor: DraftActor) -> int:
-    """Require an identified actor independently of how permission context was supplied."""
+    """Return the account ID from an integer or permission subject; reject anonymous actors."""
     identifier = actor if isinstance(actor, int) else actor.account_id
     if identifier is None or identifier < 1:
         raise DraftAccessDeniedError
@@ -56,7 +56,7 @@ class DraftPermissions(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class StoredDraft:
-    """A compacted draft snapshot and its retention/provenance metadata."""
+    """Draft answers together with expiry, source files, and preparation status."""
 
     snapshot: DraftSnapshot
     origin: SubmissionOrigin
@@ -97,14 +97,20 @@ class AppliedDraftUpgrade:
 
 @dataclass(frozen=True, slots=True)
 class ValidatedDraft:
-    """A complete pinned draft prepared for server-owned finalization checks."""
+    """Answers checked against the draft's form revision, ready for artifact checks."""
 
     draft: StoredDraft
     normalized_answers: dict[str, JSONValue]
 
 
 class DraftRepository(Protocol):
-    """Atomic persistence required by the draft application service."""
+    """Store drafts and apply edits for SubmissionDraftService.
+
+    An accepted edit replaces the answers and increments the draft revision
+    together. Retrying its change key must not apply the edit twice, and a stale
+    base revision must not overwrite a newer edit. The service checks access and
+    form values; the repository enforces revision and replay checks when it writes.
+    """
 
     async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]: ...
 
@@ -202,7 +208,7 @@ class CheckedInFormRevisionMigration:
 
 
 class FixedAccountDraftCapacity:
-    """Default capacity policy used until an account receives an override."""
+    """Use the same configured draft capacity for every account."""
 
     def __init__(self, limit: int = DEFAULT_ACCOUNT_DRAFT_CAPACITY) -> None:
         if limit < 1:
@@ -217,7 +223,18 @@ class FixedAccountDraftCapacity:
 
 
 class SubmissionDraftService:
-    """Create, edit, validate, and lock drafts without transport-specific behavior."""
+    """Let clients create, resume, and edit account-owned submission drafts.
+
+    A new draft uses the current form manifest. Edits are checked against that
+    same manifest revision until the owner explicitly upgrades it, allowing a
+    draft to be resumed even after the current form changes. Incomplete answers
+    are allowed while editing; validate_for_finalization checks required fields.
+
+    Access checks allow the owner or staff with submission-edit permission.
+    Writes use the draft repository's revision and replay checks, and this service
+    commits them. SubmissionFinalizationService handles the later step of turning
+    a completed draft into a queued build submission.
+    """
 
     def __init__(
         self,
@@ -382,7 +399,12 @@ class SubmissionDraftService:
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftChange:
-        """Validate field IDs/types and atomically persist one optimistic edit."""
+        """Validate and save an edit against the draft's expected revision.
+
+        A previously accepted idempotency key returns the current draft snapshot
+        without applying the change again. New edits are checked against the pinned
+        manifest, then permissions and revision are checked again before commit.
+        """
         async with self._uow_factory() as uow:
             current = await self.get_accessible_in(uow, draft_id, account_id)
             owner_id = current.snapshot.owner_account_id
@@ -423,7 +445,11 @@ class SubmissionDraftService:
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftUpgrade:
-        """Move an editable draft to the next checked-in manifest revision."""
+        """Upgrade to the next form revision without dropping answered fields.
+
+        If the draft already uses target_revision, return it as a replay before
+        checking its editability or expected revision.
+        """
         current = await self.get_owned(draft_id, account_id)
         if current.snapshot.schema_revision == target_revision:
             return AppliedDraftUpgrade(current, replayed=True)

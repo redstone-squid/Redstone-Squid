@@ -49,7 +49,7 @@ class DraftStateConflictError(ConflictError):
 
 
 class DraftArtifactsChangedError(ConflictError):
-    """Artifact readiness changed before finalization acquired its durable fence."""
+    """The draft's attachments changed before finalization locked them."""
 
     default_message = "The submission draft's attachments changed while submission was starting."
     default_title = "Draft attachments changed"
@@ -57,7 +57,7 @@ class DraftArtifactsChangedError(ConflictError):
     default_end_user_action = "Review the latest attachment status and submit the draft again."
 
     def __init__(self) -> None:
-        # Stable wire reason retained while presentation uses submitter-facing attachment terminology.
+        # Preserve the public reason code used by existing clients.
         super().__init__(public_context={"reason": "media_changed"})
 
 

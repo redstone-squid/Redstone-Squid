@@ -71,7 +71,13 @@ class CanonicalSubmissionVersions(Protocol):
 
 
 class SubmissionBuildPreparation:
-    """Create or retrieve one build using its source draft as the retry key."""
+    """Translate a prepared submission into a build for the finalization executor.
+
+    Resolve form option keys against current approved tags and canonical Minecraft
+    versions, then construct the category-specific Build. The source draft ID
+    also identifies an already-created build on retry. BuildSubmissionExecutor
+    performs the later transaction that saves a new build and its result.
+    """
 
     def __init__(
         self,
@@ -84,7 +90,7 @@ class SubmissionBuildPreparation:
         self._versions = versions
 
     async def prepare(self, submission: NormalizedSubmission) -> Build | BuildSubmissionRejected:
-        """Resolve a candidate without committing, or recover a pre-cutover source build."""
+        """Resolve a candidate without saving it, or return an existing matching source build."""
         existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
         if existing is not None:
             if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:

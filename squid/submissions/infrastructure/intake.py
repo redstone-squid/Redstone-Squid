@@ -85,6 +85,7 @@ class PostgresAttachmentIntake:
         return tuple(retained.values())
 
     async def set_status(self, draft_id: UUID, source_id: UUID, status: IntakeStatus) -> None:
+        """Update intake status without undoing a discard or replacing ready with failed."""
         session = self._session()
         model = await session.scalar(
             select(SubmissionSuppliedAttachment)

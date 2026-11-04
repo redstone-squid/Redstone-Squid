@@ -43,7 +43,13 @@ class AttachmentIntakeRepository(Protocol):
 
 
 class SubmissionAttachmentIntake:
-    """Retain supplied-file intent so failed downloads cannot disappear from submission."""
+    """Track files supplied with a submission until registered or explicitly discarded.
+
+    Reserve a file before downloading it, then register the downloaded bytes
+    with the media or schematic service. A failed download remains on the draft
+    and blocks submission, so the user can retry or discard it. READY here means
+    registration succeeded; artifact readiness checks subsequent processing.
+    """
 
     def __init__(
         self,
@@ -61,7 +67,7 @@ class SubmissionAttachmentIntake:
     async def reserve(
         self, draft_id: UUID, actor: DraftActor, source_id: UUID, filename: str, content_type: str | None
     ) -> SuppliedAttachment:
-        """Register intent before a transport performs its first download."""
+        """Record the supplied file before the client adapter downloads it."""
         async with self._uow_factory() as uow:
             if source_id.int == 0 or not filename.strip() or len(filename) > 255:
                 message = "A supplied attachment needs a valid identifier and filename."
@@ -75,7 +81,7 @@ class SubmissionAttachmentIntake:
     async def register_file(
         self, draft_id: UUID, actor: DraftActor, source_id: UUID, path: Path, content_type: str | None
     ) -> None:
-        """Register downloaded bytes with the existing durable processor and retain failures."""
+        """Pass downloaded bytes to the media or schematic service and record the outcome."""
         async with self._uow_factory() as uow:
             draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
             attachment = next(
@@ -185,8 +191,7 @@ def classify_supplied_file(filename: str, content_type: str | None) -> str:
     suffix = Path(filename.lower()).suffix
     mime = (
         content_type
-        # Spelled out rather than `not in {None, "application/octet-stream"}` so the None is
-        # narrowed away: membership in a set of mixed literals leaves `mime` optional.
+        # The explicit None check lets type checkers narrow the result to str.
         if content_type is not None and content_type != "application/octet-stream"
         else mimetypes.guess_type(filename)[0] or ""
     )

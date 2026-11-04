@@ -1,4 +1,10 @@
-"""Submission form definitions and validation, drawn however the client chooses."""
+"""Shared form definitions for clients that edit submission drafts.
+
+A FormManifest combines fields common to all builds with fields for a category,
+such as doors. Clients use it to render their own controls; the server uses the
+same definitions to validate answers. Drafts retain the manifest's revision so
+a later form change does not silently change the meaning of existing answers.
+"""
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -12,7 +18,7 @@ _STABLE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
 class SubmissionOrigin(StrEnum):
-    """A transport that can own or finalize a submission draft."""
+    """The client or platform from which a submission draft originated."""
 
     DISCORD = "discord"
     WEB = "web"
@@ -22,7 +28,7 @@ class SubmissionOrigin(StrEnum):
 
 
 class ControlKind(StrEnum):
-    """The small set of controls every client knows how to draw."""
+    """Control types a submission client may render."""
 
     TEXT = "text"
     NUMBER = "number"
@@ -44,7 +50,7 @@ class ValueKind(StrEnum):
 
 
 class VisibilityOperator(StrEnum):
-    """Operators supported by the deliberately narrow visibility language."""
+    """Comparisons supported by conditional field visibility."""
 
     EQUALS = "equals"
     NOT_EQUALS = "not_equals"
@@ -98,7 +104,7 @@ class VisibilityRule:
 
 @dataclass(frozen=True, slots=True)
 class FieldConstraints:
-    """Validation limits understood identically by every renderer and the server."""
+    """Limits published to clients and checked when the server validates answers."""
 
     minimum: int | float | None = None
     maximum: int | float | None = None
@@ -126,7 +132,7 @@ class FieldConstraints:
 
 @dataclass(frozen=True, slots=True)
 class FormField:
-    """One stable form field rendered by every supported submission surface."""
+    """A form field with its value type, presentation, and validation rules."""
 
     id: str
     label: str
@@ -206,7 +212,13 @@ class CategoryForm:
 
 @dataclass(frozen=True, slots=True)
 class FormManifest:
-    """One immutable, protocol-bounded submission form revision."""
+    """One form definition, identified by schema_id and revision.
+
+    Each category combines common_sections with its own sections. Field IDs are
+    the keys in a draft's answers, while labels and controls describe how clients
+    can present those fields. Protocol bounds describe which client protocol
+    versions can use this definition.
+    """
 
     schema_id: str
     revision: int
@@ -273,7 +285,13 @@ class FormManifest:
         origin: SubmissionOrigin,
         require_complete: bool = True,
     ) -> dict[str, str]:
-        """Validate submitted values and return stable field-to-error mappings."""
+        """Return field IDs mapped to validation reason codes.
+
+        Apply visible defaults first. Unknown field IDs are errors, but values of
+        known hidden fields are ignored. With require_complete=False, missing
+        required answers are allowed. Dynamic options must be checked separately;
+        only inline options are validated here.
+        """
         answers = self.apply_defaults(category, answers, origin=origin)
         fields = self.fields_for(category)
         definitions = {item.id: item for item in fields}
@@ -298,7 +316,11 @@ class FormManifest:
         *,
         origin: SubmissionOrigin,
     ) -> dict[str, JSONValue]:
-        """Return a copy with visible server-authored defaults filled in."""
+        """Fill missing visible fields in manifest order and return a shallow copy.
+
+        An explicit None is retained. Earlier defaults can affect the visibility
+        of later fields.
+        """
         normalized = dict(answers)
         for item in self.fields_for(category):
             if item.id not in normalized and item.default is not None and item.is_visible(normalized, origin):

@@ -48,7 +48,12 @@ _CLAIM_MINUTES = 5
 
 
 class PostgresFinalizationJobRepository(FinalizationJobRepository):
-    """Atomically coordinate draft state and UUID-fenced finalization jobs."""
+    """Update drafts and finalization attempts in the caller's transaction.
+
+    A new submission creates an attempt; worker retries reuse that attempt and
+    increment its claim count. Claim tokens prevent replaced workers from saving
+    results. The caller must commit before executing claimed work.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -220,7 +225,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
 
     @override
     async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]:
-        """Lease ready or abandoned work with a fresh UUID fence."""
+        """Claim ready or expired work for five minutes, replacing each claim token."""
         if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
             msg = f"finalization claim limit must be between 1 and {MAX_FINALIZATION_JOB_CLAIM}"
             raise ValueError(msg)
@@ -367,6 +372,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         return FinalizationFailureOutcome(applied=True, dead=dead)
 
     async def lock_claim(self, job: ClaimedFinalizationJob) -> StoredDraft | None:
+        """Lock the draft and return it only while the worker token still matches."""
         session = self._session()
         draft = await _locked_draft(session, job.draft_id)
         if await _claimed_job(session, job) is None:
@@ -377,6 +383,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         await _require_current_media(self._session(), draft_id, upload_ids)
 
     async def complete(self, job: ClaimedFinalizationJob, result: FinalizedBuild, *, now: Instant) -> bool:
+        """Record the result and retain its media, or return False if the claim was replaced."""
         session = self._session()
         if not await _complete(session, job, result, now=now):
             return False
@@ -525,7 +532,11 @@ async def _complete(
     *,
     now: Instant,
 ) -> bool:
-    """Fence and finish a receipt within the transaction that creates its build."""
+    """Record the created build only if this worker still owns the attempt.
+
+    The caller saves the build in the same transaction, so the result and the
+    draft's submitted status cannot outlive a failed build write.
+    """
     draft = await _locked_draft(session, job.draft_id)
     model = await _claimed_job(session, job)
     if model is None:

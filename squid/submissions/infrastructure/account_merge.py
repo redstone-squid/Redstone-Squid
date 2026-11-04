@@ -98,7 +98,11 @@ async def _canonicalize_finalization_job_owners(
     survivor: int,
     absorbed: int,
 ) -> None:
-    """Rewrite retained payload owners and fence claims that escaped before the merge lock."""
+    """Move execution payloads to the surviving owner and invalidate active claims.
+
+    The original input rows remain unchanged for audit. Workers holding the old
+    claim must reclaim the job and read its updated owner before committing.
+    """
     if not draft_ids:
         return
     jobs = tuple(

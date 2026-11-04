@@ -28,7 +28,11 @@ MAX_DRAFT_SCHEMATICS = 10
 
 
 class PostgresDraftSchematics:
-    """Retain source identity, independent references, and cleanup progress."""
+    """Store private sources and the drafts that reference them.
+
+    Methods use the caller's transaction. Attachment edits increment the draft
+    revision, clear preparation issues, and return the draft to editing.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -185,6 +189,11 @@ class PostgresDraftSchematics:
         return DraftSchematicSnapshot(SchematicArtifactState.PROCESSING, issues=issues)
 
     async def cleanup_candidates(self, *, limit: int) -> tuple[UUID, ...]:
+        """Mark old unreferenced sources for deletion and return their IDs.
+
+        A five-minute grace period protects recent uploads. Recheck references
+        after acquiring row locks so concurrent attachment cannot lose its source.
+        """
         if not 1 <= limit <= 100:
             msg = "Invalid schematic cleanup batch limit."
             raise ValueError(msg)
@@ -296,6 +305,7 @@ async def _link(session: AsyncSession, draft: SubmissionDraft, upload_id: UUID) 
         msg = "A draft cannot retain more than ten schematics."
         raise ValidationError(msg)
     if count:
+        # Adding another source requires the user to choose the primary again.
         await session.execute(
             update(DraftSchematicLink).where(DraftSchematicLink.draft_id == draft.id).values(is_primary=False)
         )

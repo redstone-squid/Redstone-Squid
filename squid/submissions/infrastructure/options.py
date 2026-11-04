@@ -44,7 +44,12 @@ class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
         *,
         locale: str | None,
     ) -> FormOptionSet:
-        """Return a deterministic content revision for one supported option source."""
+        """Return approved options and a revision derived from their values and labels.
+
+        This adapter does not filter by category or localize labels. Versions are
+        newest first within each edition, with Java before Bedrock; tags use label
+        order. Unknown sources raise ValueError.
+        """
         del locale
         if source == "approved_source_versions":
             choices = tuple(

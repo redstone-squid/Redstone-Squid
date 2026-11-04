@@ -269,7 +269,7 @@ _PAYLOAD_ADAPTER = TypeAdapter(FinalizationPayload)
 
 
 def encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
-    """Encode one normalized submission without changing retained schema 2 or 3."""
+    """Encode schema 3 for sponsor attribution, or schema 2 for other submissions."""
     model_type = FinalizationPayloadV3 if submission.sponsor_attribution else FinalizationPayloadV2
     try:
         payload = model_type.model_validate(_submission_document(submission))

@@ -1,4 +1,4 @@
-"""Persisted submission records."""
+"""Retained inference inputs, worker claims, and candidate results."""
 
 from uuid import UUID
 
@@ -14,7 +14,7 @@ from squid.persistence.types import InstantUTC
 
 
 class SubmissionInferenceRun(Base, kw_only=True):
-    """Exact private inference inputs and retained candidate facts under a renewable claim."""
+    """Private inference inputs, candidate results, and the current expiring worker claim."""
 
     __tablename__ = "submission_inference_runs"
     __table_args__ = (

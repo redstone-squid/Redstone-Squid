@@ -164,7 +164,12 @@ class SchematicRightsPolicy:
 
 @dataclass(frozen=True, slots=True)
 class VerifiedSubmissionArtifacts:
-    """Only artifacts whose readiness was established by backend-owned state."""
+    """References to media and schematics that preparation found ready to use.
+
+    These IDs come from stored processing results, rather than form answers.
+    Constructing this value checks the IDs' shape; the readiness assessment is
+    responsible for checking that processing succeeded.
+    """
 
     normalized_media_upload_ids: tuple[UUID, ...] = ()
     schematic_id: UUID | None = None
@@ -265,7 +270,12 @@ type SubmissionCategoryDetails = DoorSubmissionDetails | ExtenderSubmissionDetai
 
 @dataclass(frozen=True, slots=True)
 class NormalizedSubmission:
-    """Complete immutable input to the idempotent build-creation target."""
+    """Prepared submission retained as the input to a finalization attempt.
+
+    It combines typed form answers with verified attachment references and
+    sponsor details. Workers use this snapshot when creating the build, so
+    retries do not reinterpret the client's original answers.
+    """
 
     source_draft_id: UUID
     owner_account_id: int

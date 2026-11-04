@@ -53,7 +53,7 @@ class DraftSchematicReader(Protocol):
 
 
 class EmptyDraftSchematicReader:
-    """Report no schematic while the draft upload endpoint is not implemented."""
+    """Report no schematic for hosts that do not provide a schematic reader."""
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
         return DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
@@ -66,7 +66,13 @@ class DraftIntakeReader(Protocol):
 
 
 class AuthoritativeDraftArtifactReadiness:
-    """Assess only worker-owned media jobs and backend-owned schematic uploads."""
+    """Check whether the draft's attachments are ready for build creation.
+
+    Media jobs must have completed with the expected output files and within
+    media limits. The schematic reader supplies the selected schematic's state.
+    Intake issues also block submission, keeping failed downloads visible even
+    when no media job or schematic upload was created for them.
+    """
 
     def __init__(
         self,
@@ -82,7 +88,7 @@ class AuthoritativeDraftArtifactReadiness:
         self._media_limits = media_limits or MediaLimits()
 
     async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness:
-        """Return opaque verified IDs and stable repair states for one draft."""
+        """Return verified artifact IDs and any issues that prevent finalization."""
         jobs = await self._media.list_for_draft(draft_id)
         schematic = await self._schematics.read_for_draft(draft_id)
         media_ids, issues = _assess_media(draft_id, jobs, self._media_limits)
@@ -100,6 +106,7 @@ def _assess_media(
     jobs: Sequence[MediaJobSnapshot],
     limits: MediaLimits,
 ) -> tuple[tuple[UUID, ...], tuple[SubmissionAttentionIssue, ...]]:
+    # Discarded uploads no longer block submission or count toward batch limits.
     retained = [job for job in jobs if job.status is not MediaJobStatus.DISCARDED]
     processing = any(job.status in {MediaJobStatus.PENDING, MediaJobStatus.CLAIMED} for job in retained)
     rejected = any(job.status is MediaJobStatus.DEAD for job in retained)
@@ -142,6 +149,7 @@ def _assess_media(
 
 
 def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
+    """Check completion metadata, required artifact roles, content types, and pixel limits."""
     if (
         job.completed_at is None
         or job.claimed_at is not None

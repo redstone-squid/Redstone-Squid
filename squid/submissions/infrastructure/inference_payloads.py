@@ -65,10 +65,11 @@ class TagAssignmentPayload:
 
 @dataclass(kw_only=True)
 class BuildDraftPayload:
-    """A mutable pre-category accumulator for guided submission and inference.
+    """Stored inference facts without SQLAlchemy relationships or session state.
 
-    Every field is optional so transports can fill it progressively; nothing is
-    validated until :meth:`finalize` produces the category subclass.
+    Missing facts retain their defaults so a candidate can be reopened for editing.
+    Links and tag assignments use plain payload values and are reconstructed by
+    to_draft; this payload does not finalize or save a build.
     """
 
     category: BuildCategory | None = None

@@ -1,1 +1,1 @@
-"""Persisted submissions entities."""
+"""Database models for drafts, attachments, inference, and finalization."""

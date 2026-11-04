@@ -31,7 +31,12 @@ _SOURCE_FILES = TypeAdapter(tuple[SubmissionSourceFile, ...])
 
 
 class PostgresInferenceRuns:
-    """Serialize run admission and reject stale invocation results."""
+    """Store inference inputs and candidates in the caller's transaction.
+
+    Admission is serialized across all runs. Submission runs share a global
+    capacity limit; recalculation runs do not count toward it. Claims last five
+    minutes and completion checks both the token and its expiry.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -44,6 +49,7 @@ class PostgresInferenceRuns:
         current = Instant(now)
         row = await session.get(SubmissionInferenceRun, run_id, with_for_update=True)
         if row is not None:
+            # A run ID identifies exact inputs, so a retry cannot replace the prompt.
             if row.owner_account_id != owner:
                 raise AuthorizationError
             if row.expires_at <= current:

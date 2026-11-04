@@ -17,7 +17,11 @@ _REVISION_FACTS = TypeAdapter(RevisionFacts)
 
 
 class PostgresRevisionProposals:
-    """Persist review snapshots and commit the build and approval receipt together."""
+    """Store proposal snapshots and approval receipts in the caller's transaction.
+
+    The application service saves the build in that same transaction. Repository
+    methods neither authorize the actor nor commit on their own.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session

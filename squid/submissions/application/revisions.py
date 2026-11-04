@@ -32,7 +32,14 @@ class RevisionProposalRepository(Protocol):
 
 
 class RevisionProposalService:
-    """Keep inference separate from target matching and explicit authorized approval."""
+    """Review new inference results as proposed edits to an existing build.
+
+    First retain the inferred candidate, then match it to a build from the same
+    source message to capture a before/after diff. Approval applies that reviewed
+    diff only while the build revision and resolved values still match. The saved
+    proposal records who approved it and the resulting build revision, allowing
+    repeated approval requests to return the same result.
+    """
 
     def __init__(
         self,
@@ -134,7 +141,12 @@ class RevisionProposalService:
             return result
 
     async def approve(self, proposal_id: UUID, actor: Subject) -> RevisionProposal:
-        """Apply exactly the reviewed revision under the existing owner-pending/staff policy."""
+        """Apply the reviewed changes after rechecking access and the build revision.
+
+        An already applied proposal returns its receipt. A changed build or newly
+        resolved facts require another review; approval never silently updates
+        the retained diff.
+        """
         if actor.account_id is None:
             raise AuthorizationError
         proposal = await self.get(proposal_id, actor)
@@ -163,7 +175,7 @@ class RevisionProposalService:
 
     async def _approve_prepared(self, proposal: RevisionProposal, build: Build, actor: BuildEditor) -> RevisionProposal:
         async with self._uow_factory() as uow:
-            # Account merging locks builds before submission references.
+            # Use account merging's lock order: build first, then proposal, to avoid deadlocks.
             current = await uow.builds.get_for_update(proposal.build_id or 0)
             if current is None:
                 raise BuildNotFoundError(proposal.build_id or 0)

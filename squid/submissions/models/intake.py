@@ -1,4 +1,4 @@
-"""Persisted submission records."""
+"""Supplied files awaiting registration, retry, or explicit discard."""
 
 from uuid import UUID
 

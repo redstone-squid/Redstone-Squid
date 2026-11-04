@@ -1,4 +1,10 @@
-"""Translate transport or inference facts into the shared form vocabulary."""
+"""Convert collected build details into answers for a submission form.
+
+Inference produces a BuildDraft with build field names and human-readable tag
+names. Prefill maps these to the form's field IDs and stable option keys before
+a retained submission draft is created. Unrecognized or invalid values are
+reported for review, while the original BuildDraft remains available to callers.
+"""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass

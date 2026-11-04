@@ -77,7 +77,7 @@ _FINALIZATION_STATE_SHAPE_SQL = """
 
 
 class SubmissionFinalizationJob(Base, kw_only=True):
-    """A retained source-draft job with UUID-fenced worker claims."""
+    """A finalization attempt retained with its current worker claim and retry count."""
 
     __tablename__ = "submission_finalization_jobs"
     __table_args__ = (
@@ -130,6 +130,7 @@ class SubmissionFinalizationJob(Base, kw_only=True):
         ForeignKey("submission_drafts.id", name="submission_finalization_jobs_draft_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
+    # A new submission gets a new attempt_number; worker retries increment attempts.
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
     requested_by_account_id: Mapped[int | None] = mapped_column(
         Integer,

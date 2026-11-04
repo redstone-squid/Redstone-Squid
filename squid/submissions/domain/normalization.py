@@ -36,7 +36,12 @@ def normalize_submission(
     origin: SubmissionOrigin,
     source_installation_id: UUID | None = None,
 ) -> NormalizedSubmission:
-    """Normalize validated form answers without reading persistence or invoking services."""
+    """Convert validated form answers and resolved facts to a finalization payload.
+
+    The caller supplies answers checked against the draft's form manifest,
+    attachment readiness, and sponsor details. This step only converts them to
+    typed submission values; it performs no database or service lookups.
+    """
     category = SubmissionCategory(draft.category)
     visibility = SubmissionSchematicVisibility(_required_str(answers, "schematic_visibility"))
     public = visibility is SubmissionSchematicVisibility.PUBLIC_DOWNLOAD

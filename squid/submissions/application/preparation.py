@@ -36,7 +36,7 @@ class PreparedSubmission:
 
 @dataclass(frozen=True, slots=True)
 class PreparationRejected:
-    """Owner-repair issues found while preparing a validated draft."""
+    """Issues the submitter must resolve before the draft can be queued."""
 
     issues: tuple[SubmissionAttentionIssue, ...]
 
@@ -85,7 +85,12 @@ class SubmissionPreparation:
         self._sponsors = sponsors
 
     async def prepare(self, validated: ValidatedDraft) -> PreparationResult:
-        """Return a normalized submission or deterministic owner-repair issues."""
+        """Return a submission, a wait for processing, or issues requiring correction.
+
+        Only unfinished media or schematic processing qualifies for an automatic
+        retry. Mixed issues, including invalid taxonomy or unavailable sponsors,
+        require correction even if some files are still processing.
+        """
         draft = validated.draft
         answers = validated.normalized_answers
         sponsor, sponsor_issues = await self._resolve_sponsor(draft, answers)

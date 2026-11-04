@@ -48,7 +48,11 @@ _ACTIVE_STATUSES = (DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEE
 
 
 class PostgresDraftRepository(DraftRepository):
-    """Serialize mutations per draft and retain immutable accepted changes."""
+    """Serialize draft edits and retain accepted changes for replay detection.
+
+    Methods use the caller's transaction and do not commit. User-created drafts
+    have per-account capacity; inferred drafts share one global capacity limit.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -188,6 +192,7 @@ class PostgresDraftRepository(DraftRepository):
         ).one_or_none()
         if row is None:
             return None
+        # Replay returns today's snapshot, not the snapshot when the edit was accepted.
         return AppliedDraftChange(_to_stored(row[0]), replayed=True)
 
     @override
@@ -310,7 +315,7 @@ class PostgresDraftRepository(DraftRepository):
 
     @override
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
-        """Expire a fenced batch and cancel every unfinished artifact workflow."""
+        """Expire due drafts, remove unfinished finalization jobs, and discard unshared media jobs."""
         if not 1 <= limit <= 1_000:
             msg = "draft expiry limit must be between 1 and 1000"
             raise ValueError(msg)

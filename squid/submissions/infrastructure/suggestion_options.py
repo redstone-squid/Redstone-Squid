@@ -1,9 +1,8 @@
 """Submission form options served from the shared suggestion registry.
 
-The form manifest's `option_source` values and the suggestion registry's source ids are the same
-namespace by design. Serving both from one catalogue is what makes that true rather than merely
-intended: a source cannot be completable in Discord but missing from the web form, and the two
-cannot disagree about what a name means.
+Form option_source values name suggestion sources. Enumerable sources supply
+both form choices and autocomplete results from the same catalog. Queried sources
+cannot supply a complete choice list and are rejected here.
 """
 
 from typing import override
@@ -30,9 +29,8 @@ class SuggestionFormOptionCatalog(FormOptionCatalog):
     ) -> FormOptionSet:
         """Return a deterministic content revision for one supported option source.
 
-        Raises `ValueError` for anything a form may not read, preserving the contract the route
-        already relies on. A queried source is refused as firmly as an unregistered one: a form
-        needs the whole set, and a source that cannot be enumerated has no whole set to give.
+        Raise ValueError for unknown or non-enumerable sources. Forms need a full
+        choice list, which a source that only supports queries cannot provide.
         """
         try:
             definition = self._suggestions.registry.resolve(source)
@@ -45,6 +43,5 @@ class SuggestionFormOptionCatalog(FormOptionCatalog):
 
         result = await self._suggestions.enumerate(source, context={"category": category}, locale=locale)
         choices = tuple(ChoiceOption(item.value, item.label) for item in result.items)
-        # `enumerate` returns the source's own revision, which is content-addressed over the same
-        # value/label pairs, so a client's cached revision stays valid across this change.
+        # Reuse the suggestion source's revision so both clients can cache the same choices.
         return FormOptionSet(source, category, result.revision or 1, choices)

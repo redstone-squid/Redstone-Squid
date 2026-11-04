@@ -64,7 +64,13 @@ class FormOptionSet:
 
 
 class SubmissionFormService:
-    """Publish the fixed form definition with current approved dynamic options."""
+    """Serve form definitions and the current choices for dynamic fields.
+
+    A manifest revision fixes the fields, validation rules, and inline choices.
+    Fields with option_source instead name a separately fetched option set,
+    such as approved tags. Those choices have their own revision and can change
+    without changing the draft's form revision.
+    """
 
     def __init__(self, option_catalog: FormOptionCatalog, manifests: FormManifestRegistry) -> None:
         self._option_catalog = option_catalog
@@ -99,7 +105,7 @@ class CheckedInFormManifestRegistry:
     """Resolve the current checked-in schema and reject revisions this binary cannot serve."""
 
     async def current(self, *, locale: str | None) -> FormManifest:
-        """Return the only schema revision authored by this binary."""
+        """Return the revision selected for newly created drafts."""
         return build_submission_manifest(locale)
 
     async def get(

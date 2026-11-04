@@ -1,4 +1,10 @@
-"""Durable submission finalization, driven the same way by the bot and the API."""
+"""Turn completed submission drafts into queued build creation work.
+
+SubmissionFinalizationService validates the draft's form answers and checks its
+attachments before storing a finalization attempt. SubmissionFinalizationWorker
+claims that attempt and delegates build creation to a SubmissionExecutor. The
+stored attempt survives restarts, so clients can retrieve its progress or result.
+"""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -43,7 +49,7 @@ DEFAULT_FINALIZATION_ATTEMPTS = 3
 
 @dataclass(frozen=True, slots=True)
 class ClaimedFinalizationJob:
-    """One durable job fenced to a worker by an unguessable claim UUID."""
+    """A queued finalization attempt and the token identifying its current worker."""
 
     job_id: UUID
     draft_id: UUID
@@ -62,7 +68,12 @@ class ClaimedFinalizationJob:
 
 @dataclass(frozen=True, slots=True)
 class FinalizationJobSnapshot:
-    """Current durable state and retained outcome for a source draft."""
+    """Progress and outcome of one submission attempt.
+
+    attempt_number identifies successive submissions of the same draft, such as
+    resubmitting after correcting an issue. attempts counts worker claims of
+    this particular attempt, including retries after failures.
+    """
 
     job_id: UUID
     draft_id: UUID
@@ -108,7 +119,12 @@ type SubmissionRequestResult = FinalizationJobSnapshot | DraftPreparationSnapsho
 
 
 class SubmissionExecutor(Protocol):
-    """Commit build, artifacts, and receipt under the claim fence before returning success."""
+    """Create a build for a claimed finalization attempt.
+
+    Success means the build, its attachment references, and the result linking
+    the attempt to that build have committed together. Return None if another
+    worker has replaced the claim, or a rejection if the draft needs correction.
+    """
 
     async def execute(
         self,
@@ -119,7 +135,12 @@ class SubmissionExecutor(Protocol):
 
 
 class FinalizationJobRepository(Protocol):
-    """Atomic draft transitions and durable claim-token-fenced queue operations."""
+    """Store finalization attempts and update their source drafts together.
+
+    Each attempt retains the prepared submission for workers to retry. Claims
+    carry a token so a replaced worker cannot update the attempt's outcome.
+    The caller commits these operations before executing claimed work.
+    """
 
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None: ...
 
@@ -176,7 +197,13 @@ class FinalizationJobRepository(Protocol):
 
 
 class SubmissionFinalizationService:
-    """Coordinate manifest validation, preparation, and durable enqueueing."""
+    """Check a submission draft and queue it for build creation.
+
+    Form validation checks the answers; preparation resolves sponsor details
+    and attachment readiness. Problems keep the draft editable for correction.
+    If only attachment processing remains, the worker rechecks preparation
+    automatically. A ready submission becomes a stored finalization attempt.
+    """
 
     def __init__(
         self,
@@ -202,7 +229,12 @@ class SubmissionFinalizationService:
         locale: str | None,
         now: Instant | None = None,
     ) -> SubmissionRequestResult:
-        """Start idempotent processing or persist actionable preparation issues."""
+        """Queue a validated draft or retain the issues that prevent finalization.
+
+        Repeated requests return the active job or completed result. If only
+        artifact processing remains, retain a wait that the worker can recheck.
+        Other preparation issues are retained for correction before resubmission.
+        """
         current = await self._drafts.get_accessible(draft_id, account_id)
         return await self._submit(current, account_id, locale=locale, now=now or Instant.now(), refresh_retention=True)
 
@@ -321,7 +353,7 @@ class SubmissionFinalizationService:
                 continue
 
     async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
-        """Return retained finalization state after rechecking draft ownership."""
+        """Return retained finalization state after checking owner or staff access."""
         async with self._uow_factory() as uow:
             draft = await self._drafts.get_accessible_in(uow, draft_id, account_id)
             if draft.preparation_issues:
@@ -370,7 +402,12 @@ class SubmissionFinalizationWorker:
         self._preparation = preparation
 
     async def process_batch(self, *, limit: int = 8, now: Instant | None = None) -> None:
-        """Claim and process at most ``limit`` jobs sequentially."""
+        """Recheck attachment waits, then claim and process up to limit jobs in order.
+
+        Commit claims before running the executor. Unexpected exceptions are
+        recorded for retry; cancellations leave the lease to expire. Successful
+        execution has already committed its build and receipt.
+        """
         if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
             maximum = MAX_FINALIZATION_JOB_CLAIM
             raise InvalidStateError(tr(t"finalization claim limit must be between 1 and {maximum}"))

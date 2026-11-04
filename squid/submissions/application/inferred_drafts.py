@@ -20,7 +20,11 @@ async def materialize_candidate(
     category: BuildCategory | None = None,
     actor: DraftActor | None = None,
 ) -> StoredDraft:
-    """Reuse stable draft identity and preserve missing facts for explicit correction."""
+    """Open a draft using the candidate ID and prefill it only at revision zero.
+
+    Existing edits are preserved. If inference did not identify a category, the
+    caller must choose one before the draft can be created.
+    """
     if candidate.facts.category is not None and category not in {None, candidate.facts.category}:
         message = "The candidate already has a category; its identity cannot be reused for a different category."
         raise ValidationError(message)

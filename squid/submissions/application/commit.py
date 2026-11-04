@@ -29,7 +29,15 @@ class SubmissionBuildPreparer(Protocol):
 
 
 class BuildSubmissionExecutor:
-    """Commit a prepared source build and its receipt under the active claim fence."""
+    """Save a build and its finalization receipt in one transaction.
+
+    The receipt links a finalization attempt to its created build. Saving both
+    together lets a retry discover the result without creating another build.
+
+    Prepare the candidate before locking the draft, keeping slow preparation
+    outside the write transaction. Under the lock, recheck permission, claim
+    ownership, draft revision, and attached media before saving.
+    """
 
     def __init__(
         self,
@@ -48,7 +56,11 @@ class BuildSubmissionExecutor:
         *,
         now: Instant,
     ) -> FinalizedBuild | BuildSubmissionRejected | None:
-        """Return no result for lost authority; a success includes the committed receipt."""
+        """Return the committed build ID, a rejection, or None if the claim was lost.
+
+        Revoked permission produces a rejection. An existing build with the same
+        source draft is reused after checking its owner and sponsor details.
+        """
         if not await self._authorized(job):
             return BuildSubmissionRejected(
                 (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),)

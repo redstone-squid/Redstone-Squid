@@ -1,4 +1,11 @@
-"""Revisioned submission draft value objects."""
+"""Answers retained while an account prepares a build submission.
+
+A DraftSnapshot is the current set of answers. A DraftChange describes one edit
+against a particular snapshot revision, so an older client cannot overwrite a
+newer edit. The form manifest defines which fields and values are allowed.
+The types in this module enforce edit structure, revision checks, and limits
+on retained answers.
+"""
 
 import json
 import math
@@ -68,7 +75,7 @@ class DraftRevisionConflictError(ConflictError):
 
 @dataclass(frozen=True, slots=True)
 class FieldOperation:
-    """One stable-field mutation in a draft change."""
+    """Set or remove one field, identified by its manifest ID."""
 
     operation_id: UUID
     field_id: str
@@ -92,7 +99,11 @@ class FieldOperation:
 
 @dataclass(frozen=True, slots=True)
 class DraftChange:
-    """An atomic client edit carrying concurrency and replay metadata."""
+    """A batch of field edits with an expected revision and a retry key.
+
+    Each field may appear once. Reuse the idempotency key when retrying the same
+    batch; replay detection belongs to persistence, not to DraftSnapshot.apply.
+    """
 
     base_revision: int
     client_instance_id: str
@@ -125,7 +136,16 @@ class DraftChange:
 
 @dataclass(frozen=True, slots=True)
 class DraftSnapshot:
-    """Current compacted state of one account-owned draft."""
+    """Current answers and revision of an account-owned draft.
+
+    schema_revision selects the form definition; revision counts edits to this
+    draft. These identify different things: editing an answer does not change
+    the form definition that the draft uses.
+
+    Construction copies the answers so later changes to the input mapping cannot
+    change this snapshot. The stored mapping itself is still mutable; use apply
+    to produce a new revision rather than editing it directly.
+    """
 
     id: UUID
     owner_account_id: int
@@ -151,7 +171,12 @@ class DraftSnapshot:
         object.__setattr__(self, "answers", deepcopy(dict(self.answers)))
 
     def apply(self, change: DraftChange) -> DraftSnapshot:
-        """Apply an atomic edit or reject it when the client is stale."""
+        """Return a new editing snapshot with the revision incremented by one.
+
+        Only editing and needs-attention drafts accept changes. A stale base
+        revision raises DraftRevisionConflictError. This checks JSON budgets but
+        does not validate field names or values against a form manifest.
+        """
         if self.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             current_status = self.status.value
             raise ValidationError(
@@ -183,7 +208,7 @@ class DraftSnapshot:
         return replace(self, revision=self.revision + 1, status=DraftStatus.EDITING, answers=answers)
 
     def transition(self, status: DraftStatus) -> DraftSnapshot:
-        """Apply an allowed lifecycle transition."""
+        """Return a snapshot with a new lifecycle status, leaving its revision unchanged."""
         allowed: dict[DraftStatus, frozenset[DraftStatus]] = {
             DraftStatus.EDITING: frozenset({DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION, DraftStatus.EXPIRED}),
             DraftStatus.PROCESSING: frozenset(
@@ -204,6 +229,11 @@ class DraftSnapshot:
 
 
 def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> None:
+    """Reject oversized or deeply nested JSON before copying or retaining it.
+
+    The first pass bounds traversal and estimates size; JSON encoding then checks
+    the exact byte count. Reusing a container is rejected even without a cycle.
+    """
     stack: list[tuple[object, int]] = [(value, 0)]
     containers: set[int] = set()
     nodes = 0

@@ -60,7 +60,11 @@ class RevisionFacts:
         )
 
     def patch(self, build: Build) -> BuildEditPatch:
-        """Preserve missing facts and reject an inferred category change."""
+        """Build an edit patch without clearing values omitted by inference.
+
+        Nonempty lists replace existing lists. Missing dimensions preserve the
+        corresponding build dimension. A differing category is rejected.
+        """
         if self.category is not None and self.category != build.category:
             message = "The inferred category differs from this build; choose a matching candidate."
             raise ValidationError(message)

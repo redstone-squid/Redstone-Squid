@@ -1,4 +1,10 @@
-"""Application-owned draft attachment orchestration."""
+"""Authorize and register image or video uploads for submission drafts.
+
+The request handler first obtains DraftUploadAuthority, then writes the upload
+to a temporary file represented by StagedUpload. Registration checks access
+again and passes both to the media job service. The draft revision captured
+before upload prevents registration against a draft changed in the meantime.
+"""
 
 import logging
 from collections.abc import Sequence
@@ -52,7 +58,7 @@ class DraftAttachmentOwnership(Protocol):
 
 @dataclass(slots=True)
 class DraftUploadAuthority:
-    """Short-lived authority whose lifetime ends when registration consumes it."""
+    """Permission to register one upload against a specific draft revision."""
 
     draft_id: UUID
     account_id: int
@@ -80,14 +86,14 @@ class DraftUploadAuthority:
 
 @dataclass(slots=True)
 class StagedUpload:
-    """Private staged bytes whose authority ends when registered or discarded."""
+    """A staged file that registration can consume once and then remove."""
 
     source_path: Path
     source_content_type: str
     _available: bool = field(default=True, init=False, repr=False)
 
     def consume(self) -> Path:
-        """End this staging authority and return its path exactly once."""
+        """Return the temporary file's path once, transferring it to registration."""
         if not self._available:
             msg = tr(t"The staged attachment is no longer available.")
             raise InvalidStateError(msg)
@@ -95,7 +101,7 @@ class StagedUpload:
         return self.source_path
 
     def discard(self) -> None:
-        """End this staging authority and remove any retained private bytes."""
+        """Invalidate this handle and remove the temporary file if it still exists."""
         self._available = False
         try:
             self.source_path.unlink(missing_ok=True)
@@ -132,7 +138,11 @@ class DraftAttachmentService:
         strip_audio: bool,
         upload_id: UUID | None,
     ) -> MediaJobSnapshot:
-        """Consume staged bytes and atomically revalidate their upload authority."""
+        """Register the staged file after rechecking access and its draft revision.
+
+        Each handle can be consumed only once. The staged file is removed on success or
+        failure; cleanup errors are logged without replacing the registration result.
+        """
         try:
             await self._drafts.get_accessible(authority.draft_id, authority.actor_account_id or authority.account_id)
             registered_id = await self._jobs.submit_staged(
@@ -153,23 +163,23 @@ class DraftAttachmentService:
         return await self._owned_snapshot(authority.draft_id, registered_id)
 
     async def list(self, draft_id: UUID, account_id: int) -> Sequence[MediaJobSnapshot]:
-        """List attachment jobs after enforcing current draft ownership."""
+        """List attachment jobs after checking owner or staff access."""
         await self._drafts.get_accessible(draft_id, account_id)
         return await self._jobs.list_for_draft(draft_id)
 
     async def get(self, draft_id: UUID, account_id: int, upload_id: UUID) -> MediaJobSnapshot:
-        """Return one attachment after enforcing ownership and draft association."""
+        """Return an attachment after checking draft access and association."""
         await self._drafts.get_accessible(draft_id, account_id)
         return await self._owned_snapshot(draft_id, upload_id)
 
     async def discard(self, draft_id: UUID, account_id: int, upload_id: UUID) -> None:
-        """Discard one attachment after enforcing current draft ownership."""
+        """Discard an attachment after checking owner or staff access."""
         await self._drafts.get_accessible(draft_id, account_id)
         if not await self._jobs.discard(draft_id, upload_id):
             raise DraftMediaNotFoundError(upload_id)
 
     async def attach(self, source_id: UUID, target_id: UUID, account_id: int, upload_id: UUID) -> MediaJobSnapshot:
-        """Assign one previously supplied file to another owned draft without normalizing it again."""
+        """Share a processed upload between accessible drafts without normalizing it again."""
         await self._drafts.get_accessible(source_id, account_id)
         await self._drafts.get_accessible(target_id, account_id)
         if not await self._jobs.attach(source_id, target_id, upload_id):

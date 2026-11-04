@@ -80,7 +80,13 @@ class InferenceRunCodec(Protocol):
 
 
 class SubmissionInferenceRuns:
-    """Persist exact model inputs before invocation and reuse retained candidates on replay."""
+    """Retain a model invocation's inputs and inferred build candidates.
+
+    A run ID identifies the same input bundle across retries. Completed runs
+    return their retained candidates, each with a stable ID, so reopening a
+    submission does not call the model again or replace the user's draft edits.
+    materialize_candidate turns a candidate into an editable submission draft.
+    """
 
     def __init__(
         self,
@@ -110,7 +116,13 @@ class SubmissionInferenceRuns:
         source_files: tuple[SubmissionSourceFile, ...] = (),
         purpose: Literal["submission", "recalculation"] = "submission",
     ) -> tuple[InferenceCandidate, ...]:
-        """Replay completed work; leave interrupted invocations reclaimable after their lease."""
+        """Retain inputs, run inference, and save candidates under a worker claim.
+
+        Completed runs replay their candidates. New work stores private images
+        before calling the model. Upload, inference, and completion share a four-minute
+        timeout once the claim is committed.
+        Ordinary failures release the claim; cancellation leaves it to expire.
+        """
         inputs: dict[str, JSONValue] = {
             "schema_revision": 1,
             "purpose": purpose,
@@ -204,6 +216,7 @@ class SubmissionInferenceRuns:
             return candidates
 
     async def list_active(self, actor: Subject, *, inbox: bool = False) -> tuple[UUID, ...]:
+        """List retained runs for the actor, or for all accounts after a staff check."""
         async with self._uow_factory() as uow:
             if actor.account_id is None:
                 raise AuthorizationError

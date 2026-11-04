@@ -1,4 +1,10 @@
-"""Private durable schematic intake while sanitization is unavailable."""
+"""Retain schematic uploads privately while sanitization is unavailable.
+
+An upload stores the original bytes and links them to a submission draft. A
+source can be shared by several drafts, each with its own primary selection
+and discard state. Stored sources remain waiting for sanitization rather than
+becoming ready artifacts; see Schem-at/Nucleation#39 in the repository adapter.
+"""
 
 import hashlib
 from typing import Protocol
