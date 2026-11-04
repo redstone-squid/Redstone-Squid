@@ -10,6 +10,7 @@ from squid.accounts.infrastructure.repository import AccountRepository
 from squid.auth.infrastructure.repository import PostgresApiKeyRepository
 from squid.auth.infrastructure.sessions import PostgresWebSessionRepository
 from squid.builds.infrastructure.locks import PostgresBuildLockRepository
+from squid.builds.infrastructure.repository import BuildRepository
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.errors import InvalidStateError
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
@@ -48,6 +49,7 @@ class SqlAlchemyUnitOfWork:
         self._votes = VoteRepository(self._active_session)
         self._records = PostgresRecordRepository(self._active_session)
         self._idempotency = PostgresIdempotencyRepository(self._active_session, idempotency_cipher)
+        self._builds = BuildRepository(self._active_session)
         self._build_locks = PostgresBuildLockRepository(self._active_session)
         self._state: Literal["new", "active", "finished"] = "new"
         self._verification_code_pepper = verification_code_pepper
@@ -175,6 +177,11 @@ class SqlAlchemyUnitOfWork:
     def idempotency(self) -> PostgresIdempotencyRepository:
         self._active_session()
         return self._idempotency
+
+    @property
+    def builds(self) -> BuildRepository:
+        self._active_session()
+        return self._builds
 
     @property
     def build_locks(self) -> PostgresBuildLockRepository:

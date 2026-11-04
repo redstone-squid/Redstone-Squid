@@ -9,6 +9,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.builds.models import Build
+from squid.permissions.application.ports import PermissionUnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +35,8 @@ class BuildRepository(Protocol):
     """Persistence operations required by the build application service."""
 
     async def get_by_id(self, build_id: int) -> Build | None: ...
+
+    async def get_for_update(self, build_id: int) -> Build | None: ...
 
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
 
@@ -80,3 +83,8 @@ class BuildSchematicSummaryProvider(Protocol):
     """
 
     async def summary_for(self, build_id: int) -> BuildSchematicSummary | None: ...
+
+
+class BuildUnitOfWork(PermissionUnitOfWork, Protocol):
+    @property
+    def builds(self) -> BuildRepository: ...

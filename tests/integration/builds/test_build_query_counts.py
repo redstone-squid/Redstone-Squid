@@ -6,16 +6,19 @@ removed. That made mapping a page O(rows) queries. These tests pin the fixed
 cost so the batching cannot silently regress into an N+1.
 """
 
+from functools import partial
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
-from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import OtherBuild
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.models import Version
 from tests.support.database import record_queries
+from tests.support.unit_of_work import transact
 
 # Row query + tag-assignment and tag-definition eager loads + links eager load,
 # then the creator, submitter-identity, version and source-message batches.
@@ -39,7 +42,7 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -
         session.add_all(CreatorAlias(name=f"Builder {index}") for index in range(count))
         account_id = account.id
 
-    repository = BuildRepository(session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, session_factory)
     build_ids: list[int] = []
     for index in range(count):
         build = OtherBuild(
@@ -49,7 +52,7 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -
             creators_ign=[f"Builder {index}"],
             ai_generated=False,
         )
-        await repository.save(build)
+        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
         assert build.id is not None
         build_ids.append(build.id)
     return account_id, build_ids
@@ -62,14 +65,14 @@ async def test_list_page_query_count_does_not_grow_with_the_page(
 ) -> None:
     """Reading a page costs the same number of queries at any page size."""
     await _seed(migrated_session_factory, count)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     with record_queries(migrated_session_factory) as statements:
-        builds = await repository.list_page(
-            statuses=frozenset({Status.PENDING}),
-            submitter_account_id=None,
-            after_id=None,
-            limit=50,
+        builds = await transact(
+            repository,
+            lambda uow: uow.builds.list_page(
+                statuses=frozenset({Status.PENDING}), submitter_account_id=None, after_id=None, limit=50
+            ),
         )
 
     assert len(builds) == count
@@ -86,10 +89,10 @@ async def test_get_many_batches_cross_context_loads(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     _, build_ids = await _seed(migrated_session_factory, 5)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     with record_queries(migrated_session_factory) as statements:
-        builds = await repository.get_many(build_ids)
+        builds = await transact(repository, lambda uow: uow.builds.get_many(build_ids))
 
     assert [build.id for build in builds] == build_ids
     assert [build.creators_ign for build in builds] == [[f"Builder {index}"] for index in range(5)]
@@ -103,10 +106,10 @@ async def test_get_builds_by_id_preserves_positions_including_duplicates(
 ) -> None:
     """Positional results survive batching, including repeats and misses."""
     _, build_ids = await _seed(migrated_session_factory, 2)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     requested = [build_ids[0], 999_999, build_ids[1], build_ids[0]]
-    builds = await repository.get_builds_by_id(requested)
+    builds = await transact(repository, lambda uow: uow.builds.get_builds_by_id(requested))
 
     assert [None if build is None else build.id for build in builds] == [
         build_ids[0],

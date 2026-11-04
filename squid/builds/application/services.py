@@ -10,7 +10,7 @@ from squid.builds.application.editing import BuildEditLease, BuildEditPatch
 from squid.builds.application.ports import (
     BuildEmbeddingCoordinator,
     BuildLockManager,
-    BuildRepository,
+    BuildUnitOfWork,
     DefaultVersionResolver,
 )
 from squid.builds.application.restrictions import RestrictionRepository
@@ -22,6 +22,7 @@ from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,16 +42,16 @@ class BuildService:
 
     def __init__(
         self,
-        repository: BuildRepository,
         locks: BuildLockManager,
         restrictions: RestrictionRepository,
         versions: DefaultVersionResolver,
         embeddings: BuildEmbeddingCoordinator,
         taxonomy: BuildTaxonomyResolver,
         *,
+        uow_factory: UnitOfWorkFactory[BuildUnitOfWork],
         permissions: PermissionService | None = None,
     ) -> None:
-        self._repository = repository
+        self._uow_factory = uow_factory
         self._locks = locks
         self._restrictions = restrictions
         self._versions = versions
@@ -59,15 +60,18 @@ class BuildService:
         self._permissions = permissions
 
     async def get(self, build_id: int) -> Build | None:
-        return await self._repository.get_by_id(build_id)
+        async with self._uow_factory() as uow:
+            return await uow.builds.get_by_id(build_id)
 
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
         """Return the build previously finalized from a synchronized draft, if any."""
-        return await self._repository.get_by_source_submission_draft_id(draft_id)
+        async with self._uow_factory() as uow:
+            return await uow.builds.get_by_source_submission_draft_id(draft_id)
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
         """Return every build inferred from one Discord message, newest bundle included."""
-        return await self._repository.list_ids_for_source_message(message_id)
+        async with self._uow_factory() as uow:
+            return await uow.builds.list_ids_for_source_message(message_id)
 
     async def save(self, build: Build) -> Build:
         await self._persist(build)
@@ -118,7 +122,7 @@ class BuildService:
         expected_revision: int | None = None,
     ) -> BuildEditLease:
         return BuildEditLease(
-            self._repository,
+            self.get,
             self._locks,
             self._persist_without_lock,
             build_id,
@@ -172,19 +176,28 @@ class BuildService:
         return build
 
     async def confirm(self, build_id: int) -> Build:
-        async with self._locks.locked(build_id):
-            build = await self._get_required(build_id)
-            await self._repository.confirm(build)
+        async with self._locks.locked(build_id), self._uow_factory() as uow:
+            build = await self._get_for_update(uow, build_id)
+            await uow.builds.confirm(build)
+            await uow.commit()
         return build
 
     async def deny(self, build_id: int) -> Build:
-        async with self._locks.locked(build_id):
-            build = await self._get_required(build_id)
-            await self._repository.deny(build)
+        async with self._locks.locked(build_id), self._uow_factory() as uow:
+            build = await self._get_for_update(uow, build_id)
+            await uow.builds.deny(build)
+            await uow.commit()
         return build
 
     async def _get_required(self, build_id: int) -> Build:
-        build = await self._repository.get_by_id(build_id)
+        build = await self.get(build_id)
+        if build is None:
+            raise BuildNotFoundError(build_id)
+        return build
+
+    @staticmethod
+    async def _get_for_update(uow: BuildUnitOfWork, build_id: int) -> Build:
+        build = await uow.builds.get_for_update(build_id)
         if build is None:
             raise BuildNotFoundError(build_id)
         return build
@@ -199,7 +212,9 @@ class BuildService:
     async def _persist_without_lock(self, build: Build) -> None:
         """Persist a build when the caller already owns any required edit lease."""
         await self._prepare_for_persistence(build)
-        await self._repository.save(build)
+        async with self._uow_factory() as uow:
+            await uow.builds.save(build)
+            await uow.commit()
         await self._embeddings.index(build)
 
     async def _prepare_for_persistence(self, build: Build) -> None:

@@ -25,7 +25,6 @@ from squid.builds.application import (
 )
 from squid.builds.application.locks import BuildLockService
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, PostgresBuildIndex
-from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import BuildTagsManager, OfficialTagResolver
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
@@ -269,31 +268,24 @@ class _ServiceGraph:
         return BuildEmbeddingService(self.embedding_model, PostgresBuildIndex(self.db.async_session))
 
     @cached_property
-    def build_repository(self) -> BuildRepository:
-        return BuildRepository(self.db.async_session)
-
-    @cached_property
     def build_locks(self) -> BuildLockService:
         return BuildLockService(uow_factory=self.uow_factory)
 
     @cached_property
     def builds(self) -> BuildService:
         return BuildService(
-            self.build_repository,
             self.build_locks,
             self.restriction_repository,
             self.version_service,
             self.embedding_service,
             OfficialTagResolver(self.db.async_session),
             permissions=self.permissions,
+            uow_factory=self.uow_factory,
         )
 
     @cached_property
     def build_queries(self) -> BuildQueryService:
-        return BuildQueryService(
-            self.build_repository,
-            self.embedding_service,
-        )
+        return BuildQueryService(self.embedding_service, uow_factory=self.uow_factory)
 
     @cached_property
     def text_generator(self) -> OpenAITextGenerator:
@@ -456,7 +448,7 @@ class _ServiceGraph:
     @cached_property
     def submission_revisions(self) -> RevisionProposalService:
         return RevisionProposalService(
-            PostgresRevisionProposals(self.db.async_session, self.build_repository, self.builds),
+            PostgresRevisionProposals(self.db.async_session, self.builds),
             self.builds,
             self.permissions,
         )
@@ -498,7 +490,6 @@ class _ServiceGraph:
             self.submission_finalization_jobs,
             PostgresSubmissionExecutor(
                 self.db.async_session,
-                self.build_repository,
                 SubmissionBuildPreparation(self.builds, self.tags, self.version_service),
                 drafts=self.submission_drafts,
             ),

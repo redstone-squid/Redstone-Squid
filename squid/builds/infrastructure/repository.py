@@ -3,17 +3,16 @@
 import logging
 import uuid
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
 from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.engine import CursorResult
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload, selectinload
-from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.orm.attributes import flag_modified, set_committed_value
 from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
@@ -169,10 +168,10 @@ def _public_summary_from_selected_row(
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
-    __slots__ = ("_loader", "_session_factory")
+    __slots__ = ("_loader", "_session")
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
         self._loader = BuildLoader()
 
     async def get_by_id(self, build_id: int) -> Build | None:
@@ -184,25 +183,32 @@ class BuildRepository:
         Returns:
             The Build object with the specified ID, or None if the build was not found.
         """
-        async with self._session_factory() as session:
-            stmt = select(Build).where(Build.id == build_id).options(*_mapper_load_options())
-            result = await session.execute(stmt)
-            sql_build = result.unique().scalar_one_or_none()
-            if sql_build is None:
-                return None
-            return await self._loader.load(session, sql_build)
+        session = self._session()
+        stmt = select(Build).where(Build.id == build_id).options(*_mapper_load_options())
+        result = await session.execute(stmt)
+        sql_build = result.unique().scalar_one_or_none()
+        if sql_build is None:
+            return None
+        return await self._loader.load(session, sql_build)
+
+    async def get_for_update(self, build_id: int) -> Build | None:
+        session = self._session()
+        row = await session.scalar(
+            select(Build).where(Build.id == build_id).options(*_mapper_load_options()).with_for_update(of=Build.id)
+        )
+        return None if row is None else await self._loader.load(session, row)
 
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
         """Load several builds with one row query and preserve requested ordering."""
         if not build_ids:
             return []
-        async with self._session_factory() as session:
-            rows = (
-                (await session.scalars(select(Build).where(Build.id.in_(build_ids)).options(*_mapper_load_options())))
-                .unique()
-                .all()
-            )
-            by_id = {build.id: build for build in await self._loader.load_many(session, rows)}
+        session = self._session()
+        rows = (
+            (await session.scalars(select(Build).where(Build.id.in_(build_ids)).options(*_mapper_load_options())))
+            .unique()
+            .all()
+        )
+        by_id = {build.id: build for build in await self._loader.load_many(session, rows)}
         return [by_id[build_id] for build_id in build_ids if build_id in by_id]
 
     async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
@@ -217,137 +223,137 @@ class BuildRepository:
         builds = Build.__table__
         door = DoorBuild.__table__
         extender = ExtenderBuild.__table__
-        async with self._session_factory() as session:
-            rows = (
-                (
-                    await session.execute(
-                        select(
-                            builds.c.id.label("id"),
-                            builds.c.revision.label("revision"),
-                            builds.c.submission_status.label("submission_status"),
-                            builds.c.category.label("category"),
-                            builds.c.width.label("width"),
-                            builds.c.height.label("height"),
-                            builds.c.depth.label("depth"),
-                            builds.c.display_name.label("display_name"),
-                            builds.c.version_spec.label("version_spec"),
-                            builds.c.submission_time.label("submission_time"),
-                            builds.c.edited_time.label("edited_time"),
-                            builds.c.ai_generated.label("ai_generated"),
-                            builds.c.extra_info["unknown_restrictions"].label("unknown_restrictions"),
-                            builds.c.extra_info["unknown_patterns"].label("unknown_patterns"),
-                            door.c.orientation.label("door_orientation"),
-                            door.c.door_width.label("door_width"),
-                            door.c.door_height.label("door_height"),
-                            door.c.door_depth.label("door_depth"),
-                            door.c.normal_opening_time.label("normal_opening_time"),
-                            door.c.normal_closing_time.label("normal_closing_time"),
-                            extender.c.orientation.label("extender_orientation"),
-                            extender.c.extension_length.label("extension_length"),
-                            extender.c.extender_type.label("extender_type"),
-                        )
-                        .select_from(builds)
-                        .outerjoin(door, door.c.build_id == builds.c.id)
-                        .outerjoin(extender, extender.c.build_id == builds.c.id)
-                        .where(builds.c.id.in_(build_ids), builds.c.submission_status == Status.CONFIRMED)
+        session = self._session()
+        rows = (
+            (
+                await session.execute(
+                    select(
+                        builds.c.id.label("id"),
+                        builds.c.revision.label("revision"),
+                        builds.c.submission_status.label("submission_status"),
+                        builds.c.category.label("category"),
+                        builds.c.width.label("width"),
+                        builds.c.height.label("height"),
+                        builds.c.depth.label("depth"),
+                        builds.c.display_name.label("display_name"),
+                        builds.c.version_spec.label("version_spec"),
+                        builds.c.submission_time.label("submission_time"),
+                        builds.c.edited_time.label("edited_time"),
+                        builds.c.ai_generated.label("ai_generated"),
+                        builds.c.extra_info["unknown_restrictions"].label("unknown_restrictions"),
+                        builds.c.extra_info["unknown_patterns"].label("unknown_patterns"),
+                        door.c.orientation.label("door_orientation"),
+                        door.c.door_width.label("door_width"),
+                        door.c.door_height.label("door_height"),
+                        door.c.door_depth.label("door_depth"),
+                        door.c.normal_opening_time.label("normal_opening_time"),
+                        door.c.normal_closing_time.label("normal_closing_time"),
+                        extender.c.orientation.label("extender_orientation"),
+                        extender.c.extension_length.label("extension_length"),
+                        extender.c.extender_type.label("extender_type"),
                     )
-                )
-                .mappings()
-                .all()
-            )
-            public_ids = tuple(row["id"] for row in rows)
-            if not public_ids:
-                return ()
-
-            creators: dict[int, list[str]] = defaultdict(list)
-            for build_id, name in await session.execute(
-                select(BuildCreator.build_id, CreatorAlias.name)
-                .join(CreatorAlias, CreatorAlias.id == BuildCreator.alias_id)
-                .where(BuildCreator.build_id.in_(public_ids))
-                .order_by(BuildCreator.build_id, BuildCreator.alias_id)
-            ):
-                creators[build_id].append(name)
-
-            versions: dict[int, list[str]] = defaultdict(list)
-            for build_id, edition, major, minor, patch in await session.execute(
-                select(
-                    BuildVersion.build_id,
-                    Version.edition,
-                    Version.major_version,
-                    Version.minor_version,
-                    Version.patch_number,
-                )
-                .join(Version, Version.id == BuildVersion.version_id)
-                .where(BuildVersion.build_id.in_(public_ids))
-                .order_by(BuildVersion.build_id, BuildVersion.version_id)
-            ):
-                versions[build_id].append(f"{edition} {major}.{minor}.{patch}")
-
-            links: dict[int, list[BuildLink]] = defaultdict(list)
-            for build_id, url, media_type in await session.execute(
-                select(BuildLink.build_id, BuildLink.url, BuildLink.media_type)
-                .where(
-                    BuildLink.build_id.in_(public_ids),
-                    BuildLink.media_type.in_(("render", "image")),
-                )
-                .order_by(BuildLink.build_id, BuildLink.url)
-            ):
-                if media_type in {"render", "image"}:
-                    links[build_id].append(BuildLink(url=url, media_type=media_type))
-
-            public_tags: dict[int, list[PublicBuildTag]] = defaultdict(list)
-            title_taxonomy: dict[int, dict[str, list[str]]] = defaultdict(
-                lambda: {
-                    "patterns": [],
-                    "wiring-placement": [],
-                    "animated": [],
-                    "component": [],
-                    "miscellaneous": [],
-                }
-            )
-            tag_rows = await session.execute(
-                select(
-                    TagAssignment.build_id,
-                    TagDefinition.stable_key,
-                    TagDefinition.display_name,
-                    TagDefinition.authority,
-                    TagDefinition.semantic_kind,
-                    TagDefinition.restriction_type,
-                    TagAssignment.numeric_value,
-                    TagAssignment.text_value,
-                    TagAssignment.boolean_value,
-                    TagAssignment.display_unit,
-                )
-                .join(TagDefinition, TagDefinition.id == TagAssignment.tag_id)
-                .where(TagAssignment.build_id.in_(public_ids))
-                .order_by(
-                    TagAssignment.build_id,
-                    func.coalesce(TagAssignment.display_order, TagDefinition.default_display_order),
-                    TagAssignment.tag_id,
+                    .select_from(builds)
+                    .outerjoin(door, door.c.build_id == builds.c.id)
+                    .outerjoin(extender, extender.c.build_id == builds.c.id)
+                    .where(builds.c.id.in_(build_ids), builds.c.submission_status == Status.CONFIRMED)
                 )
             )
-            for tag_row in tag_rows:
-                value = (
-                    tag_row.numeric_value
-                    if tag_row.numeric_value is not None
-                    else tag_row.text_value
-                    if tag_row.text_value is not None
-                    else tag_row.boolean_value
+            .mappings()
+            .all()
+        )
+        public_ids = tuple(row["id"] for row in rows)
+        if not public_ids:
+            return ()
+
+        creators: dict[int, list[str]] = defaultdict(list)
+        for build_id, name in await session.execute(
+            select(BuildCreator.build_id, CreatorAlias.name)
+            .join(CreatorAlias, CreatorAlias.id == BuildCreator.alias_id)
+            .where(BuildCreator.build_id.in_(public_ids))
+            .order_by(BuildCreator.build_id, BuildCreator.alias_id)
+        ):
+            creators[build_id].append(name)
+
+        versions: dict[int, list[str]] = defaultdict(list)
+        for build_id, edition, major, minor, patch in await session.execute(
+            select(
+                BuildVersion.build_id,
+                Version.edition,
+                Version.major_version,
+                Version.minor_version,
+                Version.patch_number,
+            )
+            .join(Version, Version.id == BuildVersion.version_id)
+            .where(BuildVersion.build_id.in_(public_ids))
+            .order_by(BuildVersion.build_id, BuildVersion.version_id)
+        ):
+            versions[build_id].append(f"{edition} {major}.{minor}.{patch}")
+
+        links: dict[int, list[BuildLink]] = defaultdict(list)
+        for build_id, url, media_type in await session.execute(
+            select(BuildLink.build_id, BuildLink.url, BuildLink.media_type)
+            .where(
+                BuildLink.build_id.in_(public_ids),
+                BuildLink.media_type.in_(("render", "image")),
+            )
+            .order_by(BuildLink.build_id, BuildLink.url)
+        ):
+            if media_type in {"render", "image"}:
+                links[build_id].append(BuildLink(url=url, media_type=media_type))
+
+        public_tags: dict[int, list[PublicBuildTag]] = defaultdict(list)
+        title_taxonomy: dict[int, dict[str, list[str]]] = defaultdict(
+            lambda: {
+                "patterns": [],
+                "wiring-placement": [],
+                "animated": [],
+                "component": [],
+                "miscellaneous": [],
+            }
+        )
+        tag_rows = await session.execute(
+            select(
+                TagAssignment.build_id,
+                TagDefinition.stable_key,
+                TagDefinition.display_name,
+                TagDefinition.authority,
+                TagDefinition.semantic_kind,
+                TagDefinition.restriction_type,
+                TagAssignment.numeric_value,
+                TagAssignment.text_value,
+                TagAssignment.boolean_value,
+                TagAssignment.display_unit,
+            )
+            .join(TagDefinition, TagDefinition.id == TagAssignment.tag_id)
+            .where(TagAssignment.build_id.in_(public_ids))
+            .order_by(
+                TagAssignment.build_id,
+                func.coalesce(TagAssignment.display_order, TagDefinition.default_display_order),
+                TagAssignment.tag_id,
+            )
+        )
+        for tag_row in tag_rows:
+            value = (
+                tag_row.numeric_value
+                if tag_row.numeric_value is not None
+                else tag_row.text_value
+                if tag_row.text_value is not None
+                else tag_row.boolean_value
+            )
+            public_tags[tag_row.build_id].append(
+                PublicBuildTag(
+                    key=tag_row.stable_key,
+                    name=tag_row.display_name,
+                    value=value,
+                    unit=tag_row.display_unit,
                 )
-                public_tags[tag_row.build_id].append(
-                    PublicBuildTag(
-                        key=tag_row.stable_key,
-                        name=tag_row.display_name,
-                        value=value,
-                        unit=tag_row.display_unit,
-                    )
-                )
-                if tag_row.authority != TagAuthority.OFFICIAL:
-                    continue
-                if tag_row.semantic_kind == TagSemanticKind.PATTERN:
-                    title_taxonomy[tag_row.build_id]["patterns"].append(tag_row.display_name)
-                elif tag_row.semantic_kind == TagSemanticKind.RESTRICTION and tag_row.restriction_type is not None:
-                    title_taxonomy[tag_row.build_id][tag_row.restriction_type].append(tag_row.display_name)
+            )
+            if tag_row.authority != TagAuthority.OFFICIAL:
+                continue
+            if tag_row.semantic_kind == TagSemanticKind.PATTERN:
+                title_taxonomy[tag_row.build_id]["patterns"].append(tag_row.display_name)
+            elif tag_row.semantic_kind == TagSemanticKind.RESTRICTION and tag_row.restriction_type is not None:
+                title_taxonomy[tag_row.build_id][tag_row.restriction_type].append(tag_row.display_name)
 
         by_id = {
             row["id"]: _public_summary_from_selected_row(
@@ -364,10 +370,10 @@ class BuildRepository:
 
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
-        async with self._session_factory() as session:
-            return await self.source_in_session(session, draft_id)
+        session = self._session()
+        return await self._source(session, draft_id)
 
-    async def source_in_session(self, session: AsyncSession, draft_id: uuid.UUID) -> Build | None:
+    async def _source(self, session: AsyncSession, draft_id: uuid.UUID) -> Build | None:
         """Read a source-draft build within a submission transaction."""
         sql_build = await session.scalar(
             select(Build).where(Build.source_submission_draft_id == draft_id).options(*_mapper_load_options())
@@ -398,31 +404,31 @@ class BuildRepository:
         if sort.field != "id" and (after_id is not None or before_id is not None):
             msg = "ID anchors require the ID sort"
             raise ValueError(msg)
-        async with self._session_factory() as session:
-            statement = _page_filter(
-                select(Build),
-                statuses=statuses,
-                submitter_account_id=submitter_account_id,
+        session = self._session()
+        statement = _page_filter(
+            select(Build),
+            statuses=statuses,
+            submitter_account_id=submitter_account_id,
+        )
+        reverse = before_id is not None
+        if sort.field == "submission_time":
+            time_order = Build.submission_time.desc() if sort.descending else Build.submission_time.asc()
+            id_order = Build.id.desc() if sort.descending else Build.id.asc()
+            statement = statement.order_by(time_order.nulls_last(), id_order)
+        elif before_id is not None:
+            # Walk away from the anchor in reversed display order; the page is flipped back below.
+            statement = statement.where(Build.id > before_id if sort.descending else Build.id < before_id).order_by(
+                Build.id.asc() if sort.descending else Build.id.desc()
             )
-            reverse = before_id is not None
-            if sort.field == "submission_time":
-                time_order = Build.submission_time.desc() if sort.descending else Build.submission_time.asc()
-                id_order = Build.id.desc() if sort.descending else Build.id.asc()
-                statement = statement.order_by(time_order.nulls_last(), id_order)
-            elif before_id is not None:
-                # Walk away from the anchor in reversed display order; the page is flipped back below.
-                statement = statement.where(Build.id > before_id if sort.descending else Build.id < before_id).order_by(
-                    Build.id.asc() if sort.descending else Build.id.desc()
-                )
-            else:
-                if after_id is not None:
-                    statement = statement.where(Build.id < after_id if sort.descending else Build.id > after_id)
-                statement = statement.order_by(Build.id.desc() if sort.descending else Build.id.asc())
-            if offset:
-                statement = statement.offset(offset)
-            rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
-            ordered = list(reversed(rows)) if reverse else list(rows)
-            return await self._loader.load_many(session, ordered)
+        else:
+            if after_id is not None:
+                statement = statement.where(Build.id < after_id if sort.descending else Build.id > after_id)
+            statement = statement.order_by(Build.id.desc() if sort.descending else Build.id.asc())
+        if offset:
+            statement = statement.offset(offset)
+        rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
+        ordered = list(reversed(rows)) if reverse else list(rows)
+        return await self._loader.load_many(session, ordered)
 
     async def count(
         self,
@@ -433,14 +439,14 @@ class BuildRepository:
         """Count the builds a listing can display under a visibility policy."""
         if not statuses:
             return 0
-        async with self._session_factory() as session:
-            statement = _page_filter(
-                # No DISTINCT: the identity join that could multiply rows is gone.
-                select(func.count()).select_from(Build),
-                statuses=statuses,
-                submitter_account_id=submitter_account_id,
-            )
-            return await session.scalar(statement) or 0
+        session = self._session()
+        statement = _page_filter(
+            # No DISTINCT: the identity join that could multiply rows is gone.
+            select(func.count()).select_from(Build),
+            statuses=statuses,
+            submitter_account_id=submitter_account_id,
+        )
+        return await session.scalar(statement) or 0
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
         """Return every build inferred from one Discord message.
@@ -448,14 +454,14 @@ class BuildRepository:
         Plural because a build-log message routinely yields a bundle, which the old
         single `messages.build_id` column could not express.
         """
-        async with self._session_factory() as session:
-            return (
-                await session.scalars(
-                    select(BuildSourceMessage.build_id)
-                    .where(BuildSourceMessage.message_id == message_id)
-                    .order_by(BuildSourceMessage.build_id)
-                )
-            ).all()
+        session = self._session()
+        return (
+            await session.scalars(
+                select(BuildSourceMessage.build_id)
+                .where(BuildSourceMessage.message_id == message_id)
+                .order_by(BuildSourceMessage.build_id)
+            )
+        ).all()
 
     async def save(self, build: Build) -> None:
         """
@@ -466,13 +472,13 @@ class BuildRepository:
         build.edited_time = now()
 
         if build.id is None:
-            async with self._session_factory() as session:
-                await self.insert_in_session(session, build)
-                await session.commit()
+            session = self._session()
+            await self._insert(session, build)
+            await session.flush()
         else:
             await self._update_existing(build)
 
-    async def insert_in_session(self, session: AsyncSession, build: Build) -> None:
+    async def _insert(self, session: AsyncSession, build: Build) -> None:
         """Insert a prepared build within the caller's transaction, including its database events."""
         if build.id is not None:
             message = "Transactional insertion requires a new build."
@@ -509,10 +515,10 @@ class BuildRepository:
 
     async def _update_existing(self, build: Build) -> None:
         """Persist an existing build while its repository lease is held."""
-        async with self._session_factory.begin() as session:
-            await self.update_in_session(session, build)
+        session = self._session()
+        await self._update(session, build)
 
-    async def update_in_session(self, session: AsyncSession, build: Build) -> None:
+    async def _update(self, session: AsyncSession, build: Build) -> None:
         """Update a prepared build and its events within the caller's transaction."""
         assert build.id is not None
         if build.submission_status is None:
@@ -794,51 +800,48 @@ class BuildRepository:
     async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
         assert build.id is not None
         edited_time = now()
-        async with self._session_factory() as session:
-            statement = (
-                update(Build)
-                .where(Build.id == build.id, Build.revision == build.revision)
-                .values(
-                    submission_status=status,
-                    revision=Build.revision + 1,
-                    edited_time=edited_time,
-                )
+        session = self._session()
+        statement = (
+            update(Build)
+            .where(Build.id == build.id, Build.revision == build.revision)
+            .values(
+                submission_status=status,
+                revision=Build.revision + 1,
+                edited_time=edited_time,
             )
-            result = cast(CursorResult[Any], await session.execute(statement))
-            if result.rowcount != 1:
-                current_revision = await session.scalar(select(Build.revision).where(Build.id == build.id))
-                await session.rollback()
-                if current_revision is not None:
-                    raise BuildRevisionMismatchError(
-                        build.id,
-                        expected_revision=build.revision,
-                        current_revision=current_revision,
-                    )
-                msg = f"Failed to {operation} submission in the database."
-                raise PersistenceError(msg, context={"build_id": build.id, "operation": operation})
-            await session.commit()
-        build.submission_status = status
-        build.revision += 1
-        build.edited_time = edited_time
+        )
+        updated = (
+            await session.execute(statement.returning(Build.submission_status, Build.revision, Build.edited_time))
+        ).one_or_none()
+        if updated is None:
+            current_revision = await session.scalar(select(Build.revision).where(Build.id == build.id))
+            if current_revision is not None:
+                raise BuildRevisionMismatchError(
+                    build.id, expected_revision=build.revision, current_revision=current_revision
+                )
+            msg = f"Failed to {operation} submission in the database."
+            raise PersistenceError(msg, context={"build_id": build.id, "operation": operation})
+        for name, value in zip(("submission_status", "revision", "edited_time"), updated, strict=True):
+            set_committed_value(build, name, value)
 
     async def get_pending(self) -> list[Build]:
         """Return pending builds with the relationships required by the domain mapper."""
-        async with self._session_factory() as session:
-            statement = select(Build).where(Build.submission_status == Status.PENDING).options(*_mapper_load_options())
-            result = await session.execute(statement)
-            return await self._loader.load_many(session, list(result.unique().scalars().all()))
+        session = self._session()
+        statement = select(Build).where(Build.submission_status == Status.PENDING).options(*_mapper_load_options())
+        result = await session.execute(statement)
+        return await self._loader.load_many(session, list(result.unique().scalars().all()))
 
     async def get_builds_by_id(self, build_ids: list[int]) -> list[Build | None]:
         """Fetches builds from the database with the given IDs."""
         if len(build_ids) == 0:
             return []
 
-        async with self._session_factory() as session:
-            stmt = select(Build).options(*_mapper_load_options()).where(Build.id.in_(build_ids))
-            result = await session.execute(stmt)
-            sql_builds = list(result.unique().scalars().all())
-            by_id = {build.id: build for build in await self._loader.load_many(session, sql_builds)}
-            return [by_id.get(build_id) for build_id in build_ids]
+        session = self._session()
+        stmt = select(Build).options(*_mapper_load_options()).where(Build.id.in_(build_ids))
+        result = await session.execute(stmt)
+        sql_builds = list(result.unique().scalars().all())
+        by_id = {build.id: build for build in await self._loader.load_many(session, sql_builds)}
+        return [by_id.get(build_id) for build_id in build_ids]
 
 
 def _split_tag_value(

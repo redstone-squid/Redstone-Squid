@@ -99,7 +99,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await seed_account_and_version(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     draft_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
     builds = [
         submission_build(category, account_id, draft_id=draft_id if category is BuildCategory.OTHER else None)
@@ -107,25 +107,29 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     ]
 
     for build in builds:
-        await repository.save(build)
+        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
         assert build.id is not None
         assert build.revision == 1
 
-    loaded = [await repository.get_by_id(build.id) for build in builds if build.id is not None]
+    loaded = [
+        await transact(repository, lambda uow, build=build: uow.builds.get_by_id(build.id))
+        for build in builds
+        if build.id is not None
+    ]
     assert [build.category if build is not None else None for build in loaded] == list(BuildCategory)
     assert all(build is not None and build.submitter_account_id == account_id for build in loaded)
     assert all(build is not None and build.submitter_discord_id is None for build in loaded)
-    other = await repository.get_by_source_submission_draft_id(draft_id)
+    other = await transact(repository, lambda uow: uow.builds.get_by_source_submission_draft_id(draft_id))
     assert other is not None
     assert other.category is BuildCategory.OTHER
     assert other.display_name == "Workshop prototype"
-    pending = await repository.get_pending()
+    pending = await transact(repository, lambda uow: uow.builds.get_pending())
     assert {build.category for build in pending} == set(BuildCategory)
-    account_page = await repository.list_page(
-        statuses=frozenset({Status.PENDING}),
-        submitter_account_id=account_id,
-        after_id=None,
-        limit=10,
+    account_page = await transact(
+        repository,
+        lambda uow: uow.builds.list_page(
+            statuses=frozenset({Status.PENDING}), submitter_account_id=account_id, after_id=None, limit=10
+        ),
     )
     assert {build.category for build in account_page} == set(BuildCategory)
 
@@ -135,22 +139,22 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
         assert build.category is not None
         category = build.category
         build.description = f"Updated {category.value}"
-        await repository.save(build)
-        reloaded = await repository.get_by_id(build.id)
+        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
+        reloaded = await transact(repository, lambda uow, build=build: uow.builds.get_by_id(build.id))
         assert reloaded is not None
         assert reloaded.description == f"Updated {category.value}"
         assert reloaded.revision == 2
 
     duplicate = submission_build(BuildCategory.OTHER, account_id, draft_id=draft_id)
     with pytest.raises(IntegrityError):
-        await repository.save(duplicate)
+        await transact(repository, lambda uow: uow.builds.save(duplicate), commit=True)
 
 
 async def test_repository_round_trips_immutable_public_sponsor_snapshot(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await seed_account_and_version(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     installation_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
     sponsor = PublicSponsor(
         installation_id,
@@ -160,9 +164,9 @@ async def test_repository_round_trips_immutable_public_sponsor_snapshot(
     )
     build = submission_build(BuildCategory.OTHER, account_id, sponsor=sponsor)
 
-    await repository.save(build)
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
     assert build.id is not None
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
 
     assert loaded is not None
     assert loaded.sponsor == sponsor
@@ -184,7 +188,7 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await seed_account_and_version(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     confirmed = submission_build(BuildCategory.OTHER, account_id)
     confirmed.submission_status = Status.CONFIRMED
     confirmed.display_name = "Public prototype"
@@ -195,14 +199,15 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
         BuildLink(url="https://cdn.example.test/evidence.mp4", media_type="video"),
     ]
     pending = submission_build(BuildCategory.OTHER, account_id)
-    await repository.save(confirmed)
-    await repository.save(pending)
+    await transact(repository, lambda uow: uow.builds.save(confirmed), commit=True)
+    await transact(repository, lambda uow: uow.builds.save(pending), commit=True)
     assert confirmed.id is not None
     assert pending.id is not None
 
-    summaries = await PublicSummaryOnlyBuildRepository(migrated_session_factory).get_public_summaries(
-        [confirmed.id, pending.id, confirmed.id, 999_999]
-    )
+    async with migrated_session_factory() as session:
+        summaries = await PublicSummaryOnlyBuildRepository(lambda: session).get_public_summaries(
+            [confirmed.id, pending.id, confirmed.id, 999_999]
+        )
 
     assert [summary.id for summary in summaries] == [confirmed.id, confirmed.id]
     assert summaries[0] == summaries[1]
@@ -236,9 +241,7 @@ async def _execute_submission(
     preparation: SubmissionBuildPreparation, sessions: async_sessionmaker[AsyncSession], payload: NormalizedSubmission
 ) -> FinalizedBuild | BuildSubmissionRejected:
     claim = await _claim_submission(sessions, payload)
-    result = await PostgresSubmissionExecutor(sessions, BuildRepository(sessions), preparation).execute(
-        claim, now=Instant.now()
-    )
+    result = await PostgresSubmissionExecutor(sessions, preparation).execute(claim, now=Instant.now())
     assert result is not None
     return result
 
@@ -247,15 +250,15 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await seed_account_and_version(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     versions = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     builds = BuildService(
-        repository,
         BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         RestrictionRepository(migrated_session_factory),
         versions,
         NoopEmbeddings(),
         OfficialTagResolver(migrated_session_factory),
+        uow_factory=repository,
     )
     target = SubmissionBuildPreparation(builds, NoApprovedTags(), versions)
     canonical_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
@@ -265,7 +268,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     )
 
     assert isinstance(result, FinalizedBuild)
-    persisted = await repository.get_by_id(result.build_id)
+    persisted = await transact(repository, lambda uow: uow.builds.get_by_id(result.build_id))
     assert persisted is not None
     assert persisted.versions == ["Java 1.21.0"]
 
@@ -277,12 +280,14 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     assert rejected == BuildSubmissionRejected(
         (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
     )
-    assert await repository.get_by_source_submission_draft_id(unknown_draft_id) is None
+    assert (
+        await transact(repository, lambda uow: uow.builds.get_by_source_submission_draft_id(unknown_draft_id)) is None
+    )
 
     invalid_build = submission_build(BuildCategory.OTHER, account_id)
     invalid_build.versions = ["Java 1.21.99"]
     with pytest.raises(InvalidBuildError, match="Unknown canonical Minecraft versions"):
-        await repository.save(invalid_build)
+        await transact(repository, lambda uow: uow.builds.save(invalid_build), commit=True)
     assert invalid_build.id is None
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Build)) == 1
@@ -293,16 +298,16 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
 ) -> None:
     account_id = await seed_account_and_version(migrated_session_factory)
     draft_id = uuid.UUID("99999999-9999-4999-8999-999999999999")
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     versions = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     writer = SubmissionBuildPreparation(
         BuildService(
-            repository,
             BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             RestrictionRepository(migrated_session_factory),
             versions,
             NoopEmbeddings(),
             OfficialTagResolver(migrated_session_factory),
+            uow_factory=repository,
         ),
         NoApprovedTags(),
         versions,
@@ -310,7 +315,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     claim = await _claim_submission(
         migrated_session_factory, normalized_submission(account_id, draft_id, "Java 1.21.0")
     )
-    executor = PostgresSubmissionExecutor(migrated_session_factory, repository, writer)
+    executor = PostgresSubmissionExecutor(migrated_session_factory, writer)
     results: list[FinalizedBuild | BuildSubmissionRejected | None] = []
 
     async def create() -> None:
@@ -386,7 +391,9 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
 ) -> None:
     owner_id = await seed_account_and_version(migrated_session_factory)
     build = submission_build(BuildCategory.OTHER, owner_id)
-    await BuildRepository(migrated_session_factory).save(build)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+    )
     assert build.id is not None
 
     async with migrated_session_factory.begin() as session:
@@ -517,7 +524,9 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
     seeded_at = Instant.now()
     build = submission_build(BuildCategory.UTILITY, absorbed.id)
     build.versions = []
-    await BuildRepository(migrated_session_factory).save(build)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+    )
     assert build.id is not None
     build_id = build.id
 
@@ -750,7 +759,9 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
 
     build = submission_build(BuildCategory.OTHER, absorbed.id, draft_id=claimed_draft_id, sponsor=sponsor)
     build.versions = []
-    await BuildRepository(migrated_session_factory).save(build)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+    )
     assert build.id is not None
     build_id = build.id
 

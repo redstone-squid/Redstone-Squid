@@ -12,6 +12,7 @@ from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 type BuildSortField = Literal["id", "submission_time"]
 BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__))
@@ -162,14 +163,16 @@ class BuildQueryService:
 
     def __init__(
         self,
-        builds: BuildQueryRepository,
         semantic_search: SemanticBuildSearch,
+        *,
+        uow_factory: UnitOfWorkFactory[BuildQueryUnitOfWork],
     ):
-        self._builds = builds
+        self._uow_factory = uow_factory
         self._semantic_search = semantic_search
 
     async def get(self, build_id: int) -> Build | None:
-        return await self._builds.get_by_id(build_id)
+        async with self._uow_factory() as uow:
+            return await uow.builds.get_by_id(build_id)
 
     async def get_public(self, build_id: int) -> Build:
         """Return a build the public catalogue may show, or raise `BuildNotFoundError`.
@@ -183,21 +186,25 @@ class BuildQueryService:
         `build.submission.view_pending`, which is what keeps a submission's
         existence private until it is confirmed.
         """
-        build = await self._builds.get_by_id(build_id)
-        if build is None or build.submission_status is not Status.CONFIRMED:
-            raise BuildNotFoundError(build_id)
-        return build
+        async with self._uow_factory() as uow:
+            build = await uow.builds.get_by_id(build_id)
+            if build is None or build.submission_status is not Status.CONFIRMED:
+                raise BuildNotFoundError(build_id)
+            return build
 
     async def pending(self) -> Sequence[Build]:
-        return await self._builds.get_pending()
+        async with self._uow_factory() as uow:
+            return await uow.builds.get_pending()
 
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
         """Load builds in the caller's requested order, omitting missing rows."""
-        return await self._builds.get_many(build_ids)
+        async with self._uow_factory() as uow:
+            return await uow.builds.get_many(build_ids)
 
     async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
         """Return confirmed public summaries in requested order, omitting unavailable IDs."""
-        return await self._builds.get_public_summaries(build_ids)
+        async with self._uow_factory() as uow:
+            return await uow.builds.get_public_summaries(build_ids)
 
     async def list_page(
         self,
@@ -209,31 +216,37 @@ class BuildQueryService:
         page_size: int = 20,
     ) -> Page[Build]:
         """Return one page of authoritative builds in display order under a visibility policy."""
-        rows = await self._builds.list_page(
-            statuses=statuses,
-            submitter_account_id=submitter_account_id,
-            sort=sort,
-            offset=selector.offset,
-            after_id=selector.after_id,
-            before_id=selector.before_id,
-            # One row past the page proves whether another page follows.
-            limit=page_size + 1,
-        )
-        total = await self._builds.count(
-            statuses=statuses,
-            submitter_account_id=submitter_account_id,
-        )
-        return keyset_page(
-            rows,
-            selector=selector,
-            page_size=page_size,
-            total=total,
-            keyset=sort.field == "id",
-            id_of=_persisted_build_id,
-        )
+        async with self._uow_factory() as uow:
+            rows = await uow.builds.list_page(
+                statuses=statuses,
+                submitter_account_id=submitter_account_id,
+                sort=sort,
+                offset=selector.offset,
+                after_id=selector.after_id,
+                before_id=selector.before_id,
+                # One row past the page proves whether another page follows.
+                limit=page_size + 1,
+            )
+            total = await uow.builds.count(
+                statuses=statuses,
+                submitter_account_id=submitter_account_id,
+            )
+            return keyset_page(
+                rows,
+                selector=selector,
+                page_size=page_size,
+                total=total,
+                keyset=sort.field == "id",
+                id_of=_persisted_build_id,
+            )
 
     async def semantic(self, query: str) -> Build | None:
         build_id = await self._semantic_search.find_build_id(query)
         if build_id is None:
             return None
-        return await self._builds.get_by_id(build_id)
+        return await self.get(build_id)
+
+
+class BuildQueryUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def builds(self) -> BuildQueryRepository: ...

@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.domain import BuildCategory
-from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import Build
 from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
@@ -90,9 +89,7 @@ async def test_executor_commits_build_receipt_and_event_once(
     with_media: bool,
 ) -> None:
     claim = await claimed_submission(migrated_session_factory, with_media=with_media)
-    executor = PostgresSubmissionExecutor(
-        migrated_session_factory, BuildRepository(migrated_session_factory), PreparedBuilds()
-    )
+    executor = PostgresSubmissionExecutor(migrated_session_factory, PreparedBuilds())
     result = await executor.execute(claim, now=Instant.now())
     assert isinstance(result, FinalizedBuild)
     assert await executor.execute(claim, now=Instant.now()) is None
@@ -119,9 +116,7 @@ async def test_receipt_failure_rolls_back_build_and_events(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     claim = await claimed_submission(migrated_session_factory)
-    executor = PostgresSubmissionExecutor(
-        migrated_session_factory, BuildRepository(migrated_session_factory), PreparedBuilds()
-    )
+    executor = PostgresSubmissionExecutor(migrated_session_factory, PreparedBuilds())
 
     async def fail_receipt(*args: object, **kwargs: object) -> bool:
         raise RuntimeError("receipt unavailable")
@@ -155,9 +150,7 @@ async def test_reclaimed_worker_cannot_create_a_build(
     claim = await claimed_submission(migrated_session_factory)
     jobs = PostgresFinalizationJobRepository(migrated_session_factory)
     (replacement,) = await jobs.claim(now=claim.claimed_at.add(minutes=6), limit=1)
-    executor = PostgresSubmissionExecutor(
-        migrated_session_factory, BuildRepository(migrated_session_factory), PreparedBuilds()
-    )
+    executor = PostgresSubmissionExecutor(migrated_session_factory, PreparedBuilds())
     assert await executor.execute(claim, now=Instant.now()) is None
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Build)) == 0
@@ -211,12 +204,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
         CheckedInFormManifestRegistry(),
         permissions=permissions,
     )
-    executor = PostgresSubmissionExecutor(
-        migrated_session_factory,
-        BuildRepository(migrated_session_factory),
-        RevokingPreparation(),
-        drafts=drafts,
-    )
+    executor = PostgresSubmissionExecutor(migrated_session_factory, RevokingPreparation(), drafts=drafts)
     result = await executor.execute(claim, now=Instant.now())
     assert isinstance(result, BuildSubmissionRejected)
     assert result.issues[0].reason is SubmissionAttentionReason.PERMISSION_REVOKED
@@ -283,10 +271,10 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
         draft = await session.get(SubmissionDraft, claim.draft_id)
         assert draft is not None
         draft.source_messages = TypeAdapter(tuple[SourceMessage, ...]).dump_python((source,), mode="json")
-    builds = BuildRepository(sessions)
-    result = await PostgresSubmissionExecutor(sessions, builds, PreparedBuilds()).execute(claim, now=Instant.now())
+    builds = partial(SqlAlchemyUnitOfWork, sessions)
+    result = await PostgresSubmissionExecutor(sessions, PreparedBuilds()).execute(claim, now=Instant.now())
     assert isinstance(result, FinalizedBuild)
-    saved = await builds.get_by_id(result.build_id)
+    saved = await transact(builds, lambda uow: uow.builds.get_by_id(result.build_id))
     assert saved is not None
     assert saved.source_messages == (source,)
 
@@ -295,17 +283,19 @@ async def test_executor_recovers_a_loaded_source_build(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     claim = await claimed_submission(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     existing = await PreparedBuilds().prepare(claim.payload)
-    await repository.save(existing)
+    await transact(repository, lambda uow: uow.builds.save(existing), commit=True)
 
     class ExistingBuilds:
         async def prepare(self, submission: NormalizedSubmission) -> Build:
-            loaded = await repository.get_by_source_submission_draft_id(submission.source_draft_id)
+            loaded = await transact(
+                repository, lambda uow: uow.builds.get_by_source_submission_draft_id(submission.source_draft_id)
+            )
             assert loaded is not None
             return loaded
 
-    executor = PostgresSubmissionExecutor(migrated_session_factory, repository, ExistingBuilds())
+    executor = PostgresSubmissionExecutor(migrated_session_factory, ExistingBuilds())
     result = await executor.execute(claim, now=Instant.now())
     assert isinstance(result, FinalizedBuild)
     assert result.build_id == existing.id

@@ -17,6 +17,7 @@ itself persists ``build.tags`` verbatim without interpreting the string fields.
 # characters; they are its inputs, not typos.
 
 from dataclasses import fields as dataclass_fields
+from functools import partial
 from typing import Any
 
 import pytest
@@ -32,10 +33,13 @@ from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.models import ServerSetting
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAlias, TagApplicability, TagDefinition
+from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.models import Version
+from tests.support.unit_of_work import transact
 
 # Canonical display names of the official taxonomy seeded below, one per
 # restriction bucket plus two patterns. Tests that expect a clean round trip
@@ -250,12 +254,12 @@ def _assert_round_trip(saved: Build, loaded: Build) -> None:
 
 async def _resolve_and_save(
     session_factory: async_sessionmaker[AsyncSession],
-    repository: BuildRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     build: Build,
 ) -> None:
     """Persist the way the application service does: resolve taxonomy, then save."""
     await apply_build_taxonomy(build, OfficialTagResolver(session_factory))
-    await repository.save(build)
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
 
 
 @pytest.mark.parametrize("category", list(BuildCategory), ids=lambda category: category.value)
@@ -264,13 +268,13 @@ async def test_round_trip_is_identity_for_known_taxonomy(
     category: BuildCategory,
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(category, account_id)
     await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     _assert_round_trip(build, loaded)
 
@@ -279,7 +283,7 @@ async def test_attachment_enrichment_evidence_round_trips_as_nested_json(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     build = _make_build(BuildCategory.DOOR, account_id)
     build.extra_info["schematic_duplicates"] = [
         {
@@ -311,7 +315,7 @@ async def test_attachment_enrichment_evidence_round_trips_as_nested_json(
     await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
 
     assert loaded is not None
     assert loaded.extra_info == build.extra_info
@@ -329,19 +333,19 @@ async def test_loaded_status_is_a_status_member(
     `is Status.CONFIRMED` identity checks guarding the public catalogue.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.DOOR, account_id)
     await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     assert loaded.submission_status is Status.PENDING
     assert loaded.submission_status.name == "PENDING"
 
-    await repository.confirm(loaded)
-    reloaded = await repository.get_by_id(build.id)
+    await transact(repository, lambda uow: uow.builds.confirm(loaded), commit=True)
+    reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert reloaded is not None
     assert reloaded.submission_status is Status.CONFIRMED
 
@@ -355,7 +359,7 @@ async def test_persisting_a_build_creates_no_account(
     from a persistence layer with no evidence anybody had asked to be remembered.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     async with migrated_session_factory() as session:
         before = await session.scalar(select(func.count()).select_from(Account))
 
@@ -370,7 +374,7 @@ async def test_persisting_a_build_for_an_unknown_account_is_refused(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     with pytest.raises(InvalidStateError):
         await _resolve_and_save(migrated_session_factory, repository, _make_build(BuildCategory.DOOR, 999_999))
@@ -383,7 +387,7 @@ async def test_update_round_trip_preserves_category_fields(
 ) -> None:
     """The update path (`_update_existing`) copies the same field lists as insert."""
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(category, account_id)
     await _resolve_and_save(migrated_session_factory, repository, build)
@@ -398,7 +402,7 @@ async def test_update_round_trip_preserves_category_fields(
         build.extension_length = 11
     await _resolve_and_save(migrated_session_factory, repository, build)
 
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     _assert_round_trip(build, loaded)
 
@@ -408,7 +412,7 @@ async def test_alias_resolves_to_canonical_display_name(
 ) -> None:
     """A restriction submitted under an alias canonicalizes at edit time."""
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     build.component_restrictions = [OBSERVERLESS_ALIAS]
@@ -417,7 +421,7 @@ async def test_alias_resolves_to_canonical_display_name(
 
     # apply_build_taxonomy rewrote the field to the canonical display name.
     assert build.component_restrictions == ["Observerless"]
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     assert loaded.component_restrictions == ["Observerless"]
 
@@ -426,7 +430,7 @@ async def test_source_messages_round_trip(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.OTHER, account_id)
     frozen = OtherBuild(
@@ -444,10 +448,10 @@ async def test_source_messages_round_trip(
             SourceMessage(message_id=6001, guild_id=4000, channel_id=5000, author_id=7000, content="a follow-up"),
         ),
     )
-    await repository.save(frozen)
+    await transact(repository, lambda uow: uow.builds.save(frozen), commit=True)
     assert frozen.id is not None
 
-    loaded = await repository.get_by_id(frozen.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(frozen.id))
     assert loaded is not None
     assert [message.message_id for message in loaded.source_messages] == [6000, 6001]
     first = loaded.source_messages[0]
@@ -468,7 +472,7 @@ async def test_one_message_can_source_several_builds(
     so half a bundle's provenance was silently dropped.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     shared = SourceMessage(message_id=8000, guild_id=4000, channel_id=5000, author_id=7000, content="two doors")
 
     build_ids: list[int] = []
@@ -479,13 +483,15 @@ async def test_one_message_can_source_several_builds(
             versions=["Java 1.21.0"],
             source_messages=(shared,),
         )
-        await repository.save(build)
+        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
         assert build.id is not None
         build_ids.append(build.id)
 
-    assert sorted(await repository.list_ids_for_source_message(8000)) == sorted(build_ids)
+    assert sorted(await transact(repository, lambda uow: uow.builds.list_ids_for_source_message(8000))) == sorted(
+        build_ids
+    )
     for build_id in build_ids:
-        loaded = await repository.get_by_id(build_id)
+        loaded = await transact(repository, lambda uow, build_id=build_id: uow.builds.get_by_id(build_id))
         assert loaded is not None
         assert [message.message_id for message in loaded.source_messages] == [8000]
 
@@ -497,7 +503,7 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     build.component_restrictions = ["Imaginary Component"]
@@ -508,9 +514,9 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
     assert build.extra_info.get("unknown_restrictions") == {"component_restrictions": ["Imaginary Component"]}
     assert build.component_restrictions == []
 
-    await repository.save(build)
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
     assert build.id is not None
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     _assert_round_trip(build, loaded)
 
@@ -519,7 +525,7 @@ async def test_ambiguous_restriction_is_recorded_as_unknown(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     # Matches two official definitions via their shared alias, so it resolves
@@ -528,7 +534,7 @@ async def test_ambiguous_restriction_is_recorded_as_unknown(
     await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     assert loaded.component_restrictions == []
     assert loaded.extra_info.get("unknown_restrictions") == {"component_restrictions": [AMBIGUOUS_ALIAS]}
@@ -539,11 +545,11 @@ async def test_save_persists_tags_verbatim_without_mutating_input(
 ) -> None:
     """The repository no longer interprets the restriction string fields."""
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.DOOR, account_id)
     build.patterns = []
-    await repository.save(build)
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
 
     # Without apply_build_taxonomy, the strings are not resolved, no default
     # pattern is injected, and the input is not mutated.
@@ -551,7 +557,7 @@ async def test_save_persists_tags_verbatim_without_mutating_input(
     assert build.tags == []
 
     assert build.id is not None
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     assert loaded.tags == []
     assert loaded.patterns == []
@@ -561,7 +567,7 @@ async def test_apply_build_taxonomy_defaults_door_pattern(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.DOOR, account_id)
     build.patterns = []
@@ -571,9 +577,9 @@ async def test_apply_build_taxonomy_defaults_door_pattern(
     assert build.patterns == ["Regular"]
     assert {assignment.definition.stable_key for assignment in build.tags} >= {"pattern-regular"}
 
-    await repository.save(build)
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
     assert build.id is not None
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     assert loaded.patterns == ["Regular"]
 
@@ -588,7 +594,7 @@ async def test_replacing_links_of_one_media_type_moves_a_shared_url(
     typed collection, re-adding the URL as a video simply moves it.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = _make_build(BuildCategory.OTHER, account_id)
     build.replace_links("image", ["https://example.com/dual.png"])
@@ -597,7 +603,7 @@ async def test_replacing_links_of_one_media_type_moves_a_shared_url(
     await _resolve_and_save(migrated_session_factory, repository, build)
 
     assert build.id is not None
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     assert loaded.image_urls == ()
     assert loaded.video_urls == ("https://example.com/dual.png",)
@@ -613,7 +619,7 @@ async def test_door_dimension_defaults_are_declared_not_coerced_at_save(
     defaults instead.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     build = DoorBuild(
         submission_status=Status.PENDING,
@@ -627,7 +633,7 @@ async def test_door_dimension_defaults_are_declared_not_coerced_at_save(
     await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     _assert_round_trip(build, loaded)
 
@@ -703,7 +709,7 @@ async def test_round_trip_property(
     fresh row, so state never leaks between examples.
     """
     session_factory, account_id = seeded_factory
-    repository = BuildRepository(session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, session_factory)
     category, field_values = values
 
     build = BUILD_CLASS_BY_CATEGORY[category](
@@ -715,7 +721,7 @@ async def test_round_trip_property(
     await _resolve_and_save(session_factory, repository, build)
     assert build.id is not None
 
-    loaded = await repository.get_by_id(build.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
     _assert_round_trip(build, loaded)
 
@@ -735,7 +741,7 @@ async def test_repeat_credit_of_a_case_folding_name_resolves_to_one_alias(
     the retired SQL fold got wrong in the opposite direction by storing them separately.
     """
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     for spelling in ("ΣΣ", "ΣΣ", "Σς"):
         build = _make_build(BuildCategory.UTILITY, account_id)
@@ -753,10 +759,10 @@ async def test_detached_build_preview_changes_only_on_explicit_save(
     from tests.support.database import assert_loaded_detached
 
     account_id = await _seed_catalogue(migrated_session_factory)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     submitted = _make_build(BuildCategory.DOOR, account_id)
     await _resolve_and_save(migrated_session_factory, repository, submitted)
-    loaded = await repository.get_by_id(submitted.id)
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(submitted.id))
     assert loaded is not None
     assert_loaded_detached(loaded)
     assert_loaded_detached(loaded, attributes={"links", "tags"})
@@ -773,13 +779,13 @@ async def test_detached_build_preview_changes_only_on_explicit_save(
     assert "https://example.com/preview.png" not in loaded.image_urls
     assert loaded.tags[0].evidence != "preview evidence"
 
-    unchanged = await repository.get_by_id(loaded.id)
+    unchanged = await transact(repository, lambda uow: uow.builds.get_by_id(loaded.id))
     assert unchanged is not None
     assert unchanged.width == loaded.width
     assert unchanged.revision == loaded.revision
 
-    await repository.save(preview)
-    saved = await repository.get_by_id(loaded.id)
+    await transact(repository, lambda uow: uow.builds.save(preview), commit=True)
+    saved = await transact(repository, lambda uow: uow.builds.get_by_id(loaded.id))
     assert saved is not None
     assert saved.width == preview.width
     assert saved.extra_info["user"] == "preview only"
@@ -796,14 +802,37 @@ async def test_source_read_preserves_unclassified_links(
     draft_id = uuid4()
     build = OtherBuild(submitter_account_id=owner, source_submission_draft_id=draft_id)
     build.links = [BuildLink(url="https://example.com/unclassified", media_type=None)]
-    repository = BuildRepository(migrated_session_factory)
-    await repository.save(build)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
 
     async with migrated_session_factory.begin() as session:
-        loaded = await repository.source_in_session(session, draft_id)
+        loaded = await BuildRepository(lambda: session).get_by_source_submission_draft_id(draft_id)
         assert loaded is not None
         assert not session.dirty
 
     async with migrated_session_factory() as session:
         links = (await session.scalars(select(BuildLink).where(BuildLink.build_id == build.id))).all()
         assert [(link.url, link.media_type) for link in links] == [("https://example.com/unclassified", None)]
+
+
+async def test_tracked_status_change_advances_the_revision_once(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    owner = await _seed_catalogue(migrated_session_factory)
+    build = OtherBuild(submitter_account_id=owner)
+    async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
+        await uow.builds.save(build)
+        await uow.commit()
+    assert build.id is not None
+    previous_revision = build.revision
+    async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
+        tracked = await uow.builds.get_for_update(build.id)
+        assert tracked is not None
+        await uow.builds.confirm(tracked)
+        assert tracked.submission_status is Status.CONFIRMED
+        await uow.commit()
+    async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
+        loaded = await uow.builds.get_by_id(build.id)
+        assert loaded is not None
+        assert loaded.revision == previous_revision + 1
+        assert loaded.submission_status is Status.CONFIRMED

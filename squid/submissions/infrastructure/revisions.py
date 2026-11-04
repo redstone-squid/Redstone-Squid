@@ -23,11 +23,8 @@ _REVISION_FACTS = TypeAdapter(RevisionFacts)
 class PostgresRevisionProposals:
     """Persist review snapshots and commit the build and approval receipt together."""
 
-    def __init__(
-        self, sessions: async_sessionmaker[AsyncSession], repository: BuildRepository, builds: BuildService
-    ) -> None:
+    def __init__(self, sessions: async_sessionmaker[AsyncSession], builds: BuildService) -> None:
         self._sessions = sessions
-        self._repository = repository
         self._builds = builds
 
     async def create(self, proposal: RevisionProposal) -> RevisionProposal:
@@ -110,7 +107,7 @@ class PostgresRevisionProposals:
                 raise AuthorizationError
             await self._builds.authorize_edit(actor, build)
             build.edited_time = Instant.now()
-            await self._repository.update_in_session(session, build)
+            await BuildRepository(lambda: session).save(build)
             model.approved_by_account_id = actor.subject.account_id
             model.applied_revision = build.revision
             await session.flush()

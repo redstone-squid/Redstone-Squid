@@ -6,6 +6,7 @@ produces, and that a page's total agrees with what paging through it actually yi
 """
 
 from collections.abc import Sequence
+from functools import partial
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -13,9 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.models import Account
 from squid.builds.application.queries import BuildListSort
 from squid.builds.domain import Status
-from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import OtherBuild
 from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
@@ -30,7 +33,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) ->
         await session.flush()
         account_id = account.id
 
-    repository = BuildRepository(session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, session_factory)
     identifiers: list[int] = []
     for _ in range(count):
         build = OtherBuild(
@@ -38,26 +41,29 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) ->
             submitter_account_id=account_id,
             ai_generated=False,
         )
-        await repository.save(build)
+        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
         assert build.id is not None
         identifiers.append(build.id)
     return identifiers
 
 
 async def page_ids(
-    repository: BuildRepository,
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     *,
     selector: PageSelector = FIRST_PAGE,
     limit: int = 2,
 ) -> Sequence[int]:
-    builds = await repository.list_page(
-        statuses=_CONFIRMED,
-        submitter_account_id=None,
-        sort=BuildListSort(),
-        offset=selector.offset,
-        after_id=selector.after_id,
-        before_id=selector.before_id,
-        limit=limit,
+    builds = await transact(
+        repository,
+        lambda uow: uow.builds.list_page(
+            statuses=_CONFIRMED,
+            submitter_account_id=None,
+            sort=BuildListSort(),
+            offset=selector.offset,
+            after_id=selector.after_id,
+            before_id=selector.before_id,
+            limit=limit,
+        ),
     )
     return [build.id for build in builds if build.id is not None]
 
@@ -66,7 +72,7 @@ async def test_a_backward_page_comes_back_in_display_order(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     identifiers = await seed(migrated_session_factory, 5)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     newest_first = list(reversed(identifiers))
 
     forward = await page_ids(repository, selector=PageSelector(after_id=newest_first[1]))
@@ -82,7 +88,7 @@ async def test_an_offset_page_and_a_keyset_page_agree(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     identifiers = await seed(migrated_session_factory, 5)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     newest_first = list(reversed(identifiers))
 
     by_offset = await page_ids(repository, selector=PageSelector(offset=2))
@@ -95,9 +101,9 @@ async def test_the_total_matches_what_paging_actually_returns(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(migrated_session_factory, 5)
-    repository = BuildRepository(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
-    total = await repository.count(statuses=_CONFIRMED, submitter_account_id=None)
+    total = await transact(repository, lambda uow: uow.builds.count(statuses=_CONFIRMED, submitter_account_id=None))
     walked: list[int] = []
     selector = FIRST_PAGE
     while True:

@@ -13,7 +13,6 @@ from squid.accounts.models import Account
 from squid.builds.application import BuildEditor, BuildService
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
-from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import Build
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
@@ -26,6 +25,7 @@ from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from tests.support.database import record_queries
 from tests.support.submission_targets import seed_account_and_version, submission_build
+from tests.support.unit_of_work import transact
 
 
 class EditPolicy(BuildService):
@@ -42,9 +42,9 @@ async def prepared_proposal(
     sessions: async_sessionmaker[AsyncSession],
 ) -> tuple[PostgresRevisionProposals, RevisionProposal, Build, BuildEditor, EditPolicy]:
     owner = await seed_account_and_version(sessions)
-    builds = BuildRepository(sessions)
+    builds = partial(SqlAlchemyUnitOfWork, sessions)
     build = submission_build(BuildCategory.DOOR, owner)
-    await builds.save(build)
+    await transact(builds, lambda uow: uow.builds.save(build), commit=True)
     before = revision_values(build)
     facts = RevisionFacts(category=BuildCategory.DOOR, width=9)
     facts.patch(build).apply(build)
@@ -64,7 +64,7 @@ async def prepared_proposal(
         now.add(days=7, days_assumed_24h_ok=True),
     )
     policy = EditPolicy()
-    repository = PostgresRevisionProposals(sessions, builds, policy)
+    repository = PostgresRevisionProposals(sessions, policy)
     await repository.create(proposal)
     return repository, proposal, build, BuildEditor(Subject(account_id=owner)), policy
 
@@ -79,7 +79,9 @@ async def test_approval_commits_once_and_preserves_build_identity(
     assert result.approved_by_account_id == actor.subject.account_id
     replay = await repository.approve(proposal, build, actor)
     assert replay == result
-    saved = await BuildRepository(migrated_session_factory).get_by_id(build.id or 0)
+    saved = await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.get_by_id(build.id or 0)
+    )
     assert saved is not None
     assert saved.width == 9
     assert (saved.id, saved.category, saved.submitter_account_id, saved.submission_status) == (
@@ -94,7 +96,9 @@ async def test_stale_approval_retains_the_unapplied_proposal(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     repository, proposal, build, actor, _ = await prepared_proposal(migrated_session_factory)
-    await BuildRepository(migrated_session_factory).save(build)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+    )
     with pytest.raises(BuildRevisionMismatchError):
         await repository.approve(proposal, build, actor)
     retained = await repository.get(proposal.id)
@@ -109,7 +113,9 @@ async def test_permission_is_rechecked_inside_approval_transaction(
     policy.allowed = False
     with pytest.raises(AuthorizationError):
         await repository.approve(proposal, build, actor)
-    saved = await BuildRepository(migrated_session_factory).get_by_id(build.id or 0)
+    saved = await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.get_by_id(build.id or 0)
+    )
     assert saved is not None
     assert saved.width == 3
 
@@ -124,7 +130,9 @@ async def test_failed_receipt_rolls_back_the_build_edit(
 
     with pytest.raises(IntegrityError):
         await repository.approve(proposal, build, invalid_actor)
-    saved = await BuildRepository(migrated_session_factory).get_by_id(build.id or 0)
+    saved = await transact(
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.get_by_id(build.id or 0)
+    )
     assert saved is not None
     assert saved.width == 3
     retained = await repository.get(proposal.id)

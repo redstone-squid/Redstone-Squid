@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
+from copy import copy
 from typing import Literal, cast, override
 from uuid import UUID
 
@@ -20,12 +21,13 @@ from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisio
 from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import SubjectRecords
+from squid.permissions.application.ports import PermissionStore, SubjectRecords
 from squid.permissions.domain import Subject
 from squid.permissions.models import PermissionGrant
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
 from tests.support.permissions import permission_uow_factory
+from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 
 class FakeBuildRepository:
@@ -43,6 +45,9 @@ class FakeBuildRepository:
 
     async def deny(self, build: Build) -> None:
         self.denied.append(build)
+
+    async def get_for_update(self, build_id: int) -> Build | None:
+        return await self.get_by_id(build_id)
 
     async def get_by_id(self, build_id: int) -> Build | None:
         if self.build is not None and self.build.id == build_id:
@@ -66,6 +71,33 @@ class FakeRestrictionRepository:
 
     async def add_alias(self, restriction: str, alias: str) -> None:
         return None
+
+
+class EmptyPermissions:
+    async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+        return SubjectRecords(epoch=1)
+
+    async def epoch(self) -> int:
+        return 1
+
+
+def copy_repository(repository: FakeBuildRepository) -> FakeBuildRepository:
+    clone = copy(repository)
+    clone.build = None if repository.build is None else repository.build.copy_for_edit()
+    clone.saved = list(repository.saved)
+    clone.confirmed = list(repository.confirmed)
+    clone.denied = list(repository.denied)
+    return clone
+
+
+class BuildScope(PublishingFakeUnitOfWork[FakeBuildRepository]):
+    def __init__(self, repository: FakeBuildRepository, permissions: PermissionStore | None = None) -> None:
+        super().__init__(repository, clone=copy_repository)
+        self.permissions = permissions or EmptyPermissions()
+
+    @property
+    def builds(self) -> FakeBuildRepository:
+        return self.state
 
 
 class FakeBuildLocks:
@@ -202,16 +234,16 @@ def build_service(
     repository: FakeBuildRepository,
     locks: FakeBuildLocks | None = None,
     *,
-    permissions: PermissionService | None = None,
+    permissions: PermissionStore | None = None,
 ) -> BuildService:
     return BuildService(
-        repository,
         locks or FakeBuildLocks(),
         FakeRestrictionRepository(),
         FakeVersions(),
         FakeEmbeddings(),
         FakeTaxonomyResolver(),
-        permissions=permissions,
+        permissions=None if permissions is None else PermissionService(uow_factory=permission_uow_factory(permissions)),
+        uow_factory=lambda: BuildScope(repository, permissions),
     )
 
 
@@ -263,9 +295,10 @@ async def test_edit_commit_uses_repository_and_releases_after_save(existing_buil
     async with service.edit(42, BuildEditPatch(door_dimensions=(2, 3, 4))) as lease:
         result = await lease.commit()
 
-    assert result is existing_build
-    assert existing_build.door_dimensions == (2, 3, 4)
-    assert repository.saved == [existing_build]
+    assert result.id == existing_build.id
+    assert isinstance(result, DoorBuild)
+    assert result.door_dimensions == (2, 3, 4)
+    assert repository.saved == [result]
     assert locks.acquisitions == [(42, False, 30)]
     assert locks.releases == [42]
 
@@ -370,8 +403,8 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
     await service.deny(42)
     await service.clean_stale_locks(older_than=cutoff)
 
-    assert repository.confirmed == [existing_build]
-    assert repository.denied == [existing_build]
+    assert [build.id for build in repository.confirmed] == [existing_build.id]
+    assert [build.id for build in repository.denied] == [existing_build.id]
     assert len(locks.acquisitions) == 2
     assert locks.releases == [42, 42]
     assert locks.cleanups == [cutoff]
@@ -419,7 +452,8 @@ async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> 
 
     result = await build_service(FakeBuildRepository(existing)).get_by_source_submission_draft_id(draft_id)
 
-    assert result is existing
+    assert result is not None
+    assert result.id == existing.id
 
 
 async def test_save_prepares_defaults_then_indexes_after_relational_persistence() -> None:
@@ -427,9 +461,15 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     embeddings = FakeEmbeddings()
     locks = FakeBuildLocks()
     service = BuildService(
-        repository, locks, FakeRestrictionRepository(), FakeVersions(), embeddings, FakeTaxonomyResolver()
+        locks,
+        FakeRestrictionRepository(),
+        FakeVersions(),
+        embeddings,
+        FakeTaxonomyResolver(),
+        uow_factory=lambda: BuildScope(repository),
     )
     build = DoorBuild(id=42)
+    repository.build = build.copy_for_edit()
 
     await service.save(build)
 
@@ -455,7 +495,7 @@ class TestAuthorizedEditing:
     STRANGER = BuildEditor(subject=Subject(account_id=2))
 
     @staticmethod
-    def _permissions(*held: str) -> PermissionService:
+    def _permissions(*held: str) -> PermissionStore:
         class Store:
             async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
                 return SubjectRecords(
@@ -466,7 +506,7 @@ class TestAuthorizedEditing:
             async def epoch(self) -> int:
                 return 1
 
-        return PermissionService(uow_factory=permission_uow_factory(Store()))
+        return Store()
 
     async def test_the_owner_may_edit_their_pending_build(self, existing_build: DoorBuild) -> None:
         repository = FakeBuildRepository(existing_build)

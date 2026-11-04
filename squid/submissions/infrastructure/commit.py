@@ -42,12 +42,10 @@ class PostgresSubmissionExecutor:
     def __init__(
         self,
         sessions: async_sessionmaker[AsyncSession],
-        builds: BuildRepository,
         preparation: SubmissionBuildPreparer,
         drafts: SubmissionDraftService | None = None,
     ) -> None:
         self._sessions = sessions
-        self._builds = builds
         self._preparation = preparation
         self._drafts = drafts
 
@@ -91,7 +89,7 @@ class PostgresSubmissionExecutor:
                 source_messages=TypeAdapter(tuple[SourceMessage, ...]).validate_python(draft.source_messages)
             )
             await _require_current_media(session, job.draft_id, job.payload.artifacts.normalized_media_upload_ids)
-            existing = await self._builds.source_in_session(session, job.draft_id)
+            existing = await BuildRepository(lambda: session).get_by_source_submission_draft_id(job.draft_id)
             if existing is not None:
                 if (
                     existing.submitter_account_id != job.payload.owner_account_id
@@ -101,7 +99,7 @@ class PostgresSubmissionExecutor:
                     raise InvalidStateError(message)
                 candidate = existing
             else:
-                await self._builds.insert_in_session(session, candidate)
+                await BuildRepository(lambda: session).save(candidate)
             assert candidate.id is not None
             result = FinalizedBuild(candidate.id)
             if not await complete_in_session(session, job, result, now=now):

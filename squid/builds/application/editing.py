@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Final, Literal, Self, cast, override
 
 from squid.builds.application.commands import Dimensions
-from squid.builds.application.ports import BuildLockManager, BuildRepository
+from squid.builds.application.ports import BuildLockManager
 from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.models import Build, DoorBuild
@@ -258,7 +258,7 @@ class BuildEditLease:
 
     def __init__(
         self,
-        repository: BuildRepository,
+        load: Callable[[int], Awaitable[Build | None]],
         locks: BuildLockManager,
         persist: Callable[[Build], Awaitable[None]],
         build_id: int,
@@ -268,7 +268,7 @@ class BuildEditLease:
         timeout: float,
         expected_revision: int | None,
     ) -> None:
-        self._repository = repository
+        self._load = load
         self._locks = locks
         self._persist = persist
         self._build_id = build_id
@@ -298,7 +298,7 @@ class BuildEditLease:
         # will not run until __aenter__ returns, so a cancellation at any await
         # below would otherwise strand it for the lifetime of the process.
         try:
-            build = await self._repository.get_by_id(self._build_id)
+            build = await self._load(self._build_id)
             if build is None:
                 raise BuildNotFoundError(self._build_id)  # noqa: TRY301
             if self._expected_revision is not None and build.revision != self._expected_revision:
