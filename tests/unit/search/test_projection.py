@@ -100,11 +100,7 @@ def _tag_source(*, semantic_kind: str = "pattern", moderation_status: str = "app
 
 @pytest.mark.parametrize("semantic_kind", ["restriction", "pattern", "showcase"])
 def test_a_tag_document_says_which_kind_of_tag_it_is(semantic_kind: str) -> None:
-    """Every approved tag used to index as `kind = tag`, whatever it actually was.
-
-    That is why asking for patterns needed its own command: the one question the index
-    could answer about a tag was that it was a tag.
-    """
+    """Index the specific tag kind so taxonomy queries can distinguish patterns and restrictions."""
     projection = build_tag_projection(_tag_source(semantic_kind=semantic_kind))
 
     assert projection is not None
@@ -113,7 +109,7 @@ def test_a_tag_document_says_which_kind_of_tag_it_is(semantic_kind: str) -> None
 
 
 def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
-    """`kind:tag` was the only taxonomy query there was, so it keeps working."""
+    """Retain the broad kind:tag facet alongside the specific kind."""
     projection = build_tag_projection(_tag_source(semantic_kind="pattern"))
 
     assert projection is not None

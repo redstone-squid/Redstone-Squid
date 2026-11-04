@@ -1,7 +1,7 @@
-"""Cursor-aware query analysis tests.
+"""Analyze completion positions in both valid queries and unfinished input.
 
-Every input here is a syntax error to `SearchQueryParser`, which is the point: a query being typed
-is never valid, so completion cannot be built on a parser that refuses to read one.
+Unclosed quotes, ranges, and empty field values can be useful completion contexts
+even when the search parser rejects the whole query.
 """
 
 import pytest
@@ -138,7 +138,7 @@ def test_parentheses_bound_a_token() -> None:
     [("restriction", True), ("creator", True), ("width", False), ("created_at", False)],
 )
 def test_only_text_fields_have_values_worth_listing(name: str, listable: bool) -> None:
-    """Nobody wants the twelve hundred widths that happen to be indexed."""
+    """Offer stored text values as completions; numeric and date fields use typed input."""
     field = DEFAULT_FIELD_REGISTRY.resolve(name)
     assert field is not None
     assert completes_values(field) is listable

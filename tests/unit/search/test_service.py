@@ -16,6 +16,8 @@ from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
 class FakeSearchBackend:
+    """Return one fixed hit with a configurable total while recording calls inside a UoW scope."""
+
     def __init__(self, total: int = 25) -> None:
         self.calls: list[tuple[SearchRequest, SearchQuery, int]] = []
         self.suggestions: tuple[str, ...] = ("door",)
@@ -88,6 +90,8 @@ class StaticFields:
 
 
 class SearchUnitOfWork(FakeUnitOfWork[FakeSearchBackend]):
+    """Track scope entry on the shared backend; reads stay observable without a commit."""
+
     def __init__(self, backend: FakeSearchBackend) -> None:
         super().__init__(CommittedState(backend, clone=lambda value: value))
 
