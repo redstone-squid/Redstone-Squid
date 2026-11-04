@@ -26,9 +26,8 @@ public enum class SuggestionSlot {
 /**
  * Produce completions for one `/squid` argument.
  *
- * Implementations must return immediately from whatever they already hold in memory. Brigadier
- * asks for suggestions on the server thread as the player types, so a blocking call here would
- * stall the tick loop — which is why nothing in the default implementation touches the network.
+ * Implementations must use cached state and return without blocking. Platforms may call
+ * this on their game thread as the player types; fetching choices here would stall ticks.
  */
 public fun interface SquidSuggestions<S> {
     public fun candidates(source: S, slot: SuggestionSlot, field: String?): List<SquidSuggestion>

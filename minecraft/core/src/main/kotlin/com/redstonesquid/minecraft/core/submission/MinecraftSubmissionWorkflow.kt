@@ -37,8 +37,16 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Bounded, ephemeral in-game authorization and synchronized-draft session.
- * It deliberately has no media, schematic, capture, or final-submission operation.
+ * Connects in-game commands to account linking and backend submission drafts.
+ *
+ * Players link their account through browser approval, then use `/squid submit` to create or resume
+ * a draft and `set`/`unset` to save individual answers. Each bounded in-memory player session caches
+ * the selected draft and its form; the backend retains the draft across client restarts.
+ * Here `submit` opens the editor: capture, media uploads, and final submission are not implemented.
+ *
+ * Invoke commands and suggestions on the platform's game thread, and provide a callback executor
+ * that returns asynchronous results to that thread. Immediate notifications run on the caller's
+ * thread. The workflow owns its scheduler, including one supplied by the caller; [close] stops it.
  */
 public class MinecraftSubmissionWorkflow(
     private val origin: MinecraftOrigin,
@@ -108,6 +116,10 @@ public class MinecraftSubmissionWorkflow(
         }
     }
 
+    /**
+     * Discovers drafts, resumes a matching ID or category, or creates a draft for an unused category.
+     * With no target, resumes the sole editable draft or lists the available drafts and categories.
+     */
     public fun submit(playerId: UUID, locale: String, target: String?, notify: (String) -> Unit) {
         val session = session(playerId, notify) ?: return
         if (!requireGrant(playerId, notify)) {
@@ -144,6 +156,7 @@ public class MinecraftSubmissionWorkflow(
         }
     }
 
+    /** Reports cached authorization and draft state without contacting the backend. */
     public fun status(playerId: UUID, notify: (String) -> Unit) {
         val session = synchronized(sessions) { sessions[playerId] }
         val key = runCatching { grantKey(playerId) }.getOrNull()
@@ -182,6 +195,7 @@ public class MinecraftSubmissionWorkflow(
         }
     }
 
+    /** Deletes the active synchronized draft from the backend. It does not cancel account linking. */
     public fun cancel(playerId: UUID, locale: String, notify: (String) -> Unit) {
         val session = synchronized(sessions) { sessions[playerId] }
         if (session == null) {
@@ -233,14 +247,9 @@ public class MinecraftSubmissionWorkflow(
     }
 
     /**
-     * Offer completions for a `/squid` argument from this player's session.
-     *
-     * Answered entirely from state already in memory — the manifest fetched when the draft was
-     * opened, and the draft's own answers. Brigadier asks for suggestions on the server thread as
-     * the player types, so this must never fetch, block, or wait on a lock held by network work.
-     *
-     * A player with no active session gets nothing, which is correct: until `/squid submit` has
-     * run there is no draft to answer fields on.
+     * Offers the current draft ID, fields, and inline choices from this player's cached session.
+     * Brigadier requests these as the player types on the game thread, so suggestions use only
+     * cached state and never fetch options. Returns no candidates without an active session.
      */
     public fun suggestions(playerId: UUID, slot: SuggestionSlot, field: String?): List<SquidSuggestion> {
         val session = synchronized(sessions) { sessions[playerId] } ?: return emptyList()
@@ -270,11 +279,14 @@ public class MinecraftSubmissionWorkflow(
         if (manifest == null || draft == null || fieldId == null) return emptyList()
         val field = manifest.fieldsFor(draft.category, origin.wireValue).singleOrNull { it.id == fieldId }
             ?: return emptyList()
-        // Only inline choices are offered. A dynamic `optionSource` would have to be fetched, and
-        // the tick loop is not somewhere to discover that the backend is slow.
+        // Dynamic option sources need a network request, which would block game-thread completion.
         return field.options.map { SquidSuggestion(it.value, it.label) }
     }
 
+    /**
+     * Stops scheduled work and drops cached sessions. In-flight HTTP requests and queued callbacks
+     * may still complete; this does not clear the supplied credential store. Stop issuing commands first.
+     */
     override fun close() {
         scheduler.shutdownNow()
         synchronized(sessions) { sessions.clear() }
@@ -301,6 +313,7 @@ public class MinecraftSubmissionWorkflow(
                 session.manifest = null
             }
         }
+        // A lost response may still have created a draft. Reconcile discovery before sending another POST.
         val unresolvedCreate = synchronized(session) { session.pendingCreate }
         if (unresolvedCreate != null) {
             val matching = summaries.filter { it.category == unresolvedCreate.category }
@@ -523,6 +536,7 @@ public class MinecraftSubmissionWorkflow(
             }
             dispatch {
                 if (failure != null) {
+                    // Keep uncertain creations so the next command can reconcile or replay the same request.
                     if (!retryableCreateFailure(failure)) {
                         clearPendingCreate(session, pending)
                     }
@@ -735,6 +749,7 @@ public class MinecraftSubmissionWorkflow(
         retryTransport: Boolean,
     ) {
         client.submitChange(pending).whenComplete { response, failure ->
+            // Retry the same operation once after transport failure; a revision conflict must reach the player.
             if (failure != null && retryTransport && unwrap(failure) is BackendTransportException) {
                 scheduler.schedule(
                     { submitPreparedChange(session, client, pending, fieldId, notify, retryTransport = false) },

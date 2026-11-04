@@ -16,6 +16,10 @@ public enum class NbtType(public val id: Int) {
     LONG_ARRAY(12),
 }
 
+/**
+ * Platform-independent NBT data. Collection factories copy their containers, not nested values.
+ * Array tags copy constructor input but expose mutable arrays; keep them stable while encoding.
+ */
 public sealed interface NbtValue {
     public val type: NbtType
 }
@@ -73,6 +77,7 @@ public value class NbtString(public val value: String) : NbtValue {
         get() = NbtType.STRING
 }
 
+/** Homogeneous values; an empty list uses the END element type. */
 public data class NbtList private constructor(
     public val elementType: NbtType,
     public val values: List<NbtValue>,
@@ -90,6 +95,7 @@ public data class NbtList private constructor(
     }
 }
 
+/** Named values copied into sorted key order for deterministic serialization. */
 public data class NbtCompound private constructor(public val values: Map<String, NbtValue>) : NbtValue {
     override val type: NbtType
         get() = NbtType.COMPOUND

@@ -9,7 +9,14 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 
-/** Parses the deliberately small form value language used by `/squid set`. */
+/**
+ * Parses `/squid set` values and checks the field's constraints and approved choices.
+ *
+ * Lists use commas with trimmed, nonempty, unique entries. Durations require a suffix:
+ * `gt`/`t` are game ticks, `rt` is two game ticks, and `s` is twenty. Fractional results
+ * are rejected. Supplied dynamic options replace inline options; invalid input throws
+ * [IllegalArgumentException]. The backend still validates the resulting answer.
+ */
 public object DraftFieldValueParser {
     public fun parse(field: FormField, rawValue: String, dynamicOptions: List<ChoiceOption>? = null): JsonElement {
         require(rawValue.length <= 4_000) { "value is longer than the in-game editor supports" }

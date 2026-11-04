@@ -14,6 +14,7 @@ public object SpongeV3Writer {
         return output.toByteArray()
     }
 
+    /** Writes and flushes one gzip member without closing [output]. Keep the snapshot unchanged until return. */
     public fun write(snapshot: SchematicSnapshot, output: OutputStream) {
         val gzip = DeterministicGzipOutputStream(output)
         val data = DataOutputStream(gzip)
@@ -23,6 +24,7 @@ public object SpongeV3Writer {
     }
 
     private fun buildRoot(snapshot: SchematicSnapshot): NbtCompound {
+        // Stable palette indices make output independent of map iteration and first block occurrence.
         val paletteNames = snapshot.blocks.map(BlockStateSnapshot::canonicalName).distinct().sorted()
         val palette = paletteNames.withIndex().associate { (index, name) -> name to NbtInt(index) }
         val paletteIndices = paletteNames.withIndex().associate { (index, name) -> name to index }

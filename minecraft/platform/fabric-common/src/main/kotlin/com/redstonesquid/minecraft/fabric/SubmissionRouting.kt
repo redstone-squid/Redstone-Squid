@@ -5,11 +5,17 @@ public enum class SubmissionRoute {
     PAPER,
 }
 
+/** Server presence whose authenticity must already have been established by the platform. */
 public data class PaperPresence(
     public val protocolVersion: Int,
     public val routingCapability: String,
 )
 
+/**
+ * Uses the Paper server's submission route when its advertised protocol and capability match.
+ * Otherwise the Fabric client submits independently. The platform must authenticate server presence
+ * before calling [decide]; this class only selects the route.
+ */
 public object SubmissionRouteDecider {
     public const val ROUTING_CAPABILITY: String = "redstonesquid.routing.v1"
 

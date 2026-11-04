@@ -29,6 +29,7 @@ internal fun <T> BackendTransport.executeJson(
     try {
         decode(response.body)
     } catch (_: Exception) {
+        // Decoder errors may embed the response body, including credentials.
         throw BackendProtocolException("Backend returned an invalid $responseName")
     }
 }
@@ -49,6 +50,7 @@ private fun apiException(response: BackendResponse): BackendApiException {
         null
     }
     val authCode = (problem?.context?.get("minecraft_auth_code") as? JsonPrimitive)?.contentOrNull
+    // Accept delay-seconds only; HTTP-date values need a clock and are ignored here.
     val retryAfter = response.header("Retry-After").singleOrNull()?.toLongOrNull()?.takeIf { it >= 0 }
     return BackendApiException(
         statusCode = response.statusCode,

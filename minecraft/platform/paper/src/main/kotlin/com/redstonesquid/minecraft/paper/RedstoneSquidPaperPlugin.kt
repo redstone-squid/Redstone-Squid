@@ -18,6 +18,10 @@ import java.util.concurrent.Executor
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 
+/**
+ * Paper lifecycle owner for in-game authorization and draft editing.
+ * Commands and workflow callbacks use the server thread; grants last only for this plugin instance.
+ */
 public class RedstoneSquidPaperPlugin : JavaPlugin() {
     private var workflow: MinecraftSubmissionWorkflow? = null
 

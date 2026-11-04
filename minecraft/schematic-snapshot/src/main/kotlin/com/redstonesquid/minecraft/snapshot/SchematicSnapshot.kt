@@ -68,6 +68,7 @@ public data class EntitySnapshot(
     public val data: NbtCompound = NbtCompound.of(),
 )
 
+/** Whether capture used the server's world data or only what was visible to a client. */
 public enum class CaptureCompleteness(public val protocolValue: String) {
     SERVER_AUTHORITATIVE("server_authoritative"),
     CLIENT_VISIBLE("client_visible"),
@@ -82,7 +83,14 @@ public data class SnapshotMetadata(
     }
 }
 
-/** A structurally validated capture that preserves block and entity data. */
+/**
+ * Block states, block entities, and entities captured for a schematic, independent of game-version classes.
+ * Capture adapters build this value for [SpongeV3Writer]; positions are relative to the selection minimum.
+ *
+ * Collections and nested NBT arrays are not deeply copied. Capture adapters must detach them
+ * from live game state, and callers must keep them unchanged during encoding. Structural checks
+ * do not establish capture completeness; the adapter supplies that assessment in [metadata].
+ */
 public data class SchematicSnapshot(
     public val dataVersion: Int,
     public val dimensions: Dimensions,

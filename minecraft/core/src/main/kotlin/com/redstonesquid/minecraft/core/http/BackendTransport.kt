@@ -78,6 +78,7 @@ public class BackendResponse(
     override fun toString(): String = "BackendResponse(statusCode=$statusCode, headers=<redacted>, body=<redacted>)"
 }
 
+/** Asynchronous backend access; callers must dispatch completions before touching game state. */
 public fun interface BackendTransport {
     public fun execute(request: BackendRequest): CompletableFuture<BackendResponse>
 }
@@ -89,7 +90,14 @@ public class BackendProtocolException(message: String) : BackendTransportExcepti
 public class BackendResponseTooLargeException(limit: Int) :
     BackendTransportException("Backend response exceeded its $limit-byte budget")
 
-/** A redirect-free JDK HTTP transport with strict URI, timeout, and body bounds. */
+/**
+ * HTTPS transport with bounded UTF-8 bodies, no redirects, and no automatic retries.
+ *
+ * Request paths are relative to the configured API prefix, even though they start with `/`.
+ * The timeout includes reading the response body. Cancelling the future returned by [execute]
+ * cancels the HTTP request and closes an active body stream; cancelling a derived future does
+ * not provide that guarantee. Plain HTTP requires explicit opt-in and a loopback host.
+ */
 public class BoundedJdkHttpTransport(
     apiBaseUri: URI,
     connectTimeout: Duration = Duration.ofSeconds(5),
@@ -138,6 +146,7 @@ public class BoundedJdkHttpTransport(
                 activeBody.getAndSet(null)?.close()
             }
         }
+        // HttpClient's timeout can finish at the headers; also bound a stalled body stream.
         CompletableFuture.delayedExecutor(requestTimeout.toMillis(), TimeUnit.MILLISECONDS).execute {
             if (result.completeExceptionally(BackendTransportException("Backend request timed out"))) {
                 upstream.cancel(true)

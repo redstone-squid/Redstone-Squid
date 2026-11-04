@@ -28,11 +28,13 @@ public data class Dimensions(
     }
 }
 
+/** Normalized world-space corners, both inclusive; a one-block selection has dimensions 1 × 1 × 1. */
 public data class CuboidSelection private constructor(
     public val minimum: BlockPosition,
     public val maximum: BlockPosition,
     public val dimensions: Dimensions,
 ) {
+    /** Subtracts the selection minimum with overflow checks; it does not check containment. */
     public fun toLocal(worldPosition: BlockPosition): BlockPosition = BlockPosition(
         x = Math.subtractExact(worldPosition.x, minimum.x),
         y = Math.subtractExact(worldPosition.y, minimum.y),
@@ -80,6 +82,7 @@ public data class CaptureBudgetViolation(
     public val limit: Long,
 )
 
+/** Axis and total-block limits to check before reading or allocating a capture. */
 public data class CaptureBudget(
     public val maximumAxis: Int = 512,
     public val maximumVolume: Long = 20_000_000,

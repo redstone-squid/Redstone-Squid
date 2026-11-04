@@ -15,12 +15,14 @@ dependencies {
 }
 
 tasks.named<ShadowJar>("shadowJar") {
+    // The deployable plugin bundles the core and Kotlin dependencies.
     archiveClassifier.set("")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     filesMatching("META-INF/*.kotlin_module") {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
     dependencies {
+        // Paper supplies Brigadier; bundling another copy would duplicate server classes.
         exclude(dependency("com.mojang:brigadier:.*"))
     }
 }

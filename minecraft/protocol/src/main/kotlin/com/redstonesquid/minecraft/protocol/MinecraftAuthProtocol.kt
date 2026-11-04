@@ -70,6 +70,7 @@ public data class FabricChallengeExchangeRequest(
         "FabricChallengeExchangeRequest(deviceCode=<redacted>, pkceVerifier=<redacted>)"
 }
 
+/** Browser approval instructions plus the private device code used to exchange an approved challenge. */
 @Serializable
 public class ChallengeCreateResponse(
     public val id: String,
@@ -104,7 +105,7 @@ public class ChallengeCreateResponse(
             "verificationUri=$verificationUri, verificationUriComplete=$verificationUriComplete)"
 }
 
-/** A one-time player bearer response. The token is deliberately absent from [toString]. */
+/** A player grant with its bearer token, player identity, origin, and expiry. [toString] omits the token. */
 @Serializable
 public class IssuedPlayerGrantResponse(
     @SerialName("grant_id")

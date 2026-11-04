@@ -62,6 +62,7 @@ subprojects {
     }
 }
 
+// The structural parent project has no build tasks of its own.
 val buildModules = subprojects.filterNot { it.path == ":platform" }
 
 tasks.named("assemble") {

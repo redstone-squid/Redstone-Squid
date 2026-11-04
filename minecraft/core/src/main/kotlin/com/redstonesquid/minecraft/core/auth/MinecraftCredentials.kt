@@ -15,6 +15,7 @@ public value class PaperInstallationKey(public val value: String) {
     }
 }
 
+/** Authenticates a Paper server installation; individual players also need a [PlayerGrantCredential]. */
 public class PaperInstallationCredential(
     public val installationId: UUID,
     secret: String,
@@ -32,6 +33,7 @@ public class PaperInstallationCredential(
         "PaperInstallationCredential(installationId=$installationId, secret=<redacted>)"
 }
 
+/** Locates a player's grant for one origin, and for Paper, one server installation. */
 public data class PlayerGrantKey(
     public val javaUuid: UUID,
     public val origin: MinecraftOrigin,
@@ -44,6 +46,7 @@ public data class PlayerGrantKey(
     }
 }
 
+/** Expiring authorization to act for a linked player, issued after browser approval. */
 public class PlayerGrantCredential(
     public val grantId: UUID,
     public val key: PlayerGrantKey,
@@ -65,8 +68,11 @@ public class PlayerGrantCredential(
 }
 
 /**
- * Port for an OS-backed credential vault. Implementations must encrypt at rest,
- * avoid backups or logs that expose values, and replace writes atomically.
+ * Credential storage shared by game-thread calls and asynchronous HTTP completions.
+ *
+ * Implementations used across threads must synchronize access. Keep secrets in memory
+ * or an OS credential vault; persistent implementations must encrypt at rest, replace
+ * writes atomically, and keep values out of logs and unprotected backups.
  */
 public interface MinecraftSecretStore {
     public fun loadInstallation(key: PaperInstallationKey): PaperInstallationCredential?
@@ -86,7 +92,7 @@ public class SecretPersistenceUnavailableException : IllegalStateException(
     "No secure Minecraft credential store is configured",
 )
 
-/** Default until a platform supplies an audited OS-vault implementation. */
+/** Rejects all access until the platform explicitly chooses a credential store. */
 public object FailClosedMinecraftSecretStore : MinecraftSecretStore {
     override fun loadInstallation(key: PaperInstallationKey): PaperInstallationCredential? = unavailable()
 
@@ -105,8 +111,10 @@ public object FailClosedMinecraftSecretStore : MinecraftSecretStore {
 }
 
 /**
- * Volatile credential store for platform sessions that cannot safely persist secrets.
- * Everything is discarded when the server or client exits.
+ * Bounded, thread-safe storage that keeps credentials only in this process.
+ *
+ * Expired grants are removed on reads and saves. Saving a new key at capacity throws
+ * instead of evicting a usable credential. This store does not persist across restarts.
  */
 public class EphemeralMinecraftSecretStore(
     private val clock: Clock = Clock.systemUTC(),

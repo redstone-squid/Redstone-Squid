@@ -18,7 +18,10 @@ private val clientInstanceIdPattern = Regex("[A-Za-z0-9_.:-]{1,128}")
 private val activeDraftStatuses = setOf("editing", "processing", "needs_attention")
 private val submissionOrigins = setOf("discord", "web", "cli", "paper", "fabric")
 
-/** Capabilities of a concrete renderer; this value is not sent as one object. */
+/**
+ * Controls and features an editor supports, used to check whether it can render a form.
+ * This local description is not sent to the backend as one object.
+ */
 public data class ClientCapabilities(
     public val protocolVersion: Int,
     public val clientInstanceId: String,
@@ -164,7 +167,10 @@ public data class CategoryForm(
         get() = sections.flatMap(FormSection::fields)
 }
 
-/** Exact response shape of `GET /v1/submissions/form/options/{source}`. */
+/**
+ * Choices fetched for a field's option source, such as the supported Minecraft versions.
+ * Returned by `GET /v1/submissions/form/options/{source}`.
+ */
 @Serializable
 public data class FormOptionSet(
     public val source: String,
@@ -180,7 +186,11 @@ public data class FormOptionSet(
     }
 }
 
-/** Exact response shape of `GET /v1/submissions/form/current`. */
+/**
+ * Backend form definition shared by submission editors, returned by `GET /v1/submissions/form/current`.
+ * Common sections apply to every build category; category sections add its specific fields.
+ * [revision] versions this definition, while [StoredDraft.revision] tracks edits to a draft.
+ */
 @Serializable
 public data class FormManifest(
     @SerialName("schema_id")
@@ -208,6 +218,7 @@ public data class FormManifest(
         }
     }
 
+    /** Common fields followed by category fields for this origin; visibility is evaluated by the caller. */
     public fun fieldsFor(categoryCode: String, origin: String): List<FormField> {
         val category = categories.singleOrNull { it.code == categoryCode }
             ?: throw IllegalArgumentException("unknown category: $categoryCode")
@@ -224,6 +235,7 @@ public data class CapabilityNegotiation(
         get() = protocolCompatible && missingCapabilities.isEmpty() && unsupportedRequiredFields.isEmpty()
 }
 
+/** Checks required controls and capabilities for an origin; optional fields do not block compatibility. */
 public object FormCapabilityNegotiator {
     public fun negotiate(
         manifest: FormManifest,
@@ -312,6 +324,10 @@ public data class DraftChangeRequest(
     }
 }
 
+/**
+ * Backend-retained answers for a submission, pinned to a form schema and its revision.
+ * [revision] is the edit revision used for conflict detection; editing an answer does not upgrade the schema.
+ */
 @Serializable
 public data class StoredDraft(
     public val id: String,
@@ -401,6 +417,10 @@ public data class DraftChangeResponse(
     public val replayed: Boolean,
 )
 
+/**
+ * Strict JSON syntax with unknown properties ignored for additive protocol changes.
+ * Manifest and draft-list decoders enforce byte limits; other decoders rely on transport bounds.
+ */
 public object FormProtocolJson {
     private val json = Json {
         ignoreUnknownKeys = true

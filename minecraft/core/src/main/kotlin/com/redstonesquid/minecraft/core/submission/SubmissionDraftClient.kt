@@ -46,7 +46,10 @@ public sealed interface DraftFieldMutation {
     public data class Unset(override val fieldId: String) : DraftFieldMutation
 }
 
-/** A retry-safe optimistic edit. Reuse this object after uncertain network failures. */
+/**
+ * An optimistic edit with fixed operation IDs, base revision, and idempotency key.
+ * Reuse this object after an uncertain network failure; submitting it does not rebase a conflict.
+ */
 public class PendingDraftChange internal constructor(
     public val draftId: UUID,
     public val baseRevision: Long,
@@ -56,7 +59,10 @@ public class PendingDraftChange internal constructor(
         "PendingDraftChange(draftId=$draftId, baseRevision=$baseRevision, request=<redacted>)"
 }
 
-/** A retry-safe draft creation. Reuse this object after uncertain network failures. */
+/**
+ * A frozen creation body and idempotency key for retrying an uncertain result.
+ * Replay requires the same grant and must precede both its expiry and the 24-hour replay deadline.
+ */
 public class PendingDraftCreate internal constructor(
     public val category: String,
     internal val body: String,
@@ -69,8 +75,17 @@ public class PendingDraftCreate internal constructor(
 }
 
 /**
- * Typed synchronized-draft client bound to one server-issued player grant.
- * Origin comes from that grant key; no operation accepts an account ID or origin.
+ * Reads and edits backend submission drafts for one authorized Minecraft player.
+ *
+ * The form manifest describes the fields and controls; a stored draft holds the player's answers
+ * and edit revision. Prepare a change against that revision, then submit it; retain the prepared
+ * change to retry an uncertain response without creating a second edit. Origin comes from the
+ * player grant key; no operation accepts an account ID or origin.
+ *
+ * Form and option reads are public. Draft operations load credentials for each request and
+ * may throw synchronously before returning a future. The backend remains responsible for
+ * ownership and field validation. This client neither retries requests nor schedules callbacks
+ * on a game thread.
  */
 public class SubmissionDraftClient(
     private val transport: BackendTransport,
@@ -124,6 +139,7 @@ public class SubmissionDraftClient(
         }
     }
 
+    /** Starts a new creation each call. Use [prepareCreate] and [submitCreate] when retries are needed. */
     public fun createDraft(
         category: String,
         clientCapabilities: Set<String> = emptySet(),

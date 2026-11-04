@@ -5,7 +5,10 @@ import com.redstonesquid.minecraft.snapshot.CaptureBudgetViolation
 import com.redstonesquid.minecraft.snapshot.CuboidSelection
 import com.redstonesquid.minecraft.snapshot.SchematicSnapshot
 
-/** Game-version boundary. Implementations may read only state currently visible to the client. */
+/**
+ * Game-version boundary called synchronously on the client game thread.
+ * Implementations read only loaded, client-visible state and return data detached from live game objects.
+ */
 public interface FabricGameAdapter {
     public val minecraftVersion: String
 
@@ -26,6 +29,7 @@ public class ClientCaptureController(
     private val adapter: FabricGameAdapter,
     private val budget: CaptureBudget = CaptureBudget(),
 ) {
+    /** Checks the budget before world access and refuses an incompletely loaded selection. */
     public fun prepare(selection: CuboidSelection): CapturePreparation {
         val violations = budget.violations(selection.dimensions)
         if (violations.isNotEmpty()) {

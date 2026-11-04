@@ -3,7 +3,10 @@ package com.redstonesquid.minecraft.core.http
 import java.net.URI
 import java.util.Locale
 
-/** Explicit public endpoints accepted by the Paper and Fabric entrypoints. */
+/**
+ * Configured HTTPS endpoints for the Paper and Fabric entrypoints.
+ * [parse] checks URI structure and the API's `/v1` suffix, without resolving or restricting host addresses.
+ */
 public data class MinecraftClientEndpoints(
     public val apiBaseUri: URI,
     public val approvalUri: URI,

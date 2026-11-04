@@ -118,11 +118,8 @@ public object SquidCommandTree {
     }
 
     /**
-     * Adapt a [SquidSuggestions] to Brigadier.
-     *
-     * Filtering happens here rather than in each implementation so every slot matches the same
-     * way, and completing is failure-tolerant: a player mid-word must get an empty dropdown rather
-     * than a red error, so anything thrown while gathering candidates is swallowed.
+     * Adapts cached candidates to Brigadier with case-insensitive prefix matching.
+     * Candidate lookup failures produce an empty dropdown so typing can continue.
      */
     private fun <S> provider(
         suggestions: SquidSuggestions<S>,
@@ -136,9 +133,6 @@ public object SquidCommandTree {
             .filter { it.value.lowercase().startsWith(typed) }
             .forEach { candidate ->
                 val tooltip = candidate.tooltip
-                // `LiteralMessage` rather than a SAM-converted lambda: the overload taking a
-                // `Message` is what carries hover text, and naming the concrete type keeps which
-                // overload is selected obvious.
                 if (tooltip == null) {
                     builder.suggest(candidate.value)
                 } else {
@@ -149,12 +143,8 @@ public object SquidCommandTree {
     }
 
     /**
-     * The field name already typed, when there is one.
-     *
-     * `/squid set <field> <value>` needs it to know which field's values to offer, and Brigadier
-     * has parsed preceding arguments by the time it asks about a later one. It throws rather than
-     * returning null when the argument is absent, which is the ordinary case for the slots that
-     * have no field in front of them.
+     * Returns the preceding field argument for value completion.
+     * Brigadier throws for slots without a field argument; those use null instead.
      */
     private fun <S> fieldArgument(context: CommandContext<S>): String? =
         runCatching { StringArgumentType.getString(context, "field") }.getOrNull()

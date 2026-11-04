@@ -21,6 +21,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
 
+/** Client lifecycle owner that returns workflow callbacks to the Minecraft thread and stores grants in memory. */
 public class RedstoneSquidFabricClient : ClientModInitializer {
     private var workflow: MinecraftSubmissionWorkflow? = null
 

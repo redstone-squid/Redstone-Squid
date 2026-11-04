@@ -1,6 +1,6 @@
 package com.redstonesquid.minecraft.core.auth
 
-/** Test-only adapter; production platforms must use an audited OS credential vault. */
+/** Unsynchronized test store; production code uses the bounded ephemeral store or an OS vault. */
 class InMemoryMinecraftSecretStore : MinecraftSecretStore {
     private val installations = mutableMapOf<PaperInstallationKey, PaperInstallationCredential>()
     private val grants = mutableMapOf<PlayerGrantKey, PlayerGrantCredential>()

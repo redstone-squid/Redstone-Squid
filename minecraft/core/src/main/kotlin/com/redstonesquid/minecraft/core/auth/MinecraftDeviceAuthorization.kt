@@ -22,6 +22,7 @@ import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
+/** A challenge to display and poll until approval or expiry; implementations retain exchange secrets. */
 public sealed interface PendingPlayerAuthorization {
     public val challengeId: UUID
     public val javaUuid: UUID
@@ -83,7 +84,19 @@ public data class AuthorizedPlayer(
     public val expiresAt: Instant,
 )
 
-/** Starts and exchanges the server's Paper and Fabric device authorization flows. */
+/**
+ * Links a Minecraft player to a Squid account through browser approval.
+ *
+ * The begin methods return a challenge with a code for the player to approve in a browser.
+ * Exchange methods poll that challenge and save the resulting player grant after approval.
+ * Paper authenticates the server installation; Fabric uses a PKCE secret to bind the exchange
+ * to the client that began the challenge.
+ *
+ * The caller schedules polling and retries with the same pending challenge. A successful
+ * exchange validates the grant's player, origin, installation, and expiry before saving it.
+ * Validation and credential-store failures may throw before a future is returned; completion
+ * callbacks and grant saves run on the transport's completion thread, or inline if already complete.
+ */
 public class MinecraftDeviceAuthorizationClient(
     private val transport: BackendTransport,
     private val secretStore: MinecraftSecretStore = FailClosedMinecraftSecretStore,

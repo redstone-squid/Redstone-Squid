@@ -16,6 +16,7 @@ internal class PaperRuntimeSettings private constructor(
         "PaperRuntimeSettings(endpoints=$endpoints, installationId=$installationId, installationSecret=<redacted>)"
 
     companion object {
+        /** Properties override environment values, except the secret, which is accepted only from the environment. */
         fun load(
             property: (String) -> String?,
             environment: (String) -> String?,
