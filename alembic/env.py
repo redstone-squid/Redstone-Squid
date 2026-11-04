@@ -23,16 +23,14 @@ from squid.persistence.migration_history import (
 
 config = context.config
 if config.config_file_name is not None:
-    # fileConfig disables every already-configured logger by default. Alembic is not
-    # always the only thing running in the process — the migration tests drive it
-    # in-process — and silently muting the host's loggers is never what is wanted.
+    # Migration tests also run Alembic in-process; preserve the host's configured loggers.
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 MANAGED_ENTITY_NAMES = {f"{entity.schema}.{entity.signature}" for entity in alembic_util_entities()}
 MANAGED_ENTITY_TYPES = {type(entity) for entity in alembic_util_entities()}
 BOOKKEEPING_TABLES = frozenset({"alembic_version", HISTORY_TABLE})
-"""Alembic's own state, which no model declares and autogenerate must therefore not compare."""
+"""Migration bookkeeping excluded from ORM schema comparisons."""
 
 ALEMBIC_UTIL_ENTITY_TYPE_NAMES = {
     "extension",
@@ -82,9 +80,7 @@ def include_name(
 
 def configure_context(connection: Connection | None = None) -> None:
     """Configure schema comparison consistently for online and offline operation."""
-    # The recorder is built per run so it can time each step against the previous one, and is
-    # registered even offline: it declines to write there itself, which keeps that decision in
-    # one place rather than splitting it across two configure calls.
+    # Each run gets its own timing recorder. The recorder itself skips writes in offline mode.
     context.configure(
         connection=connection,
         on_version_apply=MigrationStepRecorder(),
@@ -117,9 +113,8 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         configure_context(connection)
         with context.begin_transaction():
-            # Inside the transaction Alembic owns, so a failed run leaves the ledger exactly as
-            # it found it. The order matters: verification reads a table that a database seeing
-            # this code for the first time does not have yet.
+            # Older databases may not have the history table yet. Create it before verifying
+            # recorded script hashes, in the same transaction as the migrations.
             create_history_table(connection)
             verify_script_digests(connection, context.script)
             context.run_migrations()

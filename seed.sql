@@ -1,3 +1,6 @@
+-- Initial example server settings, official door tags, and a fixed Minecraft version list.
+-- These inserts are not an upsert: rerunning against populated tables can hit unique constraints.
+
 insert into server_settings(server_id, smallest_channel_id, fastest_channel_id, first_channel_id, builds_channel_id, voting_channel_id, in_server)
 values
 (433618741528625152, 536004554743873556, 536004554743873556, 536004554743873556, 536004554743873556, 536004554743873556, TRUE);
