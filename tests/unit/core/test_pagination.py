@@ -66,8 +66,8 @@ def test_a_forward_page_can_always_go_back_where_it_came_from() -> None:
 
 
 def test_a_backward_page_trims_its_overfetch_from_the_front() -> None:
-    # A `before_id=5` query walks away from the anchor and is flipped back, so the proof that an
-    # earlier page exists arrives at the head of the rows rather than the tail.
+    # A backward query returns rows in display order after reversal. Its extra row is
+    # therefore at the front, showing that another earlier page exists.
     page = assemble(rows(9, 8, 7), selector=PageSelector(before_id=6))
 
     assert [row.id for row in page.items] == [8, 7]

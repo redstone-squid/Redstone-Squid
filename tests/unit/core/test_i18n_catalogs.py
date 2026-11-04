@@ -9,7 +9,7 @@ from squid.core.i18n import locales_dir
 
 
 def _po_paths() -> list[Path]:
-    """Catalogs as the application itself locates them, not as a second hard-coded walk."""
+    """Find source catalogs through the application's own locale directory."""
     root = locales_dir()
     paths = sorted(root.glob("*/LC_MESSAGES/squid.po"))
     assert paths, f"No .po catalogs found under {root}"

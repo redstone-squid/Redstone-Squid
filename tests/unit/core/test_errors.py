@@ -44,11 +44,7 @@ def test_with_context_mutates_exception_without_changing_type() -> None:
 
 
 def test_with_context_can_restate_the_message() -> None:
-    """Enrichment that cannot restate the message is only half a helper.
-
-    A layer that resolves *what* a conflict was usually wants to say so, and the alternative was
-    assigning `message` by hand, which skips the `args` refresh and leaves `str(error)` stale.
-    """
+    """Updating an error message must also refresh args, str(error), and public details."""
     error = BuildNotFoundError(42)
     build_id = 42
 

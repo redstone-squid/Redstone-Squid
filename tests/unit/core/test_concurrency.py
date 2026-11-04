@@ -22,7 +22,7 @@ async def test_run_all_handles_an_empty_batch() -> None:
 
 
 async def test_run_all_cancels_siblings_on_the_first_failure() -> None:
-    """The whole point over gather: no sibling is left running unawaited."""
+    """Wait for sibling cancellation before propagating the failure."""
     sibling_cancelled = False
     started = anyio.Event()
 
@@ -138,7 +138,7 @@ async def test_run_all_awaitables_awaits_every_coroutine() -> None:
 
 
 async def test_run_all_settled_finishes_every_operation_before_raising() -> None:
-    """A cancelled job never reaches its own except clause, so nothing may be cancelled."""
+    """Allow every branch to finish its work before propagating a failure."""
     finished: list[int] = []
     started = anyio.Event()
 

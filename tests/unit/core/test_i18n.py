@@ -140,16 +140,15 @@ def test_negotiate_locale_candidates_falls_back_to_default() -> None:
 
 
 def test_locales_dir_points_at_the_shipped_catalogs() -> None:
-    """The walk out of `squid/core/` breaks silently: a wrong directory just stops translating."""
+    """A wrong catalog directory can silently fall back to untranslated messages."""
     assert (locales_dir() / "zh_CN" / "LC_MESSAGES" / "squid.po").is_file()
 
 
 def test_catalog_maps_a_bcp47_tag_onto_its_gettext_directory(tmp_path: Path) -> None:
-    """A `zh-CN` tag has to find `zh_CN/LC_MESSAGES/squid.mo`; nothing else pins that conversion.
+    """Resolve the zh-CN locale tag to the zh_CN gettext directory.
 
-    Compiled catalogs are produced by `just i18n-compile` and are not committed, so a test
-    reading the shipped tree would assert the untranslated fallback on a clean checkout and
-    prove nothing. Injecting `localedir` lets this assert a translation actually being found.
+    Compile a temporary catalog because .mo files are generated, not committed.
+    An explicit translation proves that lookup did not merely return its fallback.
     """
     messages = tmp_path / "zh_CN" / "LC_MESSAGES"
     messages.mkdir(parents=True)
