@@ -57,12 +57,7 @@ async def test_a_field_value_is_read_from_the_index() -> None:
 
 
 async def test_facet_values_match_on_prefix_only() -> None:
-    """The deliberate trade for an unbounded set.
-
-    Small in-memory taxonomies go through the full matcher, which also does word-prefix, substring
-    and fuzzy. Facet values cannot: there is no bound on how many a field has, so matching has to
-    be something an index can serve, and that is a prefix.
-    """
+    """Facet completion uses the reader's prefix matches rather than the taxonomy fuzzy matcher."""
     result, _ = await suggest("restriction:seam", restriction=["Semi-Seamless"])
     assert result.items == ()
 
@@ -77,7 +72,7 @@ async def test_a_numeric_field_offers_no_values_to_scroll_through() -> None:
     result, facets = await suggest("width:5")
     assert result.items == ()
     assert facets.calls == []
-    # The span is still reported, so a client knows nothing here is completable.
+    # The empty result still identifies the token under the caret.
     assert result.replacement is not None
 
 
@@ -105,7 +100,6 @@ async def test_an_open_quote_is_preserved_when_completing() -> None:
 
 
 async def test_database_order_is_preserved_rather_than_re_ranked() -> None:
-    """Postgres already prefix-matched; re-ranking could only discard what it cannot re-derive."""
     result, _ = await suggest("creator:b", creator=["bob", "Bea", "bill"])
     assert [item.label for item in result.items] == ["bob", "Bea", "bill"]
 

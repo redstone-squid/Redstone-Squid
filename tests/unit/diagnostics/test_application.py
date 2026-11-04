@@ -99,7 +99,7 @@ def _throw(error: Exception) -> None:
 
 
 def raised(error: Exception) -> Exception:
-    """Return `error` carrying a real traceback, as a captured failure always would."""
+    """Attach a real traceback to the supplied exception."""
     try:
         _throw(error)
     except Exception as caught:
@@ -135,11 +135,7 @@ async def test_record_captures_the_traceback_and_classification() -> None:
 
 
 async def test_record_swallows_a_storage_failure(caplog: pytest.LogCaptureFixture) -> None:
-    """Every caller is an error handler that still owes the user a response.
-
-    A report that cannot be written is a lost diagnostic; one that raises turns a handled error
-    into a command that silently does nothing.
-    """
+    """A diagnostic write failure must not interrupt the caller's handling of the original error."""
     service = build_service(_state(failing=True))
 
     with caplog.at_level("ERROR"):
@@ -192,7 +188,7 @@ async def test_lookup_strips_the_backticks_the_error_card_rendered() -> None:
 
 
 async def test_lookup_reports_how_many_share_a_reference() -> None:
-    """A 48-bit prefix is not a key, and a moderator may be reading the wrong traceback."""
+    """Different correlation IDs can share the short reference shown to a moderator."""
     repository = _state()
     service = build_service(repository)
     for correlation in ("1" * 12 + "a" * 20, "1" * 12 + "b" * 20):

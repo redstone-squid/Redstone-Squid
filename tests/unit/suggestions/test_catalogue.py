@@ -1,8 +1,4 @@
-"""Registered suggestion source tests.
-
-The registry is a contract between three surfaces, so what it publishes is checked here rather
-than discovered when a Discord dropdown silently comes back empty.
-"""
+"""Check the source IDs, visibility, and value types published to suggestion clients."""
 
 from typing import Any, cast
 
@@ -28,7 +24,7 @@ def registry(*, discord: bool = False) -> SuggestionRegistry:
 
 
 def test_the_api_registry_omits_gateway_only_sources() -> None:
-    """The API process has no starboards, so those sources are absent rather than broken."""
+    """Omitting optional services must omit their sources from the registry."""
     api = registry()
     assert "starboard_names" not in api
     assert "permission_roles" not in api
@@ -50,7 +46,7 @@ def test_every_form_option_source_is_also_a_suggestion_source() -> None:
 
 
 def test_guild_scoped_sources_declare_the_context_they_need() -> None:
-    """Without this, a missing context resolver would answer from the wrong guild."""
+    """The service must reject missing guild context before calling a provider."""
     discord = registry(discord=True)
     for source_id in ("starboard_names", "permission_roles"):
         assert discord.resolve(source_id).context_keys == frozenset({"guild_id"})

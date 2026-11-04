@@ -1,4 +1,4 @@
-"""Log-driven capture: what becomes a report, and what must never become one."""
+"""Check which log records become reports and how queued writes recover from errors."""
 
 import asyncio
 import contextlib
@@ -62,7 +62,11 @@ def log_record(
 
 
 async def drain(handler: ErrorReportLogHandler, service: RecordingService) -> None:
-    """Run the drain long enough for queued failures to be stored."""
+    """Give the drain two event-loop turns, then cancel and await it.
+
+    The recording fake does not suspend while saving, so queued writes finish
+    within those turns without waiting for real I/O.
+    """
     task = asyncio.create_task(handler.run(cast(ErrorReportService, service)))
     await asyncio.sleep(0)
     await asyncio.sleep(0)
@@ -72,7 +76,7 @@ async def drain(handler: ErrorReportLogHandler, service: RecordingService) -> No
 
 
 async def test_a_logged_exception_becomes_a_report() -> None:
-    """The worker absorbs its failures, so the log line is the only thing left to follow."""
+    """Exceptions logged by background work can become reports without an interaction handler."""
     handler = ErrorReportLogHandler()
     service = RecordingService()
     handler.handle(log_record(error=raised(), request_id="a" * 32))
@@ -88,7 +92,7 @@ async def test_a_logged_exception_becomes_a_report() -> None:
 
 
 async def test_a_dead_lettered_job_is_marked_as_losing_work() -> None:
-    """Nothing will retry it, which is what separates it from an exception something survived."""
+    """The explicit work-lost marker must reach the stored report."""
     handler = ErrorReportLogHandler()
     service = RecordingService()
     handler.handle(log_record(error=raised(), request_id="b" * 32, extra=work_lost()))
@@ -99,7 +103,6 @@ async def test_a_dead_lettered_job_is_marked_as_losing_work() -> None:
 
 
 async def test_a_record_without_an_exception_is_ignored() -> None:
-    """An error message is not an incident; a traceback is."""
     handler = ErrorReportLogHandler()
     service = RecordingService()
     handler.handle(log_record(message="queue drained with failures", request_id="c" * 32))
@@ -132,7 +135,6 @@ async def test_failures_from_this_package_are_ignored() -> None:
 
 
 async def test_an_uncorrelated_failure_still_gets_a_reference() -> None:
-    """A report nobody can look up is not worth storing."""
     handler = ErrorReportLogHandler()
     service = RecordingService()
     handler.handle(log_record(error=raised()))
@@ -156,7 +158,7 @@ async def test_the_queue_is_bounded_and_says_what_it_dropped() -> None:
     await drain(handler, service)
 
     assert len(service.calls) == 2
-    # Newest kept: an old failure matters less than the one still happening.
+    # Overflow keeps recent failures so reports reflect what is still failing during a burst.
     assert [str(call["error"]) for call in service.calls] == ["boom 3", "boom 4"]
 
 
@@ -184,11 +186,7 @@ async def test_the_log_tail_is_read_without_consuming_it() -> None:
 
 
 async def test_a_failing_store_does_not_stop_the_drain(caplog: pytest.LogCaptureFixture) -> None:
-    """This loop is the only thing storing worker failures for the life of the process.
-
-    `ErrorReportService.record` swallows, so a raise here means something outside it broke. Ending
-    the loop over one bad write would silently lose every later failure as well.
-    """
+    """An unexpected error from the report service is logged, and later queued records remain usable."""
     handler = ErrorReportLogHandler()
     service = RecordingService(failing=True)
     handler.handle(log_record(error=raised(), request_id="0" * 32))
@@ -198,7 +196,7 @@ async def test_a_failing_store_does_not_stop_the_drain(caplog: pytest.LogCapture
 
     assert "Could not store a logged failure" in caplog.text
 
-    # The loop is still live: a later failure is still stored once the store recovers.
+    # Restart draining the same handler after the fake store recovers.
     service._failing = False
     handler.handle(log_record(error=raised("later"), request_id="1" * 32))
     await drain(handler, service)

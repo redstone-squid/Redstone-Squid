@@ -52,7 +52,6 @@ async def test_invalidate_drops_one_key_or_everything() -> None:
 
 
 async def test_concurrent_misses_on_one_key_issue_a_single_load() -> None:
-    """A cold cache under a burst of keystrokes must not stampede the database."""
     loader = CountingLoader()
     cache = TtlCache(loader.load, ttl_seconds=60)
     results: list[str] = []

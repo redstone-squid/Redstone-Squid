@@ -1,8 +1,4 @@
-"""Suggestion service tests.
-
-These pin the two rules that make the service safe to call on every keystroke: it stays within its
-limits and it does not surface failures the user cannot act on.
-"""
+"""Check suggestion limits, visibility, provider failures, and content revisions."""
 
 import anyio
 import pytest

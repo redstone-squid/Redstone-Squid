@@ -47,8 +47,7 @@ def test_command_uses_separate_corpus_and_artifact_directories(tmp_path: Path) -
 
     assert command[2:4] == ["tests.fuzz.fuzz_search_parser", str(tmp_path / ".fuzz/corpus/search_parser")]
     assert "-max_total_time=7" in command
-    # Built through `Path` the way `command_for` builds it. Hardcoding "/" separators
-    # asserts a POSIX rendering of the prefix rather than the prefix itself.
+    # Match the platform's path separators while retaining libFuzzer's trailing slash.
     artifacts = tmp_path / ".fuzz" / "artifacts" / "search_parser"
     assert command[-1] == f"-artifact_prefix={artifacts}/"
     assert (tmp_path / ".fuzz/corpus/search_parser/valid").read_bytes() == b"title:door"

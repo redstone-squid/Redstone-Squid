@@ -11,7 +11,7 @@ from squid.core.errors import ConfigurationError
 
 
 class SequenceRandom(Random):
-    """Return a finite sequence while exposing how often policy was rolled."""
+    """Return chosen random values and count how often the policy samples them."""
 
     def __init__(self, *values: float) -> None:
         super().__init__(0)
@@ -96,8 +96,7 @@ def test_welcome_relay_resolves_both_event_orders(message_first: bool) -> None:
         random_source=Random(0),
     )
 
-    # A closure rather than a `**kwargs` dict: the dict erases to `int | bool | str`
-    # across its values, so nothing checks the arguments against the signature.
+    # Keep the call typed while reusing it in both event orders.
     def record_message():
         return service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!")
 
