@@ -1,12 +1,11 @@
-"""Two-backend text spike against the same engine-level scenarios."""
+"""Compare experimental Loro and pycrdt text adapters under the same engine-level scenarios."""
 
 from itertools import permutations
 
 import pytest
 
-# Both engines are exercised by the same parametrized scenarios, so the module needs both
-# backends rather than either. They are optional extras and the engines only import them when
-# instantiated, so without this the whole file fails at construction instead of skipping.
+# Each parametrized comparison runs both engines. Skip the module if either binding is
+# absent; lazy engine imports would otherwise defer the failure until construction.
 pytest.importorskip("loro", reason="install squid-replication[loro] to run the real backends")
 pytest.importorskip("pycrdt", reason="install squid-replication[pycrdt] to run the real backends")
 
@@ -263,6 +262,11 @@ def test_pycrdt_stack_item_groups_multiple_container_types() -> None:
 
 
 def test_loro_frontier_diff_would_clobber_a_later_map_register_write() -> None:
+    """A native reverse diff alone cannot provide the adapter's selective-undo contract.
+
+    It restores the old register value over a later remote write. The production
+    adapter must detect that conflict before applying an inverse.
+    """
     loro = pytest.importorskip("loro")
     document = loro.LoroDoc()
     metadata = document.get_map("metadata")

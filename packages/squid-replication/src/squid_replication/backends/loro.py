@@ -1,4 +1,13 @@
-"""Loro engines behind the replicated SPI."""
+"""Implement document replication and selective undo with Loro.
+
+LoroEngine keeps native containers private and exposes immutable Squid snapshots.
+Each local action records semantic operations, such as replacing a particular list
+item, alongside Loro's causal versions. Undo uses those operations to check whether
+the action still owns the values it would restore; a later write produces a conflict.
+Authority maps record that ownership as the most recent operation ID for each item.
+
+LoroTextEngine is a separate, standalone adapter used for backend comparison tests.
+"""
 
 import base64
 import json
@@ -132,7 +141,7 @@ class LoroTextBranch:
 
 
 class LoroTextEngine:
-    """A Loro text adapter used by the backend gate; public Squid values remain strings."""
+    """A standalone text adapter for backend comparison tests, separate from the full document engine."""
 
     backend_id = "loro-text-v1"
 
@@ -202,7 +211,11 @@ class LoroOperation:
 
 @dataclass(frozen=True, slots=True)
 class LoroDocumentToken:
-    """One durable, action-addressable Loro inverse token."""
+    """Semantic operations and causal frontiers needed to undo one action.
+
+    The backend version must match when planning an inverse, and the before frontier
+    must remain available after compaction. Retain the token to protect that history.
+    """
 
     before: bytes
     after: bytes
@@ -371,22 +384,16 @@ def _lineage_from_frontier(frontier: bytes) -> int:
 
 
 def _authority_of(values: Mapping[str, LoroValue], key: str) -> str | None:
-    """The identity that claims `key`, if one is recorded as a string.
-
-    An authority map holds identity strings, but it is read back through the `LoroValue` union
-    like any other container, and a non-string entry means the claim is unreadable rather than
-    absent-or-valid.
-    """
+    """Return the recorded operation identity, or None for an absent or malformed claim."""
     value = values.get(key)
     return value if isinstance(value, str) else None
 
 
 def _map_contents(value: LoroValue) -> dict[str, LoroValue]:
-    """The entries of a Loro map container.
+    """Narrow a map's generic LoroValue result to the dictionary its callers require.
 
-    `get_value()` is typed as the whole `LoroValue` union because any container answers it. A map
-    container always yields a dict, but nothing in the signature says so, and every caller here
-    immediately treats the result as one.
+    Loro's get_value annotation covers every container type, even when the receiver
+    is a map. Keeping the check here avoids repeating that narrowing at each use.
     """
     if not isinstance(value, dict):
         message = f"expected a Loro map, got {type(value).__name__}"
@@ -458,6 +465,11 @@ def _find_item(
 
 
 def _visible_items(container: Any, authorities: Mapping[str, object]) -> list[tuple[int, tuple[str, str, object]]]:
+    """Expose only list entries matching the winning operation for their logical item ID.
+
+    Concurrent replacements can leave multiple physical entries; the authority map
+    selects one visible value consistently across replicas.
+    """
     values = container.get_deep_value()
     if not isinstance(values, list):
         return []
@@ -480,6 +492,7 @@ def _anchors(container: Any, index: int, count: int = 1) -> tuple[str | None, st
 
 
 def _anchor_index(container: Any, before_id: object, after_id: object) -> int:
+    """Restore relative position before the surviving right neighbor, then after the left, or append."""
     if isinstance(after_id, str):
         found = _find_item(container, after_id)
         if found is not None:
@@ -574,6 +587,7 @@ class LoroDocumentBranch:
         self._operations.append(applied)
 
     def _apply(self, operation: LoroOperation) -> LoroOperation:
+        """Apply to the isolated branch and capture prior values and identities needed for selective undo."""
         data = dict(operation.data)
         if operation.kind == "increment":
             container = self.doc.get_map(_root_name("counter", operation.path))
@@ -880,6 +894,7 @@ class LoroDocumentBranch:
 
 
 def _snapshot(document: Any) -> ReplicatedSnapshot:
+    """Validate size and container shapes while copying Loro values into public immutable snapshots."""
     deep = document.get_deep_value()
     if not isinstance(deep, dict):
         message = "Loro document root is not an object"
@@ -1037,7 +1052,11 @@ def _set_snapshot(entries: Mapping[str, LoroValue]) -> frozenset[str]:
 
 @dataclass(frozen=True, slots=True)
 class LoroBackend:
-    """Create production Loro engines for one replica incarnation."""
+    """Create document engines sharing one Loro peer identity for a replica incarnation.
+
+    A zero peer_id selects a random nonzero identity. Distinct concurrent replicas must
+    use distinct peer IDs, independently of their host-facing replica_id strings.
+    """
 
     peer_id: int = 0
     backend_id = "loro-document-v1"
@@ -1051,7 +1070,12 @@ class LoroBackend:
 
 
 class LoroEngine:
-    """A full-document Loro engine whose containers never escape as public values."""
+    """Replicate all public container types while keeping native containers private.
+
+    Counters use per-peer decimal totals to preserve arbitrary-size Python integers.
+    Registers and logical items retain the writing operation's identity so selective
+    undo can detect later changes instead of overwriting them.
+    """
 
     backend_id = LoroBackend.backend_id
     container_kinds = frozenset({"counter", "set", "text", "list", "movable", "map", "tree"})
@@ -1155,10 +1179,10 @@ class LoroEngine:
         return LoroDocumentPrepared(None, update, before, branch.oplog_frontiers.encode(), ())
 
     def _version_vector(self, version: bytes) -> Any:
-        """The version vector encoded frontiers refer to.
+        """Decode frontiers and reject versions unavailable in this document history.
 
-        Split out from `export_since` so the unavailable-version failure is raised outside that
-        method's `try`, which exists to translate the backend's own corruption errors.
+        Keeping this check separate lets export_since preserve the ordinary ValueError
+        for unavailable history while translating native Loro corruption failures.
         """
         vv = self.doc.frontiers_to_vv(self.module.Frontiers.decode(version))
         if vv is None:
@@ -1294,6 +1318,12 @@ class LoroEngine:
         return decoded_token
 
     def plan_inverse(self, token: object) -> object | ConflictDetail:
+        """Plan selective undo, returning a conflict if history or write ownership has changed.
+
+        Counters and sets use compensating operations. Text uses a filtered native diff;
+        other containers check the action's recorded identities before restoring values.
+        An unrestricted native diff could overwrite a later register write.
+        """
         if not isinstance(token, LoroDocumentToken):
             return ConflictDetail("replicated:loro:token", 0, 0)
         if not _token_operations_valid(token.operations):
@@ -1574,6 +1604,11 @@ class LoroEngine:
             self._retentions.pop(retention, None)
 
     def compact(self) -> None:
+        """Replace the native document with a shallow snapshot preserving leased history.
+
+        The intersection of retained before-versions bounds compaction. Without leases,
+        older inverse tokens may expire; current visible state is preserved.
+        """
         target = self.doc.oplog_vv
         for encoded in self._retentions.values():
             frontiers = self.module.Frontiers.decode(encoded)

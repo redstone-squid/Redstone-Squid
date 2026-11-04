@@ -1,4 +1,10 @@
-"""Backend-neutral replicated engine and staging contracts."""
+"""Connect transactional documents to interchangeable replication backends.
+
+A backend creates an engine for each document. The engine owns committed state;
+a branch holds one transaction's edits until preparation validates them and apply
+publishes them. Documents use these interfaces without exposing native backend
+containers to application code.
+"""
 
 from typing import Any, Protocol
 
@@ -6,7 +12,12 @@ from squid_reactivity import ConflictDetail
 
 
 class ReplicaBranch[SnapshotT, OperationT, PreparedT](Protocol):
-    """An isolated branch whose prepared work has not changed canonical state."""
+    """Stage operations and read their effects without publishing canonical state.
+
+    The base identifies the version at branch creation. The transaction coordinator
+    checks that committed state still matches it before preparing a local commit.
+    Calling prepare produces backend work; only the engine's apply publishes it.
+    """
 
     def apply(self, operation: OperationT) -> None: ...
 
@@ -24,7 +35,16 @@ class ReplicaBranch[SnapshotT, OperationT, PreparedT](Protocol):
 
 
 class ReplicationEngine[SnapshotT, OperationT, PreparedT, ChangeT](Protocol):
-    """A CRDT backend hidden behind immutable snapshots and opaque causal tokens."""
+    """Expose a CRDT through immutable snapshots and opaque backend tokens.
+
+    The prepare_remote method validates incoming bytes without publishing them. For a
+    prepared no-op, change_token must return None: the document skips apply, invalidation, and
+    notifications. Applying prepared work is the canonical commit boundary.
+
+    Versions support incremental export; None requests a checkpoint. Inverse planning
+    returns work to stage or a conflict without publishing state. Retention leases
+    protect the history needed for inverses from compaction until explicitly released.
+    """
 
     @property
     def backend_id(self) -> str: ...

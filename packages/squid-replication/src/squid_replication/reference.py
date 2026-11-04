@@ -97,7 +97,12 @@ class ReferenceBranch:
 
 
 class ReferenceEngine:
-    """A deterministic convergent operation set used to prove Squid integration semantics."""
+    """A deterministic counter and observed-remove set backend for conformance tests.
+
+    Operations merge by identity; replay is idempotent, but reusing an identity with
+    different content is rejected. The log is retained indefinitely and is intended
+    for small tests and examples, not bounded production storage.
+    """
 
     backend_id = "squid-reference-v1"
     container_kinds = frozenset({"counter", "set"})
@@ -201,9 +206,8 @@ class ReferenceEngine:
         for operation in prepared.operations:
             self._operations.setdefault(operation.identity, operation)
             if operation.identity.replica == self.replica_id:
-                # Restores the clock from the log. A restarted process reusing its replica ID
-                # would otherwise re-mint identities its peers already hold, and the duplicate
-                # dropped as already-known is its own new work rather than the stale copy.
+                # A restarted replica must advance past its old IDs; reusing one would make
+                # peers mistake new work for an already-seen operation.
                 self._next_sequence = max(self._next_sequence, operation.identity.sequence)
         return ReferenceChange(prepared.operations)
 
@@ -255,7 +259,7 @@ class ReferenceEngine:
         self._retentions.discard(retention)
 
     def compact(self) -> None:
-        """Keep the deterministic reference log unchanged; it is a bounded test backend."""
+        """Keep the entire reference log; this test backend does not compact history."""
 
     def export_since(self, version: object | None = None) -> bytes:
         known = version.operations if isinstance(version, ReferenceVersion) else frozenset()
@@ -354,7 +358,7 @@ class ReferenceEngine:
 
 @dataclass(frozen=True, slots=True)
 class ReferenceBackend:
-    """Create bounded deterministic engines for conformance tests and examples."""
+    """Create deterministic engines for small conformance tests and examples."""
 
     backend_id = ReferenceEngine.backend_id
 

@@ -41,11 +41,10 @@ _PENDING_UPDATE_LIMIT = 1_000
 
 
 class ReplicationError(Exception):
-    """Base class for every failure squid-replication raises deliberately.
+    """Base for replication lifecycle and backend errors.
 
-    Each error keeps a standard exception base alongside this one (`RuntimeError`,
-    `ValueError`, or `TypeError`), so catching by standard type keeps working while
-    `except ReplicationError` covers the package.
+    Subclasses also inherit a standard exception type. Validation can raise standard
+    ValueError, TypeError, or RuntimeError directly.
     """
 
 
@@ -54,11 +53,10 @@ class ReplicaClosedError(ReplicationError, RuntimeError):
 
 
 class ReplicationResyncRequiredError(ReplicationError, RuntimeError):
-    """The bounded outbound buffer overflowed, so what it still holds is an incomplete history.
+    """Outbound overflow left the pending buffer with an incomplete update history.
 
-    Recover by exporting from the peer's version and acknowledging the resync. Nothing is lost
-    permanently -- the operation log can still answer any version -- but the buffer alone can
-    no longer carry a peer forward.
+    Resynchronize from the peer's version, or use a checkpoint if that history is no
+    longer available, then acknowledge the resync before draining again.
     """
 
 
@@ -133,6 +131,11 @@ class ReplicationChangeToken:
         return cls(weakref.ref(document), backend_token, token_epoch)
 
     def plan_inverse(self) -> PreparedReplicationInverse | ConflictDetail:
+        """Plan an inverse against current state, returning a conflict if it cannot be applied.
+
+        Closed documents, expired token generations, and backend conflicts leave state
+        unchanged. Planning does not stage the inverse; use stage_inverse in a transaction.
+        """
         document = self.document()
         if document is None or document.closed:
             return ConflictDetail("replicated:closed", 0, 0)
@@ -144,6 +147,7 @@ class ReplicationChangeToken:
         return PreparedReplicationInverse(inverse, self.token_epoch)
 
     def stage_inverse(self, inverse: PreparedReplicationInverse) -> None:
+        """Stage a planned inverse in the current transaction after rechecking its token generation."""
         document = self.document()
         if document is None or document.closed:
             detail = ConflictDetail("replicated:closed", 0, 0)
@@ -236,7 +240,16 @@ class _ReplicationParticipant:
 
 
 class ReplicatedDocument:
-    """One immutable-snapshot replicated document. Calling :meth:`close` ends all access."""
+    """Expose transaction-aware snapshots and mutations for one replicated document.
+
+    Container mutations require a Squid transaction and are staged on an isolated
+    branch. Reads inside that transaction see staged work; other reads see committed
+    state. Remote imports enter through the same transaction machinery. The host
+    transports local updates through subscriptions or the bounded drain buffer.
+
+    Close rejects future reads, mutations, imports, and subscriptions and clears local
+    listeners and buffers. It does not erase backend data.
+    """
 
     def __init__(self, document_id: str, engine: ReplicationEngine[Any, Any, Any, Any]) -> None:
         self.document_id = document_id
@@ -287,6 +300,7 @@ class ReplicatedDocument:
         return len(self._seen_update_ids)
 
     def snapshot(self) -> Any:
+        """Return the staged snapshot inside an editing transaction, otherwise committed state."""
         self._ensure_open()
         self._version_cell.read()
         participant = action_participant(self)
@@ -325,6 +339,11 @@ class ReplicatedDocument:
         return ReplicatedTree(self, path)
 
     def export_since(self, version: object | None = None) -> bytes:
+        """Encode a transport envelope containing backend changes since version.
+
+        None requests a full checkpoint. Versions are backend-opaque and may become
+        unavailable after compaction; exporting does not drain queued local updates.
+        """
         self._ensure_open()
         update = ReplicationUpdate.create(
             document_id=self.document_id,
@@ -341,6 +360,13 @@ class ReplicatedDocument:
         return self.engine.version()
 
     def import_update(self, update: bytes) -> None:
+        """Validate routing and apply a remote envelope through a reactive transaction.
+
+        Recently seen update IDs are ignored. Imports that change backend state notify
+        snapshot listeners but are not republished as local outbound updates.
+        Call outside an active transaction to give the import its own remote action
+        context; nested transactions join the caller's existing transaction.
+        """
         self._ensure_open()
         envelope = ReplicationUpdate.decode(update)
         if envelope.document_id != self.document_id:
@@ -372,7 +398,10 @@ class ReplicatedDocument:
         self._remember_update(update_id)
 
     def subscribe(self, callback: Callable[[Any], None]) -> Callable[[], None]:
-        """Receive each committed snapshot until the returned function or document closes it."""
+        """Receive snapshots after committed backend changes, without an initial callback.
+
+        The returned function unsubscribes; closing the document also clears the listener.
+        """
         self._ensure_open()
         self._listeners.add(callback)
 
@@ -382,7 +411,12 @@ class ReplicatedDocument:
         return unsubscribe
 
     def subscribe_updates(self, callback: Callable[[ReplicationUpdate], None]) -> Callable[[], None]:
-        """Receive committed local updates until the returned function or document closes it."""
+        """Receive local update envelopes synchronously after commit, without replaying older updates.
+
+        Delivery is independent of the drain buffer. Callbacks should hand off transport work
+        without raising; the document does not retry callbacks or await delivery. The returned
+        function unsubscribes, and closing the document clears all listeners.
+        """
         self._ensure_open()
         self._update_listeners.add(callback)
 
@@ -392,12 +426,11 @@ class ReplicatedDocument:
         return unsubscribe
 
     def drain_updates(self) -> tuple[ReplicationUpdate, ...]:
-        """Take committed outbound updates retained for an application-owned transport.
+        """Take and clear retained local updates for an application-owned transport.
 
-        Raises :class:`ReplicationResyncRequiredError` once this bounded buffer has overflowed,
-        rather than returning a stream known to have a hole in it. Recover with
-        :meth:`export_since` from the peer's version, then :meth:`acknowledge_resync`.
-        :meth:`subscribe_updates` is the delivery path that never drops.
+        Raise ReplicationResyncRequiredError if the bounded buffer has overflowed. Recover
+        with export_since from the peer's version, or a checkpoint if needed, then call
+        acknowledge_resync. Subscribers receive updates independently of this buffer.
         """
         self._ensure_open()
         if self._resync_required:
@@ -411,10 +444,10 @@ class ReplicatedDocument:
         return updates
 
     def acknowledge_resync(self) -> None:
-        """Clear an overflow, discarding the partial updates it left behind.
+        """Clear the overflow flag and discard all currently buffered updates.
 
-        Call once :meth:`export_since` has carried the peer across the gap; the retained
-        updates go with it because that export already supersedes them.
+        Call after delivering a resync that covers those updates. The host must coordinate
+        export and acknowledgement so intervening local commits are delivered too.
         """
         self._ensure_open()
         self._pending_updates.clear()
@@ -430,7 +463,10 @@ class ReplicatedDocument:
         self.engine.compact()
 
     def checkpoint(self) -> bytes:
-        """Export a self-contained, authenticated-by-the-host checkpoint envelope."""
+        """Export current backend state in a transport envelope.
+
+        The envelope has a payload checksum; authentication is the host's responsibility.
+        """
         return self.export_since()
 
     def expire_history_tokens(self) -> None:
@@ -439,6 +475,7 @@ class ReplicatedDocument:
         self._token_epoch += 1
 
     def close(self) -> None:
+        """Reject future document operations and clear subscriptions and transport buffers."""
         self.closed = True
         self._listeners.clear()
         self._update_listeners.clear()
@@ -472,9 +509,7 @@ class ReplicatedDocument:
             origin_action_id=None if context is None else context.action_id,
         )
         if len(self._pending_updates) == _PENDING_UPDATE_LIMIT:
-            # The deque would evict its oldest entry without a word. The loss itself is
-            # recoverable -- export_since can still answer any version -- so what has to be
-            # preserved is the fact that it happened.
+            # Deque eviction is silent; remember the gap so drain_updates requires a resync.
             self._dropped_updates += 1
             self._resync_required = True
         self._pending_updates.append(update)
@@ -588,6 +623,11 @@ class ReplicatedList:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedMovableList:
+    """A sequence whose items have stable UUIDs across moves and replacements.
+
+    Mutations use the owning document's current transaction; reads return immutable items.
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -646,6 +686,12 @@ class ReplicatedMap:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedTree:
+    """An ordered forest addressed by stable logical node UUIDs.
+
+    A None parent identifies the root level. Metadata values are deeply frozen before
+    staging; mutations require the owning document's transaction.
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -701,11 +747,11 @@ class ReplicatedTree:
 
 
 class Replica:
-    """Own replicated documents and listeners. Calling :meth:`close` closes every document.
+    """Own cached documents and their listeners for one replica incarnation.
 
-    `replica_id` names an incarnation, not a machine. A restarted process that reuses one must
-    import peer state before its first local mutation so the log can restore the operation
-    clock; mutating first re-mints identities its peers already hold, and that is refused.
+    Closing the replica closes every document. Use distinct backend operation identities for concurrent
+    replicas. When restarting with an old identity, import its checkpoint or peer state
+    before making local mutations so the backend can restore its operation clock.
     """
 
     def __init__(self, replica_id: str, *, backend: ReplicationBackend) -> None:
@@ -715,6 +761,7 @@ class Replica:
         self.closed = False
 
     def open(self, document_id: str) -> ReplicatedDocument:
+        """Return the cached document, creating its engine on first access."""
         if self.closed:
             message = "replicated scope is closed"
             raise ReplicaClosedError(message)

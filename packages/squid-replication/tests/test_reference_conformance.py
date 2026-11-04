@@ -1,4 +1,8 @@
-"""Replicated SPI conformance against the deterministic fake backend."""
+"""Check how replicated documents join reactive transactions and UI history.
+
+ReferenceBackend provides deterministic counters and sets, so these tests isolate
+transaction staging, update delivery, and selective undo from native CRDT bindings.
+"""
 
 import contextvars
 import gc
@@ -59,6 +63,7 @@ class HistoryOwner:
 
 
 def _outside(callback, *args) -> None:
+    # Observe or import committed state without joining the transaction under test.
     outside = contextvars.copy_context()
     outside.run(_CURRENT.set, None)
     outside.run(callback, *args)
@@ -547,8 +552,6 @@ def test_scope_disposal_prevents_late_import_and_mutation() -> None:
         document.counter("votes").increment(1)
     with pytest.raises(ReplicaClosedError):
         document.drain_updates()
-    # Both subscriptions, on the same terms: a closed document delivers nothing, so accepting
-    # a listener for one would only be a quieter way of never calling it.
     with pytest.raises(ReplicaClosedError):
         document.subscribe(lambda snapshot: None)
     with pytest.raises(ReplicaClosedError):

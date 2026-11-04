@@ -1,4 +1,4 @@
-"""Experimental pycrdt/Yrs text engine behind the replicated SPI."""
+"""Experimental pycrdt/Yrs text replication and selective undo for backend comparisons."""
 
 from dataclasses import dataclass
 
@@ -75,7 +75,12 @@ class PycrdtTextBranch:
 
 
 class PycrdtTextEngine:
-    """A pycrdt text adapter used by the backend gate; public Squid values remain strings."""
+    """A standalone text adapter for backend comparison tests.
+
+    This experimental engine does not implement the full ReplicationEngine document
+    contract. Garbage collection stays disabled so retained deletion tokens can restore
+    content after a checkpoint reload.
+    """
 
     backend_id = "pycrdt-text-v1"
 

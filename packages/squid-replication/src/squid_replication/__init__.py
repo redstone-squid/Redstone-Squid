@@ -1,4 +1,11 @@
-"""Optional immutable-snapshot replicated state for Squid actions."""
+"""Share action state between replicas while keeping reads immutable.
+
+A Replica opens named documents using a chosen backend. Actions edit a document's
+containers inside a reactive transaction; commit publishes a new snapshot and an
+update for the host to transport. Another replica imports that update into its own
+document. The backend merges concurrent changes and supplies selective undo tokens,
+so undo can reverse one action without restoring the whole document to an old copy.
+"""
 
 from squid_replication.backends.loro import LoroBackend
 from squid_replication.document import (

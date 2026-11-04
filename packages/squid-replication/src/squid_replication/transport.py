@@ -13,7 +13,12 @@ _MAX_ENVELOPE_BYTES = 1_500_000
 
 @dataclass(frozen=True, slots=True)
 class ReplicationUpdate:
-    """A routed, integrity-checked backend update safe to hand to an application transport."""
+    """Routing metadata and backend bytes for one transport update.
+
+    Encoding includes a SHA-256 payload checksum; decoding checks it and validates the
+    envelope schema and identifiers. The checksum detects corruption, not sender
+    identity. The host transport supplies authentication and authorization.
+    """
 
     document_id: str
     backend_id: str

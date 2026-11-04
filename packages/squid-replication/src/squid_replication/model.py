@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-type ReplicatedPrimitive = None | bool | int | float | str
+type ReplicatedPrimitive = bool | int | float | str | None
 type ReplicatedValue = ReplicatedPrimitive | tuple[ReplicatedValue, ...] | Mapping[str, ReplicatedValue]
 
 _MAX_JSON_DEPTH = 16
@@ -15,7 +15,13 @@ _MAX_INT64 = 2**63 - 1
 
 
 def freeze_value(value: object, *, depth: int = 0) -> ReplicatedValue:
-    """Validate and deeply freeze one JSON-like replicated value."""
+    """Validate a JSON-like value and copy it into deeply immutable containers.
+
+    Lists and tuples become tuples; string-keyed mappings become read-only mappings.
+    Integers must fit signed 64 bits, floats must be finite, and nesting is limited to
+    16 levels. Unsupported types or mapping keys raise TypeError; numeric and depth
+    limits raise ValueError.
+    """
     if depth > _MAX_JSON_DEPTH:
         message = f"replicated values cannot exceed {_MAX_JSON_DEPTH} nested levels"
         raise ValueError(message)
@@ -85,7 +91,10 @@ class ReplicatedTreeSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedSnapshot:
-    """A deeply immutable snapshot of every named container in one document."""
+    """Immutable values for every named container in one document.
+
+    Accessors return zero or the corresponding empty value for an absent path.
+    """
 
     counters: tuple[tuple[str, int], ...] = ()
     sets: tuple[tuple[str, frozenset[str]], ...] = ()
