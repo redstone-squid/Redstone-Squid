@@ -1,4 +1,8 @@
-"""Focused scale baseline for the narrowed deterministic counter/tagged-set adapter."""
+"""Measure the reference counter/set engine as its operation history grows.
+
+Each seed step and timed action increments a counter and adds one unique tag. Output reports
+median operation times and encoded sizes; this is not a network replication benchmark.
+"""
 
 import json
 import statistics

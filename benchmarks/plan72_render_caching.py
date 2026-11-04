@@ -1,4 +1,4 @@
-"""Deterministic cold and unchanged render-cache latency evidence for Plan 72.
+"""Measure cold renders, unchanged output, and incremental refreshes with fixed fixtures.
 
 Run with ``uv run python benchmarks/plan72_render_caching.py``. The benchmark uses the
 Discord test adapter so it measures component expansion, planning, constructor programs and
@@ -173,7 +173,12 @@ def measure_case(
     cold_samples: int = 7,
     unchanged_samples: int = 50,
 ) -> RenderCachingResult:
-    """Measure one component count with fresh cold owners and one warmed owner."""
+    """Compare first renders with warmed refreshes whose computed output stays unchanged.
+
+    Cold samples include commit_render but exclude owner construction and teardown. Warm
+    samples change a dependency to another even value before timing render, preflight, and
+    suppression. Cyclic GC is disabled only for the warm samples.
+    """
     cold: list[int] = []
     for _ in range(cold_samples):
         message_root = MessageRoot(_Root(components), access=Everyone(), timeout=None)
@@ -436,7 +441,8 @@ async def measure_resource_pipeline(
 
     Instrumented samples are intentionally separate from the headline latency samples. The
     benchmark invokes the mount pipeline directly, so scheduler queueing and debounce latency
-    are excluded.
+    are excluded. Phase spans can nest, so their durations must not be summed to estimate
+    total operation time.
     """
     leaf = _ResourceLeaf()
     root = _root_with_special(components, leaf)

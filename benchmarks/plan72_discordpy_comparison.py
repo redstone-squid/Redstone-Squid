@@ -1,8 +1,9 @@
 """Compare discord.py LayoutView construction with Squid's warmed render paths.
 
-Run with ``uv run python benchmarks/plan72_discordpy_comparison.py``. Class declaration,
-scene planning, render-program compilation, state mutation and network delivery are outside
-the timed regions. Every measured construction still returns a fresh mutable LayoutView.
+Run with ``uv run python benchmarks/plan72_discordpy_comparison.py``. Construction comparisons
+use prebuilt classes and scenes with warmed render programs. The pipeline comparison also times
+component expansion and preflight, including planning. State mutation, commit, and network delivery
+are outside its timed region. Each construction returns a fresh mutable LayoutView.
 """
 
 import gc
@@ -29,6 +30,8 @@ from squid_ui_discord.testing import commit_render
 
 @dataclass(frozen=True, slots=True)
 class ConstructionResult:
+    """Per-construction percentiles and the p95 ratio to the imperative baseline."""
+
     profile: str
     implementation: str
     controls: int
@@ -188,6 +191,7 @@ class _ButtonRoot(sl.Component[sl.ComponentsV2Target]):
 
 
 def _measure_pipeline(controls: int, samples: int) -> tuple[int, int]:
+    """Time render and preflight after changing one row, committing outside each sample."""
     root = _ButtonRoot(controls)
     message_root = MessageRoot(root, access=Everyone(), timeout=None)
     commit_render(message_root)

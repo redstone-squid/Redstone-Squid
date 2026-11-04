@@ -1,8 +1,8 @@
-"""Small reproducible latency and retention baseline for Plan 68.
+"""Measure reactive transaction latency and retained ledger/history allocations.
 
-Run the core comparison with a selected ``PYTHONPATH`` and ``--core-only``. Run without that
-flag in the current workspace to include bounded ledger and history retention. This is deliberately
-not a pytest benchmark and never discovers or runs the repository test suite.
+Use ``--core-only`` with a selected PYTHONPATH to compare reactive implementations. Without
+that flag, the current workspace must also provide ActionLedger and the UI History class.
+Results are printed as JSON; this script does not run pytest or enforce performance thresholds.
 """
 
 import argparse
@@ -24,6 +24,7 @@ def _shared_type(cells: int) -> type[SharedState[str]]:
 
 
 def _latency(operation: Callable[[], None], iterations: int) -> int:
+    """Return median nanoseconds per operation across seven batches, with cyclic GC disabled."""
     samples: list[int] = []
     operation()
     gc.collect()
@@ -75,7 +76,11 @@ def core_baseline() -> dict[str, dict[str, int]]:
 
 
 def retention_baseline() -> dict[str, int]:
-    """Measure retained bytes for bounded action results and conditional history entries."""
+    """Sum positive allocation deltas after filling 100 ledger and history entries.
+
+    The measurements include incidental allocations from those operations; they are not
+    exact object sizes. Imports stay local so --core-only can run against older packages.
+    """
     from squid_reactivity import ActionLedger, add_action_result_sink
     from squid_ui.runtime import History
 

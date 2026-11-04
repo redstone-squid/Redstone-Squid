@@ -1,4 +1,8 @@
-"""Measure long-lived action staging for the two experimental CRDT adapters."""
+"""Measure repeated branch/prepare/apply cycles on growing Loro and Pycrdt text documents.
+
+Each cycle appends one character. Report elapsed time and final snapshot, version, and update
+sizes; document construction and final serialization are outside the timed loop.
+"""
 
 import json
 import time

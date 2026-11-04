@@ -1,1 +1,1 @@
-"""Deliberately small, manually invoked project performance baselines."""
+"""Manually invoked latency and memory benchmarks."""

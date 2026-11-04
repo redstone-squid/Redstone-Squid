@@ -1,4 +1,8 @@
-"""Focused representative measurements for the two experimental Plan 68 text adapters."""
+"""Measure text-engine staging, apply, snapshot, import, and inverse-plan costs.
+
+Seed each document once, then append a character per sample. Staging and apply timings therefore
+include a small amount of document growth. Fresh imports replay the final exported update.
+"""
 
 import json
 import statistics
