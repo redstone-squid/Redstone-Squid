@@ -31,7 +31,10 @@ def _collapse_votes_statement(context: AccountMergeContext) -> Delete:
 
 
 async def merge_voting(session: AsyncSession, context: AccountMergeContext) -> None:
-    """Move authored sessions and retain one ballot per merged voter."""
+    """Move authorship and ballots to the surviving account in the caller's transaction.
+
+    When both accounts voted in one session, retain the survivor's ballot unchanged.
+    """
     await move_account_references(session, VOTING_REFERENCES, context)
     await session.execute(_collapse_votes_statement(context))
     await move_account_references(session, (AccountReference("votes", "account_id"),), context)

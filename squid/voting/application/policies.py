@@ -13,7 +13,13 @@ type RoleWeightProvider = Callable[[int, VoteKind], Awaitable[Sequence[RoleWeigh
 
 
 class RoleVoteWeightPolicy(VoteWeightPolicy):
-    """Use the highest configured role multiplier, with a 3x staff fallback."""
+    """Use the highest configured role multiplier, with a 3x staff fallback.
+
+    A matching role setting takes precedence even when its multiplier is below 3.
+    With no matching role, the staff capability gives weight 3 and other eligible
+    voters receive weight 1. Deletion votes also require the log-deletion voting
+    capability; other voting kinds have no additional eligibility check here.
+    """
 
     def __init__(self, provider: RoleWeightProvider):
         async def multipliers(scope: WeightScope) -> tuple[RoleMultiplier, ...]:

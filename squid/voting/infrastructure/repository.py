@@ -54,7 +54,19 @@ class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
 
 
 class VoteRepository:
-    """Store selections while serializing refresh, mutation, and closure per session."""
+    """Store voting sessions, their ballots, and the messages that display them in PostgreSQL.
+
+    VoteService supplies eligibility decisions and calculated weights. This
+    repository records ballots and closes build or deletion votes when their
+    stored net score reaches a threshold. Generic polls close through an explicit
+    request or the service's deadline scheduler instead.
+
+    Before changing ballots, refreshing weights, or closing a vote, lock its
+    VoteSession row. Concurrent updates to the same voting session then take
+    turns, so the threshold check sees earlier committed changes. The database
+    session comes from the surrounding unit of work, which also commits or rolls
+    back the transaction; repository methods do not commit on their own.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]):
         self._session = session
@@ -69,7 +81,11 @@ class VoteRepository:
         changes: Sequence[VoteChange],
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
-        """Serialize initial-review creation and return the existing session on retry."""
+        """Return the earliest build review session, creating it under a per-build transaction lock.
+
+        An existing session is reused even when closed. The caller must keep the
+        transaction open through commit to serialize concurrent creation attempts.
+        """
         options = normalize_vote_options(options, kind=VoteKind.BUILD)
         session = self._session()
         lock_key = f"build-submission-vote:{build_id}"
@@ -314,6 +330,12 @@ class VoteRepository:
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
+        """Toggle or replace a ballot in an open session, returning None if missing or closed.
+
+        Refresh existing weights first, then compare stable option IDs to decide
+        whether to remove the voter's selection. Returned weights are positive
+        magnitudes; threshold scoring supplies the option's sign.
+        """
         session = self._session()
         row = await self._get_session_row(session, message_id, for_update=True)
         if row is None or row.status is not VoteStatus.OPEN:
@@ -372,7 +394,7 @@ class VoteRepository:
         return await self._close_row(session, row)
 
     async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None:
-        """Close a session by aggregate ID for the deadline scheduler."""
+        """Close a voting session by its own ID, without requiring an attached Discord message."""
         session = self._session()
         row = await session.scalar(
             select(VoteSession)
@@ -384,6 +406,7 @@ class VoteRepository:
 
     @staticmethod
     async def _close_row(session: AsyncSession, row: VoteSession | None) -> StoredVoteMutation | None:
+        """Close an open session with the CANCELLED result; return None if missing or already closed."""
         if row is None or row.status is not VoteStatus.OPEN:
             return None
         row.status = VoteStatus.CLOSED
@@ -563,7 +586,12 @@ class VoteRepository:
 
     @staticmethod
     async def _to_snapshot(session: AsyncSession, row: VoteSession) -> VoteSessionSnapshot:
-        # The guild comes from the message fact; the post says which messages are ours.
+        """Load messages, ballots, and kind-specific data for the voting session.
+
+        Convert stored guild ID 0 to an unscoped option and derive signed score weights
+        from each selection's choice; stored ballot weights remain positive.
+        """
+        # DiscordPost associates a message with the vote; MessageRecord supplies the guild where it was sent.
         locations = (
             await session.execute(
                 select(DiscordPost.message_id, DiscordPost.channel_id, MessageRecord.guild_id)

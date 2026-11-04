@@ -37,7 +37,16 @@ logger = logging.getLogger(__name__)
 
 
 class VoteService:
-    """Own voting authorization, policy evaluation, configuration, and closure."""
+    """Check voter eligibility and manage voting sessions through the repository.
+
+    Discord membership and resolved capabilities determine each ballot's weight.
+    Existing weights are refreshed before a ballot changes or a poll closes, so
+    role changes can affect the outcome. The repository applies those weights and
+    any threshold closure together; this service commits the transaction.
+
+    Results describe the resulting voting session. Publishing its Discord messages
+    and acting on an approved build or deletion vote happen outside this service.
+    """
 
     def __init__(
         self,
@@ -74,13 +83,11 @@ class VoteService:
     async def _weight_actor(
         self, actor: VoteActor, snapshot: VoteSessionSnapshot, owner_guild_id: int | None
     ) -> VoteActor | None:
-        """Return `actor` as seen in the owner guild, or `None` if that is unknowable.
+        """Resolve the voter in the guild whose role weights govern the session.
 
-        A non-member resolves to an actor with no roles or capabilities, which the
-        policy scores at the default weight; `None` means the lookup itself failed
-        and callers should keep whatever weight they already had. With no owner
-        guild the actor stands as-is, which decides eligibility only — the caller
-        drops the multiplier.
+        With no owner guild, retain the supplied actor for eligibility checks. With no
+        resolver, use an actor without roles or capabilities for a different owner
+        guild. A failed lookup returns None; casting and refresh handle that separately.
         """
         if owner_guild_id is None or actor.guild_id == owner_guild_id:
             return actor
@@ -122,11 +129,10 @@ class VoteService:
         changes: Sequence[VoteChange],
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
-        """Return the one initial review session for a submitted build.
+        """Return the earliest review session for a build, creating one if none exists.
 
-        Domain events are delivered at least once and the legacy Discord submit path
-        can race the event consumer. The repository serializes both callers by build
-        so they converge on one session.
+        The repository serializes creation per build so event retries and concurrent
+        submission paths reuse the same session, including after it has closed.
         """
         async with self._uow_factory() as uow:
             options = normalize_vote_options(options, kind=VoteKind.BUILD)
@@ -179,11 +185,10 @@ class VoteService:
         scope: PollScope = PollScope.GUILD,
         now: Instant | None = None,
     ) -> int:
-        """Create a generic poll independently of where it will be shown.
+        """Validate and persist a poll with a deadline derived from its duration.
 
-        Creation takes a duration rather than a deadline, and takes no channel at all:
-        the card is a `discord_posts` row that the reconciler adopts afterwards, so a
-        Discord outage after this returns loses a message, not a poll.
+        Publication is separate, so creating a poll does not require a Discord message.
+        Network polls require an owning guild and options usable in every guild.
         """
         async with self._uow_factory() as uow:
             if not question.strip():
@@ -241,7 +246,7 @@ class VoteService:
         actor: VoteActor,
         option_id: str,
     ) -> CastVoteResult:
-        """Cast a vote using stable session and option identifiers, not Discord ones."""
+        """Cast by session and option ID using an attached message in the actor's guild."""
         snapshot = await self.get_session_by_id(vote_session_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
@@ -254,6 +259,13 @@ class VoteService:
         return await self.cast_vote(message.id, actor, option.emoji)
 
     async def cast_vote(self, message_id: int, actor: VoteActor, emoji: str) -> CastVoteResult:
+        """Validate eligibility, refresh weights, and toggle or replace the actor's ballot.
+
+        Selecting the same stable option again removes the ballot, even with another
+        emoji alias. The repository serializes the mutation and any threshold closure.
+        An unresolved owner-guild lookup uses base weight 1 for the new ballot, before
+        the option multiplier. Unresolved existing ballots retain their cached weights.
+        """
         snapshot = await self.get_session(message_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
@@ -264,6 +276,7 @@ class VoteService:
         if actor.guild_id and message_guild_id and actor.guild_id != message_guild_id:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
 
+        # Resolve the alias where the ballot was cast, then use the owner guild's role weights.
         option = snapshot.option_by_emoji(emoji, message_guild_id)
         if option is None:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
@@ -293,6 +306,7 @@ class VoteService:
             raise InvalidVoteConfigurationError(msg)
         weight *= option.multiplier
 
+        # Refresh earlier ballots too: role changes may alter the score that closes this vote.
         refreshed, unresolved = await self._calculate_refresh(snapshot, replacing=weight_actor)
         if unresolved:
             logger.warning(
@@ -324,14 +338,14 @@ class VoteService:
         )
 
     async def refresh(self, message_id: int) -> VoteRefreshResult:
-        """Explicitly recompute all resolvable cached weights and thresholds."""
+        """Recalculate resolvable ballot weights and check the session's existing thresholds."""
         snapshot = await self.get_session(message_id)
         if snapshot is None:
             return VoteRefreshResult(None)
         return await self._refresh_snapshot(snapshot)
 
     async def _refresh_snapshot(self, snapshot: VoteSessionSnapshot) -> VoteRefreshResult:
-        """Recompute cached weights for a session already read, carded or not."""
+        """Refresh a loaded session, whether or not it has an attached Discord message."""
         weights, unresolved = await self._calculate_refresh(snapshot)
         async with self._uow_factory() as uow:
             mutation = await uow.votes.refresh_weights(snapshot.id, weights)
@@ -350,7 +364,7 @@ class VoteService:
         )
 
     async def close(self, message_id: int, actor: VoteActor) -> CastVoteResult:
-        """Close a generic poll when requested by its creator or guild staff."""
+        """Refresh and close a generic poll if its author or an authorized actor requests it."""
         snapshot = await self.get_session(message_id)
         if snapshot is None:
             return CastVoteResult(None, VoteRejection.NOT_FOUND)
@@ -433,12 +447,7 @@ class VoteService:
             await self._refresh_kind(guild_id, current_kind)
 
     async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
-        """Reweigh the open sessions this guild's table governs.
-
-        Only the sessions it owns: editing a multiplier used to rewrite cached
-        weights on every session merely carded here, including shared build
-        reviews this guild has no say over.
-        """
+        """Refresh open sessions whose owner guild supplies the changed role weights."""
         for snapshot in await self.list_open(kind):
             if self._owner_guild_id(snapshot) == guild_id:
                 await self._refresh_snapshot(snapshot)
@@ -446,6 +455,12 @@ class VoteService:
     async def _calculate_refresh(
         self, snapshot: VoteSessionSnapshot, *, replacing: VoteActor | None = None
     ) -> tuple[dict[int, float], list[int]]:
+        """Calculate replacement weights without changing stored ballots.
+
+        A zero removes an ineligible voter. Unresolved accounts are returned separately
+        and omitted from the weight map, preserving their stored weights. Without a
+        resolver, return no updates.
+        """
         if self._actor_resolver is None:
             return {}, []
         owner_guild_id = self._owner_guild_id(snapshot)

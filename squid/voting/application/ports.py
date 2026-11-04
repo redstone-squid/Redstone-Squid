@@ -21,21 +21,24 @@ from squid.voting.domain import (
 
 
 class VoteWeightPolicy(Protocol):
-    """Calculate a positive vote magnitude or reject an ineligible actor."""
+    """Calculate a positive base weight, or return None for an ineligible actor.
+
+    VoteService applies the selected option's multiplier to this weight.
+    """
 
     async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot, emoji: str) -> float | None: ...
 
 
 class VoteActorResolver(Protocol):
-    """Resolve current member facts for refresh operations."""
+    """Resolve membership in the guild whose roles determine ballot weight."""
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Return the account's membership facts in `guild_id`.
 
         An account that is definitely not a member resolves to a `VoteActor` with
-        no roles or capabilities, which weights at the default. `None` is reserved
-        for "cannot answer" — an unreachable or invisible guild — and tells callers
-        to keep the weight they already have rather than rewriting it.
+        no roles or capabilities. The policy then determines whether the account is
+        still eligible and what weight it receives. `None` means membership could
+        not be established; refreshes preserve the ballot's cached weight.
         """
         ...
 
@@ -49,7 +52,19 @@ class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
 
 
 class VoteRepository(Protocol):
-    """Persistence operations required by :class:`VoteService`."""
+    """Storage operations used by VoteService to manage voting sessions.
+
+    A voting session represents one build review, deletion vote, or poll. Several
+    Discord messages can display the same voting session; they share its ballots
+    and result. A ballot records one account's selected option and current weight.
+
+    Changes to one voting session must run one at a time. Updating ballots and
+    checking whether their net score closes the vote belong to the same transaction,
+    so a concurrent request cannot decide against a partly updated score.
+
+    VoteService determines voter eligibility and ballot weights. Repository methods
+    store the supplied changes; the surrounding VoteUnitOfWork commits them.
+    """
 
     async def get_or_create_build_submission_session(
         self,
@@ -116,13 +131,25 @@ class VoteRepository(Protocol):
         emoji: str,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
-    ) -> StoredVoteMutation | None: ...
+    ) -> StoredVoteMutation | None:
+        """Toggle the same option off or replace the ballot, then check thresholds.
+
+        Return None if the session is missing or closed. Supplied refresh weights apply
+        before the ballot change; nonpositive refresh values remove existing ballots.
+        """
+        ...
 
     async def close(self, message_id: int) -> StoredVoteMutation | None: ...
 
     async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None: ...
 
-    async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None: ...
+    async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
+        """Update weights and check thresholds in the same transaction.
+
+        Missing accounts in `weights` remain unchanged. Closed sessions remain frozen;
+        only a missing session returns None.
+        """
+        ...
 
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]: ...
 

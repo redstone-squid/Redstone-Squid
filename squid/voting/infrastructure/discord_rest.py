@@ -18,15 +18,10 @@ from squid.voting.errors import DiscordMemberServiceUnavailableError
 logger = logging.getLogger(__name__)
 DEFAULT_DISCORD_API_URL = Route.BASE
 MAX_RATE_LIMIT_WAIT_SECONDS = 60.0
+"""Maximum rate-limit delay accepted by the HTTP client before it raises `RateLimited`."""
 
 _UNREADABLE = object()
 """Marks a guild this token cannot read, as opposed to one holding no such member."""
-"""Ceiling on how long one lookup may wait out a rate limit.
-
-discord.py raises `RateLimited` rather than sleeping past this, which is the
-supported expression of the bound the hand-rolled limiter used to enforce with a
-0-60s clamp on the body's `retry_after`.
-"""
 type Clock = Callable[[], float]
 
 
@@ -37,12 +32,7 @@ class VoterDiscordIdLookup(Protocol):
 
 
 class DiscordMemberClient(Protocol):
-    """The two operations this adapter needs from a Discord HTTP client.
-
-    Narrower than `HTTPClient`, which satisfies it structurally: the adapter
-    depends on the member lookup and on shutdown, not on the hundred other routes
-    discord.py exposes.
-    """
+    """Member lookup and shutdown operations supplied by a Discord HTTP client."""
 
     # Returns an awaitable rather than being declared `async`: discord.py's `HTTPClient.get_member`
     # is a plain method handing back the coroutine `request` produced, which satisfies this
@@ -84,20 +74,19 @@ class _RebasedHTTPClient(HTTPClient):
 
 
 class DiscordRestActorResolver:
-    """Resolve vote actors through discord.py's rate-limited HTTP client.
+    """Resolve an account's Discord membership for ballot eligibility and weighting.
 
-    This used to hand-roll a limiter that understood exactly one 429: retry once,
-    sleep on the body's `retry_after`, raise on the second. It never read
-    `X-RateLimit-Remaining`/`Reset-After`, never told a global limit from a bucket
-    limit, and held no lock, so N concurrent votes in one guild fired N
-    independent requests into the same bucket. `discord.http.HTTPClient` already
-    does proactive per-bucket accounting keyed by route and major parameters,
-    holds a global lock, and raises typed errors -- and it is already a hard
-    dependency of this project.
+    The account supplies a Discord identity; a member lookup supplies its guild
+    roles, which the permission resolver uses to determine voting capabilities.
+    Requests use discord.py's HTTP client for shared rate-limit accounting without
+    opening a gateway connection.
 
-    No gateway connection and no second `discord.Client`: `static_login` costs one
-    `GET /users/@me`, and `get_member` returns the payload's `roles`, which is all
-    a vote actor needs.
+    Member facts and resolved capabilities are cached per guild and Discord user
+    for `cache_ttl_seconds`. An internally created client logs in lazily and is
+    closed by `aclose`; injected clients remain the caller's responsibility.
+
+    `member` exposes lookup failures to interactive callers. `resolve` converts
+    failures to None so weight refreshes can preserve their cached values.
     """
 
     def __init__(
@@ -124,10 +113,10 @@ class DiscordRestActorResolver:
         self._cache: dict[tuple[int, int], tuple[float, VoteActor | None, bool]] = {}
 
     async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Return current member facts, raising when Discord cannot answer reliably.
+        """Return cached or fetched membership facts for an interactive request.
 
-        Callers use this to gate access, so an unreadable guild denies just like an
-        absent member does.
+        Missing identities, absent members, and unreadable guilds return None. Other
+        lookup failures raise `DiscordMemberServiceUnavailableError`.
         """
         actor, _ = await self._member_with_certainty(account_id, guild_id, kind)
         return actor
@@ -158,11 +147,12 @@ class DiscordRestActorResolver:
         return actor, certain
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Resolve refresh facts, retaining cached vote weight on any failure.
+        """Return membership for a weight refresh, or None when the lookup cannot answer.
 
-        A member we can prove is absent resolves to an actor holding nothing, so the
-        refresh drops them to the default weight; a guild we could not read resolves
-        to `None`, which keeps whatever weight is already recorded.
+        A known non-member becomes an actor without roles or capabilities. The
+        weighting policy may give that actor a default weight or reject them as
+        ineligible. An unreadable guild or failed member lookup returns None,
+        allowing the service to preserve the ballot's cached weight.
         """
         try:
             actor, certain = await self._member_with_certainty(account_id, guild_id, kind)
@@ -187,12 +177,7 @@ class DiscordRestActorResolver:
             await http.close()
 
     async def _discord_id(self, account_id: int) -> int | None:
-        """The snowflake behind a voting account.
-
-        Not covered by the `(guild_id, discord_id)` member cache, which is keyed on the
-        answer rather than the question, so a refresh costs one query per uncached actor.
-        Measured rather than pre-optimized: see the commit that introduced this.
-        """
+        """Look up the Discord identity for an account, without using the member cache."""
         if self._discord_ids is None:
             return None
         return await self._discord_ids.discord_id_for(account_id)
@@ -239,14 +224,10 @@ class DiscordRestActorResolver:
             raise self._unavailable(guild_id, error) from error
 
     async def _actor_from_payload(self, payload: object, account_id: int, discord_id: int, guild_id: int) -> VoteActor:
-        """Build an actor from the member payload, capabilities included.
+        """Validate member roles and resolve voting capabilities from account and role grants.
 
-        This used to hardcode both capability flags to False, so a `delete_log`
-        vote cast over REST was always rejected as ineligible. The node is
-        grantable to a Discord role, so the role ids already in this payload
-        answer it -- no extra guild-permission fetch, and the Manage-Server
-        bridge, which is the one source not represented here, is the
-        lowest-priority one anyway.
+        The member payload does not establish Manage Server or bot-owner status, so
+        those permission shortcuts are not enabled here.
         """
         if not isinstance(payload, dict) or not isinstance(payload.get("roles"), list):
             raise self._malformed_member(guild_id)
