@@ -1,10 +1,8 @@
-"""Guard the seam between what Compose interpolates and what the config audit accepts.
+"""Check that Compose variables are accepted by the application environment audit.
 
 Compose resolves `${SQUID_*}` itself, but then hands the same `.env` to every container through
-`env_file`, so a Compose-only variable also reaches `_audit_unknown_environment_keys`. Under
-`SQUID_STRICT_UNKNOWN_KEYS` an unknown key is a boot failure, which makes a new Compose knob a
-stack-wide outage the moment an operator sets it -- and only then, which is why reviewing the
-Compose change alone did not catch it.
+`env_file`, so a Compose-only variable also reaches `_audit_unknown_environment_keys`.
+With `SQUID_STRICT_UNKNOWN_KEYS` enabled, an unrecognized variable prevents startup.
 """
 
 import re

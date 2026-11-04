@@ -14,6 +14,7 @@ from squid.observability import ObservabilityHandle, configure_observability
 
 @pytest.fixture(autouse=True)
 def _reset_observability_state() -> Iterator[None]:
+    """Isolate module caches between tests without installing a real telemetry SDK."""
     previous_pid = observability._configured_pid  # pyright: ignore[reportPrivateUsage]
     previous_handle = observability._configured_handle  # pyright: ignore[reportPrivateUsage]
     previous_active = observability._ACTIVE  # pyright: ignore[reportPrivateUsage]
@@ -153,12 +154,9 @@ def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture
 
 
 def test_correlation_id_stays_unique_without_a_tracer() -> None:
-    """Errors stay correlatable on deployments that never installed the SDK.
+    """Errors need distinct references even when no tracer supplies an ID.
 
-    `build_error_presentation` shows this id to the user and logs it beside the redacted
-    diagnostic, so the untraced path has to keep producing distinct ids rather than a
-    constant. That it prefers the active trace id when there is one is proven for real,
-    against a live tracer, in tests/integration/observability/test_traces.py.
+    Live trace-ID reuse is covered in tests/integration/observability/test_traces.py.
     """
     error_ids = {observability.correlation_id() for _ in range(3)}
 
@@ -202,7 +200,6 @@ def test_correlated_log_buffer_keeps_the_most_recent_records_per_correlation() -
 
 
 def test_correlated_log_buffer_evicts_whole_correlations_past_its_bound() -> None:
-    """One pathological correlation must not be able to displace every other tail."""
     buffer = observability.CorrelatedLogBuffer(max_records=4, max_correlations=2)
     buffer.setFormatter(logging.Formatter("%(message)s"))
 

@@ -40,8 +40,7 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "expire_submission_drafts",
         "cleanup_submission_schematics",
         "cleanup_submission_inference",
-        # Shared with the API and bot bundles rather than owned: all three capture failures, and
-        # the worker is only the one that sweeps expired reports.
+        # All processes capture failures; only the worker sweeps expired reports.
         "error_reports",
     }
 
@@ -101,7 +100,7 @@ async def test_background_task_supervisor_reports_fresh_periodic_heartbeats() ->
 
 
 async def test_background_task_supervisor_captures_a_failed_run() -> None:
-    """A background job answers nobody, so a log line was the only trace it ever left."""
+    """Keep a diagnostic reference for failures that have no request or response."""
     captured: list[dict[str, object]] = []
     report_recorded = anyio.Event()
 
@@ -162,9 +161,7 @@ async def test_background_task_supervisor_bounds_feature_cancellation() -> None:
 
     async def stubborn_operation() -> None:
         entered.set()
-        # Only a shielded scope genuinely resists cancellation now. Merely
-        # catching the cancellation exception no longer stalls shutdown, because
-        # the scope re-delivers it at the next checkpoint.
+        # Shield the wait so repeated cancellation cannot finish it before the assertion.
         with anyio.CancelScope(shield=True):
             await release.wait()
 
@@ -180,11 +177,7 @@ async def test_background_task_supervisor_bounds_feature_cancellation() -> None:
 
 
 async def test_background_task_supervisor_forces_down_a_job_that_swallows_cancellation() -> None:
-    """A job catching the cancellation must not be able to outlast the deadline.
-
-    A shielded job still can -- a task group cannot abandon a child the way the
-    asyncio.wait this replaces could -- but nothing in the codebase shields.
-    """
+    """Cancellation reaches the next checkpoint even after the job catches it once."""
     entered = anyio.Event()
     finished = anyio.Event()
 

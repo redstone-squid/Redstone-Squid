@@ -51,11 +51,9 @@ def _issues(error: ConfigurationError) -> list[dict[str, str]]:
 
 @pytest.fixture
 def dotenv(tmp_path: Path) -> Path:
-    """Dotenv path handed to every loader, absent unless a test writes to it.
+    """Return a temporary dotenv path, absent until a test writes it.
 
-    Passing the path beats the `monkeypatch.chdir(tmp_path)` this replaces: that moved the whole
-    process to keep the repository's own `.env` out of the loaders, which made the isolation
-    invisible at the call site and would have made these tests unsafe to run in parallel.
+    Loaders given this path cannot pick up the checkout's .env file.
     """
     return tmp_path / ".env"
 
@@ -216,14 +214,11 @@ def test_application_config_groups_and_resolves_settings(
 
 
 def test_a_process_projection_reads_no_environment_of_its_own(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """Projecting narrows settings that are already loaded, so it may not consult the environment.
+    """Project already loaded settings without merging new environment values.
 
-    It used to: `BaseSettings` builds its sources in `__init__`, and pydantic routes
-    `model_validate` through `__init__` for any model defining one, so a projection merged whatever
-    the environment said at that moment. Scalars survived on init priority, but dict fields merge
-    key by key — the API process could hold an idempotency key its own configuration never named,
-    and decrypt stored replay rows under it. On a developer machine the repository's own `.env` was
-    enough to trigger it.
+    Dictionary values are the important case: a second settings load could add an
+    idempotency key absent from the original configuration, even if scalar values
+    retain their original priority.
     """
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_API_SECRET="api-secret")
     config = load_application_config(dotenv_path=dotenv)
@@ -238,7 +233,6 @@ def test_a_process_projection_reads_no_environment_of_its_own(monkeypatch: pytes
 
 
 def test_observability_exports_nowhere_by_default(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """Disabled, with no endpoint and no credentials: nothing leaves the process unasked."""
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
 
     config = load_bot_process_config(dotenv_path=dotenv).observability
@@ -249,7 +243,7 @@ def test_observability_exports_nowhere_by_default(monkeypatch: pytest.MonkeyPatc
 
 
 def test_observability_samples_everything_until_it_is_tuned(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """A separate claim from the one above: the ratio only takes effect once exporting is on."""
+    """The sampling ratio applies only when observability is enabled."""
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
 
     assert load_bot_process_config(dotenv_path=dotenv).observability.sample_ratio == 1.0
@@ -615,12 +609,9 @@ def test_sibling_process_keys_in_shared_dotenv_are_not_reported_unknown(
 
 
 def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """Aggregation is the contract here, not the current list of required groups.
+    """Report missing settings together so operators can fix them in one restart.
 
-    A loader that raised on the first missing setting would send an operator round the
-    boot loop once per variable. The exact field set this used to compare against churned
-    with every new required setting while proving nothing beyond "several were named", so
-    the required groups are asserted as a lower bound and each issue must be actionable.
+    Assert a minimum set of groups rather than duplicating the full required-settings list.
     """
     for name in (*BASE_ENVIRONMENT, "SQUID_DISCORD_TOKEN", "SQUID_API_SECRET"):
         monkeypatch.delenv(name, raising=False)
@@ -638,12 +629,7 @@ def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatc
 def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(
     monkeypatch: pytest.MonkeyPatch, dotenv: Path
 ) -> None:
-    """SQUID_CURSOR_SECRET outlived the signed cursors it fed.
-
-    Strict mode turns an unknown key into a boot failure, so without the retired-key tombstone a
-    stale line in an env file would take down deployments during a release that changed nothing
-    for them.
-    """
+    """Accept the retired cursor secret so an old environment file still starts in strict mode."""
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -655,11 +641,7 @@ def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(
 
 
 def test_compose_only_keys_in_the_shared_dotenv_do_not_block_boot(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Compose interpolates these, then hands the same `.env` to every container via `env_file`.
-
-    So they reach this audit even though no process reads them, and under strict mode that made
-    moving the API's published host port off a taken 8000 fail the whole stack at boot.
-    """
+    """Compose also passes its interpolation variables to containers through the shared env_file."""
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -685,8 +667,7 @@ def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.Mon
 
 
 def test_a_malformed_bootstrap_secret_node_fails_configuration_load(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The column downstream is free text, so a typo here would otherwise become
-    a credential that authenticates and then silently authorizes nothing."""
+    """Reject invalid permission patterns before a credential can authenticate without granting access."""
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret-long-enough",
@@ -726,11 +707,10 @@ def test_idempotency_encryption_keyring_is_complete_and_strong(
     field: str,
     dotenv: Path,
 ) -> None:
-    """The exact field matters because the rendered message is derived from it.
+    """Report keyring failures against the settings an operator can change.
 
-    A keyring rejected by the sibling IdempotencyEncryptionConfig used to be reported against
-    that model's own `keys` field, which names no variable an operator can set. Only the
-    membership check spans two settings and so belongs to `api` as a whole.
+    Individual key errors belong to api.idempotency_keys. Checking that the active
+    key exists spans two settings, so that error belongs to the api group.
     """
     _set_environment(
         monkeypatch,
@@ -766,12 +746,7 @@ def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPat
 
 
 def test_configuration_failures_name_the_variables_to_change(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """The rendered text is the whole diagnostic an operator gets.
-
-    Nothing renders `context["issues"]`: logging is configured from the settings being loaded,
-    so a boot failure is printed before any handler exists. A count with no names sends the
-    operator to grep the settings model.
-    """
+    """Startup errors need setting names in their rendered text, before logging is configured."""
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -805,11 +780,7 @@ def test_a_missing_settings_group_names_its_required_variables(monkeypatch: pyte
 def test_a_rendered_failure_never_invents_an_environment_variable(
     monkeypatch: pytest.MonkeyPatch, dotenv: Path
 ) -> None:
-    """A name assembled from a validation location can be one no source ever reads.
-
-    Setting an invented variable looks like a fix and is then silently ignored, so a location
-    that maps to no declared key degrades to its group rather than being spelled out.
-    """
+    """Map validation locations to declared settings; an invented variable cannot fix the error."""
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret-long-enough",
@@ -825,11 +796,7 @@ def test_a_rendered_failure_never_invents_an_environment_variable(
 
 
 def test_a_rendered_failure_omits_configured_dictionary_keys(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """A validation location can end in a key the deployment chose, so only two levels are read.
-
-    `context["issues"]` keeps the full internal path — that is the long-standing structured
-    contract — but the operator-facing text is assembled from declared field names alone.
-    """
+    """Keep deployment-chosen dictionary keys out of the operator-facing error text."""
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret-long-enough",
@@ -843,11 +810,7 @@ def test_a_rendered_failure_omits_configured_dictionary_keys(monkeypatch: pytest
 
 
 def test_an_unparsable_setting_names_the_group_it_belongs_to(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
-    """pydantic-settings fails structured values before validation, with only free text.
-
-    Its message names the field but its cause can quote the input, so the field name is taken
-    from a fixed pattern and accepted only when it matches a declared key.
-    """
+    """Malformed JSON must identify its settings group without echoing the rejected input."""
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret-long-enough",

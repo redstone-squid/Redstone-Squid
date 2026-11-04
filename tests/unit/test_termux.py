@@ -15,6 +15,7 @@ pytestmark = pytest.mark.skipif(os.name != "posix", reason="requires a POSIX she
 
 @pytest.fixture
 def checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Copy the launchers into a path with spaces and fake Android detection through PATH."""
     root = tmp_path / "moved checkout"
     scripts = root / "scripts"
     scripts.mkdir(parents=True)

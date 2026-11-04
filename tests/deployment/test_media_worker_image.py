@@ -24,13 +24,7 @@ def _read(relative_path: str) -> str:
 
 
 def _required_python_version() -> str:
-    """Return the `X.Y` the project declares it needs.
-
-    Hardcoding the interpreter version here just moved the maintenance burden: `c4c10005` bumped
-    the Dockerfile and pyproject together and this test kept asserting 3.12, so it failed for
-    months on a tree that was internally consistent. Deriving it instead turns the assertion into
-    the thing actually worth guarding -- that the image ships the interpreter the code requires.
-    """
+    """Read the required Python major/minor version so the image check follows project metadata."""
     metadata = tomllib.loads(_read("pyproject.toml"))
     requires = metadata["project"]["requires-python"]
     match = re.fullmatch(r">=\s*(\d+\.\d+)", requires)
