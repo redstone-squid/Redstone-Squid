@@ -7,13 +7,10 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 # GitHub Actions keeps requirements/base.txt and requirements/dev.txt in sync.
-# To reproduce the export locally, run:
-# 1. uv export --no-dev --no-emit-workspace -o requirements/base.txt
-# 2. uv export --only-dev -o requirements/dev.txt
+# Run `just compile` to export both files from the lockfile.
 dependencies = [
     "alembic>=1.18.5",
-    # Structured concurrency on the asyncio backend. Already arrives transitively via
-    # starlette, httpx and openai; declared here because we import it directly.
+    # Direct dependency for task groups and cancellation on the asyncio backend.
     "anyio>=4.14,<5",
     "babel>=2.17.0",
     "discord-py[speed]>=2.7,<3",
@@ -35,8 +32,7 @@ dependencies = [
     "squid-ui",
     "squid-ui-widgets",
     "squid-replication",
-    # Direct: `squid/topics.py` opens the LISTEN/NOTIFY bridge itself rather than reaching
-    # for it through the UI package that used to re-export it.
+    # squid/topics.py imports the PostgreSQL LISTEN/NOTIFY bridge directly.
     "squid-storage[postgres]",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
@@ -74,9 +70,7 @@ observability = [
 dev = [
     "docker>=7.2,<8",
     "hypothesis>=6.0.0",
-    # Validates the published scene schema against real payloads in
-    # squid-ui' tests. Arrived transitively via schemathesis before; a
-    # cross-language contract should not depend on another tool's dependency tree.
+    # Scene contract tests validate serialized payloads against the published JSON Schema.
     "jsonschema>=4.23",
     # The replication package keeps both real adapters optional for users, but its test and
     # type-check suite exercises them together as the production/conformance pair.
@@ -143,9 +137,7 @@ exclude-newer = "7 days"
 [tool.ruff]
 line-length = 120
 target-version = "py314"
-# Spike prototypes under docs/plans/ are evidence for a design decision, written to
-# mirror the shape they argue about rather than this project's standards. They are
-# never imported by anything shipped, and pyrefly already excludes docs/ by omission.
+# Historical design spikes are not shipped code and may use older APIs and conventions.
 extend-exclude = ["docs/plans/**/spikes/"]
 
 [tool.ruff.lint]
@@ -307,11 +299,9 @@ enableExperimentalFeatures = true  # For `TypeForm` support
 project-includes = ["squid/**/*.py", "tests/**/*.py", "packages/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
 python-version = "3.14"
-# uv installs the workspace packages as editable `.pth` files pointing at `packages/*/src`, which
-# puts those directories on Pyrefly's site-package path. Anything reachable from there counts as
-# third-party and is skipped, so `project-includes` alone silently left every package source file
-# unchecked. `search-path` is consulted before the site-package path, which claims them as
-# first-party again. Keep this list in sync with `[tool.uv.workspace] members`.
+# List every workspace src directory so Pyrefly checks editable packages as first-party code.
+# project-includes alone does not override their discovery through site-packages .pth files.
+# Keep this list in sync with [tool.uv.workspace] members.
 search-path = [
     ".",
     "packages/squid-reactivity/src",
@@ -322,8 +312,7 @@ search-path = [
     "packages/squid-ui-slack/src",
     "packages/squid-ui-widgets/src",
 ]
-# `observability` is an optional extra (see the dependency group below) that isn't installed in
-# every environment; these imports are already guarded by `try`/`ModuleNotFoundError` at runtime.
+# The observability extra is optional; runtime imports already handle ModuleNotFoundError.
 ignore-missing-imports = ["opentelemetry", "opentelemetry.*"]
 
 [tool.alembic]

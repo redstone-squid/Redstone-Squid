@@ -3,10 +3,9 @@ receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
-  # Application logs deliberately reach the telemetry backend through files. Each process also
-  # writes the same JSON records to stdout for operators and `docker logs`, but stdout is not an
-  # input to this collector. Files keep accumulating while the collector is stopped or its profile
-  # is disabled; the application's RotatingFileHandler is the only pruning mechanism.
+  # Read application JSON logs from files; container stdout carries copies for operators.
+  # The app rotates these files even when this collector is stopped. This receiver starts at
+  # the end of newly discovered files and has no configured persistent read offsets.
   filelog:
     include:
       - /var/log/app/*.log
@@ -36,6 +35,8 @@ processors:
         action: insert
   batch: {}
 
+# The checked-in configuration writes telemetry to collector logs. Configure an exporter
+# and its pipeline references here to send telemetry to a remote backend.
 exporters:
   debug:
     verbosity: basic

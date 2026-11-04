@@ -1,3 +1,5 @@
+// Validate screenshot artifacts before the write-enabled workflow creates Git blobs.
+// This module only inspects supplied metadata and buffers; callers perform filesystem and API I/O.
 'use strict';
 
 const EXPECTED_SCREENSHOTS = Object.freeze([
@@ -20,6 +22,8 @@ function sortedEntries(entries) {
   return [...entries].sort((left, right) => left.name.localeCompare(right.name));
 }
 
+// Check the exact filename set and aggregate size before the caller reads file contents.
+// isFile and isSymbolicLink must come from lstat, not from following a symlink.
 function validateScreenshotMetadata(entries) {
   const files = sortedEntries(entries);
   const names = files.map((entry) => entry.name);
@@ -61,6 +65,8 @@ function crc32(contents) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
+// Check chunk framing, checksums, and required boundary chunks without decoding pixels.
+// Passing this check does not establish that the compressed image data can be decoded.
 function validatePng(name, contents) {
   if (!Buffer.isBuffer(contents) || !contents.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
     throw new Error(`${name} does not have a PNG signature.`);
@@ -105,6 +111,7 @@ function validatePng(name, contents) {
   throw new Error(`${name} does not end with a PNG IEND chunk.`);
 }
 
+// Recheck metadata and bytes, then return immutable Git blob descriptions in filename order.
 function planScreenshotArtifact(entries) {
   const metadata = validateScreenshotMetadata(entries);
   const entriesByName = new Map(entries.map((entry) => [entry.name, entry]));
