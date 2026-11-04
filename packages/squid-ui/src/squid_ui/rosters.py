@@ -1,4 +1,8 @@
-"""Immutable roster values shared by semantic rendering and downstream pattern packages.
+"""Allocate signup entries to named slots and describe the result for display.
+
+Each RosterEntry requests one RosterSlot. place_roster fills slots in signup order,
+then waitlists or rejects entries whose requested slot is full. RosterPlacement is
+the resulting display value; the application still owns storing and changing signups.
 
 Named in the plural for the same reason as `grids`: `sl.roster` is the factory.
 """
@@ -14,7 +18,7 @@ from squid_ui.text import TextLike
 
 @dataclass(frozen=True, slots=True)
 class RosterSlot:
-    """One capacity-constrained destination in a roster."""
+    """A named roster destination; capacity None is unlimited and zero admits nobody."""
 
     key: str
     label: TextLike
@@ -109,7 +113,13 @@ def place_roster(
     *,
     overflow: RosterOverflow = RosterOverflow.WAITLIST,
 ) -> RosterPlacement:
-    """Allocate a valid single-slot ledger in stable FIFO order."""
+    """Allocate each entry to its requested slot, respecting capacity and overflow policy.
+
+    Dated entries come first in timestamp order, with input order breaking ties. Undated
+    entries follow in input order. Groups retain slot declaration order. Actor IDs and
+    slot keys must be unique, every requested slot must exist, and timestamps must have
+    compatible timezone awareness.
+    """
     slot_by_key = {slot.key: slot for slot in slots}
     if len(slot_by_key) != len(slots):
         message = "roster slot keys must be unique"

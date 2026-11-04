@@ -1,4 +1,10 @@
-"""Position tokens and asynchronous window loading."""
+"""Fetch ordered content a window at a time for paginated interfaces.
+
+A WindowSource fetches items at a Position and returns a Window with the position it
+actually resolved. Positions can carry a stable item key, a numeric offset, or both;
+the source decides which it can use. WindowLoader turns next, previous, and refresh
+requests into fetches and discards results overtaken by a newer request.
+"""
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
@@ -20,7 +26,11 @@ class Direction(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Position:
-    """A source-neutral position in ordered content."""
+    """An optional stable item anchor plus a zero-based offset and navigation direction.
+
+    The source defines how anchor and offset interact. Resolved windows use AROUND;
+    FORWARD and BACKWARD describe requests beyond an anchor.
+    """
 
     anchor: str | None = None
     offset: int = 0
@@ -32,7 +42,13 @@ ORIGIN = Position()
 
 @dataclass(frozen=True, slots=True)
 class PositionResolver:
-    """Resolve the shared override/anchor/staleness/stored/initial precedence ladder."""
+    """Choose where to display content after navigation or a content change.
+
+    An explicit override wins. Otherwise, a position recovered from an item anchor
+    preserves the reader's place even if earlier items moved. If no anchor resolves
+    and the content is stale, use fallback; otherwise reuse stored or start at initial.
+    resolve clamps the offset but leaves anchor interpretation to the source.
+    """
 
     def resolve(
         self,
@@ -148,7 +164,11 @@ class _ListSource[ItemT]:
 
 
 def list_source[ItemT](items: Iterable[ItemT]) -> WindowSource[ItemT]:
-    """Wrap an immutable snapshot as an exact offset-addressed source."""
+    """Snapshot the iterable into an exact offset-addressed source.
+
+    Items themselves are not copied. Fetches ignore anchors and direction and clamp
+    an out-of-range offset to the last item, or zero for an empty source.
+    """
     return _ListSource(items)
 
 
@@ -175,7 +195,12 @@ def window_fingerprint[ItemT](items: tuple[ItemT, ...], identity: Callable[[Item
 
 
 class WindowLoader[ItemT]:
-    """Load immutable windows while dropping completions older than the newest request."""
+    """Load windows and ignore results superseded by a newer request on this loader.
+
+    Starting another request does not cancel an earlier fetch. A stale successful result
+    returns None before validation; fetch exceptions still propagate. Item identities
+    must be stable strings, and their ordered fingerprint excludes item content.
+    """
 
     def __init__(
         self,
@@ -202,7 +227,11 @@ class WindowLoader[ItemT]:
         *,
         previous: LoadedWindow[ItemT] | None = None,
     ) -> LoadedWindow[ItemT] | None:
-        """Load a requested position or refresh around the previously visible anchor."""
+        """Load an explicit position or refresh the previous window, returning None if superseded.
+
+        Validate the latest result against the requested extent and source capabilities.
+        The source's resolved position is authoritative, including when its anchor moved.
+        """
         previous_position = None if previous is None else previous.position
         requested = self.policy.resolve(
             override=position,

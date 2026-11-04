@@ -2,11 +2,10 @@
 
 
 class SquidUiError(Exception):
-    """Base class for every failure the Squid UI packages raise deliberately.
+    """Base for UI-specific failures across layout, forms, history, and adapters.
 
-    Errors outside the layout family keep a standard exception base alongside this one
-    (`CodecError` stays a `ValueError`, `HistoryError` a `RuntimeError`), so catching by
-    standard type keeps working while `except SquidUiError` covers the whole suite.
+    Some subclasses also inherit standard exception types. Argument validation and
+    application callbacks may raise exceptions outside this hierarchy.
     """
 
 

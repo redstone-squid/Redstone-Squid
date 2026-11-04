@@ -1,4 +1,10 @@
-"""Frontend-neutral action events and dispatch metadata."""
+"""Connect planned controls to application handlers without exposing transport details.
+
+Planning keeps Python callbacks in ActionBinding objects, separate from the serializable
+Scene. When a control is used, the frontend resolves its binding and supplies an
+ActionEvent describing the actor and input. The event's responder handles notices,
+forms, and other replies through that frontend.
+"""
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
@@ -18,7 +24,14 @@ if TYPE_CHECKING:
 
 
 class ActionMode(StrEnum):
-    """Concurrency and stale-generation policy for an interactive action."""
+    """The dispatch policy requested by an interactive control.
+
+    Mounted frontends track a render generation so a press can be recognized as coming
+    from an older display. EXCLUSIVE serializes actions and rejects stale presses;
+    REBASE serializes them but resolves the current binding before invoking it.
+    IMMEDIATE skips that lock and generation check. PARALLEL_READ also skips them,
+    but runs the handler in a read-only state transaction.
+    """
 
     EXCLUSIVE = "exclusive"
     REBASE = "rebase"
@@ -65,11 +78,11 @@ class Actor:
 
 
 class ActionResponder(Protocol):
-    """Response authority for one action, ending when its handler returns.
+    """Frontend response operations available while an action handler is active.
 
-    Every method here is one that any frontend can honestly implement. Forms joined this
-    surface once their schemas became portable; frontend-native payloads remain on concrete
-    adapters exposed through the event's typed invocation context.
+    Portable methods delegate transport details to the frontend. on_success transfers
+    work to the execution host after commit; native frontend features remain on the
+    event's typed invocation context.
     """
 
     async def acknowledge(self) -> None: ...
@@ -193,7 +206,11 @@ class EntitySelectionEvent[ContextT = object](ActionEvent[ContextT]):
 
 @dataclass(frozen=True, slots=True)
 class SubmitEvent[ContextT = object](ActionEvent[ContextT]):
-    """A portable form was submitted."""
+    """A form attempt with parsed values, original attempted input, and validation issues.
+
+    Values may be partial on invalid submissions; attempted retains the input needed
+    for redisplay. Frontends use InvalidSubmitEvent when offering retry authority.
+    """
 
     values: Mapping[str, object] = field(default_factory=dict)
     attempted: Mapping[str, object] = field(default_factory=dict)
@@ -215,8 +232,10 @@ class InvalidSubmitEvent[ContextT = object](SubmitEvent[ContextT]):
 class ActionRequest:
     """One admitted mounted action supplied to application middleware.
 
-    Rebase is generation metadata, not an outcome: the rebased handler may still return,
-    fail, or later encounter a delivery failure. Framework admission has already resolved
+    A render generation identifies the display from which a control was pressed.
+    The rebased flag means an older press was accepted against the current binding;
+    its handler may still fail, and a successful handler can be followed by delivery
+    failure. Framework admission has already resolved
     the binding and generation before constructing this value.
     """
 
@@ -256,7 +275,12 @@ type EntitySelectionHandler[ContextT = object] = Callable[[EntitySelectionEvent[
 
 @dataclass(frozen=True, slots=True)
 class ActionBinding[EventT: ActionEvent = Any]:
-    """Ephemeral handler data kept out of serializable scenes."""
+    """A callback and dispatch policy addressed by a planned control's action key.
+
+    PlanResult carries these Python objects alongside its serializable Scene. A grouped
+    select can represent several controls; routes maps each submitted option to its
+    own binding so the frontend invokes the intended control's handler and policy.
+    """
 
     key: str
     handler: Callable[[EventT], Awaitable[None]]
@@ -265,9 +289,9 @@ class ActionBinding[EventT: ActionEvent = Any]:
     guard: Guard | None = None
     """Admission checked by the frontend after the concurrency gate, before the handler."""
     busy: BusySpec | None = None
-    """Busy busy policy for a handler slow enough to need it."""
+    """Interim presentation requested for a slow handler."""
     label: TextLike = ""
-    """What the pressed control says, which is what a framework-written entry is called."""
+    """Control label also used for framework-created history entries."""
     record: History | None = None
     """History this action enters itself into, under `label`, before the handler runs."""
 

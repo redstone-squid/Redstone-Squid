@@ -97,14 +97,9 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget, ContextT = object](
             raise LayoutInvariantError(message)
         return transformed[0]
 
-    # The suppressions below all name one mismatch, not four. This walker rewrites the
-    # *authored* tree, so it speaks `LayoutNode[RenderTargetT, ContextT]` -- open, and parameterized by
-    # the caller's dialect. But the primitive containers it has to rebuild (`Break`, `Budget`,
-    # `Extension.fallback`, `Variant.nodes`) declare their child fields as `Node`: the closed,
-    # already-lowered union, which is what lets the planner match over them exhaustively. The
-    # two are the same objects at runtime and neither declaration is wrong for its own job.
-    # Closing the gap means making those containers generic in their children's target, which
-    # is a change to the primitive vocabulary rather than to this traversal.
+    # Authored children use the open LayoutNode type, but primitive containers declare the
+    # closed Node union for planner matching. The suppressions preserve the caller's generic
+    # child type while rebuilding those same runtime containers.
     match node:
         case (
             Group(children=children)

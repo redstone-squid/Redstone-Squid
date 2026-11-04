@@ -10,7 +10,11 @@ def attribute(value: object) -> str:
 
 
 def safe_url(value: str) -> str | None:
-    """Return an absolute HTTP(S) URL, rejecting unsafe or relative references."""
+    """Accept references with an HTTP(S) scheme and a nonempty network location.
+
+    This filters schemes; it does not authorize a destination or fetch its content.
+    Malformed URL syntax may raise ValueError from urlsplit.
+    """
     parsed = urlsplit(value)
     return value if parsed.scheme in {"http", "https"} and parsed.netloc else None
 

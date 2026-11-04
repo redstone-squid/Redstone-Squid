@@ -1,4 +1,14 @@
-"""Run shared services for as long as their owner needs them."""
+"""Run shared services for as long as their owner needs them.
+
+A ManagedService describes background work, such as following live updates.
+A ServiceOwner decides when that work starts and stops; components use an owner
+to tie service runs to their mounted lifetime. UIExecutionHost supplies the task
+group that runs those services and waits for their cleanup during shutdown.
+
+The service object can be shared with other components without transferring
+ownership. Each activation creates a separate ServiceRun handle, so a waiter can
+observe one run even if the service is later stopped and started again.
+"""
 
 import asyncio
 import logging
@@ -508,7 +518,11 @@ class ServiceOwner:
 
 
 class _ServiceLifecycle:
-    """Track component services until ``cancel`` starts their cleanup."""
+    """Coordinate services across the committed component tree.
+
+    Descendant runs finish cleanup before an ancestor's services are cancelled, so
+    children can still use parent-provided services while shutting down.
+    """
 
     def __init__(self, host: UIExecutionHost | None, on_error: ServiceFailure | None) -> None:
         self.host = host

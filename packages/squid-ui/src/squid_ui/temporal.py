@@ -37,7 +37,7 @@ class InvalidTimezoneOffsetError(SquidUiError, ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ZonedDateTime:
-    """One exact instant together with the IANA timezone used to present it."""
+    """An aware instant normalized to UTC, with an IANA timezone retained for presentation."""
 
     instant: datetime
     timezone: str
@@ -72,7 +72,12 @@ def resolve_local_datetime(
     ambiguous: AmbiguousTimeMode,
     nonexistent: NonexistentTimeMode,
 ) -> datetime:
-    """Resolve a naive wall time to one aware instant under explicit policies."""
+    """Resolve a naive wall time to an aware datetime in the supplied timezone.
+
+    Repeated times select the earlier or later instant, or raise under REJECT. For a
+    skipped time, SHIFT_FORWARD uses the first forward result of the UTC round trip,
+    shifting across the offset gap rather than snapping to its start.
+    """
     valid, resolved = _local_mapping(value, timezone)
     if valid:
         if len(valid) == 1:
@@ -102,6 +107,11 @@ def resolve_offset_datetime(value: datetime, timezone: tzinfo) -> datetime:
 
 
 def _local_mapping(value: datetime, timezone: tzinfo) -> tuple[tuple[datetime, ...], tuple[datetime, ...]]:
+    """Round-trip both fold candidates through UTC to distinguish repeats from gaps.
+
+    Return unique valid instants as local datetimes, plus both round-trip results for
+    the caller's gap policy. Equal offsets collapse ordinary times to one candidate.
+    """
     candidates = tuple(value.replace(tzinfo=timezone, fold=fold) for fold in (0, 1))
     instants = tuple(candidate.astimezone(UTC) for candidate in candidates)
     resolved = tuple(instant.astimezone(timezone) for instant in instants)

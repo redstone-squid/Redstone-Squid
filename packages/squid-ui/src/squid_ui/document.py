@@ -1,4 +1,4 @@
-"""Complete declarative output produced by a component render."""
+"""Group layout nodes and their assets before planning for a target."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -13,7 +13,12 @@ __all__ = ["Asset", "AssetSource", "Document", "DocumentLike", "InlineAsset", "S
 
 @dataclass(frozen=True, slots=True)
 class Document[RenderTargetT = RenderTarget, ContextT = object]:
-    """Visual nodes and delivery assets derived from one component state snapshot."""
+    """The layout to display, together with the files that layout needs.
+
+    A component can return a Document when it needs to declare assets as well as
+    content. Returning a node or a sequence of nodes is shorthand for a document
+    without separate asset declarations; as_document normalizes those forms before planning.
+    """
 
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     assets: tuple[Asset, ...] = ()

@@ -35,7 +35,13 @@ type FileResolver = Callable[[scene.File], str | None]
 
 
 class DiscordPreviewRenderer:
-    """Draw a Discord Components V2 scene as an inspection-oriented HTML preview."""
+    """Draw a Components V2 tree as HTML for inspection, without interaction dispatch.
+
+    Text is displayed literally rather than interpreting Discord Markdown. CSS and
+    non-None asset_resolver results are trusted host configuration: CSS is embedded
+    verbatim and resolved file URLs are escaped but not scheme-filtered. Plan resources
+    can supply inline downloads when no host URL is returned.
+    """
 
     def __init__(
         self,
@@ -61,9 +67,7 @@ class DiscordPreviewRenderer:
             message = f"DiscordPreviewRenderer cannot preview target version {document.target_version}"
             raise DrawInvariantError(message)
         if not isinstance(document.body, scene.ComponentsV2):
-            # The real gate, and both stricter and more honest than a target id: what this
-            # preview can draw is a component tree, not a name. A classic message is content
-            # and embeds with no tree to walk.
+            # Check the body shape: classic messages have content and embeds, not this tree.
             message = f"HTML preview cannot draw a {type(document.body).__name__} body"
             raise DrawInvariantError(message)
         pager_data = json.dumps(

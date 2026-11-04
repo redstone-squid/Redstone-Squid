@@ -1,4 +1,10 @@
-"""Task-local runtime tracing with bounded immutable retention."""
+"""Record UI operation timings, retaining selected traces and aggregate statistics.
+
+An operation scope creates a trace. Nested span scopes record steps within it and use
+the current task's context to identify their parent. When the operation ends, the trace
+is frozen for inspection and contributes to timing summaries even if sampling omits
+its individual record. MemoryProfiler owns retention; the scopes only record work.
+"""
 
 import asyncio
 import math
@@ -70,7 +76,12 @@ class DetachedSpanRecorder(SpanRecorder, Protocol):
 
 
 class OperationRecorder(Protocol):
-    """Controls one operation and creates structurally nested spans."""
+    """Record nested timing, results, and counters for one operation scope.
+
+    Span context managers follow the current context's parent. Detached spans must be
+    finished explicitly; any still open when the operation ends become ABANDONED.
+    record_span adds an already-measured duration in seconds without changing context.
+    """
 
     def span(
         self,
@@ -239,13 +250,7 @@ class _NoOpSpan(AbstractContextManager[SpanRecorder]):
 
 
 class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorder):
-    """The no-op operation.
-
-    Deliberately not a `_NoOpSpan`: `OperationRecorder` and `SpanRecorder` are separate
-    protocols, so one object cannot enter as both. Sharing an instance made `__enter__`
-    advertise only the span half, which is what the profiler's `operation()` return type
-    could not honour.
-    """
+    """An inert operation recorder with the same context-manager result type as real operations."""
 
     @override
     def __enter__(self) -> OperationRecorder:
@@ -319,7 +324,7 @@ _NOOP = _NoOpOperation()
 
 
 class NoOpProfiler:
-    """Profiler implementation whose instrumented hot path performs no work."""
+    """Return inert recorders and a fixed empty snapshot without retaining instrumentation."""
 
     def operation(
         self,
@@ -616,7 +621,21 @@ def _exception_name(error: BaseException) -> str:
 
 
 class MemoryProfiler:
-    """Bounded in-memory runtime profiler with active-operation snapshots and tail retention.
+    """Retain runtime traces and aggregate timings in memory.
+
+    Use operation as a context manager around one dispatch, delivery, or refresh, and
+    its recorder's span method around individual steps. snapshot exposes both work in
+    progress and completed work without ending active operations.
+
+    Completed trace queues and aggregate cardinality are bounded; active traces and
+    each trace's spans and counter names are not. All completed traces contribute to
+    aggregates, including sampled-out traces. Slow, failed, and deadline-miss queues
+    may contain the same trace; recent contains only sampled ordinary successes.
+
+    Rolling aggregates retain whole time slices, so their exact horizon varies within
+    one slice. Attribute bounds limit size and types, not sensitive content: callers
+    choose what to record. Scope instrumentation records internal failures instead of
+    replacing application exceptions; explicit snapshot calls can still fail.
 
     Args:
         recent: Maximum sampled ordinary traces retained.
@@ -730,15 +749,23 @@ class MemoryProfiler:
         links: Sequence[TraceLink] = (),
         started: float | None = None,
     ) -> AbstractContextManager[OperationRecorder]:
+        """Create a synchronous scope recording one operation and its nested spans.
+
+        Started, when supplied, uses the profiler's monotonic clock domain and is clamped
+        to the current time. Exiting records failure or cancellation from an escaping
+        exception; otherwise it uses the explicit result or COMPLETED.
+        """
         return _OperationScope(self, operation, name, attributes, links, started)
 
     def capture_link(self) -> TraceLink | None:
+        """Return the active span in this context for this profiler, or None outside a live trace."""
         current = _current.get()
         if current is None or current.profiler is not self or current.trace.closed:
             return None
         return TraceLink(current.trace.trace_id, current.span_id)
 
     def snapshot(self) -> RuntimeSnapshot:
+        """Freeze active work, retained traces, aggregates, and loss counters without ending operations."""
         now = self._clock()
         captured_at = self._wall_clock()
         with self._lock:
@@ -797,7 +824,11 @@ class MemoryProfiler:
             )
 
     def clear(self) -> None:
-        """Clear retained traces and aggregates while keeping profiler configuration."""
+        """Clear recorded diagnostics and counters while retaining configuration and startup times.
+
+        Active scopes are removed from inspection but not closed. If they later finish,
+        they can contribute new traces and aggregates again.
+        """
         with self._lock:
             self._active.clear()
             self._recent.clear()

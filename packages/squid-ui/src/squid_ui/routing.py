@@ -1,34 +1,19 @@
-"""Stateless control identity: routes that own their own custom id format.
+"""Stateless control IDs parsed into arguments for host-registered route handlers.
 
-The third interactivity tier. A `MessageRoot` keeps handlers in memory and issues an id per
-render generation; a route does the opposite — the id *is* the state pointer, the store
-owns the state, and the control keeps working after a restart, a redeploy, or a year.
-
-A route is one format string, read as colon-separated segments:
+A route contains colon-separated literals or whole parameters:
 
     EDIT_BUILD = Route("edit:build:{build_id:int}")
-    EDIT_BUILD.id(build_id=5)            # "edit:build:5"
-    EDIT_BUILD.match("edit:build:5")     # {"build_id": 5}
+    EDIT_BUILD.id(build_id=5)         # "edit:build:5"
+    EDIT_BUILD.match("edit:build:5")  # {"build_id": 5}
 
-Aliases keep already-posted controls alive when the canonical format changes. `id()` always
-builds the canonical format; `match()` and overlap detection cover the canonical format and
-every alias.
+Aliases accept old formats while id() emits the canonical one. Each segment must
+be a literal or one parameter, never a mixture such as build-{id}. Values cannot
+contain colons; use a stored record key for richer state.
 
-Each segment is *exactly* a literal or one parameter — never a mix, so `build-{id}` is not
-a route. That restriction is what makes overlap between two routes decidable exactly
-(`Route.overlaps`) instead of by sampling, which is worth far more than the generality it
-gives up: an ambiguous route table is a click that reaches the wrong handler depending on
-import order.
-
-A parameter's format spec names its converter, the way Werkzeug spells `<int:build_id>`,
-and the converter supplies the pattern that field matches — so a tighter type is a tighter
-route rather than a check the handler has to remember. Values cannot contain ``:``, because
-that is the segment separator; a route needing richer arguments should point at a stored
-row instead of encoding one, which is the whole premise of the tier.
-
-A custom id is not a capability. Discord only echoes back an id that already exists on a
-message it rendered, so ids cannot be forged and need no signing; but they are readable by
-anyone who can see the card, so a handler still authorizes every click itself.
+Routes retain no in-memory handler or application state. Restart survival requires
+the host to register the route again and retain the referenced state. IDs provide
+routing, not authorization: the host authenticates incoming interactions and the
+handler checks the actor's permission to act on the referenced object.
 """
 
 import re
@@ -247,12 +232,11 @@ class Route:
             )
 
     def id(self, **params: object) -> str:
-        """Build one custom id, refusing anything this route could not match back.
+        """Build a canonical ID from exactly the declared parameter names.
 
-        The check is the invariant the whole tier rests on — a route's pattern matches
-        every id that route builds — rather than a list of the ways a value can be wrong.
-        Empty values, values carrying the separator and values of the wrong type all fail
-        here, because all three are just "the result is not one of my ids".
+        Converter output must match the route's pattern, which rejects empty segments,
+        separators, and unsupported representations. This checks the encoded form rather
+        than requiring a particular Python input type. Oversized IDs raise LayoutInvariantError.
         """
         missing = set(self.params) - set(params)
         unknown = set(params) - set(self.params)
@@ -314,12 +298,11 @@ class Route:
         return any(_intersect(route.segments[0], literal) for route in (self, *self._alias_routes))
 
     def overlaps(self, other: Route) -> bool:
-        """Whether any one custom id could belong to both routes.
+        """Whether the canonical formats or aliases can accept the same ID.
 
-        Exact, not approximate, which is the point of the segment grammar: two routes share
-        an id iff they have the same segment count and every position admits common text.
-        Sampling one id per route misses `foo:{x}:baz` against `foo:bar:{y}`, which collide
-        at `foo:bar:baz`.
+        Equal segment counts and pairwise intersections are sufficient for the built-in
+        str and int converters. Parameter pairs are assumed to overlap because both accept
+        digits; adding disjoint custom converters requires updating that assumption.
         """
         return any(
             left._overlaps_format(right)

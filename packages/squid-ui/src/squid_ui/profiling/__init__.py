@@ -1,4 +1,10 @@
-"""Bounded in-process runtime profiling."""
+"""Measure UI operations and inspect recent traces or aggregate timings.
+
+A trace records one operation, such as dispatching a press. Spans time steps within
+that operation, such as planning or delivery. MemoryProfiler retains selected completed
+traces and timing summaries; snapshot returns immutable values for inspection or JSON
+export. NoOpProfiler accepts the same instrumentation when profiling is disabled.
+"""
 
 from squid_ui.profiling.export import snapshot_json
 from squid_ui.profiling.model import (

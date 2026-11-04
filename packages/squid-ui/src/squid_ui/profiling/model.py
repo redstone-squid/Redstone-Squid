@@ -1,4 +1,9 @@
-"""Frozen values describing profiled runtime operations."""
+"""Immutable snapshots of operation traces, their timed spans, and aggregate statistics.
+
+RuntimeTrace describes a completed operation and its parent-linked RuntimeSpan values.
+RuntimeSnapshot combines retained traces with unfinished work and timing histograms.
+These values can be inspected or exported without reading the profiler's mutable state.
+"""
 
 import math
 from dataclasses import dataclass
@@ -85,7 +90,12 @@ class GenerationDecision:
 
 @dataclass(frozen=True, slots=True)
 class DispatchResult:
-    """Independent terminal, action, presentation, and generation dispatch facts."""
+    """Keep handler success distinct from delivery and admission outcomes.
+
+    For example, a handler can finish successfully while delivery of its new display
+    fails. disposition describes the overall dispatch; action and presentation retain
+    those separate outcomes, and generation records which display the press targeted.
+    """
 
     disposition: DispatchDisposition
     action: ActionStatus
@@ -156,7 +166,7 @@ class TraceResult:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeSpan:
-    """One completed interval within a runtime trace."""
+    """A finished interval; started is seconds from its trace start and duration is elapsed seconds."""
 
     span_id: SpanId
     parent_span_id: SpanId | None
@@ -171,7 +181,7 @@ class RuntimeSpan:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeTrace:
-    """One completed operation and its flat, parent-linked spans."""
+    """A completed operation; started is seconds from profiler startup and spans are parent-linked."""
 
     trace_id: TraceId
     root_span_id: SpanId
@@ -189,7 +199,7 @@ class RuntimeTrace:
 
 @dataclass(frozen=True, slots=True)
 class ActiveSpanSnapshot:
-    """Safe diagnostic view of a span that has not finished."""
+    """An unfinished span with start offset from its trace and elapsed duration, both in seconds."""
 
     span_id: SpanId
     parent_span_id: SpanId | None
@@ -200,7 +210,7 @@ class ActiveSpanSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class ActiveTraceSnapshot:
-    """Safe diagnostic view of an operation that has not finished."""
+    """An unfinished operation with start offset from profiler startup and elapsed seconds."""
 
     trace_id: TraceId
     operation: OperationKind
@@ -212,7 +222,11 @@ class ActiveTraceSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class HistogramSnapshot:
-    """One fixed-bucket latency distribution."""
+    """Count durations in fixed buckets, using seconds for bounds and measured values.
+
+    Each count covers values above the previous bound and at or below its own bound;
+    the final count covers values above every bound. Counts are not cumulative.
+    """
 
     bounds: tuple[float, ...]
     counts: tuple[int, ...]
@@ -222,7 +236,11 @@ class HistogramSnapshot:
     maximum: float | None
 
     def percentile(self, fraction: float) -> float | None:
-        """Return the containing bucket's upper bound for ``fraction`` in ``[0, 1]``."""
+        """Estimate the quantile using its bucket's upper bound, or None without observations.
+
+        Fraction must be in [0, 1]. The overflow bucket returns the observed maximum rather
+        than an infinite bound; other buckets return their configured upper bound.
+        """
         if not 0 <= fraction <= 1:
             message = "percentile fraction must be between zero and one"
             raise ValueError(message)

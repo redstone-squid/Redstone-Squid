@@ -99,17 +99,11 @@ class GuardScope(StrEnum):
 
 @dataclass(slots=True)
 class _Staged:
-    """One admission pass's ledger writes, held back until its decision is known.
+    """Buffer ledger changes for one admission pass, including read-your-writes behavior.
 
-    A pass that ends in a challenge must record nothing: `squid_ui_widgets.guards.confirm`
-    belongs last in a chain, so it is exactly the guard whose non-admit decision would
-    otherwise spend every earlier one, and the actor who cancelled would be the one paying
-    the cooldown. Buffering sits here rather than at the decision because a guard may write
-    and then deny in the same call. The challenge mechanism is this module's; the one guard
-    that raises a rendered question lives beside the shells it renders.
-
-    Denial is not buffered away — `all_of(cooldown(5), permission(deny))` spends the cooldown
-    today, deliberately, and only a challenge rolls a pass back.
+    The frontend commits ordinary admission or denial, but discards a pass ending in a
+    challenge. This prevents an unanswered confirmation from spending earlier cooldowns.
+    Ordinary denial still preserves earlier guards' writes.
     """
 
     writes: dict[str, Any] = field(default_factory=dict)
@@ -119,24 +113,14 @@ class _Staged:
 
 @dataclass(frozen=True, slots=True)
 class GuardKind[ValueT]:
-    """What one stateful guard stores, declared once beside the guard that stores it.
-
-    The parameter is what a bare string could not carry. `GuardLedger.read` and `.write`
-    used to take a `str` and an `object`, with `read`'s return type inferred from whatever
-    default the caller passed -- so a cooldown written as a float and read back with an
-    `int` default type-checked and lied.
-    """
+    """Declare the stored value type for one named guard, shared by its reads and writes."""
 
     name: str
 
 
 @dataclass(frozen=True, slots=True)
 class GuardKey[ValueT]:
-    """One `GuardKind` scoped to an action and an actor: where that value actually lives.
-
-    Built by :meth:`GuardLedger.bucket`, which owns the scoping rule. Carrying the entry
-    name in a typed wrapper is what keeps the read and the write agreeing about the value.
-    """
+    """A typed ledger entry combining guard kind, action key, and actor or mount scope."""
 
     entry: str
 
@@ -202,10 +186,9 @@ class GuardLedger:
     def read[ValueT](self, key: GuardKey[ValueT], default: ValueT) -> ValueT: ...
 
     def read[ValueT](self, key: GuardKey[ValueT], default: ValueT | None) -> ValueT | None:
-        """The value stored under `key`, or `default` when nothing is stored.
+        """Read the staged or stored value, falling back to default for missing entries or None.
 
-        The overload pair is for the guards that use `None` to mean "never yet": a cooldown
-        asks for a `float` and gets `float | None`, without widening every other caller.
+        A staged clear hides the underlying entry until the admission pass commits.
         """
         entry = key.entry
         if (staged := self._staged) is not None:
@@ -225,7 +208,10 @@ class GuardLedger:
         self._entries[key.entry] = value
 
     def clear(self, key: GuardKey[Any] | None = None) -> None:
-        """Forget one entry, or every entry this ledger holds."""
+        """Forget one entry, or every entry shared by this mount's ledger.
+
+        Clearing an action-scoped view without a key still clears the whole ledger.
+        """
         if (staged := self._staged) is not None:
             if key is None:
                 staged.writes.clear()
@@ -368,8 +354,6 @@ class _AllOf:
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult:
         for guard in self.guards:
             decision = await guard.admit(event, ledger)
-            # Denial and challenge both stop the chain: it never asks a question it is about
-            # to deny anyway.
             if isinstance(decision, Challenge) or not decision.allowed:
                 return decision
         return ADMIT
@@ -383,8 +367,7 @@ class _AnyOf:
         last = deny()
         for guard in self.guards:
             decision = await guard.admit(event, ledger)
-            # Unlike `all_of`, this one walks past denials -- that is what makes it `any_of`.
-            # A challenge is not a "no", so it is returned rather than counted as one.
+            # A challenge needs an answer; trying later alternatives would bypass it.
             if isinstance(decision, Challenge):
                 return decision
             if decision.allowed:
@@ -437,24 +420,21 @@ def until(deadline: datetime, *, reason: TextLike | None = None) -> Guard:
 
 
 def all_of(*guards: Guard) -> Guard:
-    """Admit only when every guard admits; the first denial is reported.
+    """Run guards in order, stopping at the first denial or challenge; an empty chain admits.
 
-    Order matters for stateful guards: an earlier `cooldown` records its press before a
-    later `permission` gets to deny it, so put the cheap unconditional checks first. That
-    advice cannot work for `squid_ui_widgets.guards.confirm`, which belongs last -- so a pass
-    ending in a challenge records nothing at all, and the guards run again on approval.
+    Earlier stateful writes survive an ordinary denial. Put permission checks before
+    cooldowns when denial should not spend them. The frontend discards staged writes
+    when a challenge is returned and checks admission again after approval.
     """
     return _AllOf(guards)
 
 
 def any_of(*guards: Guard) -> Guard:
-    """Admit when any guard admits; the last denial is reported.
+    """Run guards until one admits or challenges; otherwise return the last denial.
 
-    Stateful guards ahead of the admitting one still record their press, for the same
-    reason `all_of` cares about order. A challenge from any member is returned as one --
-    a question is not a "no" -- which gives this composite an ordering rule opposite to
-    `all_of`'s: `any_of(squid_ui_widgets.guards.confirm(...), permission(admin))` asks an admin
-    the permission branch would have admitted for free, so it belongs last here too.
+    An empty chain denies. Earlier guards' ledger changes are retained unless the
+    frontend discards a challenged pass. Put unconditional alternatives before a
+    confirmation guard when they should admit without prompting.
     """
     return _AnyOf(guards)
 

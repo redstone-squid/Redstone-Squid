@@ -16,6 +16,7 @@ except ImportError:
 
 
 def task_is_within(runner_ids: set[int]) -> bool:
+    """Return whether the current AnyIO task or one of its ancestors is a named runner."""
     if not runner_ids:
         return False
 

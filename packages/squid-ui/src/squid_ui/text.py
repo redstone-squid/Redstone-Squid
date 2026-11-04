@@ -1,4 +1,10 @@
-"""Resolved text values and safe Discord Markdown interpolation."""
+"""Prepare authored text for localization and target rendering.
+
+Bare strings are trusted Discord Markdown. Use plain for literal text, or md to keep
+template formatting while escaping interpolated values. Message defers translation
+until the render's Localization is known; resolution produces ResolvedText carrying
+both content and its markup type for the planner and renderer.
+"""
 
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager

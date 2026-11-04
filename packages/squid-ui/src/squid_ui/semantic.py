@@ -1,4 +1,15 @@
-"""Frontend-neutral semantic layout vocabulary."""
+"""Describe what a UI contains before choosing how a target will display it.
+
+Semantic nodes describe content and interaction: a Table contains rows and columns,
+and Choices lets a reader select options. A target planner chooses a representation,
+such as buttons or a select menu for Choices, subject to that target's limits.
+The factories in squid_ui.factories are the usual way to construct these records.
+
+Controlled and Uncontrolled specify who stores an interactive node's current value.
+Adaptation wrappers specify which changes are acceptable when content does not fit:
+for example, truncate permits shorter prose and optional permits omitting a region.
+These declarations are frozen, but referenced application objects need not be.
+"""
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -93,7 +104,11 @@ class TimeStyle(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Controlled[ValueT, EventT]:
-    """The author owns this value: authoritative on every render, never written by the engine."""
+    """Read the value from application state and send requested changes to on_change.
+
+    The handler must update that state if it accepts a change; the supplied value
+    remains authoritative on every render.
+    """
 
     value: ValueT
     on_change: Callable[[EventT], Awaitable[None]]
@@ -101,21 +116,17 @@ class Controlled[ValueT, EventT]:
 
 @dataclass(frozen=True, slots=True)
 class Uncontrolled[ValueT]:
-    """The engine owns this value, in the presentation session under the node's key.
+    """Let PresentationState store the value under the node's key.
 
-    ``initial`` is a seed, not a value: it applies on a session miss and is ignored from
-    then on. An author who needs their value to keep winning wants `Controlled`.
+    The initial value applies whenever that key has no stored value, including after a reset.
+    Use Controlled when the author-supplied value must win on every render.
     """
 
     initial: ValueT
 
 
 type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[ValueT]
-"""Every stateful semantic node takes one of these, and it is the whole ownership story.
-
-Ownership is a value rather than something inferred from whether a handler was passed,
-so a node cannot be half-controlled and the mode is readable at the call site.
-"""
+"""Explicitly choose author-owned values or state stored in the presentation session."""
 
 
 type ChoiceOwnership[ContextT = object] = Ownership[tuple[str, ...], ChoiceEvent[ContextT]]
@@ -482,7 +493,7 @@ class ActionControl[ContextT = object]:
     guard: Guard | None = None
     """Whether this press may execute now. `available` is the render-time question."""
     busy: BusySpec | None = None
-    """Busy busy for a handler slow enough that the reader needs to see it running."""
+    """Interim presentation requested while a slow handler runs."""
     record: History | None = None
     """History this press enters itself into, under `label`, before `on_trigger` runs."""
 
@@ -497,15 +508,13 @@ class Link:
 
 @dataclass(frozen=True, slots=True)
 class RoutedActionControl:
-    """A control whose custom id is its state, dispatched by a router rather than a mount.
+    """A control dispatched by a host route rather than an in-memory mounted handler.
 
-    For the buttons on mass-posted cards that must still work after a restart: no
-    in-process handler, so a sessionless document may carry one. Build ``route_id`` with
-    a `squid_ui.routing.Route`, which validates it against Discord's budget at
-    authoring time rather than at send time.
-
-    `ActionControl` remains the right node whenever a session is already in play; this one buys
-    survival at the price of every guarantee the mount's funnel provides.
+    For example, a button on a posted card can keep working after a process restart
+    because its route ID identifies the operation without retaining a Python callback.
+    Use Route.id to validate the ID format and length. The host must keep the route
+    registered and authorize each request; mounted action lifecycle policies do not
+    follow automatically from using a route.
     """
 
     key: str
@@ -577,11 +586,12 @@ class ScaleEvent[ContextT = object](ActionEvent[ContextT]):
 
 @dataclass(frozen=True, slots=True)
 class Choices[ContextT = object](Renderable[RenderTarget, ContextT]):
-    """A picker over `choices`, backed by buttons or a select depending on shape.
+    """Let the reader select between minimum and maximum options.
 
-    `minimum` defaults to 1, so the picker cannot be cleared to nothing without setting
-    it to 0 explicitly; a small (2-5 choice) single-select (`maximum=1`) renders as
-    buttons instead, which always select exactly one and ignore `minimum` entirely.
+    The selection uses Controlled or Uncontrolled to decide who stores the selected
+    option keys. Minimum zero permits an empty selection where the target supports
+    clearing. Discord may render a small single-select picker as buttons, whose presses
+    always select one option. Other targets choose their own representation.
     """
 
     key: str
@@ -803,12 +813,10 @@ type SemanticNode[RenderTargetT = RenderTarget, ContextT = object] = (
     | RoutedChoices
     | Navigation[ContextT]
 )
-"""Everything the semantic vocabulary offers, in the dialects it can be drawn in.
+"""The framework's semantic node types, each describing content rather than target widgets.
 
-Only the containers take the parameter. The rest are target-neutral by construction: a
-`Table` or a `Roster` says what the information *means* and every dialect has some way to
-draw it, which is the whole reason to author semantically. A leaf that grew a dialect
-restriction would belong in `primitives`, not here.
+Leaves such as Table are portable. Containers retain any target restrictions imposed
+by their children, so a stack containing a Discord-only primitive is also Discord-only.
 """
 
 type Adaptation[RenderTargetT = RenderTarget, ContextT = object] = (
@@ -847,16 +855,12 @@ the operative word: a caller's own `Renderable` is a layout node and is delibera
 one of these, which is what the Discord lowering needs to say when it meets one.
 """
 type LayoutNode[RenderTargetT = RenderTarget, ContextT = object] = Renderable[RenderTargetT, ContextT]
-"""Anything that may stand in the authored tree, in the dialects it can be drawn in.
+"""An authored node, including custom Renderable subclasses.
 
-Exactly `Renderable`, and named apart from it on purpose: `Renderable` is the capability a
-class claims by inheriting it, while this is the stage a value is at. A field or parameter
-wants to say "a node of the authored tree", not "something drawable", even though the two
-are the same type.
-
-Open at its only arm, so nothing may match over it. `PortableNode` is the closed union a
-traversal proves itself exhaustive against, and `BuiltinLayoutNode` the one an `isinstance`
-can test.
+Renderable is the capability a class declares by inheritance; LayoutNode names the
+same type when referring to its place in the authored layout tree.
+This open type does not support exhaustive matching. Use PortableNode for the closed
+portable vocabulary or BuiltinLayoutNode for all framework-defined nodes.
 """
 
 

@@ -1,4 +1,10 @@
-"""Host-owned operations admitted by successful action commits."""
+"""Run requested work only after the action that requested it commits.
+
+event.on_success creates a PostCommitOperation handle during an action handler.
+The execution host starts the callback after a successful commit; rollback
+discards it. The handle lets other code observe completion without owning the
+callback's lifetime.
+"""
 
 import logging
 from collections.abc import Awaitable, Callable, Generator

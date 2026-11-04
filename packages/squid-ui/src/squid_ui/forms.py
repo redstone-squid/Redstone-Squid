@@ -1,4 +1,14 @@
-"""Portable form schemas, typed fields, and descriptor-based form sugar."""
+"""Declare forms and turn submitted control values into typed application values.
+
+A FormSpec lists fields, initial values, and optional cross-field validation. The
+frontend presents it using its own controls, then calls evaluate to parse a submission.
+The result retains both parsed values and attempted input so invalid entries can be
+shown again without losing what the reader typed.
+
+Subclass Form to declare fields as class attributes and handle submissions in methods.
+Its spec method builds the same FormSpec; after parsing, the attributes expose typed
+values for validate and on_submit. The frontend owns presentation and retry handling.
+"""
 
 import inspect
 import math
@@ -92,23 +102,11 @@ def _invalid(message: str) -> NoReturn:
 
 
 type PrefillValue = str | tuple[str, ...] | bool | int | float | None
-"""What a field hands an adapter to seed its control with.
-
-`format` used to return `object`, which pushed the question to every consumer: the Discord
-modal wraps one result in `str()` and calls `set()` on another, the latter type-checking
-only because `MultiChoiceField` happens to narrow. This is the set those consumers can
-actually accept.
-"""
+"""Scalar or selected-key values accepted by adapters when prefilling a control."""
 
 
 def _prefill(value: object) -> PrefillValue:
-    """One stored value as a prefill, or None when nothing usable can stand for it.
-
-    The fallthrough every override shares. Prefills arrive from untyped stores and
-    round-tripped payloads, so the field narrows what it recognizes and this decides the
-    rest: what a JSON round-trip yields is kept, and an object no control could be seeded
-    with becomes no prefill at all.
-    """
+    """Return a supported scalar or tuple of string keys; unsupported stored values become None."""
     if value is None or isinstance(value, str | bool | int | float):
         return value
     if isinstance(value, tuple) and all(isinstance(item, str) for item in value):
@@ -279,7 +277,12 @@ _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 @dataclass(frozen=True, slots=True)
 class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
-    """A compact duration such as ``30m``, parsed to seconds."""
+    """Parse compact durations into integer seconds, with optional inclusive bounds.
+
+    The default grammar accepts one nonnegative decimal quantity followed by s, m, h, d, or w,
+    ignoring unit case and surrounding whitespace. Fractional seconds use Python's
+    rounding. A custom parser replaces the grammar and reports bad input with ValueError.
+    """
 
     minimum: int | None = None
     maximum: int | None = None
@@ -435,7 +438,12 @@ class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
 class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     FormField[ZonedDateTime, RequiredT]
 ):
-    """A local ISO-8601 datetime resolved in one named IANA timezone."""
+    """Resolve ISO datetime input in one named IANA timezone.
+
+    Naive input follows the ambiguity and gap policies. Explicit offsets must agree
+    with that wall time in the named zone. The result retains the zone and normalizes
+    the instant to UTC; optional bounds compare instants inclusively.
+    """
 
     timezone: str = "UTC"
     minimum: DateTimeValue | None = None
@@ -587,7 +595,11 @@ class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[T
 class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
     FormField[tuple[ValueT, ...], RequiredT]
 ):
-    """Several declared choices returned in declaration order."""
+    """Return distinct selected values in declaration order.
+
+    Repeated keys count once. Missing optional input returns an empty tuple; required
+    input must select at least one option even when minimum is zero.
+    """
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
     minimum: int = 0
@@ -645,7 +657,7 @@ class UploadedFile:
 
 @dataclass(frozen=True, slots=True)
 class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[bool, RequiredT]):
-    """A boolean checkbox."""
+    """Parse a checkbox value; missing input means False even when required is True."""
 
     @override
     def parse(self, raw: object) -> bool:
@@ -671,7 +683,11 @@ class ExtensionField[ValueT, RequiredT: bool = bool](FormField[ValueT, RequiredT
 
 @dataclass(frozen=True, slots=True)
 class FormResult:
-    """Typed values and validation errors from one submission attempt."""
+    """Parsed values, original attempted input, and errors from one submission.
+
+    The values mapping contains only fields that parsed successfully. The attempted
+    mapping retains raw input, including invalid values, so the frontend can prefill a retry.
+    """
 
     values: Mapping[str, object]
     attempted: Mapping[str, object]
@@ -687,7 +703,13 @@ type SubmitHandler[ContextT = object] = Callable[[SubmitEvent[ContextT]], Awaita
 
 @dataclass(frozen=True, slots=True)
 class FormSpec[ContextT = object]:
-    """A frontend-neutral, immutable form schema."""
+    """Fields and validation rules that a frontend uses to present and evaluate a form.
+
+    Each field needs a unique key for submitted values and a label for display.
+    The items sequence preserves display order, including static FormText between fields. Prefills
+    override field defaults and are formatted for controls; they are not parsed until
+    submission. evaluate parses each field before running the cross-field validator.
+    """
 
     title: TextLike
     items: tuple[FormField[Any] | FormText, ...]
@@ -727,7 +749,12 @@ class FormSpec[ContextT = object]:
         return tuple(field.key for field in self.items if isinstance(field, FormField))
 
     async def evaluate(self, attempted: Mapping[str, object]) -> FormResult:
-        """Parse every field, then run cross-field validation only after parsing succeeds."""
+        """Parse all declared fields and return successful values alongside any validation issues.
+
+        Only FormValueError becomes a field issue; unexpected parser exceptions propagate.
+        Cross-field validation runs only if every field parsed. Missing keys are passed as
+        None, while unknown keys remain in attempted but do not enter parsed values.
+        """
         raw = MappingProxyType(dict(attempted))
         values: dict[str, object] = {}
         errors: list[FormIssue] = []
@@ -773,7 +800,12 @@ class FormSpec[ContextT = object]:
         return replace(self, prefill={key: value for key, value in values.items() if key in known})
 
     def adapt(self, capabilities: frozenset[str], *, maximum_fields: int | None = None) -> FormSpec[ContextT]:
-        """Resolve extension fallbacks and enforce a target's explicit form budget."""
+        """Replace unsupported extension fields with one declared fallback.
+
+        The optional component budget counts all items, including static FormText. Missing
+        fallbacks raise LayoutInvariantError. Fallbacks retain the original key and field
+        reference so cross-field validation can still identify the declaration.
+        """
         if maximum_fields is not None and len(self.items) > maximum_fields:
             message = f"form has {len(self.items)} components; target permits 1-{maximum_fields}"
             raise LayoutInvariantError(message)
@@ -807,11 +839,16 @@ class FormSpec[ContextT = object]:
 
 
 class Form[ContextT = object]:
-    """A form whose field attributes expose parsed submission values.
+    """Declare fields as class attributes and read their parsed values in form methods.
 
-    Constructor values are raw prefills, available through `prefill`. Reading a field before
-    it parses raises `FieldNotReadyError`; a parsed optional blank is `None`. Validation
-    runs after parsing, then either `on_submit` or `on_invalid` handles the attempt.
+    For example, ``quantity = IntField(minimum=1)`` declares a required integer field.
+    In validate or on_submit, ``self.quantity`` reads the submitted integer. On the
+    class, the same attribute remains the field declaration for use in FieldError.
+
+    Constructor values are raw prefills, not parsed values. Reading a field that has not
+    parsed raises FieldNotReadyError. Missing optional values follow the field's contract:
+    usually None, but False for BoolField and an empty tuple for MultiChoiceField.
+    Validation runs after parsing; the frontend dispatches to on_submit or on_invalid.
     """
 
     title: ClassVar[TextLike] = "Form"
@@ -852,7 +889,11 @@ class Form[ContextT = object]:
 
     @classmethod
     def from_submission(cls, event: SubmitEvent[ContextT]) -> Self:
-        """Bind an already validated event for a separate screen handler."""
+        """Bind an event with no reported errors to a new form instance.
+
+        This does not parse or validate again. The caller must supply values already
+        evaluated against this form's schema.
+        """
         if event.errors:
             message = "Cannot bind an invalid submission as a validated form"
             raise ValueError(message)
@@ -935,7 +976,7 @@ type FormLike[ContextT = object] = FormSpec[ContextT] | Form[ContextT]
 def bind_form[ContextT = object](
     form: FormLike[ContextT], on_submit: SubmitHandler[ContextT] | None
 ) -> tuple[FormSpec[ContextT], SubmitHandler[ContextT], ActionMode]:
-    """Resolve value-layer and descriptor forms to one presentation binding."""
+    """Return a schema, submission handler, and action mode for either form authoring style."""
     if isinstance(form, Form):
         if on_submit is not None:
             message = "a Form instance owns its on_submit method"

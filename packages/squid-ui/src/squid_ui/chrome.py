@@ -1,7 +1,8 @@
-"""Host-supplied framework strings.
+"""Host-overridable framework labels and status messages.
 
-The package may not contain `_()` markers (the host's Babel setup extracts only from its own
-tree), so every user-visible string the framework produces enters through this table.
+Supply localized TextLike values or callbacks instead of relying on the host's
+translation extractor to scan this package. Form parse errors and renderer-specific
+wording are defined separately.
 """
 
 from collections.abc import Callable
@@ -55,6 +56,8 @@ def _default_approved_count(count: int, total: int) -> TextLike:
 
 @dataclass(frozen=True, slots=True)
 class Chrome:
+    """Framework wording shared by planners, navigation controls, and mounted interactions."""
+
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
     """Spill line appended when a list shows fewer entries than it holds."""
     not_yours: TextLike = "These controls belong to someone else."
@@ -136,7 +139,10 @@ LOCALIZATION_CONTEXT = ContextKey[Localization]("localization")
 
 
 def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
-    """Resolve host chrome once before planning and navigation consume it."""
+    """Resolve fixed labels now and wrap dynamic labels with the same localization.
+
+    Callbacks still run when their counts, ranges, or selected labels are known.
+    """
     return Chrome(
         and_n_more=lambda count: resolve_text(chrome.and_n_more(count), localization).content,
         not_yours=resolve_text(chrome.not_yours, localization).content,

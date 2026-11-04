@@ -6,7 +6,11 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True, slots=True, eq=False)
 class ContextKey[ValueT]:
-    """Typed identity and optional cache-version contract for an ephemeral context value.
+    """A shared key through which a parent component provides a value to descendants.
+
+    Pass the same key to Component.provide and Component.inject during rendering.
+    Keys compare by identity, so declare each shared key once: constructing another
+    key with the same name does not retrieve the original value.
 
     Args:
         name: Diagnostic name for the provided value.

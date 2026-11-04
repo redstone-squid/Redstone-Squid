@@ -1,8 +1,9 @@
-"""Variadic builders over the semantic IR — the recommended authoring surface.
+"""Build semantic layout nodes using shorthand suited to Component.render methods.
 
-The frozen dataclasses in :mod:`squid_ui.semantic` remain the IR and remain public;
-these factories are sugar over them, normalizing what render code actually writes:
-conditional children (``cond and node``), bare strings and t-strings.
+These factories construct the public records in squid_ui.semantic. Containers accept
+layout nodes, turn bare strings and t-strings into paragraphs, and omit None or False
+children. For example, ``sl.stack("Details", show_note and sl.note("Draft"))`` includes
+the note only when show_note is true.
 
 Factories follow reading order: a semantic identity such as a heading, summary, item label,
 table columns, or form label comes before the content it introduces. Runtime identity and
@@ -11,9 +12,9 @@ back — on nodes that own session state or custom ids. Records whose key no tar
 (`Field`, `Column`, `TableRow`, `MediaItem`, `ListItem`) default it to ``""`` rather than
 making authors invent identities that nothing consumes.
 
-Collections are unpacked by the caller (``sl.section(*(sl.field(k, v) for k, v in rows))``).
-Factories deliberately do not flatten a list argument: ``*`` already says it, says it at the
-call site, and keeps a stray dict or generator from being silently absorbed.
+Collections are unpacked by the caller (``sl.fields(*(sl.field(k, v) for k, v in rows))``).
+Factories do not flatten a list argument: explicit unpacking keeps a stray dictionary
+or generator from being silently treated as content.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
@@ -149,12 +150,10 @@ plain inference over an overload ladder, and for the one case it does not catch.
 
 
 def _node_types(annotation: object) -> Iterator[type]:
-    """Flatten a union of type aliases into the concrete classes it admits.
+    """Flatten aliases and unions into concrete classes for runtime membership tests.
 
-    The `get_origin` branch is not decoration: once the containers became generic in their
-    dialect, `Stack[RenderTargetT, ContextT]` stopped being a `type`, every container silently fell out of
-    `_BUILTIN_TYPES`, and `is_builtin_layout_node(sl.stack(...))` went quietly False -- which reads at
-    runtime as "a stack is not content".
+    Parameterized containers have a runtime origin rather than being classes themselves;
+    follow that origin so generic layout nodes remain in the accepted vocabulary.
     """
     if isinstance(annotation, TypeAliasType):
         yield from _node_types(annotation.__value__)
@@ -178,25 +177,15 @@ _PORTABLE_TYPES: tuple[type, ...] = tuple(_node_types(PortableNode))
 
 
 def is_layout_node(value: object) -> TypeIs[Renderable[Any, Any]]:
-    """True when `value` is already a layout node, rather than text or a component.
+    """Whether value inherits Renderable, including application-defined layout nodes.
 
-    What the authoring surface asks, so it answers for the whole of `LayoutNode` — a
-    caller's own `Renderable` included. That is what the escape hatch is for: a frontend
-    may ship a node this package has never heard of, and a container factory has no
-    business refusing it.
-
-    Use :func:`is_builtin_layout_node` where the answer must be a node *this* package
-    ships, which is what the Discord lowering needs before it may match.
+    Use is_builtin_layout_node when a traversal requires the framework's closed union.
     """
     return isinstance(value, Renderable)
 
 
 def is_builtin_layout_node(value: object) -> TypeIs[BuiltinLayoutNode]:
-    """True when `value` is one of the layout nodes the framework itself ships.
-
-    The closed half of :func:`is_layout_node`, and the narrowing a traversal needs: a
-    `match` may only claim to have covered the vocabulary once the open arm is excluded.
-    """
+    """Whether value belongs to the framework-defined layout vocabulary."""
     return isinstance(value, _BUILTIN_TYPES)
 
 
@@ -355,7 +344,7 @@ def controlled[ValueT, EventT](
 
 
 def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
-    """Let the engine own this node's value, seeded once with ``initial``."""
+    """Store this node's value in PresentationState, using initial when its key is absent."""
     return Uncontrolled(initial)
 
 
@@ -688,13 +677,14 @@ def action_control[ContextT = object](
 ) -> ActionControl[ContextT]:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
 
-    ``guard`` decides whether a press may execute now; ``available`` decides whether the
-    control is offered at all. A cooldown wants both.
+    ``available`` controls the rendered enabled state; ``guard`` checks admission when
+    a press arrives. A disabled appearance does not replace an authorization check.
 
     ``record`` opens the entry for this press, under ``label``, before the handler runs: an
     action whose whole commit is transactional state needs no `History.record` of its own.
-    A world-changing action records one explicit `CompensationSpec`; doing so under
-    ``record=`` raises `HistoryError` rather than making two entries.
+    To undo external effects as well, call History.record with a CompensationSpec
+    inside the handler instead. Combining that call with ``record=`` raises HistoryError
+    because both would reserve the same history entry.
     """
     if record is not None and mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
@@ -845,12 +835,11 @@ def rating[ContextT = object](
     value: ScaleOwnership[ContextT] = UNRATED,
     labels: Mapping[int, TextValue] | None = None,
 ) -> Choices[ContextT]:
-    """An ordinal 1-to-``maximum`` picker; five or fewer points render as a star row.
+    """Build a single-select ordinal scale from 1 through maximum.
 
-    No new semantic node: `choices` with ``maximum=1`` already lowers to the row a rating
-    wants. This owns the two things that would otherwise be hand-rolled every time — the
-    star labels and the string-to-`int` round trip — and hands the handler a typed
-    `ScaleEvent` rather than the option key it was submitted as.
+    Default labels use cumulative stars through five points and numbers above five.
+    Controlled changes are converted from choice keys into integer ScaleEvent values;
+    the target planner chooses the actual control representation.
     """
     if maximum < 2:
         message = "sl.rating() needs a maximum of at least 2"

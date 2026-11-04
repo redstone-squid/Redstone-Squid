@@ -63,10 +63,15 @@ def _token_attribute(token: Token, name: str) -> str | None:
 
 
 class Renderer:
-    """Draw a semantic HTML scene, without adding browser behavior or transport.
+    """Draw a semantic HTML scene as a fragment or standalone document.
 
-    Passing ``css`` opts into trusted host configuration. It is embedded verbatim in a
-    standalone document and must never contain untrusted authored content.
+    The output contains action metadata but no browser behavior or transport. Text is
+    escaped, Markdown is rendered through a limited inline token set, and external
+    links and images require HTTP(S) URLs. Inline plan assets may become data URLs.
+
+    CSS is trusted host configuration embedded verbatim in standalone output. An asset
+    resolver receives scene metadata; its non-None result takes precedence over plan
+    resources and is accepted only when it passes the URL filter.
     """
 
     def __init__(
@@ -210,6 +215,7 @@ class Renderer:
         assets: dict[str, scene.Asset],
         plan: PlanResult[scene.HtmlBody] | None,
     ) -> str | None:
+        """Resolve matching scene metadata through the host resolver, then optional plan resources."""
         metadata = assets.get(reference.key)
         if metadata is None or (metadata.name, metadata.media_type) != (reference.name, reference.media_type):
             return None

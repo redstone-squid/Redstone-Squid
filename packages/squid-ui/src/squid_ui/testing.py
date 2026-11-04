@@ -1,15 +1,8 @@
-"""Queries, doubles and determinism controls for exercising the engine with no frontend.
+"""Tree queries, frontend doubles, and deterministic helpers for UI tests.
 
-Three halves, which is one more than the name suggests. `walk`, `texts`, `labels`, `keys`,
-`find` and `find_all` read a rendered semantic tree, so an assertion can say what the tree
-holds rather than how one target serializes it. `RecordingResponder` and the event factories
-stand in for the frontend end of `ActionEvent`, so a handler can be driven directly.
-`ManualClock` and `assert_imports_without` remove the two things a test cannot otherwise
-control: the passage of time and what the interpreter has already imported.
-
-This module is public and versioned like the rest of the package. It is imported by tests
-rather than by a running application, so it is reachable as `squid_ui.testing.X` and promotes
-no names to `squid_ui` itself.
+These helpers inspect semantic values and call handlers directly. They do not emulate
+mounted dispatch, guards, transactions, or transport. Import them from squid_ui.testing;
+they are not promoted into the package root.
 """
 
 import subprocess
@@ -43,14 +36,11 @@ type Tree = object
 
 
 def walk(tree: Tree) -> Iterator[object]:
-    """Yield every dataclass in `tree`, depth first, including `tree` itself.
+    """Yield each reachable dataclass once by identity, in depth-first traversal order.
 
-    Deliberately generic rather than built on `runtime._tree`'s `_CHILD_FIELD_NAMES`. That set
-    names the fields a *structural rewrite* must descend, which excludes the control axis on
-    purpose -- `ActionControls.items` is not a layout child. A test asking "is this button in
-    the render" wants both axes, and every hand-written walker this replaces had to pick which
-    container types to special-case. Visiting every dataclass field cannot make that mistake,
-    and cannot drift when a node grows a field.
+    Traverse all dataclass fields, mapping values, and iterable items, including controls
+    that the structural layout rewriter does not visit. Shared references and cycles are
+    visited once; traversing an iterator consumes it.
     """
     yield from _walk(tree, set())
 
@@ -117,12 +107,7 @@ def find_all[NodeT](tree: Tree, kind: type[NodeT], *, key: str | None = None) ->
 
 
 def find[NodeT](tree: Tree, kind: type[NodeT], *, key: str | None = None) -> NodeT:
-    """The single `kind` in `tree`, or a failure naming what was there instead.
-
-    Asserts uniqueness rather than taking the first match: a duplicate key is a real defect
-    (two controls that share one), and silently reading past it is how such a defect survives
-    a test that looks like it covers the control.
-    """
+    """Return the unique matching node, asserting when it is missing or ambiguous."""
     found = find_all(tree, kind, key=key)
     where = f"{kind.__name__}" + (f" keyed {key!r}" if key is not None else "")
     assert found, f"no {where} in this render; it holds {sorted(set(keys(tree)))}"
@@ -131,7 +116,7 @@ def find[NodeT](tree: Tree, kind: type[NodeT], *, key: str | None = None) -> Nod
 
 
 def render_tree(component: AnyComponent) -> tuple[AnyLayoutNode, ...]:
-    """The expanded semantic nodes of one component, with no frontend and no runtime."""
+    """Expand one component's layout without frontend loading, delivery, or lifecycle hooks."""
     return tuple(render_component_tree(component).nodes)
 
 
@@ -140,11 +125,11 @@ def render_tree(component: AnyComponent) -> tuple[AnyLayoutNode, ...]:
 
 @dataclass
 class RecordingResponder:
-    """Record the response intents issued by an action handler.
+    """Record handler intents without mounted dispatch or transport.
 
-    Every method a frontend must honestly implement, answered by appending to a list. A test
-    asserts against `notices`, `redirects`, `forms`, `finished` and `invalidations` rather than
-    against a mock's call args, so it reads as the handler's intent.
+    Notices use neutral localization. Forms record only their schemas; callbacks and
+    other presentation options are not retained. on_success records a callback and
+    returns a pending handle, but never commits or starts it.
     """
 
     acknowledged: int = 0
@@ -192,12 +177,7 @@ class RecordingResponder:
 
 
 class UntouchedResponder:
-    """A responder that rejects every call.
-
-    For the cases whose whole claim is that no frontend call happens -- a guard answering a
-    verdict, a pure machine computing a transition. An unused `RecordingResponder` proves the
-    same thing only if the test remembers to assert it; this one cannot be forgotten.
-    """
+    """Reject every response operation so tests fail immediately on an unexpected frontend call."""
 
     def _unexpected(self, name: str) -> None:
         message = f"this code was not supposed to reach the responder, but called {name}"
@@ -264,8 +244,8 @@ def choice_event(
     """A picker settling on `selected`, carrying a `RecordingResponder` unless one is supplied.
 
     Distinct from `selection_event`: `semantic.Choices` hands its owner a `ChoiceEvent`, which
-    also reports what the interaction added and removed, while a raw `interactions.Selection`
-    control reports only the values it submitted.
+    also reports what the interaction added and removed. SelectionEvent carries only
+    submitted values, as supplied by a primitive SelectMenu.
     """
     return ChoiceEvent(
         Actor(actor),
@@ -315,10 +295,9 @@ async def press(
     actor: str = "1",
     responder: ActionResponder | None = None,
 ) -> None:
-    """Press the control keyed `key` in `component`'s current render.
+    """Render the component and directly invoke the keyed ActionControl handler.
 
-    Renders first, so the control pressed is the one the reader would be looking at rather than
-    one captured before an earlier press moved the tree.
+    This bypasses mounted admission, guards, concurrency modes, and transactions.
     """
     await control(render_tree(component), key).on_trigger(press_event(actor=actor, responder=responder))
 
@@ -330,7 +309,7 @@ async def choose(
     actor: str = "1",
     responder: ActionResponder | None = None,
 ) -> None:
-    """Settle the picker keyed `key` in `component`'s current render on `values`."""
+    """Directly invoke a controlled picker's change handler with the selected keys, without dispatch."""
     picker = find(render_tree(component), Choices, key=key)
     assert isinstance(picker.selection, Controlled), f"the picker keyed {key!r} does not own its selection"
     await picker.selection.on_change(choice_event(*values, actor=actor, responder=responder))
@@ -344,7 +323,7 @@ async def submit(
     actor: str = "1",
     responder: ActionResponder | None = None,
 ) -> None:
-    """Submit `values` to the form the trigger keyed `key` opens."""
+    """Directly call the keyed form trigger with supplied values; no parsing or validation runs."""
     trigger = find(render_tree(component), FormTrigger, key=key)
     await trigger.on_submit(submit_event(values, actor=actor, responder=responder))
 
@@ -386,12 +365,9 @@ type Line = TextLike | Callable[[Any], TextLike]
 
 
 def text_component(*lines: Line, **declared: object) -> AnyComponent:
-    """A component that renders `lines` as paragraphs and nothing else.
+    """Build a component rendering fixed text or instance-dependent callables as paragraphs.
 
-    Most component tests need a tree to hang behaviour off, not a particular tree; seven files
-    each declared their own one-paragraph class to get one. `declared` becomes reactive state
-    on the instance, and a line given as a callable is passed the instance -- which is what
-    lets the render read that state, the way the hand-written classes did:
+    Keyword arguments declare initial reactive state; each callable receives the instance:
 
         subject = text_component(lambda self: f"count {self.count}", count=0)
     """
@@ -411,16 +387,11 @@ def text_component(*lines: Line, **declared: object) -> AnyComponent:
 
 
 def assert_imports_without(imports: str | Sequence[str], *blocked: str) -> None:
-    """Assert every name in `imports` imports where `blocked` cannot be imported at all.
+    """Check imports in a fresh subprocess with the named dependency roots blocked.
 
-    A subprocess rather than an in-process `sys.meta_path` finder, because by the time a test
-    runs the blocked packages are already in `sys.modules`, and an import would find them there
-    whether it declared them or not. `sys.executable` rather than a bare `python`: the
-    interpreter on PATH is not this venv when pytest is driven from Git Bash, and the
-    assertions only mean anything in the interpreter that installed the package under test.
-
-    The child runs a standalone helper by file path, installing the import blocker
-    before loading this package or any of its optional dependencies.
+    A fresh process prevents cached imports from bypassing the blocker. Use the current
+    interpreter so installed packages match the test environment. A standalone helper
+    installs the blocker before importing squid_ui, then checks sys.modules for blocked roots.
     """
     names = (imports,) if isinstance(imports, str) else tuple(imports)
     argument = ", ".join(repr(name) for name in (names, *blocked))

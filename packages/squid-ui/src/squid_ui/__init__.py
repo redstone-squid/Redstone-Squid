@@ -1,4 +1,16 @@
-"""Semantic-first, limits-aware UI planning and component runtime."""
+"""Describe an interface once, then plan its layout for a delivery target.
+
+Factories such as paragraph and action_control build layout nodes: descriptions
+of content and controls, rather than native Discord, HTML, or Slack objects.
+A Document groups those nodes with any files needed to display them. A target
+planner chooses a supported representation and produces a Scene that a renderer
+can turn into the target's payload.
+
+For interactive interfaces, Component groups state with a render method that
+returns the current layout. The component runtime tracks which state that render
+reads so changes can trigger another render. Frontends, such as squid-ui-discord,
+deliver the result and dispatch interactions to the bound handlers.
+"""
 
 from importlib import import_module
 from typing import TYPE_CHECKING

@@ -11,12 +11,11 @@ type AssetResolver = Callable[[scene.Asset], str | None]
 
 
 class Renderer[BodyT: scene.Body, OutputT](Protocol):
-    """Draw an already-planned scene without changing layout decisions.
+    """Draw a resolved scene without changing layout decisions.
 
-    Parameterized by the body it draws, not only by what it returns. An unparameterized
-    `Scene` here made the protocol unsatisfiable: parameters are contravariant, so
-    a renderer narrowing `draw` to its own body type — which every real one does — could
-    not implement it, and the protocol sat declared and structurally dead.
+    BodyT identifies the scene body this renderer accepts; OutputT identifies the
+    frontend payload it produces. Plan resources carry runtime objects omitted from
+    the serializable scene.
     """
 
     def draw(self, document: scene.Scene[BodyT], *, plan: PlanResult[BodyT] | None = None) -> OutputT: ...

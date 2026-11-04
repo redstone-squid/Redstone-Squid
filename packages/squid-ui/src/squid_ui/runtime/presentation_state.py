@@ -1,4 +1,10 @@
-"""Closed, frontend-neutral vocabulary for presentation-only state."""
+"""Remember how an interface is being viewed between renders.
+
+PresentationState holds selected pages, open details, and other control values
+managed by the UI runtime. These values affect how application data is displayed
+without changing that data. Planners read them and return SessionUpdate values;
+frontends apply those updates after successful delivery.
+"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -40,7 +46,16 @@ class StrategyState:
 
 @dataclass(slots=True)
 class PresentationState:
-    """Presentation state shared by a runtime and independent of domain state."""
+    """Navigation and control values for one mounted interface, indexed by node key.
+
+    For example, two pagers with different keys retain independent positions across
+    renders. Stateful nodes use these values when declared Uncontrolled; Controlled
+    nodes instead take their values from application state on every render.
+
+    Use the mutators or apply_updates so a change also advances revision. Planner
+    caches use that revision to notice changes; directly editing the dictionaries
+    bypasses the check and can leave a previous plan reusable.
+    """
 
     cursors: dict[str, CursorState] = field(default_factory=dict)
     selections: dict[str, SelectionState] = field(default_factory=dict)
@@ -172,7 +187,7 @@ the reader exactly where the message still shows them.
 
 
 def apply_updates(session: PresentationState, updates: Sequence[SessionUpdate]) -> None:
-    """Commit planning's presentation writes, in the order planning made them."""
+    """Apply staged writes in order and increment revision once if any stored value changes."""
     changed = False
     for update in updates:
         match update:

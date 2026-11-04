@@ -23,7 +23,22 @@ from squid_ui.target_types import RenderTarget
 
 
 class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
-    """Own a reactive component tree and presentation session until ``finish`` unmounts the tree."""
+    """Track one component tree as its state changes and new layouts are delivered.
+
+    The runtime keeps the last delivered tree separate from a candidate render.
+    This lets the frontend attempt planning and delivery without mounting new
+    components or stopping old services before the user sees the replacement.
+
+    The frontend drives the lifetime:
+
+    - render produces a candidate tree, reusing unchanged component results.
+    - After successful delivery, commit adopts that tree and runs mount/unmount hooks.
+    - finish unmounts the tree and requests service cancellation; wait_services waits
+      for cleanup to finish.
+
+    Asynchronous component loading and delivery belong to the frontend. Presentation
+    state, such as selected pages, is retained here for subsequent planning calls.
+    """
 
     def __init__(
         self,
@@ -142,7 +157,9 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         reuse_committed: bool = False,
         terminal: bool = False,
     ) -> ComponentTree[RenderTargetT]:
-        """Render a candidate tree; call :meth:`commit` after planning and drawing succeed.
+        """Render a candidate tree for the frontend to plan and deliver.
+
+        Call commit after successful delivery so lifecycle hooks follow the displayed tree.
 
         ``defer`` renders for discovery only -- see :func:`render_component_tree`. Such a tree
         is missing subtrees and must never be passed to :meth:`commit`.
@@ -277,11 +294,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._dirty_paths.clear()
 
     def commit(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int | None = None) -> None:
-        """Publish one successfully planned tree and reconcile keyed lifecycle hooks.
+        """Reconcile a delivered tree, unmounting children first and mounting parents first.
 
-        `rendered_revision` is what :attr:`revision` was when `tree` was rendered. Delivery
-        succeeding does not mean nothing changed while it was in flight, so the tree stays
-        dirty when the inputs have moved since.
+        Pass the revision captured at render time so changes during delivery leave the
+        runtime dirty. Lifecycle errors are collected and raised as an ExceptionGroup
+        after reconciliation; they do not roll back an already delivered tree. Discovery
+        trees with deferred components cannot be committed.
         """
         if tree.deferred:
             # A discovery tree is missing subtrees; committing one would unmount live
