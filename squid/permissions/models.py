@@ -1,9 +1,11 @@
-"""SQLAlchemy permission models.
+"""Persist permission patterns, assignments, and their audit trail.
 
-Grants and role definitions store *patterns*, never expansions of them. A grant of
-`build.**` written today therefore covers a node added next year with no re-grant
-and no migration, and the expansion happens at read time against the live
-catalogue in `squid.permissions.domain`.
+Permission roles are Squid's named bundles of patterns, distinct from Discord
+roles. Assignments give a permission role to an account or a Discord role; grants
+attach an allow, deny, or forbid pattern directly to either kind of subject.
+
+Patterns are expanded against the current catalogue when read. Existing wildcard
+grants therefore cover matching nodes added in later releases.
 """
 
 from sqlalchemy import (
@@ -37,16 +39,14 @@ _ROLE_SUBJECT_HAS_GUILD = "subject_role_id IS NULL OR subject_guild_id IS NOT NU
 """A Discord role only means anything alongside the guild it lives in."""
 
 _ROLE_SUBJECT_STAYS_HOME = "subject_role_id IS NULL OR scope_guild_id IS NULL OR scope_guild_id = subject_guild_id"
-"""The anti-escalation invariant, enforced in storage rather than only in code: a
-Discord role from one guild can never carry authority scoped into another."""
+"""Prevent a Discord role from receiving a grant scoped to a different guild."""
 
 
 class PermissionRole(Base, kw_only=True):
-    """A named bundle of permission patterns.
+    """A named bundle of permission patterns and management settings.
 
-    Built-in roles keep their pattern lists in code, so this row exists only to
-    give assignments a foreign key; any `permission_role_patterns` rows attached
-    to a built-in are additive overrides on top of the code-defined list.
+    Built-in pattern lists live in code. Stored patterns supplement those lists,
+    while this row supplies the assignment target, rank, and display metadata.
     """
 
     __tablename__ = "permission_roles"
@@ -91,12 +91,10 @@ class PermissionRole(Base, kw_only=True):
 
 
 class PermissionRolePattern(Base, kw_only=True):
-    """One pattern a role includes or subtracts.
+    """One included or excluded pattern in a role.
 
-    Subtraction is not a deny: it withholds the pattern from *this* role's
-    contribution, and any other role including it still confers it. That is
-    Azure's `NotActions` semantics, and it is why a role can be written as "this
-    namespace, minus its destructive members" without poisoning other grants.
+    Exclusions remove matching nodes from this role's contribution without denying
+    those nodes when another role or direct rule grants them.
     """
 
     __tablename__ = "permission_role_patterns"
@@ -113,8 +111,7 @@ class PermissionRolePattern(Base, kw_only=True):
     pattern: Mapped[str] = mapped_column(Text, primary_key=True)
     """A node name, a `*`/`**` wildcard, or an `@tag` selector."""
     mode: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    """1 to include, -1 to subtract. One mode per pattern, so a role cannot
-    contradict itself."""
+    """1 to include or -1 to exclude; a role stores one mode for each pattern."""
     added_by_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_role_patterns_added_by_fkey", ondelete="SET NULL"),
@@ -280,7 +277,7 @@ class PermissionRoleAssignment(Base, kw_only=True):
         nullable=True,
         default=None,
     )
-    """Who issued this, or NULL when the system did. See `PermissionGrant`."""
+    """Account that issued the assignment, or None for a system operation."""
     subject_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_role_assignments_subject_account_fkey", ondelete="CASCADE"),
@@ -316,7 +313,7 @@ class PermissionAuditEntry(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     action: Mapped[str] = mapped_column(Text, nullable=False)
-    """What happened: `grant`, `revoke`, `role_create`, `role_pattern_add`, and so on."""
+    """Mutation name, such as `grant`, `revoke`, `role_create`, or `role_include`."""
     actor_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_audit_log_actor_fkey", ondelete="SET NULL"),
@@ -332,19 +329,17 @@ class PermissionAuditEntry(Base, kw_only=True):
     effect: Mapped[int | None] = mapped_column(SmallInteger, nullable=True, default=None)
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    """Mandatory for `forbid`, enforced by the service rather than the schema so
-    the column stays usable for the actions that do not need it."""
+    """Reason for the change; the service requires one for a forbid grant."""
     details: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True, default=None)
     at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False, server_default=func.now(), default_factory=now)
 
 
 class PermissionEpoch(Base, kw_only=True):
-    """A single counter bumped by any permission write.
+    """A shared counter used to invalidate permission caches.
 
-    Three processes each hold their own rule-set cache, so a grant issued in the
-    API has to become visible in the bot. A trigger bumps this row and sends
-    `NOTIFY squid_permissions`; watchers treat the notification as a latency hint
-    and poll this counter as the durable signal.
+    Database triggers increment the counter and send `NOTIFY squid_permissions`
+    after permission changes. Watchers poll the counter and use notifications
+    to refresh sooner.
     """
 
     __tablename__ = "permission_epoch"

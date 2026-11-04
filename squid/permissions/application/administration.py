@@ -1,21 +1,17 @@
-"""Writing permissions: `/perm` and `/role`, and the guards behind them.
+"""Create and change the permission grants and roles managed by `/perm` and `/role`.
 
-Two independent gates protect every role edit and every grant, and they block
-different attacks:
+A direct grant attaches an allow, deny, or forbid pattern to an account or Discord
+role. A permission role bundles patterns and can be assigned to either kind of
+subject. The actor is the person making the change, who may differ from its subject.
 
-* the **authority boundary** stops escalation — you cannot grant, or edit a role
-  into a state carrying, a node you do not hold yourself;
-* **rank** stops lateral sabotage — two equally privileged administrators editing
-  or deleting each other's roles, which the boundary alone permits because
-  neither gains anything by it.
+Two checks protect these changes. Authority limits actors to granting capabilities
+they already hold. Management rank limits which permission roles they may edit:
+equally privileged administrators cannot edit each other's roles just because
+they hold the same capabilities. Protected built-in roles additionally reserve
+structural changes for the bot owner.
 
-They are separate because they fail for different reasons, and a single
-"insufficient permissions" for both is what makes a permission system
-infuriating. Every refusal below says which gate refused and why.
-
-`rank` never enters resolution (property P10). That is what makes having both
-gates safe: reordering roles for management reasons cannot silently change an
-authorization outcome.
+Management rank does not affect permission resolution. Reordering roles therefore
+cannot silently change which permission rule wins.
 """
 
 from collections.abc import Iterable, Sequence
@@ -71,7 +67,7 @@ class ProtectedRoleError(AuthorizationError):
 class Actor:
     """Who is performing an administrative action, and what they may do.
 
-    Built once per command so the gates below share one permission load.
+    Built once per command so the authorization checks share one permission load.
     """
 
     def __init__(self, subject: Subject, *, held: frozenset[str], highest_rank: int) -> None:
@@ -85,11 +81,10 @@ class Actor:
 
 
 class PermissionAdministrationService:
-    """Grant, revoke, and shape roles, with the delegation rules enforced here.
+    """Validate administrative changes and commit them with their audit entries.
 
-    Deliberately not in the cog: the API and the recovery CLI reach the same
-    rules through this class, and a guard that lives in one transport is a guard
-    the other transports do not have.
+    Keep delegation checks here so callers do not need to reproduce them in each
+    interface that grants permissions or manages roles.
     """
 
     def __init__(
@@ -142,14 +137,10 @@ class PermissionAdministrationService:
                 held_ranks.append(bridge.rank)
         return max(held_ranks, default=0)
 
-    # ---- gates ---------------------------------------------------------
+    # ---- Authorization checks ------------------------------------------
 
     def _require_authority(self, actor: Actor, patterns: Iterable[str]) -> None:
-        """Refuse patterns reaching any node the actor does not hold.
-
-        Self-maintaining: it tracks real authority rather than a hand-kept
-        integer that drifts as the catalogue grows.
-        """
+        """Reject patterns selecting any current node the actor does not hold."""
         if actor.is_owner:
             return
         for pattern in patterns:
@@ -170,23 +161,20 @@ class PermissionAdministrationService:
             raise PermissionRankError(msg, public_context={"role": role.slug, "rank": role.rank})
 
     def _require_unprotected(self, actor: Actor, role: PermissionRole) -> None:
-        """Keep the built-ins whole against anyone but the owner.
+        """Reserve structural edits to protected roles for the bot owner.
 
-        Without this, someone who happens to hold everything in `global-admin`
-        could hollow it out for everybody else, and both other gates would let
-        them: the boundary is satisfied, and the rank check passes for anyone
-        ranked above it.
+        Holding a role's capabilities and outranking it does not authorize changing
+        that shared built-in definition.
         """
         if role.protected and not actor.is_owner:
             msg = f"{role.slug} is a built-in role; only the bot owner can restructure it."
             raise ProtectedRoleError(msg, public_context={"role": role.slug})
 
     def _require_scope(self, actor: Actor, pattern: str, scope_guild_id: int | None) -> None:
-        """Enforce the guild-delegation rule: guild-scoped rules, guild-only nodes.
+        """Limit guild delegates to guild-scoped nodes in the current server.
 
-        Checked here as well as by the resolver and a database CHECK. Three
-        layers because this is the escalation that matters: a guild
-        administrator must never be able to reach global state.
+        Global granters and the owner bypass this delegation restriction. The resolver
+        also prevents guild-scoped grants from satisfying global nodes.
         """
         if actor.is_owner or PERM_GRANT_GLOBAL.name in actor.held:
             return
@@ -228,7 +216,7 @@ class PermissionAdministrationService:
             raise ValidationError(msg, public_context={"pattern": pattern})
         return reached
 
-    # ---- rules ---------------------------------------------------------
+    # ---- Direct grants -------------------------------------------------
 
     async def grant(
         self,
@@ -261,8 +249,7 @@ class PermissionAdministrationService:
                 msg = "A rule applies to exactly one subject: an account or a Discord role."
                 raise ValidationError(msg)
             if discord_role_id is not None and guild_id is None:
-                # A role snowflake means nothing without its guild, and the storage
-                # CHECK would reject it -- as a database error rather than as advice.
+                # Report the missing guild before the database constraint rejects it.
                 msg = "Granting to a Discord role has to be done inside that role's server."
                 raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
 
@@ -300,7 +287,11 @@ class PermissionAdministrationService:
         discord_role_id: int | None = None,
         scope_guild_id: int | None = None,
     ) -> bool:
-        """Remove a rule. Distinct from denying it: absence falls through to the default."""
+        """Remove a stored rule, returning whether it existed.
+
+        Remaining rules determine the result; the catalogue default applies only if
+        none match.
+        """
         async with self._uow_factory() as uow:
             self._require_scope(actor, pattern, scope_guild_id)
             self._require_authority(actor, (pattern,))
@@ -326,11 +317,10 @@ class PermissionAdministrationService:
     async def _refuse_last_global_granter(
         self, uow: PermissionAdminUnitOfWork, account_id: int | None, pattern: str
     ) -> None:
-        """Never leave the deployment with nobody who can grant anything.
+        """Reject revocation when at most one account has a live direct allow for global grants.
 
-        The owner escape hatch exists, but a deployment whose `owner_id` is
-        misconfigured would otherwise be locked out entirely, and discovering
-        that costs a database session.
+        This recovery safeguard counts matching direct grants, not resolved authority:
+        role assignments, scope, and competing deny or forbid rules are not evaluated.
         """
         holders = await self._global_granter_count(uow)
         if holders <= 1:
@@ -357,7 +347,7 @@ class PermissionAdministrationService:
         discord_role_id: int | None = None,
         guild_id: int | None = None,
     ) -> tuple[PermissionGrant, ...]:
-        """Every stored rule attached to one subject."""
+        """List stored direct grants matching the supplied subject and guild filters."""
         async with self._uow_factory() as uow:
             return await uow.permission_admin.list_rules(
                 subject_account_id=account_id,
@@ -372,7 +362,7 @@ class PermissionAdministrationService:
         discord_role_id: int | None = None,
         guild_id: int | None = None,
     ) -> tuple[PermissionRoleAssignment, ...]:
-        """Every role assignment attached to one subject."""
+        """List permission-role assignments matching the supplied subject and guild filters."""
         async with self._uow_factory() as uow:
             return await uow.permission_admin.list_assignments(
                 subject_account_id=account_id,
@@ -385,7 +375,7 @@ class PermissionAdministrationService:
         async with self._uow_factory() as uow:
             return await uow.permission_admin.list_audit(guild_id=guild_id, limit=limit)
 
-    # ---- roles ---------------------------------------------------------
+    # ---- Permission roles ----------------------------------------------
 
     async def roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
         """Every role visible from one guild, highest rank first."""
@@ -486,12 +476,10 @@ class PermissionAdministrationService:
             await uow.commit()
 
     async def add_pattern(self, actor: Actor, role: PermissionRole, pattern: str, *, mode: int = INCLUDE_MODE) -> None:
-        """Include or subtract one pattern in a role.
+        """Include or exclude a pattern from a role.
 
-        An *exclusion* is not gated by the authority boundary: subtracting from a
-        role can only ever narrow what it confers, so requiring the node would
-        stop an administrator from removing a capability they cannot themselves
-        hold — which is backwards.
+        Includes require the actor to hold every selected node. Exclusions only narrow
+        the role, so they require management authority but not the excluded permissions.
         """
         async with self._uow_factory() as uow:
             Pattern.parse(pattern)
@@ -545,8 +533,7 @@ class PermissionAdministrationService:
             if self._would_cycle(role.id, included.id, roles):
                 msg = f"Including {included.slug} in {role.slug} would create a cycle."
                 raise ConflictError(msg, public_context={"role": role.slug, "included": included.slug})
-            # Composing a role in confers everything it confers, so the boundary
-            # applies to the composed leaves exactly as it does to a raw pattern.
+            # Check inherited capabilities just as we check direct include patterns.
             self._require_authority(actor, self.resolved_leaves(included, roles))
             await uow.permission_admin.add_role_include(
                 role.id,
@@ -678,11 +665,7 @@ class PermissionAdministrationService:
     def unmanageable_patterns(
         self, actor: Actor, role: PermissionRole, roles: Sequence[PermissionRole]
     ) -> tuple[str, ...]:
-        """Which of a role's leaves the actor could not grant themselves.
-
-        `/role show` surfaces this so the two gates disagreeing is visible up
-        front, rather than discovered one rejected edit at a time.
-        """
+        """Return role capabilities the actor cannot grant, for administrative displays."""
         if actor.is_owner:
             return ()
         return tuple(sorted(frozenset(self.resolved_leaves(role, roles)) - actor.held))
@@ -699,5 +682,5 @@ def scope_label(scope_guild_id: int | None) -> str:
 
 
 def effect_label(effect: int) -> str:
-    """Discord's own vocabulary: allow / deny, plus the loud third one."""
+    """Return the command display label for an effect, or `?` for an unknown value."""
     return {int(Effect.ALLOW): "allow", int(Effect.DENY): "deny", int(Effect.FORBID): "forbid"}.get(effect, "?")

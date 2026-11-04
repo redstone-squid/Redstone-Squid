@@ -12,13 +12,9 @@ a grant or a role definition actually stores, and selects zero or more nodes:
 | `**`                    | every node                                                  |
 | `@destructive`          | every node carrying that tag                                |
 
-Matching is structural and always evaluated against the live catalogue, so a
-pattern never stores an expansion of itself. That is what lets a node added
-tomorrow fall under a wildcard granted today without a re-grant or a migration.
-
-Mid-string globs (`build.re*`) are deliberately unsupported: they match on how a
-name happens to be spelled rather than on the tree, and silently capture any
-future node sharing the prefix.
+Patterns are matched against current nodes rather than stored as expanded lists.
+Existing wildcards therefore include matching nodes added in later releases.
+Wildcards occupy whole segments; partial segments such as `build.re*` are invalid.
 """
 
 import re
@@ -31,9 +27,7 @@ SEGMENT_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 """A literal name segment. Lowercase, so patterns are unambiguous to type."""
 
 MAX_SEGMENTS = 5
-"""Depth ceiling. The convention is `<domain>.<resource>.<verb>`; the two spare
-levels are for resources that genuinely nest, and the cap catches typos that
-would otherwise register an unreachable node."""
+"""Maximum pattern depth, allowing nested resources beyond the usual three segments."""
 
 ANY = "*"
 """Matches exactly one segment."""
@@ -117,13 +111,11 @@ class Pattern:
 
     @property
     def specificity(self) -> Specificity:
-        """How narrow a claim this pattern makes, comparable and total.
+        """Return a rank whose maximum is the most specific pattern.
 
-        Ordered descending, so the maximum is the most specific pattern. The
-        tiers are: patterns naming at least one real segment, then tag selectors,
-        then patterns that name nothing at all (`**`, `*`). A tag sits below any
-        concrete name because it cuts across the tree, but above a bare wildcard
-        because it still excludes something.
+        Patterns with literal segments outrank tags, which outrank bare wildcards.
+        Within a tier, compare literal count, absence of trailing `**`, then segment
+        count. This rank is independent of how many current catalogue nodes match.
         """
         if self.tag is not None:
             return (1, 0, 1, 0)

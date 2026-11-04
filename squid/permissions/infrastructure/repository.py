@@ -44,18 +44,16 @@ class PermissionRepository:
         discord_role_ids: Iterable[int],
         guild_id: int | None,
     ) -> SubjectRecords:
-        """Load everything one subject's decisions depend on, in one session.
+        """Load the epoch, all role definitions, and grants and assignments for one subject.
 
-        Every role is loaded rather than only the assigned ones. Roles compose,
-        so following the graph selectively would mean a recursive query or a
-        round trip per level; the table is small, and one flat read keeps the
-        promise that resolving N nodes costs one call.
+        Loading all roles allows composition to be resolved without recursive database
+        queries. Expiry and permission scope are checked by the resolver, not this query.
         """
         role_ids = tuple(dict.fromkeys(discord_role_ids))
 
         session = self._session()
-        # Read the epoch first: if a write lands mid-read, the cache entry is
-        # stamped with the older epoch and gets discarded rather than served.
+        # Read the epoch first so a concurrent write leaves an older stamp.
+        # The cache discards these rules once it observes the newer epoch.
         epoch = await session.scalar(select(PermissionEpoch.version).where(PermissionEpoch.id == 1)) or 0
 
         roles = await self._load_roles(session)
@@ -114,10 +112,9 @@ class PermissionRepository:
 
 
 class PermissionAdminRepository:
-    """Write permissions, appending the audit row in the same transaction.
+    """Write permissions and audit entries in the caller's transaction.
 
-    An audit trail that can be half-written is not an audit trail, so each
-    mutation adds its audit entry to the caller's transaction.
+    Methods flush changes but leave commit and rollback to the unit of work.
     """
 
     def __init__(self, session: Callable[[], AsyncSession]):
@@ -241,6 +238,11 @@ class PermissionAdminRepository:
         subject_role_id: int | None = None,
         guild_id: int | None = None,
     ) -> tuple[PermissionRoleAssignment, ...]:
+        """List assignments, optionally filtering subjects and guild-related rows.
+
+        The guild filter retains every account assignment, including those scoped
+        to another guild. Callers computing effective rank must check scope and expiry.
+        """
         statement = select(PermissionRoleAssignment, PermissionRole.slug).join(
             PermissionRole, PermissionRole.id == PermissionRoleAssignment.role_id
         )

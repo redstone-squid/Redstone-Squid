@@ -78,7 +78,12 @@ def _collapse_permission_role_assignments_statement(context: AccountMergeContext
 
 
 async def merge_permissions(session: AsyncSession, context: AccountMergeContext) -> None:
-    """Move permission provenance and collapse subject collisions to the restrictive effect."""
+    """Move account references and collapse duplicate grants and role assignments.
+
+    For the same pattern and scope, the more restrictive effect wins:
+    forbid, then deny, then allow. Other grant fields and duplicate assignment
+    fields come from the surviving account. The caller owns the transaction.
+    """
     await move_account_references(session, PERMISSION_PROVENANCE_REFERENCES, context)
     await session.execute(_merge_permission_effects_statement(context))
     await session.execute(_collapse_permission_grants_statement(context))

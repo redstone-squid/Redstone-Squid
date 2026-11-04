@@ -12,10 +12,12 @@ from squid.unit_of_work import UnitOfWork
 
 @dataclass(frozen=True, slots=True)
 class SubjectRecords:
-    """Everything one subject's decisions depend on, loaded in a single call.
+    """Stored inputs from which PermissionService assembles a subject's rules.
 
-    Carries the epoch it was read at so a cache entry can be discarded the moment
-    any process writes a permission, rather than aged out on a timer.
+    Grants and assignments belong to the subject. All permission-role definitions
+    are included so the service can follow roles that include other roles.
+    The epoch is the shared permission-change counter read before these records;
+    the cache discards their assembled rules once it observes a newer epoch.
     """
 
     epoch: int
@@ -43,11 +45,10 @@ class PermissionStore(Protocol):
 
 
 class ActorCapabilityResolver(Protocol):
-    """Resolves an actor's node names for contexts that must not depend on us.
+    """Supply resolved permission names when adapters construct voting or reaction actors.
 
-    The voting and reactions contexts hold their authorization as a set of
-    already-resolved capability names, so they never import the permissions
-    application package and stay framework-independent.
+    Their policies receive a set of allowed names rather than a permission service,
+    so evaluating a policy does not itself perform permission queries.
     """
 
     async def capabilities_for(
@@ -60,13 +61,13 @@ class ActorCapabilityResolver(Protocol):
         discord_guild_admin: bool = False,
         nodes: Iterable[str] = (),
     ) -> frozenset[str]:
-        """The subset of `nodes` the described actor holds."""
+        """Return the subset of `nodes` held by the described actor."""
         ...
 
 
 @dataclass(frozen=True, slots=True)
 class AuditEntry:
-    """What the service asks the store to append when it changes something."""
+    """Audit details to append in the same transaction as a permission change."""
 
     action: str
     actor_account_id: int | None = None
@@ -83,11 +84,10 @@ class AuditEntry:
 
 
 class PermissionAdminStore(Protocol):
-    """Write operations behind `/perm` and `/role`.
+    """Permission mutations and administrative queries.
 
-    Every mutation takes the audit entry that describes it, because the log is
-    written in the same transaction as the change: an audit trail that can be
-    half-written is not an audit trail.
+    Each mutation adds its supplied audit entry to the caller's transaction;
+    deletions only record an entry when a row was removed.
     """
 
     async def upsert_grant(

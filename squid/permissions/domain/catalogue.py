@@ -1,12 +1,11 @@
-"""The permission node catalogue and the built-in role definitions.
+"""Declare permission nodes and built-in roles.
 
-Every separately grantable capability in the application is declared here exactly
-once. Node names follow `<domain>.<resource>.<verb>`, borrowed from Google Cloud
-IAM: a predictable shape is what makes `build.*.view` mean something, and an
-inconsistent one would make wildcards guesswork.
+The catalogue lists every separately grantable capability. Stored permission
+patterns select nodes from this catalogue when a subject's authority is checked.
 
-Declaring a node and binding its constant are the same expression, so a duplicate
-name fails at import time rather than at the call site that happens to lose.
+Node names conventionally follow `<domain>.<resource>.<verb>`, allowing patterns
+such as `build.*.view` to select related capabilities. The builder rejects
+duplicate or structurally invalid declarations when this module is imported.
 """
 
 from collections.abc import Iterable, Iterator, Sequence
@@ -31,7 +30,7 @@ collide with a namespace and make `foo.**` ambiguous."""
 
 
 class Catalogue:
-    """An immutable, validated set of permission nodes."""
+    """Permission nodes indexed by name. Use `CatalogueBuilder` to validate declarations."""
 
     def __init__(self, nodes: Iterable[PermissionNode]):
         self._nodes = {node.name: node for node in nodes}
@@ -114,7 +113,7 @@ class CatalogueBuilder:
         return created
 
     def build(self) -> Catalogue:
-        """Freeze the catalogue, rejecting structurally invalid node sets."""
+        """Build the catalogue, rejecting names that are also another node's namespace."""
         # A node that is also an interior namespace would make `foo.bar.**`
         # ambiguous: it could mean "the subtree" or "the subtree and its root".
         for name in self._nodes:
@@ -493,10 +492,9 @@ CATALOGUE = _b.build()
 class RoleDefinition:
     """A built-in role's identity and pattern lists.
 
-    Built-in pattern lists live in code rather than in the database on purpose. A
-    migration that seeded them would freeze the catalogue as it looked on the day
-    it ran, so every node added afterwards would silently fall outside
-    `global-admin`. Database rows for a built-in are additive overrides only.
+    Code-defined patterns can evolve with the application without updating seeded
+    rows. Stored role patterns supplement these lists, and both are expanded against
+    the current catalogue.
     """
 
     key: str
@@ -576,7 +574,7 @@ TRUSTED = RoleDefinition(
 
 
 class BuiltinRoleKeys(StrEnum):
-    """`builtin_key` values, so nothing matches these by bare string."""
+    """Stable values stored in a built-in role's `builtin_key` column."""
 
     OWNER = "owner"
     GLOBAL_ADMIN = "global-admin"

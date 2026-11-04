@@ -1,30 +1,39 @@
-"""Deciding whether a subject holds a permission node.
+"""Decide whether a caller may use a permission, and explain the decision.
 
-The resolver is pure: it takes a subject, a flat sequence of rules already loaded
-for that subject, and one node, and returns a decision plus the trace that
-produced it. `/perm can` renders that trace, so there is exactly one
-implementation of the precedence rules.
+A permission node names one capability, such as `settings.server.edit`. The
+catalogue defines the known nodes and their defaults. A subject describes the
+caller: their account, Discord roles, and the guild where the check happens.
+Rules select nodes with patterns and request an allow, deny, or forbid result.
+PermissionService loads the subject's grants and expands permission roles into
+these rules before calling this module; the resolver does no database reads.
 
-Precedence, highest first:
+Resolution follows these steps:
 
-0. The bot owner is allowed everything, before any rule is examined.
-1. A matching `FORBID` rule denies, before any ranking. This is the emergency
-   stop, and it is the only effect that does not have to win a specificity
-   argument.
-2. Otherwise the matching rules are ranked and the maximum decides:
-   `(specificity, scope, subject, origin, deny-first)`.
-3. With no matching rule, the node's catalogue default applies.
+1. The bot owner is allowed every known node without consulting rules.
+2. Discard rules that have expired, belong to another guild, or do not match the
+   node. Guild-scoped rules also cannot apply to global capabilities.
+3. Any remaining `FORBID` denies the node, regardless of other rules.
+4. Otherwise choose the highest-ranked matching rule. If none remain, use the
+   node's catalogue default.
 
-Specificity outranks deny on purpose, which is LuckPerms' rule and what Minecraft
-admins already expect: `settings.**` allowed with `settings.server.edit` denied
-reads as "the namespace minus one hole". Deny only breaks a complete tie.
+Allow and deny rules are compared in this order; later factors break ties only:
 
-That tie-break inverts Discord's. Discord unions every role's denies, then every
-role's allows, and applies denies first, so allow wins and role position never
-enters into it. Here a deny is always something a person deliberately typed —
-absence already denies, so nobody writes a deny just to structure things — and
-honouring it is the safer reading. Role rank deliberately plays no part at all;
-it governs who may edit which role, and nothing else.
+- Pattern specificity: an exact permission outranks a broad wildcard. The full
+  ordering, including tag selectors, is defined by `Pattern.specificity`.
+- Scope: a rule for this guild outranks an unscoped rule.
+- Subject: a rule attached to an account outranks one attached to a Discord role.
+- Origin: a direct account grant outranks a direct Discord-role grant, then a
+  permission-role assignment, then the Discord Manage Server bridge.
+- Effect: deny wins if all preceding factors tie.
+
+For example, denying `settings.**` and allowing `settings.server.edit` permits
+that one action: specificity is compared before effect. A matching forbid would
+still reject it, except for the bot owner. Permission-role management rank
+controls who can edit a role; it does not influence this decision.
+
+The returned Decision includes a trace of the rules used to reach the answer.
+`/perm can` renders that trace, so permission checks and their explanations share
+one implementation.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -38,15 +47,13 @@ from squid.permissions.domain.matching import Pattern
 from squid.permissions.domain.models import Default, Effect, NodeScope, PermissionNode
 
 MAX_ROLE_DEPTH = 8
-"""How far role composition is followed. A cycle already terminates because a
-role is never expanded twice on one path; this only bounds pathological fan-out."""
+"""Maximum roles visited along a composition path, including the starting role."""
 
 
 class Origin(IntEnum):
-    """Where a rule came from, ranked. Higher wins a tie.
+    """Where a rule came from, ranked after specificity, scope, and subject.
 
-    Mirrors Discord's overwrite tiers: what is set directly on you outranks what
-    you inherit, and an explicit rule outranks the Manage Server bridge.
+    Higher values win when those earlier components tie.
     """
 
     GUILD_ADMIN_BRIDGE = 0
@@ -83,11 +90,10 @@ type Rank = tuple[tuple[int, int, int, int], int, int, int, int]
 
 @dataclass(frozen=True, slots=True)
 class Subject:
-    """Who is being checked, and in what context.
+    """The caller and guild context for a permission check.
 
-    `account_id` is optional so an unauthenticated caller can still be resolved
-    from Discord role grants alone — a permission check must never be the thing
-    that creates an account row.
+    A caller without a stored account can still receive Discord role grants.
+    Permission checks do not create account rows.
     """
 
     account_id: int | None = None
@@ -99,13 +105,16 @@ class Subject:
 
 @dataclass(frozen=True, slots=True)
 class Rule:
-    """One allow, deny or forbid statement applying to a subject.
+    """An allow, deny, or forbid statement already selected for the subject being checked.
 
-    `excluded` carries a role's subtractions as resolved node names. Keeping them
-    separate from the pattern is what makes Azure-style subtraction work without
-    turning into a deny: a role contributing `build.**` minus `@destructive`
-    still ranks with `build.**`'s specificity, and a node it subtracts stays
-    available from any other role that includes it.
+    The rule does not carry an account or Discord role ID. PermissionService must
+    select the subject's records before constructing it; subject_kind and origin
+    describe how it was assigned and determine its precedence.
+
+    `excluded` removes named nodes from this rule's contribution without changing
+    its pattern specificity or denying grants from other rules. For example, a role
+    including `build.**` and excluding `@destructive` can coexist with a separate
+    grant of a destructive build permission.
     """
 
     pattern: Pattern
@@ -119,7 +128,7 @@ class Rule:
     via: str | None = None
 
     def matches(self, node: PermissionNode) -> bool:
-        """Whether this rule speaks about `node` at all."""
+        """Match the pattern and exclusions; guild scope and expiry are checked by resolve."""
         return self.pattern.matches(node) and node.name not in self.excluded
 
     def rank(self) -> Rank:
@@ -135,7 +144,7 @@ class Rule:
 
 @dataclass(frozen=True, slots=True)
 class TraceStep:
-    """One rule that spoke about the node, and how it fared."""
+    """A matching rule and its position in the decision trace."""
 
     rule: Rule
     rank: Rank
@@ -147,7 +156,11 @@ class TraceStep:
 
 @dataclass(frozen=True, slots=True)
 class Decision:
-    """The verdict for one node, and everything that went into it."""
+    """Whether the requested node is allowed, with the reason and supporting rule trace.
+
+    Owner and default decisions need no rules and have an empty trace. Forbids
+    short-circuit ordinary ranking, so a forbid trace contains only forbidding rules.
+    """
 
     node: str
     allowed: bool
@@ -162,10 +175,11 @@ class Decision:
 
 @dataclass(frozen=True, slots=True)
 class RoleSpec:
-    """A role's pattern lists and its composition edges.
+    """A permission role's own patterns and the other permission roles it includes.
 
-    Applies to both built-in roles, whose lists live in code, and user-defined
-    roles loaded from the database.
+    Role composition means including another role's patterns rather than copying
+    them. includes_roles holds the keys used to follow those relationships.
+    Built-in and user-defined permission roles use the same representation.
     """
 
     key: str
@@ -189,13 +203,11 @@ def expand_role(
     catalogue: Catalogue = CATALOGUE,
     max_depth: int = MAX_ROLE_DEPTH,
 ) -> RoleExpansion:
-    """Resolve a role to its include patterns and its subtracted node names.
+    """Collect include patterns and excluded node names through role composition.
 
-    Exclusions accumulate down the composition chain and are applied at match
-    time, so a parent can subtract from what it inherits and a child's own
-    subtraction survives into the parent. A role is never expanded twice on one
-    path, so a cycle terminates rather than raising: a broken composition graph
-    should not take every permission check down with it.
+    Exclusions from every visited role apply to the whole expansion, including
+    patterns inherited through other branches. Missing roles, cycles on the current
+    path, and branches beyond `max_depth` contribute nothing further.
     """
     return _expand(key, roles, catalogue, frozenset(), max_depth)
 
@@ -272,14 +284,10 @@ def _applicable(
 
 
 def _ordering(rule: Rule) -> tuple[object, ...]:
-    """Sort key placing the winner first, and breaking remaining ties stably.
+    """Order rules by descending rank, then by stable source and pattern values.
 
-    Rank alone leaves genuine ties, and Python's sort would then hand the verdict
-    to whichever rule the database happened to return first. Two rules that tie on
-    rank always agree on the verdict — deny-first is part of the rank, so an allow
-    and a deny can never tie — but the *trace* would still shuffle between runs,
-    and `/perm can` is a user-facing explanation that ought to read the same
-    way twice.
+    Allow/deny ties already agree on the verdict; stable ordering makes their
+    explanation independent of database row order.
     """
     negated_rank = tuple(-component for component in rule.rank()[1:])
     negated_specificity = tuple(-component for component in rule.rank()[0])
@@ -305,7 +313,12 @@ def resolve(
     catalogue: Catalogue = CATALOGUE,
     now: Instant | None = None,
 ) -> Decision:
-    """Decide whether `subject` holds `node`, and record why."""
+    """Resolve a known node and record the rules that determine the answer.
+
+    Unknown node names raise `UnknownPermissionNodeError`, including for the owner.
+    Owner and default decisions have no trace. A forbid decision lists only matching
+    forbids; other rule decisions list all applicable candidates in precedence order.
+    """
     resolved = catalogue[node] if isinstance(node, str) else node
     instant = now if now is not None else Instant.now()
 
@@ -350,11 +363,7 @@ def resolve_many(
     catalogue: Catalogue = CATALOGUE,
     now: Instant | None = None,
 ) -> frozenset[str]:
-    """The names of the nodes in `nodes` that `subject` holds.
-
-    One call answers a whole command's checks, or a vote actor's capability set,
-    from a single already-loaded rule sequence.
-    """
+    """Return allowed node names, evaluating every node at the same instant."""
     instant = now if now is not None else Instant.now()
     return frozenset(
         decision.node

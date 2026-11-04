@@ -1,4 +1,14 @@
-"""Permission application services."""
+"""Load a subject's permission sources and resolve the capabilities they hold.
+
+Direct grants attach patterns to an account or Discord role. Permission-role
+assignments attach named bundles of patterns instead; these are Squid roles,
+separate from Discord roles. The service expands both sources into rules for the
+domain resolver. Discord's Manage Server permission also supplies the built-in
+guild-admin role, through what we call the guild-admin bridge.
+
+Assembled rules can be cached across checks. Resolution still evaluates expiry,
+scope, and precedence for each requested capability.
+"""
 
 from collections.abc import Iterable
 
@@ -30,17 +40,11 @@ from squid.unit_of_work import UnitOfWorkFactory
 
 
 def _role_specs(roles: Iterable[PermissionRole]) -> dict[str, RoleSpec]:
-    """Key stored roles by id, folding code-defined built-in patterns in.
+    """Combine stored role patterns with code-defined built-in patterns.
 
-    A built-in's pattern list lives in `squid.permissions.domain.catalogue`, and
-    any rows stored against it are additive overrides on top. That is what stops
-    the seeded list from freezing the catalogue as it looked on migration day.
-
-    Stored includes cannot punch through a built-in's code-level excludes, since
-    exclusions are applied after the union. That is deliberate: those excludes are
-    the boundary keeping `global-admin` clear of `bot.**` and `@destructive`, so
-    write access to `permission_role_patterns` must not be a route to the
-    owner-only surface. Widening past the boundary needs a deploy or a new role.
+    Stored patterns extend built-ins, but cannot override their code-defined
+    exclusions. Exclusions apply after the union, preserving the built-in limits
+    on destructive and bot-wide permissions.
     """
     specs: dict[str, RoleSpec] = {}
     for role in roles:
@@ -97,7 +101,7 @@ class PermissionService:
         return self._cache
 
     async def rules_for(self, subject: Subject) -> tuple[Rule, ...]:
-        """Every rule that could bear on `subject`, role composition already applied."""
+        """Load and expand the subject's rules; the resolver still checks expiry and scope."""
         if subject.is_bot_owner:
             # The owner short-circuits before any rule is read, so loading them
             # would be pure cost.
@@ -138,7 +142,7 @@ class PermissionService:
         return resolve_many(nodes, subject, rules, catalogue=self._catalogue)
 
     def assemble(self, records: SubjectRecords, subject: Subject) -> tuple[Rule, ...]:
-        """Turn stored rows into resolver rules. Pure, so it is cheap to test."""
+        """Convert stored grants and role assignments into rules, including the guild-admin bridge."""
         specs = _role_specs(records.roles)
         rules = [_grant_rule(grant) for grant in records.grants]
         rules.extend(self._assignment_rules(records, specs))
@@ -174,10 +178,10 @@ class PermissionService:
         specs: dict[str, RoleSpec],
         subject: Subject,
     ) -> list[Rule]:
-        """Discord's Manage Server permission, as the lowest-priority rule source.
+        """Add guild-admin rules for Discord members with Manage Server.
 
-        The permission system is evaluated first: this is a default that any
-        explicit rule outranks, not a tier that competes with one.
+        The bridge has the lowest origin rank. Specificity, scope, and subject rank
+        still take precedence, so an explicit rule does not always outrank it.
         """
         if not subject.discord_guild_admin or subject.guild_id is None:
             return []
@@ -207,11 +211,10 @@ class PermissionService:
         subject: Subject,
         nodes: Iterable[PermissionNode | str],
     ) -> tuple[Decision, ...]:
-        """Decide several nodes from one load, keeping each one's reason.
+        """Decide several nodes from one rule load, retaining each decision's explanation.
 
-        A command that declares two nodes needs to know *why* it was refused —
-        a `forbid` reads differently to a missing grant — which the capability
-        set alone cannot say.
+        Callers can distinguish an explicit forbid from a missing grant, which a
+        set of allowed capability names alone would not show.
         """
         rules = await self.rules_for(subject)
         return tuple(resolve(node, subject, rules, catalogue=self._catalogue) for node in nodes)
@@ -234,10 +237,10 @@ class PermissionService:
         discord_guild_admin: bool = False,
         nodes: Iterable[str] = (),
     ) -> frozenset[str]:
-        """Satisfy `ActorCapabilityResolver` for contexts that must not import us.
+        """Return allowed capability names for adapters constructing voting or reaction actors.
 
-        The voting and reactions contexts carry authorization as resolved node
-        names, so they depend on this protocol rather than on this class.
+        Those actors carry the resolved names so their policies can check authority
+        without loading permissions themselves.
         """
         subject = Subject(
             account_id=account_id,
@@ -249,11 +252,9 @@ class PermissionService:
         return await self.capabilities(subject, nodes)
 
     def role_leaves(self, role: PermissionRole, roles: Iterable[PermissionRole]) -> tuple[str, ...]:
-        """The node names one role actually confers, sorted.
+        """Return sorted node names after role composition and exclusions.
 
-        Expansion is a read-time convenience for rendering and for the authority
-        gate; nothing stores it, so a node added tomorrow appears here without a
-        migration.
+        Expansion uses the current catalogue and is not persisted.
         """
         specs = _role_specs(roles)
         expansion = expand_role(str(role.id), specs, catalogue=self._catalogue)
@@ -263,12 +264,9 @@ class PermissionService:
         return tuple(sorted(leaves - expansion.excluded))
 
     def is_delegable_by_guild_admin(self, pattern: str) -> bool:
-        """Whether a guild administrator may issue `pattern` inside their guild.
+        """Return whether a valid pattern selects only guild-scoped catalogue nodes.
 
-        True only when every catalogue leaf the pattern reaches is guild-scoped.
-        A pattern reaching nothing is refused as well: it is either a typo or a
-        bet on a node that does not exist yet, and both deserve an error rather
-        than a grant that silently starts applying later.
+        Malformed patterns and patterns matching no current node return False.
         """
         try:
             scopes = self._catalogue.scopes_reached(pattern)

@@ -1,20 +1,19 @@
-"""A process-local cache of assembled permission rules.
+"""Reuse a subject's permission rules across checks in one process.
 
-What is cached is the *rule set*, not the decision. One load then answers every
-node a command checks, every node a vote actor needs, and any node added later
-that an already-cached wildcard covers — which is the difference between one
-round trip per command and one per check.
+PermissionService assembles a rule set from direct grants, permission-role
+assignments, and the Discord Manage Server bridge. Caching that set lets several
+capability checks share one database load. Decisions themselves are not cached:
+the resolver still checks each rule's expiry and matches it against the requested
+node, including nodes added to the catalogue after a wildcard was granted.
 
-Invalidation is by epoch rather than by time. Any permission write anywhere bumps
-a single counter; a watcher notices and clears the whole cache. Clearing
-everything is deliberate: a role edit changes the answer for every holder, and a
-role *composition* edit changes it for every transitive holder, so per-subject
-invalidation would have to know a graph that the writing process does not have in
-front of it. `clear()` is O(1) and always correct.
+Permission writes advance a shared database counter, called the permission epoch.
+PermissionEpochWatcher observes that counter through polling and notification
+hints. A changed epoch invalidates every subject's cached rules. This is deliberate:
+a permission role can include other roles, so editing one role may affect people
+who hold it indirectly as well as its direct holders.
 
-The wall-clock backstop bounds what a dead watcher can cost. Entries older than
-`max_age_seconds` are refetched, so the failure mode is a 30-second stale grant
-rather than an indefinite one.
+Entries also expire after `max_age_seconds` (30 seconds by default). This forces
+a new load even if the watcher has stopped reporting changes.
 """
 
 from collections import OrderedDict
@@ -35,13 +34,10 @@ type CacheKey = tuple[int | None, frozenset[int], int | None, bool]
 
 
 def cache_key(subject: Subject) -> CacheKey:
-    """The identity of everything about `subject` that changes its rule set.
+    """Include every subject fact that changes its assembled rules.
 
-    `discord_guild_admin` is part of the key even though the plan's key was
-    account, roles and guild alone: the Manage-Server bridge contributes rules to
-    the assembled set, so a subject holding it and a subject not holding it do not
-    share an answer. `is_bot_owner` is absent because the owner short-circuits
-    before any rule is read, so no owner entry is ever stored.
+    The Manage Server flag contributes bridge rules. The owner flag is omitted
+    because the service bypasses the cache for owners.
     """
     return (subject.account_id, subject.discord_role_ids, subject.guild_id, subject.discord_guild_admin)
 
@@ -54,7 +50,11 @@ class _Entry:
 
 
 class SubjectRuleCache:
-    """A bounded LRU of assembled rule sets, keyed by subject identity."""
+    """Cache assembled rule sets, evicting the least recently used entry when full.
+
+    Each entry records the database epoch at which it was loaded and the fetch time.
+    `get` discards entries from a different epoch or older than `max_age_seconds`.
+    """
 
     def __init__(self, *, max_entries: int = MAX_ENTRIES, max_age_seconds: float = MAX_AGE_SECONDS) -> None:
         self._entries: OrderedDict[CacheKey, _Entry] = OrderedDict()
@@ -64,7 +64,7 @@ class SubjectRuleCache:
 
     @property
     def epoch(self) -> int:
-        """The newest permission epoch this process has seen."""
+        """The permission epoch currently used to validate entries."""
         return self._epoch
 
     def __len__(self) -> int:
@@ -96,12 +96,10 @@ class SubjectRuleCache:
         return entry.rules
 
     def put(self, key: CacheKey, rules: tuple[Rule, ...], *, epoch: int, now: Instant | None = None) -> None:
-        """Store the rules assembled for `key`, stamped with the epoch they were read at.
+        """Store rules with the epoch observed before their database load.
 
-        A load that returns a newer epoch than this process knew about advances the
-        cache itself, so entries read before that write are discarded on their next
-        read without waiting for the watcher. The watcher is a latency hint here
-        too, not the only route to correctness.
+        A newer epoch advances the cache epoch. Older entries are discarded on their
+        next lookup, even if the watcher has not yet observed the change.
         """
         if epoch > self._epoch:
             self._epoch = epoch

@@ -12,9 +12,9 @@ from squid_ui.text import Message
 class NodeScope(StrEnum):
     """Where a permission node's authority applies.
 
-    `GLOBAL` nodes touch cross-guild state (the shared build database, bot-wide
-    configuration) and may only ever be granted globally. `GUILD` nodes affect a
-    single Discord server and may be delegated by that server's administrators.
+    `GLOBAL` nodes touch cross-guild state, such as the shared build database or
+    bot-wide configuration. Only unscoped rules can affect them. `GUILD` nodes
+    affect a single Discord server and may be delegated by its administrators.
     """
 
     GLOBAL = "global"
@@ -29,11 +29,10 @@ class Default(StrEnum):
 
 
 class Tag(StrEnum):
-    """A semantic classification used to select nodes across the tree.
+    """A category that selects related nodes across namespaces.
 
-    Tags exist so a role can be defined as "this namespace, minus the dangerous
-    parts" and stay correct as the catalogue grows: a leaf added later inherits
-    the exclusion from its tag rather than needing every role to be edited.
+    Roles can exclude a tag such as `@destructive` so newly declared nodes with
+    that tag receive the same exclusion.
     """
 
     DESTRUCTIVE = "destructive"
@@ -43,12 +42,10 @@ class Tag(StrEnum):
 
 
 class Effect(IntEnum):
-    """The verdict a rule asserts for the nodes it matches.
+    """The verdict a matching rule requests.
 
-    `DENY` loses to a more specific `ALLOW`, which is what makes "grant the
-    namespace except this one leaf" work. `FORBID` short-circuits the whole
-    resolution instead, and exists so the emergency stop does not have to win a
-    specificity argument.
+    A more specific allow can override a broad deny. Forbid overrides other rules
+    regardless of specificity, but the bot owner bypasses all rules.
     """
 
     ALLOW = 1

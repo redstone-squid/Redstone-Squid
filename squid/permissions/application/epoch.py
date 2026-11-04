@@ -1,11 +1,10 @@
-"""Keeping one process's permission cache in step with the others.
+"""Refresh the local permission cache from the shared database epoch.
 
-Three processes hold three caches, and a grant issued in the API has to become
-visible in the bot. Both routes to that are here: a `LISTEN` connection that
-wakes on the trigger's `NOTIFY`, and a poll that runs regardless. The poll is the
-durable one — the same division of labour the domain-event poller already uses,
-for the same reason: a notification delivered while a process was restarting is
-simply gone.
+The epoch is a shared counter incremented whenever permissions change. Each
+process compares it with its cached epoch to detect rules that need reloading.
+The runtime calls `refresh` periodically. An optional PostgreSQL listener also
+triggers refreshes for lower latency; polling catches notifications missed
+during disconnects or restarts.
 """
 
 import logging
@@ -25,13 +24,13 @@ POLL_INTERVAL_SECONDS = 5.0
 
 
 class WakeListener(Protocol):
-    """A source of wake hints, satisfied by `PostgresWakeListener`."""
+    """Notify the watcher when it should reread the epoch; implemented by `PostgresWakeListener`."""
 
     async def run(self, on_wake: Callable[[], Awaitable[None]]) -> None: ...
 
 
 class PermissionEpochWatcher:
-    """Clear the local rule cache whenever any process writes a permission."""
+    """Invalidate local rules when a refresh observes a changed permission epoch."""
 
     def __init__(
         self,
