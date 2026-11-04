@@ -1,4 +1,4 @@
-"""Dependency-free catalogue title grammar."""
+"""Catalogue title grammar without persistence or transport dependencies."""
 
 from squid.catalogue.domain.titles import (
     DoorCategory,

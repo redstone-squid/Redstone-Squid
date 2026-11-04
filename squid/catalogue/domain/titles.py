@@ -1,4 +1,11 @@
-"""Pure title grammar shared by catalogue consumers."""
+"""Turn door and extender facts into consistently ordered catalogue titles.
+
+RulesTitleFormatter groups terms into sections, orders them, and renders a title
+and optional subtitle. It also returns the tokens and diagnostics so consumers
+can explain unfamiliar or ambiguous terms without dropping them from display.
+Build titles and record titles share this grammar; records add their comparison
+class, such as Fastest, before the category title.
+"""
 
 import re
 from dataclasses import dataclass
@@ -43,7 +50,11 @@ class TrapdoorPlacement(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class TitleToken:
-    """One rendered term with enough provenance for presentation."""
+    """One displayed term, its title section, and the input it came from.
+
+    `source_value` defaults to `value`; it differs when rendering replaces the
+    original text, such as an orientation replaced by a trapdoor placement.
+    """
 
     value: str
     section: TitleSection
@@ -246,9 +257,24 @@ _MISCELLANEOUS_ORDER: Final = (
 
 
 class RulesTitleFormatter:
-    """Formatter for the Door Rules title grammar."""
+    """Order door and extender title terms according to the catalogue rules.
+
+    Within each section, known terms follow the configured order. Unknown terms
+    remain visible after them and produce diagnostics for moderators. Duplicate
+    terms within a section are rendered once; comparisons ignore case, repeated
+    whitespace, and hyphens.
+
+    Component and miscellaneous restrictions appear in the subtitle. Input
+    spelling is otherwise preserved rather than converted to a canonical label.
+    """
 
     def format_door(self, category: DoorCategory) -> FormattedTitle:
+        """Format wiring, animation, size, type, and orientation in that order.
+
+        An explicit trapdoor placement replaces the orientation and removes
+        trapdoor wiring terms. Without a placement, those terms remain and add
+        an ambiguity diagnostic. The type `regular` is omitted.
+        """
         diagnostics: list[TitleDiagnostic] = []
         wiring = self._terms(category.wiring_restrictions, TitleSection.WIRING, _WIRING_ORDER, diagnostics)
         animated = self._terms(
@@ -274,6 +300,7 @@ class RulesTitleFormatter:
         return _formatted(title_tokens, subtitle_tokens, diagnostics)
 
     def format_extender(self, category: ExtenderCategory) -> FormattedTitle:
+        """Format wiring, orientation, length, and type before `Piston Extender`."""
         diagnostics: list[TitleDiagnostic] = []
         wiring = self._terms(category.wiring_restrictions, TitleSection.WIRING, _WIRING_ORDER, diagnostics)
         types = self._terms(category.types, TitleSection.TYPE, _EXTENDER_TYPE_ORDER, diagnostics, omit={"regular"})
@@ -291,6 +318,7 @@ class RulesTitleFormatter:
         return _formatted(title_tokens, subtitle_tokens, diagnostics)
 
     def format_record(self, record_class: str, category: FormattedTitle) -> FormattedTitle:
+        """Prefix the record class while preserving the category's subtitle and diagnostics."""
         record_name = record_class.replace("_", " ").title()
         record_token = _fixed_token(record_name, TitleSection.RECORD_CLASS)
         category_tokens = category.title_tokens or (_fixed_token(category.title, TitleSection.FIXED_NOUN),)
@@ -375,6 +403,8 @@ class RulesTitleFormatter:
                 continue
             unique[key] = value
 
+        # Keep a lone alias as written. When both `vault` and `dual funnel` occur,
+        # retain the canonical term and report the duplicate to the moderator.
         alias_groups: dict[str, list[str]] = {}
         for key in unique:
             alias_groups.setdefault(_ALIASES.get(key, key), []).append(key)
