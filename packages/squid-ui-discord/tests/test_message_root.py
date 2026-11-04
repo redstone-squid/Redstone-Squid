@@ -1,4 +1,9 @@
-"""Reactive core tests: state, dispatch funnel, flush, lifecycle."""
+"""Keep a reactive component tree and its Discord message in sync.
+
+MessageRoot stages renders before delivery and keeps the active handlers aligned with
+the visible controls. These tests cover failed writes, interaction dispatch, resource
+loading, and shutdown, using recorded Discord calls instead of network requests.
+"""
 
 import asyncio
 import inspect
@@ -229,7 +234,11 @@ async def test_message_root_snapshot_reports_lifecycle_and_handle_expiry() -> No
 
 
 class TestCandidateSettlement:
-    """A drawn candidate owes the mount exactly one ending: committed, or rolled back."""
+    """Each candidate is a staged render awaiting either commit or rollback.
+
+    Settling it twice, or staging another before it settles, would make the message root's
+    active state ambiguous.
+    """
 
     async def test_a_candidate_cannot_be_rolled_back_twice(self) -> None:
         message_root = MessageRoot(Counter(), access=Everyone())
@@ -252,7 +261,7 @@ class TestCandidateSettlement:
             message_root._rollback(candidate)
 
     async def test_only_one_candidate_may_be_outstanding_at_a_time(self) -> None:
-        """The reconciler owns this half: a second draw cannot stage over the first."""
+        """Staging a second render must not replace the candidate still awaiting settlement."""
         message_root = MessageRoot(Counter(), access=Everyone())
         await message_root.send(delivered_to(message_harness()))
         message_root._stage()
@@ -267,6 +276,7 @@ async def _armed_root(
     access: squid_ui_discord.AccessPolicy | None = None,
     on_error: squid_ui_discord.message_root_contracts.ErrorHook | None = None,
 ) -> tuple[MessageRoot, Any, MessageRootScheduler]:
+    """Deliver an ephemeral root with a token inside its warning window and arm renewal."""
     now = datetime.now(UTC)
     scheduler = MessageRootScheduler(clock=lambda: now)
     interaction = interaction_harness()
@@ -1139,10 +1149,7 @@ class TestFinishHooks:
         assert message_root._view is None
 
     async def test_a_hook_fires_even_when_the_disable_edit_raises(self):
-        """The mount is finished and torn down either way, so an observer must hear about it.
-
-        `finish_via` re-raises past its own `finally`, which is where the hooks have to run.
-        """
+        """Shutdown observers still run when the terminal Discord edit fails."""
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         seen: list[MessageRoot] = []
         message_root.on_finish(lambda finished: _record(seen, finished))
@@ -1157,11 +1164,7 @@ class TestFinishHooks:
         assert message_root.finished
 
     async def test_a_hook_fires_even_when_finish_hits_an_unanticipated_error(self):
-        """`finish` anticipates `HTTPException` from its disable-edit and nothing else.
-
-        Anything it did not anticipate used to propagate past the teardown as well as the
-        hooks, leaving the mount half-finished and every observer holding it.
-        """
+        """An unexpected edit error must still stop the view and notify finish observers."""
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         seen: list[MessageRoot] = []
         message_root.on_finish(lambda finished: _record(seen, finished))
@@ -1872,7 +1875,7 @@ class TestLifecycle:
         disabled_view = message.edit.await_args.kwargs["view"]
         assert _button(disabled_view).disabled
         interaction = interaction_harness()
-        await message_root.dispatch("inc", interaction)  # finished mounts ignore late clicks
+        await message_root.dispatch("inc", interaction)  # finished message roots ignore late clicks
         interaction.response.edit_message.assert_not_awaited()
 
     async def test_timeout_can_leave_only_stateless_recovery_routes_enabled(self) -> None:
@@ -1979,13 +1982,10 @@ class TestLifecycle:
 
 
 class TestDeliveryAtomicity:
-    """A render becomes the mount's state only once Discord has accepted it."""
+    """Failed writes must not publish a candidate's handlers or component lifecycle."""
 
     def test_stage_view_stages_without_committing(self):
-        """The stage-only escape hatch renders the tree and publishes none of it.
-
-        Committing is `send`'s and `flush`'s job; `TestSend` covers the other half.
-        """
+        """A synchronous staging call must leave handlers, generation, and assets uncommitted."""
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
         message_root._stage_view()
@@ -2003,9 +2003,7 @@ class TestDeliveryAtomicity:
         assert message_root.presentation.cursor("entries").position.offset == 1
 
         live_generation = message_root.generation
-        # The private mapping, deliberately: the claim below is that a failed refresh left this
-        # very object in place, and `snapshot().handler_keys` builds a fresh tuple every call,
-        # so it can only ever say the keys are equal -- the weaker half of what is asserted.
+        # Compare mapping identity: snapshot handler keys would miss a premature replacement.
         live_handlers = message_root._handlers
         live_strategies = dict(message_root.presentation.strategies)
         panel.entries = (*panel.entries, "entry 6")  # a new fingerprint: the staged render resets the cursor
@@ -2020,8 +2018,7 @@ class TestDeliveryAtomicity:
         assert message_root.pending
         assert mounted == []
         assert message_root.presentation.cursor("entries").position.offset == 1
-        # Planning only reads the session, so a discarded candidate leaves behind none of
-        # its writes — not just the cursors the old snapshot happened to restore.
+        # Discarded planning updates must leave strategy state unchanged along with cursors.
         assert message_root.presentation.strategies == live_strategies
 
     async def test_a_click_after_a_failed_edit_still_runs_and_repairs_the_message(self, monkeypatch):
@@ -2037,7 +2034,7 @@ class TestDeliveryAtomicity:
             await message_root.refresh(interaction_harness())
         monkeypatch.undo()
 
-        # The stale-generation guard would silently defer this click if the mount had
+        # The stale-generation guard would silently defer this click if the message root had
         # advanced past the generation the message is still showing.
         interaction = interaction_harness()
         await message_root.dispatch("add", interaction, generation=live_generation)
@@ -2232,7 +2229,7 @@ class TestDeliveryAtomicity:
 
 
 class _Destination:
-    """A recording destination. `message` is whatever its result exposes to the mount."""
+    """Record the delivered payload and return the configured message and edit handle."""
 
     def __init__(
         self,
@@ -2277,7 +2274,7 @@ class MutableReport(Component[sl.ComponentsV2Target]):
 
 
 class TestSend:
-    """`MessageRoot.send` runs stage -> deliver -> commit; the destination only says where."""
+    """MessageRoot stages a render, calls the destination to deliver it, then commits it."""
 
     async def test_a_successful_send_commits_and_keeps_the_message_handle(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
@@ -2350,7 +2347,7 @@ class TestSend:
         assert not message_root.pending
         assert message_root.handle is None
 
-        # The first click renews the mount, exactly as an ephemeral send relies on.
+        # The first click supplies an interaction token that can edit the message.
         await message_root.dispatch("inc", interaction_harness())
 
         assert component.count == 1
@@ -2537,7 +2534,7 @@ class TestSend:
         assert delivered is not staged
         assert staged.is_finished()
         assert message_root._pending is None
-        # The delivered generation is the one the mount is now live on.
+        # The message root now uses the view that was delivered.
         assert message_root._view is delivered
 
     async def test_a_finished_message_root_does_not_send(self):
@@ -2737,7 +2734,7 @@ class TestStateDescriptor:
 
 
 class Notifier(Component[sl.ComponentsV2Target]):
-    """Writes state and then answers with a notice — the shape that broke the panel."""
+    """Change state and send a separate notice before the original panel refreshes."""
 
     count: int = state(0)
 
@@ -2846,7 +2843,7 @@ class TestEditHandles:
     async def test_a_notice_does_not_swallow_the_render_it_came_with(self):
         # `notice` answers with a new message, which moves the interaction's original
         # response off the panel. Editing through it would overwrite the notice and leave
-        # the panel stale, so the mount falls back to the message it holds.
+        # the panel stale, so the message root falls back to the message it holds.
         message = message_harness()
         message_root = MessageRoot(Notifier(), access=Everyone(), timeout=None)
         await message_root.send(delivered_to(message))
@@ -2862,7 +2859,7 @@ class TestEditHandles:
 
     async def test_a_flush_through_the_standing_handle_still_answers_the_click(self):
         # A modal submitted from a command rather than from a component carries no message,
-        # so `handle_from` has nothing to build on and the edit goes through the mount's own
+        # so `handle_from` has nothing to build on and the edit goes through the message root's own
         # handle. Only the interaction's handle answers the click by editing through it, so
         # the flush owes an acknowledgement -- without one Discord reports a failure at 3s.
         message = message_harness()
@@ -2920,8 +2917,7 @@ class TestEditHandles:
 
         await message_root.refresh()
 
-        # Not an error and not the end of the mount: the message is simply out of reach
-        # until someone clicks it again.
+        # An expired token leaves the message root open; another click can supply a fresh token.
         assert message_root.pending
         assert not message_root.finished
 
@@ -3617,14 +3613,14 @@ class TestResourceLoading:
         assert "ready:loaded" in str(message_root._view.to_components())
 
     async def test_a_load_superseded_mid_settle_is_abandoned(self) -> None:
-        """The mount supplies the cancellation `abandon_superseded_loads` asks for."""
+        """The message root cancels a blocked loader when its resource is invalidated."""
         panel = CheckpointedResourcePanel()
         message: Any = message_harness()
         destination = _Destination(message)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
-        # Deadlined because the regression is a hang, not a wrong answer: without the mount
-        # installing a scope, nothing releases the first loader and `send` never returns.
+        # Without a cancellation scope, nothing releases the first loader and `send`
+        # never returns. The deadline turns that hang into a test failure.
         with anyio.fail_after(5):
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(message_root.send, destination)
@@ -3680,7 +3676,7 @@ class Host(Component[sl.ComponentsV2Target]):
 
 
 class TestDeferredExpansion:
-    """A discovery render: what `on_load` needs to run before anything renders."""
+    """Discovery renders identify unloaded children without rendering or committing them."""
 
     def test_expansion_stops_at_a_deferred_child(self):
         log: list[str] = []
@@ -3734,7 +3730,7 @@ class TestDeferredExpansion:
 
 
 class Nested(Component[sl.ComponentsV2Target]):
-    """A loading parent that embeds a loading child, for the tiered-pass case."""
+    """A parent whose on_load reveals a child that also needs to load before rendering."""
 
     ready: bool = state(default=False)
 
@@ -3893,7 +3889,7 @@ class TestLoading:
         assert "loaded" in str(destination.calls[0][0].to_components())
 
     async def test_a_lone_failure_arrives_unwrapped(self):
-        """Error routing downstream of a mount is isinstance-based, not `except*`-based."""
+        """Callers can catch one failed load by its exception type without unpacking an ExceptionGroup."""
 
         class Boom(Leaf):
             @override
@@ -3941,7 +3937,7 @@ class TestLoading:
         assert log.count("load:panel") == 1
 
     async def test_stage_view_renders_without_loading(self):
-        """The stage-only escape hatch is sync, so it cannot load — and does not pretend to."""
+        """The synchronous staging helper skips asynchronous load hooks."""
         log: list[str] = []
         message_root = MessageRoot(Leaf(log, "panel"), access=Everyone(), timeout=None)
 
@@ -3980,7 +3976,7 @@ class TestLoading:
         assert len(renders) == 1
 
     async def test_a_load_writes_plain_state_outside_any_transaction(self):
-        """Plan 08's tracking covers handlers; a load is ordinary pre-delivery state."""
+        """Initial on_load hooks run before delivery, outside handler transactions."""
         seen: list[bool] = []
 
         class Reader(Component[sl.ComponentsV2Target]):

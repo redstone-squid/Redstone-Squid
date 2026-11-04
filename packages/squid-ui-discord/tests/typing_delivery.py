@@ -1,7 +1,6 @@
-"""Pins the delivery surfaces a host reaches for, under the project type check.
+"""Check that native Discord objects and delivery doubles work without casts.
 
-Never imported at runtime: these are assertions the type checker makes, and the point of
-each one is that the host had to write no cast to get here.
+The project type checker checks these calls; pytest does not execute this fixture.
 """
 
 from typing import Any

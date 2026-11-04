@@ -26,7 +26,10 @@ def interaction_for(bot: commands.Bot, *, user_id: int = 7) -> InteractionHarnes
 
 
 async def run(command: object, *args: object) -> None:
-    """Call a command's callback the way discord.py does: binding first, then the source."""
+    """Invoke the wrapped callback directly, with its binding and native source supplied by the caller.
+
+    This helper does not run discord.py's command checks.
+    """
     await cast(Any, command).callback(*args)
 
 
@@ -214,7 +217,7 @@ async def test_class_body_group_members_inherit_the_class_policy() -> None:
 
 
 async def test_defer_then_resolving_the_request_again_shares_the_ledger() -> None:
-    """The bug the old surface had: a helper re-resolving a deferred interaction lost the defer."""
+    """Re-resolving a deferred interaction must preserve its acknowledgement ledger."""
     bot = installed_bot()
     cog = Builds(bot)
     interaction = interaction_for(bot)

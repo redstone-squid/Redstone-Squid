@@ -1,8 +1,9 @@
 """Where Discord access policy meets an agreement's own membership check.
 
 The widget's behaviour -- who has approved, resolution order, withdrawal, validation -- is
-tested without a transport in `squid-ui-widgets`. What is left here is the pair of gates that
-only exist once a mount is in front of it, and the difference in how each one refuses.
+tested without a transport in squid-ui-widgets. Here MessageRoot checks access before
+dispatch, and Agreement checks the admitted actor against its participant list.
+The tests distinguish the response sent by each check.
 """
 
 from typing import Any
@@ -21,7 +22,7 @@ def _agreement(**overrides: Any) -> sp.Agreement:
 
 
 async def test_an_outsider_admitted_by_access_is_still_refused_by_the_participant_list() -> None:
-    """`Everyone()` lets the press through the mount, so the widget's own check has to hold.
+    """Everyone() admits the press to MessageRoot, so Agreement must check the participant list.
 
     It refuses by deferring: the interaction is consumed, and nothing changes.
     """
@@ -38,7 +39,7 @@ async def test_an_outsider_admitted_by_access_is_still_refused_by_the_participan
 
 
 async def test_users_access_refuses_before_the_agreement_is_reached_at_all() -> None:
-    """The mount's own gate answers first, and it answers differently -- a message, not a defer."""
+    """MessageRoot sends an access denial before dispatching to Agreement."""
     agreement = _agreement(require=1)
     message_root = squid_ui_discord.MessageRoot(agreement, access=squid_ui_discord.Users({1, 2}), timeout=None)
     commit_render(message_root)

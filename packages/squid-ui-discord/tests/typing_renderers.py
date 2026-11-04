@@ -1,9 +1,6 @@
-"""Pins that the renderer protocols are satisfied by the renderers. Nothing here runs.
+"""Static conformance of concrete renderers to their scene and payload protocols.
 
-A protocol nothing is ever checked against is how the original contravariance bug survived:
-`Renderer.draw` took an unparameterized `scene.Scene`, so no renderer that narrowed to its
-own body type could implement it, and the protocol sat declared and structurally dead for as
-long as no file said `Renderer` in a parameter position. These assignments are that file.
+Assignments exercise generic compatibility that runtime rendering tests do not check.
 """
 
 from squid_ui import scene
@@ -45,8 +42,7 @@ def accepts_mounted_classic(value: MountedRenderer[scene.ClassicMessage]) -> Non
     del value
 
 
-# What `_BINDINGS` stores: a mount picks its renderer by dialect id at runtime, so both
-# concrete renderers must be reachable through one erased type.
+# Both mounted renderer specializations must fit the union used for dialect selection.
 def accepts_either_mounted(value: MountedRenderer[scene.ComponentsV2] | MountedRenderer[scene.ClassicMessage]) -> None:
     del value
 
@@ -56,7 +52,5 @@ accepts_mounted_classic(ClassicRenderer())
 accepts_either_mounted(V2Renderer())
 accepts_either_mounted(ClassicRenderer())
 
-# The HTML renderer draws scenes but has no mount to wire controls to, so it is deliberately
-# not a `MountedRenderer`. If this stops being an error, `wire` has gone optional in a way
-# that lets an unwireable renderer into a live message root.
+# The HTML renderer uses different scene and payload types and provides no Discord control wiring.
 accepts_mounted_v2(HtmlRenderer())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]

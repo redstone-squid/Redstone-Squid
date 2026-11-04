@@ -1,6 +1,8 @@
-"""Pins target-mode variance and adapter profile families under the project type check.
+"""Check which content, caches, and adapter profiles a target accepts.
 
-Renderer protocol conformance moved to `typing_renderers.py`.
+The target chooses a scene dialect and an adapter implementation. These examples
+check that their type parameters stay connected through planning. Concrete renderer
+compatibility is checked separately in typing_renderers.py.
 """
 
 from typing import Any, assert_type

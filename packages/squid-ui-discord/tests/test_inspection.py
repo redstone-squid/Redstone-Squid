@@ -19,7 +19,7 @@ from squid_ui_discord.inspection import ViolationCode, audit, cost, measure
 
 
 def _rich_view() -> discord.ui.LayoutView:
-    """One view exercising every nesting shape measurement has to walk."""
+    """Combine top-level text, nested containers, a section accessory, media, and buttons."""
     section = discord.ui.Section(accessory=discord.ui.Button(label="go", custom_id="go"))
     section.add_item(discord.ui.TextDisplay("section text"))
     container = discord.ui.Container()
@@ -36,7 +36,7 @@ def _rich_view() -> discord.ui.LayoutView:
 
 
 class TestAgreesWithDiscordPy:
-    """Measurement must count what Discord counts, or every budget below it is fiction."""
+    """Compare measured resource usage with the SDK's own traversal and counters."""
 
     def test_component_count_matches_the_library_walk(self):
         view = _rich_view()

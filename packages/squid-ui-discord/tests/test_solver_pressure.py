@@ -1,4 +1,4 @@
-"""Author-sized glue budgets and heterogeneous region breaking."""
+"""Authored text budgets and page breaks across regions containing several node types."""
 
 import pytest
 

@@ -1,14 +1,8 @@
-"""Pins for the erased aliases and the finished `Axis` keying. Nothing here runs.
+"""Static contracts for target-erased aliases and Axis-keyed resource costs.
 
-`Component[RenderTargetT]` and `MessageRoot[RenderTargetT, AdapterT]` default every type parameter, so a bare
-annotation silently means one specific instantiation and rejects every other -- including `Self`
-inside each class's own methods. That is what `AnyComponent` and `AnyMessageRoot` exist to say,
-and these pins are what keeps them saying it: if a bare name ever becomes assignable from a
-non-default render target, the alias has stopped being load-bearing and the defaults have changed
-meaning underneath it.
-
-Every `pyrefly: ignore` and `pyright: ignore` below is an assertion that the line *is* an error.
-If one goes unused, the guarantee it protects has changed.
+AnyComponent and AnyMessageRoot accept different render targets, while bare generic
+names use their default target types. Suppressions mark intentional invalid combinations;
+an unused suppression means its negative example needs review.
 """
 
 from typing import assert_type, override
@@ -86,7 +80,7 @@ assert_type(cost.axes, tuple[Axis, ...])
 ResourceCost({"components": 3})  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-assignment]
 cost.get("components")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
-# The limits side already spoke `Axis`; this is the hand-off that used to be untypeable.
+# Resource costs and target capacities use the same Axis keys.
 assert not list(cost.over(LIMITS.capacities))
 
 

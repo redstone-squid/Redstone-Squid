@@ -247,9 +247,9 @@ class TestDiscordPyCrossChecks:
     def test_an_action_row_only_layout_view_still_sets_the_components_v2_flag(self) -> None:
         """The reason the classic renderer must build a real `View`.
 
-        `ActionRow._is_v2()` returns True by deliberate upstream design, so a LayoutView whose
-        payload is identical to a classic one still flags the message irreversibly V2. This is
-        the upstream assumption most likely to change.
+        `ActionRow._is_v2()` returns True in the supported SDK, so a LayoutView with only
+        classic-compatible controls still requests the V2 message flag. This test catches
+        changes to the SDK behavior that the classic renderer relies on.
         """
         layout = discord.ui.LayoutView(timeout=None)
         layout.add_item(discord.ui.ActionRow(discord.ui.Button(label="x", custom_id="x")))
@@ -269,7 +269,7 @@ class TestDiscordPyCrossChecks:
             discord.ui.View(timeout=None).add_item(discord.ui.ActionRow())  # type: ignore[arg-type]
 
     def test_discordpy_validates_no_embed_string_length_locally(self) -> None:
-        """Every per-value cap is server-only, which is why Squid audits the payload itself."""
+        """The SDK serializes overlong titles and descriptions, so Squid checks them before delivery."""
         embed = discord.Embed(title="x" * 500, description="y" * 5000)
 
         payload = embed.to_dict()

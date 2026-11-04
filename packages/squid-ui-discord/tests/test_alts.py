@@ -1,4 +1,4 @@
-"""Degradation ladder (alts) tests."""
+"""Text alternatives tried from most to least detailed when the message runs out of space."""
 
 import pytest
 from hypothesis import given

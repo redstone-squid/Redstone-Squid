@@ -1,4 +1,4 @@
-"""The owner-only mount inspector: what it lists, what it opens, and what it refuses."""
+"""Developer inspectors list message roots, show runtime state, and control permitted operations."""
 
 import json
 from datetime import UTC, datetime, timedelta
@@ -163,8 +163,8 @@ class TestDetail:
         message_root, _ = message_root_inspector(inspector)
         await subject.dispatch("open", interaction_harness(message_id=42))
 
-        # A handler that changes nothing leaves the mount clean, so Refresh has to be a
-        # state change of its own or the message would keep showing the old dump.
+        # The subject changed outside the inspector's own state. Refresh must invalidate the
+        # inspector, or its message would keep showing the old snapshot.
         await message_root.dispatch("refresh", interaction_harness())
 
         assert "'opened': True" in "\n".join(sd.payload_texts(commit_render(message_root)))

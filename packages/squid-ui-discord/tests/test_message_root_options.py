@@ -6,8 +6,8 @@ surface by hand, because a TypedDict cannot be derived from a dataclass at type-
 A keyword added to one but not the other would be silently unreachable for every host that
 mounts through ``DiscordUIRuntime.mount`` or a ``SessionSpec``.
 
-``MessageRoot.__init__`` is no longer a third copy: it takes a config, the target discriminator,
-and target-independent overrides, so it cannot fall out of step with either.
+MessageRoot.__init__ accepts the config, target, and per-root access policy. Checking
+that small signature prevents another independently maintained list of options.
 """
 
 import inspect
@@ -16,8 +16,8 @@ from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootConfig
 from squid_ui_discord.message_root_options import MessageRootDefaults, MessageRootOptions
 
-# The one keyword deliberately absent from the reusable defaults: access identifies the
-# actor allowed to use a specific mount and must be supplied at each construction site.
+# Access is supplied for each message root; reusable defaults must not silently choose
+# who may use a newly mounted component.
 PER_MOUNT_ONLY = {"access"}
 
 

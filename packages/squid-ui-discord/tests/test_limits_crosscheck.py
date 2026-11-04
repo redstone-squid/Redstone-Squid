@@ -1,8 +1,9 @@
 """Cross-check the limits table against what discord.py 2.7 enforces locally.
 
-discord.py validates child counts at mutation time but no string lengths. If one of these
-starts failing after a discord.py upgrade, the limits table (or the conform gate's division of
-labor) needs a fresh look.
+These cases compare child-count checks in the SDK with the planner's limits. They also
+show that the tested modal strings can serialize while exceeding those limits, which
+is why inspection must check the completed payload. Revisit these assumptions after
+a discord.py upgrade.
 """
 
 import discord
@@ -61,7 +62,8 @@ def test_select_option_count_matches_discordpy():
 
 
 def test_discordpy_does_not_validate_string_lengths():
-    # The premise of the conform gate: these all serialize locally and would 50035 at send time.
+    # Local serialization accepts these oversized strings; no API request is needed to
+    # show why the frontend needs its own payload checks.
     modal = discord.ui.Modal(title="t" * (LIMITS.components.modal_title + 1), timeout=None)
     modal.add_item(discord.ui.Label(text="l", component=discord.ui.TextInput(label="i", default="v" * 5000)))
     payload = modal.to_dict()

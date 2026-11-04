@@ -60,11 +60,10 @@ assert "asyncpg" not in sys.modules
 
 
 def test_base_install_needs_no_store_backend() -> None:
-    """The `durable` extra is real, not decorative.
+    """Import the base adapter with both storage backends unavailable.
 
-    `durability` is behind a lazy `__getattr__`, and `operations`, `devtools` and
-    `devtools_view` name its types under `TYPE_CHECKING`. Miss any one of those and importing
-    this package reaches `squid_storage` again, which nothing else here would notice.
+    Durability is exposed lazily, and modules that need only its types import them under
+    TYPE_CHECKING. Blocking the backend imports verifies that these boundaries hold.
     """
     code = """
 import importlib.abc

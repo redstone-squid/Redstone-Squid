@@ -1,12 +1,9 @@
-"""Pins that a dialect mismatch is a *static* error at any nesting depth. Nothing here runs.
+"""Static target constraints through nested containers and component boundaries.
 
-This is the file the typing pass exists for. `typing_targets.py` already pinned that a bare
-V2-only primitive cannot be planned for the classic target; what it could not pin, because
-the mode stopped propagating one level down, is the case an author actually hits -- the
-offending node three containers deep inside something that looks portable.
-
-Every `pyrefly: ignore` and `pyright: ignore` below is an assertion that the line *is* an error.
-If one ever goes unused, propagation has regressed and the guarantee is gone.
+A V2-only Panel must still require a V2 target when buried inside several portable
+containers. These examples check that wrappers do not erase that restriction.
+Suppressions mark intentional invalid combinations; an unused suppression means its
+negative example needs review.
 """
 
 from typing import assert_type
@@ -44,7 +41,7 @@ plan(classic_only, target=classic())
 plan(v2_only, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 plan(classic_only, target=v2())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 
-# Three containers deep, which is the case `typing_targets.py` could not reach.
+# Keep target restrictions through several container layers.
 buried = sl.stack(sl.section(sl.heading("h"), sl.aside(sl.stack(Panel(())))))
 plan(buried, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 plan(buried, target=v2())

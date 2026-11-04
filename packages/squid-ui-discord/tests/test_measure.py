@@ -52,9 +52,8 @@ def _text_of(view: discord.ui.LayoutView) -> str:
 def _content_of(child: object) -> str:
     """The text one measured child carries.
 
-    `children` is typed as `Realized`, which spans every node kind, and only `MeasuredText`
-    holds `content`. Stating that expectation once here beats repeating a suppression at
-    every assertion.
+    Measured layouts can contain several node types. These assertions expect text, so the
+    cast belongs here instead of being repeated at every assertion.
     """
     return cast(MeasuredText, child).content
 

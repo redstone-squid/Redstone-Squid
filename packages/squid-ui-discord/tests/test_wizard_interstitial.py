@@ -1,9 +1,9 @@
-"""The framework-owned interstitial hop between two consecutive wizard forms.
+"""The Continue button between consecutive wizard forms belongs to the Discord frontend.
 
 Discord will not open a modal from a modal submission, so a wizard whose next step is also a
-form cannot go straight there -- the mount has to render one button in between and let the
-reader press it. That hop is the mount's invention, not the machine's: the wizard's state says
-`detail` either way. It is asserted here because there is nowhere else it exists.
+form needs a button press before the frontend can open it. The wizard state already
+points to detail; MessageRoot supplies the Continue button for that pending form.
+These tests check that presentation step separately from the wizard's transitions.
 """
 
 import discord

@@ -73,10 +73,9 @@ async def test_request_returns_the_interaction_behind_a_discord_event() -> None:
 
 
 def test_a_portable_responder_satisfies_the_protocol_it_claims() -> None:
-    """The stub is the point: the protocol must be implementable with no Discord in reach.
+    """The annotated assignment checks protocol conformance without Discord-specific types.
 
-    The real check is static — `Portable` is accepted where `ActionResponder` is required,
-    which is what stopped holding once `present_form` took a frontend object.
+    The runtime assertion verifies that the event retains the responder.
     """
     accepted: ActionResponderProtocol = Portable()
 

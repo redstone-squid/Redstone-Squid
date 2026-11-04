@@ -41,8 +41,8 @@ def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -
     assert isinstance(presenter, sd.DialogPresenter)
     assert presenter.sessions is runtime.sessions
     assert presenter.supervisor is runtime.challenges
-    # The registry's defaults and the host's are one object, so a mount opened through
-    # either is wired the same way.
+    # The session manager and runtime share defaults, so both construct message roots
+    # with the same challenge presenter and scheduler.
     assert runtime.defaults is runtime.sessions.defaults
 
 
@@ -57,7 +57,7 @@ def test_install_makes_a_reactor_only_when_given_a_bus() -> None:
 
 
 def test_a_second_install_on_one_client_is_refused() -> None:
-    """Two hosts on one client would give the same click two registries."""
+    """One client must identify one UI runtime when an interaction looks it up."""
     client = fake_client()
     install(cast(discord.Client, client))
 

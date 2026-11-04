@@ -1,4 +1,4 @@
-"""Palette registry behavior at the live-mount boundary."""
+"""A live message root keeps its palette until explicitly given a replacement."""
 
 from typing import override
 
