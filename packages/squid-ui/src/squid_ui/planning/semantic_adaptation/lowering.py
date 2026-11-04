@@ -1,4 +1,11 @@
-"""Lower semantic author intent into finite target-shaped strategy candidates."""
+"""Build Discord primitives for one selected set of semantic representations.
+
+For example, an Article becomes an embed in classic mode or a container in
+Components V2. Lowering still knows which content is a heading, field, or region,
+so it can preserve those relationships before measurement allocates text space.
+Strategy discovery lives in `decisions`; comparing complete layouts belongs to
+the Discord planner.
+"""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -196,7 +203,12 @@ def lower_semantics(
     strategies: Mapping[str, str] | None = None,
     fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticLowering:
-    """Lower one semantic decision set into the primitives `measure()` will price."""
+    """Lower selected semantic representations into localized Discord primitives.
+
+    Unspecified strategies use their locally preferred choice; global layout
+    search is the caller's responsibility. Session updates are staged in the
+    result. A supplied cursor coordinator owns pager state and its updates.
+    """
     broker = pages if pages is not None else CursorCoordinator(session, chrome)
     context = LoweringContext(
         limits,
@@ -398,8 +410,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
-            # Not `children`: that name is a match capture throughout this function, and
-            # declaring it here would impose `list[Node]` on every other branch's binding.
+            # Use a separate name because `children` is a typed match capture in other branches.
             gallery: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
             if caption is not None:
                 gallery.append(Footer(_resolve(caption, context)))
@@ -525,17 +536,17 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> l
 
 
 def _card_fields(fields: Sequence[Field], context: LoweringContext) -> list[CardField]:
-    """Real embed fields, keeping the name/value split the semantic node already made.
+    """Keep semantic fields as separate embed names and values.
 
-    This is the whole reason lowering has to know the target. `_field_entry` flattens a field
-    into one line of text, and a target that decided embed structure downstream of lowering
-    would have nothing left to decide with.
+    Targets without embed fields use `_field_entry` to flatten each pair into a
+    labeled line. Making that choice here preserves the structure a classic
+    scene needs, along with priorities and authored overflow alternatives.
     """
     entries: list[CardField] = []
     for field in fields:
         value = _resolve(field.value, context)
-        # A field's own ladder is its overflow policy, so the solver steps it down its
-        # author-written rungs before anything is trimmed mid-string.
+        # Retain authored alternatives for shared-budget pressure. Per-slot embed
+        # caps are enforced separately during realization.
         rungs = [rung for fallback in field.fallbacks if len(rung := _resolve(fallback, context)) <= len(value)]
         policy: Overflow = alts(*rungs) if rungs else Never()
         entries.append(
@@ -693,11 +704,10 @@ def _card_media(value: CardMedia | None, context: LoweringContext) -> CardMedia 
 
 
 def _field_entry(field: Field, context: LoweringContext) -> str | Alt:
-    """One `Fields` line, carrying the field's own degradation ladder when it has one.
+    """Format a field and its alternatives as labeled lines.
 
-    Rungs come from caller data assembled by formatting and escaping, so one that came out
-    empty or longer than what precedes it is skipped rather than rejected — direct `Alt`
-    construction stays strict.
+    Skip alternatives longer than the last accepted line so the resulting Alt
+    ladder stays nonincreasing. The label is repeated in every rung.
     """
     label = _resolve(field.label, context)
     primary = f"**{label}:** {_resolve(field.value, context)}"

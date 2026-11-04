@@ -1,14 +1,11 @@
-"""Measure one concrete IR tree against Discord's message budgets.
+"""Measure an already-selected primitive tree against Discord message budgets.
 
-`measure()` evaluates a single already-decided layout. It costs every node's chrome
-(markdown prefixes, code fences, join characters) exactly, grants the shared display-text
-budget in priority order, and applies each node's overflow policy only when its content does
-not fit. Higher priority is allocated first; ties fall back to document order. Dropped nodes
-refund their grant and the allocation reruns, so a dropped footnote genuinely returns its
-characters to the body.
+Each text pool is allocated independently after charging markdown chrome and
+reserving pager footers. Never and Condense policies precede flexible text;
+flexible grants follow author priority. Dropped nodes release their grants.
 
-Nothing here chooses between alternatives. `Variants` and semantic fallbacks are the
-planner's search decisions, and a layout reaching this module has already made them.
+Structural variants and semantic fallbacks must be selected before measurement.
+Text overflow policies can still choose shorter alternatives during allocation.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -69,19 +66,12 @@ class MeasuredLayout:
     notes: list[SolveNote]
     pagers: tuple[Pager, ...] = ()
     cost: ResourceCost = EMPTY_COST
-    """Everything this layout spends, per named axis, including every pager's controls.
-
-    One cost rather than a components scalar beside a text scalar: a target with two text
-    pools has no single number to report, and a caller asking "does this fit?" has to ask
-    it of every axis the target budgets or it is not asking the question at all.
-    """
+    """Measured consumption by resource axis, including pager footers and controls."""
     overflowed: bool = False
-    """Whether anything had to give to fit, as opposed to being clamped on the way in.
+    """Whether fitting added diagnostics beyond the initial shape checks.
 
-    Not every note is a defeat. Trimming a select's options to 25 or a section's texts to
-    3 is Discord's shape being enforced and happens whatever the budget; degrading,
-    spilling, dropping or stepping a ladder means the content did not fit. A caller
-    deciding whether more will fit — the root packer — needs to tell those apart.
+    Local clamps alone do not set this flag. Root pagination uses it to avoid
+    packing another node onto a page that already required overflow handling.
     """
     nav: PlannedNav | None = None
     chrome: Chrome = DEFAULT_CHROME
@@ -98,14 +88,15 @@ class MeasuredLayout:
         return tuple(note for note in self.notes if note.severity is SolveNoteSeverity.FAILURE)
 
     def reposition(self, positions: Mapping[str, Position]) -> None:
-        """Show a different position in each named pager without re-fitting.
+        """Rewrite visible pager pages without reallocating text.
 
-        Which page is showing is a display decision, not a layout one: every fragment
-        already fits the grant its pager was allocated, the footer reservation was
-        measured at its widest, and a nav factory may not vary its shape by page. So a
-        caller that only learns where the reader belongs *after* fitting — which is
-        anyone reconciling against a stored cursor, since the page count is an output —
-        can move the page here instead of measuring again.
+        Page counts become known during fitting, so stored positions can only be
+        reconciled afterward. Each fragment already fits its text allowance;
+        changing the visible page can reuse that allocation and footer reservation.
+
+        Navigation must preserve its realized node count and component cost; a
+        change raises `LayoutInvariantError`. This mutates pager slots and child
+        lists even though the MeasuredLayout wrapper is frozen.
         """
         for pager in self.pagers:
             position = positions.get(pager.key)
@@ -143,12 +134,6 @@ class MeasuredLayout:
         return self.pager.pages if self.pager is not None else 1
 
 
-# --- Text units -----------------------------------------------------------------------------
-
-
-# --- Solve ----------------------------------------------------------------------------------
-
-
 def _count_pages(unit: TextUnit, per: int) -> list[str]:
     """Group a Lines node's entries into pages of ``per`` entries."""
     entries = [ladder[0] for ladder in unit.ladders or ()]
@@ -157,11 +142,11 @@ def _count_pages(unit: TextUnit, per: int) -> list[str]:
 
 
 def _footer_cost(footer: Callable[[int, int], str], content_len: int) -> int:
-    """Characters to hold back for the page footer before anything is allocated.
+    """Reserve a footer using the widest page number implied by content length.
 
-    Pages never outnumber the characters they hold, so the widest number the footer can be
-    asked to render has at most as many digits as the content length. Measuring the footer
-    there bounds its cost exactly, without a hand-picked sentinel page number.
+    This assumes footer length grows with the digit counts of its arguments. A
+    custom footer whose longest text occurs for smaller numbers can exceed this
+    estimate. The `-# ` prefix is included.
     """
     widest = 10 ** len(str(max(content_len, 1))) - 1
     return len(PAGE_FOOTER_PREFIX) + len(footer(widest, widest))
@@ -181,12 +166,12 @@ def measure(
     position: PositionState = None,
     nav: PlannedNav | None = None,
 ) -> MeasuredLayout:
-    """Fit one concrete primitive layout into its target budgets.
+    """Fit a normalized primitive tree and return its realized nodes, costs, and diagnostics.
 
-    Exactly one deterministic pass over one already-decided tree: no alternatives are
-    weighed here. Choosing between them — semantic strategies, semantic fallbacks, and
-    primitive `Variants` — belongs to the planner's search, which calls this per candidate.
-    An unresolved `Variants` reaching here is a planner bug, not a layout to fit.
+    Structural alternatives must already be resolved. Allocation may repeat as
+    nodes drop or pagers activate. With `strict=True`, any diagnostic other than
+    lossless adaptation raises `LayoutOverflowError`; otherwise failures remain
+    in the returned layout for the caller to inspect.
     """
     chrome = localize_chrome(chrome, localization)
     measured = _measure_once(
@@ -290,10 +275,8 @@ def _measure_once(
     seen: set[frozenset[int]] = {active}
     final: _Pass | None = None
 
-    # `active` only ever grows and is bounded by the number of paginators in the tree, so
-    # this terminates. The bound is stated rather than borrowed from an unrelated limit,
-    # and a repeated active set means a paginator toggled itself off, which is a bug in
-    # this function rather than a document the caller can fix.
+    # Keep footer reservations once a pager has activated. This monotone set is
+    # bounded by the number of paginators, so repeated allocation terminates.
     while True:
         pass_notes = list(notes)
         degradation = DegradationRecorder.create()
@@ -372,7 +355,7 @@ def _measure_once(
         if placement is None:
             placement = (children, len(children))
             children.extend(additions)
-        # The nav follows the footer slot, and `repage` replaces exactly that span.
+        # Navigation follows the footer; repositioning replaces only that span.
         pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
         pagers.append(pager)
 

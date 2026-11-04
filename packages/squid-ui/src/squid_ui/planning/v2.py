@@ -1,4 +1,4 @@
-"""The Components V2 dialect: what makes a V2 message a V2 message, and nothing else."""
+"""Normalize, validate, paginate, and build Discord Components V2 scenes."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace

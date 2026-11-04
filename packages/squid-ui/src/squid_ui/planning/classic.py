@@ -171,12 +171,12 @@ def _paginate(
     nav: PlannedNav,
     broker: CursorCoordinator,
 ) -> tuple[MeasuredLayout, int]:
-    """Pack cards and rows into the fewest legal pages, losslessly.
+    """Greedily pack cards and controls into pages in source order.
 
-    Explicit `Content` is pinned: it is the message's one content field and every page has
-    one, so repeating it unchanged is the only representation that does not invent or lose
-    text. Everything else flows in source order, and each page is the longest legal prefix
-    left once the navigation row has reserved its slot.
+    Repeat top-level Content on every page. Each probe reserves a footer card
+    and navigation controls. A node whose measured cost still exceeds page
+    capacities raises `UnsolvableLayoutError`. Individual nodes may apply their overflow
+    policies, which remain visible in the returned measurement diagnostics.
     """
     pinned = tuple(node for node in nodes if isinstance(node, Content))
     flowing = [node for node in nodes if not isinstance(node, Content)]

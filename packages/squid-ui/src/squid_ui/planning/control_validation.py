@@ -1,13 +1,7 @@
-"""The component rules both Discord dialects enforce, stated once.
+"""Validate controls and wrappers shared by both Discord message modes.
 
-Components V2 and classic messages disagree about structure — panels and sections against
-embeds and content — but they draw the same buttons and selects under the same
-`ComponentLimits`. Both validators had grown their own copy of those checks, so a cap
-corrected in one dialect stayed wrong in the other.
-
-A dialect's own `match` runs first and delegates here for whatever it does not claim. That
-order is load-bearing: a structure one dialect rejects outright is rejected before the shared
-rules can read it as an ordinary control.
+A dialect checks its own structures before delegating here, so unsupported structures
+are rejected before the shared control rules run.
 """
 
 from collections.abc import Callable
@@ -133,10 +127,8 @@ def validate_component(node: Node, path: str, *, limits: MessageLimits, walk: Wa
             for index, child in enumerate(children):
                 walk(child, f"{path}.{index}")
         case Variants(variants=variants):
-            # Every rung is checked, not just the one the search will open on, so a document
-            # is rejected for a bad rung it might never reach. That also means two rungs
-            # cannot share a Paginate key — as under the previous Fold, whose primary and
-            # fallback were both walked.
+            # Validate every rung, including ones search may never select. Pager keys must
+            # therefore be unique across alternatives as well as within a selected layout.
             for index, variant in enumerate(variants):
                 for child_index, child in enumerate(variant.nodes):
                     walk(child, f"{path}.variant.{index}.{child_index}")

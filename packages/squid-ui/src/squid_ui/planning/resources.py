@@ -1,4 +1,10 @@
-"""Target-neutral resource axes, costs, and limit contracts."""
+"""Count the resources a layout consumes and compare them with target limits.
+
+A resource axis is one independently limited quantity, such as characters or buttons.
+ResourceCost records how much a layout uses on each axis; TargetLimits supplies the
+corresponding capacities. Keeping these quantities separate prevents spare text space
+from making a layout appear to fit when it still contains too many components.
+"""
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
@@ -29,7 +35,11 @@ TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
 
 @dataclass(frozen=True, slots=True)
 class ResourceCost:
-    """Named resource consumption measured against target-wide budgets."""
+    """Nonnegative costs by resource axis, copied into an immutable mapping.
+
+    Zero entries are omitted and missing axes read as zero. Capacity checks only
+    inspect axes present in the supplied capacity mapping.
+    """
 
     values: Mapping[Axis, int] = field(default_factory=dict)
 

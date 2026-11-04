@@ -1,4 +1,10 @@
-"""Portable semantic planning for Slack Block Kit surfaces."""
+"""Compile portable layout nodes for Slack messages, modals, and Home views.
+
+The HTML planner first resolves semantic structure, presentation state, and live
+handlers into an element tree. `_Lowerer` turns that tree into Block Kit scene
+data using the selected surface's limits. The final plan retains bindings for
+actions that remain visible and reports any recorded content loss.
+"""
 
 import hashlib
 import re
@@ -89,6 +95,7 @@ def _plain_text(value: str) -> str:
 
 
 def _mrkdwn(value: str, markup: Markup = Markup.DISCORD_MARKDOWN) -> str:
+    """Escape Slack control characters and translate a limited set of Markdown tokens."""
     escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     if markup is Markup.PLAIN:
         return escaped
@@ -826,7 +833,13 @@ def _action_keys(body: SlackBody) -> set[str]:
 
 
 class SlackPlanner:
-    """Compile portable semantic documents into deterministic Slack scenes."""
+    """Compile portable documents through an HTML intermediate into Slack scene data.
+
+    Surface limits may truncate text or blocks; strict mode rejects recorded
+    degradation. Modals require exactly one top-level FormTrigger. Structural
+    cache hits still rebuild current bindings and resources before reusing the
+    cached scene and report.
+    """
 
     def plan[BodyT: SlackBody, RenderTargetT: SlackTarget, AdapterT](
         self,

@@ -1,20 +1,7 @@
-"""The Discord-specific dialect seam used by the layout solver.
+"""Normalize, validate, paginate, and build scenes for Discord message modes.
 
-Almost all of planning is target-neutral. Semantic adaptation, resource allocation, the
-variant search, action bindings, caching, degradation accounting, and session state work
-the same whichever message a document ends up in. Four things do not, and a
-:class:`TargetDialect` is exactly those four and nothing else:
-
-1. normalizing lowered primitives into the target's own shape;
-2. validating structure only that target can judge;
-3. paginating a document losslessly across that target's message-wide budgets;
-4. building the exact scene body a renderer will draw.
-
-The list is short on purpose. Anything else that wants to branch on the target is a shared
-operation that has not been extracted yet, and adding a fifth *method* is the signal to go
-extract it instead. The data members below are not methods: they are the protocol's own
-identity — what it is called, what it can draw, what a legal message of it holds — and a
-target is the product of one of them and one adapter.
+`DiscordDialect` supplies the mode-specific operations used by the shared Discord
+planner. `TargetDialect` is the broader contract used by all target families.
 """
 
 from collections.abc import Mapping, Sequence
@@ -62,11 +49,7 @@ def require_gallery_item(value: str | GalleryItem) -> GalleryItem:
 
 @dataclass(slots=True)
 class SceneBindings:
-    """Callbacks, forms, and prepared resources collected while a scene is built.
-
-    Shared by every dialect. What a control *looks* like is target shape; what it *does* is
-    not, and an action key means the same thing to a mount whichever message drew it.
-    """
+    """Callbacks, forms, and live resources collected while building one scene."""
 
     bindings: dict[str, ActionBinding] = field(default_factory=dict)
     form_bindings: dict[str, FormBinding] = field(default_factory=dict)
@@ -83,8 +66,8 @@ class SceneBindings:
             raise LayoutInvariantError(message)
         handler = node.on_click if isinstance(node, Button) else node.on_select
         routes = node.routes if isinstance(node, SelectMenu) else {}
-        # Only buttons carry admission, busy busy and recording; a select's guards and
-        # histories, if any, live on the route bindings its grouped actions were lowered into.
+        # Button guards, busy state, and history belong to the button binding.
+        # Grouped selects attach guards and history to their individual routes.
         guard = node.guard if isinstance(node, Button) else None
         busy = node.busy if isinstance(node, Button) else None
         label = resolved_optional_text(node.label) if isinstance(node, Button) else ""
@@ -143,12 +126,7 @@ class SceneBindings:
 
 
 class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](Protocol):
-    """One Discord protocol mode: what a legal message of it is, and how to build one.
-
-    The first axis of a target. Bound to its own limits and body types, so each dialect's
-    four methods can narrow to what it actually handles instead of declaring the union and
-    narrowing anyway.
-    """
+    """Operations and limits for one Discord message mode."""
 
     id: str
     """This protocol's stable name, recorded in every scene planned against it."""
@@ -160,11 +138,7 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](P
     body_type: type[BodyT]
     default_limits: LimitsT
     realizes_extensions: bool
-    """Whether this protocol can draw a native item at all.
-
-    False for classic, whose inability to hold one used to be expressed only by a factory
-    omitting a keyword argument.
-    """
+    """Whether this message mode supports native extension resources."""
 
     def normalize(self, nodes: Sequence[Node], target: Target[LimitsT, BodyT, RenderTargetT, Any]) -> tuple[Node, ...]:
         """Rewrite semantically lowered nodes into this target's own primitive shape."""
@@ -185,7 +159,7 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](P
         nav: PlannedNav,
         broker: CursorCoordinator,
     ) -> tuple[MeasuredLayout, int]:
-        """Split an over-budget document into the fewest lossless pages this target allows."""
+        """Pack an over-budget document into pages and return the selected page and total count."""
         ...
 
     def body(self, children: Sequence[Realized], bindings: SceneBindings) -> BodyT:

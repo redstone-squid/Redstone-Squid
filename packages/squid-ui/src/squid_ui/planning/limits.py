@@ -1,24 +1,14 @@
-"""Discord presentation limits as data, for both message modes.
+"""Discord component, embed, and message limits used by planning.
 
-The single source of truth for every hard limit the engine enforces. Exceeding any of these in
-a payload makes Discord reject the request with HTTP 400 error code 50035 ("Invalid Form
-Body"). Values follow the Discord API docs for Components V2, classic messages, components,
-and modals; the ones discord.py 2.7 validates locally are cross-checked by tests.
+ComponentLimits describes individual controls and modals. EmbedLimits describes one
+embed, while MessageLimits subclasses declare the independent message-wide budgets.
+Custom limit instances can reduce these defaults for tests or reserved capacity.
 
-Documentation consulted, pinned here so a future reader can re-verify rather than re-guess:
+API references for checking the defaults:
 
-- https://docs.discord.com/developers/resources/message (classic content, embeds)
-- https://docs.discord.com/developers/components/reference (rows, buttons, selects, modals)
-- https://docs.discord.com/developers/components/overview (the irreversible V2 transition)
-
-Almost none of these are enforced client-side. discord.py checks `len(embeds) > 10` and the
-25-child cap on `discord.ui.View`; everything else — the 6,000-character aggregate and every
-per-value embed cap — is server-only, which is why the renderer runs a strict payload audit.
-
-The caps split three ways, and the split is what lets a function say what it reads.
-`ComponentLimits` holds what every component obeys in either mode, `EmbedLimits` what one
-embed may hold, and a `MessageLimits` subclass the message-wide budgets that mode alone
-knows. A shared planning layer takes a `MessageLimits` and may touch only what it declares.
+- https://docs.discord.com/developers/resources/message
+- https://docs.discord.com/developers/components/reference
+- https://docs.discord.com/developers/components/overview
 """
 
 from abc import ABC, abstractmethod
@@ -34,13 +24,7 @@ ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
 
 @dataclass(frozen=True, slots=True)
 class ComponentLimits:
-    """Caps every Discord component obeys, whichever message mode holds it.
-
-    Row width, control text, custom-ID length, and modal shape are properties of Discord's
-    components rather than of a message mode, so they are stated once and both modes share
-    the same instance. A function that reads only these should say `ComponentLimits`: that
-    is what makes it usable from either mode's path.
-    """
+    """Limits for individual Discord controls and modals, shared by both message modes."""
 
     # ActionRow.
     row_buttons: int = 5
@@ -74,13 +58,7 @@ COMPONENT_LIMITS = ComponentLimits()
 
 @dataclass(frozen=True, slots=True)
 class EmbedLimits:
-    """What one embed may hold.
-
-    These are local caps: they describe what a legal embed *is*, not how much room is left,
-    and they are clamped and validated exactly as `ComponentLimits.button_label` is. The
-    message-wide `Axis.EMBED_TEXT` pool that several embeds share is a budget and lives on
-    `ClassicLimits`.
-    """
+    """Limits for one embed's fields; the shared aggregate text budget lives on ClassicLimits."""
 
     title: int = 256
     description: int = 4096
@@ -110,33 +88,22 @@ def _cap_values(value: object, prefix: str = "") -> Iterator[tuple[str, object]]
 
 @dataclass(frozen=True, slots=True)
 class MessageLimits(ABC):
-    """The message-wide budgets every dialect obeys, whichever component mode it is in.
+    """Shared Discord limits and the interface for mode-specific resource budgets.
 
-    Abstract: message-wide budgets live on the subclasses, because a mode-specific strategy
-    may not borrow another mode's totals. What is shared is stated here, and a shared
-    planning layer may read only what this class declares — anything mode-specific goes
-    through a declared member or moves onto the dialect.
+    Subclasses declare their own axes so separate text pools and component
+    counting rules remain independent.
     """
 
     components: ComponentLimits = COMPONENT_LIMITS
     attachments: int = 10
     """Files per message. Discord's own cap, not discord.py's; the message docs omit it."""
     embeds: EmbedLimits | None = None
-    """What one embed may hold, or None in a mode that has no embeds.
-
-    Optional because the capability is: a Components V2 message cannot carry an embed at
-    all. Reading it through the None forces the guard the shared measurer used to skip by
-    substituting an invented default.
-    """
+    """Per-embed limits, or None when this message mode cannot contain embeds."""
 
     @property
     @abstractmethod
     def capacities(self) -> Mapping[Axis, int]:
-        """Every message-wide budget this mode declares, with the room it has left.
-
-        The limits own this rather than the target, because the caps and the names for
-        them have to agree and there is no way to keep two declarations in step.
-        """
+        """Available capacity by resource axis for this message mode."""
 
     @abstractmethod
     def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
@@ -149,12 +116,7 @@ class MessageLimits(ABC):
     @property
     @abstractmethod
     def text_axes(self) -> Mapping[Axis, int]:
-        """Every independent text pool this mode budgets, by axis.
-
-        Independent is the operative word. Two pools do not lend to each other, so the
-        allocator runs once per pool over the units tagged to it rather than once over a
-        single total.
-        """
+        """Independent text capacities; allocation runs separately for each pool."""
 
     @abstractmethod
     def fits_controls(self, controls: int, rows: int) -> bool:
@@ -217,8 +179,7 @@ class V2Limits(MessageLimits):
     @property
     @override
     def text_axes(self) -> Mapping[Axis, int]:
-        # Exactly one pool, which is why this looks like ceremony here and stops looking
-        # like it the moment a target has two.
+        # Components V2 charges all display text to one pool.
         return {Axis.DISPLAY_TEXT: self.total_text}
 
     @override
@@ -237,12 +198,7 @@ class ClassicLimits(MessageLimits):
     """Hard limits for a pre-Components-V2 message: content, embeds, and action rows."""
 
     embeds: EmbedLimits = EMBED_LIMITS
-    """Narrowed from the base's optional: a classic message always has embeds.
-
-    Plan 71 made `MessageLimits.embeds` optional so a mode without embeds could say so and
-    every read would be guarded. The classic path is the mode that always has them, and
-    saying so here is what spares its own code seven `is None` checks that can never fire.
-    """
+    """Per-embed limits are always available in classic mode."""
 
     # Message-wide budgets.
     content: int = 2000
@@ -254,12 +210,7 @@ class ClassicLimits(MessageLimits):
     """Embeds per message, which discord.py checks locally."""
     rows: int = 5
     controls: int = 25
-    """Interactive components per message: 5 action rows of 5 buttons.
-
-    Discord's cap, not discord.py's. discord.py happens to be the only layer that checks it
-    locally — `discord.ui.View` refuses a 26th child — which is why it reads like a library
-    limit at the one site that enforces it.
-    """
+    """Interactive components across the message's action rows."""
 
     @property
     @override

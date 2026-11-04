@@ -65,6 +65,12 @@ from squid_ui.primitives.nodes import (
 
 @dataclass(slots=True)
 class Builder:
+    """Build mutable text slots and charge fixed costs before shared-budget allocation.
+
+    Local clamps emit diagnostics. The planner validates structure separately;
+    realizing a tree alone does not establish that the target can draw it.
+    """
+
     limits: MessageLimits = LIMITS
     notes: list[SolveNote] = field(default_factory=list)
     units: list[TextUnit] = field(default_factory=list)

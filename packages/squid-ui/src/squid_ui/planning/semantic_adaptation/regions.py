@@ -1,4 +1,10 @@
-"""Lower semantic regions and balanced region pagination."""
+"""Preserve authored regions while arranging their content into cards or pages.
+
+Classic messages need loose prose and fields collected into embed cards. A
+temporary `_Fragment` marks content that may merge with its neighbors; an
+explicitly authored region keeps its grouping. Paged regions use measured child
+costs to choose balanced breaks before the complete candidate is fitted.
+"""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -67,15 +73,15 @@ class _Fragment(Card):
 
 
 def _fold(nodes: Sequence[Node], context: LoweringContext) -> list[Node]:
-    """Fold consecutive fragments into as few legal cards as possible.
+    """Combine adjacent loose prose and fields into card fragments.
 
-    Loose prose has to live somewhere, and a classic message's only home for prose beside an
-    explicit `Content` is an embed description. Consecutive prose therefore becomes one
-    implicit card and the first suitable heading becomes its title — later headings stay in
-    the description as formatted text, because an embed has one title.
+    In classic messages, prose outside an explicit Content node needs an embed
+    description. Combining adjacent fragments gives that prose a common card
+    while leaving explicitly authored regions separate.
 
-    A fragment that would overflow a card's own shape opens a continuation card. Continuations
-    are exact: everything the author wrote is still shown, in the same order.
+    A leading heading can become the title. Conflicting singleton slots or too
+    many fields start another fragment. Shared text budgets are allocated later;
+    merging here does not validate description length or guarantee the card fits.
     """
     limits = context.limits
     folded: list[Node] = []
@@ -126,7 +132,7 @@ def _as_fragment(node: Node, open_card: _Fragment | None) -> _Fragment | None:
 
 
 def _merge(first: _Fragment, second: _Fragment, limits: MessageLimits) -> _Fragment | None:
-    """Fold `second` into `first`, or None when the result would not be one legal embed."""
+    """Merge compatible slots and fields, or return None for conflicts or excess fields."""
     embeds = limits.embeds
     if embeds is None or len(first.fields) + len(second.fields) > embeds.fields:
         return None
@@ -192,11 +198,10 @@ def _slot_text(value: CardText) -> str:
 
 
 def _region(card: Card, body: Sequence[Node], context: LoweringContext) -> Node:
-    """One authored region as one card, absorbing whatever its body folded into.
+    """Wrap an authored region and its compatible fragments in cards.
 
-    A region's body is already folded, so the common case is a single fragment that merges
-    straight in. Anything the region cannot hold — a second image, a 26th field — stays a
-    sibling card, which is a continuation rather than a loss.
+    Conflicting slots or excess fields create sibling continuation cards, kept
+    in a Break group so root packing treats the region as one unit.
     """
     fragment = _Fragment(
         title=card.title,

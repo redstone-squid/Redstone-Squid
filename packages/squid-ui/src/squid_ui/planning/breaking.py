@@ -36,12 +36,16 @@ def balanced_breaks(
     widows: int = 1,
     ideal_total: int | None = None,
 ) -> tuple[int, ...]:
-    """Return exact page-end offsets in fragmentation objective order.
+    """Return exclusive page-end offsets minimizing a lexicographic objective.
 
-    Preference violations are minimized first, followed by page count, squared distance
-    from the mean fill, and stable fuller-first cuts. The first pass finds the first two
-    tiers on the page-boundary DAG. A second, fixed-depth pass optimizes balance without
-    carrying whole cut tuples through every state.
+    Minimize preference violations, then page count, squared distance from mean
+    fill, and finally prefer earlier pages with more items. `min_fill` is a soft
+    character minimum for non-final pages; `widows` is a soft item minimum for the
+    final page. Leading separators cost nothing at the start of a page.
+
+    The first dynamic-programming pass finds the best violation and page counts;
+    a fixed-depth second pass balances pages. Raise `ValueError` for invalid limits
+    or when no cuts satisfy capacities and `break_after` boundaries.
     """
     if max_chars < 1:
         message = "page character limit must be positive"

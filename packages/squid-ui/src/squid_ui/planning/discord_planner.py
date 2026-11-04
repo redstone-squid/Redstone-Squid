@@ -1,4 +1,18 @@
-"""Discord semantic adaptation, layout search, measurement, and scene conversion."""
+"""Choose a Discord representation that fits the message's text and component limits.
+
+Semantic nodes can offer several strategies, such as buttons or a select menu for a
+choice picker. Authors can also provide whole-region fallbacks, and primitive Variants
+can offer alternative widget arrangements. A search candidate selects one combination,
+converts it to Discord primitives, and measures the result, including any text shortening.
+
+The search prefers less degradation, then the lower strategy cost, while checking each
+resource limit separately. If the selected document still exceeds those limits, root
+pagination may split it into pages. The chosen display becomes a Scene; callbacks,
+assets, diagnostics, and staged presentation updates accompany it in PlanResult.
+
+Exact memo and structural cache hits skip some or all of this work. A cache hit must
+still use the current document's handlers; cached display structure owns no callbacks.
+"""
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass, replace
@@ -140,11 +154,10 @@ def _program_dynamic_values(
     capabilities: frozenset[str],
     planned: scene.Scene[Any],
 ) -> tuple[object, ...]:
-    """Every process-local value a compiled template must be handed back to be replayed.
+    """Collect the live values needed to restore a compiled template.
 
-    Typed even though the result is a heterogeneous tuple: seven of these were `object`
-    only because of where they end up, and seven interchangeable `object` keywords is
-    exactly the shape in which a swapped argument goes unnoticed.
+    Values keep their traversal order so template slots can bind to this render
+    rather than retaining callbacks from the render that filled the cache.
     """
     external = (
         target,
@@ -364,7 +377,7 @@ class _Candidate:
 
 @dataclass(frozen=True, slots=True)
 class _Expansion:
-    """The decisions one step away, and whether reaching them cost the search its guarantee."""
+    """Successor states and whether guided expansion discarded alternatives."""
 
     successors: tuple[tuple[DegradationProfile, CostVector, _State], ...]
     guided: bool
@@ -372,12 +385,10 @@ class _Expansion:
 
 @dataclass(frozen=True, slots=True)
 class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
-    """One document compiled for one target: everything that does not vary between candidates.
+    """Resolved inputs shared by all candidates and cache replay for one plan.
 
-    The target is already reserved and the chrome already localized, which is the whole reason
-    this is a value rather than the request itself. Everything else is read back off the
-    request, so a search candidate, a structural replay and the final assembly all see one
-    set of inputs instead of three re-spreadings of the same eight fields.
+    The target includes reservations and the chrome is localized; other inputs
+    remain on the original request.
     """
 
     request: PlanRequest[BodyT, RenderTargetT, AdapterT]
@@ -506,8 +517,8 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
     def evaluate(self, state: _State) -> _Candidate:
         """Lower, validate, and measure exactly one candidate in its own coordinator.
 
-        The coordinator is per candidate rather than per plan: a rejected state must not
-        leave its pagers, assets, events, bindings, or staged session writes behind.
+        Each candidate gets a fresh cursor coordinator so rejected layouts cannot
+        leave pagers or proposed presentation-state updates in the winning plan.
         """
         broker = CursorCoordinator(self.presentation, self.chrome, self.nav, self.positions)
         fallbacks = dict(state.fallbacks)
@@ -626,7 +637,7 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
 
         A product the remaining budget cannot exhaust is walked one deterministic step at a
         time instead: breadth and priority still choose the eligible ladders, and among them
-        the step that frees the most components wins.
+        the step with the lowest net resource-cost change wins.
         """
         eligible = steppable(candidate.lowered, variants)
         if variant_state_bound(candidate.lowered, remaining) > remaining:
@@ -642,14 +653,10 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
 
 @dataclass(slots=True)
 class _ParetoArchive:
-    """The non-dominated states seen so far, in fidelity and per-axis resource cost.
+    """Candidates not dominated in both degradation and per-axis resource cost.
 
-    A state is worth expanding only if it reaches somewhere no explored state already
-    reaches more cheaply. "More cheaply" is per axis and never traded: a candidate that
-    spends fewer components but more embed text is not dominated by one that does the
-    reverse, because a document blocked on components and a document blocked on embed text
-    need different steps to become feasible. Collapsing that to a scalar is exactly how a
-    component-only heuristic starves a second budget.
+    Admission ignores strategy cost and successor structure. A candidate spending
+    less on one resource but more on another remains eligible for expansion.
     """
 
     points: list[tuple[DegradationProfile, ResourceCost]] = field(default_factory=list)
@@ -730,11 +737,11 @@ def _fallback_notes(occurrences: Sequence[FallbackAxis], selected: Mapping[str, 
 
 
 def _search(search: _Compilation[Any, Any, Any], *, search_budget: int) -> _Candidate:
-    """Explore one conditional decision graph best-first and return the least degraded fit.
+    """Search strategies, semantic fallbacks, and primitive variants within an evaluation budget.
 
-    Strategies, semantic fallbacks, and primitive ladders are all decisions in the same
-    frontier, so a lossless representation is never traded for a structural fallback the
-    author priced higher, and an alternative hidden behind an unopened branch costs nothing.
+    Return the best feasible candidate found, or the candidate with the smallest
+    summed overspend if none fit. Guided ladder steps or an exhausted frontier
+    budget add a fallback warning; the result need not be globally optimal.
     """
     frontier: list[tuple[DegradationProfile, CostVector, int, _State]] = []
     serial = count()
@@ -758,9 +765,8 @@ def _search(search: _Compilation[Any, Any, Any], *, search_budget: int) -> _Cand
         if nearest is None or (_overspend(candidate), *candidate.rank) < (_overspend(nearest), *nearest.rank):
             nearest = candidate
         if not archive.admit(candidate):
-            # Dominated: no better on fidelity and no cheaper on any axis than something
-            # already explored. Its successors are reachable from that one for less, so
-            # expanding it would only re-walk the same ground.
+            # Stop expanding candidates no better in fidelity and no cheaper on any
+            # resource axis than a previously explored candidate.
             continue
         expansion = search.successors(candidate, search_budget - states_explored)
         guided = guided or expansion.guided
@@ -811,8 +817,9 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     Planning owns every fit and fallback decision. The resulting scene contains visual action
     references, while callbacks remain in the plan result for the mounted frontend.
 
-    Three ways in, cheapest first: an exact memo hit returns the previous result outright, a
-    structural cache hit replays a stored scene, and a miss runs the layout search.
+    Exact memo hits reuse live results; structural cache hits recover current
+    bindings around a stored scene. Misses evaluate candidates, with an incremental
+    shortcut for previously certified isolated text regions.
     """
     exact_key = request.exact_key()
     if memo is not None and (exact := memo.replay(rendered, exact_key, request.presentation)) is not None:
@@ -1001,13 +1008,11 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
 
 
 def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> None:
-    """Move each measured pager to the page its reader belongs on.
+    """Resolve stored cursors after measurement establishes page counts.
 
-    Measuring a page means rendering *some* page, and the choice is made before anyone knows
-    how many there are — the count is an output of fitting. This is the first moment a
-    stored cursor can be reconciled against it, and because the page is a projection it
-    costs a slot rewrite rather than a second measurement. The mount used to do this by
-    drawing twice.
+    Only now can a remembered page be clamped to the new content's extent.
+    Repositioning rewrites visible text and controls within existing character
+    allowances, avoiding another allocation pass.
     """
     positions: dict[str, Position] = {}
     for pager in measured.pagers:

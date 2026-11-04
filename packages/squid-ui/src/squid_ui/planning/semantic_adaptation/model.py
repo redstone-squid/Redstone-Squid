@@ -18,6 +18,8 @@ from squid_ui.text import Localization
 
 @dataclass(frozen=True, slots=True)
 class SemanticLowering:
+    """Localized primitives, live assets, diagnostics, and staged strategy updates."""
+
     nodes: tuple[Node, ...]
     assets: tuple[Asset, ...] = ()
     events: tuple[PlanEvent, ...] = ()
@@ -29,6 +31,8 @@ class SemanticLowering:
 
 @dataclass(slots=True)
 class LoweringContext:
+    """Mutable output collectors and read-only session inputs for one candidate."""
+
     limits: MessageLimits
     chrome: Chrome
     localization: Localization

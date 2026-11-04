@@ -1,4 +1,11 @@
-"""Deterministic lexicographic strategy selection without scalar weights."""
+"""Rank alternative representations by stability, author preference, and navigation cost.
+
+A strategy is one way to display a semantic node, such as a table or a list of records.
+A StrategyAxis collects the choices for one node occurrence. CostVector compares those
+choices against the previously displayed strategy and the author's preferred one.
+An assignment chooses one strategy per occurrence; the Discord planner then measures
+whether the resulting layout fits. This module ranks choices but does not measure them.
+"""
 
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -11,7 +18,13 @@ DEFAULT_SEARCH_BUDGET = 512
 
 @dataclass(frozen=True, slots=True, order=True)
 class CostVector:
-    """Coarse planner tiers, ordered from sacred to cosmetic."""
+    """Preference penalties compared in field order, with lower values winning.
+
+    Changes to a STABLE node outweigh any number of changes to NORMAL or FLEXIBLE
+    nodes. Only after those counts tie do author preference, pager count, and transition
+    distance matter. Paths and strategy IDs break remaining ties deterministically.
+    These penalties describe presentation choices, not resource consumption or text loss.
+    """
 
     stable_changes: int = 0
     normal_changes: int = 0
@@ -32,7 +45,12 @@ class StrategyCandidate:
 
 @dataclass(frozen=True, slots=True)
 class StrategyAxis:
-    """One semantic occurrence's finite, independently selectable strategies."""
+    """The available representations for one node occurrence in the authored layout.
+
+    preferred is the representation requested by the author. baseline is the previously
+    displayed strategy, when known; changing it incurs a penalty based on flexibility.
+    The path identifies this occurrence even when another node has the same choices.
+    """
 
     path: str
     key: str
@@ -55,7 +73,7 @@ class StrategyAxis:
 
 @dataclass(frozen=True, slots=True)
 class StrategyAssignment:
-    """One complete assignment in global lexicographic order."""
+    """One strategy per node occurrence, with their combined preference penalties."""
 
     strategies: tuple[tuple[str, str], ...]
     cost: CostVector

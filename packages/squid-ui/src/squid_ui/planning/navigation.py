@@ -1,4 +1,10 @@
-"""One navigation factory for materialized and asynchronously loaded cursors."""
+"""Build navigation controls for complete content and asynchronously loaded windows.
+
+Both kinds of pager expose `NavigationState`, which describes the visible position
+and available movements. `NavigationContext` adds handlers so a factory can build
+buttons or a jump menu without knowing how the content is loaded. Page numbers
+are separate from cursor offsets: a source cursor may address items, not pages.
+"""
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -112,11 +118,9 @@ class NavigationContext:
 
 type NavNode = Row | SelectMenu | RoutedSelect | Sep | Thumbnail | Gallery | RawItem
 type MountNavNode = Row | SelectMenu | RoutedSelect | RawItem
-"""Navigation a live component may author before its Discord mode is selected.
+"""Navigation a mount may author before its Discord message mode is selected.
 
-`NavNode` is wider because planner-internal pagination already knows its concrete target and
-may use V2-only structural nodes. A mount navigation factory runs above that decision, so
-admitting `Gallery`, `Thumbnail`, or `Sep` here falsely made every consumer target-erased.
+`NavNode` also permits V2 structures for planner factories that already know the mode.
 """
 type NavFactory = Callable[[NavigationContext], Sequence[MountNavNode]]
 type PlannedNav = Callable[[NavigationState], Sequence[NavNode]]
@@ -161,8 +165,7 @@ def _seek_pages(page: int, extent: int) -> list[int]:
     """Which zero-based pages a jump select should offer, always including ``page``."""
     if extent <= SEEK_OPTION_LIMIT:
         return list(range(extent))
-    # An evenly spaced ladder rather than a window around the reader: two clicks then reach
-    # any page in the range, where a local window can only ever crawl.
+    # Spread jump choices across the whole range so distant pages remain accessible.
     step = (extent - 1) / (SEEK_OPTION_LIMIT - 1)
     ladder = {round(index * step) for index in range(SEEK_OPTION_LIMIT)}
     if page not in ladder:

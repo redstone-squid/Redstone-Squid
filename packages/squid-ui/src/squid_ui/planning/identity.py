@@ -1,4 +1,10 @@
-"""Stable logical identities shared by planners and local region slicers."""
+"""Fingerprint layout content for planning caches and remembered page positions.
+
+Equivalent authored values should keep their identity across renders even when
+their Python objects and callbacks are new. Fingerprints therefore describe
+dataclass fields and container contents, replacing callbacks with a fixed marker.
+They identify content, not which live handler should receive an event.
+"""
 
 import hashlib
 import json

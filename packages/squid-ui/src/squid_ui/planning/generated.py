@@ -1,4 +1,8 @@
-"""Marker for framework-generated event adapters."""
+"""Identify framework event handlers whose fields can be rebound after a cache hit.
+
+The planner can keep the handler's structure in a cached plan while replacing
+its live callbacks with those from the current document.
+"""
 
 from abc import ABC, abstractmethod
 

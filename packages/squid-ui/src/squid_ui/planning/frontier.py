@@ -36,11 +36,10 @@ def walk_ladders(
     positions: Positions,
     visit: Callable[[VariantPath, Variants, int], None],
 ) -> None:
-    """Visit every node reachable through the currently selected rungs, in document order.
+    """Visit each reachable ladder through its selected rung, in document order.
 
-    Ladders only occur at the top level, inside a Panel, or inside another ladder's rung:
-    `Section.texts`, `Row.items` and `ControlGroup.items` are typed to exclude them, so these
-    two recursive arms are exhaustive.
+    Panels, budget regions, break groups, and cards may contain ladders. Section
+    text slots and control groups exclude them from their child types.
     """
 
     def walk(node: Node, path: VariantPath) -> None:
@@ -92,16 +91,11 @@ def canonical_positions(nodes: Sequence[Node], positions: Positions) -> dict[Var
 
 
 def variant_profile(nodes: Sequence[Node], positions: Positions) -> DegradationProfile:
-    """Price the selected rungs: fidelity as loss, distance as the tie beneath it.
+    """Price selected rungs by author priority, fidelity loss, and rung distance.
 
-    Two things are being ordered and they are not the same thing. A rung that says it
-    reformats or discards content costs the reader something, and must lose to any faithful
-    alternative however far down the ladder that alternative sits — that is what makes
-    exact pagination beat a lossy one-pager. A rung's *distance* from rung 0 costs the
-    reader nothing; it is only the author's stated preference, so it ranks below every real
-    loss axis. It stays in the profile rather than moving to the cost vector because
-    `Variants.priority` groups it, and priority has to keep steering which ladder gives way
-    first even when every rung on offer is exact.
+    At a given priority, reformatting or omitting content costs more than moving
+    to another exact representation. Rung distance expresses the author's order
+    of preference among otherwise equivalent alternatives.
     """
     profile = DegradationProfile()
 
@@ -206,16 +200,11 @@ def static_cost(nodes: Sequence[Node], limits: MessageLimits) -> ResourceCost:
 
 
 def guided_step(nodes: Sequence[Node], positions: Positions, limits: MessageLimits) -> dict[VariantPath, int] | None:
-    """Pick the one step a budget-starved product should take next.
+    """Choose one deterministic ladder step when the search budget cannot cover the product.
 
-    Breadth and priority still decide *which* ladders are eligible; among equals the step
-    that frees the most, summed over every axis it frees anything on, wins, and document
-    order breaks the remaining tie. This keeps an intractable product linear in the budget
-    instead of abandoning it.
-
-    Summing across axes is a heuristic and is only used here, where the search has already
-    given up its guarantee. Everywhere a decision is actually *made*, axes are compared one
-    at a time and never traded against each other.
+    Prefer the lowest author priority, then the least advanced rung. Among peers,
+    minimize the net change in summed resource cost; document order breaks ties.
+    This mixes unlike resource units as a heuristic and does not guarantee an optimum.
     """
     remaining = steppable(nodes, positions)
     if not remaining:

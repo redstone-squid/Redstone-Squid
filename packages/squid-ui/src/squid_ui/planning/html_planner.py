@@ -1,4 +1,13 @@
-"""Native semantic-document planning for the HTML target."""
+"""Compile portable layout nodes into an HTML scene and live event bindings.
+
+Semantic structure maps directly to elements: a Table becomes a table, and a
+Section wraps its heading and children. The compiler resolves text and
+presentation state, records handlers separately, and applies explicitly authored
+budgets or pagination. The renderer later serializes the resulting scene.
+
+Slack planning also uses this element tree as an intermediate representation
+before applying its own surface limits and producing Block Kit scene data.
+"""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -147,6 +156,7 @@ def _html_size(node: scene.HtmlNode) -> int:
 def _truncate_nodes(
     nodes: Sequence[scene.HtmlNode], capacity: int, *, keep: str = "head"
 ) -> tuple[tuple[scene.HtmlNode, ...], int]:
+    # Share one character budget across text leaves; element attributes are not charged.
     remaining = capacity
     omitted = 0
 
@@ -445,7 +455,7 @@ class _Compiler:
                 assert_never(unreachable)
 
     def _display(self, node: _Display) -> tuple[scene.HtmlNode, ...]:
-        """Resolve a node that draws itself: no children to compile, no state to bind."""
+        """Render display content, including any controls embedded in a grid or roster."""
         match node:
             case sem.Heading():
                 return (self._heading(node),)
@@ -731,6 +741,7 @@ class _Compiler:
         branches = (fallback.primary, *fallback.alternates)
         paths = branch_paths(path, len(branches))
         for index, branch in enumerate(branches):
+            # A rejected branch must not retain its bindings, assets, or staged cursor writes.
             candidate = self._fork()
             compiled = candidate.compile(branch, paths[index])
             if index:
@@ -1298,7 +1309,13 @@ class _Compiler:
 
 
 class HtmlPlanner:
-    """Compile semantic documents directly into safe HTML scene data."""
+    """Compile portable semantic documents into HTML scene data.
+
+    There is no global character budget. Authored budgets truncate text, and
+    authored pagination splits between children without splitting an oversized
+    child. Strict mode rejects recorded degradation. Structural cache hits still
+    compile current bindings and resources before reusing the cached scene.
+    """
 
     def plan(
         self,
@@ -1308,8 +1325,8 @@ class HtmlPlanner:
         cache: PlanCache[scene.HtmlBody] | None = None,
         memo: PlanMemo[scene.HtmlBody] | None = None,
     ) -> PlanResult[scene.HtmlBody]:
-        # HTML has neither a bounded document nor a global resource budget, so the two request
-        # fields that exist to bound one are refused rather than quietly ignored.
+        # HTML has no global resource axes to reserve; authored region budgets
+        # are handled separately during compilation.
         if request.reservation.values:
             message = "HTML has no reservable global resource axes"
             raise LayoutInvariantError(message)

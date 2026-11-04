@@ -1,4 +1,10 @@
-"""Realized node values produced by concrete layout measurement."""
+"""Intermediate nodes whose text is filled during layout measurement.
+
+The builder preserves structure while replacing authored text with mutable
+`MeasuredText` slots. Allocation fills or drops those slots, and the dialect
+converts the completed tree into a scene. These values belong to one candidate;
+they are not the serializable scene delivered to a renderer.
+"""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -143,7 +149,7 @@ class Pager:
     """The page to open on; a mount adopts this before its first render."""
     page: int = 0
     nav_host: list[Realized] | None = None
-    """The realized list holding this pager's nav, so `repage` can replace it in place."""
+    """The realized list holding this pager's navigation, replaced in place when repositioning."""
     nav_at: int = 0
     nav_count: int = 0
 

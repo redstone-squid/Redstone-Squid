@@ -37,7 +37,23 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     memo: PlanMemo[BodyT] | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
-    """Resolve a logical document through the selected target's planner backend."""
+    """Choose a target layout and return its Scene, handlers, and planning diagnostics.
+
+    The target's planner selects representations for the authored nodes and checks
+    their resource limits. The returned PlanResult keeps the serializable display
+    separate from Python handlers and file sources needed by the frontend.
+
+    Planning reads presentation state without changing it. After successful delivery,
+    the frontend must apply the result's session_updates so remembered pages and
+    selections match the display. Reservations withhold space needed by other content.
+
+    The backend controls fitting and supported adaptations. Discord's strict check
+    rejects lossy measurement diagnostics; HTML and Slack reject degradation events.
+
+    `cache` reuses callback-free structure; `memo` retains an owner's live result.
+    The evaluation budget bounds Discord layout search; other backends compile
+    their supported representations directly.
+    """
     request = PlanRequest(
         target=target,
         chrome=chrome,
@@ -60,12 +76,7 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     cache: PlanCache[BodyT] | None = None,
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
-    """Plan against an already-assembled request.
-
-    The keyword form above is the authoring entry point; this one is for callers that hold a
-    request already and would otherwise have to spread it back out only for it to be
-    reassembled -- every layer between a mount and a backend is one of those.
-    """
+    """Compile an existing request and select callbacks for the adapter's frontend."""
     backend = request.target.dialect.planner
     result = backend.plan(rendered, request, cache=cache, memo=memo)
     frontend = request.target.adapter.frontend or request.target.adapter.name

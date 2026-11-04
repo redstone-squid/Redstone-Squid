@@ -52,7 +52,7 @@ def _page_items[T](
     *,
     identity: Callable[[T], str],
 ) -> tuple[tuple[T, ...], int, int]:
-    """Window a list of options 25 at a time, following the item the reader was on."""
+    """Page options using the target's select capacity, preserving the remembered item anchor."""
     per = context.limits.components.select_options
     keys = [identity(item) for item in items]
     anchors: dict[str, int] = {}

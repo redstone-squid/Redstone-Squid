@@ -1,4 +1,10 @@
-"""Position-native cursor coordination for materialized slicers."""
+"""Choose visible pages and stage their presentation state during planning.
+
+A materialized pager already has all its content, so its cursor offset is a page
+index. Each pager asks the coordinator to resolve its remembered position, then
+records the page it actually displays. The resulting updates accompany the scene;
+the frontend applies them after delivery succeeds.
+"""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -45,7 +51,11 @@ def content_fingerprint(parts: Sequence[str]) -> str:
 
 @dataclass(slots=True)
 class CursorCoordinator:
-    """Resolve, stage, and draw every materialized cursor in one plan."""
+    """Coordinate page positions, navigation, and staged updates for one candidate.
+
+    Give each candidate its own coordinator so a rejected layout cannot change
+    remembered positions or contribute pagers to the selected scene.
+    """
 
     session: PresentationState
     chrome: Chrome

@@ -87,7 +87,7 @@ def note(
 
 
 class LayoutOverflowError(LayoutError):
-    """The document cannot fit its hard constraints into Discord's budgets."""
+    """Strict measurement rejected a clamp, degradation, or constraint failure."""
 
     def __init__(self, notes: list[SolveNote]) -> None:
         super().__init__("; ".join(note.message for note in notes))

@@ -14,10 +14,10 @@ from squid_ui.scene.model import JsonValue
 
 @dataclass(frozen=True, slots=True)
 class PreparedExtension[ResourceT]:
-    """One target extension prepared and measured exactly once.
+    """An extension's measured cost, portable scene payload, and live renderer resource.
 
-    Parameterized by what it produces, so the renderer downcasting `resource` back to a
-    frontend object has something to check the downcast against.
+    The resource remains process-local; only the scene payload is serialized.
+    The caller controls how often the adapter prepares it.
     """
 
     cost: ResourceCost
@@ -32,21 +32,16 @@ class ExtensionAdapter[PayloadT, ResourceT](Protocol):
 
 
 def extension_capability(kind: str) -> str:
-    """The capability string one extension kind contributes.
-
-    One spelling, because the synthesized name was written out at four call sites and a
-    typo at any of them would silently drop an extension from planning.
-    """
+    """Return the shared capability name for an extension kind."""
     return f"extension.{kind}"
 
 
 class AdapterCapability(StrEnum):
-    """One behavior a library has been verified to provide.
+    """Behavior supported by a renderer library.
 
-    A namespace apart from `Capability`, which is what the *protocol* can draw. The two
-    unite into `Target.capabilities` as plain strings, so the membership tests that read
-    that union are unaffected; keeping the declarations typed apart is what stops an
-    adapter behavior being written where a protocol capability is meant.
+    Protocol capabilities describe what the target format can express. Adapter
+    capabilities describe the library behavior available to realize that format;
+    `Target.capabilities` combines both sets as strings.
     """
 
     RENDER_V2 = "adapter.discord.render.components-v2"
@@ -72,14 +67,7 @@ class AdapterProfile[AdapterT]:
     version_expression: str
     capabilities: frozenset[AdapterCapability] = frozenset()
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
-    """Extension adapters, by the wire name of the `ExtensionKind` each answers for.
-
-    `Any` at the container is unavoidable and now costs nothing: the mapping is genuinely
-    heterogeneous, each kind pairing its own payload with its own frontend object, and no
-    single pair can stand for all of them. What changed is that the pairing is recovered
-    either side of this crossing -- an `ExtensionKind` carries it to the author, and the
-    adapter's own signature states it -- rather than being erased everywhere at once.
-    """
+    """Extension adapters keyed by wire name. Each kind has its own payload and resource types."""
 
     def __post_init__(self) -> None:
         if not self.name:

@@ -1,14 +1,7 @@
-"""The structural rules every semantic traversal states identically, stated once.
+"""Shared semantic paths, fallback selection, and state lookup.
 
-The HTML compiler, the Discord lowering pass, and the decision nomination walk all visit the
-same semantic tree, and each had grown its own copy of the grammar that names a position in
-it. A spelling corrected in one walk stayed wrong in the others, and the planner's
-path-keyed state only holds together while every walk agrees on the spelling.
-
-What belongs here is target-neutral by definition: how a child's path is derived from its
-parent's, how a fallback branch is named and selected, how a stateful node's current state
-is read from author control or session memory, and how a control's action key is spelled.
-How a target reacts to what it finds there does not.
+These helpers keep branch names and action keys consistent across traversals that
+read state or select a representation for the same semantic occurrence.
 """
 
 from collections.abc import Iterator, Mapping, Sequence

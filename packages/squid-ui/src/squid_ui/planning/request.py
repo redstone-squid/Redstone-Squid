@@ -60,18 +60,16 @@ class PlanOptions(StaticPlanOptions, total=False):
 
 @dataclass(frozen=True, slots=True)
 class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
-    """Everything one call to a planner backend is asked to compile against.
+    """Carry the target, display preferences, and presentation state through one plan.
 
-    These travel together through every layer of planning -- the public dispatcher, each
-    backend, the layout search, and both cache key encodings -- so they are one value rather
-    than a keyword bundle re-declared at each boundary. The two caches are deliberately *not*
-    part of this: they are per-runtime storage handed in alongside a request, not a property
-    of what was asked for.
+    These are the caller's inputs. A backend can reduce the target's limits for a
+    reservation or resolve framework labels into the requested language without
+    replacing values in this request.
 
-    Held values are the caller's, unresolved. A backend that reserves resources from its
-    target or localizes its chrome does so into locals and passes the results to
-    :meth:`cache_context`, because the exact memo keys on what the caller supplied while the
-    structural cache keys on what was actually compiled against.
+    Cache keys distinguish those two stages: exact_key identifies the original
+    objects for replaying one owner's live result, while cache_context describes
+    the effective inputs used to build reusable structure. Caches themselves are
+    supplied separately because their contents outlive this planning call.
     """
 
     target: Target[Any, BodyT, RenderTargetT, AdapterT]
@@ -95,11 +93,12 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
         object.__setattr__(self, "presentation", self.session if self.session is not None else PresentationState())
 
     def exact_key(self) -> tuple[object, ...]:
-        """Key the exact memo, by identity: the same objects, not merely equal ones.
+        """Build the exact memo key using identity for callback-bearing configuration.
 
-        The memo holds callbacks, so a hit must mean the caller is replaying one render with
-        the very values it planned from. Identity is what says that, and it is far cheaper
-        than hashing a chrome and a palette on every refresh.
+        The memo separately checks source identity and session revision. Callers
+        must replace mutable inputs such as `positions` when their contents change;
+        changing them in place does not change this key. Navigation factories may
+        instead expose a changing `version`.
         """
         return (
             Identity(self.target),

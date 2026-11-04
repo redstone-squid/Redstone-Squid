@@ -1,4 +1,11 @@
-"""Small per-runtime LRU for callback-free resolved plan structure."""
+"""Reuse planning work while keeping callbacks tied to the render that supplied them.
+
+PlanMemo retains one owner's complete result and replays it only for the same inputs
+and presentation-state revision. PlanCache stores structure without live callbacks;
+the planner rebuilds bindings from the current document when reusing that structure.
+This lets an identical-looking display reuse layout work without invoking an older
+component's handler when a control is pressed.
+"""
 
 from collections import OrderedDict
 from dataclasses import dataclass, replace
@@ -26,11 +33,14 @@ class CachedPlan[BodyT: scene.Body = scene.Body]:
 
 
 class PlanCache[BodyT: scene.Body = Any]:
-    """A deliberately small LRU; runtimes do not retain unbounded document history.
+    """Reuse callback-free plans, evicting the least recently used entries when full.
 
-    A bare cache starts unbound because its constructor has no target-bearing input from which
-    to infer `BodyT`. Owners that know their target specialize it; passing an unbound cache to
-    the first planner call binds the checked operation without pretending construction knew.
+    A separate store remembers isolated text-region shapes that previously fitted
+    without loss. These certifications let the Discord planner try a single candidate
+    before a full search when only that region's text changes.
+
+    Each store holds at most `capacity` entries. Specialize `BodyT` when the owner
+    knows its scene type; the default also supports runtime-selected targets.
     """
 
     def __init__(self, capacity: int = 32) -> None:
@@ -112,12 +122,7 @@ class PlanMemo[BodyT: scene.Body = Any]:
         self._result = result
 
     def replay(self, source: object, key: object, session: PresentationState) -> PlanResult[BodyT] | None:
-        """The retained result re-marked as an exact hit, or None if this is not one.
-
-        Re-marking belongs here rather than at each planner backend: a caller that returned
-        the retained result unchanged would report the metrics of the render that produced
-        it, and both backends previously had to remember not to.
-        """
+        """Return a matching retained result with metrics marking this call as an exact hit."""
         retained = self.get(source, key, session, session.revision)
         if retained is None:
             return None

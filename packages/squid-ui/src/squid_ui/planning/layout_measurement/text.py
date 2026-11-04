@@ -16,7 +16,12 @@ type TextBearing = Text | Heading | Footer | Code | Lines
 
 @dataclass(slots=True)
 class TextUnit:
-    """One text-bearing node's mutable allocation state."""
+    """A text node's demand, character allowance, and destination slot.
+
+    `need` includes formatting such as a heading prefix or code fences. Allocation
+    sets `grant`, applies the node's overflow policy within that allowance, and
+    writes the result into `slot`. `axis` keeps independent text pools separate.
+    """
 
     node: TextBearing
     slot: MeasuredText
@@ -128,7 +133,12 @@ def split_pages(
     min_fill: int = 0,
     widows: int = 1,
 ) -> list[str]:
-    """Balance ``text`` across the fewest bounded pages, preferring semantic cuts."""
+    """Split text into bounded pages, balancing fill after pagination preferences.
+
+    Boundary separators are retained within pages and omitted at page breaks.
+    Segments larger than the limit are cut at character offsets. `min_fill` and
+    `widows` are soft preferences passed to `balanced_breaks`.
+    """
     if limit < 1:
         message = "page limit must be positive"
         raise ValueError(message)
@@ -182,7 +192,12 @@ def split_text_node(
     min_fill: int = 0,
     widows: int = 1,
 ) -> tuple[Node, ...] | None:
-    """Losslessly split one text primitive into independently renderable fragments."""
+    """Split a text primitive into independently renderable fragments.
+
+    Return None for unsupported nodes or when chrome leaves no content space.
+    Boundary separators at page breaks are omitted; each fragment repeats the
+    node's formatting chrome and uses Never overflow.
+    """
     if not isinstance(node, Text | Heading | Footer | Code | Lines):
         return None
     slot = MeasuredText()

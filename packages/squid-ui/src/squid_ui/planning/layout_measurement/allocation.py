@@ -18,7 +18,7 @@ from squid_ui.primitives.constraints import Alts, Condense, Drop, Never, Paginat
 
 
 def _apply(unit: TextUnit, chrome: Chrome, notes: list[SolveNote], degradation: DegradationRecorder) -> bool:
-    """Render the unit into its slot within its grant. Returns False when the node drops."""
+    """Apply the unit's grant and overflow policy; return False when it drops."""
     if unit.count_pages is not None:
         return _apply_count_pages(unit)
     if unit.fragments is not None and unit.grant >= unit.chrome_len + max(map(len, unit.fragments)):
@@ -118,7 +118,7 @@ def _apply_count_pages(unit: TextUnit) -> bool:
 
 
 def _step_ladders(ladders: tuple[tuple[str, ...], ...], join: str, usable: int) -> list[int]:
-    """Step the largest entries down their ladders until the block fits."""
+    """Step the largest eligible entry until the block fits or every ladder is exhausted."""
     levels = [0] * len(ladders)
     total = sum(len(ladder[0]) for ladder in ladders) + max(0, len(ladders) - 1) * len(join)
     candidates: list[tuple[int, int]] = []
@@ -234,7 +234,13 @@ def allocate(
     chrome: Chrome,
     degradation: DegradationRecorder,
 ) -> None:
-    """Allocate one text pool by hard policy and authored priority."""
+    """Allocate one text pool, mutating slots and recording loss.
+
+    Never nodes receive grants first, then Condense nodes, both in document order.
+    Other policies share the remainder by descending priority, proportionally to
+    need within each priority. Rounding leftovers go to earlier nodes. Dropped
+    nodes release their grants and trigger another allocation pass.
+    """
     active = list(units)
     for _ in range(len(units) + 1):
         remaining = budget
@@ -305,7 +311,13 @@ def allocate_budgeted(
     chrome: Chrome,
     degradation: DegradationRecorder,
 ) -> None:
-    """Allocate transparent budget regions as siblings, then solve inside each grant."""
+    """Allocate region floors and distribute spare capacity before solving each group.
+
+    Regions claim units in reverse collection order, so outer regions claim their
+    nested units first. Unclaimed units become sibling groups. Hard floors precede
+    best-effort floors, then remaining demand competes by descending priority.
+    A group's priority is its highest member priority.
+    """
     claimed: set[int] = set()
     groups: list[_GrantGroup] = []
     for region in reversed(regions):

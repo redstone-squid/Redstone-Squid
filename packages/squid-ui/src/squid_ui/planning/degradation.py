@@ -1,4 +1,11 @@
-"""Structured, lexicographic accounting for author-granted layout loss."""
+"""Compare how much authored content competing layouts shorten, omit, or reformat.
+
+A DegradationEffect records one change at a node path, such as truncating characters
+or dropping a region. DegradationProfile groups those effects by author priority.
+The planner compares higher priorities first, so preserving important content wins
+over preserving a larger amount of lower-priority content. Within each priority,
+DegradationLevel.rank orders the different kinds of loss.
+"""
 
 from dataclasses import dataclass
 from functools import total_ordering
@@ -81,7 +88,14 @@ def _level_values(level: DegradationLevel) -> list[int]:
 @total_ordering
 @dataclass(frozen=True, slots=True)
 class DegradationProfile:
-    """Loss grouped by author priority, with deterministic paths as the final tie."""
+    """Loss grouped by descending author priority, with paths breaking final ties.
+
+    Lower profiles are preferred. Compare the highest priority first, using
+    DegradationLevel.rank within each priority; an absent level counts as zero.
+    For example, dropping a LOW-priority note is preferred to truncating a HIGH-priority
+    heading, even if the note contains more text. Paths make otherwise equal choices
+    deterministic.
+    """
 
     levels: tuple[DegradationLevel, ...] = ()
     ties: tuple[Tie, ...] = ()

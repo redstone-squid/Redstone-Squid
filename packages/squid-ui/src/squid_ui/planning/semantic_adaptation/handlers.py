@@ -1,4 +1,10 @@
-"""Declarative event adapters emitted by semantic lowering."""
+"""Event adapters emitted by semantic lowering.
+
+Controlled handlers delegate state changes and acknowledgement to the author's
+callback. Uncontrolled handlers acknowledge first, update presentation state, and
+invalidate the mounted view. Dataclass fields let cached plans reconstruct these
+adapters with the current render's callbacks and state.
+"""
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass

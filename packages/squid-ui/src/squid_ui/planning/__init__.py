@@ -1,4 +1,13 @@
-"""Portable planning, adaptation, and layout measurement APIs."""
+"""Choose a target representation for authored layout nodes and fit its limits.
+
+plan accepts a Document or layout nodes and returns a PlanResult. Its Scene describes
+the chosen display; accompanying bindings connect controls to Python handlers. Planning
+does not send the display: a renderer builds the native payload and a frontend delivers it.
+
+A Target combines a dialect, which defines a scene format and its planner, with an
+adapter profile describing the renderer library's supported behavior. Limits and
+reservations tell the planner how much space that particular display can use.
+"""
 
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache, PlanMemo
