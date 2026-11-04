@@ -1,4 +1,8 @@
-"""Accepted closure belongs to the host; observers share its terminal result."""
+"""Message-root shutdown continues after the requesting task is cancelled.
+
+Once shutdown is accepted, UIExecutionHost owns cleanup. Callers can wait for the same
+completion result, including callback failures; cancelling a waiter must not stop cleanup.
+"""
 
 import asyncio
 from typing import override
@@ -22,6 +26,7 @@ class Panel(Component[ComponentsV2Target]):
 
 async def test_cancel_before_acceptance_leaves_panel_open() -> None:
     root = MessageRoot(Panel(), access=Everyone())
+    # Hold closure before acceptance so cancellation cannot race a completed shutdown.
     await root._render_lock.acquire()
     try:
         with anyio.move_on_after(0):

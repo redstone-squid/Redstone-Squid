@@ -1,4 +1,8 @@
-"""Committed actions supervise operations without replaying them through history."""
+"""Operations registered by an action start only after its UI transaction commits.
+
+The execution host owns their lifetime after dispatch, while history records the state change
+that caused them. Undo and redo must not run those operations again.
+"""
 
 import asyncio
 from collections.abc import Awaitable, Callable
@@ -273,6 +277,7 @@ async def test_commit_conflict_discards_operation() -> None:
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(root.dispatch, "save", interaction_harness(), None)
         await requested.wait()
+        # This task writes outside the suspended handler's UI transaction, forcing its commit to conflict.
         counter.value = 5
         release.set()
     assert counter.value == 5

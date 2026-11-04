@@ -1,4 +1,4 @@
-"""Who owns a stateful node's value: the author, or the presentation session."""
+"""Controlled values come from the author; uncontrolled values live in presentation state."""
 
 from collections.abc import Awaitable, Callable
 
@@ -64,7 +64,7 @@ def _select(values: tuple[str, ...]) -> SelectionEvent:
 
 
 def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None]]]:
-    """A handler plus the events it saw, so a test can assert who the engine called."""
+    """Return the event list and a handler that appends to it."""
     seen: list[EventT] = []
 
     async def record(event: EventT) -> None:

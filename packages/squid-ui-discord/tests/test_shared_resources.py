@@ -1,8 +1,8 @@
 """Computed values and resources declared on an `sl.runtime.SharedState` namespace.
 
-A cell on a namespace is state several mounts share. These are the two derived forms of the
-same idea: a computed, which is a pure function of cells and needs no address of its own, and
-a resource, which is loaded and therefore can move on its own -- so it publishes.
+Several message roots can read the same namespace. Computed values derive from its cells,
+so readers follow those cells. A resource can also change when its asynchronous loader
+finishes or its value is replaced; readers follow the resource's own address as well.
 """
 
 from typing import override
@@ -53,10 +53,10 @@ class Reader(sl.Component[sl.ComponentsV2Target]):
 
 
 async def mounted(catalog: Catalog, scheduler: MessageRootScheduler, message: object) -> MessageRoot:
-    """Send a reader, and hand the mount back so the caller keeps it alive.
+    """Send a reader and return its message root so the caller can keep it alive.
 
-    A scheduler holds its mounts weakly, so a test that drops the reference is testing whether
-    the collector ran rather than whether the refresh works.
+    The scheduler holds weak references to message roots. Retaining the returned root keeps
+    garbage collection from ending its subscriptions before the test checks a refresh.
     """
     message_root = MessageRoot(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
@@ -187,7 +187,7 @@ async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.Local
 
 
 async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopicBus) -> None:
-    """Doc 48 staging, seen from the bus: an action that failed must not wake other mounts."""
+    """A rolled-back replacement must not wake other message roots through the topic bus."""
     scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
     message = message_harness()
@@ -213,7 +213,7 @@ def test_two_namespaces_hold_separate_resources(bus: sl.runtime.LocalTopicBus) -
 
 
 def test_a_component_resource_carries_no_address() -> None:
-    """Nothing else can be looking at it, so there is nothing to publish."""
+    """Component-owned resources do not publish under a SharedState bus address."""
 
     class Panel(sl.Component[sl.ComponentsV2Target]):
         @sl.resource

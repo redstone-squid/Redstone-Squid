@@ -31,6 +31,12 @@ async def running_host() -> AsyncIterator[UIExecutionHost]:
 
 
 class Activity(ManagedService):
+    """A service whose worker failure and cleanup can be controlled by tests.
+
+    ``started`` signals entry before setup completes. ``stopped`` signals completed cleanup;
+    tests that require successful startup use the runtime's readiness barrier.
+    """
+
     def __init__(self) -> None:
         self.started = asyncio.Event()
         self.stopped = asyncio.Event()

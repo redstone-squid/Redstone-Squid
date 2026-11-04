@@ -1,4 +1,4 @@
-"""The weak registry behind `squid_ui_discord.message_roots()`: who is live, and for how long."""
+"""The weak registry behind squid_ui_discord.live.message_roots()."""
 
 import gc
 from typing import override
@@ -45,7 +45,7 @@ class TestLiveRegistry:
         commit_render(message_root)
 
         assert live.message_roots() == (message_root,)
-        # One hook, not one per generation: the mount is deregistered once when it finishes.
+        # Register one finish hook across generations so the message root is removed once.
         assert len(message_root._hooks.finish) == 1
 
     async def test_finishing_deregisters_before_collection(self) -> None:
@@ -53,8 +53,7 @@ class TestLiveRegistry:
         await message_root.send(delivered_to(message_harness()))
         await message_root.finish()
 
-        # Still strongly referenced here, so anything left in the registry would be a lie
-        # that survives until the local goes out of scope.
+        # Keep the root strongly referenced to distinguish finish cleanup from weak-reference collection.
         assert live.message_roots() == ()
         assert message_root.finished
 
@@ -88,8 +87,7 @@ class TestSnapshot:
 
     async def test_a_handleless_message_root_learns_its_message_from_the_first_click(self) -> None:
         message_root = MessageRoot(Panel(), access=Everyone())
-        # A destination that delivers without handing a message back — the unwaited
-        # interaction response, where the mount runs located only once someone clicks.
+        # No message metadata is returned; the first click must supply the address.
         await message_root.send(lambda presentation: _none())
         assert message_root.snapshot().address is None
 

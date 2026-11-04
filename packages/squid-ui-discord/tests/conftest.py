@@ -1,4 +1,4 @@
-"""Package-local test configuration; the repo-root conftest does not reach this directory."""
+"""Isolate package registries and provide execution hosts for standalone test roots."""
 
 import inspect
 import os
@@ -24,14 +24,10 @@ settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "default"))
 
 @pytest.fixture(autouse=True)
 def _isolated_process_state() -> Iterator[None]:
-    """Start and leave behind an empty live registry and no installed runtimes.
+    """Clear process-wide registries before and after each test.
 
-    Both registries are process-wide, and both are weak collections -- so a leak is bounded by
-    when the garbage collector gets around to the message root or client, not by the end of the
-    test that made it. A test that holds a reference past its own body therefore reaches the
-    next one, which is exactly the shape of an order-dependent failure nobody can reproduce in
-    isolation. Six files used to carry half of this fixture each; two that install clients
-    carried neither.
+    Weak references can outlive a test until collection, so relying on garbage collection
+    would make registry assertions depend on test order.
     """
     live._LIVE.clear()
     runtime._INSTALLED.clear()

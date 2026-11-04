@@ -126,7 +126,7 @@ class TestBudgetRegions:
 
 class TestParetoSearch:
     def test_a_candidate_cheaper_on_one_axis_is_not_pruned_by_one_cheaper_on_another(self) -> None:
-        """Two documents blocked on different budgets need different steps to become legal."""
+        """Check strict dominance: the second cost is lower on both constrained axes."""
         components = ResourceCost({Axis.COMPONENTS: 39, Axis.DISPLAY_TEXT: 3999})
         text = ResourceCost({Axis.COMPONENTS: 5, Axis.DISPLAY_TEXT: 10})
 

@@ -34,12 +34,8 @@ dependencies = [
 durable = ["squid-storage==0.1.0a1"]
 postgres = ["squid-storage[postgres]==0.1.0a1"]
 
-# Test-only. This package's suite drives the widget library across the transport boundary --
-# `tests/test_widget_integration.py` -- but nothing it ships imports it, and
-# `tests/architecture/test_boundaries.py` enforces that squid_ui_widgets sits *beside* this
-# package rather than below it. A PEP 735 group says so without touching the wheel's
-# dependencies. Until now these imports resolved only because the uv workspace installs every
-# member, which left the coupling invisible.
+# Widget integration tests need this sibling package, but the Discord runtime does not.
+# Keep it out of wheel dependencies; tests/architecture/test_boundaries.py enforces the boundary.
 [dependency-groups]
 test = ["squid-ui-widgets"]
 

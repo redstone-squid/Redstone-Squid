@@ -1,8 +1,8 @@
-"""One resource deriving from another.
+"""Async resources can depend on other async resources.
 
-A resource already re-pends when a cell its loader read moves. These are about the case that
-did not work: an async value derived from another async value, which before this had to be
-fused into one loader returning a tuple.
+In the main example, `node` awaits `build`, which watches a topic. Publishing that topic
+must invalidate both resources, and delivery must wait for both new values. The cycle
+tests distinguish a dependency loop from several resources sharing one input.
 """
 
 from typing import Any, override
@@ -50,7 +50,7 @@ class Chain(sl.Component[sl.ComponentsV2Target]):
 
 
 def texts(view: discord.ui.LayoutView) -> str:
-    """This file reads the whole render as one blob; the walk itself is `sd.payload_texts`."""
+    """Join serialized display texts for whole-render assertions."""
     return "\n".join(sd.payload_texts(view))
 
 
@@ -113,7 +113,7 @@ async def test_a_computed_reading_a_resource_rederives_when_it_reloads() -> None
 
 
 async def test_every_transition_moves_the_version() -> None:
-    """A dependent compares versions, so a re-pend has to be visible as one."""
+    """Dependents compare versions, so invalidation must advance the version before reloading."""
     panel = Chain()
     await panel.build.reload()
     versions = [panel.build.version]
@@ -157,7 +157,7 @@ async def test_a_failed_load_moves_the_version_too() -> None:
     assert panel.value.version > settled, "a dependent must re-derive against the failure"
 
 
-# --- Through a mount ------------------------------------------------------------------
+# --- Through a message root -----------------------------------------------------------
 
 
 async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
@@ -201,7 +201,7 @@ async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
 
 
 async def test_two_independent_resources_still_settle_together() -> None:
-    """Nothing about chaining serialises a tier that has no chain in it."""
+    """Smoke-test delivery with two independent atomic bindings; this does not measure concurrency."""
 
     class Pair(sl.Component[sl.ComponentsV2Target]):
         @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
@@ -224,7 +224,7 @@ async def test_two_independent_resources_still_settle_together() -> None:
     message: Any = message_harness()
     await message_root.send(delivered_to(message))
 
-    assert message_root.snapshot().suppressed >= 0  # the send completed
+    assert message_root.snapshot().suppressed >= 0
 
 
 # --- Cycles ---------------------------------------------------------------------------

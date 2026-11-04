@@ -1,4 +1,4 @@
-"""The shipped doubles and queries, exercised before the suite depends on them."""
+"""Recorded Discord calls and serialized-payload queries used by the test suite."""
 
 import discord
 
@@ -10,11 +10,7 @@ from squid_ui_discord import testing as sd
 
 class TestPayloadQueries:
     def test_texts_read_the_payload_and_agree_with_walking_the_objects(self) -> None:
-        """The payload is what Discord sees; the object tree is how discord.py got there.
-
-        Pinning the agreement is what makes replacing the object walkers a safe substitution
-        rather than a behaviour change.
-        """
+        """Check that serialization preserves display-text content and traversal order."""
         view = sd.static_view([Heading("Title"), Text("one"), Panel(children=(Text("inner"), Sep())), Text("two")])
 
         walked = [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
