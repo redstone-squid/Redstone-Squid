@@ -7,11 +7,9 @@ from squid.persistence.alembic_entities import alembic_util_entities
 EMITTING_TABLES = {"public.builds", "public.vote_sessions"}
 """Tables allowed to emit domain events.
 
-Handlers write in response to events, so an emitting table that a handler also
-writes to is a cycle. `ApplyBuildVoteOutcomeHandler` writes `builds` and
-`PostConfirmedBuildHandler` writes `messages`; the chain terminates only because
-`messages` is absent here. Adding a table to this set means checking that no
-handler writes to it, directly or through a service.
+Handlers can write to other tables in response to an event. Before adding a
+table, follow those writes and their trigger conditions to check that they cannot
+emit an endless cycle of events. This assertion makes changes to that set visible.
 """
 
 

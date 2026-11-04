@@ -7,10 +7,10 @@ from whenever import Instant
 
 @dataclass(frozen=True, slots=True)
 class MessageFact:
-    """What is true about a Discord message, independent of why we care.
+    """Details observed on a Discord message.
 
-    One row per Discord message, shared by every use: a build's provenance, a
-    starboard origin, and a vote target are all the same message, recorded once.
+    The message ID identifies one stored record even when several features use
+    it, such as a build source and a starboard entry.
     """
 
     id: int

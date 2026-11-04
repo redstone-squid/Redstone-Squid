@@ -1,1 +1,1 @@
-"""Tracked message bounded context."""
+"""Stored Discord messages shared by builds, posts, and other features."""

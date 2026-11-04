@@ -20,9 +20,11 @@ class DomainEventDelivery:
     event: DomainEvent
     consumer: str
     attempts: int
+    """Failures recorded before this claim; claiming alone does not increment it."""
     claimed_at: Instant
     claim_token: UUID | None = None
     claim_count: int = 0
+    """Number of claims, including claims taken over after a lease expired."""
 
 
 class DomainEventRepository(Protocol):
@@ -44,6 +46,12 @@ class UnsupportedEventVersionError(DataIntegrityError):
 class DomainEventService:
     """Claim and acknowledge domain events on behalf of one named consumer.
 
+    A domain event records a state transition, such as a build being confirmed.
+    Each registered consumer has its own delivery record, so acknowledging the
+    event for one consumer leaves the others' work intact. The dispatcher claims
+    deliveries here, runs its handlers, then reports completion or failure.
+    Each service call commits before returning; handlers run between transactions.
+
     Delivery is at-least-once: a handler that crashes after its side effect but
     before the acknowledgement will see the event again, so handlers must be
     idempotent.
@@ -57,7 +65,12 @@ class DomainEventService:
         self._max_attempts = max_attempts
 
     async def claim(self, consumer: str, limit: int = 20) -> Sequence[DomainEventDelivery]:
-        """Claim ready deliveries, reclaiming those abandoned by crashed workers."""
+        """Claim ready deliveries and commit their leases before returning.
+
+        Expired leases can be reclaimed even if the previous worker is still
+        running. An empty consumer name or a limit outside 1 to 100 raises
+        InvalidStateError.
+        """
         async with self._uow_factory() as uow:
             if not consumer:
                 msg = tr(t"consumer must be a non-empty name")
@@ -70,7 +83,7 @@ class DomainEventService:
             return result
 
     async def complete(self, delivery: DomainEventDelivery) -> bool:
-        """Acknowledge a delivery only if its claim is still current."""
+        """Remove a delivery and return True only if its claim still matches."""
         async with self._uow_factory() as uow:
             result = await uow.domain_events.complete(delivery)
             await uow.commit()
@@ -79,7 +92,8 @@ class DomainEventService:
     async def fail(self, delivery: DomainEventDelivery, error: Exception) -> bool:
         """Retry a failed delivery with backoff, or dead-letter it at the attempt ceiling.
 
-        Returns whether the delivery was dead-lettered.
+        Return True if this call stops further retries. False can mean that a
+        retry was scheduled or that the claim no longer matches.
         """
         async with self._uow_factory() as uow:
             result = await uow.domain_events.fail(delivery, str(error)[:4000], max_attempts=self._max_attempts)
@@ -87,7 +101,10 @@ class DomainEventService:
             return result
 
     async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
-        """Permanently reject an event whose contract cannot be interpreted."""
+        """Stop retries for an event the consumer cannot interpret.
+
+        Return False if the claim is missing or has been replaced.
+        """
         async with self._uow_factory() as uow:
             result = await uow.domain_events.reject(delivery, str(error)[:4000])
             await uow.commit()

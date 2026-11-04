@@ -35,16 +35,20 @@ DOMAIN_EVENT_DELIVERY_SPEC = QueueSpec(
         counted=DomainEventDeliveryRecord.event_id,
     ),
 )
-"""The queue the shared protocol was modelled on.
+"""Queue mapping for per-consumer event deliveries.
 
-It converts with no new configuration knobs beyond `claim_count`, which it already
-had, and the four-field health shape below -- which exists because this is the one
-queue whose gauges are keyed by something other than the table.
+Health metrics include every registered consumer, even those with no pending
+rows. Claim counts track worker takeovers separately from recorded failures.
 """
 
 
 class PostgresDomainEventRepository:
-    """Claim per-consumer deliveries with database-clock UUID fencing tokens."""
+    """Lease event deliveries in the caller's transaction.
+
+    Each claim receives a new token. Acknowledgements must match that token so a
+    worker whose lease was reclaimed cannot remove or update the new claim.
+    The caller must commit changes made by these methods.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -124,7 +128,7 @@ def _delivery(record: DomainEventDeliveryRecord, event: DomainEvent) -> DomainEv
 
 
 def _identity(delivery: DomainEventDelivery) -> tuple[ColumnElement[bool], ...]:
-    """Name one delivery row. The fence on top of it is the shared helper's job."""
+    """Select one event and consumer; the queue helper separately checks its claim token."""
     return (
         DomainEventDeliveryRecord.event_id == delivery.event.id,
         DomainEventDeliveryRecord.consumer == delivery.consumer,

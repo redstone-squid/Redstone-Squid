@@ -33,8 +33,8 @@ class DomainEvent(Base, kw_only=True):
     )
 
 
-# Membership is data rather than trigger logic, so adding a consumer is an insert and
-# the emitting trigger never has to learn who is listening.
+# Event triggers read this table when creating deliveries. Registering a consumer
+# does not require changing the trigger function.
 class DomainEventConsumer(Base, kw_only=True):
     """A registered reader of the event log."""
 

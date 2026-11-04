@@ -14,7 +14,7 @@ from squid.messages.models import MessageRecord
 
 
 class MessageRepository:
-    """Repository for pure database operations on Discord message facts."""
+    """Read and update stored messages in the caller's transaction."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -60,10 +60,10 @@ class MessageRepository:
         return bool(result.rowcount)
 
     async def mark_deleted(self, message_id: int, deleted_at: Instant) -> bool:
-        """Tombstone a message, reporting whether it was known.
+        """Set the deletion time only if the message has not already been marked deleted.
 
-        Only the first deletion wins, so a redelivered raw event cannot move the
-        timestamp forward.
+        Return True if a row changed. Unknown messages and repeated deletion
+        notices return False, preserving the original deletion time.
         """
         statement = (
             update(MessageRecord)

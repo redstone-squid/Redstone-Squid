@@ -9,21 +9,20 @@ from squid.unit_of_work import UnitOfWorkFactory
 
 
 class MessageService:
-    """Record what is true about the Discord messages the bot has seen.
+    """Store observed Discord messages and their edits and deletions.
 
-    Only facts. What a message is *for* is expressed by whatever links to it —
-    `discord_posts` for the ones the bot owns and renders, `build_source_messages` for
-    the ones a build was inferred from — rather than by a purpose stored on the row.
+    Other features link to these records: discord_posts tracks messages the bot
+    renders, and build_source_messages links builds to their source messages.
     """
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[MessageUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
     async def observe(self, fact: MessageFact) -> None:
-        """Record a Discord message as a fact, refreshing it if already known.
+        """Insert a message or replace its observed details if it is already known.
 
-        Idempotent by design: the same message legitimately arrives from several
-        directions, and each is recording the same row rather than competing for it.
+        Keep the first observation time and any recorded edit or deletion times.
+        A later observation can replace stored content with None.
         """
         async with self._uow_factory() as uow:
             await uow.messages.upsert_fact(fact)
@@ -41,9 +40,10 @@ class MessageService:
             return changed
 
     async def mark_deleted(self, message_id: int) -> bool:
-        """Tombstone a message Discord reports gone, retaining it as a fact.
+        """Record a message's deletion without removing its stored details.
 
-        Returns whether a stored message matched.
+        Return True on the first deletion of a known message. Return False for
+        unknown messages and repeated deletion notices.
         """
         async with self._uow_factory() as uow:
             changed = await uow.messages.mark_deleted(message_id, Instant.now())
@@ -51,5 +51,6 @@ class MessageService:
             return changed
 
     async def get(self, message_id: int) -> MessageRecord | None:
+        """Return a stored message, including deleted ones, or None if unknown."""
         async with self._uow_factory() as uow:
             return await uow.messages.get_by_id(message_id)

@@ -62,7 +62,7 @@ def _fact(message_id: int = 1, *, content: str | None = "hello") -> MessageFact:
 
 
 async def test_observing_the_same_message_twice_keeps_one_fact() -> None:
-    """Several uses of one message record the same row rather than competing for it."""
+    """A second observation refreshes content without changing the first-seen time."""
     committed = CommittedState(FakeMessageRepository())
     service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, committed))
 
@@ -77,7 +77,7 @@ async def test_observing_the_same_message_twice_keeps_one_fact() -> None:
 
 
 async def test_observing_a_dm_is_allowed() -> None:
-    """A message fact is true regardless of where it lives; only the guild is unknown."""
+    """Direct messages have no guild ID."""
     committed = CommittedState(FakeMessageRepository())
     service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, committed))
 
@@ -87,7 +87,7 @@ async def test_observing_a_dm_is_allowed() -> None:
 
 
 async def test_edits_and_deletes_report_whether_the_message_was_known() -> None:
-    """Most Discord edits and deletes are to messages the bot has no reason to store."""
+    """Unknown messages and repeated deletions return False."""
     committed = CommittedState(FakeMessageRepository())
     service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, committed))
     await service.observe(_fact())

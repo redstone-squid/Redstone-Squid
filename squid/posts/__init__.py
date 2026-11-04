@@ -1,6 +1,5 @@
-"""Bot-owned Discord post bounded context.
+"""Track Discord messages the bot publishes and keeps up to date.
 
-A post is a Discord message the bot sent and keeps rendered: a build card, a vote
-card, a starboard entry. Distinct from `squid.messages`, which records messages as
-facts regardless of who sent them or why.
+Posts include build cards, vote cards, and starboard entries. Each post links a
+message recorded by squid.messages to the resource and presentation it displays.
 """

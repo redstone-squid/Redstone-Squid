@@ -15,7 +15,7 @@ from squid.sync.models import DiscordSyncQueueItem
 
 
 class PostRepository:
-    """Database operations on the bot's own rendered Discord messages."""
+    """Read and update post records in the caller's transaction."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -117,7 +117,11 @@ class PostRepository:
         await session.execute(delete(DiscordPost).where(DiscordPost.message_id == message_id))
 
     async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
-        """Return the queued generation if a live post is behind, otherwise None."""
+        """Return the queued generation if any live post is behind or none exist.
+
+        Treat an empty set of live posts as revision -1 so reconciliation can
+        create a replacement. Return None if there is no outstanding generation.
+        """
         statement = (
             select(DiscordSyncQueueItem.generation)
             .where(
