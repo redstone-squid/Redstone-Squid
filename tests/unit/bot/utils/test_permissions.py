@@ -158,7 +158,7 @@ class TestRequires:
         assert raised.value.forbidden is False
 
     async def test_a_forbid_is_reported_as_such(self) -> None:
-        """The refusal has to read differently: nothing the user does will help."""
+        """An explicit forbid must remain distinguishable from a missing grant."""
         store = FakePermissionStore(
             grants=(PermissionGrant(pattern="build.**", effect=int(Effect.FORBID), subject_account_id=8),),
         )

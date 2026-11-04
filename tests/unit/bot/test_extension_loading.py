@@ -1,8 +1,6 @@
-"""Every cog must load onto one bot together.
+"""Load all cogs together to detect command-name collisions across extensions.
 
-A command name collision between two cogs is only raised when both are registered on the same
-bot. The per-cog taxonomy tests instantiate each cog alone, so they cannot see one: a duplicate
-name shipped as a `CommandRegistrationError` at process start, with the bot refusing to boot.
+Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 """
 
 import sys
@@ -30,7 +28,7 @@ party and need not be installed for these tests to mean anything.
 
 
 class StubBot(commands.Bot):
-    """A real `Bot` with the attributes cog constructors read, and nothing else."""
+    """A real command registry with mocked runtime collaborators."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -58,8 +56,7 @@ class StubBot(commands.Bot):
         self.inference_reasoning_effort = "low"
 
     def __getattr__(self, name: str) -> Any:
-        # Only reached for attributes `Bot` does not define, so a cog reading a bot attribute
-        # this stub has not listed gets a mock rather than turning this into a maintenance chore.
+        # Registration checks do not exercise these unlisted collaborators' methods.
         if name.startswith("__"):
             raise AttributeError(name)
         return MagicMock()
@@ -146,12 +143,9 @@ def test_layout_showcase_is_development_only() -> None:
 
 
 async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands.Bot) -> None:
-    """Every category entry has to resolve, in either tree.
+    """The hand-maintained help directory must resolve names across both command trees.
 
-    The map is edited by hand and read by name, so a renamed or retired group leaves an
-    entry that quietly lists nothing: `patterns` survived phase 2 and `vote` survived phase
-    5.1 this way. Both trees are consulted because `/poll` is app-only, and the directory
-    listing it at all is the point of `_root_commands`.
+    App-only commands such as polls require checking the application-command tree as well.
     """
     prefix_names = {command.name for command in loaded_bot.commands}
     app_names = {command.name for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.chat_input)}
@@ -174,7 +168,7 @@ async def test_message_context_menu_taxonomy(production_bot: commands.Bot) -> No
 
 
 async def test_production_chat_input_taxonomy(production_bot: commands.Bot) -> None:
-    """The breaking cutover leaves one app-only root per public workflow."""
+    """Production exposes one application-command root for each public workflow."""
     names = {command.name for command in production_bot.tree.get_commands(type=discord.AppCommandType.chat_input)}
 
     assert names == {

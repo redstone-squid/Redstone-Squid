@@ -16,11 +16,7 @@ def _custom_ids(payload: sd.message_payload.MessagePayload) -> list[str]:
 
 
 def test_an_open_poll_card_carries_its_own_close_and_refresh_controls() -> None:
-    """`/poll close` and `/poll refresh` made you paste a link to the card in front of you.
-
-    Canonical ids are pinned rather than merely counted. Legacy ids are pinned separately
-    against the route aliases, so new cards can migrate without orphaning old ones.
-    """
+    """Pin canonical IDs for new cards; route tests separately preserve legacy aliases."""
     assert _custom_ids(render_generic_poll(poll_snapshot())) == ["r:polls:close", "r:polls:refresh"]
 
 

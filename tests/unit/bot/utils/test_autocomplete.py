@@ -1,8 +1,7 @@
-"""Discord autocomplete adapter tests.
+"""Discord autocomplete limits, authorization and failure responses.
 
-Autocomplete runs outside the command tree's checks and error handling, so these pin the
-properties that would otherwise be nobody's responsibility: it stays inside Discord's limits, it
-does not leak gated data, and it never propagates a failure.
+Autocomplete runs outside command checks and error handling, so its adapter and service
+must enforce access and return an empty response for provider failures and timeouts.
 """
 
 import anyio

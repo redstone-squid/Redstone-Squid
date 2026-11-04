@@ -1,4 +1,8 @@
-"""Reconciliation batches acknowledge only rendered and published resources."""
+"""Acknowledge queued refreshes after updating posts and notifying live panels.
+
+Submission drafts have no public post renderer, so their jobs only publish the update topic.
+Post creation and deletion behavior is covered in ``posts/test_reconciler.py``.
+"""
 
 import uuid
 from collections.abc import Sequence

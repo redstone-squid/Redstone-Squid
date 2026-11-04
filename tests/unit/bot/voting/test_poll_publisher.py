@@ -1,4 +1,8 @@
-"""Poll publication recovery contracts."""
+"""Resume poll publication using the session and message already created.
+
+Attaching a message here means recording its association with the vote session. Retrying that
+database write must reuse the Discord message rather than send another poll card.
+"""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime

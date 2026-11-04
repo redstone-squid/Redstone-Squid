@@ -38,6 +38,7 @@ class RecordingSubscriber:
 async def running_router(
     *, concurrency: int = 16, max_pending: int = 1024, shutdown_timeout: float = 10
 ) -> AsyncIterator[ReactionRouter]:
+    """Close the router before ending its supervisor, including when an assertion fails."""
     async with BackgroundTaskSupervisor().running() as supervisor:
         router = ReactionRouter(
             make_reaction_bot().bot,

@@ -1,4 +1,8 @@
-"""The Discord consent gate: ask first, then continue what was asked for."""
+"""The Discord consent gate: ask first, then continue the requested action.
+
+Commands can await a prompt; an active panel instead resumes through a continuation so other
+presses remain available while the reader decides.
+"""
 
 from dataclasses import dataclass
 from typing import Any, override
@@ -83,7 +87,7 @@ def make_accounts(existing: Account | None) -> AccountRecorder:
 
 
 def make_context() -> Any:
-    """A prefix/hybrid context; `send` is the only surface the gate uses."""
+    """A prefix/hybrid context with recording message delivery."""
     return ContextHarness(message=MessageHarness(message_id=1), bot=make_layout_bot(), user_id=USER_ID).source
 
 
@@ -182,7 +186,7 @@ def answer(view_holder: list[Any], *, agree: bool) -> None:
 
 
 async def test_an_already_consented_user_is_never_prompted() -> None:
-    """The fast path is one indexed read and nothing sent; it runs on every gated command."""
+    """An existing current receipt avoids prompting or creating an account."""
     accounts = make_accounts(discord_account(consented=True))
     ctx = make_context()
 
@@ -192,11 +196,7 @@ async def test_an_already_consented_user_is_never_prompted() -> None:
 
 
 async def test_declining_stores_nothing_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The notice's central promise, expressed as a test.
-
-    Cancelling cannot store anything, which it could not promise if the account row had been
-    minted in order to ask the question. So the gate must not have created one.
-    """
+    """Asking for consent must not create an account before acceptance."""
     accounts = make_accounts(None)
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=False)
@@ -247,11 +247,7 @@ async def test_the_gate_works_from_an_interaction_in_either_response_state(
 
 
 async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`NOT_ASKED` is not a decline, and reporting it as one is a lie the user can read.
-
-    The prompt already told them why nothing happened. A second message saying "cancelled,
-    nothing was stored" describes a cancellation that never took place.
-    """
+    """A refused prompt already explained why it could not open; do not report a decline."""
     accounts = make_accounts(None)
     ctx = make_context()
 
@@ -276,7 +272,7 @@ async def _collect(into: list[Any], awaitable: Any) -> None:
 
 
 async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
-    """Two prompts for one user leave the first's waiter stranded whichever one wins."""
+    """Refusing a duplicate preserves the first prompt and its awaiting caller."""
     ctx = make_context()
     request = await gate(ctx)
     key = SessionKey.user("consent", USER_ID)
@@ -298,11 +294,9 @@ async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
 
 
 async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
-    """Disabling the prompt's buttons is not enough.
+    """Closing the parent must also resolve the waiter.
 
-    The prompt is awaited, and the handler that awaits it holds the parent's action lock. A
-    cascade that stops the mount without ending the wait leaves both blocked for the rest of
-    the 120 s, which is the leak this was supposed to close.
+    Disabling buttons alone would leave the awaiting caller blocked until timeout.
     """
     ctx = make_context()
     request = await gate(ctx)
@@ -388,12 +382,10 @@ def _prompt_of(registry: SessionManager, panel: sd.MessageRoot) -> sd.MessageRoo
 
 
 async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None:
-    """The defect this closed: the answer was awaited inside the press that asked for it.
+    """request_consent returns once the notice opens, freeing the originating action.
 
-    A handler runs in the mount's transaction and, under the default EXCLUSIVE policy, in its
-    dispatch lock, so awaiting the reader held both for as long as they took to answer -- up
-    to the prompt's full 120 s. `request_consent` returns once the notice is on screen, so the
-    press ends and the panel goes on working.
+    Awaiting the answer inside the panel's exclusive action would hold its UI transaction and
+    dispatch lock. A second press proves the panel remains usable while the notice is open.
     """
     bot = make_layout_bot()
     registry = bot.sessions

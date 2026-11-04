@@ -26,7 +26,7 @@ BUILD_LOG_CHANNEL = 500
 
 @pytest.fixture(autouse=True)
 def _sticky_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Undo the temporary kill switch so these tests keep covering the sticky."""
+    """Enable the consent banner so these tests exercise its gated path."""
     monkeypatch.setattr("squid.bot.submission.submit.CONSENT_STICKY_ENABLED", True)
 
 
@@ -148,8 +148,7 @@ def _interaction() -> discord.Interaction[Any]:
 
 
 def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> discord.Message:
-    # A real TextChannel, because the eligibility check is an isinstance test: inference reads
-    # the channel's history, which a thread or a DM does not offer the same way.
+    # Use a TextChannel spec so the channel eligibility isinstance check succeeds.
     channel = MagicMock(spec=discord.TextChannel)
     channel.id = channel_id
 
@@ -174,8 +173,7 @@ async def _run(cog: BuildSubmitCommands[Any], message: discord.Message) -> disco
 
 
 async def test_the_menu_denies_the_way_the_command_did() -> None:
-    """A context menu cannot carry `requires(...)`, so it raises what the decorator raises
-    and the shared presenter renders one refusal for both surfaces."""
+    """Context-menu denials use the same PermissionNodeRequired error as command checks."""
     cog = _cog(allowed=False)
 
     with pytest.raises(PermissionNodeRequired) as denial:
@@ -186,8 +184,7 @@ async def test_the_menu_denies_the_way_the_command_did() -> None:
 
 
 async def test_a_message_no_build_can_come_from_says_so() -> None:
-    """The command reported "Build recalculated." whatever it was pointed at, because
-    inference is a listener that silently ignores anything outside a build log channel."""
+    """An ineligible channel gets a reply without starting inference."""
     cog = _cog()
 
     interaction = await _run(cog, _message(channel_id=999))

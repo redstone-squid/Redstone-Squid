@@ -1,8 +1,6 @@
-"""Reconcile-loop tests.
+"""Reconcile desired posts across configured channels.
 
-These pin the properties that used to be reimplemented per surface: publishing to
-every configured channel, never duplicating on redelivery, filling only the channel a
-partial failure missed, and removing posts a resource no longer wants.
+Cover redelivery, recovery after partial publication, and removal of unwanted posts.
 """
 
 from collections.abc import Sequence
@@ -105,7 +103,7 @@ class FakeChannel:
 
 
 class FakePosts:
-    """An in-memory stand-in enforcing the one-live-post-per-channel rule."""
+    """Enforce one live post per resource and channel in memory."""
 
     def __init__(self) -> None:
         self.posts: dict[int, DiscordPost] = {}
@@ -192,6 +190,8 @@ class FakeMessages:
 
 
 class FakeRenderer:
+    """Supply desired channels; None represents a resource that no longer exists."""
+
     resource_kind: ResourceKind = "build"
 
     def __init__(self, channels: Sequence[FakeChannel] | None, *, repost_if_deleted: bool = False) -> None:
@@ -287,7 +287,7 @@ async def test_a_newer_generation_edits_rather_than_reposts() -> None:
 
 
 async def test_an_already_current_post_is_not_edited() -> None:
-    """Re-running at the same generation costs no Discord calls."""
+    """A current generation skips the Discord edit."""
     channels = [FakeChannel(1)]
     reconciler = _reconciler(channels, FakeRenderer(channels))
     await reconciler.reconcile("build", "42", 7)

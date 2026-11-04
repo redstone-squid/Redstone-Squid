@@ -33,7 +33,7 @@ class UIRuntimeRecorder:
 
 
 async def test_run_bot_starts_log_capture(mocker: MockerFixture) -> None:
-    """Worker-style absorbed failures are only stored because this is started."""
+    """Background jobs can log an exception and continue; log capture turns those failures into reports."""
     config = mocker.Mock()
     config.discord.token.get_secret_value.return_value = "discord-token"
     config.diagnostics.capture_logged_errors = True

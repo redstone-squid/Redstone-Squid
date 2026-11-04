@@ -182,6 +182,7 @@ async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -
         "video_urls": "ftp://invalid-video, relative-video",
         "world_download_urls": "https://valid.example/world.zip",
     }
+    # Fill the payload slots discord.py normally populates before calling on_submit.
     for child in modal.children:
         assert isinstance(child, discord.ui.Label)
         component = child.component

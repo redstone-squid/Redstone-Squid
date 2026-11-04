@@ -1,8 +1,6 @@
-"""Rendering for every branch of a Minecraft identity refresh.
+"""Render Minecraft identity refresh results, including unchanged and contested names.
 
-`IdentityRefresh` reports the no-op case as well as the interesting ones, so the renderer has to
-say something for all of them. The contested branch matters most: it used to be indistinguishable
-from "nothing happened", which is exactly what left users unaware their new name was taken.
+A successful identity link must still explain any credit that could not be transferred.
 """
 
 from uuid import UUID
@@ -105,11 +103,7 @@ def test_a_link_reports_the_credit_it_claimed() -> None:
 
 
 def test_a_link_reports_a_contested_credit() -> None:
-    """The regression this subplan exists for: linking used to report only the claimed alias.
-
-    A user whose verified name belonged to someone else was told the link succeeded, and never that
-    their credit had not moved or that a staff claim was now open.
-    """
+    """A successful link must disclose the unmoved credit and the open staff claim."""
     message = link_message(
         _refresh(
             current_name="Notch",
@@ -160,7 +154,6 @@ def test_holding_a_different_java_identity_conflicts() -> None:
 
 
 def test_a_uuid_linked_to_somebody_else_conflicts() -> None:
-    """Detected before the prompt now; it used to surface only after consent was given."""
     assert link_conflict(_preview(held_elsewhere=True), ()) == JAVA_UUID
 
 
@@ -192,7 +185,7 @@ def _claim(claimant: Account | None) -> AliasClaim:
 
 
 def test_a_claimant_with_discord_is_shown_as_a_mention() -> None:
-    """The only handle a reviewer can click, and the only one Discord resolves for us."""
+    """A Discord mention gives the reviewer a clickable identity."""
     claim = _claim(Account(identities=(AccountIdentity.discord(555),), consent=None, id=42, created_at=NOW))
 
     assert present_claimant(claim) == "<@555>"
@@ -265,9 +258,7 @@ async def test_registered_claim_provider_uses_the_canonical_presentation() -> No
     assert candidate.suggestion.description == present_claimant(claim, mention=False)
 
 
-# The unlink decision tree that used to live here is gone with the command: unlinking is a
-# picked row on the `/account` panel, and its cases are pinned in `test_account_panel.py`
-# (docs/plans/completed/command-redesign/07-account.md).
+# Account-panel unlink interactions are covered in ``test_account_panel.py``.
 
 
 @pytest.mark.parametrize(

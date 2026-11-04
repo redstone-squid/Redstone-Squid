@@ -31,11 +31,7 @@ UNGATED_COMMANDS = frozenset(
         "layout shared",
     }
 )
-"""Commands that legitimately declare no permission node: the public ones.
-
-Everything else in `PUBLIC_COGS` must declare one, so a privileged command
-shipped without a gate fails CI instead of shipping open.
-"""
+"""Explicit exceptions to the permission-node requirement for commands in PUBLIC_COGS."""
 
 PUBLIC_COGS = (
     SearchCog,
@@ -53,15 +49,9 @@ PUBLIC_COGS = (
 )
 
 PICKER_VISIBILITY: dict[str, frozenset[str]] = {
-    # Discord permissions that a viewer must hold for a top-level command to appear
-    # in their picker at all (audit finding C1). Everything absent from this map is
-    # visible to everyone, which is the default and has to stay a deliberate choice:
-    # before this map existed, all ~108 commands showed up for every user and the
-    # staff-only ones failed only after being invoked.
-    #
-    # These are visibility hints, never gates. `requires(...)` decides, and a guild
-    # admin can override any of these per command in Server Settings; the bits below
-    # are chosen to match the operation, so the override is rarely needed.
+    # Default picker visibility for top-level commands; guild admins can override it.
+    # Runtime permission checks remain authoritative. Comparing the whole map keeps
+    # newly restricted or newly public commands visible in review.
     "errors": frozenset({"manage_guild"}),
     "access": frozenset({"manage_guild"}),
     "records": frozenset({"manage_guild"}),
@@ -116,11 +106,7 @@ def test_build_slash_group_includes_the_app_only_workspaces() -> None:
 
 
 def test_guided_submit_puts_attachments_last() -> None:
-    """The tab order through the options is the form: typed fields first, attachments trailing.
-
-    Attachments-first was the original dogfooding complaint against `/build submit`
-    (docs/plans/completed/command-redesign/01-build-submit.md), so the order is pinned.
-    """
+    """Typed fields lead the option tab order, followed by attachments."""
     build_group = next(
         command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"
     )
@@ -146,11 +132,7 @@ def test_search_modes_have_user_friendly_labels() -> None:
 
 
 def test_every_privileged_command_declares_a_node() -> None:
-    """A privileged command shipped with no gate fails CI.
-
-    The allowlist is the whole point: adding a command to it is a visible,
-    reviewable decision, whereas forgetting a check is silent.
-    """
+    """Commands without permission nodes require an explicit allowlist entry."""
     ungated: set[str] = set()
     for cog in PUBLIC_COGS:
         for command in _commands_of(cog):
@@ -164,11 +146,7 @@ def test_every_privileged_command_declares_a_node() -> None:
 
 
 def test_staff_groups_are_hidden_from_non_staff_pickers() -> None:
-    """Which commands the picker offers is part of the public surface.
-
-    A staff group shipped without a visibility hint is invisible in review and
-    very visible to users, so the whole map is pinned rather than each entry.
-    """
+    """Compare the complete map so a missing visibility hint cannot go unnoticed."""
     visibility = {
         command.qualified_name: names
         for cog in PUBLIC_COGS
@@ -196,13 +174,7 @@ def test_subcommands_do_not_claim_a_visibility_they_would_not_get() -> None:
 
 
 def test_polls_are_one_app_only_command() -> None:
-    """A poll opens a modal, which a prefix invocation cannot do (audit C7).
-
-    `poll` was a hybrid group whose members answered "use the slash command `/poll
-    create`", so the prefix tree advertised three entry points and honoured none.
-    Declaring it app-only is the audit's other option, and the group had nothing left to
-    hold once `close` and `refresh` moved onto the poll card itself.
-    """
+    """Poll creation opens a modal and therefore requires an application-command interaction."""
     cog = VoteCog.__new__(VoteCog)
 
     assert [command.qualified_name for command in cog.__cog_app_commands__] == ["poll"]

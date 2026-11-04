@@ -1,4 +1,7 @@
-"""Transport interruption retains supplied-file requirements before processor registration."""
+"""Reserve every supplied attachment before downloading any of them.
+
+A failed download remains a draft requirement, so finalization cannot silently omit that file.
+"""
 
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -44,6 +47,7 @@ class Attachment:
     size: int = 4
 
     async def save(self, path: Path) -> None:
+        # Reserve both requirements before attempting either download.
         assert len(self.intake.files) == 2
         if self.fails:
             raise OSError("download interrupted")

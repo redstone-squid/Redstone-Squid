@@ -23,12 +23,9 @@ def _squid_fields(record: logging.LogRecord) -> dict[str, object]:
 async def test_command_log_carries_only_low_cardinality_fields(
     caplog: pytest.LogCaptureFixture, guild_id: int | None, interaction: object | None
 ) -> None:
-    """The exact field set is the contract, so comparing it whole is the assertion.
+    """Inspect LogRecord extra fields: the default formatter omits them.
 
-    `log_command_usage` is handed the entire invocation context, raw argument values
-    included. A membership check over the rendered text would not prove they stay out:
-    `extra` fields are not rendered by the default formatter, so a leaked argument
-    would pass one. Equality over the attached fields plus a constant message does.
+    Checking rendered text alone cannot detect arguments leaked through those fields.
     """
     cog = LoggingCog(Mock())
     ctx = Mock()
@@ -52,7 +49,6 @@ async def test_command_log_carries_only_low_cardinality_fields(
 
 
 async def test_ready_log_reports_bot_identity_and_guild_count(caplog: pytest.LogCaptureFixture) -> None:
-    """`on_ready` fires again on every failed RESUME; the bot's own identity is constant across those retries."""
     bot = Mock()
     bot.user.id = 111
     bot.user.__str__ = Mock(return_value="SquidBot#0000")

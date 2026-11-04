@@ -128,6 +128,7 @@ def decision_event(responder: RecordingResponder) -> sp.TransitionEvent[sp.Decis
 async def message_root_browser(
     browser: ErrorReportScreen, *, execution_host: UIExecutionHost
 ) -> tuple[MessageRoot, discord.ui.LayoutView]:
+    """Load browser data before the synchronous rendering assertions."""
     await browser.on_load()
     browser._loaded = True
     bot = make_layout_bot(topic_bus=browser._bus)
@@ -149,7 +150,7 @@ def _texts(view: discord.ui.LayoutView) -> list[str]:
 
 
 def _code_pages(message_root: MessageRoot) -> list[str]:
-    """Every page of the fenced body, walked via the mount's own nav handlers."""
+    """Collect fenced text from every page by advancing the presentation cursor."""
     pages = []
     while True:
         view = commit_render(message_root)
@@ -167,7 +168,6 @@ def _code_pages(message_root: MessageRoot) -> list[str]:
 
 async def test_recent_list_offers_every_entry_for_opening() -> None:
     async with running_execution_host() as execution_host:
-        """The audit's complaint: a listed reference could only be read, then retyped."""
         reports = (make_report("aaa111"), make_report("bbb222", work_lost=True))
         browser = make_screen(reports)
         await message_root_browser(browser, execution_host=execution_host)
@@ -194,7 +194,6 @@ async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
 
 async def test_a_long_traceback_is_readable_past_one_page() -> None:
     async with running_execution_host() as execution_host:
-        """Previously the card showed a fixed 1200-character tail and nothing could reach the rest."""
         frames = "\n".join(f"  File 'module{index}.py', line {index}, in frame{index}" for index in range(300))
         browser = make_screen(report=make_report(traceback=f"Traceback:\n{frames}\nValueError: boom"))
         message_root, view = await message_root_browser(browser, execution_host=execution_host)
@@ -248,7 +247,7 @@ async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
 
 async def test_every_page_fits_the_real_display_budget() -> None:
     async with running_execution_host() as execution_host:
-        """The PAGE_CHARS killer: each page, chrome and footer included, fits the actual budget."""
+        # A line longer than one page forces splitting even without newline boundaries.
         long_line = "x" * 9001
         browser = make_screen(report=make_report(traceback=f"{long_line}\nValueError: boom"))
         message_root, _ = await message_root_browser(browser, execution_host=execution_host)

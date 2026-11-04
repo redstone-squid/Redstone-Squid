@@ -67,12 +67,7 @@ async def _run(cog: SearchCog[Any], **kwargs: Any) -> None:
 
 
 async def test_a_descending_sort_suggestion_survives_the_trip() -> None:
-    """The `search_sorts` source suggests `-width`, so the command has to accept it.
-
-    Reading the option as a bare field name and taking the direction from a second
-    option left the minus sign inside the field name, and the backend then rejected
-    `-width` as unsortable — every descending value the autocomplete offered failed.
-    """
+    """Autocomplete emits signed sort fields; parse -width into a field and descending direction."""
     search = RecordingSearch()
 
     await _run(_cog(search), query="doors", sort="-width")
@@ -108,7 +103,6 @@ async def test_a_sort_of_only_a_minus_sign_is_a_user_error() -> None:
 
 
 async def test_a_taxonomy_target_narrows_the_query_for_you() -> None:
-    """`/patterns search` went away because this option does its job."""
     search = RecordingSearch()
 
     await _run(_cog(search), query="lacing", scope=SearchTarget.patterns)

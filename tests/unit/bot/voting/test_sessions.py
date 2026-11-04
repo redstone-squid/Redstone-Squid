@@ -13,10 +13,9 @@ from squid.builds.models import OtherBuild
 async def test_a_guild_without_a_vote_channel_does_not_fail_the_submission(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """The build is already committed by the time we get here, so nowhere to post is not an error.
+    """The build is already committed; missing vote channels must not fail its event handler.
 
-    It used to raise, which reported a saved build as a failed submission and made the
-    at-least-once event handler retry it forever.
+    Raising here would report a saved build as failed and keep retrying the same delivery.
     """
     build = OtherBuild(id=42, submission_status=Status.PENDING, submitter_account_id=7)
 

@@ -1,4 +1,8 @@
-"""The one ephemerality rule, at the sites where getting it wrong costs something (audit C2)."""
+"""Personal replies use ephemeral interactions where available; private payloads require private delivery.
+
+For a prefix command in a guild, private delivery uses a DM. If DMs are closed, only the delivery
+failure notice may reach the channel.
+"""
 
 from dataclasses import dataclass
 from typing import Any, cast, override

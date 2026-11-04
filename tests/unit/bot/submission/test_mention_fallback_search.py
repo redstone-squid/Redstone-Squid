@@ -21,11 +21,7 @@ class Context:
 
 
 async def test_a_real_command_error_passes_through_untouched() -> None:
-    """Every command error in the bot lands here, and only CommandNotFound belongs to us.
-
-    Raising instead — as an unconditional `assert ctx.command is None` did — fails inside
-    `on_command_error` itself, so discord.py drops the error that was being reported.
-    """
+    """Ignore errors from real commands so the shared error presenter can handle them."""
     context = Context()
     error = commands.CommandInvokeError(RuntimeError("the command itself failed"))
 

@@ -1,4 +1,7 @@
-"""Build edit command tests."""
+"""Open an existing build's editor with staged changes and current authorization.
+
+Retained submission-draft editing is covered in ``test_draft_editor.py``.
+"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -135,7 +138,7 @@ async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interactio
 
 
 def _sent_view(interaction: discord.Interaction[Any]) -> Any:
-    """The one message the command sent: it completes its own private defer in place."""
+    """Read the view from the initial send, follow-up, or original-response edit."""
     source = cast(Any, interaction)
     call = (
         source.response.send_message.await_args
@@ -191,10 +194,9 @@ async def test_nothing_typed_still_opens_the_workspace() -> None:
 
 
 async def test_a_stored_editor_follows_its_build_without_rereading_it() -> None:
-    """The editor's resource is seeded with the build the command already fetched.
+    """Reuse the command's fetched build for the first render, then follow later build updates.
 
-    It still declares the dependency, so the mount follows the topic -- but the follow costs
-    a `sl.runtime.watch` line inside the loader rather than a second query to prime it.
+    The editor must register its topic dependency even when its initial value needs no query.
     """
     cog = _cog(_door())
 
@@ -208,7 +210,6 @@ async def test_a_stored_editor_follows_its_build_without_rereading_it() -> None:
 
 
 async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:
-    """A field absent from the build is refused rather than silently dropped."""
     cog = _cog(OtherBuild(id=1, submission_status=Status.PENDING, submitter_account_id=1))
 
     view = _sent_view(await _run(cog, door_size="2x2"))
@@ -217,7 +218,6 @@ async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:
 
 
 async def test_a_pending_builds_submitter_may_edit_it_without_the_node() -> None:
-    """A pending submitter may open the editor without the node permission."""
     cog = _cog(_door(), allowed=False, account_id=1)
 
     assert _component(_sent_view(await _run(cog))) is not None
@@ -271,9 +271,7 @@ async def _open_from_menu(cog: BuildEditCommands[Any], message: discord.Message)
 
 
 async def test_the_menu_opens_the_editor_behind_its_own_defer() -> None:
-    """`open_build_editor` used to resolve a second request for the same interaction, which
-    did not know about the defer, so the workspace went out as a follow-up next to a
-    placeholder that never resolved."""
+    """Opening from a resolved build card must produce an editor."""
     cog = _cog(_door())
     cog.bot.user = cast(Any, discord.Object(id=1))
     cog.bot.services.posts = PostRecorder("1")

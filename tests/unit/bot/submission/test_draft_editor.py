@@ -1,4 +1,7 @@
-"""Persisted editor recovery and optimistic form writes."""
+"""Reopen retained submission drafts and save answers against the displayed edit revision.
+
+The editor uses the draft's pinned form schema; concurrent answer edits must not overwrite each other.
+"""
 
 from dataclasses import replace
 from types import SimpleNamespace
@@ -24,6 +27,8 @@ from squid_ui_discord.testing import commit_render
 
 
 class Drafts:
+    """Apply changes through DraftSnapshot revision checks while keeping the snapshot in memory."""
+
     def __init__(self, draft: StoredDraft) -> None:
         self.current = draft
         self.actors: list[int] = []

@@ -163,9 +163,10 @@ async def test_a_saved_channel_is_kept_without_a_hand_written_invalidate() -> No
 
 
 async def test_a_channel_saved_before_a_later_failure_is_not_left_applied() -> None:
-    """The guarantee the architecture doc promises, on the panel that motivated it.
+    """Rollback must restore mutations inside the panel's channel dictionary.
 
-    set_channel writes into a dict, which is the shape assignment-level rollback would miss.
+    Restoring only attribute assignments would miss these changes; this checks UI state,
+    not rollback of the settings service write.
     """
     panel, _, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
@@ -242,7 +243,7 @@ async def test_a_channel_change_can_be_undone() -> None:
         assert await panel.history.undo() is not None
 
     assert panel.channel_id("Vote") == 3
-    # The world half went back too: the framework only ever restores the panel's own dict.
+    # Undo must compensate through the service as well as restoring the panel's dictionary.
     assert settings.channel_writes[-1] == (GUILD_ID, "Vote", 3)
 
 

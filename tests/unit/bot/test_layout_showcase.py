@@ -1,4 +1,4 @@
-"""Public dogfood surface for the squid-ui engine."""
+"""Exercise squid-ui through the development bot's interactive examples."""
 
 import gc
 import weakref
@@ -446,8 +446,6 @@ class TestLobby:
         guild_id: int = 5,
         host_id: int = 7,
     ) -> tuple[Any, Lobby]:
-        # A new name, not a rebind: the parameter's declared type keeps `None` in the
-        # union no matter what is assigned back to it.
         host = make_layout_bot() if bot is None else bot
         context = ContextHarness(
             message=MessageHarness(message_id=guild_id),

@@ -29,7 +29,7 @@ AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 
 @pytest.fixture(autouse=True)
 def _sticky_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Undo the temporary kill switch so these tests keep covering the sticky."""
+    """Enable the consent banner so these tests exercise its gated path."""
     monkeypatch.setattr("squid.bot.submission.submit.CONSENT_STICKY_ENABLED", True)
 
 

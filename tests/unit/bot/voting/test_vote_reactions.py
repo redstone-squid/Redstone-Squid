@@ -127,6 +127,8 @@ class Permissions:
 
 @dataclass
 class Votes:
+    """Record casts without mutating the snapshot; tests explicitly seed resulting selections."""
+
     trace: list[str]
     snapshot: VoteSessionSnapshot = field(
         default_factory=lambda: poll_snapshot(
@@ -331,6 +333,10 @@ async def test_anonymous_recovery_cleans_committed_and_unconsented_reactions_wit
 async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_stable_option(
     reactions: ReactionHarness,
 ) -> None:
+    """The two guilds' different emoji both mean option ``one`` in the same session ballot.
+
+    Recovery must recognize the existing selection; removing either alias can withdraw it.
+    """
     reactions.services.votes.snapshot = poll_snapshot(
         visibility=VoteVisibility.VISIBLE_LIVE,
         messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),

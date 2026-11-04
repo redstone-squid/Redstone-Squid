@@ -20,8 +20,8 @@ from squid_ui_discord.testing import delivered_to, message_harness
 class Projection(sl.Component):
     """A panel that re-reads its source whenever the build topic is published.
 
-    The whole binding is the `sl.runtime.watch` line: no subscription to register, no reload closure
-    to pass, and no priming call before the send.
+    ``sl.runtime.watch`` records the build topic as a dependency of the loaded value. Publishing
+    that topic makes the mounted panel reload the value and schedule a new render.
     """
 
     def __init__(self, read) -> None:

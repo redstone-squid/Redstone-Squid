@@ -60,6 +60,8 @@ async def no_consent_request(
 
 
 class ConsentCapture:
+    """Keep the continuation so tests can accept, cancel, or abandon the notice after opening."""
+
     def __init__(self, *, opened: bool = True) -> None:
         self.opened = opened
         self.answered: ConsentAnswer | None = None
@@ -786,10 +788,9 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
 
 
 def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[str, Any]]:
-    """A panel whose reader has not consented, with the notice stubbed out.
+    """Capture the consent continuation without mounting the notice.
 
-    The prompt is a mount of its own and is covered in `test_consent_gate`; what matters here
-    is that the press ends without one being awaited, and that the continuation does the work.
+    Notice interactions are covered in ``test_consent_gate.py``.
     """
     del monkeypatch
     opened: dict[str, Any] = {}
@@ -833,11 +834,10 @@ def _press(message_root: Any) -> Any:
 async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The notice goes up and the press is over; it used to be awaited where it stood.
+    """Return from the requesting press before the reader answers.
 
-    An action handler runs inside the mount's transaction and, under EXCLUSIVE, inside its
-    dispatch lock, so awaiting the answer held the whole panel for as long as the reader took
-    -- up to two minutes. Nothing here waits, so the editor is simply not open yet.
+    Awaiting consent inside the panel's exclusive action would retain its UI transaction and
+    dispatch lock, blocking other presses. The continuation opens the editor after acceptance.
     """
     panel, opened = _gated_panel(monkeypatch)
     message_root = ScheduleRoot()
@@ -856,7 +856,6 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
 
 
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Cancelling stores nothing, changes nothing, and does not redraw anything."""
     panel, opened = _gated_panel(monkeypatch)
     message_root = ScheduleRoot()
 
@@ -872,11 +871,7 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
 async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A toggle carries no `guard=`, so admission-stage confirmation could not have reached it.
-
-    It is also where two of this panel's three consent waits lived, which is why the fix had
-    to sit in the handler rather than in the control declaration.
-    """
+    """Visibility writes wait for consent even when triggered by a toggle handler."""
     panel, opened = _gated_panel(monkeypatch)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
@@ -922,11 +917,7 @@ def _linked_panel() -> tuple[AccountScreen, _Recorder, AccountMutationService, s
 
 
 async def test_unlinking_asks_before_it_removes_anything() -> None:
-    """The armed flag is gone: the button declares that it needs reaffirming.
-
-    What used to be three pieces of view state, an early return and a relabelled button is now
-    `guard=sp.guards.confirm(...)`, and the warning is in the question instead of the footer.
-    """
+    """The confirmation guard must intercept unlink before the service receives a write."""
     panel, presenter, accounts, message_root = _linked_panel()
 
     await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))

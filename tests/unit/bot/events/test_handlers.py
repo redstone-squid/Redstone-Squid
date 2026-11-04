@@ -1,8 +1,7 @@
-"""Domain event handler tests.
+"""Domain events delegate submission review work to the publisher.
 
-Publishing a confirmed build's card is no longer a handler: confirming enqueues a
-Discord sync job and the reconciler renders it, so those cases live in
-`tests/unit/bot/posts/test_reconciler.py`.
+Confirming a build queues a Discord refresh; the post reconciler publishes its card.
+That separate path is covered in ``tests/unit/bot/posts/test_reconciler.py``.
 """
 
 from dataclasses import dataclass

@@ -143,8 +143,7 @@ def _screen(harness: InteractionHarness) -> Any:
 
 
 async def test_the_workspace_completes_the_private_defer() -> None:
-    """Before the request ledger, the workspace resolved a second request that did not know
-    about the defer and went out as a follow-up, leaving the "thinking" placeholder forever."""
+    """Complete the existing private defer so no thinking placeholder or extra follow-up remains."""
     harness = await _submit(_cog(), door_size="2x2")
 
     harness.response.defer.assert_awaited_once()

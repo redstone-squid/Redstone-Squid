@@ -11,8 +11,7 @@ MAX_BYTES = 2 * 1024 * 1024
 @pytest.mark.parametrize(
     ("filename", "content_type", "expected"),
     [
-        # Both shapes belong to the accepted input contract. The test proves that a missing or
-        # generic value cannot decide the format; it makes no claim about Discord client behavior.
+        # Schematic extensions remain authoritative when MIME is missing or generic.
         ("door.litematic", None, "schematic"),
         ("door.litematic", "application/octet-stream", "schematic"),
         ("DOOR.LITEMATIC", None, "schematic"),
@@ -25,8 +24,8 @@ MAX_BYTES = 2 * 1024 * 1024
         # Falls back to guessing from the name when Discord tells us nothing.
         ("screenshot.png", None, "image"),
         ("clip.mp4", None, "video"),
-        # A schematic renamed to look like an image is still typed by its extension here; the
-        # content sniffer downstream is what refuses bytes that do not match.
+        # A conflicting image MIME must not override the final schematic extension.
+        # This only classifies the filename; schematic intake later validates the bytes.
         ("door.png.litematic", "image/png", "schematic"),
     ],
 )
