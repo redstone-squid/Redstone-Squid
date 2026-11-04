@@ -1,11 +1,5 @@
-# Common settings that generally should always be used with your language specific settings
-
-# Auto detect text files and perform LF normalization
+# Normalize detected text files to LF unless a rule below specifies another line ending.
 *          text=auto
-
-#
-# The above will handle all files NOT found below
-#
 
 # Documents
 *.bibtex   text diff=bibtex
@@ -59,9 +53,6 @@ requirements/*.txt linguist-generated=true
 *.rs       text
 *.kt       text
 *.kts      text
-# If you want to treat it as binary,
-# use the following line instead.
-# *.svg    binary
 *.eps      binary
 
 # Scripts
@@ -145,8 +136,6 @@ tests/supabase -text
 *.js           text
 *.lock         text
 *.mako         text
-
-# Basic .gitattributes for a python repo.
 
 # Source files
 # ============
