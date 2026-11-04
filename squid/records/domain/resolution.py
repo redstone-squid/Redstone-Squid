@@ -1,4 +1,9 @@
-"""Progressive record comparison algorithms."""
+"""Compare record candidates in priority order.
+
+Missing primary metrics exclude a candidate. Missing tie-breakers leave a result
+unresolved only when the comparison reaches them; an earlier decisive metric
+needs no lower-priority evidence.
+"""
 
 from collections.abc import Iterable, Sequence
 
@@ -13,7 +18,17 @@ from squid.records.domain.models import (
 
 
 def reduce_timing_variants(variants: Sequence[TimingVariant]) -> TimingReduction:
-    """Reduce possible behaviors to the lexicographically slowest provable one."""
+    """Select the slowest timing variant by comparing methods in priority order.
+
+    Variants without a primary timing are excluded. At each position, retain only
+    variants tied for the largest value. Thus (5, 2) is slower than (4, 8), even
+    though its second method is faster. Missing data among the remaining variants
+    stops comparison and leaves that position and the rest unknown.
+
+    Once one variant remains, copy its remaining values, including unknowns.
+    `missing_index` identifies a blocked comparison, not every unknown value in
+    the returned timing.
+    """
     active = [variant for variant in variants if variant.values[0] is not None]
     if not active:
         return TimingReduction(timing=None, missing_index=0)
@@ -51,7 +66,12 @@ def resolve_smallest(candidates: Iterable[RecordCandidate]) -> RecordResolution:
 
 
 def resolve_fastest(candidates: Iterable[RecordCandidate], methods: Sequence[str]) -> RecordResolution:
-    """Resolve speed lexicographically, requesting lower methods only for ties."""
+    """Compare each build's slowest variant, using lower-priority methods only for ties.
+
+    `methods` names timing slots in priority order and supplies gap field names.
+    After every timing method ties, earliest completion breaks the tie; identical
+    dates produce co-holders.
+    """
     active, incomplete = _fastest_pool(candidates, methods)
     if incomplete is not None:
         return incomplete

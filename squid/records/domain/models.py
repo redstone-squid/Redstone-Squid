@@ -76,7 +76,11 @@ EXTENDER_TIMING_METHODS: tuple[TimingMethod, ...] = (
 
 @dataclass(frozen=True, slots=True)
 class TimingVariant:
-    """One possible timing behavior, represented in game ticks."""
+    """One timing behavior in game ticks, with slots ordered by the build kind's methods.
+
+    `None` means unknown. Negative reset times are allowed; the tuple must contain
+    at least its primary timing slot.
+    """
 
     values: tuple[int | None, ...]
 
@@ -111,7 +115,11 @@ class RecordCandidate:
 
 @dataclass(frozen=True, slots=True)
 class TimingReduction:
-    """A build's lexicographically slowest known timing behavior."""
+    """A build's slowest timing variant, or the known prefix of an unresolved comparison.
+
+    `missing_index` is the slot that blocked variant selection. It can be `None`
+    even when the selected variant contains unknown lower-priority timings.
+    """
 
     timing: TimingVariant | None
     missing_index: int | None = None

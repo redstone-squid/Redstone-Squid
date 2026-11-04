@@ -74,9 +74,8 @@ RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
     claim_token=RecordRecomputeQueueItem.claim_token,
     attempts=RecordRecomputeQueueItem.attempts,
     last_error=RecordRecomputeQueueItem.last_error,
-    # No `dead_at`: this queue must never stop retrying. A stuck recomputation is a
-    # visible staleness bug, where a dead-lettered one is invisible -- at the cost
-    # that a poisoned scope can spin forever.
+    # Retry with backoff rather than abandoning a request: otherwise its published
+    # records could stay stale indefinitely. A permanent error keeps retrying too.
 )
 
 
@@ -96,14 +95,14 @@ class _DefinitionWrite:
 
 
 class PostgresRecordRepository:
-    """Load record candidates and atomically publish computation runs."""
+    """Load candidates and stage record publication in the caller's transaction."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
         self._recompute_queue = ClaimedRowQueue(RECORD_RECOMPUTE_QUEUE_SPEC)
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[RecordSourceCandidate]:
-        """Load confirmed fixed candidates of one supported kind."""
+        """Load confirmed doors or extenders; return no candidates for unsupported kinds."""
         session = self._session()
         if kind is BuildKind.DOOR:
             return await self._list_doors(session)
@@ -190,7 +189,12 @@ class PostgresRecordRepository:
         return (await session.execute(statement)).scalar_one_or_none()
 
     async def activate(self, batch: ComputationBatch) -> int:
-        """Persist and activate a complete run in one transaction."""
+        """Stage a complete run, supersede the previous run, and enqueue its activation event.
+
+        The advisory lock lets only one transaction replace the active run for
+        this kind and version at a time. RecordComputationService commits the new
+        results and activation event together, so readers cannot see a partial run.
+        """
         session = self._session()
         await _advisory_lock(
             session,
@@ -543,12 +547,10 @@ class PostgresRecordRepository:
         await session.execute(statement)
 
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
-        """Lease queued scopes without holding locks during computation.
+        """Lease queued scopes and return their distinct build kinds.
 
-        A crashed worker used to hold its lease forever: the claim filtered
-        `locked_at IS NULL` with no visibility timeout at all, so a row locked by a
-        killed process was never reclaimed and reported as in-flight indefinitely.
-        The shared readiness predicate brings the timeout with it.
+        The caller must commit the claims before computing. Expired claims become
+        eligible again through the shared queue visibility timeout.
         """
         rows = await self._recompute_queue.claim(limit=limit, session=self._session())
         return RecomputeLease(
@@ -557,13 +559,10 @@ class PostgresRecordRepository:
         )
 
     async def complete_recompute(self, lease: RecomputeLease) -> None:
-        """Acknowledge the leased scopes this worker still owns.
+        """Acknowledge only scopes whose claim tokens still match this lease.
 
-        Acknowledging by kind destroyed work: `enqueue` upserts on `scope_key` and
-        clears the lock, so new work arriving for a kind mid-run was claimed by a
-        second worker and then deleted by the first one's `WHERE build_kind IN (...)
-        AND locked_at IS NOT NULL`. Fencing on the tokens this worker was handed
-        leaves the other worker's row alone.
+        Enqueueing resets a scope's claim; reclaiming gives it a new token. Either
+        change prevents this acknowledgement from deleting the newer work.
         """
         await self._recompute_queue.complete_batch(lease.claim_tokens, session=self._session())
 
@@ -633,7 +632,7 @@ class PostgresRecordRepository:
         """Persist one scope in bulk, preserving stable IDs and explicit public requests."""
         if not writes:
             return ()
-        # Both callers take unique identities in the same order, including concurrent lookups.
+        # Sort conflict keys consistently so concurrent lookups acquire row locks in the same order.
         ordered = sorted({write.key: write for write in writes}.values(), key=lambda write: write.key)
         scope_values: dict[str, object] = {"build_kind": kind, "version_scope": scope, "version_id": version_id}
         identities = [
@@ -946,6 +945,11 @@ def _gap_from_row(definition: RecordRule, result: RecordStanding) -> RecordGap:
 
 
 def parse_category_key(key: str) -> CategoryIdentity | None:
+    """Parse a stored category key, returning `None` for unrecognized syntax.
+
+    This checks the serialized structure, not whether the referenced tags exist
+    or their operators and values form a valid competition.
+    """
     try:
         kind_value, remainder = key.split(":", maxsplit=1)
         base_key, restriction_part = remainder.rsplit(":r[", maxsplit=1)

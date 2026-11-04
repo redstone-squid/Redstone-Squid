@@ -51,7 +51,19 @@ from squid.unit_of_work import UnitOfWorkFactory
 
 
 class RecordComputationService:
-    """Build complete versioned record runs from confirmed build facts."""
+    """Compare confirmed builds and publish replacement record results.
+
+    Categories group builds by features such as door size and restrictions.
+    Within each category, the record class selects the comparison: first,
+    fastest, smallest, or a combination. An all-time scope considers every
+    confirmed candidate; a current scope considers those supporting the pinned
+    Minecraft version. Resolution can retain tied holders or report missing
+    facts that prevent a decision.
+
+    A rebuild computes all results for each requested kind and scope, then
+    activates the replacement runs together. Readers continue to see the old
+    results until that transaction commits.
+    """
 
     def __init__(
         self,
@@ -83,7 +95,11 @@ class RecordComputationService:
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
-        """Recompute and atomically activate every requested kind/scope."""
+        """Stage replacement runs in the caller's transaction without committing.
+
+        Every kind gets an all-time run. A supplied current version also gets a
+        filtered run and marks incompatible all-time holders as broken.
+        """
         ruleset_id = await uow.records.active_ruleset_id()
         run_ids: list[int] = []
         records: list[ComputedRecord] = []
@@ -174,7 +190,13 @@ class RecordComputationService:
         current_version_id: int | None = None,
         limit: int = 20,
     ) -> QueueProcessSummary:
-        """Claim queued scopes, rebuild them, and acknowledge only on success."""
+        """Claim scopes, rebuild their kinds, then acknowledge the owned claims.
+
+        Claiming, publication, and acknowledgement use separate transactions;
+        claim locks are released before rebuilding starts. An omitted version
+        reuses the current pin. Rebuild failures release owned claims for retry
+        and propagate.
+        """
         async with self._uow_factory() as uow:
             lease = await uow.records.claim_recompute_kinds(limit=limit)
             if current_version_id is None:
@@ -199,6 +221,12 @@ class RecordComputationService:
         kind: BuildKind,
         candidates: Sequence[RecordSourceCandidate],
     ) -> dict[str, CategoryCompetition]:
+        """Generate categories from observed restrictions, bounded by category_limit.
+
+        A build can compete in several categories, including the unrestricted one.
+        The limit bounds combinations generated here; explicitly requested exact
+        categories are added separately so the limit does not hide those results.
+        """
         grouped: dict[str, list[tuple[RecordSourceCandidate, tuple[CandidateFacet, ...]]]] = defaultdict(list)
         thresholds = _observed_thresholds(candidates)
         for source in candidates:
@@ -271,7 +299,13 @@ class RecordComputationService:
 
 
 class RecordService:
-    """Queries and explicit category materialization."""
+    """Query published results and add exact categories requested by users.
+
+    Automatic computation bounds the number of restriction combinations it
+    generates. A lookup can request a more specific category; if a confirmed
+    build qualifies, the service saves it for future rebuilds and recomputes
+    that build kind before returning.
+    """
 
     def __init__(
         self,
@@ -382,7 +416,7 @@ class RecordService:
 
 
 class PublicRecordQueryService:
-    """Assemble public-complete record details across record and build read boundaries."""
+    """Combine published standings with all their holders' public build summaries."""
 
     def __init__(
         self, builds: PublicBuildSummaryReader, *, uow_factory: UnitOfWorkFactory[RecordQueryUnitOfWork]
@@ -391,7 +425,11 @@ class PublicRecordQueryService:
         self._builds = builds
 
     async def get(self, standing_id: int) -> PublicRecordDetail | None:
-        """Return one public detail, rejecting missing or private holder references."""
+        """Return an active result with holders in standing order, or `None` if absent.
+
+        Raise `DataIntegrityError` when holder rows contradict the result status
+        or any referenced build is unavailable in the public catalogue.
+        """
         async with self._uow_factory() as uow:
             standing = await uow.records.get_published_record(standing_id)
         if standing is None:
@@ -462,6 +500,7 @@ def _restriction_combinations(
     *,
     max_size: int,
 ) -> Iterable[tuple[CandidateFacet, ...]]:
+    """Choose at most one threshold per restriction, up to `max_size` restrictions."""
     yield ()
     for size in range(1, min(max_size, len(groups)) + 1):
         for selected_groups in combinations(groups, size):
@@ -627,6 +666,13 @@ def _reconstruct_history(
     kind: BuildKind,
     candidates: Sequence[RecordCandidate],
 ) -> tuple[HolderHistoryEntry, ...]:
+    """Reconstruct holder changes from today's facts and known completion dates.
+
+    Builds completed at the same time enter together. Undated builds are omitted,
+    and unresolved prefixes leave the previous period open until another resolved
+    holder set appears. These intervals are reconstructed evidence, not an audit
+    log of previously published results.
+    """
     dated = sorted(
         (candidate for candidate in candidates if candidate.completion_at is not None),
         key=_known_completion,

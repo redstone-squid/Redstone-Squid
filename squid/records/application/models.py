@@ -27,7 +27,12 @@ MaterializationSource = Literal["eager", "seeded", "public_lookup"]
 
 @dataclass(frozen=True, slots=True)
 class CandidateFacet:
-    """A canonical taxonomy value attached to a candidate."""
+    """A taxonomy value and the category threshold a candidate can satisfy.
+
+    `assigned_value` is the build's actual value. `category_value` overrides it
+    for category titles: a build three blocks wide can enter an at-most-four-wide
+    category while keeping its measured width of three.
+    """
 
     id: int
     kind: FacetKind
@@ -67,7 +72,10 @@ class RecordSourceCandidate:
 
 @dataclass(frozen=True, slots=True)
 class CategoryIdentity:
-    """A stable competition category shared by qualifying builds."""
+    """A stable competition category shared by qualifying builds.
+
+    Callers provide sorted restriction IDs and values; `key` preserves their order.
+    """
 
     kind: BuildKind
     base_key: str
@@ -119,7 +127,7 @@ class HolderHistoryEntry:
 
 @dataclass(frozen=True, slots=True)
 class ComputationBatch:
-    """A complete replacement run for a build kind and concrete version."""
+    """A replacement run for one build kind; a null version includes all versions."""
 
     ruleset_id: int
     kind: BuildKind
@@ -150,16 +158,10 @@ class TitleDiagnosticGap:
 
 @dataclass(frozen=True, slots=True)
 class PublishedRecord:
-    """Public read model for one result of the currently published computation run.
+    """One result belonging to the active computation run for its kind and version.
 
-    It used to be `ActiveRecord`, which borrows Rails' name for "a domain object
-    that persists itself" to mean something entirely different. It persists
-    nothing and knows nothing about its own storage.
-
-    `record_computation_runs.is_active` keeps the word and is right to: it
-    describes a *run*, and exactly one run per kind and version is the active
-    one. What this type names is a result belonging to that run, which is a
-    different fact about a different thing.
+    `id` identifies this run's result. `definition_id` identifies a rule within
+    its ruleset, while `competition_id` stays stable across rulesets and runs.
     """
 
     id: int

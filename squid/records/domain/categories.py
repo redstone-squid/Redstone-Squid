@@ -28,7 +28,7 @@ class CategorySemantics:
         return frozenset(result)
 
     def is_valid(self, facets: Iterable[str]) -> bool:
-        """Return whether a category contains no incompatible pair."""
+        """Return whether the facets and their implications contain no incompatible pair."""
         closed = self.closure(facets)
         return all(not (self.incompatibilities.get(facet, frozenset()) & closed) for facet in closed)
 
@@ -39,7 +39,13 @@ def generate_category_subsets(
     *,
     max_size: int = 8,
 ) -> Iterator[frozenset[str]]:
-    """Stream every unique valid subset without constructing a power-set mask."""
+    """Yield valid subsets of the input facets and their implications, including the empty set.
+
+    Subsets are ordered by size, then sorted facet IDs. Each contains at most
+    `max_size` facets; implied facets participate in validation but need not appear
+    in the yielded subset. For example, if A implies B, {A} and {B} are separate
+    categories. A negative size limit raises `ValidationError` when iteration starts.
+    """
     if max_size < 0:
         msg = tr(t"Maximum category size cannot be negative.")
         raise ValidationError(msg)

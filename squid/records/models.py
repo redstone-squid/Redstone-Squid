@@ -1,4 +1,17 @@
-"""SQLAlchemy models for rule-driven record computation."""
+"""Store record definitions and the results of comparing eligible builds.
+
+A record competition combines a category, a record class such as fastest, and a
+Minecraft version scope. RecordSeries gives that competition a stable public ID.
+RecordRule is its definition under one RecordRuleset, which identifies the rules
+document and calculator/formatter versions used. The database names these tables
+record_competitions and record_definitions respectively.
+
+A RecordComputationRun groups results for one build kind and version scope. Each
+RecordStanding is one definition's result in that run, with RecordResultHolder rows
+for tied winners. Public queries use the active run; replacing it keeps the old
+results for reference. A standing's result ID therefore changes across rebuilds,
+while the competition ID remains stable.
+"""
 
 import uuid
 from enum import StrEnum
@@ -53,7 +66,7 @@ class RecordComputationStatus(StrEnum):
 
 
 class RecordRuleset(Base, kw_only=True):
-    """An immutable version of the record calculators and title formatters."""
+    """Calculator and formatter versions with a mutable activation timestamp."""
 
     __tablename__ = "record_rulesets"
     __table_args__ = (
@@ -215,7 +228,7 @@ class RecordDefinitionFacet(Base, kw_only=True):
 
 
 class RecordComputationRun(Base, kw_only=True):
-    """An immutable attempt to calculate records for one build and version scope."""
+    """A computation attempt for one build kind and version, including its publication state."""
 
     __tablename__ = "record_computation_runs"
     __table_args__ = (
@@ -408,14 +421,14 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
-    """When this row next becomes claimable, and the only column backoff writes."""
+    """Earliest next claim time; retry backoff advances it without changing the enqueue time."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The database-minted fencing token handed to the worker that leased this scope.
+    """Token identifying the current claim, cleared when new work replaces it.
 
-    Scopes are leased in batches and acknowledged as a set, so the token is what
-    tells a finishing worker's acknowledgement from work enqueued during its run.
+    Completion and failure updates match this token to preserve work enqueued
+    or reclaimed after the worker started.
     """
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
 

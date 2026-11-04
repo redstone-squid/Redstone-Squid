@@ -20,12 +20,11 @@ from squid.unit_of_work import UnitOfWork
 
 @dataclass(frozen=True, slots=True)
 class RecomputeLease:
-    """A set of recompute scopes leased together by one worker.
+    """Queued scopes claimed together, with distinct kinds to rebuild and tokens to acknowledge.
 
-    The kinds are what gets rebuilt; the tokens are what the acknowledgement is
-    fenced on. Carrying the tokens is what distinguishes the rows this worker
-    leased from rows enqueued while it was running, which acknowledging by kind
-    alone silently destroyed.
+    Several scopes can belong to one kind, so the tuples need not have equal
+    lengths. Acknowledging tokens preserves work enqueued or reclaimed during
+    this worker's computation.
     """
 
     kinds: tuple[BuildKind, ...]
