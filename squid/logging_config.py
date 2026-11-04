@@ -43,9 +43,8 @@ DEFAULT_ACCESS_LOG_FORMAT = (
 JSON_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s %(created)s %(pathname)s %(lineno)s"
 """Fields emitted for structured application and worker logs.
 
-`service_name` is deliberately absent: it is supplied as a formatter *default* so that a record
-forwarded from a schematic worker child keeps the identity the child stamped on it. As a format
-field it would be a required field, which `static_fields` overwrite and record attributes cannot.
+Set service_name as a formatter default so a forwarded worker record keeps the
+child's service name instead of receiving the parent's name.
 """
 
 JSON_ACCESS_LOG_FORMAT = f"{JSON_LOG_FORMAT} %(client_addr)s %(request_line)s %(status_code)s"
@@ -72,7 +71,11 @@ def resolve_level(level_name: str) -> int:
 
 
 def prepare_log_path(log_dir: Path, path_str: str | None) -> Path | None:
-    """Prepare a relative log path beneath the configured log directory."""
+    """Resolve a log filename and create its parent directories.
+
+    Return None for an empty filename, an absolute path, or a directory-creation
+    failure. LoggingConfig callers are expected to validate traversal components.
+    """
     if not path_str:
         return None
 
@@ -111,11 +114,12 @@ def build_logging_config(
     service_name: str = "redstone-squid",
     log_tail_records: int = 0,
 ) -> dict[str, object]:
-    """Build a logging configuration dictionary for dictConfig.
+    """Build a dictConfig dictionary and prepare any configured log directories.
 
-    `log_tail_records` installs a `CorrelatedLogBuffer` keeping that many records per correlation
-    ID, so a stored error report can show what the process was doing around the failure. Zero
-    disables it and costs nothing.
+    Use readable text in development and JSON otherwise. `use_queue` moves output
+    handlers behind a queue; callers must start and stop its listener. A positive
+    `log_tail_records` also adds a synchronous buffer of recent lines per correlation
+    ID for error reports. Zero leaves that buffer uninstalled.
     """
     level = resolve_level(config.level)
     root_level = resolve_level(config.root_level)
@@ -161,10 +165,8 @@ def build_logging_config(
             "formatter": default_formatter,
             "max_records": log_tail_records,
         }
-        # Deliberately a sibling of the queue rather than one of its targets. A queued record
-        # reaches its handlers on the listener thread, so an error captured moments after the
-        # lines that explain it would drain a tail that is still in flight. Appending to a deque
-        # in the emitting thread is cheap enough to pay for that ordering guarantee.
+        # Buffer on the emitting thread. Otherwise error capture could read the buffer
+        # before the queue listener has delivered the lines that explain the failure.
         base_handlers = [*base_handlers, CORRELATION_BUFFER_HANDLER]
 
     if include_uvicorn_loggers:
@@ -250,7 +252,7 @@ def build_logging_config(
 
 
 def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> QueueListener:
-    """Configure logging for the Discord bot process."""
+    """Configure bot logging and start its queue listener; the caller must stop the returned listener."""
     named_logger_levels = {
         "discord": DEFAULT_LOG_LEVEL,
         "squid": DEFAULT_LOG_LEVEL,
@@ -317,9 +319,8 @@ def configure_service_worker_logging(config: LoggingConfig, *, dev_mode: bool = 
 def configure_worker_logging(*, level: str = DEFAULT_LOG_LEVEL, root_level: str = DEFAULT_ROOT_LOG_LEVEL) -> None:
     """Configure JSON logging to stderr for a schematic worker child.
 
-    Levels mirror the supervising process rather than being pinned to DEBUG: every record the
-    child emits is serialised, piped, parsed and rebuilt by the parent, so a record the parent
-    would only discard is work nobody asked for.
+    Pass the parent's log levels to avoid forwarding records that it would discard.
+    The parent reads these records from the child and forwards them to its handlers.
     """
     logging.config.dictConfig(
         {

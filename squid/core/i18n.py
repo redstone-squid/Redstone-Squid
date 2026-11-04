@@ -56,7 +56,15 @@ def tr(message: str, /, **params: object) -> str: ...
 
 
 def tr(message: str | Template | Message, /, **params: object) -> str | Message:
-    """Create deferred template text or resolve text through the ambient localization."""
+    """Defer a template string, or translate an existing message in the current locale.
+
+    For example, `tr(t"Hello {name}")` returns a Message that can be rendered later;
+    `tr(message)` renders that Message now. A plain string is translated immediately
+    and formatted with any keyword arguments.
+
+    Template placeholders must be simple identifiers. Plural templates must use the
+    same placeholders as the singular form and include an integer `count`.
+    """
     if isinstance(message, Template):
         plural = params.pop("plural", None)
         if params:
@@ -87,11 +95,7 @@ def tr(message: str | Template | Message, /, **params: object) -> str | Message:
 
 
 def locales_dir() -> Path:
-    """Directory holding the compiled gettext catalogs shipped with this source tree.
-
-    Resolved on demand rather than at import, so a test can point `_catalog` at a fixture
-    tree without reloading the module, and so importing `squid.core.i18n` touches no disk.
-    """
+    """Return the directory containing this checkout's compiled gettext catalogs."""
     return Path(__file__).resolve().parent.parent.parent / "locales"
 
 
@@ -154,7 +158,10 @@ def _match_locale(requested: str) -> str | None:
 
 
 def negotiate_locale(requested: str | None) -> str:
-    """Resolve a requested locale tag to one of `SUPPORTED_LOCALES`."""
+    """Choose a supported locale by exact match, then language, then the default.
+
+    For example, zh-TW falls back to zh-CN. Missing and unrecognized tags use en.
+    """
     if requested is None:
         return DEFAULT_LOCALE
     return _match_locale(requested) or DEFAULT_LOCALE

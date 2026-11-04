@@ -1,16 +1,11 @@
-"""Structured fan-out helpers built on anyio task groups.
+"""Run related async operations with a shared lifetime and ordered results.
 
-asyncio.gather returns on the first exception and leaves its siblings running
-unawaited, which for job batches means abandoned work still holding database
-claims and temporary directories. A task group cancels the siblings and waits
-for them, but returns nothing, so these helpers restore the one thing gather
-was actually being used for: results in argument order.
-
-One helper per failure policy: :func:`run_all` cancels the siblings on the
-first failure, :func:`run_all_settled` lets every operation finish and then
-raises, and :func:`settle_all` hands the failures back as values. All three run
-on :func:`task_group`, which is also the one to reach for directly when a block
-supervises a task of its own rather than a fan-out.
+These helpers wait for child tasks to finish or clean up before returning, so
+a failed batch cannot leave tasks using its database claims or temporary files.
+Choose a helper by its failure policy. `run_all` cancels siblings when one fails.
+`run_all_settled` waits for ordinary failures before raising, and `settle_all`
+returns those failures as values. All return results in input order. Use
+`task_group` directly when children do not need to return a list of results.
 """
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
@@ -35,16 +30,13 @@ def _limiter(limit: int | None) -> anyio.CapacityLimiter | nullcontext[None]:
 
 @asynccontextmanager
 async def task_group() -> AsyncIterator[anyio.abc.TaskGroup]:
-    """anyio's task group, without the ExceptionGroup around a lone failure.
+    """Run child tasks and unwrap a single failure from AnyIO's exception group.
 
-    The scope ends when the block exits, which waits for the children and
-    cancels them if the body or a sibling fails -- anyio's semantics exactly.
-    All that differs is the exception: anyio wraps even one failure in a group,
-    and a group of one matches neither ``except SquidError`` nor the isinstance
-    classification call sites do, so a handled error arrives unhandled.
-
-    Several failures still raise as a group, and a child's own group is passed
-    through: only the wrapper this block added is stripped.
+    Leaving the block waits for its children. A failure in the body or a child
+    cancels the other children. If only one failure escapes, raise it directly so
+    callers can catch its original type, for example with `except SquidError`.
+    Multiple failures remain grouped. A group raised by a child is preserved;
+    only the outer wrapper is removed.
     """
     failure: BaseException | None = None
     try:
@@ -63,29 +55,22 @@ async def task_group() -> AsyncIterator[anyio.abc.TaskGroup]:
 
 
 def _failure(failures: Sequence[BaseException]) -> BaseException:
-    """Pick what a fan-out raises: the lone failure itself, or a group of them.
-
-    A single failure is not wrapped. Call sites classify errors by type --
-    ``except SquidError``, ``isinstance(error, InvalidSchematicError)`` -- and an
-    ExceptionGroup matches neither, so wrapping one failure silently turns a
-    handled error into an unhandled one.
-    """
+    """Return a lone failure directly, or combine multiple failures into a group."""
     if len(failures) == 1:
         return failures[0]
     return BaseExceptionGroup("A fan-out operation failed.", failures)
 
 
 async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None) -> list[T]:
-    """Run every operation concurrently and return results in argument order.
+    """Run operations concurrently and return their results in input order.
 
-    The first failure cancels the rest and propagates, so use this only where a
-    cancelled sibling strands nothing; where each operation owns state that its
-    own error handling has to release, use :func:`run_all_settled`. One failure
-    propagates as itself, several as an ExceptionGroup to split with ``except*``.
+    A failure cancels siblings and waits for their cleanup. Use `run_all_settled`
+    when ordinary failures must not interrupt siblings, for example when each
+    job must record its own outcome before the batch returns.
 
     Args:
         operations: Zero-argument callables, each returning an awaitable.
-        limit: Maximum operations in flight at once. ``None`` runs them all.
+        limit: Maximum operations in flight at once. None runs them all.
     """
     factories = list(operations)
     if not factories:
@@ -104,16 +89,15 @@ async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit:
 
 
 async def run_all_settled[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None) -> list[T]:
-    """Run every operation to completion, then raise if any of them failed.
+    """Wait for all operations, then raise any ordinary failures.
 
-    Unlike :func:`run_all`, a failure cancels nothing, so every operation reaches
-    its own ``except`` clause -- which for a claimed job is what marks it failed
-    and releases the claim. Cancelling a sibling instead skips that clause and
-    strands the claim until its lease expires.
+    Successful results keep input order. One failure is raised directly; several
+    are grouped. Cancellation and other BaseException subclasses still interrupt
+    the batch. An Exception returned as a result is also treated as a failure.
 
     Args:
         operations: Zero-argument callables, each returning an awaitable.
-        limit: Maximum operations in flight at once. ``None`` runs them all.
+        limit: Maximum operations in flight at once. None runs them all.
     """
     outcomes = await settle_all(operations, limit=limit)
     failures = [outcome for outcome in outcomes if isinstance(outcome, Exception)]
@@ -125,14 +109,11 @@ async def run_all_settled[T](operations: Iterable[Callable[[], Awaitable[T]]], *
 async def settle_all[T](
     operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None
 ) -> list[T | Exception]:
-    """Run every operation to completion, returning each result or its failure.
+    """Return each operation's result or exception in input order.
 
-    Use this for best-effort fan-outs where one branch failing must not stop the
-    others -- a missing permission on one channel should not skip the rest. It
-    is the bounded, structured form of ``gather(..., return_exceptions=True)``.
-
-    Cancellation still propagates: only ``Exception`` is captured, never
-    ``BaseException``, so the caller can always tear the whole fan-out down.
+    An ordinary failure does not cancel siblings. For example, a permission error
+    in one Discord channel need not prevent updates to other channels. Cancellation
+    and other BaseException subclasses still propagate and stop the batch.
     """
     factories = list(operations)
     if not factories:
@@ -154,11 +135,10 @@ async def settle_all[T](
 
 
 async def run_all_awaitables[T](awaitables: Iterable[Awaitable[T]]) -> list[T]:
-    """Run already-constructed awaitables concurrently, in argument order.
+    """Run existing awaitables and return their results in input order.
 
-    Prefer :func:`run_all`. This exists for call sites that build their
-    coroutines eagerly; every one of them is awaited exactly once, so none can
-    be left un-awaited even if a sibling fails.
+    Failures follow `run_all`'s cancellation policy. Prefer `run_all` when callers
+    can supply factories instead of constructing awaitables in advance.
     """
     return await run_all([_as_factory(awaitable) for awaitable in awaitables])
 

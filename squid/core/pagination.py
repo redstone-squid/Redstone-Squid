@@ -1,31 +1,24 @@
-"""Pagination: how a page is addressed, and how one is assembled.
+"""Page contents and the parameters used to request neighbouring pages.
 
-Pagination is transparent: every value a caller needs to reach an adjacent page is a plain
-identifier or offset it could also have supplied by hand. A page addresses its neighbours in the
-mode the request used -- an offset-addressed request gets an offset back, and a request in an
-identifier order gets `after_id` / `before_id`, including the parameterless first page. That
-distinction is not cosmetic: identifier anchors walk a collection of any size, so a full crawl
-never runs into `MAX_PAGE_OFFSET`.
-
-Application services own page assembly for the collections they query, because the overfetch and
-the total are theirs. Transports map the result onto their own wire format.
+Services query the data and assemble pages; transports expose the anchors in
+their own response format. Identifier anchors support full traversal without
+the offset limit used for deep numbered pages.
 """
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 MAX_PAGE_OFFSET = 10_000
-"""Deepest offset any paginated collection will serve.
+"""Maximum offset accepted by paginated endpoints.
 
-The corpus is ~10^4-10^5 rows, so an `OFFSET 10000` scan over an indexed table costs single-digit
-milliseconds; past that, offset paging stops being the right tool. Full traversal of a collection
-is still unbounded through the `after_id` keyset chain, which no clamp applies to.
+Use identifier anchors for deeper traversal without scanning past every row
+before the requested offset. The assembly helpers here do not enforce this limit.
 """
 
 
 @dataclass(frozen=True, slots=True)
 class PageAnchor:
-    """The values addressing one adjacent page. Exactly one field is set."""
+    """An adjacent page address. Callers should set exactly one field."""
 
     offset: int | None = None
     after_id: int | None = None
@@ -76,15 +69,16 @@ def keyset_page[ItemT](
     keyset: bool,
     id_of: Callable[[ItemT], int],
 ) -> Page[ItemT]:
-    """Assemble one page from a `page_size + 1` overfetch already in display order.
+    """Assemble a page from at most `page_size + 1` rows in display order.
 
-    The extra row is the evidence that another page exists in the direction of travel, so it is
-    trimmed from whichever end the query was walking towards: the front for a backward page, which
-    was fetched away from its anchor and flipped back, and the tail otherwise.
+    The extra row indicates another page in the direction of travel. Backward
+    queries must reverse their results into display order before calling this
+    helper; their extra row is removed from the front. Forward queries lose the
+    extra row at the end.
 
-    `keyset` says whether the display order is the one identifier anchors address. When it is not
-    -- a sort on another column -- or when the caller addressed this page by offset, the neighbours
-    are addressed by offset too, so a caller never receives an anchor it cannot use.
+    Set `keyset` only when identifier anchors match the display order. A nonzero
+    offset or `keyset=False` produces offset anchors. With `keyset=True`, a zero
+    offset is treated as the first identifier-based page.
     """
     overflow = len(rows) > page_size
     backward = selector.before_id is not None

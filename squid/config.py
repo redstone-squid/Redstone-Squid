@@ -1,4 +1,14 @@
-"""Typed process configuration loaded and validated at application boundaries."""
+"""Load and validate settings for the bot, API, and worker processes.
+
+Each load_*_process_config function reads the environment and a dotenv file into
+that process's settings. Nested fields map to SQUID_* names: database.url becomes
+SQUID_DATABASE_URL. Validation checks values, while the separate name audit catches
+misspellings and accepts settings intended for another process in the same deployment.
+
+The process config exposes resolved runtime and logging settings for startup.
+ApplicationConfig contains the combined settings; its process projection methods
+select and validate one process's values without reading the environment again.
+"""
 
 import base64
 import binascii
@@ -48,17 +58,15 @@ EMBEDDING_DIMENSION = 1536
 """Vector dimension fixed by the application-owned PostgreSQL schema."""
 
 OPENAI_REQUEST_TIMEOUT_SECONDS = 60.0
-"""Per-request bound on OpenAI-compatible calls.
+"""Timeout passed to each OpenAI-compatible request.
 
-The SDK defaults to ten minutes with retries on top. Embedding work runs inside
-a periodic job that awaits it to completion, so an unbounded call stalls the
-job's heartbeat and flips the worker readiness probe; inference runs behind
-interactive Discord surfaces that will have given up long before.
+Retries can extend the total call time. Keeping individual requests bounded
+helps workers update their heartbeats and limits how long interactive callers
+wait for inference.
 """
 
 OPENAI_MAX_RETRIES = 2
-"""Retries per OpenAI-compatible call, so the worst case stays a bounded multiple
-of OPENAI_REQUEST_TIMEOUT_SECONDS rather than the SDK's larger default."""
+"""Maximum retries after the initial OpenAI-compatible request fails."""
 
 
 def _empty_to_none(value: object) -> object:
@@ -112,7 +120,11 @@ class _FrozenModel(BaseModel):
 
 
 class DatabaseConfig(_FrozenModel):
-    """Relational database connection configuration."""
+    """PostgreSQL URLs for transactions and optional notification listeners.
+
+    The listener URL must keep a connection attached to one database session;
+    transaction-pooling proxies cannot preserve LISTEN registrations.
+    """
 
     url: SecretStr
     listener_url: SecretStr | None = None
@@ -144,7 +156,7 @@ class EmbeddingProviderConfig(_FrozenModel):
 
 
 class ObjectStorageConfig(_FrozenModel):
-    """Content-addressed binary artifact storage configuration."""
+    """Local filesystem or S3-compatible storage for binary artifacts."""
 
     backend: Literal["local", "s3"] = "local"
     local_directory: Path = Field(default_factory=lambda: Path.cwd() / ".data" / "objects")
@@ -370,15 +382,10 @@ class ApiConfig(_FrozenModel):
     cors_origins: tuple[str, ...] = ()
     trusted_proxy_ips: tuple[str, ...] = ()
     secret_nodes: tuple[str, ...] = ("build.submission.read",)
-    """Permission nodes the legacy bootstrap secret carries.
+    """Permission patterns granted to requests using the bootstrap secret.
 
-    It used to carry every capability the API defined, forever, with no way to
-    narrow it. Deployments that still need it for writes list the nodes here
-    explicitly; the default is what an anonymous caller already has, so leaving
-    it unset makes the secret useless rather than dangerous.
-
-    Validated as patterns at load, so a typo fails startup rather than quietly
-    matching nothing. Read `secret_patterns` at request time.
+    Write access must be configured explicitly. Patterns are validated at startup;
+    use `secret_patterns` when checking a request.
     """
 
     _empty_log_file = field_validator("log_file", "access_log_file", mode="before")(_empty_to_none)
@@ -416,7 +423,7 @@ class ApiConfig(_FrozenModel):
 
     @cached_property
     def secret_patterns(self) -> frozenset[Pattern]:
-        """`secret_nodes` parsed once, for matching without re-parsing per request."""
+        """Return the cached permission patterns parsed from secret_nodes."""
         from squid.permissions.domain import Pattern
 
         return frozenset(Pattern.parse(raw) for raw in self.secret_nodes)
@@ -470,8 +477,7 @@ class RateLimitConfig(_FrozenModel):
     suggest_requests: int = Field(default=1_200, ge=1)
     """Typeahead runs per keystroke, so it needs headroom the generic read quota does not give."""
     render_requests: int = Field(default=20, ge=1)
-    """On-demand renders occupy the native engine for seconds each, so they are quota'd well
-    below the generic read ceiling that would otherwise govern them."""
+    """Render requests allowed per window; rendering has a lower quota than ordinary reads."""
     minecraft_challenge_start_requests: int = Field(default=10, ge=1)
     minecraft_challenge_exchange_requests: int = Field(default=120, ge=1)
     minecraft_challenge_approval_requests: int = Field(default=20, ge=1)
@@ -518,19 +524,20 @@ class OAuthClientCredentials:
 
 
 class OAuthConfig(_FrozenModel):
-    """Authorization-code client registrations, one flat group per provider.
+    """OAuth client registrations, with one flat field group per provider.
 
-    Flat rather than a `dict[str, OAuthClientCredentials]` because `_ProcessSettings` sets
-    `env_nested_max_split=1`: `SQUID_OAUTH_DISCORD_CLIENT_ID` cannot split into
-    `oauth -> discord -> client_id`, so the nested shape is unreachable from the
-    environment. A second provider is three more fields and one `_GROUPS` entry.
+    Settings split environment names only once. Thus SQUID_OAUTH_DISCORD_CLIENT_ID
+    maps to oauth.discord_client_id rather than oauth.discord.client_id. Add new
+    providers through their fields and an entry in _GROUPS.
     """
 
     discord_client_id: str | None = None
     discord_client_secret: SecretStr | None = None
     redirect_uri: AnyHttpUrl | None = None
-    """Discord's callback. Named without a provider prefix for compatibility with
-    SQUID_OAUTH_REDIRECT_URI, which is registered in the Discord developer portal."""
+    """Discord's callback URL.
+
+    The field name preserves the existing SQUID_OAUTH_REDIRECT_URI setting.
+    """
     session_ttl_hours: int = Field(default=336, ge=1)
 
     _empty_client_id = field_validator("discord_client_id", mode="before")(_empty_to_none)
@@ -542,7 +549,7 @@ class OAuthConfig(_FrozenModel):
     }
 
     def clients(self) -> Mapping[IdentityProvider, OAuthClientCredentials]:
-        """Every provider whose credentials are completely configured."""
+        """Return registrations for providers with a complete set of credentials."""
         resolved: dict[IdentityProvider, OAuthClientCredentials] = {}
         for provider, (id_field, secret_field, redirect_field) in self._GROUPS.items():
             client_id = getattr(self, id_field)
@@ -680,11 +687,10 @@ class GoogleConfig(_FrozenModel):
 
 
 def default_render_cache_dir(*, working_directory: Path | None = None) -> Path:
-    """Cache root for rendered schematics when the operator names none.
+    """Return the schematic cache directory, using XDG_CACHE_HOME when set.
 
-    Honours `XDG_CACHE_HOME`, falling back to `.cache` beside the process working directory
-    rather than the spec's `$HOME/.cache`, because a container image often has no writable home.
-    `working_directory` exists so that fallback can be asserted without `chdir`-ing the process.
+    Otherwise use .cache under `working_directory`, or the current directory if it
+    is omitted. This fallback works in containers without a writable home directory.
     """
     cache_home = os.environ.get("XDG_CACHE_HOME")
     if cache_home:
@@ -771,18 +777,23 @@ class SchematicConfig(_FrozenModel):
     worker_memory_limit_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=1)
     """`RLIMIT_AS` applied in the child before the engine is imported."""
     worker_cpu_seconds: int = Field(default=900, ge=1)
-    """Cumulative `RLIMIT_CPU` backstop. Reaching it recycles the worker; the per-operation
-    deadline, not this, is what bounds a single request."""
+    """Cumulative CPU-time limit for one worker process.
+
+    Reaching it recycles the worker. Per-operation deadlines separately limit
+    individual requests.
+    """
     worker_file_size_limit_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
-    """`RLIMIT_FSIZE` applied in the child. The worker exchanges bytes over pipes and has no
-    legitimate reason to write a large file."""
+    """Maximum file size a worker may write, enforced by RLIMIT_FSIZE."""
 
     restart_backoff_seconds: float = Field(default=1.0, gt=0)
     """Base delay for the exponential backoff between worker restarts."""
     max_restarts_per_window: int = Field(default=5, ge=1)
     restart_window_seconds: float = Field(default=60.0, gt=0)
-    """Crashing more than `max_restarts_per_window` times inside this window trips the circuit
-    breaker, so a payload a user keeps retrying cannot fork-bomb the host."""
+    """Window used to count worker restarts.
+
+    Exceeding max_restarts_per_window trips the circuit breaker and stops repeated
+    crashes from creating workers indefinitely.
+    """
 
     @field_validator("render_pack_sha256")
     @classmethod
@@ -845,22 +856,19 @@ class DiagnosticsConfig(_FrozenModel):
     """Retention and size limits for stored error reports."""
 
     retention_hours: int = Field(default=168, ge=1, le=8760)
-    """How long a stored error report stays queryable. A week covers the gap between a user
-    hitting an error and a moderator getting around to asking about it."""
+    """Hours before an error report becomes eligible for retention cleanup."""
     log_tail_records: int = Field(default=50, ge=0, le=1000)
-    """Log records buffered per correlation ID and attached to a report. Zero disables the
-    buffer entirely, and with it the memory it holds on the logging path."""
+    """Recent log records kept per correlation ID for error reports; zero disables buffering."""
     max_traceback_chars: int = Field(default=20000, ge=1000, le=200000)
     """Cap on the stored traceback text, so a runaway recursion cannot write an unbounded row."""
     capture_logged_errors: bool = True
-    """Store every logged exception, not only the ones a transport captures itself.
+    """Capture logged exceptions as well as failures reported directly by handlers.
 
-    This is what makes worker failures reachable: its queue consumers absorb, dead-letter and log
-    a failure rather than letting it reach the supervisor. Off, the store holds only what the
-    HTTP, Discord, and background-job handlers capture directly."""
+    This includes failures that queue workers catch and log themselves. Capture
+    uses a bounded queue, so reports can be dropped when it fills.
+    """
     log_capture_queue: int = Field(default=256, ge=16, le=10000)
-    """Failures held between the logging call and the database write before the oldest are
-    dropped. Dropping is counted and logged rather than silently absorbed."""
+    """Maximum queued error reports; when full, drop the oldest and report the loss."""
 
 
 class LoggingConfig(_FrozenModel):
@@ -876,7 +884,7 @@ class LoggingConfig(_FrozenModel):
 
 
 class ObservabilityConfig(_FrozenModel):
-    """Optional OTLP trace export settings shared by all application processes."""
+    """Optional OTLP trace and metric export settings shared by application processes."""
 
     enabled: bool = False
     endpoint: AnyHttpUrl | None = None
@@ -1008,14 +1016,11 @@ class _FilteredEnvironmentSource(PydanticBaseSettingsSource):
 
 @cache
 def _projection_type[ConfigT: BaseSettings](config_type: type[ConfigT]) -> type[ConfigT]:
-    """A twin of `config_type` that reads nothing but the values it is handed.
+    """Return a settings class that validates only the values passed to it.
 
-    `BaseSettings` builds its sources in `__init__`, and pydantic routes `model_validate` through
-    `__init__` for any model that defines one — so validating a projection re-read `./.env` and
-    `os.environ` and merged them *over* the values passed in. Scalars survived that, since init has
-    the highest priority, but dict fields merge key by key: an API process projected from a config
-    loaded elsewhere ended up holding the union of both idempotency keyrings, trusting a key its own
-    configuration never named.
+    Normal BaseSettings construction also reads the environment and dotenv file.
+    Dictionary fields merge those sources by key, so a process projection could
+    otherwise gain idempotency keys absent from its source configuration.
     """
 
     class _Projection(config_type):  # pyright: ignore[reportUntypedBaseClass]  # pyrefly: ignore[invalid-inheritance]
@@ -1226,26 +1231,24 @@ class ApplicationConfig(BotProcessConfig):
 _DOTENV_KEY = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
 
 DEFAULT_DOTENV_PATH = Path(".env")
-"""Dotenv file the loaders read when a caller injects no other path.
+"""Default dotenv path, relative to the process's current directory.
 
-Deliberately relative, so a deployment still picks up the file beside the process working
-directory. Callers that must not depend on the working directory — tests above all — pass an
-absolute `dotenv_path` to the loader instead of moving the whole process with `chdir`.
+Pass an absolute dotenv_path when loading settings must not depend on that
+directory, for example in tests.
 """
 
 
 _RETIRED_ENVIRONMENT_KEYS = frozenset({"SQUID_CURSOR_SECRET"})
-"""Keys a deployment may still be setting for a feature that has since been removed.
+"""Retired settings accepted silently during configuration auditing.
 
-They are accepted silently rather than reported: under `SQUID_STRICT_UNKNOWN_KEYS` an unknown key
-is a boot failure, so a leftover in an env file or a compose service would take the process down
-during a deploy that was otherwise a no-op for it.
+Old deployment files may still contain them. Accepting them avoids a startup
+failure when strict unknown-key checking is enabled.
 """
 
 _DEPRECATED_ENVIRONMENT_KEYS = {
     "SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS": "SQUID_RATE_LIMIT_CALLER_REQUESTS",
 }
-"""One-release aliases accepted with an actionable startup warning."""
+"""Deprecated aliases accepted with a startup warning naming their replacements."""
 
 
 _INFRASTRUCTURE_ENVIRONMENT_KEYS = frozenset(
@@ -1258,13 +1261,10 @@ _INFRASTRUCTURE_ENVIRONMENT_KEYS = frozenset(
         "SQUID_PGWEB_PORT",
     }
 )
-"""Keys the Compose files interpolate that no process reads as configuration.
+"""Settings consumed by Compose rather than by application processes.
 
-They select images, published host ports and the env file itself, so they are resolved by Compose
-before a container exists. The same `.env` is then handed to the containers wholesale via
-`env_file`, which puts them in front of this audit anyway -- and under
-`SQUID_STRICT_UNKNOWN_KEYS` an unknown key is a boot failure, so leaving them out would mean
-publishing the API on a spare host port took the whole stack down.
+Compose may also pass these through env_file. Accept them during the unknown-key
+audit so strict checking does not reject valid deployment settings.
 """
 
 
@@ -1296,13 +1296,11 @@ def _environment_group(field: str) -> tuple[str, tuple[str, ...]] | None:
 
 
 def _setting_name(field: str, issue_type: str) -> str:
-    """Render a validation location as the ``SQUID_*`` name(s) an operator can act on.
+    """Map a validation location to declared SQUID_* environment names.
 
-    Every character of the result comes from a declared field name. A validation location is
-    not a settings path: its tail can be a configured dictionary key, and a validator that
-    rejects a whole model reports no leaf at all, so neither the raw location nor a name
-    assembled from it can be shown. A variable that does not exist would be set and then
-    silently ignored, which is worse than naming the group.
+    Nested locations may contain arbitrary dictionary keys rather than field names.
+    Only use declared settings to build the result. For a missing group, list its
+    required members; for an error without a known field, name the group.
     """
     if field.upper().startswith("SQUID_"):
         return field  # The unknown-key audit already reports literal variable names.
@@ -1441,11 +1439,10 @@ def _load_settings[ConfigT: _EnvironmentSettings](config_type: type[ConfigT], do
 
 
 def load_or_exit[ConfigT](loader: Callable[[], ConfigT]) -> ConfigT:
-    """Load a process configuration, reporting a boot failure without a traceback.
+    """Call a settings loader and exit with status 1 on ConfigurationError.
 
-    Logging is configured from the very settings being loaded, so the report goes straight to
-    stderr. The guard covers one call and one exception type: a configuration error raised
-    later, by real work, still surfaces with its traceback.
+    Print its diagnostic text to stderr because logging is not configured yet.
+    Other exception types propagate with their tracebacks.
     """
     try:
         return loader()

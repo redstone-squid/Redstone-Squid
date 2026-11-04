@@ -110,12 +110,10 @@ class _Telemetry:
 
 
 CORRELATION_REFERENCE_LENGTH = 12
-"""Hex characters shown to users: 48 bits, and the width of the untraced fallback.
+"""Length of the error reference shown to users.
 
-The requirement is that one reported reference resolves to one incident within the retention
-window, so the bound is `N / 2**48`: at 10 000 unexpected errors per window that is ~4e-11, and
-even the stricter all-pairs-distinct bound, `N**2 / 2**49`, is ~2e-7. Eight characters would put
-that all-pairs bound near 1% for the same volume, which is why the prefix is not shortened further.
+Twelve hex characters provide 48 bits. With 10,000 random references, the chance
+of any collision is roughly 2e-7; eight characters would raise it to about 1%.
 """
 
 # Request-scoped correlation id, bound by the API's RequestContextMiddleware. When set it wins
@@ -139,7 +137,7 @@ def active_trace_id() -> str | None:
 
 
 class TraceSpan:
-    """Small transport-facing facade over an optional OpenTelemetry span."""
+    """A span wrapper whose methods do nothing when telemetry is unavailable."""
 
     def __init__(self, span: _Span | None = None, error_status: Callable[[], object] | None = None) -> None:
         self._span = span
@@ -180,16 +178,12 @@ CORRELATION_BUFFER_HANDLER = "correlation_buffer"
 
 
 class CorrelatedLogBuffer(logging.Handler):
-    """Keep the most recent log lines per correlation ID so an error can be explained.
+    """Keep recent formatted log lines for each correlation ID.
 
-    Records are formatted on arrival rather than held: a `LogRecord` keeps its `args` and
-    `exc_info` alive, so buffering thousands of them would pin arbitrary application objects for
-    as long as the correlation lives. Formatting eagerly costs a little CPU on the logging path
-    and bounds the memory to text we already know we want.
-
-    Both dimensions are bounded. `max_correlations` evicts whole correlations in insertion order,
-    which for request-scoped IDs is close enough to least-recently-used, and `max_records` caps
-    each one, so a single pathological loop cannot displace every other correlation's tail.
+    Formatting records immediately avoids retaining their arguments and exception
+    objects. Each correlation keeps at most `max_records` lines. When the number of
+    correlations exceeds `max_correlations`, evict the one least recently written.
+    Reading a snapshot does not update that order.
     """
 
     def __init__(self, *, max_records: int = 50, max_correlations: int = 256) -> None:
@@ -239,11 +233,7 @@ class CorrelatedLogBuffer(logging.Handler):
             self.release()
 
     def drain(self, correlation: str) -> tuple[str, ...]:
-        """Take and forget everything buffered under `correlation`.
-
-        Draining rather than copying keeps a captured error from being reported twice with the
-        same tail, and releases the memory at the one moment we know the correlation is over.
-        """
+        """Remove and return a correlation's buffered lines, or an empty tuple if absent."""
         self.acquire()
         try:
             buffer = self._buffers.pop(correlation, None)
@@ -295,10 +285,15 @@ def _telemetry() -> _Telemetry | None:
 
 
 def configure_observability(config: ObservabilityConfig, *, service_name: str) -> ObservabilityHandle:
-    """Configure OTLP trace export once in the current process.
+    """Configure OTLP trace and metric export once in the current process.
 
-    Disabled deployments return before importing OpenTelemetry. The configuration service
-    name is a deployment-owned base; ``service_name`` distinguishes the process component.
+    Disabled deployments do not import OpenTelemetry. Missing optional dependencies
+    produce a warning and a no-op handle. Later calls return the same handle, even
+    after shutdown. Configure each process after forking; inherited configuration
+    raises RuntimeError.
+
+    The configured service name is the deployment prefix; `service_name` identifies
+    the process component. The caller owns the returned shutdown handle.
     """
     if not config.enabled:
         return _NOOP_HANDLE
@@ -338,7 +333,11 @@ def instrument_api_app(app: FastAPI, config: ObservabilityConfig) -> None:
 
 
 def correlation_id() -> str:
-    """Return the request-scoped id when bound, else the active trace ID, else a local fallback."""
+    """Return the bound correlation ID, the active trace ID, or a new random fallback.
+
+    Without a binding or active trace, each call generates a different ID. Use
+    `correlation_scope()` when several operations need to share one.
+    """
     bound = _bound_correlation_id.get()
     if bound is not None:
         return bound
@@ -348,11 +347,10 @@ def correlation_id() -> str:
 
 @contextmanager
 def correlation_scope() -> Generator[str]:
-    """Bind one correlation ID for the duration of a unit of work, and yield it.
+    """Bind and yield a correlation ID until the block exits.
 
-    Re-entrant on purpose: a nested scope keeps the outer binding rather than minting a second
-    ID. A hybrid command arrives through the application command tree and is then invoked through
-    the prefix path, so both scopes open around the same invocation and must agree.
+    Nested scopes reuse the outer ID. This lets both invocation paths of a Discord
+    hybrid command report the same failure reference.
     """
     existing = _bound_correlation_id.get()
     if existing is not None:
@@ -367,18 +365,13 @@ def correlation_scope() -> Generator[str]:
 
 
 def correlation_reference(correlation_id: str) -> str:
-    """Shorten a correlation ID for display without changing what is stored or sent.
-
-    A 32-hex trace ID becomes its first 12 characters; the untraced fallback is already that
-    width, so this is the identity function for it. Both paths therefore look the same to a user
-    reading an error card and to whoever they report it to.
-    """
+    """Return the first 12 characters of a correlation ID for display."""
     return correlation_id[:CORRELATION_REFERENCE_LENGTH]
 
 
 @contextmanager
 def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None) -> Generator[TraceSpan]:
-    """Start an application-edge span, or yield a no-op facade without the extra."""
+    """Start a span that records escaping exceptions, or yield a no-op wrapper without telemetry."""
     telemetry = _telemetry()
     if telemetry is None:
         yield TraceSpan()

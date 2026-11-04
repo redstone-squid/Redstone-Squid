@@ -15,7 +15,7 @@ from babel.messages.extract import extract_python
 
 
 def deferred_msgid(call: ast.Call) -> str | tuple[str, str] | None:
-    """Derive the msgid carried by a deferred translation call, if statically known."""
+    """Return a literal translation key or singular/plural pair from a tr() call."""
     if not isinstance(call.func, ast.Name) or call.func.id != "tr" or not call.args:
         return None
 
@@ -30,7 +30,7 @@ def deferred_msgid(call: ast.Call) -> str | tuple[str, str] | None:
 
 
 def locale_str_msgid(call: ast.Call) -> str | None:
-    """Derive a discord.py command-localization msgid."""
+    """Return a command translation key from a locale_str() call with one literal argument."""
     name = (
         call.func.id
         if isinstance(call.func, ast.Name)
