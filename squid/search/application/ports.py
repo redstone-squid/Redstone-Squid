@@ -1,6 +1,5 @@
 """Search application extension points implemented by persistence adapters."""
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -35,26 +34,15 @@ class SearchBackend(Protocol):
         *,
         offset: int,
         registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
-        semantic_candidates: Sequence[SemanticCandidate] | None = None,
+        query_embedding: QueryEmbedding | None = None,
     ) -> SearchSlice: ...
 
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]: ...
 
 
-SEARCH_CANDIDATE_LIMIT = 200
-
-
 @dataclass(frozen=True, slots=True)
-class SemanticCandidate:
-    """One vector result, ordered from most to least relevant."""
+class QueryEmbedding:
+    """A query vector and the model used to generate it."""
 
-    resource_kind: str
-    source_key: str
-
-
-class SemanticCandidateProvider(Protocol):
-    async def candidates(self, query: str, *, limit: int) -> Sequence[SemanticCandidate]: ...
-
-
-class SearchVectorRepository(Protocol):
-    async def candidates(self, embedding: list[float], model: str, *, limit: int) -> Sequence[SemanticCandidate]: ...
+    vector: list[float]
+    model: str

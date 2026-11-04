@@ -20,7 +20,7 @@ from squid.search.application import (
     reciprocal_rank_fusion,
 )
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
-from squid.search.application.ports import SemanticCandidate
+from squid.search.application.ports import QueryEmbedding
 from squid.search.domain import (
     BuildSearchHit,
     MetadataSearchHit,
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 class PostgresSearchBackend(SearchBackend):
-    """Execute filtered lexical search against indexed projection documents."""
+    """Rank and filter indexed documents using lexical and vector queries."""
 
     def __init__(
         self,
@@ -63,7 +63,7 @@ class PostgresSearchBackend(SearchBackend):
         *,
         offset: int,
         registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
-        semantic_candidates: Sequence[SemanticCandidate] | None = None,
+        query_embedding: QueryEmbedding | None = None,
     ) -> SearchSlice:
         """Search indexed documents and return the window starting at `offset`."""
         compiler = self._compiler if registry is DEFAULT_FIELD_REGISTRY else PostgresSearchQueryCompiler(registry)
@@ -82,7 +82,7 @@ class PostgresSearchBackend(SearchBackend):
             return await self._sorted(session, request, predicate, offset, field)
         if is_filter_only(query):
             return await self._filter_only(session, request, predicate, offset)
-        return await self._ranked(session, request, query, predicate, offset, semantic_candidates)
+        return await self._ranked(session, request, query, predicate, offset, query_embedding)
 
     def compile_predicate(
         self,
@@ -179,7 +179,7 @@ class PostgresSearchBackend(SearchBackend):
         query: SearchQuery,
         predicate: ColumnElement[bool],
         offset: int,
-        semantic_candidates: Sequence[SemanticCandidate] | None,
+        query_embedding: QueryEmbedding | None,
     ) -> SearchSlice:
         """Page the fused relevance ranking.
 
@@ -196,12 +196,18 @@ class PostgresSearchBackend(SearchBackend):
         }
         warnings: tuple[str, ...] = ()
         if request.mode is SearchMode.SEMANTIC:
-            if semantic_candidates is None:
+            if query_embedding is None:
                 warnings = (_SEMANTIC_WARNING,)
             else:
-                branches[RankingBranch.SEMANTIC] = await self._semantic_candidates(
-                    session, predicate, semantic_candidates
-                )
+                try:
+                    # A failed vector query must leave lexical results usable.
+                    async with session.begin_nested():
+                        branches[RankingBranch.SEMANTIC] = await self._semantic_candidates(
+                            session, predicate, query_embedding
+                        )
+                except Exception:
+                    logger.exception("Semantic search candidate lookup failed")
+                    warnings = (_SEMANTIC_WARNING,)
         ranked = reciprocal_rank_fusion(branches)
         page_candidates = ranked[offset : offset + request.page_size]
         documents = await self._documents_by_candidate(session, page_candidates)
@@ -297,30 +303,30 @@ class PostgresSearchBackend(SearchBackend):
         self,
         session: AsyncSession,
         predicate: ColumnElement[bool],
-        candidates: Sequence[SemanticCandidate],
+        embedding: QueryEmbedding,
     ) -> tuple[RankedCandidate, ...]:
-        if not candidates:
-            return ()
-        identities = tuple((candidate.resource_kind, candidate.source_key) for candidate in candidates)
-        identity_predicate = or_(
-            *(
-                (SearchDocument.resource_kind == resource_kind) & (SearchDocument.source_key == source_key)
-                for resource_kind, source_key in identities
-            )
+        distance = SearchDocument.embedding.cosine_distance(embedding.vector)
+        # Preserve the global candidate budget before applying the search predicate.
+        nearest = (
+            select(SearchDocument.id, distance.label("distance"))
+            .where(SearchDocument.embedding.is_not(None), SearchDocument.embedding_model == embedding.model)
+            .order_by(distance)
+            .limit(_CANDIDATE_LIMIT)
+            .subquery()
         )
-        statement = select(SearchDocument).where(predicate, identity_predicate)
-        allowed = {
-            (document.resource_kind, document.source_key): document
-            for document in (await session.scalars(statement)).all()
-        }
+        statement = (
+            select(SearchDocument.resource_kind, SearchDocument.source_key, SearchDocument.normalized_title)
+            .join(nearest, SearchDocument.id == nearest.c.id)
+            .where(predicate)
+            .order_by(nearest.c.distance)
+        )
         return tuple(
             RankedCandidate(
-                _public_source_id(candidate.resource_kind, candidate.source_key),
-                _group_kind(candidate.resource_kind),
-                allowed[(candidate.resource_kind, candidate.source_key)].normalized_title,
+                _public_source_id(row.resource_kind, row.source_key),
+                _group_kind(row.resource_kind),
+                row.normalized_title,
             )
-            for candidate in candidates
-            if (candidate.resource_kind, candidate.source_key) in allowed
+            for row in (await session.execute(statement)).all()
         )
 
     async def _documents_by_candidate(

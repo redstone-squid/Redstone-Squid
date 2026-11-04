@@ -11,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.search.application import SearchEmbeddingService
-from squid.search.application.embeddings import SemanticCandidateService
+from squid.search.application import SearchEmbeddingService, SearchQueryParser
+from squid.search.application.ports import QueryEmbedding
+from squid.search.domain import SearchMode, SearchRequest, SearchScope
 from squid.search.models import SearchDocument, SearchEmbeddingQueueItem
 from tests.support.unit_of_work import transact
 
@@ -135,31 +136,85 @@ async def test_exhausted_embedding_work_is_retained_as_a_dead_letter(
     assert queue_item.last_error is not None
 
 
-async def test_semantic_candidates_are_ranked_by_postgres_cosine_distance(
+async def test_semantic_search_ranks_vectors_and_respects_visibility_and_query_filters(
     search_embedding_tables: None,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     del search_embedding_tables
     first = await _document(async_session_factory, "near", source_hash="v1")
     second = await _document(async_session_factory, "far", source_hash="v1")
+    hidden = await _document(async_session_factory, "hidden", source_hash="v1")
+    outside = await _document(async_session_factory, "outside", source_hash="v1")
     async with async_session_factory.begin() as session:
         await session.execute(
             update(SearchDocument)
             .where(SearchDocument.id == first)
-            .values(embedding=[1.0] + [0.0] * 1535, embedding_model="test-model")
+            .values(embedding=[1.0] + [0.0] * 1535, embedding_model="test-model", status="confirmed")
         )
         await session.execute(
             update(SearchDocument)
             .where(SearchDocument.id == second)
-            .values(embedding=[0.0, 1.0] + [0.0] * 1534, embedding_model="test-model")
+            .values(embedding=[0.0, 1.0] + [0.0] * 1534, embedding_model="test-model", status="confirmed")
         )
-    provider = SemanticCandidateService(
-        FakeEmbeddingModel([1.0] + [0.0] * 1535), uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)
-    )
+        await session.execute(
+            update(SearchDocument)
+            .where(SearchDocument.id == hidden)
+            .values(embedding=[1.0] + [0.0] * 1535, embedding_model="test-model", status="pending")
+        )
+        await session.execute(
+            update(SearchDocument)
+            .where(SearchDocument.id == outside)
+            .values(
+                embedding=[1.0] + [0.0] * 1535,
+                embedding_model="test-model",
+                status="confirmed",
+                title="Unrelated",
+                normalized_title="unrelated",
+                fuzzy_text="unrelated",
+            )
+        )
+    request = SearchRequest("title:build", mode=SearchMode.SEMANTIC, scope=SearchScope.BUILDS)
+    parsed = SearchQueryParser().parse(request.query)
+    embedding = QueryEmbedding([1.0] + [0.0] * 1535, "test-model")
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        page = await uow.search.search(request, parsed, offset=0, query_embedding=embedding)
+        wrong_model = await uow.search.search(
+            request, parsed, offset=0, query_embedding=replace(embedding, model="other-model")
+        )
+        lexical = await uow.search.search(replace(request, mode=SearchMode.LEXICAL), parsed, offset=0)
 
-    candidates = await provider.candidates("nearest", limit=2)
+    assert [hit.source_id for hit in page.hits] == ["near", "far"]
+    assert not page.warnings
+    assert wrong_model.hits == lexical.hits
+    assert not wrong_model.warnings
 
-    assert [candidate.source_key for candidate in candidates] == ["near", "far"]
+
+async def test_failed_vector_lookup_preserves_lexical_results_and_the_read_scope(
+    search_embedding_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    identifier = await _document(async_session_factory, "1", source_hash="v1")
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(SearchDocument)
+            .where(SearchDocument.id == identifier)
+            .values(status="confirmed", embedding=[1.0] + [0.0] * 1535, embedding_model="test-model")
+        )
+    request = SearchRequest("build", mode=SearchMode.SEMANTIC, scope=SearchScope.BUILDS)
+    parsed = SearchQueryParser().parse(request.query)
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        # PostgreSQL rejects comparing vectors with different dimensions.
+        failed = await uow.search.search(
+            request, parsed, offset=0, query_embedding=QueryEmbedding([1.0, 0.0], "test-model")
+        )
+        unavailable = await uow.search.search(request, parsed, offset=0)
+        lexical = await uow.search.search(replace(request, mode=SearchMode.LEXICAL), parsed, offset=0)
+
+    assert [hit.source_id for hit in failed.hits] == ["1"]
+    assert failed.hits == unavailable.hits == lexical.hits
+    assert failed.warnings == unavailable.warnings
+    assert failed.warnings
+    assert not lexical.warnings
 
 
 async def test_stale_completion_preserves_other_writes_in_the_unit_of_work(

@@ -10,7 +10,6 @@ import anyio
 
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
-from squid.search.application.ports import SearchVectorRepository, SemanticCandidate
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
@@ -113,23 +112,3 @@ def _require_embedding(embedding: list[float] | None) -> list[float]:
 class SearchEmbeddingUnitOfWork(UnitOfWork, Protocol):
     @property
     def search_embeddings(self) -> SearchEmbeddingQueue: ...
-
-
-class SemanticCandidateService:
-    """Generate the query vector before opening its database lookup scope."""
-
-    def __init__(self, model: SearchEmbeddingModel, *, uow_factory: UnitOfWorkFactory[SearchVectorUnitOfWork]) -> None:
-        self._model = model
-        self._uow_factory = uow_factory
-
-    async def candidates(self, query: str, *, limit: int) -> Sequence[SemanticCandidate]:
-        embedding = await self._model.embed(query)
-        if embedding is None:
-            return ()
-        async with self._uow_factory() as uow:
-            return await uow.search_vectors.candidates(embedding, self._model.model_name, limit=limit)
-
-
-class SearchVectorUnitOfWork(UnitOfWork, Protocol):
-    @property
-    def search_vectors(self) -> SearchVectorRepository: ...

@@ -1,7 +1,8 @@
 """Search application service tests."""
 
-from collections.abc import Sequence
 from functools import partial
+from types import TracebackType
+from typing import Self
 
 import pytest
 
@@ -9,8 +10,8 @@ from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
 from squid.search.application import SearchService, SearchSlice
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.search.application.ports import SemanticCandidate
-from squid.search.domain import BuildSearchHit, SearchQuery, SearchRequest, SearchScope
+from squid.search.application.ports import QueryEmbedding
+from squid.search.domain import BuildSearchHit, SearchMode, SearchQuery, SearchRequest, SearchScope, SearchSort
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
@@ -19,6 +20,8 @@ class FakeSearchBackend:
         self.calls: list[tuple[SearchRequest, SearchQuery, int]] = []
         self.suggestions: tuple[str, ...] = ("door",)
         self.total = total
+        self.active_scopes = 0
+        self.embeddings: list[QueryEmbedding | None] = []
 
     async def search(
         self,
@@ -27,9 +30,11 @@ class FakeSearchBackend:
         *,
         offset: int,
         registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
-        semantic_candidates: Sequence[SemanticCandidate] | None = None,
+        query_embedding: QueryEmbedding | None = None,
     ) -> SearchSlice:
+        assert self.active_scopes == 1
         self.calls.append((request, query, offset))
+        self.embeddings.append(query_embedding)
         hit = BuildSearchHit("1", "Door", "confirmed", score=0.5)
         return SearchSlice((hit,), self.total, warnings=("degraded",))
 
@@ -86,6 +91,15 @@ class SearchUnitOfWork(FakeUnitOfWork[FakeSearchBackend]):
     def __init__(self, backend: FakeSearchBackend) -> None:
         super().__init__(CommittedState(backend, clone=lambda value: value))
 
+    async def __aenter__(self) -> Self:
+        self.state.active_scopes += 1
+        return self
+
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
+    ) -> None:
+        self.state.active_scopes -= 1
+
     @property
     def search(self) -> FakeSearchBackend:
         return self.state
@@ -96,3 +110,64 @@ class SearchUnitOfWork(FakeUnitOfWork[FakeSearchBackend]):
 
     async def commit(self) -> None:
         raise AssertionError("Search must not commit.")
+
+
+class FakeEmbeddingModel:
+    model_name = "test-model"
+
+    def __init__(self, backend: FakeSearchBackend, *, unavailable: bool = False, error: bool = False) -> None:
+        self.backend = backend
+        self.unavailable = unavailable
+        self.error = error
+        self.inputs: list[str] = []
+
+    async def embed(self, text: str) -> list[float] | None:
+        assert self.backend.active_scopes == 0, "Embedding requests must run outside database scopes."
+        self.inputs.append(text)
+        if self.error:
+            raise RuntimeError("Embedding provider unavailable")
+        return None if self.unavailable else [1.0, 0.0]
+
+
+async def test_query_embedding_is_generated_outside_scopes_and_passed_to_search() -> None:
+    backend = FakeSearchBackend()
+    model = FakeEmbeddingModel(backend)
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
+
+    await service.search(SearchRequest("door", mode=SearchMode.SEMANTIC))
+
+    assert model.inputs == ["door"]
+    assert backend.embeddings == [QueryEmbedding([1.0, 0.0], "test-model")]
+    assert backend.active_scopes == 0
+
+
+@pytest.mark.parametrize(
+    "search_request",
+    [
+        SearchRequest("door"),
+        SearchRequest("status:confirmed", mode=SearchMode.SEMANTIC),
+        SearchRequest("door", mode=SearchMode.SEMANTIC, sort=SearchSort("submission_time")),
+    ],
+)
+async def test_search_skips_embedding_when_semantic_ranking_is_unused(search_request: SearchRequest) -> None:
+    backend = FakeSearchBackend()
+    model = FakeEmbeddingModel(backend)
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
+
+    await service.search(search_request)
+
+    assert model.inputs == []
+    assert backend.embeddings == [None]
+
+
+@pytest.mark.parametrize("raises", [False, True])
+async def test_missing_or_failed_embedding_still_runs_the_result_query(raises: bool) -> None:
+    backend = FakeSearchBackend()
+    model = FakeEmbeddingModel(backend, unavailable=True, error=raises)
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
+
+    page = await service.search(SearchRequest("door", mode=SearchMode.SEMANTIC))
+
+    assert page.hits
+    assert backend.embeddings == [None]
+    assert backend.active_scopes == 0

@@ -32,7 +32,7 @@ from squid.schematics.infrastructure.preview_publisher import PostgresSchematicP
 from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.schematics.infrastructure.repository import PostgresSchematicRepository
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
-from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue, PostgresSearchVectors
+from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue
 from squid.search.infrastructure.fields import PostgresFieldRegistryProvider
 from squid.search.infrastructure.projection import PostgresSearchProjection
 from squid.search.infrastructure.repository import PostgresSearchBackend
@@ -85,7 +85,6 @@ class SqlAlchemyUnitOfWork:
         self._search = PostgresSearchBackend(self._active_session)
         self._search_fields = PostgresFieldRegistryProvider(self._active_session)
         self._search_embeddings = PostgresSearchEmbeddingQueue(self._active_session)
-        self._search_vectors = PostgresSearchVectors(self._active_session)
         self._search_projection = PostgresSearchProjection(self._active_session)
         self._suggestions = PostgresSuggestionRepository(self._active_session)
         self._schematic_jobs = PostgresSchematicJobRepository(self._active_session)
@@ -293,11 +292,6 @@ class SqlAlchemyUnitOfWork:
     def search_embeddings(self) -> PostgresSearchEmbeddingQueue:
         self._active_session()
         return self._search_embeddings
-
-    @property
-    def search_vectors(self) -> PostgresSearchVectors:
-        self._active_session()
-        return self._search_vectors
 
     @property
     def search_projection(self) -> PostgresSearchProjection:

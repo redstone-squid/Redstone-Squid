@@ -73,7 +73,6 @@ from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.search.application import SearchEmbeddingService, SearchService
-from squid.search.application.embeddings import SemanticCandidateService
 from squid.search.application.projection import SearchProjectionService
 from squid.settings.application import SettingsService
 from squid.starboard.application import StarboardService
@@ -474,7 +473,7 @@ class _ServiceGraph:
     def search(self) -> SearchService:
         return SearchService(
             uow_factory=self.uow_factory,
-            semantic_provider=SemanticCandidateService(self.embedding_model, uow_factory=self.uow_factory),
+            embedding_model=self.embedding_model,
         )
 
     @cached_property

@@ -1,4 +1,4 @@
-"""PostgreSQL embedding queue and semantic candidate adapters."""
+"""PostgreSQL queue for search-document embedding jobs."""
 
 from collections.abc import Callable, Sequence
 
@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.search.application.embeddings import SearchEmbeddingJob
-from squid.search.application.ports import SemanticCandidate
 from squid.search.models import SearchDocument, SearchEmbeddingQueueItem
 
 SEARCH_EMBEDDING_QUEUE_SPEC = QueueSpec(
@@ -93,30 +92,6 @@ class PostgresSearchEmbeddingQueue:
             SearchEmbeddingQueueItem.document_id == job.document_id,
             SearchEmbeddingQueueItem.source_hash == job.source_hash,
         )
-
-
-class PostgresSearchVectors:
-    """Generate a query vector and rank search documents with pgvector cosine distance."""
-
-    def __init__(
-        self,
-        session: Callable[[], AsyncSession],
-    ) -> None:
-        self._session = session
-
-    async def candidates(self, embedding: list[float], model: str, *, limit: int) -> Sequence[SemanticCandidate]:
-        statement = (
-            select(SearchDocument.resource_kind, SearchDocument.source_key)
-            .where(
-                SearchDocument.embedding.is_not(None),
-                SearchDocument.embedding_model == model,
-            )
-            .order_by(SearchDocument.embedding.cosine_distance(embedding))
-            .limit(limit)
-        )
-        session = self._session()
-        rows = (await session.execute(statement)).all()
-        return tuple(SemanticCandidate(row.resource_kind, row.source_key) for row in rows)
 
 
 def _embedding_text(document: SearchDocument) -> str:
