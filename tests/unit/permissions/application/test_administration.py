@@ -1,4 +1,8 @@
-"""The two management gates, and the delegation rules behind `/perm`."""
+"""Permission administration and delegation checks.
+
+An editor's capabilities limit what they can grant, and their role rank limits which roles
+they can manage.
+"""
 
 import dataclasses
 from functools import partial
@@ -30,7 +34,12 @@ GUILD = 555
 
 
 class FakeStore:
-    """One in-memory store standing in for both halves of the repository."""
+    """State for administration checks, shared by the read and write ports.
+
+    Subject loads filter account grants and assignments; Discord role subjects are
+    not modeled. Role lookups ignore guild scope. Some removal methods only record
+    the audit call, so their storage behavior needs integration coverage.
+    """
 
     def __init__(self, *, roles: tuple[PermissionRole, ...] = (), rules: tuple[PermissionGrant, ...] = ()) -> None:
         builtin = tuple(
@@ -258,7 +267,6 @@ class TestAuthorityBoundary:
         assert any(rule.subject_account_id == 8 for rule in store.value.rules)
 
     async def test_a_pattern_beyond_the_actor_is_refused(self) -> None:
-        """You cannot mint yourself, or anyone else, something you lack."""
         store = stored(rules=granted("perm.grant.global", "build.**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
@@ -278,7 +286,7 @@ class TestAuthorityBoundary:
 
 class TestGuildDelegation:
     async def test_a_guild_granter_cannot_reach_a_global_node(self) -> None:
-        """Blocked here, at the resolver, and by a database CHECK."""
+        """Check the administration service refuses a global capability in a guild-scoped grant."""
         store = stored(rules=granted("perm.grant.guild", "settings.**", "build.**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
@@ -331,7 +339,7 @@ class TestForbid:
 
 class TestRankGate:
     async def test_a_peer_role_cannot_be_managed(self) -> None:
-        """The boundary alone permits lateral sabotage; rank is what stops it."""
+        """Holding the management permission does not allow editing a role at the actor's own rank."""
         store = stored(
             roles=(
                 PermissionRole(id=50, slug="moderator", guild_id=GUILD, builtin_key=None, rank=60, protected=False),
@@ -386,8 +394,7 @@ class TestRoles:
             await service.add_include(actor, await service.role("b"), await service.role("a"))
 
     async def test_an_exclusion_needs_no_authority_over_what_it_removes(self) -> None:
-        """Subtracting can only narrow a role, so requiring the node would stop an
-        administrator from removing a capability they cannot themselves hold."""
+        """An exclusion narrows a role, so the editor need not hold the removed capability."""
         store = stored(
             roles=(
                 PermissionRole(id=50, slug="helper", guild_id=None, builtin_key=None, rank=5, protected=False),
@@ -429,7 +436,7 @@ class TestRoles:
 
 class TestLastGranter:
     async def test_the_last_global_granter_cannot_be_revoked(self) -> None:
-        """Owner lockout is the failure nobody can recover from in-product."""
+        """Preserve a stored holder of global grant authority."""
         store = stored(rules=granted("perm.grant.global", "**"))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7))
@@ -456,20 +463,13 @@ async def test_every_mutation_records_an_audit_entry() -> None:
     assert store.value.audit_entries[0].reason == "event weekend"
 
 
-# ---- P11: the two management gates are non-escalating ------------------------
-#
-# The example tests above show each gate refusing a single bad edit. What they
-# cannot show is a *sequence* of individually-accepted edits compounding into an
-# escalation -- e.g. composing a role into another, then composing that one
-# into a third, hiding a leaf the actor never held behind two hops of
-# indirection. This section quantifies over such sequences instead.
+# P11 checks sequences as well as individual edits: composition can expose a capability
+# indirectly through another role, so each accepted step must preserve the authority bound.
 
 CUSTOM_A = "custom-role-a"
 CUSTOM_B = "custom-role-b"
 SEED_ROLE = "seed-assigned"
-"""Assigned to the actor before the sequence starts, purely to give them a
-starting `highest_rank` without touching the two roles under test -- an actor
-with no role assignment at all can manage nothing, rank 0 being the floor."""
+"""Give the actor a starting rank independently of the two roles being edited."""
 
 REJECTIONS = (PermissionAuthorityError, PermissionRankError, ProtectedRoleError, ValidationError, ConflictError)
 
@@ -552,14 +552,11 @@ async def _p11_apply(service: PermissionAdministrationService, actor: Actor, op:
 @settings(max_examples=200, deadline=None)
 @given(scenario=_p11_scenarios())
 async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario: _P11Scenario) -> None:
-    """P11: no sequence of edits the boundary gate accepts lets the editor -- or
-    a role they shape -- reach a node they could not already reach.
+    """P11: generated edit sequences must not expand the editor's authority.
 
-    Checked two ways: after every accepted edit, the editor's own resolved
-    capabilities cannot exceed what they held before the whole sequence began;
-    and once the sequence ends, neither role under test confers a leaf outside
-    that starting set, which is what would let some *other* subject inherit an
-    escalation the editor engineered through composition.
+    After each accepted edit, compare the editor's capabilities with both the previous
+    step and the initial set. At the end, both edited roles must also stay within
+    that initial set, so assigning either role to someone else cannot grant more.
     """
     store = stored(
         roles=(

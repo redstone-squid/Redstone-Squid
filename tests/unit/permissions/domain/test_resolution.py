@@ -1,9 +1,4 @@
-"""Resolver behaviour, stated mostly as properties.
-
-The precedence rules are small enough to read and subtle enough to get wrong in a
-refactor, so the interesting assertions are quantified over generated rule sets
-rather than written as a handful of examples.
-"""
+"""Permission precedence and role expansion checked with examples and generated rules."""
 
 import dataclasses
 from typing import Any
@@ -47,7 +42,7 @@ def deny(raw: str, **overrides: Any) -> Rule:
 
 
 def signature(decision: Decision) -> tuple[object, ...]:
-    """Everything about a decision that callers and `/perm can` depend on."""
+    """Select the decision and trace fields compared across rule orderings."""
     return (
         decision.node,
         decision.allowed,
@@ -69,10 +64,7 @@ class TestExamples:
         assert decision.trace[-1].lost_on == "specificity"
 
     def test_deny_breaks_a_complete_tie(self) -> None:
-        """Two roles, same pattern, opposite effects: fail safe.
-
-        This is the deliberate inversion of Discord, where allow would win.
-        """
+        """Deny wins when scope, specificity, subject, and origin are tied."""
         role = {"subject_kind": SubjectKind.ACCOUNT, "origin": Origin.ROLE}
         decision = resolve(
             "build.submission.approve",
@@ -171,11 +163,7 @@ class TestRoleExpansion:
 
 @given(name=node_names(), ruleset=rule_sets(), data=st.data())
 def test_p1_the_decision_does_not_depend_on_rule_order(name: str, ruleset: list[Rule], data: st.DataObject) -> None:
-    """P1: the rank tuple is a strict weak ordering, trace included.
-
-    If this fails, the verdict depends on whatever order the database happened to
-    return rows in.
-    """
+    """P1: database row order must not change the decision or its explanation."""
     shuffled = data.draw(st.permutations(ruleset))
 
     assert signature(resolve(name, MEMBER, ruleset)) == signature(resolve(name, MEMBER, shuffled))
@@ -183,7 +171,7 @@ def test_p1_the_decision_does_not_depend_on_rule_order(name: str, ruleset: list[
 
 @given(name=node_names(), data=st.data())
 def test_p2_a_wildcard_grant_decides_a_leaf_as_an_exact_grant_would(name: str, data: st.DataObject) -> None:
-    """P2: selecting a node by ancestor or by name reaches the same verdict."""
+    """P2: a matching selector and an exact node name give the same decision for a lone rule."""
     selector = data.draw(st.sampled_from(selectors_for(name)))
     effect = data.draw(st.sampled_from((Effect.ALLOW, Effect.DENY)))
     rule = Rule(pattern=Pattern.parse(selector), effect=effect)
@@ -194,7 +182,7 @@ def test_p2_a_wildcard_grant_decides_a_leaf_as_an_exact_grant_would(name: str, d
 
 @given(name=node_names(), ruleset=rule_sets(include_forbid=False))
 def test_p4_a_guild_scoped_rule_never_allows_a_global_node(name: str, ruleset: list[Rule]) -> None:
-    """P4: guild-scoped authority cannot reach the shared build database."""
+    """P4: guild-scoped rules leave global capabilities at their catalogue defaults."""
     guild_only = [dataclasses.replace(rule, scope_guild_id=GUILD_ID) for rule in ruleset]
     decision = resolve(name, MEMBER, guild_only)
 
@@ -205,12 +193,7 @@ def test_p4_a_guild_scoped_rule_never_allows_a_global_node(name: str, ruleset: l
 
 @given(pattern=patterns(), ruleset=rule_sets(include_forbid=False), name=node_names())
 def test_p5_a_delegable_grant_cannot_change_a_global_decision(pattern: str, ruleset: list[Rule], name: str) -> None:
-    """P5: whatever the guild-delegation validator accepts is safe to add.
-
-    The validator's rule is "every scope this pattern reaches is GUILD"; this
-    checks that accepting on that basis really does leave global nodes alone, for
-    every rule set and every node.
-    """
+    """P5: a guild-scoped grant that selects only guild nodes leaves global decisions unchanged."""
     assume(not CATALOGUE.scopes_reached(pattern) - {NodeScope.GUILD})
     delegated = Rule(pattern=Pattern.parse(pattern), effect=Effect.ALLOW, scope_guild_id=GUILD_ID)
 
@@ -220,11 +203,7 @@ def test_p5_a_delegable_grant_cannot_change_a_global_decision(pattern: str, rule
 
 @given(name=node_names(), data=st.data())
 def test_p6_a_role_subtraction_is_not_a_deny(name: str, data: st.DataObject) -> None:
-    """P6: Azure `NotActions` semantics.
-
-    A role that excludes a node withholds it; it must not stop a different role
-    from conferring it.
-    """
+    """P6: excluding a node from one role must not block another role from granting it."""
     broad = data.draw(st.sampled_from([s for s in selectors_for(name) if s != name]))
     subtracting = RoleSpec("subtracting", includes=(broad,), excludes=(name,))
     granting = RoleSpec("granting", includes=(name,))
@@ -243,7 +222,7 @@ def test_p6_a_role_subtraction_is_not_a_deny(name: str, data: st.DataObject) -> 
 
 @given(keys=st.lists(st.sampled_from("abcde"), min_size=1, max_size=5, unique=True), data=st.data())
 def test_p7_role_expansion_terminates_and_ignores_edge_order(keys: list[str], data: st.DataObject) -> None:
-    """P7: composition graphs are safe to load even when cyclic."""
+    """P7: generated role graphs, including cycles, expand consistently after edge reversal."""
     specs: dict[str, RoleSpec] = {}
     for key in keys:
         edges = data.draw(st.lists(st.sampled_from(keys), max_size=3, unique=True))
@@ -260,7 +239,7 @@ def test_p7_role_expansion_terminates_and_ignores_edge_order(keys: list[str], da
 
 @given(name=node_names(), ruleset=rule_sets(), pattern=patterns())
 def test_p8_forbid_denies_regardless_of_everything_else(name: str, ruleset: list[Rule], pattern: str) -> None:
-    """P8: the emergency stop does not have to win a specificity argument."""
+    """P8: a matching forbid overrides other rules for an ordinary subject."""
     forbid = Rule(pattern=Pattern.parse(pattern), effect=Effect.FORBID)
     decision = resolve(name, MEMBER, [*ruleset, forbid])
 
@@ -280,12 +259,7 @@ def test_p9_the_owner_is_allowed_everything(name: str, ruleset: list[Rule]) -> N
 
 @given(rule=rules(), label=st.text(max_size=8), note=st.text(max_size=8))
 def test_p10_rank_depends_only_on_the_precedence_components(rule: Rule, label: str, note: str) -> None:
-    """P10: role rank, and everything else cosmetic, stays out of resolution.
-
-    Role rank governs who may edit which role and nothing more. It never reaches
-    `Rule`, so the closest structural guard is that a rule's precedence is a
-    function of exactly the five documented components.
-    """
+    """P10: changing the source label or inheritance note must not change rule precedence."""
     relabelled = dataclasses.replace(rule, source=label, via=note)
 
     assert relabelled.rank() == rule.rank()
@@ -293,7 +267,7 @@ def test_p10_rank_depends_only_on_the_precedence_components(rule: Rule, label: s
 
 @given(name=node_names(), ruleset=rule_sets())
 def test_p12_an_exact_rule_beats_any_wildcard_of_the_opposite_effect(name: str, ruleset: list[Rule]) -> None:
-    """P12: specificity dominance, the rule the whole design leans on."""
+    """P12: an exact deny wins unless a forbid or a stronger exact rule changes the comparison."""
     exact = Rule(pattern=Pattern.parse(name), effect=Effect.DENY)
     node = CATALOGUE[name]
     assume(not any(rule.effect is Effect.FORBID and rule.matches(node) for rule in ruleset))
@@ -305,10 +279,9 @@ def test_p12_an_exact_rule_beats_any_wildcard_of_the_opposite_effect(name: str, 
 
 @given(name=node_names(), ruleset=rule_sets())
 def test_p13_the_trace_explains_the_decision_it_came_with(name: str, ruleset: list[Rule]) -> None:
-    """P13: replaying the winning step alone reproduces the verdict.
+    """P13: the decisive rule alone must reproduce the reported decision.
 
-    `/perm can` renders this trace, so a trace that disagrees with its own
-    decision would be a lie told to whoever is debugging a permission problem.
+    Permission diagnostics display this trace, so it must agree with the resolver.
     """
     decision = resolve(name, MEMBER, ruleset)
 
@@ -334,7 +307,7 @@ def test_p14_an_empty_rule_set_falls_through_to_the_catalogue_default(name: str)
 
 @pytest.mark.parametrize("subject", [MEMBER, Subject(guild_id=GUILD_ID)])
 def test_an_unauthenticated_subject_resolves_without_an_account(subject: Subject) -> None:
-    """A permission check must never be the thing that creates an account row."""
+    """Resolve a guild-role grant even when the subject has no account ID."""
     rule = allow("settings.**", subject_kind=SubjectKind.DISCORD_ROLE, scope_guild_id=GUILD_ID)
 
     assert resolve("settings.server.edit", subject, [rule]).allowed

@@ -20,7 +20,7 @@ ROLE_ID = {row.builtin_key: row.id for row in BUILTIN_ROWS}
 
 
 class CountingStore:
-    """A store whose epoch can be moved the way another process would move it."""
+    """Count loads and return a trusted-role assignment at a manually controlled epoch."""
 
     def __init__(self, *, epoch: int = 1) -> None:
         self.epoch_version = epoch
@@ -66,7 +66,7 @@ class TestSubjectRuleCache:
         assert cache.get(key) is None
 
     def test_the_wall_clock_backstop_expires_an_entry(self) -> None:
-        """A watcher that has died degrades to a TTL, never to unbounded staleness."""
+        """Expire cached rules even when no watcher reports an epoch change."""
         cache = SubjectRuleCache(max_age_seconds=30)
         key = cache_key(Subject(account_id=7))
         stored_at = Instant.from_utc(2026, 1, 1)

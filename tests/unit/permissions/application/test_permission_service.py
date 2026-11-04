@@ -27,7 +27,7 @@ ROLE_ID = {row.builtin_key: row.id for row in BUILTIN_ROWS}
 
 
 class FakeStore:
-    """Counts loads, so the N+1 guard has something to assert on."""
+    """Return the supplied records for any subject and count load calls."""
 
     def __init__(self, records: SubjectRecords):
         self.records = records
@@ -97,13 +97,7 @@ async def test_stored_patterns_extend_a_builtin_rather_than_replacing_it() -> No
 
 
 async def test_a_stored_pattern_cannot_punch_through_a_builtins_exclude() -> None:
-    """The code-level excludes are a boundary, not a default.
-
-    `global-admin` withholds `bot.**` and `@destructive` deliberately, so someone
-    with write access to `permission_role_patterns` must not be able to hand
-    themselves the owner-only surface by adding an include row. Widening past the
-    boundary is a deploy, or a separate role.
-    """
+    """Built-in exclusions still apply when stored include patterns overlap them."""
     permissions, _ = service(
         roles=widened("global-admin", "bot.**", "record.entry.rebuild"),
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
@@ -138,7 +132,7 @@ class TestGuildAdminBridge:
         assert not await permissions.allows(subject, "settings.server.edit")
 
     async def test_an_explicit_deny_outranks_it(self) -> None:
-        """The permission system is evaluated first; Discord is only a default."""
+        """An explicit deny can override the grant derived from Discord's Manage Server permission."""
         permissions, _ = service(
             grants=(PermissionGrant(pattern="settings.server.edit", effect=int(Effect.DENY), subject_account_id=7),),
         )
@@ -165,7 +159,7 @@ class TestLoadCost:
         assert store.loads == 0
 
     async def test_resolving_many_nodes_costs_one_load(self) -> None:
-        """The N+1 guard: today's tiers pay two or three round trips per check."""
+        """Resolve a capability set from one repository load rather than loading once per node."""
         permissions, store = service(
             assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
         )

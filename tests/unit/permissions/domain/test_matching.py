@@ -70,7 +70,7 @@ def test_specificity_orders_the_documented_example() -> None:
 
 @given(name=node_names())
 def test_every_selector_actually_selects_its_node(name: str) -> None:
-    """P2: the selector enumeration used by the other properties is honest."""
+    """P2: verify the selector generator before using it in other properties."""
     node = CATALOGUE[name]
 
     assert all(Pattern.parse(raw).matches(node) for raw in selectors_for(name))

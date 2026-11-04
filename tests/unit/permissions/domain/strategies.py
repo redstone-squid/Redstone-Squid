@@ -1,8 +1,8 @@
-"""Hypothesis strategies over the real permission catalogue.
+"""Generate permission rules from the application catalogue.
 
-Generating against the live catalogue rather than a toy one is deliberate: the
-properties then cover the actual node shapes, tags and scopes the application
-ships, and a new node with an awkward shape shows up as a property failure.
+New catalogue entries become candidates for the property tests without updating a
+separate test catalogue. Hypothesis samples these candidates; it does not enumerate
+every possible rule set.
 """
 
 import itertools
@@ -16,7 +16,7 @@ GUILD_ID = 4242
 
 
 def selectors_for(name: str) -> tuple[str, ...]:
-    """Every pattern in the grammar that selects `name`."""
+    """Generate exact, subtree, single-segment wildcard, and tag selectors for a node."""
     segments = name.split(".")
     found = {name, "**"}
     for depth in range(1, len(segments)):
@@ -41,7 +41,7 @@ def node_names() -> st.SearchStrategy[str]:
 
 
 def patterns() -> st.SearchStrategy[str]:
-    """Any pattern that selects at least one catalogue node."""
+    """Sample a generated selector that matches at least one catalogue node."""
     return st.sampled_from(ALL_SELECTORS)
 
 
@@ -58,7 +58,7 @@ def rules(
     include_forbid: bool = True,
     guild_scoped: st.SearchStrategy[bool] | None = None,
 ) -> Rule:
-    """A rule over a pattern that selects something."""
+    """Generate a rule using a catalogue selector unless a custom pattern strategy is supplied."""
     raw = draw(pattern if pattern is not None else patterns())
     scoped = draw(guild_scoped if guild_scoped is not None else st.booleans())
     return Rule(
@@ -72,5 +72,5 @@ def rules(
 
 
 def rule_sets(*, include_forbid: bool = True, max_size: int = 6) -> st.SearchStrategy[list[Rule]]:
-    """A small set of rules, the shape a single subject actually accumulates."""
+    """Generate a bounded list of rules, allowing duplicates."""
     return st.lists(rules(include_forbid=include_forbid), max_size=max_size)

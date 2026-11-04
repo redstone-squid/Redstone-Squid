@@ -96,12 +96,9 @@ class TestBuiltinRoles:
         assert "role.definition.manage" not in leaves
 
     def test_global_admin_withholds_nothing_beyond_those(self) -> None:
-        """Guards the include list, which is where a node is silently forgotten.
+        """Catch catalogue additions omitted from the global-admin role.
 
-        The old `check_is_global_admin` tier passed `check_is_server_admin` too,
-        so a global administrator keeps every guild-scoped node as well; an
-        include list that misses a namespace shows up here rather than as a
-        support question.
+        Only owner-only capabilities and nodes already allowed by default may be absent.
         """
         withheld = frozenset(CATALOGUE.names) - builtin_leaves("global-admin")
         owner_only = (
