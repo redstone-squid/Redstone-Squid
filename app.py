@@ -15,7 +15,12 @@ def _interrupt(_signum: int, _frame: FrameType | None) -> None:
 
 
 def supervise(commands: Sequence[Sequence[str]]) -> int:
-    """Run child commands together and stop every sibling when one exits."""
+    """Run child commands together and stop every sibling when one exits.
+
+    Return the first exit code observed, or 130 if interrupted. During shutdown,
+    terminate each live child, then wait up to ten seconds per child before
+    killing it. Commands must contain an executable and its separate arguments.
+    """
     processes = [subprocess.Popen(command) for command in commands]
     try:
         while True:

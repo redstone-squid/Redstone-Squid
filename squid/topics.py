@@ -1,9 +1,9 @@
-"""The resource topic vocabulary, and the bridge that carries it between processes.
+"""Resource addresses used to refresh panels after a build or other resource changes.
 
-`TopicBus` is process-local, but the writes a panel shows are made by three processes: the
-bot itself, the worker that finishes a schematic render, and the API. The address a panel
-follows therefore travels over PostgreSQL `LISTEN`/`NOTIFY`. Only the address travels --
-every subscriber re-reads the database, exactly as it does for a local publish.
+The bot, worker, and API can all change the data a panel displays. PostgreSQL
+LISTEN/NOTIFY carries resource addresses between their local topic buses.
+Notifications carry no resource data; subscribers read the current value from
+the database when they refresh.
 """
 
 from typing import Protocol
@@ -21,27 +21,30 @@ RESOURCE_TOPIC_CHANNEL = "squid_resource_topics"
 
 
 def resource_topic(resource_kind: ResourceKind, resource_key: str) -> Topic:
-    """Address one bot-owned resource consistently across publishers and subscribers.
+    """Return a topic for an application resource.
 
-    A thin constructor over `Topic`, kept because it is what carries the `ResourceKind`
-    literal: a bare `Topic` would accept any kind string a caller happened to type.
+    The ResourceKind annotation lets type checkers catch unknown resource kinds;
+    constructing Topic directly would accept any string.
     """
     return Topic(resource_kind, resource_key)
 
 
 class TopicPublisher(Protocol):
-    """What a process publishes through: the local bus, or the bridge in front of it."""
+    """Publish resource changes through either a local bus or a PostgreSQL bridge."""
 
     def publish(self, *topics: Address) -> None: ...
 
 
 async def open_topic_bridge(database: DatabaseConfig, bus: TopicBus) -> PostgresTopicBridge | None:
-    """Join the shared resource channel, or return `None` when none is configured.
+    """Create a bridge, or return None if the database has no listener URL.
 
-    `LISTEN` needs a session-level connection, so this reuses the direct URL the domain
-    event and permission epoch listeners already require. Without it the process keeps its
-    local bus, and cross-process freshness falls back to the reconciler's poll. The caller
-    owns the returned bridge: run it, and close `bridge.pool` on shutdown.
+    LISTEN needs a connection that stays attached to one PostgreSQL session, so
+    the pool uses the direct listener URL. The caller must run `bridge.run()` in
+    a supervised task, cancel that task on shutdown, and close `bridge.pool`.
+    Creating the bridge alone does not start sending or receiving notifications.
+
+    Notifications can be missed. Consumers still need a way to refresh without
+    them, such as the post reconciler's periodic poll.
     """
     if database.listener_url is None:
         return None

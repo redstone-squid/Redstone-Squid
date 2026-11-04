@@ -1,4 +1,10 @@
-"""Application services and process runtime, defined without reference to a web framework."""
+"""Provide application services and manage work that lasts for a process's lifetime.
+
+Each process receives a service bundle for its role: HTTP API, Discord bot, or
+background worker. ApplicationRuntime pairs that bundle with dependency checks
+and resource cleanup. BackgroundTaskSupervisor owns ongoing jobs so shutdown
+can cancel them and wait for their cleanup before the process exits.
+"""
 
 import logging
 import time
@@ -175,7 +181,12 @@ class WorkerServices:
 
 @dataclass(frozen=True, slots=True)
 class ApplicationRuntime[ServicesT]:
-    """Own application services and process-level resource callbacks."""
+    """Keep a process's services together with their readiness and cleanup callbacks.
+
+    Composition code creates the services and supplies the callbacks. Use this
+    runtime as an async context manager to close those resources on exit; call
+    ready separately when checking whether the process can serve work.
+    """
 
     services: ServicesT
     close_resources: Callable[[], Awaitable[None]]

@@ -1,4 +1,4 @@
-"""Safe, immutable public sponsor attribution values."""
+"""Sponsor details that may be shown alongside a build."""
 
 from dataclasses import dataclass
 from uuid import UUID
@@ -10,7 +10,13 @@ _HTTP_URL = TypeAdapter(AnyHttpUrl)
 
 @dataclass(frozen=True, slots=True)
 class PublicSponsor:
-    """Allowlisted public snapshot of one sponsoring Paper installation."""
+    """Public details of a sponsoring Minecraft server running the Paper plugin.
+
+    Optional fields use None for missing values; empty strings and surrounding
+    whitespace are rejected. Website URLs must use HTTP(S), contain no whitespace
+    or embedded credentials, and are normalized by Pydantic. Invalid values raise
+    ValueError during construction.
+    """
 
     installation_id: UUID
     display_name: str | None = None

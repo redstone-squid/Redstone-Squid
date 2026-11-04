@@ -1,4 +1,10 @@
-"""Locale-agnostic translation lookup shared by the bot and the REST API."""
+"""Create deferred messages and translate them for the current reader.
+
+Application code can build a Message before a reader's locale is known. The
+presentation code later renders it through the current Localization context.
+Locale negotiation selects a supported language, and gettext catalogs supply
+its translations; missing translations retain the source text.
+"""
 
 import gettext
 from collections.abc import Sequence

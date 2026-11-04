@@ -7,7 +7,7 @@ from typing import ClassVar, Self, override
 from squid.core.i18n import tr
 from squid_ui.text import Message
 
-type JSONValue = None | bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue]
+type JSONValue = bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
 
 
 def _source_text(value: str | Message) -> str:
@@ -87,7 +87,13 @@ class ErrorCode(StrEnum):
 
 
 class SquidError(Exception):
-    """Base class for structured application failures."""
+    """An application failure with separate diagnostic and user-facing details.
+
+    `context` holds diagnostic data; only `public_context` should reach users.
+    Messages and end-user actions can contain deferred translations. Diagnostic
+    text uses the source language, while `public_detail()` uses the current locale.
+    Callers must choose safe public messages; this class does not redact them.
+    """
 
     default_message: ClassVar[str | Message] = tr(t"An application error occurred.")
     default_title: ClassVar[str | Message] = tr(t"Application error")
@@ -138,7 +144,7 @@ class SquidError(Exception):
         return f"{message}{separator}{self.developer_action}"
 
     def public_detail(self) -> str:
-        """Return safe user-facing text using the ambient localization."""
+        """Render the message and end-user action using the current locale."""
         message = tr(self.message)
         if self.end_user_action:
             return f"{message} {tr(self.end_user_action)}"
@@ -153,12 +159,11 @@ class SquidError(Exception):
         developer_action: str | None = None,
         end_user_action: str | Message | None = None,
     ) -> Self:
-        """Enrich this exception in place while preserving its traceback.
+        """Update this exception in place and return it without replacing its traceback.
 
-        `message` is here because enrichment that cannot restate the message is only half a helper:
-        a layer that resolves *what* the conflict was usually wants to say so, and assigning
-        `self.message` by hand skips the `args` refresh at the bottom. Pass deferred text as a
-        constructor would.
+        Context mappings are merged, with new values replacing existing keys. Other
+        supplied values replace their fields; None leaves a field unchanged. The
+        method also refreshes `args` so exception displays use the updated details.
         """
         if context:
             self.context = {**self.context, **context}
@@ -221,7 +226,7 @@ class AuthorizationError(DomainError):
 
 
 class RateLimitedError(DomainError):
-    """A caller exceeded a bounded operation's abuse-control window."""
+    """A caller exceeded a rate limit; retry_after is the wait in seconds."""
 
     default_message = tr(t"Too many requests. Please try again later.")
     default_title = tr(t"Too many requests")

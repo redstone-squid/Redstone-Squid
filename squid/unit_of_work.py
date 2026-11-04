@@ -6,11 +6,12 @@ from typing import Protocol, Self
 
 
 class UnitOfWork(Protocol):
-    """Track mapped changes until commit; leaving without commit rolls back.
+    """Group repository changes in a transaction that the caller must commit.
 
-    Each scope belongs to one task. Commit is terminal, and repositories may only
-    be used inside an active scope. Loaded entities detach when the scope closes;
-    edits persist only after a successful commit.
+    Enter the scope with `async with` and use it from one task. Call `commit()`
+    to save changes; leaving without committing rolls them back. After commit,
+    the scope no longer accepts repository calls, even before the context exits.
+    Loaded entities detach when the scope closes, so later edits are not saved.
     """
 
     async def __aenter__(self) -> Self: ...

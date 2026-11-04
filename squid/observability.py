@@ -1,4 +1,14 @@
-"""Process-local OpenTelemetry initialization with an optional runtime dependency."""
+"""Connect work, log lines, and error reports through shared correlation IDs.
+
+A correlation ID groups the logs and failures from one request or background
+operation. Entry points bind it directly or use correlation_scope; error reports
+can then retain that operation's recent log lines and show a shorter reference
+to the user. This works without OpenTelemetry installed.
+
+Optional OpenTelemetry support adds spans and metrics exported by each process.
+A trace ID can supply the correlation ID when none is bound, while propagated
+trace context connects parent work to schematic worker subprocesses.
+"""
 
 import logging
 import os

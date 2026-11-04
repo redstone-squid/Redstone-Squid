@@ -1,4 +1,10 @@
-"""Babel extraction extended for deferred Python template strings."""
+"""Find translation keys in source code when building the Babel message catalog.
+
+Babel handles ordinary translation calls. This extractor also recognizes tr()
+template strings and Discord's locale_str() declarations. It records template
+placeholders as names, such as {name}, without evaluating their values; the
+same key can then be translated for every value supplied at runtime.
+"""
 
 import ast
 import io
@@ -57,6 +63,7 @@ def _template_msgid(message: ast.expr) -> str | None:
                 format_parts: list[str] = []
                 for part in value.format_spec.values:
                     if not isinstance(part, ast.Constant) or not isinstance(part.value, str):
+                        # A dynamic format specification has no fixed catalog key to extract.
                         return None
                     format_parts.append(part.value)
                 format_spec = ":" + "".join(format_parts)

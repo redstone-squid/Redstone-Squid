@@ -1,4 +1,13 @@
-"""Composition root: wires adapters into services that name no framework themselves."""
+"""Construct each process's services and register their cleanup callbacks.
+
+The API, bot, and worker use different service bundles, but many services need
+the same database, permission cache, or external client. _ServiceGraph creates
+each dependency on first use and shares it within one bundle. The create_*_runtime
+functions return an ApplicationRuntime that owns the resulting resources.
+
+The runtime owns its database even when the caller supplies it. It closes adapters
+before the database so their shutdown work can still use a database connection.
+"""
 
 import logging
 from collections.abc import Callable
@@ -128,13 +137,11 @@ def create_schematic_service(
     uow_factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     render_capable: bool = False,
 ) -> SchematicService:
-    """Assemble the schematic service over whichever analyzer this process can run.
+    """Build a schematic service that submits work to the durable queue.
 
-    `render_capable` says this process may *ask* for renders, not that it performs them: the
-    native work always happens in the worker behind the durable job queue. What it actually
-    buys is the resource pack, which a process must be able to load before it can name a
-    recipe — so the API and the bot carry it for on-demand renders, and the worker for the
-    previews it publishes.
+    When `render_capable` and rendering are enabled, attach a resource-pack loader
+    so this process can prepare render requests. Native rendering still runs in
+    the dedicated worker process.
     """
     analyzer = create_schematic_analyzer(config, jobs, artifacts)
     resource_pack = None
@@ -176,7 +183,11 @@ def create_schematic_service(
 
 
 class _ServiceGraph:
-    """Lazily assemble one process's services and register owned adapters."""
+    """Build each service once per process and register adapter cleanup.
+
+    Cached properties let services share dependencies without constructing unused
+    adapters. The caller must close the supplied AsyncExitStack on shutdown.
+    """
 
     def __init__(
         self,
@@ -229,11 +240,10 @@ class _ServiceGraph:
 
     @cached_property
     def permission_epoch(self) -> PermissionEpochWatcher:
-        """The watcher keeping this process's rule cache honest.
+        """Watch permission changes using the same cache as this process's checks.
 
-        It shares the cache instance with the service above, which is the whole
-        point: a grant written in another process clears the one cache the checks
-        in this process read through.
+        Polling notices grants written by other processes. The optional PostgreSQL
+        listener wakes the watcher sooner.
         """
         listener = (
             None
@@ -765,7 +775,7 @@ def _create_runtime[ServicesT](
     service_factory: Callable[[DatabaseEngine, RuntimeConfig, AsyncExitStack], ServicesT],
     db: DatabaseEngine | None,
 ) -> ApplicationRuntime[ServicesT]:
-    """Share resource ownership behind the concrete process runtime constructors."""
+    """Create a runtime that closes its adapters and then its database, including a supplied database."""
     database = db or DatabaseEngine(config.database)
     resources_stack = AsyncExitStack()
     # Registered first so LIFO shutdown keeps the database alive until every adapter

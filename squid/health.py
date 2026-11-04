@@ -1,4 +1,4 @@
-"""Small process-local HTTP health server for non-HTTP services."""
+"""HTTP health probes for the bot and worker processes."""
 
 import asyncio
 import logging
@@ -13,7 +13,15 @@ type ReadinessCheck = Callable[[], Awaitable[bool]]
 
 
 class ProcessHealthServer:
-    """Expose liveness and dependency-aware readiness for one process."""
+    """Serve `/livez` and `/readyz` for one process.
+
+    Liveness returns 200 whenever the server can answer a request. Readiness calls
+    the supplied check for each request and returns 503 if it returns false,
+    raises an exception, or exceeds `timeout_seconds`. The check decides which
+    dependencies the process needs to serve work.
+
+    Use as an async context manager, or call `start()` and `close()` once each.
+    """
 
     def __init__(
         self,
@@ -30,7 +38,7 @@ class ProcessHealthServer:
         self._runner: web.AppRunner | None = None
 
     async def start(self) -> None:
-        """Bind the health listener after process resources exist."""
+        """Start accepting probes on the configured host and port."""
         application = web.Application()
         application.router.add_get("/livez", self._live)
         application.router.add_get("/readyz", self._ready)
