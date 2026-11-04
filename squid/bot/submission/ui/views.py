@@ -18,8 +18,9 @@ from squid.bot.submission.ui.fields import (
     field_spec,
 )
 from squid.bot.ui import DISCORD_YELLOW, tr
+from squid.bot.utils.permissions import subject_for_interaction
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
-from squid.builds.application import BuildEditPatch, BuildService
+from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild
@@ -469,8 +470,8 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
             self._build_id = build.id
         else:
             try:
-                async with self.builds.edit(build.id, patch, expected_revision=build.revision) as edit:
-                    build = await edit.commit()
+                actor = BuildEditor(await subject_for_interaction(cast(sd.Request[Any], event.context)))
+                build = await self.builds.apply_edit(actor, build.id, patch, expected_revision=build.revision)
             except BuildRevisionMismatchError:
                 self.confirming = False
                 self.validation_error = tr(

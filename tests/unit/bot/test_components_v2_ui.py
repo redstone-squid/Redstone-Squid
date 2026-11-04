@@ -13,12 +13,14 @@ import squid_ui_discord as sd
 from squid.bot.submission import build_handler as build_handler_module
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchScreen
+from squid.bot.submission.ui import views as build_views
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
 from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour
-from squid.builds.application import BuildService
+from squid.builds.application import BuildEditor, BuildService
 from squid.builds.domain import SourceMessage, Status
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, BuildLink, DoorBuild
+from squid.permissions.domain import Subject
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
@@ -70,33 +72,15 @@ class EditRecorder(BuildService):
         self.expected_revision: int | None = None
 
     @override
-    def edit(
-        self,
-        build_id: int,
-        patch: Any,
-        *,
-        blocking: bool = False,
-        timeout: float = 30,
-        expected_revision: int | None = None,
-    ) -> Any:
-        del patch, blocking, timeout
+    async def apply_edit(
+        self, actor: BuildEditor, build_id: int, patch: Any, *, expected_revision: int | None = None
+    ) -> Build:
+        del actor, patch
         assert build_id == self.build.id
         self.expected_revision = expected_revision
-        recorder = self
-
-        class Lease:
-            async def __aenter__(self) -> Any:
-                if recorder.conflict:
-                    raise BuildRevisionMismatchError(build_id, expected_revision=expected_revision, current_revision=2)
-                return self
-
-            async def __aexit__(self, *args: object) -> None:
-                pass
-
-            async def commit(self) -> Build:
-                return replace(recorder.build, revision=recorder.build.revision + 1)
-
-        return Lease()
+        if self.conflict:
+            raise BuildRevisionMismatchError(build_id, expected_revision=expected_revision, current_revision=2)
+        return replace(self.build, revision=self.build.revision + 1)
 
 
 @dataclass(frozen=True)
@@ -244,7 +228,10 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
     assert all(disabled for label, disabled in buttons.items() if label != "Reload fresh editor")
 
 
-async def test_build_editor_commits_against_the_revision_it_presented(display_build: Build) -> None:
+async def test_build_editor_commits_against_the_revision_it_presented(
+    display_build: Build, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncMock(return_value=Subject(account_id=1)))
     builds = EditRecorder(display_build)
     field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
@@ -263,7 +250,10 @@ async def test_build_editor_commits_against_the_revision_it_presented(display_bu
     assert component.saved is True
 
 
-async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(display_build: Build) -> None:
+async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
+    display_build: Build, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncMock(return_value=Subject(account_id=1)))
     builds = EditRecorder(display_build, conflict=True)
     field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
