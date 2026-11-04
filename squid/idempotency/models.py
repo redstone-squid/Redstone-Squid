@@ -45,7 +45,7 @@ class IdempotencyRequest(Base, kw_only=True):
         init=False,
         default=None,
     )
-    """Rolling-deploy mirror removed after the caller-vocabulary compatibility window."""
+    """Legacy copy of caller, still written by the repository for the retained database column."""
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     request_fingerprint: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     method: Mapped[UnsafeHttpMethod] = mapped_column(

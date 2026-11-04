@@ -46,6 +46,7 @@ class ExistingRequest:
 
     fingerprint: bytes
     response: StoredResponse | None
+    """None while the reserved request is still in progress."""
 
 
 type Reservation = PendingRequest | ExistingRequest

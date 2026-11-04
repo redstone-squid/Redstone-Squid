@@ -32,8 +32,7 @@ class ErrorReport(Base, kw_only=True):
         Index("error_reports_correlation_id_idx", "correlation_id"),
         Index("error_reports_expires_at_idx", "expires_at"),
         Index("error_reports_occurred_at_idx", "occurred_at"),
-        # Partial: the listing that filters on it wants only the true rows, and they are the
-        # rare ones. A full index would be mostly `false` entries nothing ever reads.
+        # The work-lost listing needs only marked reports, ordered by occurrence time.
         Index("error_reports_work_lost_idx", "occurred_at", postgresql_where=text("work_lost")),
     )
 
@@ -41,16 +40,15 @@ class ErrorReport(Base, kw_only=True):
     correlation_id: Mapped[str] = mapped_column(Text, nullable=False)
     """The full correlation ID, as it appears in logs and the Request-Id response header."""
     reference: Mapped[str] = mapped_column(Text, nullable=False)
-    """The shortened form shown to the user, indexed because it is what they quote back.
+    """Short reference shown to the user, usually the first 12 correlation-ID characters.
 
-    Not unique: it is a 48-bit prefix of the correlation ID, so a collision is possible even
-    though it is vanishingly unlikely, and a unique constraint would turn that into a failure to
-    record the second error rather than an ambiguous lookup.
+    References are not unique. Multiple failures can share a correlation ID, and
+    different IDs can share a prefix; lookup also returns a match count.
     """
     occurred_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     """When the failure was captured."""
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
-    """When retention drops this report."""
+    """When the report stops appearing in lookups and becomes eligible for deletion."""
     surface: Mapped[str] = mapped_column(Text, nullable=False)
     """Which transport failed: an application command, a view callback, a route, a worker job."""
     origin: Mapped[str | None] = mapped_column(Text, default=None)
@@ -58,13 +56,13 @@ class ErrorReport(Base, kw_only=True):
     exception_type: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """Qualified name of the raised exception class."""
     message: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    """The exception's own string form, which is never shown to the user who triggered it."""
+    """The exception's string form, available to callers authorized to read diagnostic details."""
     error_code: Mapped[ErrorCode | None] = mapped_column(ErrorCodeText(ErrorCode), default=None)
     """The application ErrorCode, when the failure carried one."""
     traceback: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """Rendered traceback, truncated from the front so the frames nearest the failure survive."""
     context: Mapped[dict[str, JSONValue]] = mapped_column(JSONB, nullable=False, default_factory=dict)
-    """Redacted diagnostic context. Never contains stable Discord account identifiers."""
+    """Diagnostic context supplied by the caller; the storage service does not redact it."""
     log_tail: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default_factory=list)
     """What the process logged under this correlation ID before failing, oldest first."""
     work_lost: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)

@@ -13,7 +13,10 @@ from squid.diagnostics.models import ErrorReport
 
 
 class PostgresErrorReportRepository(ErrorReportRepository):
-    """Store error reports and resolve either width of the reference a user quotes."""
+    """Store reports and look up short references or full correlation IDs.
+
+    The caller owns the transaction, including the commit after writes.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -67,10 +70,9 @@ class PostgresErrorReportRepository(ErrorReportRepository):
 
 
 def _matches(reference: str):
-    """Match a quoted reference against either width it could have been read from.
+    """Match an exact short reference or full correlation ID.
 
-    A user reads the short form off a Discord card; an operator reads the full ID off a
-    `Request-Id` header or a log line. Both must resolve, and both are exact matches on an indexed
-    column rather than a prefix scan.
+    Short references come from error cards; full IDs appear in logs and HTTP
+    response headers. Both columns are indexed, so no prefix scan is needed.
     """
     return or_(ErrorReport.reference == reference, ErrorReport.correlation_id == reference)

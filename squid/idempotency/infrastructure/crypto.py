@@ -49,7 +49,12 @@ class EncryptedResponseBody:
 
 
 class IdempotencyResponseCipher:
-    """Encrypt with the active key and decrypt with any retained rotation key."""
+    """Encrypt response bodies with the active key and read them with retained keys.
+
+    Request identity, status, and headers are authenticated along with the body,
+    so changing that metadata causes decryption to fail. The metadata itself is
+    not encrypted. Keep old keys until all responses stored with them expire.
+    """
 
     def __init__(self, *, active_key_id: str, keys: Mapping[str, bytes]) -> None:
         if active_key_id not in keys:
@@ -73,7 +78,11 @@ class IdempotencyResponseCipher:
         encrypted: EncryptedResponseBody,
         metadata: ResponseEncryptionMetadata,
     ) -> bytes:
-        """Authenticate and open one body, failing closed on unknown or altered data."""
+        """Return the decrypted body after verifying its metadata.
+
+        Raise IdempotencyCiphertextError for an unknown key, an invalid nonce
+        length, or failed authentication.
+        """
         key = self._keys.get(encrypted.key_id)
         if key is None:
             msg = "The idempotency response uses an unavailable encryption key."
@@ -93,6 +102,11 @@ class IdempotencyResponseCipher:
 
 
 def _associated_data(metadata: ResponseEncryptionMetadata, key_id: str) -> bytes:
+    """Encode metadata in a stable order, with a length prefix for each field.
+
+    Prefixes distinguish fields such as ("ab", "c") from ("a", "bc"), which would
+    otherwise produce the same concatenated bytes.
+    """
     canonical_headers = json.dumps(
         dict(metadata.headers),
         ensure_ascii=False,

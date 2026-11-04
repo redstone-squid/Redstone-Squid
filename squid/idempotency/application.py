@@ -40,7 +40,20 @@ class IdempotencyRepository(Protocol):
 
 
 class IdempotencyService:
-    """Claim caller keys and distinguish replay from conflicting reuse."""
+    """Reserve request keys and return stored responses for equivalent retries.
+
+    The API supplies a caller namespace, a client-chosen key, and a fingerprint
+    of the request. The caller/key pair identifies the operation being retried;
+    the fingerprint checks that the retry still asks for the same thing. A new
+    reservation returns PendingRequest so the API can run the handler. A completed
+    reservation returns StoredResponse so the API can replay it without running
+    the handler again.
+
+    Reserving a key and storing its response use separate transactions. The caller
+    runs the operation between them. An unfinished reservation blocks retries with
+    the same key until it expires; this service does not undo the operation's side
+    effects if response storage fails.
+    """
 
     def __init__(
         self,
@@ -65,7 +78,13 @@ class IdempotencyService:
         method: UnsafeHttpMethod,
         route: str,
     ) -> PendingRequest | StoredResponse:
-        """Reserve a new key or return its completed response for replay."""
+        """Reserve a caller's key or return its completed response.
+
+        The retention window starts at reservation time and is not extended by
+        retries. Reusing a live key with another fingerprint raises
+        IdempotencyConflictError. An equivalent unfinished request raises
+        IdempotencyInProgressError.
+        """
         now = self._now()
         async with self._uow_factory() as uow:
             reservation = await uow.idempotency.reserve(
@@ -92,7 +111,7 @@ class IdempotencyService:
             await uow.commit()
 
     async def purge_expired(self) -> int:
-        """Remove replay state whose bounded retention window has elapsed."""
+        """Remove expired reservations and responses, returning the number deleted."""
         async with self._uow_factory() as uow:
             result = await uow.idempotency.purge_expired(now=self._now())
             await uow.commit()

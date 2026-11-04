@@ -39,12 +39,16 @@ class ErrorReportUnitOfWork(UnitOfWork, Protocol):
 
 
 class ErrorReportService:
-    """Store what failed, and hand it back to whoever is allowed to ask.
+    """Store failures for later lookup by their public reference or correlation ID.
 
-    Capture is best effort by construction: `record` never raises, because every one of its
-    callers is an error handler that has already failed once and still owes the user a response.
-    A report that cannot be written is a lost diagnostic; a report that raises is a command that
-    silently does nothing.
+    The correlation ID connects a failure to its request or operation's logs;
+    the short reference is the form shown in user-facing error messages. A report
+    stores the traceback, context, and recent logs needed to investigate either.
+
+    `record` logs ordinary capture errors so an error handler can still respond
+    to its caller. Cancellation and other BaseException subclasses can propagate.
+    Callers must authorize report access and redact sensitive context before
+    passing it to this service.
     """
 
     def __init__(
@@ -75,7 +79,7 @@ class ErrorReportService:
         log_tail: Sequence[str] = (),
         work_lost: bool = False,
     ) -> None:
-        """Store one failure, swallowing anything that goes wrong while storing it."""
+        """Store a failure and log ordinary errors from report creation or persistence."""
         try:
             now = self._now()
             report = ErrorReport(
@@ -101,11 +105,11 @@ class ErrorReportService:
             logger.exception("Could not store an error report [correlation_id=%s]", correlation_id)
 
     async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
-        """Resolve a quoted reference to its report and how many share it.
+        """Return the newest unexpired match and the number of reports sharing the reference.
 
-        The count is returned rather than hidden because the short reference is a 48-bit prefix,
-        not a key: a second match is astronomically unlikely but not impossible, and a moderator
-        reading a traceback deserves to know they may be reading the wrong one.
+        Short references can collide, and several failures can share a correlation
+        ID. The count lets the caller show that the selected report is not the only
+        match. Raise ErrorReportNotFoundError when no unexpired report matches.
         """
         async with self._uow_factory() as uow:
             normalized = self.normalize(reference)
@@ -117,11 +121,11 @@ class ErrorReportService:
             return report, matches
 
     async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
-        """List the newest unexpired reports, for looking around without a reference.
+        """List unexpired reports, newest first.
 
-        `work_lost_only` narrows to failures that abandoned work. Following the logs means most
-        reports are failures something recovered from, and those can bury the ones that cost
-        something.
+        Set work_lost_only to select reports marked as abandoned work, such as
+        jobs that exhausted their retries. This separates lost work from failures
+        the application recovered from. Limits below one are treated as one.
         """
         async with self._uow_factory() as uow:
             return await uow.error_reports.list_recent(
@@ -136,10 +140,9 @@ class ErrorReportService:
             return result
 
     async def clear_all(self) -> int:
-        """Delete every stored report, expired or not.
+        """Delete every report and return the number removed.
 
-        Unlike `purge_expired`, this is an operator action rather than routine housekeeping, so
-        it is gated on `diagnostics.error.clear` rather than running unattended.
+        The caller must check diagnostics.error.clear permission before calling.
         """
         async with self._uow_factory() as uow:
             result = await uow.error_reports.clear_all()
@@ -161,8 +164,9 @@ class ErrorReportService:
     def _format_traceback(self, error: BaseException) -> str:
         """Render a traceback, keeping its tail when it has to be cut.
 
-        The frames nearest the failure are the ones worth reading, and a runaway recursion makes
-        the head thousands of identical lines, so the truncation drops from the front.
+        Keep the frames nearest the failure and the exception message when a
+        traceback exceeds max_traceback_chars. Repeated recursion frames at the
+        start are less useful. Prefix a truncated trace with an ellipsis.
         """
         rendered = "".join(traceback.format_exception(error))
         if len(rendered) <= self._max_traceback_chars:

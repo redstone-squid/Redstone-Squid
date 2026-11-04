@@ -30,7 +30,12 @@ from squid.idempotency.models import IdempotencyRequest
 
 
 class PostgresIdempotencyRepository(IdempotencyRepository):
-    """Atomically reserve keys across every API process."""
+    """Reserve keys across API processes within the caller's transaction.
+
+    The unique caller/key pair decides which process owns a new reservation.
+    The caller must commit before executing the operation. A cipher is required
+    for storing or replaying responses, but not for a fresh reservation.
+    """
 
     def __init__(
         self,
@@ -52,6 +57,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
         expires_at: Instant,
         now: Instant,
     ) -> Reservation:
+        """Remove expired records, then insert a reservation or read the existing one."""
         candidate_id = uuid4()
         session = self._session()
         await session.execute(delete(IdempotencyRequest).where(IdempotencyRequest.expires_at <= now))
@@ -84,6 +90,11 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
 
     @override
     async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None:
+        """Store an encrypted response for a reservation that is still pending.
+
+        Raise RuntimeError if the reservation was removed or already completed.
+        Headers are stored as a mapping, so the last value wins for repeated names.
+        """
         headers = dict(response.headers)
         session = self._session()
         existing = await session.scalar(
