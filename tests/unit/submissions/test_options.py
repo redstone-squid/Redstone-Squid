@@ -1,3 +1,5 @@
+"""Approved catalogue values and revisions, including exact manifest lookup."""
+
 import pytest
 
 from squid.submissions.application import CheckedInFormManifestRegistry

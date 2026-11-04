@@ -41,6 +41,7 @@ def raw_request(
     query_string: bytes = b"",
     messages: Sequence[Message] = (),
 ) -> Request:
+    """Supply exact ASGI headers and receive messages without HTTP-client normalization."""
     scope = {
         "type": "http",
         "http_version": "1.1",
@@ -415,6 +416,7 @@ async def test_cancellation_waits_for_blocking_write_before_closing_and_removing
     release = threading.Event()
     real_write_all = submission_media._write_all
 
+    # Hold the worker thread inside the write so cancellation cannot safely close its descriptor yet.
     def blocking_write(descriptor: int, data: bytes) -> None:
         started.set()
         if not release.wait(timeout=5):

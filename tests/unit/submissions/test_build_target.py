@@ -43,6 +43,8 @@ INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000504")
 
 
 class FakeBuilds:
+    """Prepare build fields without persisting; tests seed created entries to model a completed write."""
+
     def __init__(self, *, error: Exception | None = None) -> None:
         self.error = error
         self.calls: list[tuple[Build, dict[str, object]]] = []

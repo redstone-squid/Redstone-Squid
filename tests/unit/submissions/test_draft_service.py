@@ -39,16 +39,19 @@ DRAFT_ID = UUID("00000000-0000-4000-8000-000000000101")
 INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000103")
 OPERATION_ID = UUID("00000000-0000-4000-8000-000000000102")
 NOW = Instant.parse_iso("2026-08-11T00:00:00Z")
-"""The clock every draft in this file is seeded against.
+"""Shared fixture and service clock, keeping seven-day expiry independent of the calendar.
 
-Pass it to the service too. A service left on the real clock agrees with these fixtures only
-until the drafts' seven-day expiry falls into the past, at which point `get_owned` starts
-reporting `expired` and unrelated assertions fail on a date rather than on a change. The two
-services that deliberately offset from `NOW` are testing expiry itself.
+Tests of expiry deliberately move the service clock beyond this instant.
 """
 
 
 class FakeDraftRepository:
+    """Model ownership, revisions and replay in memory.
+
+    Capacity counts active-status rows until expire_due marks them expired; no database
+    locking or concurrent transaction behavior is modeled.
+    """
+
     def __init__(self) -> None:
         self.drafts: dict[UUID, StoredDraft] = {}
         self.actors: list[int | None] = []

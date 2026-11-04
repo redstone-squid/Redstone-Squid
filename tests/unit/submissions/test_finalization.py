@@ -58,12 +58,7 @@ CLAIM_TOKEN = UUID("00000000-0000-4000-8000-000000000403")
 SCHEMATIC_ID = UUID("00000000-0000-4000-8000-000000000404")
 INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000405")
 NOW = Instant.parse_iso("2026-08-11T16:00:00Z")
-"""The instant every fixture here is pinned to.
-
-The draft service reads its own clock unless given one, so a fixture dated in the past expires
-against the real time of day — these tests passed until seven days after the date above and then
-failed together. `_drafts` hands the service this instant so the suite tests the code rather than
-the calendar."""
+"""Shared fixture and service clock; _drafts injects it to prevent calendar-dependent expiry."""
 
 
 class FakeDraftRepository:
@@ -156,6 +151,11 @@ class FakeSponsors:
 
 
 class FakeFinalizationJobs:
+    """Record orchestration for one draft, with claims and snapshots supplied by each test.
+
+    This fake does not schedule retries, rotate lease tokens, or persist worker completion.
+    """
+
     def __init__(self) -> None:
         self.snapshot: FinalizationJobSnapshot | None = None
         self.enqueued: NormalizedSubmission | None = None
@@ -287,6 +287,7 @@ def _stored(
     category: str = "other",
     answers: dict[str, JSONValue] | None = None,
 ) -> StoredDraft:
+    """Build a draft at NOW; omitted or empty answers use the complete common answer set."""
     return StoredDraft(
         snapshot=DraftSnapshot(
             id=DRAFT_ID,
@@ -698,6 +699,7 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
 
 @pytest.mark.asyncio
 async def test_unexpected_failure_retries_then_dead_letters() -> None:
+    """Report the exception class without private detail; retry scheduling belongs to the repository."""
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload, attempts=3),)

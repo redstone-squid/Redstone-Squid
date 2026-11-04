@@ -88,6 +88,7 @@ class Recovery:
 
 @pytest.fixture
 async def recovery(tmp_path: Path) -> Recovery:
+    """Retain the inputs from an initial model failure, then return one candidate on the next call."""
     repository = RetainedRun()
     artifacts = LocalArtifactStore(tmp_path)
     inference = AsyncMock(spec=BuildInferenceService)

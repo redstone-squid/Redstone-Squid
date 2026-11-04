@@ -1,8 +1,7 @@
-"""Form options served from the suggestion registry.
+"""Suggestion-backed form options must preserve existing catalogue revisions.
 
-Drafts pin a schema revision, and option revisions are content-addressed, so this must produce
-byte-identical revisions to the catalogue it replaces. A revision that moved for no reason would
-look to every client like the option set had changed.
+Revisions identify option content, so changing providers must not make unchanged choices
+appear new to clients with pinned drafts.
 """
 
 from collections.abc import Sequence
@@ -60,10 +59,10 @@ class FakeVersions:
 
 
 class FakeSuggestionRepository:
-    """Serves the same rows the tag service does, in an arbitrary order.
+    """Return matching taxonomy keys and labels in reverse fixture order.
 
-    Deliberately unsorted: the ordering that decides the revision has to come from the provider,
-    not from whatever order the database happened to return.
+    Providers must establish the order used for revision hashing. Numeric IDs are synthetic;
+    authority and build-kind filters are not modeled here.
     """
 
     async def taxonomy(

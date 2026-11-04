@@ -1,3 +1,5 @@
+"""Keep SQLAlchemy enum mappings and declared database check values aligned."""
+
 import re
 from typing import cast
 

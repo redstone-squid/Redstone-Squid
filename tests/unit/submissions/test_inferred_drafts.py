@@ -18,6 +18,8 @@ from squid.submissions.domain import DraftChange, DraftSnapshot, SubmissionOrigi
 
 
 class Drafts:
+    """Keep one draft and apply real snapshot changes, ignoring authorization and identifier lookup."""
+
     current: StoredDraft | None = None
     changes: int = 0
 

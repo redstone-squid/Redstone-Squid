@@ -27,6 +27,8 @@ NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
 
 
 class FakeMediaJobs:
+    """Return supplied jobs without filtering, allowing tests to inject a wrong-draft repository result."""
+
     def __init__(self, jobs: tuple[MediaJobSnapshot, ...] = ()) -> None:
         self.jobs = jobs
         self.requested: list[UUID] = []

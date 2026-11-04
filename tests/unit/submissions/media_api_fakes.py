@@ -97,6 +97,11 @@ class FakeDrafts:
 
 
 class FakeMedia:
+    """Record staged bytes before returning a pending job or raising the configured failure.
+
+    Snapshots are maintained in memory; no decoder or background worker runs.
+    """
+
     def __init__(self, events: list[str], *, failure: BaseException | None = None) -> None:
         self.events = events
         self.limits = MediaLimits(
@@ -180,6 +185,7 @@ class DisabledMediaRuntime:
 
 
 def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
+    """Mount media routes with a fixed caller, bypassing authentication to isolate upload behavior."""
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(router)

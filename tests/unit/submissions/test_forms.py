@@ -1,3 +1,5 @@
+"""Form manifests, partial validation and immutable revisioned draft operations."""
+
 from uuid import UUID
 
 import anyio

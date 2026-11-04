@@ -68,6 +68,8 @@ def _snapshot(*, draft_id: UUID = DRAFT_ID, upload_id: UUID = UPLOAD_ID) -> Medi
 
 @dataclass
 class FakeDrafts:
+    """Record access checks and return the configured draft without evaluating actor permissions."""
+
     draft: StoredDraft
     calls: list[tuple[UUID, int]]
 

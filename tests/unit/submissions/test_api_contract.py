@@ -1,4 +1,4 @@
-"""Isolated tests for the submission HTTP contract, which no client has to draw one way."""
+"""Submission HTTP payloads, dependency arguments, and provider-neutral caller identity."""
 
 import hashlib
 import json
@@ -335,6 +335,7 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
+    """Pin the full historical wire shape; changing a published manifest requires a new revision."""
     payload = FormManifestResponse.from_domain(build_submission_manifest("en", revision=revision)).model_dump(
         mode="json"
     )
@@ -514,8 +515,7 @@ async def test_draft_authentication_requires_current_privacy_consent() -> None:
     with pytest.raises(ConsentRequiredError) as error:
         await authenticated_account(caller)
 
-    # The account alone. Nothing implies Discord just because this caller happens to
-    # have arrived over it: the same error is raised for a CLI device.
+    # Consent failures identify the account without assuming a Discord identity.
     assert error.value.context == {"account_id": 42}
 
 

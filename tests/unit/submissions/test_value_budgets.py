@@ -58,6 +58,7 @@ def test_change_enforces_its_operation_count_in_the_domain() -> None:
 
 
 def test_draft_rejects_cumulative_answer_growth_with_a_stable_domain_error() -> None:
+    """Each operation fits its own budget; their combined answers must still fit the draft budget."""
     snapshot = DraftSnapshot(
         id=uuid4(),
         owner_account_id=1,
