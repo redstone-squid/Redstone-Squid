@@ -68,6 +68,7 @@ async def test_completed_owner_wait_releases_failed_run_locals() -> None:
         @override
         async def run(self, *, task_status: TaskStatus[None]) -> None:
             resource = Resource()
+            # Retaining the failed run's traceback would retain this local after shutdown.
             references.append(weakref.ref(resource))
             raise ValueError("setup failed")
 

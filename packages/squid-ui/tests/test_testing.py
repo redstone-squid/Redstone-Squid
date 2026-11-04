@@ -1,4 +1,4 @@
-"""The shipped test helpers, exercised before anything else depends on them."""
+"""Contracts for tree queries, responder doubles, event factories, and import isolation."""
 
 import subprocess
 
@@ -22,8 +22,7 @@ def _controls(*keys: str) -> ActionControls:
 
 class TestWalk:
     def test_it_reaches_controls_the_layout_child_fields_do_not_name(self) -> None:
-        """`ActionControls.items` is deliberately not a layout child, and every hand-written
-        walker this replaces had to remember to special-case it."""
+        """Inspect controls as well as layout children; structural rewriting deliberately skips ActionControls.items."""
         tree = sl.stack(sl.paragraph("body"), _controls("save", "close"))
 
         assert st.keys(tree) == ["bar", "save", "close"]

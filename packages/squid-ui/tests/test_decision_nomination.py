@@ -13,8 +13,7 @@ from squid_ui.target_types import DiscordTarget, Renderable
 
 
 def test_container_interiors_contribute_their_axes() -> None:
-    # A forgotten descent arm would not crash; the interior axis would just vanish from the
-    # search space. This pins the failure mode the exhaustive walk exists to prevent.
+    # Skipping a container can silently remove its nested table's strategy from the search.
     document = sl.section(
         sl.heading("Report"),
         sl.table(

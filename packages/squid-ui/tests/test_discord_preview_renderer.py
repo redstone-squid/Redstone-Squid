@@ -1,4 +1,4 @@
-"""Regression coverage for the legacy Discord Components V2 HTML preview."""
+"""Structure, escaping, and codec round trips for the Discord Components V2 HTML preview."""
 
 from dataclasses import replace
 from typing import cast

@@ -48,7 +48,7 @@ class TestTracking:
         assert panel.runs["total"] == 2
 
     def test_it_is_never_stale_for_state_no_declaration_would_have_named(self):
-        """The defect this replaces: a body reading more than `depends=` said it did."""
+        """Discover every state read from the body without a separate dependency declaration."""
 
         class Panel(Counter):
             @computed
@@ -144,7 +144,7 @@ class TestWork:
         assert panel.runs["shared"] == 2
 
     def test_a_value_that_settles_unchanged_stops_there(self):
-        """`normalized` reruns because its input moved; `label` does not, because it did not."""
+        """A changed input reruns normalized; its unchanged result lets label keep its cached value."""
 
         class Panel(Counter):
             @computed
@@ -225,7 +225,7 @@ class TestFailure:
         panel = Panel()
         with pytest.raises(RuntimeError, match="no"):
             _ = panel.broken
-        # And again, rather than caching a value nothing verified.
+        # Failed evaluations must be retried rather than cached as successful values.
         with pytest.raises(RuntimeError, match="no"):
             _ = panel.broken
         assert panel.runs["broken"] == 2
@@ -242,7 +242,7 @@ class TestFailure:
 
 class TestReferences:
     def test_a_dropped_reader_is_collected_while_its_source_lives(self):
-        """Why pull rather than a dependent list: components here are per-message."""
+        """A long-lived source must not retain per-message components that read it."""
 
         class Source(Component[DiscordTarget]):
             count: int = state(0)

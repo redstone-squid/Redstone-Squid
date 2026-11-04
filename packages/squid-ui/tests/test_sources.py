@@ -23,6 +23,8 @@ class Entry:
 
 
 class ListSource:
+    """Resolve stable anchors against mutable fixture keys, falling back to offsets when an anchor disappears."""
+
     capabilities = SourceCapabilities(backward=True, offsets=True, jumpable=True, count=CountPrecision.EXACT)
 
     def __init__(self, keys: tuple[str, ...]) -> None:
@@ -90,6 +92,8 @@ async def test_refresh_delegates_anchor_gone_fallback_to_the_source() -> None:
 
 
 class RacingSource:
+    """Hold each fetch behind its own event so the test controls completion order without sleeps."""
+
     capabilities = SourceCapabilities(backward=True)
 
     def __init__(self) -> None:
@@ -171,7 +175,6 @@ async def test_loader_rejects_results_that_contradict_capabilities() -> None:
 
 
 async def test_a_list_source_returns_exact_offset_windows_and_advertises_every_capability() -> None:
-    """An in-memory list is the one source that can honestly claim all four capabilities."""
     source = list_source(("a", "b", "c"))
 
     window = await source.fetch(Position(offset=1), 2)

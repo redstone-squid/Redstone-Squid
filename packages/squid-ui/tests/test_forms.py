@@ -223,6 +223,7 @@ async def test_datetime_field_rejects_nonexistent_local_time_by_default() -> Non
     ("zone", "raw", "expected"),
     [
         ("America/New_York", "2026-03-08 02:30", "2026-03-08T03:30:00-04:00"),
+        # This zone's half-hour gap catches implementations that always add one hour.
         ("Australia/Lord_Howe", "2026-10-04 02:15", "2026-10-04T02:45:00+11:00"),
     ],
 )
@@ -338,11 +339,7 @@ def test_zoned_datetime_field_applies_instant_bounds() -> None:
 
 
 def test_a_prefill_a_control_cannot_be_seeded_with_becomes_no_prefill() -> None:
-    """`format` answers in `PrefillValue`, so an unusable stored value drops out here.
-
-    It used to hand the object straight back and leave every consumer to cope: the Discord
-    modal wraps one result in `str()` and calls `set()` on another.
-    """
+    """Opaque stored values must not leak into adapters as unsupported prefills."""
 
     class Opaque:
         pass
@@ -352,7 +349,6 @@ def test_a_prefill_a_control_cannot_be_seeded_with_becomes_no_prefill() -> None:
 
 
 def test_a_prefill_that_survived_a_json_round_trip_is_kept() -> None:
-    """Which is the case the `object` fallthrough was really there for."""
     assert sl.forms.DateField().format("2026-08-22") == "2026-08-22"
     assert sl.forms.IntField().format(7) == 7
     assert sl.forms.BoolField().format(value=True) is True

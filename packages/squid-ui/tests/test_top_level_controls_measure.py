@@ -1,9 +1,7 @@
-"""Every control the planners convert must survive measurement as a top-level node.
+"""Top-level primitive controls must reach planners through measurement.
 
-`RoutedButton` regressed exactly here: measurement dropped it into the catch-all arm, so
-`Realized` never carried one and the `case RoutedButton()` arms in both planners were
-unreachable. Validation accepted a bare one, so the failure surfaced as
-"must be normalized before measuring" from a caller that had skipped nothing.
+These fixtures are already normalized. A missing measurement branch must not reject
+them as unnormalized input or silently drop them before target conversion.
 """
 
 import pytest
@@ -20,14 +18,12 @@ CONTROLS = (
 
 @pytest.mark.parametrize("control", CONTROLS)
 def test_a_bare_control_measures(control: object) -> None:
-    """A control the dialects know how to convert reaches them instead of raising."""
     solved = measure([control])  # type: ignore[arg-type]
 
     assert solved.children, f"{type(control).__name__} was dropped during measurement"
 
 
 def test_routed_button_is_carried_through_rather_than_replaced() -> None:
-    """Measurement passes the control through, so the planner arm for it is reachable."""
     solved = measure([RoutedButton(label="x", route_id="route")])
 
     assert [type(child).__name__ for child in solved.children] == ["RoutedButton"]

@@ -101,7 +101,7 @@ def test_an_underscored_cell_raises_at_class_creation() -> None:
 
 
 def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) -> None:
-    """`sl.state()` everywhere: what it means is what holds it, which the class already says."""
+    """The same descriptor supports component-local and shared state through its owner type."""
 
     class Namespace(SharedState[Member]):
         value: int = state(0)
@@ -122,7 +122,6 @@ def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) ->
 
 
 def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: Member) -> None:
-    """The whole difference, and it is a property of the owner rather than the declaration."""
 
     class Namespace(SharedState[Member]):
         value: int = state(0)
@@ -147,7 +146,11 @@ def test_a_namespace_refuses_persistence_it_cannot_honour() -> None:
 
 
 def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: LocalTopicBus, here: Member) -> None:
-    """`persist` defaults to True, so only an explicit ask can be refused."""
+    """Plain state() declarations must work for shared state as well as component state.
+
+    SharedState rejects an explicit persist=True, but accepts the descriptor's default
+    so callers can use the same declaration syntax for both owners.
+    """
 
     class Fine(SharedState[Member]):
         value: int = state(0)
@@ -185,7 +188,7 @@ def test_an_equal_write_changes_nothing(bus: LocalTopicBus, here: Member) -> Non
 
 
 class Held:
-    """A collaborator: real, and its `__eq__` is the author's code, not a settle check."""
+    """Fail loudly if opaque state compares values instead of object identity."""
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -244,8 +247,8 @@ async def test_only_the_cells_that_moved_publish(bus: LocalTopicBus, here: Membe
 async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus) -> None:
     """`mutated()` is a write like any other, and a rolled-back one was never published.
 
-    The list itself keeps the appended item -- in place means in place -- but no other mount
-    is told to re-read a namespace on behalf of an action that failed.
+    The list itself keeps the appended item, but subscribers receive no notification
+    from the failed transaction.
     """
 
     class Draft(SharedState):
@@ -270,7 +273,7 @@ async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus
     assert seen == [CellAddress(draft, "body")]
 
 
-# --- ActionControls ----------------------------------------------------------------------------
+# --- Transaction staging -------------------------------------------------------------------
 
 
 async def test_writes_stage_and_publish_together(bus: LocalTopicBus, here: Member) -> None:
@@ -298,10 +301,10 @@ def test_a_staged_write_is_not_visible_to_another_reader(bus: LocalTopicBus, her
 
 
 def elsewhere[ValueT](what: Callable[[], ValueT]) -> ValueT:
-    """Run `what` the way another task would: no transaction of this test's in scope.
+    """Run a synchronous read or write in a fresh context with no ambient transaction.
 
-    A fresh context, not a copy of this one, so every ContextVar the runtime keys off falls
-    back to its default. That is exactly what a second handler on the event loop sees.
+    This simulates an unrelated handler without scheduling a task. A task spawned inside
+    the current transaction would normally inherit its context instead.
     """
     return contextvars.Context().run(what)
 
@@ -464,8 +467,8 @@ async def test_a_namespace_with_no_holder_is_collected(bus: LocalTopicBus, here:
     gone = weakref.ref(workspace)
     unfollow = bus.subscribe(CellAddress(workspace, "selected"), _record([]))
     workspace.selected = 3
-    # Both halves of what keeps a namespace alive: the handle itself, and the unfollow that
-    # closes over its address. A mount holds exactly these two and drops both on finish.
+    # Release both references held by this fixture: the namespace itself and the unsubscribe
+    # callback, which closes over its cell address.
     unfollow()
     del unfollow, workspace
     gc.collect()

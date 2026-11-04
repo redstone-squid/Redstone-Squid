@@ -67,13 +67,10 @@ class Panel(Component[DiscordTarget]):
 
 
 class UnassignedPanel(Component[DiscordTarget]):
-    """A slot that holds no value of its own until an action puts one there.
+    """Leave a defaulted cell unmaterialized until the recorded action first writes it.
 
-    How an absent slot actually arises: `__init__` leaves the field alone, so the cell exists
-    and its declared default is what anyone reads, but nothing has been assigned and the first
-    write's inverse restores absence rather than a value. `_checked_init` makes this the only
-    shape that reaches it -- a field declared `state()` with no default must be assigned during
-    construction, so no component can carry one that is absent.
+    Undo can then restore absence. A declaration without a default would instead have
+    to be assigned during construction and could not exercise this case.
     """
 
     history: History = history()
@@ -295,8 +292,7 @@ async def test_intervening_write_makes_redo_conflict() -> None:
 async def test_absent_slot_keeps_lineage_across_undo_and_reassignment() -> None:
     subject = UnassignedPanel()
     ComponentRuntime(subject)
-    # Not read before the recorded action: reading materializes the default onto the cell,
-    # which is exactly the absence this is about.
+    # Reading the default here would materialize the cell and lose the absent-slot case.
     with transaction():
         subject.history.record("assign")
         subject.value = 7
@@ -595,7 +591,7 @@ async def test_reference_compensation_outbox_retention_is_bounded() -> None:
 
 
 async def test_reference_compensation_outbox_reports_a_forgotten_settled_answer() -> None:
-    """The bound can only be held by forgetting, and forgetting a "yes" repeats an effect."""
+    """Evicting a successful record permits another dispatch, so settled-record loss must be counted."""
     outbox = MemoryCompensationOutbox(limit=2)
 
     def intent_for(index: int) -> CompensationIntent:
@@ -611,8 +607,6 @@ async def test_reference_compensation_outbox_reports_a_forgotten_settled_answer(
         await outbox.claim(intent_for(index), CompensationRetryPolicy())
 
     assert outbox.dropped_records == 1
-    # The record is gone, so the outbox can no longer refuse it -- which is exactly why the
-    # loss is counted rather than absorbed.
     assert (await outbox.claim(settled, CompensationRetryPolicy())).dispatch
 
 

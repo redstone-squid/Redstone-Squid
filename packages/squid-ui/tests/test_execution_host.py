@@ -43,6 +43,7 @@ async def test_drain_rejects_operations_but_accepts_nested_cleanup(kind: str) ->
             await entered.wait()
             tasks.start_soon(close)
             await nested.wait()
+            # Descendant cleanup may extend draining; this unrelated test task may not.
             assert not closed.is_set()
             with pytest.raises(RuntimeError, match="running UIExecutionHost"):
                 host.start_cleanup(cleanup)

@@ -1,8 +1,8 @@
-"""Every portable node plans through every registered target: no crash, no silent drop.
+"""Check minimal portable nodes against the targets listed in _TARGETS.
 
-Static exhaustiveness proves every planner has an arm for every member; this suite is the
-runtime backstop it cannot give — an arm that exists but emits nothing still fails here.
-A future target joins by adding one entry to `_TARGETS`.
+Each supported pair must produce a nonempty body; known gaps must raise the recorded
+error. The vocabulary check requires a fixture for every PortableNode member.
+These examples do not cover every placement or parameter combination.
 """
 
 from collections.abc import Callable
@@ -52,8 +52,8 @@ def _roster() -> semantic.Roster:
     return sl.roster(placement, key="roster", on_join=_selected)
 
 
-# One minimal, everywhere-plannable instance per portable member, built through the public
-# factories. The drift test below keeps this table exactly aligned with `PortableNode`.
+# One minimal instance per portable member, built through the public factories. Known
+# target gaps are listed in _REFUSALS; the drift test keeps this table aligned with PortableNode.
 _MINIMAL: dict[type, Callable[[], semantic.AnyLayoutNode]] = {
     semantic.Group: lambda: sl.group(sl.paragraph("grouped")),
     semantic.Stack: lambda: sl.stack(sl.paragraph("stacked")),
@@ -133,14 +133,10 @@ _TARGETS: dict[str, Callable[[], Any]] = {
     "slack-home": lambda: sl.slack.home_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
 }
 
-# A pair a target refuses documents its refusal here, message and all; a pair with no
-# entry must plan, so fixing a gap forces its entry's removal. Every entry below is a
-# genuine classic-dialect gap this suite surfaced, in any placement, not only at the root
-# -- none is a designed refusal:
-# - timestamps: classic could render `<t:...>` markup, but MeasuredTime cannot pass the
-#   card-description textifier;
-# - budget/break wrappers: the classic converter cannot unwrap them even around plain text;
-# - media: the "classic media strategy" the refusal points at is never nominated.
+# Record known gaps as expected errors rather than skipping their fixtures. Fixing a gap
+# makes its raises assertion fail, prompting removal of that exception. Classic currently
+# rejects measured timestamps, these wrappers around text, and the media fixture because
+# their required conversion or strategy is missing.
 _REFUSALS: dict[tuple[type, str], str] = {
     (semantic.Timestamp, "discord-classic"): "MeasuredTime cannot appear in a card description",
     (semantic.ZonedTimestamp, "discord-classic"): "MeasuredZonedTime cannot appear in a card description",

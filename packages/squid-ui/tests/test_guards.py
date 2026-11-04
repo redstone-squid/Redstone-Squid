@@ -19,11 +19,7 @@ def _ledger(clock: testing.ManualClock, action: str = "press") -> GuardLedger:
 
 
 async def _decision(guard: guards.Guard, event: sl.PressEvent, ledger: GuardLedger) -> GuardDecision:
-    """The answer from a guard that never asks a question -- which is every one below.
-
-    `Guard.admit` may also return a `Challenge`; narrowing here keeps each assertion about
-    the verdict rather than about the union.
-    """
+    """Require a yes/no verdict from these fixtures; a challenge would need a frontend response."""
     decision = await guard.admit(event, ledger)
     assert isinstance(decision, GuardDecision), "this guard answers yes or no, never a question"
     return decision

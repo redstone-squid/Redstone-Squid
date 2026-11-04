@@ -1,4 +1,4 @@
-"""What a transaction actually covers, and what it says about what it does not."""
+"""Transaction staging, rollback, write restrictions, participant ordering, and commit hooks."""
 
 import asyncio
 import logging
@@ -15,7 +15,7 @@ from squid_ui.runtime import ComponentRuntime, ReactiveWriteError, UndeclaredSta
 
 
 class Uncopyable:
-    """Stands in for a service, guild, or session: real, useful, and not deep-copyable."""
+    """Represent an opaque collaborator that fails if transactional state tries to deep-copy it."""
 
     def __deepcopy__(self, memo: dict[int, object]) -> Uncopyable:
         message = "a reference-copied field was deep-copied"
@@ -38,7 +38,7 @@ class Panel(Component[DiscordTarget]):
 
 
 def attached[ComponentT: Component[Any, Any]](component: ComponentT) -> ComponentT:
-    """Give a component a runtime, which is what makes its writes state changes."""
+    """Attach a runtime so tests can observe invalidation and mounted component behavior."""
     ComponentRuntime(component)
     return component
 
@@ -56,7 +56,7 @@ class TestUndeclaredWrites:
             panel.undeclared = "after"
 
     def test_the_attribute_is_left_unwritten(self):
-        """Raising before the write lands is the point: a landed write is never rolled back."""
+        """Reject undeclared writes before assignment because they are outside the rollback overlay."""
         panel = attached(Panel(Uncopyable()))
         with pytest.raises(UndeclaredStateError), transaction():
             panel.undeclared = "after"
@@ -113,7 +113,7 @@ class TestOpaqueState:
         assert panel.service is original
 
     def test_it_holds_a_value_the_immutability_check_would_refuse(self):
-        """The escape hatch is the whole point: a collaborator is not a snapshot."""
+        """Opaque state may hold mutable collaborators whose contents are not transactional snapshots."""
         panel = attached(Panel(Uncopyable()))
         assert type(panel.handles) is list
 
@@ -137,8 +137,7 @@ class TestStaging:
         assert panel.declared == 7
 
     def test_another_task_does_not(self):
-        """The reason writes stage rather than write through: a shared read crossing an
-        `await` must not see an action that has not committed."""
+        """Coordinate the reader between staging and commit to check that uncommitted state stays private."""
         panel = attached(Panel(Uncopyable()))
         seen: dict[str, int] = {}
 
@@ -376,12 +375,7 @@ class TestMutatedInPlace:
 
 class TestAbstractBases:
     def test_a_component_without_a_render_cannot_be_mounted(self):
-        """`render` is abstract, so "did not describe a message" is caught at construction.
-
-        This used to be a proxy check on `cls.render is not Component.render`, which decided
-        whether the required-state check applied. It failed open: a class that merely had no
-        render -- not abstract, just unfinished -- skipped the check entirely.
-        """
+        """An abstract render method prevents constructing unfinished components before state validation."""
         with pytest.raises(TypeError, match="abstract"):
             Component()  # type: ignore[abstract]
 
@@ -454,7 +448,7 @@ class TestAbstractBases:
 
 
 class TestActionCommitHooks:
-    """The seam an undo entry's state capture comes from (see `sl.history`)."""
+    """Committed patches provide the before/after state used by runtime.History."""
 
     def test_the_delta_carries_both_directions(self):
         panel = attached(Panel(Uncopyable()))
@@ -575,7 +569,7 @@ class Recorder:
 
 
 class TestActionParticipants:
-    """The seam a subsystem with its own writes commits through (see plan 40)."""
+    """Participants join their own staged work to the reactive transaction protocol."""
 
     def test_there_is_nothing_to_join_outside_an_action(self):
         """The caller's signal that its write has nothing to wait for."""
@@ -604,8 +598,6 @@ class TestActionParticipants:
             "b.finalize",
         ]
         assert first is not None and second is not None
-        # Held across the whole prepare pass and handed back to its own author, so a
-        # participant never has to find its prepared work on itself.
         assert (first.applied, second.applied) == ("a.prepared", "b.prepared")
 
     def test_a_participant_that_stages_nothing_still_applies(self):
@@ -704,10 +696,10 @@ class TestActionParticipants:
 
 
 class TestCommitFailures:
-    """A commit is two halves, and only the first one can be taken back."""
+    """Commit hooks run after publication; their failures cannot undo published state."""
 
     def test_a_raising_hook_leaves_the_action_committed_and_reported(self):
-        """The recorder is what failed, not the action; silently un-rendering it is worse."""
+        """A failed commit observer must not roll back state or suppress invalidation."""
         panel = watched()
 
         def explode(commit: ActionCommit, continuation) -> None:
@@ -721,7 +713,7 @@ class TestCommitFailures:
         assert panel.notified == [frozenset({"__state_declared"})]
 
     def test_hooks_run_after_the_action_is_visible(self):
-        """A recorder's effect outlives the transaction, so nothing may fail after it."""
+        """Hooks run after participant finalization, when published state is already visible."""
         log: list[str] = []
         panel = watched()
         with transaction():
@@ -735,11 +727,10 @@ class TestPrePublicationRollback:
     """What a failed action puts back, and what it must leave alone."""
 
     def test_a_failed_action_does_not_clobber_a_write_it_never_saw(self):
-        """Rollback restores the overlay, and before publication the overlay never left.
+        """Bypass the overlay to simulate another writer publishing while this action is staged.
 
-        Component state cannot show this -- one owner writes it -- but a shared cell can, and
-        restoring `before` over a value another action committed meanwhile would revert a
-        write this action never observed.
+        Rollback must discard this action's overlay without restoring its stale before-value
+        over the independent write.
         """
         component = attached(Panel(Uncopyable()))
         with pytest.raises(RuntimeError, match="abort"), transaction():
@@ -750,7 +741,7 @@ class TestPrePublicationRollback:
         assert component.declared == 99
 
     def test_a_failed_action_still_restores_what_it_published(self):
-        """A participant rejecting after publication is the one path that writes cells back."""
+        """A prepare failure discards staged cell writes before publication."""
 
         class Rejects:
             def prepare(self, view) -> None:

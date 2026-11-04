@@ -1,8 +1,8 @@
-"""Pins the `state()` and `state()` overloads under `just typecheck`; nothing here runs.
+"""Static checks for state overloads, shared scopes, resource results, and context values.
 
-A `dict`, `list` or `set` default or factory must declare the read-only ABC, which is what
-makes a concrete annotation and every mutating method a type error at the use sites. A
-namespace's scope is typed by its parameter, and unparameterised means `SharedState[None]`.
+Mutable container inputs expose read-only ABC types to callers. SharedState's type
+parameter determines its scope type; omitting it means SharedState[None]. This file
+is checked by the project type checker and is not a pytest runtime test.
 """
 
 from collections.abc import Mapping, Sequence

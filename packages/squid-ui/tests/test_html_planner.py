@@ -1,4 +1,4 @@
-"""Native semantic planning for the first-class HTML target."""
+"""Semantic structure, form adaptation, explicit budgets, and caching for HTML planning."""
 
 from datetime import UTC, date, datetime, time
 from typing import Any, cast, override
@@ -192,8 +192,7 @@ class _PortableExtension(ExtensionField[str]):
 
     @override
     def parse(self, raw: object) -> str | None:
-        # Never reached in this test: the target lacks the capability, so the portable
-        # fallback stands in and it is the fallback's parse that runs.
+        # Planning substitutes the fallback field; this test does not submit or parse input.
         return None if raw is None else str(raw)
 
 
@@ -337,9 +336,8 @@ def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> No
 
 
 def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
-    # The engine's own stale memory -- a remembered key whose entry or destination no
-    # longer exists -- must not survive into the scene; only an author's controlled value
-    # may be wrong. Discord already validated these reads; HTML now shares them.
+    # These uncontrolled selections are remembered in presentation state. Removed destinations
+    # must not remain selected in the scene; navigation falls back to an available destination.
     session = PresentationState()
     session.selections["entries"] = SelectionState(("gone",))
     session.selections["nav"] = SelectionState(("gone",))
@@ -361,9 +359,8 @@ def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
 
 
 def test_html_paging_honors_min_fill() -> None:
-    # Four 4-character pages under a 12-character budget balance to 8/8; a 9-character
-    # fill floor forbids the 8-character first page, forcing 12/4. Before HTML adopted
-    # balanced_breaks, min_fill was silently ignored here.
+    # Four 4-character paragraphs balance to 8/8 under a 12-character page budget.
+    # A 9-character minimum forbids that first page and forces 12/4; the last page is exempt.
     def build(min_fill: int) -> sl.semantic.Paged:
         return sl.semantic.Paged(
             sl.stack(sl.paragraph("aaaa"), sl.paragraph("bbbb"), sl.paragraph("cccc"), sl.paragraph("dddd")),

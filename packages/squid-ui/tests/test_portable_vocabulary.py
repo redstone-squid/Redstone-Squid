@@ -9,7 +9,7 @@ from squid_ui.text import Message
 
 def test_portable_nodes_are_portable():
     assert is_portable_node(sl.paragraph("leaf"))
-    # A container: guards the get_origin branch that once dropped every generic node.
+    # Generic containers require resolving their runtime origin for membership checks.
     assert is_portable_node(sl.stack(sl.paragraph("child")))
     assert is_portable_node(sl.truncate(sl.paragraph("adaptation")))
     assert is_portable_node(sl.fallback(sl.paragraph("primary"), sl.paragraph("alternate")))
@@ -23,10 +23,9 @@ def test_primitives_are_layout_nodes_but_not_portable():
 
 
 def test_a_caller_s_own_renderable_is_a_layout_node_but_not_a_builtin_one():
-    """The open arm of `LayoutNode`, which is the whole point of the escape hatch.
+    """Authoring accepts custom Renderable subclasses without making them built-in vocabulary.
 
-    A frontend may ship a node this package has never heard of. The authoring surface has
-    to accept it; the Discord lowering has to be able to say it cannot draw it.
+    A target must still explicitly support the node before it can plan it.
     """
 
     class Custom(Renderable[RenderTarget]):

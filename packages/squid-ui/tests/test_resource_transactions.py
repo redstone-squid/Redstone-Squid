@@ -1,8 +1,7 @@
-"""A resource's replaced value belongs to the action that replaced it.
+"""Resource replacements participate in the action's staged writes.
 
-`Resource.replace` is the application saying "this is the value now". That makes it a write,
-and every other write in the package stages in the transaction's overlay: readable by the
-action that made it, invisible to everyone else until commit, and gone if the action fails.
+The action reads its replacement immediately; other contexts see the committed value.
+Rollback drops the replacement, and commit updates its dependency baseline.
 """
 
 from typing import override
@@ -64,7 +63,7 @@ async def test_a_replacement_is_invisible_until_the_action_commits() -> None:
 
 
 def _outside(panel: Panel) -> str:
-    """Read the resource as a task with no transaction of its own would."""
+    """Read in a copied context with only the transaction cleared, simulating an unrelated reader."""
     import contextvars
 
     from squid_reactivity.internals import CURRENT_TRANSACTION
@@ -150,12 +149,10 @@ async def test_a_replacement_settles_sources_before_the_commit_becomes_irreversi
 
 
 async def test_a_replacement_survives_the_action_that_wrote_its_sources() -> None:
-    """Replacing and moving an input in one action is one decision, not a race.
+    """Baseline the replacement against source versions produced by the same commit.
 
-    The replacement is re-baselined against the sources as the action leaves them, so the
-    value the application called authoritative is still there afterwards. Baselining against
-    the committed versions instead re-pends the resource the moment anything reads it, and
-    the loader silently overwrites what the author just installed.
+    Using the old versions would mark the authoritative replacement pending immediately,
+    allowing a later reload to overwrite it.
     """
 
     class Sourced(sl.Component):

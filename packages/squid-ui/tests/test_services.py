@@ -25,6 +25,7 @@ from squid_ui.runtime import (
 
 @asynccontextmanager
 async def running_host() -> AsyncIterator[UIExecutionHost]:
+    """Run and drain a real execution host under a timeout so lifecycle deadlocks fail the test."""
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
             host = UIExecutionHost()
@@ -41,6 +42,12 @@ def owner() -> ServiceOwner:
 
 
 class Recorder(ManagedService):
+    """Record worker cancellation, asynchronous cleanup, and subscription release in order.
+
+    Setup and cleanup are overridable so individual tests can block or fail at precise
+    lifecycle boundaries.
+    """
+
     def __init__(self) -> None:
         self.events: list[str] = []
         self.task_groups: list[TaskGroup] = []
@@ -59,6 +66,7 @@ class Recorder(ManagedService):
                     task_status.started()
                     await anyio.sleep_forever()
             finally:
+                # Cleanup must cross an await even after the service's scope was cancelled.
                 with anyio.CancelScope(shield=True):
                     await self.cleanup()
 
@@ -858,7 +866,7 @@ async def test_resource_entry_failure_unwinds_without_starting_activity() -> Non
             async def client(self) -> AsyncIterator[None]:
                 try:
                     raise ValueError("resource entry failed")
-                    yield
+                    yield  # Keep this an async generator even though entry always fails.
                 finally:
                     with anyio.CancelScope(shield=True):
                         await anyio.sleep(0)

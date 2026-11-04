@@ -9,10 +9,8 @@ import pytest
 import squid_ui as sl
 from squid_ui import testing
 
-# ~115 names: the authoring vocabulary. See docs/plans/squid-ui-redesign/58-public-api-narrowing.md
-# for the promotion rule and the grouped rationale (namespaces, component model, document,
-# semantic factories, factory type aliases, adaptation verbs, text, node union, event types,
-# central nouns) this list encodes.
+# Public namespace policy: docs/plans/completed/squid-layouts-redesign/58-public-api-narrowing.md.
+# Importing these modules must not replace a public factory with a module object.
 
 ROOT_NAMESPACES = (
     "chrome",
@@ -75,11 +73,7 @@ def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> N
 
 
 def test_engine_imports_without_transport_or_store_dependencies() -> None:
-    """The point of the split, asserted: the engine installs none of these.
-
-    `squid_storage` joins `discord` and `anyio` on the blocked list because it was a mandatory
-    dependency of this package while only the Discord durability modules imported it.
-    """
+    """Core imports must work without optional execution, frontend, widget, or storage packages."""
     testing.assert_imports_without(
         [
             "squid_ui",

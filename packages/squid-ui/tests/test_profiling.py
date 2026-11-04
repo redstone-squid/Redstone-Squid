@@ -1,4 +1,4 @@
-"""Bounded runtime trace tests for the in-process profiler."""
+"""Runtime span parentage, retention bounds, aggregates, and failure isolation."""
 
 import asyncio
 import json
@@ -255,6 +255,7 @@ def test_escaping_exception_overrides_an_explicit_span_outcome() -> None:
     clock = _clock()
     subject = profiler(clock)
 
+    # The span sees the exception first; pytest catches it before the operation exits.
     with (
         subject.operation(OperationKind.DISPATCH, name="caught") as operation,
         pytest.raises(ValueError),

@@ -1,9 +1,7 @@
-"""The invariant every resolved-value access downstream rests on.
+"""Lowering resolves deferred text before measurement and target conversion.
 
-`lower_semantics` resolves each text field against the localization, which is why the dialects
-and the measurement pipeline may call `len()` and `.strip()` on what reaches them. If a node
-type is ever added that carries text through lowering untouched, an unresolved `Message` would
-reach those readers and raise there instead of here.
+The fixture covers text-bearing primitive fields and nested records. Leaving a Message
+unresolved would send it to downstream readers that expect resolved text.
 """
 
 from typing import Any, cast
@@ -126,8 +124,7 @@ def test_unknown_renderables_are_rejected_with_their_path() -> None:
     class Unregistered(Renderable[DiscordTarget]):
         pass
 
-    # An unhandled node used to be cast into the primitive stream and drift downstream
-    # unresolved; now lowering refuses it by name, at its position.
+    # Reject unknown nodes at their authored path before they enter the primitive stream.
     with pytest.raises(LayoutInvariantError, match=r"\$\.0: Unregistered is neither"):
         lower_semantics(
             [cast(Any, Unregistered())],

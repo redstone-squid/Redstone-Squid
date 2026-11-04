@@ -17,7 +17,7 @@ class Filters:
 
 
 class Service:
-    """A collaborator a component holds and never mutates."""
+    """Opaque collaborator used to distinguish identity tracking from ordinary value comparison."""
 
 
 def cell_of(component: Component[Any, Any], name: str) -> Cell:
@@ -43,7 +43,7 @@ class Panel(Component[DiscordTarget]):
 
 class TestReplacement:
     def test_a_builtin_container_is_stored_as_assigned(self):
-        """Nothing freezes at the boundary: the type checker holds the line, not the runtime."""
+        """Read-only annotations guide callers; assigning a container does not copy or freeze it."""
         panel = Panel(Service())
         rows = ["a"]
         panel.rows = rows
