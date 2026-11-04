@@ -1,10 +1,7 @@
-"""Database-derived health metrics for durable work queues.
+"""Database health metrics for the queues registered below.
 
-The union below is generated from the same `QueueSpec` constants the claim path
-uses, so the readiness predicate is one Python expression rather than eight
-hand-written copies. The copies were the defect: the raw SQL in this module wrote
-`dead_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - ...)` seven times,
-and nothing made them agree with the adapters or with each other.
+Each query uses its queue's claim specification so readiness counts include the
+same retry delays, visibility timeouts, and terminal states as claiming work.
 """
 
 from dataclasses import dataclass
@@ -34,7 +31,7 @@ QUEUE_SPECS: tuple[QueueSpec[Any], ...] = (
     SEARCH_EMBEDDING_QUEUE_SPEC,
     SEARCH_PROJECTION_QUEUE_SPEC,
 )
-"""Every durable work queue in the application, in label order."""
+"""Queues sampled by this monitor through the shared claim protocol."""
 
 
 def _queue_health_select(spec: QueueSpec[Any]) -> Select[str, int, int, int, int]:
@@ -78,12 +75,17 @@ def _queue_health_select(spec: QueueSpec[Any]) -> Select[str, int, int, int, int
 
 
 QUEUE_HEALTH_STATEMENT = union_all(*(_queue_health_select(spec) for spec in QUEUE_SPECS))
-"""One read-only round trip covering every queue."""
+"""One read-only query covering the registered queue specifications."""
 
 
 @dataclass(frozen=True, slots=True)
 class QueueHealthSnapshot:
-    """Low-cardinality operational state for one durable queue."""
+    """Counts and waiting age for one queue label.
+
+    `oldest_ready_age` is seconds since the earliest ready row's `available_at`,
+    or zero when no row is ready. It measures availability age, not total time
+    since enqueueing.
+    """
 
     queue: str
     ready: int
@@ -93,7 +95,7 @@ class QueueHealthSnapshot:
 
 
 class PostgresQueueHealthMonitor:
-    """Sample all durable queues in one read-only database round trip."""
+    """Sample registered queues in one read-only database round trip."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
@@ -114,7 +116,7 @@ class PostgresQueueHealthMonitor:
 
 
 def emit_queue_health(snapshot: QueueHealthSnapshot) -> None:
-    """Export one queue snapshot through OpenTelemetry gauges any collector can read."""
+    """Export the snapshot as OpenTelemetry gauges labeled by queue."""
     attributes = {"squid.queue.name": snapshot.queue}
     record_gauge("squid.queue.ready", snapshot.ready, attributes=attributes)
     record_gauge("squid.queue.in_flight", snapshot.in_flight, attributes=attributes)

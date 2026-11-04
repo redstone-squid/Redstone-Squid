@@ -13,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class SchematicPreviewWorker:
-    """Render and publish generated previews from durable build intents."""
+    """Process queued requests to update a build's generated preview.
+
+    SchematicPreviewService selects the current featured attachment and prepares fresh or cached
+    output. This worker stores any new PNG, then asks the service to publish its URL on the build.
+    A request can also finish without an image when preparation reports a skip or the attachment
+    changes before publication.
+    """
 
     def __init__(
         self,
@@ -50,11 +56,11 @@ class SchematicPreviewWorker:
             await self._jobs.complete(job)
 
     async def _publish_preview(self, build_id: int) -> None:
-        """Carry out whatever the service decided, letting only retryable failures escape.
+        """Apply the preparation decision, acknowledging skips without an upload.
 
-        A `SkippedRender` is a permanent verdict for this build's recipe, so returning
-        normally lets `process_batch` acknowledge the job instead of burning its attempts on
-        a build that will never render.
+        A skipped recipe returns normally. Preparation, storage, publication, and
+        topic errors propagate to the batch's retry policy. A stale render may be
+        declined by the publication service and still complete the job normally.
         """
         match await self._schematics.prepare_render(build_id):
             case SkippedRender(reason=reason):
@@ -73,7 +79,12 @@ class SchematicPreviewWorker:
             self._topics.publish(resource_topic("build", str(build_id)))
 
     async def _upload_and_publish(self, render: FreshRender) -> None:
-        """Upload a fresh preview and publish the URL it is now reachable at."""
+        """Reserve storage, upload if needed, then offer the preview for publication.
+
+        Uploaded bytes must match the reservation and returned storage metadata.
+        The publication service checks whether the render still belongs to the
+        build's current primary schematic.
+        """
         if self._public_base_url is None:
             msg = "Schematic rendering requires a public API base URL."
             raise RuntimeError(msg)
@@ -92,5 +103,5 @@ class SchematicPreviewWorker:
         await self._schematics.publish_fresh_preview(render, url, object_key)
 
     async def cleanup(self, *, retention_hours: int = 24, limit: int = 50) -> int:
-        """Run one bounded reference-safe generated-preview cleanup batch."""
+        """Delete up to limit old preview objects that no stored render still references."""
         return await self._schematics.cleanup_preview_objects(retention_hours=retention_hours, limit=limit)

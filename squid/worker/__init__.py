@@ -1,1 +1,1 @@
-"""Background worker process: it serves no request and accepts no connection."""
+"""Background jobs and the worker process, including its HTTP health endpoint."""

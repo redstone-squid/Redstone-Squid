@@ -1,4 +1,4 @@
-"""Domain-event handlers owned by the worker process, which serves no request."""
+"""Worker handlers and delivery retries for the core domain-event consumer."""
 
 import logging
 from typing import Protocol
@@ -33,7 +33,7 @@ class BuildStatusWriter(Protocol):
 
 
 class CoreEventHandler(Protocol):
-    """Handle one domain event idempotently, whatever produced it."""
+    """Handle an event idempotently, including retries after another handler fails."""
 
     async def handle(self, event: DomainEvent) -> None: ...
 
@@ -69,14 +69,19 @@ class MaterializeNotificationHandler:
 
 
 class CoreDomainEventRunner:
-    """Drain and acknowledge the core consumer's durable deliveries."""
+    """Run handlers sequentially and acknowledge each delivery after all succeed.
+
+    Events with no registered handler are acknowledged. Unsupported schema versions
+    are rejected; other handler failures use the queue's retry policy. A retry runs
+    all handlers again, so each must tolerate previously completed side effects.
+    """
 
     def __init__(self, events: DomainEventService, handlers: dict[str, tuple[CoreEventHandler, ...]]) -> None:
         self._events = events
         self._handlers = handlers
 
     async def process_batch(self) -> None:
-        """Process one bounded batch, isolating failure to each delivery."""
+        """Process a bounded batch; queue-operation errors propagate and stop the batch."""
         for delivery in await self._events.claim(CORE_CONSUMER):
             await self._process(delivery)
 

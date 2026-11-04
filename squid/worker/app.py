@@ -1,4 +1,4 @@
-"""Database maintenance worker and process entry point."""
+"""Background queue processing, maintenance, and the worker process entry point."""
 
 import asyncio
 import contextlib
@@ -42,7 +42,12 @@ class WorkerJobSpec:
 
 
 class DatabaseWorker:
-    """Own periodic database-only application work."""
+    """Run the application's background queues and periodic maintenance.
+
+    Job specifications pair each batch processor or maintenance task with its interval. start
+    registers them with BackgroundTaskSupervisor, whose task group stays open through running.
+    The health endpoint uses successful runs of critical jobs to decide whether this worker is ready.
+    """
 
     def __init__(
         self,
@@ -85,7 +90,7 @@ class DatabaseWorker:
             yield
 
     def start(self) -> None:
-        """Start all jobs after the runtime has been constructed successfully."""
+        """Register jobs once, inside `running()`, after runtime construction succeeds."""
         for spec in self._job_specs:
             self._supervisor.start_periodic(
                 spec.run,
@@ -114,7 +119,11 @@ class DatabaseWorker:
         await self._supervisor.close()
 
     def is_ready(self) -> bool:
-        """Return whether every critical job has completed at least once."""
+        """Return whether every critical job has succeeded recently.
+
+        Critical jobs share an allowed age of three times the longest critical interval.
+        A critical job that has never succeeded keeps the worker unready.
+        """
         critical = tuple(spec for spec in self._job_specs if spec.critical)
         required = {spec.name for spec in critical}
         longest_interval = max(spec.interval_seconds for spec in critical)
@@ -223,6 +232,7 @@ class DatabaseWorker:
         return tuple(jobs)
 
     async def _process_events(self) -> None:
+        # Polling and database wake hints share this path; only one batch runs at a time.
         async with self._event_lock:
             with trace_span("squid.worker.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
                 await self._events.process_batch()
@@ -378,7 +388,7 @@ async def _run_worker(config: WorkerProcessConfig, *, stop_event: asyncio.Event 
             return worker.is_ready()
 
         # The supervisor's task group must be entered and exited by the same
-        # task, so it is held here rather than inside DatabaseWorker.
+        # task, so this context spans startup, signal waiting, and shutdown.
         async with worker.running():
             worker.start()
             if topic_bridge is not None:

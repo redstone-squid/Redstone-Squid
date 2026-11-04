@@ -1,4 +1,4 @@
-"""Worker event tests: the worker serves no request and knows no chat client."""
+"""Core event acknowledgement, retry, and polling behavior without a chat client."""
 
 from typing import cast, override
 
