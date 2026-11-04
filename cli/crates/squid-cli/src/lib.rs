@@ -1,4 +1,8 @@
 //! Command parsing and dispatch for the `squid` executable.
+//!
+//! Connected commands use the active profile and encrypted device session. This layer
+//! owns retries, interactive workflows, and conversion of failures to CLI exit codes.
+//! Clap derive doc comments below also supply command and argument help.
 
 use std::collections::BTreeMap;
 use std::env;
@@ -359,7 +363,11 @@ impl CommandFailure {
     }
 }
 
-/// Parse process arguments, run one command, and return its stable exit status.
+/// Parse arguments, run one command, and map runtime failures to stable exit codes.
+///
+/// Clap handles help and parse errors before dispatch. A broken pipe while writing command
+/// output counts as success. Runtime failures use stderr in human mode and stdout in JSON mode;
+/// failure-reporting errors do not replace the original exit status.
 #[must_use]
 pub fn main_entry() -> ExitCode {
     let cli = Cli::parse();
@@ -455,6 +463,11 @@ fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError
     }
 }
 
+/// An active profile's enrolled device, saved session, and HTTP client for connected commands.
+///
+/// Commands use `request` so a rejected session can be renewed with the device's signing key.
+/// Renewal updates both in-memory state and the encrypted state file; first-time browser
+/// enrollment belongs to `run_auth`.
 struct ConnectedSession {
     profile: Profile,
     backend: CredentialBackend,
@@ -466,6 +479,7 @@ struct ConnectedSession {
 }
 
 impl ConnectedSession {
+    /// Load an existing enrollment, renewing immediately only when no bearer is stored.
     fn open(locale: Locale, store: &ProfileStore) -> Result<Self, RunError> {
         let config = store.load().map_err(|error| profile_failure(error, None))?;
         let (_profile_name, profile) = config
@@ -509,6 +523,11 @@ impl ConnectedSession {
         Ok(session)
     }
 
+    /// Run an operation with one network retry per bearer and at most one renewal after a 401.
+    ///
+    /// The operation may run again after the server accepted a request whose response was lost.
+    /// Mutating callers must capture stable idempotency keys and payloads outside the closure.
+    /// Renewal resets the network-retry allowance; other HTTP failures return immediately.
     fn request<T>(
         &mut self,
         mut operation: impl FnMut(&ApiClient, &SecretBytes) -> Result<T, TransportError>,
@@ -852,6 +871,7 @@ fn run_media(
     Ok(())
 }
 
+/// Infer a media type from the extension or normalize an explicit type; do not inspect file bytes.
 fn resolve_media_content_type(
     kind: MediaKind,
     path: &std::path::Path,
@@ -890,6 +910,10 @@ fn resolve_media_content_type(
     Ok(content_type)
 }
 
+/// Poll until processing reaches a terminal state, including failure.
+///
+/// The local deadline is checked between iterations and does not interrupt an in-flight request.
+/// Timing out leaves server processing running and returns IDs for a later status check.
 fn wait_for_media(
     session: &mut ConnectedSession,
     draft_id: Uuid,
@@ -1047,6 +1071,10 @@ fn confirm_media_discard(locale: Locale, upload_id: Uuid) -> Result<bool, RunErr
     Ok(response.trim().eq_ignore_ascii_case(&upload_id))
 }
 
+/// Create a retained draft, collect its answers, then request finalization into a build.
+///
+/// Command failures during editing include the draft ID so the user can resume saved answers.
+/// Raw I/O errors cannot carry that extra field; see `attach_preserved_draft`.
 #[allow(clippy::too_many_arguments)]
 fn run_guided_submission(
     category: &str,
@@ -1067,6 +1095,7 @@ fn run_guided_submission(
     Ok(())
 }
 
+/// Validate the current form and renderer before creating a draft pinned to that form revision.
 fn create_connected_draft(
     session: &mut ConnectedSession,
     category: &str,
@@ -1093,6 +1122,10 @@ fn create_connected_draft(
     Ok((response.data, response.request_id))
 }
 
+/// Fetch the latest revision, then submit one explicit field operation against it.
+///
+/// The request body and its operation/idempotency IDs stay fixed across transport retries.
+/// A revision conflict is returned to the caller; it is not automatically rebased.
 fn change_draft_field(
     session: &mut ConnectedSession,
     draft_id: Uuid,
@@ -1126,6 +1159,12 @@ fn change_draft_field(
     Ok((response.data.draft, response.request_id))
 }
 
+/// Load the draft's pinned form and collect its missing answers in field order.
+///
+/// Existing answers and fields with server defaults are left alone. For each visible field,
+/// resolve any dynamic choices, collect an answer with the configured renderer, and save it
+/// immediately. That answer may change later fields' visibility or capability requirements.
+/// Cancellation or a later error leaves answers already saved in the retained draft.
 fn edit_draft_interactively(
     session: &mut ConnectedSession,
     draft_id: Uuid,
@@ -1281,6 +1320,8 @@ fn validate_option_set(
     Ok(())
 }
 
+/// Start finalization with one idempotency key per command, optionally waiting for a result.
+/// Needs-attention and dead results are terminal too; callers must inspect the returned status.
 fn submit_connected_draft(
     session: &mut ConnectedSession,
     draft_id: Uuid,
@@ -1299,6 +1340,8 @@ fn submit_connected_draft(
     }
 }
 
+/// Poll durable finalization without cancelling server work on local timeout.
+/// The deadline is checked between iterations; request time and retries can extend the wait.
 fn wait_for_finalization(
     session: &mut ConnectedSession,
     draft_id: Uuid,
@@ -1351,6 +1394,7 @@ fn finalization_is_terminal(finalization: &SubmissionFinalization) -> bool {
     )
 }
 
+/// Add the retained draft ID to command failures; raw I/O errors have no fields to amend.
 fn attach_preserved_draft(error: RunError, draft_id: Uuid) -> RunError {
     match error {
         RunError::Command(mut failure) => {
@@ -1992,6 +2036,8 @@ fn run_auth(
     }
 }
 
+/// Sign a fresh server challenge to renew an enrolled device's session without browser approval.
+/// Each challenge or exchange request retains its idempotency key across network retries.
 fn renew_cli_session(
     api: &CliAuthApi<'_>,
     identity: &DeviceIdentity,
@@ -2007,6 +2053,8 @@ fn renew_cli_session(
     .data)
 }
 
+/// Show browser approval instructions and poll until approved, rejected, or locally timed out.
+/// JSON mode sends instructions to stderr so stdout remains available for the final envelope.
 #[allow(clippy::too_many_arguments)]
 fn enroll_cli_device(
     api: &CliAuthApi<'_>,
@@ -2048,6 +2096,7 @@ fn enroll_cli_device(
     let started = Instant::now();
     let polling_interval = Duration::from_secs(enrollment.polling_interval_seconds.clamp(1, 30));
     loop {
+        // A new poll has a new key; a network retry of that poll must reuse it.
         let idempotency_key = Uuid::new_v4();
         match retry_cli_network_once(|| {
             api.exchange_enrollment(identity, &enrollment, idempotency_key)
@@ -2071,6 +2120,8 @@ fn enroll_cli_device(
     }
 }
 
+/// Retry one transport request failure immediately, without retrying HTTP error responses.
+/// The caller must keep any mutation idempotency key unchanged across both attempts.
 fn retry_cli_network_once<T>(
     mut operation: impl FnMut() -> Result<T, CliAuthError>,
 ) -> Result<T, CliAuthError> {
@@ -2080,6 +2131,7 @@ fn retry_cli_network_once<T>(
     }
 }
 
+/// A view of local auth metadata, not a server check of session validity or expiry.
 #[derive(Debug, Serialize)]
 struct AuthStatusView {
     profile: String,
@@ -2328,6 +2380,8 @@ fn run_profile(
                 )?;
                 return Ok(());
             }
+            // Purge origin-scoped state before dropping the profile reference. If cleanup fails,
+            // the profile remains available for retry; earlier purge steps are not rolled back.
             let encrypted_state = EncryptedStateStore::new(store.paths(), &origin);
             encrypted_state.purge().map_err(encrypted_state_failure)?;
             let credentials = CredentialVault::system(store.paths(), &origin);
@@ -2818,6 +2872,7 @@ fn write_version(format: OutputFormat, locale: Locale, output: &mut impl Write) 
     }
 }
 
+/// Write a localized runtime failure to stderr for humans or as a JSON envelope on stdout.
 fn write_failure(
     format: OutputFormat,
     locale: Locale,
@@ -2863,6 +2918,8 @@ fn write_failure(
     }
 }
 
+/// Prefer --locale, then SQUID_LOCALE, then the process locale environment.
+/// This lookup runs before profile loading and does not consult the saved profile locale.
 fn resolve_locale(explicit: Option<&str>) -> Result<Locale, CommandFailure> {
     if let Some(value) = explicit {
         return Locale::from_str(value).map_err(|_error| {
