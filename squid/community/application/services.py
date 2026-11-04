@@ -32,7 +32,11 @@ class RedstonerService:
         mentioned_user_ids: list[int],
         content: str,
     ) -> RedstonerDecision:
-        """Evaluate a starboard post without depending on Discord objects."""
+        """Check the configured sender and channel, then require one mention and a message link.
+
+        A matching post produces a grant decision; the caller assigns the role.
+        This method checks the link's syntax without fetching its target.
+        """
         if author_id != self._policy.starboard_author_id or channel_id != self._policy.starboard_channel_id:
             return RedstonerDecision(RedstonerDecisionKind.IGNORE)
 
@@ -57,7 +61,21 @@ class RedstonerService:
 
 
 class WelcomeRelayService:
-    """Correlate recent member joins and welcome messages without waiting."""
+    """Match member joins to Discord welcome messages in either arrival order.
+
+    The bot receives member joins and welcome messages as separate events. A
+    decision supplies the member ID and matching name so the bot can replace that
+    name with a mention when relaying the message to its configured channel.
+
+    A username must appear as a case-sensitive substring of the welcome text.
+    Return a decision only when exactly one pending member matches; ambiguous
+    matches remain pending. A join also needs exactly one matching pending
+    message. Each pending list is bounded. New joins and accepted messages remove
+    entries older than the TTL using the injected monotonic clock.
+
+    Sampling happens once when a welcome message arrives. A message rejected by
+    forward_chance is not retained for a later join event.
+    """
 
     def __init__(
         self,

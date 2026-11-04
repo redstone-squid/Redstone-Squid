@@ -13,7 +13,12 @@ type Eligibility = Callable[[ReactionActor, WeightScope], bool]
 
 
 class RoleWeightPolicy(WeightPolicy):
-    """Use the highest matching role multiplier with an optional staff fallback."""
+    """Choose a reaction weight after the optional eligibility check.
+
+    An ineligible actor receives None. Otherwise use the highest configured
+    multiplier for their roles, even if it is below the staff multiplier. Only
+    actors with no matching role use the staff fallback or the default weight 1.
+    """
 
     def __init__(
         self,
@@ -28,8 +33,7 @@ class RoleWeightPolicy(WeightPolicy):
             raise InvalidStateError(msg)
         self._provider = provider
         self._eligibility = eligibility
-        # A node *name*, supplied by whichever context uses this policy, so the
-        # reactions context stays generic and never learns the catalogue.
+        # The caller chooses which permission counts as staff for this use of reactions.
         self._staff_capability = staff_capability
         self._staff_multiplier = staff_multiplier
 

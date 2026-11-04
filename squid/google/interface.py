@@ -35,7 +35,7 @@ class Connection:
         self._client: gspread.Client | None = None
 
     def get(self) -> gspread.Client:
-        """Return a usable client, refreshing the cached credentials when needed."""
+        """Return the cached client, rebuilding it if its credentials have expired."""
         if self._client is None or self._credentials is None or self._credentials.expired:
             self._credentials, self._client = connect(self._config)
         return self._client

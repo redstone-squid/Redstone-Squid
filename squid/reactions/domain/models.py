@@ -1,4 +1,10 @@
-"""Reaction weighting values, holding no Discord library objects."""
+"""Shared inputs for weighting voting and starboard reactions.
+
+ReactionActor carries Discord member facts and already-resolved capability names.
+WeightScope selects the guild and feature configuration. A policy combines those
+inputs with configured role multipliers to return a positive weight or reject an
+ineligible actor, without depending on Discord library objects.
+"""
 
 from dataclasses import dataclass
 from math import isfinite
@@ -20,11 +26,12 @@ class ReactionActor:
 
 @dataclass(frozen=True, slots=True)
 class WeightScope:
-    """The configuration bucket a weight lookup belongs to."""
+    """The server and feature whose reaction multipliers should be used."""
 
     guild_id: int
     kind: str
     scope_id: int | None = None
+    """Optional configuration ID within the feature, such as one starboard's ID."""
 
 
 @dataclass(frozen=True, slots=True)

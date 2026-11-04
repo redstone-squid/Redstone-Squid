@@ -63,6 +63,7 @@ class PendingWelcomeMember:
     user_id: int
     username: str
     joined_at: float
+    """Time from the relay's monotonic clock, in seconds."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +72,7 @@ class PendingWelcomeMessage:
 
     system_content: str
     received_at: float
+    """Time from the same monotonic clock used for member joins."""
 
 
 @dataclass(frozen=True, slots=True)

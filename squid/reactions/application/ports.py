@@ -7,7 +7,7 @@ from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
 
 
 class WeightPolicy(Protocol):
-    """Calculate a positive reaction weight or reject an ineligible actor."""
+    """Return a positive reaction weight, or None if the actor is ineligible."""
 
     async def calculate(self, actor: ReactionActor, scope: WeightScope) -> float | None: ...
 
