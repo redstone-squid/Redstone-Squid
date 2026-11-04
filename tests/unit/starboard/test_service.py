@@ -44,6 +44,7 @@ def _copy_repository(repository: FakeRepository) -> FakeRepository:
         replace(repository.config, emojis=tuple(replace(item) for item in repository.config.emojis))
     )
     copied.recorded = [replace(vote, config=replace(vote.config)) for vote in repository.recorded]
+    # Keep lookup observations across read scopes, whose state is never committed.
     copied.relevant_calls = repository.relevant_calls
     return copied
 

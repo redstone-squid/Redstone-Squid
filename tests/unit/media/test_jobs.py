@@ -141,6 +141,8 @@ class _JobState:
 
 
 class MemoryMediaJobs:
+    """Job-state fake for service tests; claims do not model availability times, lease expiry, or locks."""
+
     def __init__(self) -> None:
         self.states: dict[UUID, _JobState] = {}
         self.artifact_objects: dict[str, bool] = {}
@@ -378,6 +380,8 @@ class RejectingMediaJobs(MemoryMediaJobs):
 
 
 class DiscardingCompletionMediaJobs(MemoryMediaJobs):
+    """Simulate a discard that wins just before the runner records completion."""
+
     @override
     async def complete(
         self,
@@ -412,6 +416,8 @@ class CleanupContendingMediaJobs(MemoryMediaJobs):
 
 
 class WritingNormalizer:
+    """Write predictable output and poster bytes so publication and cleanup use real local files."""
+
     def __init__(self, kind: MediaKind, *, failure: Exception | None = None) -> None:
         self.kind = kind
         self.failure = failure
@@ -592,6 +598,7 @@ async def test_submit_staged_cancellation_settles_metadata_reader_before_returni
     jobs = MediaNormalizationJobService(MemoryArtifacts(), uow_factory=partial(MediaScope, MemoryMediaJobs()))
     source = tmp_path / "source"
     source.write_bytes(b"image")
+    # Hold the thread reader open so cancellation cannot safely release the caller's source file yet.
     started = threading.Event()
     release = threading.Event()
     real_metadata = media_jobs._staged_source_metadata
@@ -986,7 +993,7 @@ class BrokenFailurePathJobs(MemoryMediaJobs):
 
 
 class SelectivelyFailingNormalizer(WritingNormalizer):
-    """Fail one job by its raw bytes, and hold the others at a checkpoint meanwhile."""
+    """Fail one source immediately and delay the others so sibling cancellation would interrupt them."""
 
     def __init__(self, kind: MediaKind, *, failing_source: bytes) -> None:
         super().__init__(kind)
@@ -1033,6 +1040,8 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
 
 
 class MediaScope(PublishingFakeUnitOfWork[MemoryMediaJobs]):
+    """Share nested job state across shallow copies; this fake does not test rollback isolation."""
+
     def __init__(self, repository: MemoryMediaJobs) -> None:
         super().__init__(repository, clone=copy)
 

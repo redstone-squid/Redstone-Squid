@@ -1,3 +1,5 @@
+"""Media subprocess cleanup and probe parsing, using Python children without requiring FFmpeg."""
+
 import asyncio
 import json
 import sys
@@ -66,6 +68,7 @@ async def test_tool_timeout_reaps_child_before_reporting_failure(
 async def test_task_group_cancellation_reaps_child_and_drains_its_pipes(
     tmp_path: Path, child_processes: list[asyncio.subprocess.Process]
 ) -> None:
+    # Write continuously to both pipes so cancellation also exercises pipe cleanup.
     ready = tmp_path / "ready"
     script = f"""
 import os

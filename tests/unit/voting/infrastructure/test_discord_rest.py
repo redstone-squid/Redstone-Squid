@@ -1,9 +1,7 @@
-"""Discord member resolution over discord.py's rate-limited HTTP client.
+"""Discord member lookup results, caching, and client ownership.
 
-The adapter no longer owns a rate limiter, so there is nothing here about
-`retry_after`, retry counts, or backoff: that contract is discord.py's, and
-discord.py tests it. What is still ours is the mapping from its typed errors onto
-the promises `member()` and `resolve()` make to the voting service.
+Script discord.py HTTP responses to check how interactive lookups and background
+weight refreshes distinguish absent members from unavailable membership information.
 """
 
 from typing import Any, cast
@@ -32,7 +30,7 @@ def discord_error(kind: type[HTTPException], status: int) -> HTTPException:
 
 
 class StubHTTPClient:
-    """Records member lookups and replays a scripted result for each."""
+    """Replay scripted lookup results, repeating the last result after earlier ones are consumed."""
 
     def __init__(self, *results: Any) -> None:
         self._results = list(results)
@@ -74,8 +72,7 @@ def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestActorResolve
 
 
 async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
-    """The REST path used to hardcode both capability flags to False, so a
-    `delete_log` vote cast over HTTP was always rejected as ineligible."""
+    """Resolve capabilities from the returned roles as well as retaining the raw role IDs."""
     http = StubHTTPClient({"roles": ["11", "22"]})
     resolver = resolver_for(http, capabilities=FakeCapabilities())
 
@@ -101,7 +98,7 @@ async def test_an_account_without_a_discord_identity_is_not_a_member() -> None:
 
 @pytest.mark.parametrize(("kind", "status"), [(Forbidden, 403), (NotFound, 404)])
 async def test_member_returns_none_when_member_is_not_accessible(kind: type[HTTPException], status: int) -> None:
-    """Not a member, or not visible to this token: a fact, not a failure."""
+    """Interactive callers receive no member for either absence or an unreadable guild."""
     http = StubHTTPClient(discord_error(kind, status))
     resolver = resolver_for(http)
 
@@ -147,8 +144,7 @@ async def test_member_caches_successful_lookup_for_five_minutes() -> None:
     ],
 )
 async def test_member_raises_typed_unavailable_error(error: Exception) -> None:
-    """A rate limit past `max_ratelimit_timeout`, a 5xx, and a transport failure
-    all mean the same thing to a vote: Discord cannot answer truthfully now."""
+    """Rate-limit exhaustion, server errors, and transport failures use the same unavailable error."""
     resolver = resolver_for(StubHTTPClient(error))
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="Discord member lookup failed"):
@@ -156,7 +152,7 @@ async def test_member_raises_typed_unavailable_error(error: Exception) -> None:
 
 
 async def test_resolve_swallows_discord_failure_for_background_refresh() -> None:
-    """This is why a vote does not become un-castable when Discord hiccups."""
+    """An unresolved refresh returns None so the service can retain the recorded vote weight."""
     resolver = resolver_for(StubHTTPClient(discord_error(HTTPException, 500)))
 
     assert await resolver.resolve(1, 10, VoteKind.BUILD) is None
@@ -193,7 +189,7 @@ async def test_an_injected_client_is_not_closed_by_the_resolver() -> None:
 
 
 class TestConfiguredBase:
-    """A loopback upstream override has to reach every route, login included."""
+    """URL rewriting for member and login routes."""
 
     def test_the_default_base_leaves_routes_untouched(self) -> None:
         route = Route("GET", "/guilds/{guild_id}/members/{member_id}", guild_id=10, member_id=7)
@@ -208,21 +204,20 @@ class TestConfiguredBase:
         assert rebased == "http://127.0.0.1:8102/discord/api/guilds/10/members/7"
 
     def test_login_is_rebased_too(self) -> None:
-        """`static_login` builds its own route, so a configured deployment would
-        otherwise validate its token against the real Discord."""
+        """The login route needs the same base override as member requests."""
         assert rebased_url("http://127.0.0.1:8102/discord/api", Route("GET", "/users/@me").url) == (
             "http://127.0.0.1:8102/discord/api/users/@me"
         )
 
     def test_rate_limit_buckets_do_not_mention_the_host(self) -> None:
-        """Which is why rewriting the URL leaves discord.py's accounting intact."""
+        """The route key excludes the host, so rewriting the URL preserves that bucket identity."""
         route = Route("GET", "/guilds/{guild_id}/members/{member_id}", guild_id=10, member_id=7)
 
         assert route.key == "GET /guilds/{guild_id}/members/{member_id}"
 
 
 async def test_resolve_reports_a_proven_absence_as_a_weightless_member() -> None:
-    """404 is Discord answering, so the refresh may drop the voter to the default."""
+    """A 404 supplies an actor with no roles or capabilities for recalculating the vote weight."""
     http = StubHTTPClient(discord_error(NotFound, 404))
     resolver = resolver_for(http)
 
@@ -235,7 +230,7 @@ async def test_resolve_reports_a_proven_absence_as_a_weightless_member() -> None
 
 
 async def test_resolve_keeps_the_cached_weight_when_the_guild_is_unreadable() -> None:
-    """403 is a question we could not ask, so no weight may be rewritten from it."""
+    """A 403 leaves membership unresolved, so refresh must not infer an empty role set."""
     http = StubHTTPClient(discord_error(Forbidden, 403))
     resolver = resolver_for(http)
 

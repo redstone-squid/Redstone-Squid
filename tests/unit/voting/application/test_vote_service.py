@@ -70,7 +70,7 @@ def snapshot(
 
 
 def shared_snapshot() -> VoteSessionSnapshot:
-    """A build review carded in the owner guild and in a second guild."""
+    """A build review with cards in both the owner guild and another guild."""
     return replace(
         snapshot(),
         messages=(VoteMessage(100, 200, OWNER_GUILD_ID), VoteMessage(101, 201, VOTING_GUILD_ID)),
@@ -78,6 +78,8 @@ def shared_snapshot() -> VoteSessionSnapshot:
 
 
 class FakeVoteRepository:
+    """Record service calls and return configured snapshots and mutations without applying votes."""
+
     def __init__(self, session: VoteSessionSnapshot | None):
         self.session = session
         self.cast_calls: list[CastVoteCall] = []
@@ -220,6 +222,8 @@ class FakeVoteRepository:
 
 
 class MissingActorResolver:
+    """Return an unresolved lookup, which must preserve existing weights during refresh."""
+
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> None:
         del account_id, guild_id, kind
         return
@@ -516,6 +520,7 @@ async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
 
 
 async def test_race_with_another_closing_vote_returns_closed_rejection() -> None:
+    """Simulate closure between the initial read and mutation, then check the service's response."""
     initial = snapshot()
     repository = FakeVoteRepository(initial)
     repository.mutation = None

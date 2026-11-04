@@ -54,6 +54,8 @@ def artifact(
 
 
 class FakeMediaNormalizer:
+    """Return probe facts and reports without writing outputs; optionally mutate the source file."""
+
     def __init__(self, inspected: MediaProbe) -> None:
         self.inspected = inspected
         self.probe_calls: list[Path] = []
@@ -223,9 +225,7 @@ async def test_symlink_sources_are_rejected(tmp_path: Path) -> None:
     target = tmp_path / "target.mp4"
     target.write_bytes(b"video")
     source = tmp_path / "source.mp4"
-    # Windows refuses this without Developer Mode or SeCreateSymbolicLinkPrivilege, and a
-    # test about *rejecting* symlinks cannot run where none can be made. Skipped rather
-    # than xfailed: the guard under test is fine, the platform simply will not set it up.
+    # Some platforms require extra privileges to create the symlink needed by this test.
     try:
         source.symlink_to(target)
     except OSError as error:

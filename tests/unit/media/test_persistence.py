@@ -1,4 +1,4 @@
-"""Typed checked-text contracts for durable media rows."""
+"""Keep media enum values, SQL CHECK constraints, and result conversion in agreement."""
 
 import re
 from typing import cast

@@ -343,7 +343,7 @@ def test_a_network_poll_follows_its_author_but_pins_everyone_else() -> None:
     poll = poll_snapshot(author_account_id=7, guild_id=10, scope=PollScope.NETWORK)
     close_any = frozenset({VOTE_POLL_CLOSE_ANY.name})
 
-    # The author may be standing in any guild the poll reached.
+    # A network poll's author may close it from a different guild.
     assert poll.can_close(VoteActor(7, 70, guild_id=999)) is None
     # Staff elsewhere hold a capability resolved in the wrong guild.
     assert poll.can_close(VoteActor(8, 80, guild_id=999, capabilities=close_any)) is VoteRejection.WRONG_GUILD
