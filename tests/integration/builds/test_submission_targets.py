@@ -17,9 +17,9 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.models import Account, AccountIdentity
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.builds.application import BuildService
+from squid.builds.application.locks import BuildLockService
 from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
-from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
@@ -251,7 +251,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     versions = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     builds = BuildService(
         repository,
-        BuildLockRepository(migrated_session_factory),
+        BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         RestrictionRepository(migrated_session_factory),
         versions,
         NoopEmbeddings(),
@@ -298,7 +298,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     writer = SubmissionBuildPreparation(
         BuildService(
             repository,
-            BuildLockRepository(migrated_session_factory),
+            BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             RestrictionRepository(migrated_session_factory),
             versions,
             NoopEmbeddings(),

@@ -23,8 +23,8 @@ from squid.builds.application import (
     BuildService,
     RestrictionService,
 )
+from squid.builds.application.locks import BuildLockService
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, PostgresBuildIndex
-from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import BuildTagsManager, OfficialTagResolver
@@ -273,8 +273,8 @@ class _ServiceGraph:
         return BuildRepository(self.db.async_session)
 
     @cached_property
-    def build_locks(self) -> BuildLockRepository:
-        return BuildLockRepository(self.db.async_session)
+    def build_locks(self) -> BuildLockService:
+        return BuildLockService(uow_factory=self.uow_factory)
 
     @cached_property
     def builds(self) -> BuildService:
