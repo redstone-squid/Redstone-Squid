@@ -12,7 +12,7 @@
     },
     "FindingCandidateV1": {
       "additionalProperties": false,
-      "description": "Redacted metadata pointing to one engine-native reproducer.",
+      "description": "Metadata identifying one engine-native reproducer.\n\nProducers must redact sensitive content before constructing this model. Validation\nchecks field shapes, identifiers, control characters, and relative path syntax;\nit does not detect secrets or verify the referenced file.",
       "properties": {
         "affected_operations": {
           "default": [],
@@ -94,7 +94,7 @@
     },
     "ReproductionV1": {
       "additionalProperties": false,
-      "description": "One isolated fresh-stack qualification attempt.",
+      "description": "Reported run ID and terminal state for one qualification attempt.",
       "properties": {
         "run_id": {
           "$ref": "#/$defs/Hex32"
@@ -123,7 +123,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "A candidate reproduced on the exact required number of fresh stacks.",
+  "description": "Validate the reported reproductions for a candidate.\n\nRequire two distinct run IDs, or three for performance findings, all marked\nproduct_finding. The runner is responsible for using fresh isolated stacks;\nthese metadata checks cannot verify that isolation.",
   "properties": {
     "candidate": {
       "$ref": "#/$defs/FindingCandidateV1"

@@ -1,8 +1,8 @@
 """Coverage-guided fuzz harness for the search query language parser.
 
-SearchQueryParser tokenizes and parses raw search strings typed directly by Discord/API users.
-It must never raise anything other than QuerySyntaxError, and any query it accepts must survive
-being rendered back to its normalized form and re-parsed identically.
+Accept syntax errors as rejected inputs and report other exceptions as findings.
+For accepted nonempty queries, reparsing must preserve the normalized text; this
+does not compare expression trees or database results.
 """
 
 import importlib

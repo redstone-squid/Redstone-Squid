@@ -20,7 +20,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Redacted metadata pointing to one engine-native reproducer.",
+  "description": "Metadata identifying one engine-native reproducer.\n\nProducers must redact sensitive content before constructing this model. Validation\nchecks field shapes, identifiers, control characters, and relative path syntax;\nit does not detect secrets or verify the referenced file.",
   "properties": {
     "affected_operations": {
       "default": [],

@@ -166,9 +166,8 @@ def test_artifact_scan_accepts_keyed_canary_hashes(tmp_path: Path) -> None:
 def test_artifact_scan_refuses_symlinks(tmp_path: Path) -> None:
     target = tmp_path / "target"
     target.write_text("safe", encoding="utf-8")
-    # Windows refuses this without Developer Mode or SeCreateSymbolicLinkPrivilege, and a
-    # test about *rejecting* symlinks cannot run where none can be made. Skipped rather
-    # than xfailed: the guard under test is fine, the platform simply will not set it up.
+    # Some platforms require extra privileges to create symlinks. Skip when the
+    # filesystem cannot provide the input this test needs.
     try:
         (tmp_path / "link").symlink_to(target)
     except OSError as error:

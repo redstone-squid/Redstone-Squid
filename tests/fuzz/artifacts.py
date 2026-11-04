@@ -1,4 +1,9 @@
-"""Versioned redacted metadata around engine-native fuzzing artifacts."""
+"""Versioned metadata for retaining and reproducing fuzzing findings.
+
+A candidate points to the fuzzer's native reproducer and records the suspected cause.
+A qualified finding adds the required successful reproduction reports. Fingerprints
+use the checker and cause to group repeated reports of the same problem.
+"""
 
 import hashlib
 import hmac
@@ -30,13 +35,18 @@ type Hex64 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
 class FuzzArtifactModel(BaseModel):
-    """Strict immutable base for data crossing workflow trust boundaries."""
+    """Reject unknown fields and prevent attribute reassignment on artifact metadata."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
 
 class FindingCandidateV1(FuzzArtifactModel):
-    """Redacted metadata pointing to one engine-native reproducer."""
+    """Metadata identifying one engine-native reproducer.
+
+    Producers must redact sensitive content before constructing this model. Validation
+    checks field shapes, identifiers, control characters, and relative path syntax;
+    it does not detect secrets or verify the referenced file.
+    """
 
     schema_version: Literal["finding-candidate-v1"] = "finding-candidate-v1"
     engine: EngineName
@@ -84,7 +94,7 @@ class FindingCandidateV1(FuzzArtifactModel):
 
     @property
     def fingerprint(self) -> str:
-        """Fingerprint the checker and root cause, treating operations as occurrences."""
+        """Hash the checker and normalized root cause; operations and revision do not affect grouping."""
         document = {
             "checker": self.checker,
             "normalized_root_cause": self.normalized_root_cause,
@@ -94,14 +104,19 @@ class FindingCandidateV1(FuzzArtifactModel):
 
 
 class ReproductionV1(FuzzArtifactModel):
-    """One isolated fresh-stack qualification attempt."""
+    """Reported run ID and terminal state for one qualification attempt."""
 
     run_id: Hex32
     state: TerminalState
 
 
 class QualifiedFindingV1(FuzzArtifactModel):
-    """A candidate reproduced on the exact required number of fresh stacks."""
+    """Validate the reported reproductions for a candidate.
+
+    Require two distinct run IDs, or three for performance findings, all marked
+    product_finding. The runner is responsible for using fresh isolated stacks;
+    these metadata checks cannot verify that isolation.
+    """
 
     schema_version: Literal["qualified-finding-v1"] = "qualified-finding-v1"
     candidate: FindingCandidateV1
@@ -141,7 +156,12 @@ def keyed_sensitive_hash(value: str, key: bytes) -> str:
 
 
 def assert_artifacts_are_redacted(root: Path, canaries: Iterable[str]) -> None:
-    """Refuse symlinks, oversized bundles, and any raw synthetic canary value."""
+    """Check descendant files for size limits, symlinks, and raw UTF-8 canary bytes.
+
+    This does not redact files or inspect encoded, compressed, or unlisted secrets.
+    The caller must keep the bundle unchanged during scanning and subsequent use.
+    A missing or empty directory contains no files to check.
+    """
     encoded_canaries = tuple(canary.encode() for canary in canaries)
     if any(not canary for canary in encoded_canaries):
         msg = "Artifact canaries must be non-empty."
