@@ -58,6 +58,7 @@ class LocalCounter(StateOwner):
 
 
 def _outside_write(preferences: Preferences, name: str, value: str) -> None:
+    # Simulate another action committing without joining this test's transaction.
     outside = contextvars.copy_context()
     outside.run(_CURRENT.set, None)
     outside.run(setattr, preferences, name, value)
@@ -123,7 +124,7 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
 
 
 def test_write_skew_is_allowed_by_default() -> None:
-    """Reading a shared cell the action does not write costs it nothing by default."""
+    """Changing a field that was only read does not invalidate an ordinary transaction."""
     preferences = Preferences(LocalTopicBus(), 1)
 
     with transaction():
@@ -159,7 +160,7 @@ def test_a_read_the_action_also_writes_conflicts_without_opting_in() -> None:
 
 
 def test_a_b_a_lineage_change_conflicts_even_when_value_matches() -> None:
-    """Lineage, not equality: the cell holds what it held, but not the same version of it."""
+    """Restoring the original value still advances the version and causes a conflict."""
     preferences = Preferences(LocalTopicBus(), 1)
 
     with pytest.raises(ReactiveConflictError), transaction():
@@ -523,7 +524,7 @@ def test_durable_sink_encodes_outcomes_and_declares_host_policy() -> None:
 
 
 def test_a_strong_read_guards_its_own_version_not_an_earlier_unguarded_one() -> None:
-    """The unguarded read was disclaimed by not being guarded, so it is not the precondition."""
+    """The first strong read establishes the precondition, even after an ordinary read."""
     preferences = Preferences(LocalTopicBus(), 1)
 
     with transaction():

@@ -1,4 +1,4 @@
-"""Tracked topic addresses and synchronous in-process publication."""
+"""Track named dependencies and publish changes through a synchronous topic bus."""
 
 import logging
 from collections.abc import Callable, Sequence
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class Topic:
-    """A process-portable, payload-free address."""
+    """A named dependency identified by a kind and key, such as ``build:123``."""
 
     kind: str
     key: str
@@ -26,7 +26,7 @@ class Topic:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class CellAddress:
-    """The process-local identity of one field on a shared reactive owner."""
+    """Identify a shared field by owner identity and field name."""
 
     owner: object
     name: str
@@ -43,13 +43,7 @@ class CellAddress:
 
     @override
     def __str__(self) -> str:
-        """``Preferences(Member(1, 2)).theme``: what a person needs to find the field.
-
-        Here rather than only in :func:`squid_reactivity.shared_state.describe` so that
-        :mod:`squid_reactivity.core` can name an address too. It cannot import the namespace
-        module -- that module imports it -- and a conflict that says which field moved is
-        worth more than a diagnostic layered on top of one that does not.
-        """
+        """Return a diagnostic name such as ``Preferences(7).theme``."""
         return f"{self.owner!r}.{self.name}"
 
 
@@ -74,7 +68,7 @@ def _topic_cell(topic: Topic) -> _TopicCell:
 
 
 def watch(*topics: Topic) -> None:
-    """Record versioned reads of payload-free topics in the active read consumer."""
+    """Track these topics as dependencies of the current computation or render."""
     for topic in topics:
         cell = _topic_cell(topic)
         cell.track(cell.version)
@@ -95,7 +89,12 @@ class TopicCodec(Protocol):
 
 
 class KindKeyCodec:
-    """Encode topics as ``kind<separator>key`` without escaping."""
+    """Encode topics as ``kind<separator>key`` without escaping.
+
+    The kind and key must be nonempty. The kind cannot contain the separator;
+    the key can, because decoding splits only at the first occurrence. Invalid
+    inputs return None. An empty separator raises ValueError at construction.
+    """
 
     def __init__(self, separator: str = ":") -> None:
         if not separator:
@@ -131,7 +130,7 @@ class TopicBus(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class TopicSnapshot:
-    """Compatibility diagnostics for one address on a local bus."""
+    """Delivery counts for one address. Queue counts are zero on a synchronous bus."""
 
     topic: Address
     subscribers: int
@@ -143,7 +142,7 @@ class TopicSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class BusSnapshot:
-    """Compatibility diagnostics for synchronous local publication."""
+    """Delivery counts for addresses that still have subscriptions."""
 
     topics: tuple[TopicSnapshot, ...]
     queued: int = 0
@@ -175,7 +174,13 @@ def _log_subscriber_error(address: Address, callback: Subscriber, error: Excepti
 
 
 class LocalTopicBus:
-    """Deliver exact-address notifications synchronously in registration order."""
+    """Notify subscribers synchronously in registration order.
+
+    Callbacks receive the address, not a value. An ordinary callback exception
+    is reported without stopping later callbacks. Subscriptions added during
+    a delivery are not called for that delivery. Those removed before their
+    turn are skipped.
+    """
 
     def __init__(self, *, on_subscriber_error: SubscriberErrorHandler = _log_subscriber_error) -> None:
         self._on_subscriber_error = on_subscriber_error
@@ -241,7 +246,13 @@ class LocalTopicBus:
 
 
 class SubscriptionReconciler:
-    """Keep subscriptions until ``close`` releases them; ``commit`` or ``discard`` ends a candidate."""
+    """Keep old subscriptions active while a replacement set is prepared.
+
+    Call stage to subscribe to new addresses without dropping the committed set.
+    Then call commit to accept the new set, or discard to keep the old one.
+    This overlap prevents missed notifications while a render is being delivered.
+    Only one set can be staged at a time. Call close to release all subscriptions.
+    """
 
     def __init__(self, bus: TopicBus | None, callback: Subscriber) -> None:
         self.bus = bus

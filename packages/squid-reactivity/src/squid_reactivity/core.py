@@ -1,13 +1,13 @@
-"""Transactional reactive state for component trees.
+"""Transactional state and computed values for component trees.
 
-A state field stores an immutable value in a :class:`_Cell`, next to the version that dates
-it. Writing replaces the value; nothing is mutated in place. That is what makes a snapshot a
-reference rather than a deep copy, and rolling an action back putting the old reference back.
+Each state field has a cell containing a value and a version. Assigning state
+stages a replacement in the current transaction, or publishes it immediately
+when no transaction is open. Callers must replace ordinary values rather than
+mutate them in place; snapshots retain references instead of copying values.
 
-Reads are tracked. A computed records the cells it read and the version each held, and asked
-for its value it recomputes only if one of those versions has moved. Nothing is pushed: every
-reference points from reader to source, which is what lets a per-message component be
-collected while the state it read lives on.
+Computed values record their dependencies and check versions when read. Sources
+do not retain their readers, so a long-lived shared field does not keep every
+component that once read it alive.
 """
 
 import asyncio
@@ -54,10 +54,9 @@ _MISSING = object()
 
 
 class ReactiveOwner(Protocol):
-    """The behaviour reactive state needs from its declaring owner.
+    """Hooks called when an owner's state commits or rolls back.
 
-    The instance dictionary is reached through `vars()`; see
-    `squid_ui.runtime.histories.HistoryOwner`.
+    State descriptors also require an instance dictionary for cell storage.
     """
 
     def _state_changed(self, names: frozenset[str]) -> None: ...
@@ -77,15 +76,15 @@ class TransactionView(Protocol):
 
 
 class TransactionParticipant[PreparedT](Protocol):
-    """A subsystem that publishes its own writes when the action in flight commits.
+    """Join an action with writes managed outside the state cells.
 
-    The split is the whole point. Everything that can fail happens in `prepare`, before
-    any participant has made anything visible, so the transaction can still roll the
-    action back as though it never ran. Register with :func:`enlist`.
+    Register through enlist. During commit, prepare validates the staged changes
+    and returns the data apply needs. Preparation must not publish changes. If it
+    fails, the action aborts before publication.
 
-    `prepare` hands what it built to `apply` as a value, rather than leaving it in a field
-    `apply` has to trust. That is what makes "everything fallible happened in prepare" a
-    fact of the signatures instead of an assertion inside a body.
+    Apply runs synchronously after the commit point and must not fail. Finalize
+    runs after all participants have applied, when subscribers can read the full
+    result. A finalize failure is reported without undoing the commit.
     """
 
     def prepare(self, view: TransactionView) -> PreparedT:
@@ -97,7 +96,7 @@ class TransactionParticipant[PreparedT](Protocol):
         ...
 
     def apply(self, prepared: PreparedT) -> None:
-        """Publish what `prepare` returned. Synchronous, and past the point of failure."""
+        """Publish the prepared change synchronously. This method must not raise."""
 
     def describe_change(self, prepared: PreparedT) -> TransactionContribution | None:
         """Return the participant's reversible token, or no history contribution."""
@@ -106,19 +105,17 @@ class TransactionParticipant[PreparedT](Protocol):
         """Discard staged work after failure. Called once in reverse participant order."""
 
     def finalize(self, prepared: PreparedT) -> None:
-        """React to a commit that has fully landed -- notify watchers, publish addresses.
+        """Notify subscribers after all participants have applied.
 
-        Every participant has applied by now, so a subscriber this wakes cannot observe a
-        half-published action. Raising here does not undo the commit; it already happened.
+        An exception here is reported but does not roll back the committed action.
         """
 
 
 class ReactivityError(Exception):
-    """Base class for every failure squid-reactivity raises deliberately.
+    """Base class for the package's named reactive-state errors.
 
-    Each error keeps a standard exception base alongside this one (`RuntimeError`,
-    `ValueError`, or `LookupError`), so catching by standard type keeps working while
-    `except ReactivityError` covers the package.
+    Subclasses also inherit standard exception types such as RuntimeError,
+    ValueError, or LookupError so callers can catch either category.
     """
 
 
@@ -143,12 +140,10 @@ class UndeclaredStateError(ReactivityError, RuntimeError):
 
 
 class ReactiveCycleError(ReactivityError, RuntimeError):
-    """A derived value depends, through some chain, on itself.
+    """A computed value or resource depends on itself, directly or indirectly.
 
-    Raised for a computed that reads itself and for a resource whose loader awaits one
-    waiting on it -- the same mistake, and a chain can cross both kinds, so it is one error.
-    Carries the whole ring rather than the node that closed it, because `a` needing `b` is
-    usually fine and `b` needing `a` is usually fine, and only the pair is wrong.
+    The path includes the full cycle, for example ``a -> b -> a``. Dependencies
+    can cross between computed values and asynchronous resource loaders.
     """
 
     def __init__(self, path: Sequence[str]) -> None:
@@ -159,24 +154,19 @@ class ReactiveCycleError(ReactivityError, RuntimeError):
 
 
 class StaleReactiveContextError(ReactivityError, RuntimeError):
-    """A transaction was written through from outside the scope or the task that owns it.
+    """A write used a finished transaction or came from a different task.
 
-    Two mistakes with one shape, because a transaction travels in a `ContextVar` and a task
-    inherits a copy of it. A task spawned inside a handler still holds the handler's
-    transaction after that `with` block has committed, so a write through it stages into an
-    action that is over. Sibling tasks under one `gather` hold the *same* transaction, and
-    interleaving their staging into one overlay makes what commits a matter of scheduling.
-
-    Reads are left alone either way: a closed transaction reads as though absent, which is
-    what its cells already say, and reading an open one from a branch is what branches do.
+    Child tasks inherit the transaction context, but only its owning task may
+    stage writes. Reads from child tasks are allowed. Once the transaction closes,
+    reads ignore its staged values and use the committed cells.
     """
 
 
 class ReactiveConflictError(ReactivityError, RuntimeError):
-    """An action's strong input or explicit inverse precondition moved before commit.
+    """A required shared-state version changed before commit.
 
-    Nothing was published: the action rolls back whole and travels the ordinary failed-handler
-    path. A handler cannot catch this, because the check runs when its transaction exits.
+    The action discards its staged changes. The error is raised when the
+    transaction context exits, so catch it outside the with block.
     """
 
     def __init__(self, detail: ConflictDetail, message: str) -> None:
@@ -185,7 +175,7 @@ class ReactiveConflictError(ReactivityError, RuntimeError):
 
 
 def _equal(left: object, right: object) -> bool:
-    """Whether a write leaves the field where it already was, conservatively."""
+    """Compare values, treating an equality-check failure as a difference."""
     if left is right:
         return True
     try:
@@ -223,11 +213,7 @@ def _checkpoint(name: str) -> None:
 
 
 def _current_task() -> object | None:
-    """The task a write is happening on, or `None` when nothing is running one.
-
-    Synchronous use has no tasks to confuse, so it reports `None` and every transaction
-    counts as confined to it.
-    """
+    """Return the current asyncio task, or None when no event loop is running."""
     try:
         return asyncio.current_task()
     except RuntimeError:
@@ -235,24 +221,21 @@ def _current_task() -> object | None:
 
 
 def _active() -> _Transaction | None:
-    """The transaction a *read* should consult: the open one, or none at all.
+    """Return the open transaction used for reads, ignoring a finished context.
 
-    A closed transaction is not an error to read through -- it is simply over, and the cells
-    now hold what it decided. Answering `None` for one is what makes an inherited copy
-    harmless to a reader while `_write` stays loud about it.
+    A child task may retain a transaction after its context exits. Reads then
+    use committed state, while writes through that context are rejected.
     """
     current = _CURRENT.get()
     return None if current is None or current.closed else current
 
 
 class _Cell:
-    """One state field's storage: an immutable value, and the version that dates it.
+    """Store one field's value, version, and optional publication address.
 
-    `address` is what an addressed cell publishes under: a ``CellAddress`` for shared state,
-    or a ``Topic`` for the valueless cell behind :func:`squid_reactivity.watch`. A local owner's
-    cell has none, and the two behaviours an address adds --
-    the commit precondition below, and being followed by a render -- both key off its
-    presence rather than off a second cell type.
+    Shared fields have CellAddress values. Topics use cells with Topic addresses
+    and no payload. Local component fields have no address. Addressed reads can
+    be checked for conflicts and collected as render subscriptions.
     """
 
     __slots__ = ("__weakref__", "address", "identity", "value", "version")
@@ -284,8 +267,8 @@ class _Cell:
         if current is not None:
             entry = current.staged(self)
             if entry is not None:
-                # Reading back what this action staged answers "what did I just write", not
-                # "what is the world", so it is not an observation and carries no precondition.
+                # A staged read does not observe committed state, so it adds no
+                # commit-time version precondition.
                 self.track(entry.version)
                 return entry.value
             if self.address is not None and _RELAXED_READS.get() == 0:
@@ -299,7 +282,7 @@ class _Cell:
         _bump_epoch()
 
     def touch(self) -> None:
-        """Say the held value changed in place: the version moves, the value does not."""
+        """Advance the version without replacing the value."""
         self.version += 1
         _bump_epoch()
 
@@ -331,7 +314,7 @@ class _ReactiveSource(Protocol):
 
 
 class _Consumer(Protocol):
-    """Whatever a tracked read reports itself to: a computed, or a resource load."""
+    """Collect dependencies read by a computed value, resource load, or render."""
 
     sources: dict[_ReactiveSource, int]
 
@@ -355,11 +338,10 @@ one stack because a chain can run through both, and a cycle should be named whol
 
 
 def cycle_path(node: _SettlingNode) -> tuple[str, ...] | None:
-    """The ring `node` closes if it is already producing a value on this task, else `None`.
+    """Return the cycle ending at ``node``, or None if it is not already active.
 
-    Reported from the first time `node` appears, so the answer is the ring itself and not the
-    run-up to it: naming a caller that merely reached the cycle sends the reader to the wrong
-    line. `node` needs a `_label`.
+    The path starts at the first occurrence of the node and repeats it at the
+    end. Callers that led into the cycle are excluded from the diagnostic.
     """
     stack = _SETTLING.get()
     for index, entered in enumerate(stack):
@@ -370,11 +352,7 @@ def cycle_path(node: _SettlingNode) -> tuple[str, ...] | None:
 
 @contextmanager
 def settling(node: _SettlingNode) -> Iterator[None]:
-    """Mark `node` as producing a value, and refuse to enter a ring twice.
-
-    The check precedes the push, so the error is raised before whatever would otherwise
-    deadlock or recurse.
-    """
+    """Track a computation or load, raising before it re-enters an active dependency."""
     path = cycle_path(node)
     if path is not None:
         raise ReactiveCycleError(path)
@@ -419,10 +397,9 @@ def note_initialized(owner: object) -> None:
 
 
 _EPOCH = 0
-"""Bumped by every write anywhere.
+"""Advance when state is staged, published, restored, or invalidated.
 
-A node settled in the current epoch cannot be stale, so it can skip walking its sources --
-which is the whole of a render, where reads are many and writes are none.
+Computed values use this counter to skip dependency checks when no state has changed.
 """
 
 
@@ -479,10 +456,10 @@ def strong_read() -> Iterator[None]:
 
 @dataclass(slots=True)
 class _Staged:
-    """One cell an action has written, holding both halves of the change.
+    """A pending cell replacement and the value and version that preceded it.
 
-    The overlay is the snapshot. Rolling back is putting `before` back; committing is
-    putting `value` in. Neither copies anything, because a state value is immutable.
+    Before publication, rollback discards this entry without changing the cell.
+    Values are retained by reference, so ordinary state must be treated as immutable.
     """
 
     owner: ReactiveOwner
@@ -510,25 +487,16 @@ class SlotValue:
 
 
 def _slot_name(cell: _Cell) -> str:
-    """How a conflict report or a ledger entry names this slot.
-
-    An addressed cell says which field on which namespace, because that is what somebody
-    reading the report has to go and look at. A component's own cell is not addressed and has
-    no name worth printing outside the tree that owns it, so it keeps the opaque identity its
-    slot has carried since it was made.
-    """
+    """Return the shared field address, or an opaque slot ID for local state."""
     return f"slot:{cell.identity}" if cell.address is None else str(cell.address)
 
 
 @dataclass(frozen=True, slots=True, init=False)
 class CellTarget:
-    """A weak runtime capability for one stable reversible state slot.
+    """Refer to a reversible state slot without keeping its owner alive.
 
-    `identity` stays opaque rather than naming the field. A retained inverse outlives what it
-    points at, and the report that matters most -- the target is gone -- is the one where
-    there is no cell left to ask for a name. A stable string that means the same slot before
-    and after collection is worth more there than a readable one that becomes unavailable
-    exactly when it is needed.
+    The opaque identity remains available after collection. History can therefore
+    report which target expired even when the cell and its readable address are gone.
     """
 
     _owner: weakref.ReferenceType[ReactiveOwner]
@@ -729,15 +697,14 @@ class _Transaction:
         self.born[id(owner)] = owner
 
     def writable(self) -> bool:
-        """Whether this caller may stage into this transaction at all.
+        """Whether this transaction is open and the caller owns it.
 
-        Prior to every policy question `stage` asks: those are about what the action is
-        allowed to do, this is about whether the caller is part of the action.
+        Read-only and temporary write restrictions are checked separately by stage.
         """
         return not self.closed and (self.owner_task is None or self.owner_task is _current_task())
 
     def reject_stale(self, what: str) -> None:
-        """Refuse a write from a caller with no standing to make it, saying which mistake."""
+        """Raise an error identifying the finished transaction or wrong task."""
         if self.closed:
             message = (
                 f"{what} was written through a transaction that has already finished. The write "
@@ -765,13 +732,10 @@ class _Transaction:
         return self.writes.get(cell)
 
     def observe(self, cell: _Cell, *, strong: bool) -> None:
-        """Note that this action looked at a shared cell's committed value.
+        """Record the first committed version read from a shared cell.
 
-        The first read is the one kept: a later write does not clear it, because the action
-        has already branched on what it saw. `strong` marks a read taken inside
-        `strong_read()` and is kept separately, at the version *that* read returned: an
-        earlier unguarded read of the same cell was disclaimed by not being guarded, so it
-        cannot be what the commit requires.
+        Strong reads have a separate first-read version. An earlier ordinary read
+        must not become a precondition just because a later read is strong.
         """
         if cell not in self.observed:
             self.observed[cell] = cell.version
@@ -779,14 +743,12 @@ class _Transaction:
             self.strong[cell] = cell.version
 
     def check_preconditions(self) -> None:
-        """Reject a publishing action if any strong input or explicit precondition moved.
+        """Check required versions before publishing writes or participant changes.
 
-        A read is strong -- it guards the commit -- when the action also wrote that cell, or
-        when it was taken inside `strong_read()`. Read-only reads carry no precondition by
-        default, because handlers routinely consult shared state for a decision and write
-        something unrelated, and aborting those costs more than the write skew it prevents.
-        `strong_read()` is how an action that does branch on shared state says so. Blind
-        writes remain last-commit-wins.
+        Reads of cells this action also writes are checked automatically. Strong
+        reads and explicit patch preconditions are checked even when their cells
+        are not written. Other reads are recorded for diagnostics only. Blind writes
+        have no read precondition, so the last commit wins.
         """
         _checkpoint("commit.before_validation")
         if not (self.writes or self.participants):
@@ -817,7 +779,7 @@ class _Transaction:
         self.preconditions[cell] = version
 
     def stage(self, owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
-        """Hold a write until this action commits, so nothing else can read it meanwhile."""
+        """Hold a write for commit, visible only to readers of this transaction."""
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
@@ -836,14 +798,11 @@ class _Transaction:
         _bump_epoch()
 
     def publish(self) -> None:
-        """Make this action's writes visible, never leaving a cell's version where it was.
+        """Install staged values and advance each cell beyond its committed version.
 
-        The staged version is used where it still leads, so a reader that already sampled the
-        cell inside the action stays valid across the commit. It no longer leads once another
-        action published to the same cell while this one was staging: a blind write staged at
-        `version + 1` would then land on the version that action already took, and every
-        reader settled against it would keep reporting a value the cell no longer holds.
-        Last-commit-wins is about which value survives, not about standing still.
+        Keep the staged version when it is still newer than the committed one. If
+        another action committed first, advance beyond that version instead. Reusing
+        a version would leave computed values unable to detect the new value.
         """
         if not self.writes:
             self.applied = True
@@ -915,19 +874,12 @@ class _Transaction:
 
     @contextmanager
     def preparing(self) -> Iterator[None]:
-        """Re-enter this transaction's overlay, read-only, for the prepare phase.
+        """Expose staged values to participants while preventing further writes.
 
-        `transaction()` closes staging before the commit gate, so by the time a participant
-        is asked to validate what the action staged, an ordinary read answers with the
-        committed value instead -- the one thing prepare must not be told. Reinstating the
-        overlay is what makes "everything fallible happens before publication" true of reads
-        as well as of writes.
-
-        Read-only, through the two mechanisms that already exist. `block_writes` stops
-        anything staging a write or enlisting a further participant, so prepare cannot grow
-        the action it is validating. `relaxed_read` keeps these reads out of `observed`,
-        which is already frozen: `check_preconditions` has run and `reads()` is about to be
-        called, and neither should be told about a read the framework itself provoked.
+        The transaction context has already been removed before commit. Restore it
+        for preparation so participants can read the values they are validating.
+        Block writes and new participants, and exclude these internal reads from
+        the observation report because conflict validation has already run.
         """
         token = _CURRENT.set(self)
         try:
@@ -1059,14 +1011,10 @@ class _FrozenTransactionView:
 
 
 def report_undeclared_write(owner: object, name: str) -> None:
-    """Reject a transaction-time write to an attribute that is not declared state.
+    """Reject writes to undeclared attributes during a transaction.
 
-    Raised before the write lands, so the transaction rolls back whole. The alternative --
-    letting it land and logging that it is uncovered -- produced exactly the corruption it
-    described: the attribute stays written while everything around it is restored.
-
-    A component built during the action is exempt; assigning to something the action created
-    is construction, not mutation.
+    Those writes cannot be rolled back or trigger reactive updates. Objects
+    created inside the transaction are exempt so their constructors can run.
     """
     current = _active()
     if current is None or not current.protects(owner):
@@ -1156,7 +1104,16 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
 
 @contextmanager
 def transaction(*, action_context: ActionContext | None = None) -> Iterator[None]:
-    """Commit one identified action atomically or emit one immutable rollback result."""
+    """Stage state changes and publish them together when the context exits.
+
+    An exception in the body or preparation discards staged changes. Nested
+    calls share the outer transaction; they are not independent savepoints.
+    Only the task that opened the transaction may write through it.
+
+    Participants must not fail during apply, which runs after the commit point.
+    Such a failure raises FrameworkIntegrityError and is recorded as a damaged
+    commit, since already applied external changes cannot be rolled back here.
+    """
     outer = _CURRENT.get()
     if outer is not None:
         # Checked at the `with`, not at the first write inside it, so a task that inherited
@@ -1285,21 +1242,25 @@ def readonly_transaction(*, action_context: ActionContext | None = None) -> Iter
 def on_action_commit(
     callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None
 ) -> None:
-    """Run a failure-isolated synchronous callback after definitive commit."""
+    """Register a synchronous callback for a successful commit.
+
+    Call inside a transaction. Callback failures are reported without changing
+    the result. Use the supplied continuation to start a new action for writes.
+    """
     _add_action_hook("commit", callback, key=key)
 
 
 def on_action_rollback(
     callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None
 ) -> None:
-    """Run a failure-isolated callback after staged state is dead."""
+    """Register a synchronous callback after rollback; its errors are reported."""
     _add_action_hook("rollback", callback, key=key)
 
 
 def on_action_result(
     callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None
 ) -> None:
-    """Run a failure-isolated callback after either terminal result."""
+    """Register a synchronous callback for either commit or rollback."""
     _add_action_hook("result", callback, key=key)
 
 
@@ -1338,11 +1299,7 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
 
 
 def action_participant(key: object) -> TransactionParticipant[Any] | None:
-    """`key`'s participant in the action in flight, without enlisting one.
-
-    The read half of :func:`enlist`, for a subsystem that has to answer "what did this
-    action stage" on a path where staging itself would be wrong -- a read, or a render.
-    """
+    """Return the participant already registered for ``key``, without creating one."""
     current = _CURRENT.get()
     return None if current is None else current.participants.get(key)
 
@@ -1424,12 +1381,9 @@ class _State:
         return self._factory()
 
     def address(self, instance: ReactiveOwner) -> Any:
-        """What a write to this field publishes under, or `None` if nobody outside can see it.
+        """Ask the owner for this field's publication address, or return None.
 
-        Asked of the *instance*, not declared at the field: whether state is private to one
-        owner or shared with every mount holding it is what kind of object holds it, and the
-        object already knows. A namespace answers with an address; a component has no hook and
-        so has no address.
+        SharedState supplies the binding hook. Local component state has no address.
         """
         binding = getattr(instance, "_state_binding", None)
         return None if binding is None else binding(self.public_name)
@@ -1447,16 +1401,11 @@ class _State:
         return cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING)
 
     def mutated(self, instance: ReactiveOwner) -> None:
-        """Note that the held value changed in place: the version moves, the value does not.
+        """Stage a version change for an opaque value that was mutated in place.
 
-        Staged like any other write when an action is open. The change to the object itself
-        is already irreversible -- that is what "in place" means -- but *saying so* is not,
-        and a version bump that lands immediately publishes a shared namespace to every
-        other mount from inside a transaction that may still fail.
-
-        Re-staging the value it already holds is what moves the version: `__set__` is
-        deliberately not used, because its settled-value check would see the same object and
-        decline the write it is being asked to record.
+        The mutation itself cannot be undone. Staging delays its notification until
+        commit, so a failed action does not publish a change notification. Bypass
+        __set__ because its identity comparison would discard this same-object write.
         """
         cell = self.cell(instance)
         held = _staged_value(cell)
@@ -1525,16 +1474,10 @@ class _State:
         _write(instance, self._name, self.cell(instance), value)
 
     def __delete__(self, instance: ReactiveOwner) -> None:
-        """Refuse removal: a state field is reset by assignment, never taken away.
+        """Reject deletion and direct callers to reset the field by assignment.
 
-        Reading it back would have to answer something, and every answer is a lie about a
-        field that is still declared. Defined rather than left off so the refusal says which
-        field and what to do instead, in place of the bare `AttributeError: __delete__`
-        Python raises for a data descriptor with no deleter.
-
-        Nothing inside the package needs it: history restores a slot that was never assigned
-        by staging that absence through the ordinary write path, which keeps the slot, its
-        identity, and its version lineage.
+        History can still restore an unassigned slot through the internal write
+        path, preserving its identity and version.
         """
         message = (
             f"{type(instance).__name__}.{self.public_name} cannot be deleted; a state field is "
@@ -1626,15 +1569,22 @@ def state(
     persist: bool | None = None,
     opaque: bool = False,
 ) -> Any:
-    """Declare observed component state.
+    """Declare a reactive field whose assignments participate in transactions.
 
-    Pass a default or a factory for a field the class owns, or neither for one ``__init__``
-    assigns. A value is replaced, never mutated in place: an in-place change moves no version.
-    The type checker holds that line -- a ``dict``, ``list`` or ``set`` default declares the
-    field as ``Mapping``, ``Sequence`` or ``AbstractSet``, so a concrete annotation and every
-    mutating method are type errors. The stored value is the one assigned. ``opaque=True``
-    declares a collaborator the component holds -- a service, a guild, a session -- which
-    settles on identity rather than ``==`` and is never persisted.
+    Supply either a default or a factory, or leave both out and assign the field
+    in __init__. The factory runs when an unassigned field is first read.
+
+    Replace ordinary values rather than mutate them in place. For example, use
+    ``self.items = (*self.items, item)`` to notify readers of an added item.
+    Collection overloads expose read-only interfaces to type checkers, but the
+    actual stored objects are not wrapped or copied.
+
+    Args:
+        default: Initial value, shared by reference across instances.
+        factory: Build an initial value for each instance on demand.
+        persist: Include the field in exported state. Defaults to True unless opaque.
+        opaque: Hold a collaborator such as a service or session. Compare changes
+            by identity and exclude the field from persistence.
     """
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 
@@ -1688,11 +1638,10 @@ def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
 
 
 def declared_cells(owner: ReactiveOwner) -> dict[_Cell, int]:
-    """Every declared state cell on `owner`, at the version it holds now.
+    """Return all declared cells and their current versions.
 
-    The presumed dependency set for something that has not yet said what it reads -- a
-    resource holding a value that was installed rather than loaded. Over-subscribing is the
-    safe direction, and the first real run replaces the presumption with the truth.
+    Resources use these as initial dependencies when replace supplies a value
+    before the loader has run. The first load records the actual dependencies.
     """
     presumed: dict[_Cell, int] = {}
     for klass in type(owner).__mro__:
@@ -1757,13 +1706,8 @@ class _Derived:
 
     def settle(self) -> int:
         """Return this node's current version, recomputing only if a source moved."""
-        # The epoch fast path asserts nothing anywhere has moved since this node settled.
-        # A staged write breaks that assertion without bumping the epoch -- staging is
-        # deliberately cheap, so it does not invalidate every settled node in the process --
-        # so inside an action that has staged something, fall through to the source
-        # comparison, which consults staged versions and recomputes against what the action
-        # wrote. Skipping it here is what lets a participant settle its sources *before* the
-        # commit becomes irreversible rather than reporting a pre-action baseline.
+        # An active transaction may expose staged versions instead of committed versions.
+        # Check those dependencies even when this node has already seen the current epoch.
         current = _active()
         if self._epoch == _EPOCH and (current is None or not current.writes):
             return self.version
@@ -1829,11 +1773,12 @@ class _Computed:
 
 
 def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
-    """Derive a value from the state its body reads, recomputed when that state moves.
+    """Cache a derived value and track the reactive fields its function reads.
 
-    The dependency set is what the last run actually read, so a conditional dependency is
-    exact rather than over-declared, and nothing has to be named twice. A computed nobody
-    reads is never evaluated, and one that raises does so where its value is used.
+    The function runs on first access and again when a dependency version
+    changes. Each run replaces the dependency set, so conditional branches can
+    change what is tracked. If recomputation produces an equal value, dependents
+    keep seeing the same computed version.
     """
     # The declared return type describes what reading the attribute yields, not what the
     # decorator hands back: the descriptor below is what actually gets bound to the class.
@@ -1842,12 +1787,11 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
 
 @dataclass(slots=True)
 class Observation:
-    """What one run read, so its shared cells can be turned into bus addresses.
+    """Record dependencies read by one render or computation.
 
-    A plain :class:`_Consumer`: the same tracked read a computed records is what a render
-    records, and the context the read happens in is the only difference between them. For a
-    shared cell that is the whole story -- there is no separate ``watch()`` to forget to
-    call. :func:`squid_reactivity.watch` exists only for a named topic, which has no value to read.
+    Addresses are collected through computed values and resources as well as
+    direct cell reads. Shared state is tracked automatically; watch adds a
+    dependency on a topic that has no value to read.
     """
 
     sources: dict[_ReactiveSource, int] = field(default_factory=dict)
@@ -1868,16 +1812,12 @@ class Observation:
     """
 
     def note_born(self, owner: object) -> None:
-        """Exempt `owner`'s writes from the render guard until its own render() runs."""
+        """Allow construction writes until the owner finishes initialization or starts rendering."""
         self.born[id(owner)] = owner
         self.constructed[id(owner)] = owner
 
     def entering_own_render(self, owner: object) -> None:
-        """`owner`'s own render() is starting: end its construction exemption.
-
-        Scoped to this one instance, not the whole render -- otherwise a child could tear its
-        own tree and be excused for it because some ancestor built it a moment earlier.
-        """
+        """End the construction exemption for this owner."""
         self.born.pop(id(owner), None)
 
     def exempts(self, owner: object) -> bool:
@@ -1949,12 +1889,11 @@ def observe_reads() -> Iterator[Observation]:
 
 
 def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
-    """The bus addresses of the shared cells `read` touches, for following them by hand.
+    """Return the addresses read by a callable, raising if none are found.
 
-    ``addresses(lambda: preferences.theme)`` names a cell the way the rest of the package
-    does -- by reading it -- so the thunk is ordinary typed code with no class name repeated
-    and no string to drift. Reading a computed yields the shared cells behind it. Raises if
-    the thunk reaches no shared cell at all, so a typo cannot quietly follow nothing.
+    For example, ``addresses(lambda: preferences.theme)`` returns the address
+    of that shared field. Reads through computed values include their source
+    addresses. The callable runs as a read-only render observation.
     """
     with observe_render() as observation:
         read()
@@ -1994,9 +1933,14 @@ def _checked_init(
 class StateOwner:
     """Reusable owner for transactional state and computed values.
 
-    Subclasses normally override :meth:`on_state_commit` to invalidate whatever projection
-    reads them. The base owns descriptor discovery, construction exemptions, rollback-safe
-    attribute protection, required fields, and opaque collaborator mutation.
+    Declare fields with `state()` and derived properties with `computed`, then
+    override `on_state_commit` to refresh the view that reads them. Fields without
+    a default must be assigned before initialization finishes.
+
+    Construction may assign ordinary attributes. Once the owner exists, writes
+    inside a transaction must target declared state so failure can discard them.
+    Opaque collaborator changes are signaled through `mutated`; that delays their
+    notifications but cannot undo mutations already made to the collaborator.
     """
 
     _state_names: ClassVar[frozenset[str]] = frozenset()

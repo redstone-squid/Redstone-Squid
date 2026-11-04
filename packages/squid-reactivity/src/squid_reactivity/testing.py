@@ -19,7 +19,7 @@ class InterleavingHarness:
         self._scheduled[checkpoint].append(callback)
 
     def checkpoint(self, name: str) -> None:
-        """Record a framework or author-defined yield point and run its next callback."""
+        """Record a checkpoint and run its next queued callback, if any."""
         self.seen.append(name)
         scheduled = self._scheduled.get(name)
         if scheduled:
@@ -27,7 +27,7 @@ class InterleavingHarness:
 
     @contextmanager
     def installed(self) -> Iterator[InterleavingHarness]:
-        """Install this harness for the lexical test scope."""
+        """Use this harness until the context exits, then restore the previous one."""
         token = core._INTERLEAVER.set(self.checkpoint)
         core._INTERLEAVER_USERS += 1
         try:

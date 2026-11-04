@@ -1,10 +1,8 @@
-"""Reactive-core internals exported for the rest of the Squid UI suite.
+"""Private integration points for other Squid UI packages.
 
-Nothing here is supported public API and nothing here is covered by the alpha stability
-promise: these names exist so sibling distributions -- squid-ui's component runtime and
-squid-replication's document binding -- can integrate with the reactive core without
-importing private names across a distribution boundary, and they may change in any
-release. Application code should import from :mod:`squid_reactivity` instead.
+The component runtime and replication bindings use these exports to work with
+reactive storage and transactions. They may change in any release. Application
+code should import from ``squid_reactivity`` instead.
 """
 
 from squid_reactivity.core import _CURRENT as CURRENT_TRANSACTION

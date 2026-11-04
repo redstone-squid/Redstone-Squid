@@ -1,13 +1,9 @@
-"""View state that outlives one mount.
+"""View state shared by several mounted components.
 
-A shared namespace holds what the view owns. It is a class, declared the way a component
-declares its own state, and two panels converge on one because something handed them the
-same object -- there is no store, no registry and no keyed lookup. What a namespace adds
-over an application service is that its writes join the action's transaction and publish
-their exact cell addresses without the author writing either half.
-
-Anything the application would still want if no one were looking at it belongs to the
-application's data layer, not here.
+Pass the same SharedState instance to components that should share values. Writes
+join the current action and publish the changed field addresses on the topic bus.
+The instance stays alive while its consumers or host retain it. Store durable
+application data in the application data layer.
 """
 
 import logging
@@ -18,14 +14,10 @@ from squid_reactivity.core import StateOwner, _Computed, _State
 from squid_reactivity.topics import Address, CellAddress, TopicBus
 
 _RESERVED = frozenset({"bus", "scope"})
-"""Attribute names a namespace owns, so state may not take one.
-
-Everything beginning with an underscore is reserved too. The list is short on purpose: the
-surface is a read, a write and `scope`, and every name past those is the author's.
-"""
+"""Names reserved for namespace metadata. Underscored names are also reserved."""
 
 _NO_SCOPE: Any = None
-"""The scope of a namespace with nothing to say about itself, i.e. ``SharedState[None]``."""
+"""Default label for a namespace without a scope."""
 
 _logger = logging.getLogger(__name__)
 
@@ -37,23 +29,18 @@ def _check_name(cls: type, name: str) -> None:
 
 
 class SharedState[ScopeT = None](StateOwner):
-    """Base class for a namespace of view state that several mounts share.
+    """A group of reactive fields shared by mounted components.
 
-    Subclass it, declare fields with :func:`~squid_reactivity.state`, and hand the instance to
-    whoever should see the same values. The handle *is* the state, so it lives exactly as long as the object
-    does: panels holding it means the state dies with the last panel, and a session holding
-    it means the state survives every panel opening and closing. Which of those you want is
-    a line of host code, not a setting.
+    Declare fields with ``state()`` and pass the same instance to each consumer.
+    A host can retain the instance across panel openings, or let it be collected
+    when the last consumer releases it.
 
-    ``ScopeT`` is a label, and nothing is required of it -- not frozen, not hashable, not
-    validated. Nothing keys on it, because nothing keys on anything; it exists so a conflict
-    message, a history label and a devtools row can say which namespace they mean.
+    The scope labels the instance in diagnostics. It need not be hashable or
+    immutable unless the host uses it as a key, for example in SharedStatePool.
 
     Args:
-        bus: The host's topic bus, which state changes are published on. Required, because a
-            namespace that silently stopped being reactive would be worse than one that
-            cannot be built.
-        scope: What this namespace is about, for diagnostics.
+        bus: Topic bus used to announce changed fields and resources.
+        scope: Label identifying the state in logs and conflict reports.
     """
 
     _state_slots: ClassVar[dict[str, _State]] = {}
@@ -90,20 +77,17 @@ class SharedState[ScopeT = None](StateOwner):
         cls._resource_names = frozenset(loaded)
 
     def _state_binding(self, name: str) -> CellAddress:
-        """Address a field declared here, so a write publishes instead of staying local.
+        """Give an ordinary state() field an address so its writes reach other consumers.
 
-        The one hook that makes `state()` on a namespace mean something different from
-        `state()` on a local owner -- and the reason it does not have to be spelled
-        differently. A component has no such hook, so its state has no address.
+        StateOwner calls this hook when creating a cell. Local component state has no
+        address; shared state uses the same descriptor but publishes through its bus.
         """
         return CellAddress(self, name)
 
     def _resource_binding(self, name: str) -> tuple[CellAddress, Callable[[Address], None]]:
-        """Address a resource declared here, and hand it the bus to announce itself on.
+        """Return the resource address and the callback that publishes its changes.
 
-        This is what makes a namespace resource *shared* rather than merely reachable from
-        several places: a component's resource reloads and re-renders its one component,
-        while this one reloads and publishes, so every mount that read it re-reads.
+        Publishing lets every mount that read the resource request a fresh render.
         """
         return CellAddress(self, name), self.bus.publish
 
@@ -111,8 +95,7 @@ class SharedState[ScopeT = None](StateOwner):
         self.bus = bus
         self.scope = scope
         self._commit_listeners: set[Callable[[], None]] = set()
-        # Eagerly, so every state field carries its address from birth. Its storage outlives
-        # every value it holds and is never replaced, so this is the only place one has to be made.
+        # Create stable cells and addresses before readers can subscribe to this namespace.
         for descriptor in type(self)._state_descriptors.values():
             descriptor.cell(self)
 
@@ -128,12 +111,10 @@ class SharedState[ScopeT = None](StateOwner):
 
     @override
     def __delattr__(self, name: str) -> None:
-        """Refuse removal of declared state; a namespace field is reset by assigning it.
+        """Reject deletion of declared state. Assign a new value to reset a field.
 
-        `_State.__delete__` stages removal, which is right for a component that owns its own
-        slots and can stop having one. A namespace field is addressed: readers elsewhere hold
-        a `CellAddress` for it, so removing it would leave them pointed at a slot with no
-        value, and the next read would resurrect the default as though someone had written it.
+        Other consumers retain the field's address. Deleting its value would leave
+        those readers referring to an empty cell that silently recreates its default.
         """
         if name in type(self)._state_descriptors:
             message = (
@@ -149,11 +130,9 @@ class SharedState[ScopeT = None](StateOwner):
 
     @override
     def _state_changed(self, names: frozenset[str]) -> None:
-        """Publish the addresses of the state fields that actually moved.
+        """Publish changed field addresses, then call the commit listeners.
 
-        The bus is the package's one cross-mount refresh mechanism, and a namespace keeps it
-        that way: no subscriber index of its own, no payloads, just addresses whose readers
-        re-read. Coalescing and delivery are the bus's, already tested.
+        Listener failures are logged so later listeners can still run.
         """
         slots = type(self)._state_slots
         self.bus.publish(*(slots[name].address(self) for name in names if name in slots))
@@ -165,7 +144,7 @@ class SharedState[ScopeT = None](StateOwner):
 
     @override
     def _state_rolled_back(self) -> None:
-        """Nothing to undo: a shared write stages, so a rolled-back one was never published."""
+        """Do nothing: staged writes were never published."""
 
     def _add_commit_listener(self, listener: Callable[[], None]) -> None:
         """Register a synchronous observer called after this namespace commits state."""
@@ -177,12 +156,7 @@ class SharedState[ScopeT = None](StateOwner):
 
 
 def describe(address: Address) -> str:
-    """One address as ``Preferences(Member(1, 2)).theme`` or ``build:123``, for diagnostics.
-
-    Devtools and host logs get a readable name without knowing how an address is built. Every
-    address kind now spells itself, so this is the name for the operation rather than a place
-    the formatting lives.
-    """
+    """Return a diagnostic address such as ``Preferences(7).theme`` or ``build:123``."""
     return str(address)
 
 

@@ -215,7 +215,7 @@ def _generation_statuses(ledger: ActionLedger) -> list[str]:
 
 
 async def test_an_installed_scope_abandons_a_superseded_load() -> None:
-    """Cancellation supplied by the host stops the loader instead of discarding its result."""
+    """A host cancellation scope stops an obsolete loader before it returns."""
     owner = _Checkpointed()
     ledger = ActionLedger()
     add_action_result_sink(ledger)
@@ -240,7 +240,7 @@ async def test_an_installed_scope_abandons_a_superseded_load() -> None:
 
 
 async def test_a_superseded_load_runs_to_completion_without_an_installed_scope() -> None:
-    """The dependency-free default: nothing stops the loader, only its result is dropped."""
+    """Without a cancellation scope, the obsolete loader finishes but its result is ignored."""
     owner = _Checkpointed()
     ledger = ActionLedger()
     add_action_result_sink(ledger)
@@ -263,7 +263,7 @@ async def test_a_superseded_load_runs_to_completion_without_an_installed_scope()
 
 
 async def test_replacing_a_resource_abandons_the_load_it_supersedes() -> None:
-    """`replace` bumps the generation too, so an authoritative value stops the request it beat."""
+    """Replacing a value also cancels its obsolete load when a scope is installed."""
     owner = _Checkpointed()
 
     with abandon_superseded_loads(anyio.CancelScope):
@@ -277,7 +277,7 @@ async def test_replacing_a_resource_abandons_the_load_it_supersedes() -> None:
 
 
 async def test_an_installed_scope_does_not_swallow_a_cancellation_from_outside() -> None:
-    """The scope answers for its own generation; a caller's deadline stays the caller's."""
+    """The load scope must let the caller's cancellation reach the caller."""
     attempts = 0
 
     class Retryable(StateOwner):

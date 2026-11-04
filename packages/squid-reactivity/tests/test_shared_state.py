@@ -36,6 +36,7 @@ def test_shared_read_write_conflict_rolls_back() -> None:
         assert preferences.theme == "dark"
         preferences.theme = "ours"
         descriptor = type(preferences)._state_descriptors["theme"]
+        # Commit a competing write without joining the transaction being tested.
         outside = contextvars.copy_context()
         outside.run(_CURRENT.set, None)
         outside.run(descriptor.cell(preferences).write, "theirs")

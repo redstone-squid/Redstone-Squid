@@ -1,4 +1,4 @@
-"""Contracts for the optional keyed lifetime owner."""
+"""Shared-state caching, scope validation, and instance lifetime."""
 
 from collections.abc import Hashable
 from dataclasses import dataclass
@@ -77,7 +77,7 @@ def test_a_custom_factory_is_called_once_per_generation_with_its_dependencies(bu
 
 
 def test_a_hit_does_not_construct_a_namespace_it_throws_away(bus: LocalTopicBus) -> None:
-    """The `setdefault` shape this replaces built one per call and discarded it."""
+    """Avoid eager factory calls such as ``cache.setdefault(scope, factory())``."""
     built = 0
 
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
@@ -260,7 +260,7 @@ def test_an_unhashable_pool_key_raises_the_normal_type_error(bus: LocalTopicBus)
     with pytest.raises(TypeError, match="unhashable"):
         pool.get(["guild", 7])  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
-    # ... while a direct namespace with the same scope is still fine, per 40's model.
+    # SharedState itself does not use the scope as a key, so direct construction accepts a list.
     assert Loose(bus, ["guild", 7]).scope == ["guild", 7]  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
@@ -279,7 +279,7 @@ def test_a_pool_needs_a_namespace_class_not_a_function(bus: LocalTopicBus) -> No
 
 
 def test_two_pools_over_one_namespace_do_not_converge(bus: LocalTopicBus) -> None:
-    """A pool is a lifetime owner, not a registry: nothing is global."""
+    """Each pool has its own cache, even when the namespace class is shared."""
     left = SharedStatePool(Preferences, bus)
     right = SharedStatePool(Preferences, bus)
 

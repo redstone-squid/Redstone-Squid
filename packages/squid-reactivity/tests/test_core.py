@@ -87,6 +87,7 @@ async def test_a_task_outliving_the_action_cannot_stage_into_it() -> None:
         counter.value = 99
 
     with transaction():
+        # Deliberately outlive the transaction to exercise an inherited stale context.
         escaped = asyncio.create_task(later())
         counter.value = 1
 
@@ -129,6 +130,7 @@ async def test_a_finished_transaction_reads_as_though_absent() -> None:
         return counter.value
 
     with transaction():
+        # Deliberately outlive the transaction to exercise an inherited stale context.
         escaped = asyncio.create_task(later())
         counter.value = 4
 
@@ -160,11 +162,10 @@ class Label(StateOwner):
 
 
 async def test_a_blind_write_moves_the_version_past_the_action_that_beat_it() -> None:
-    """Last commit wins the value; it must not also inherit the loser's version.
+    """A later commit must advance the version even if both actions staged the same version.
 
-    Both actions stage `version + 1` from the same starting version, so publishing that
-    number verbatim leaves the second commit standing on the first one's version -- and
-    every reader settled against it holding a value the cell no longer has.
+    The computed value is read between commits. If the second commit reused
+    the first version, that cached value would appear current and never update.
     """
     bus = LocalTopicBus()
     preferences = Preferences(bus)
@@ -194,12 +195,12 @@ async def test_a_blind_write_moves_the_version_past_the_action_that_beat_it() ->
 
 
 async def test_a_strong_read_is_not_satisfied_by_a_version_a_later_write_reused() -> None:
-    """`strong_read` compares versions, so a reused version would silently satisfy it.
+    """A strong read must detect a later commit that replaces the value it read.
 
-    Three actions, because two cannot tell the bug from correct behaviour: `slow` stages
-    blindly at the starting version, `quick` commits on top of it, and `guarded` branches on
-    what `quick` published. `slow` then replaces that value -- and unless its commit moves the
-    version past `quick`'s, `guarded` serializes against a value that is no longer there.
+    The slow action stages first. The quick action commits, and the guarded
+    action reads its result. The slow action then commits over that result.
+    If it reused the quick action's version, the guarded action would miss the
+    conflict and publish a result based on an obsolete value.
     """
     bus = LocalTopicBus()
     preferences = Preferences(bus)

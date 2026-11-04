@@ -1,4 +1,8 @@
-"""Adversarial transaction schedules at named deterministic checkpoints."""
+"""Inject competing writes and failures at specific transaction phases.
+
+InterleavingHarness runs callbacks at named checkpoints. This makes races such as
+a write just before commit validation reproducible without relying on task timing.
+"""
 
 import asyncio
 from typing import override

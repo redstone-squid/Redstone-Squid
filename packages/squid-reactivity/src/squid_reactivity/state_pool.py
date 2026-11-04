@@ -1,13 +1,8 @@
-"""An optional keyed lifetime owner for shared view state.
+"""Keep one shared-state instance per scope.
 
-:mod:`squid_reactivity.shared_state` argues that there is no store, no registry and no keyed lookup, and
-that stays true: a handle is still the state, and it still lives exactly as long as whoever holds
-it. This module is the one thing a host may reach for when what it holds is *one handle per scope* —
-the `setdefault` cache otherwise written by hand around every namespace.
-
-A pool is strong and single-typed. It owns one namespace class and retains one canonical handle per
-hashable scope until that scope is dropped, the pool is cleared, or the pool itself is released.
-There is no global pool, no lookup by type, and no way to reach a namespace nobody handed you.
+A pool retains its instances until ``delete()`` or ``clear()`` removes them, or
+until the pool itself is released. Hosts choose the lifetime by retaining the
+pool on a process, session, or request. Each pool accepts one namespace class.
 """
 
 from collections.abc import Callable, Hashable, Mapping
@@ -22,27 +17,22 @@ type SharedStateFactory[ScopeT, SharedT] = Callable[[TopicBus, ScopeT], SharedT]
 
 
 class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
-    """Retain one canonical namespace per scope, for as long as this pool is held.
+    """Cache one shared-state instance for each hashable scope.
 
-    The pool is where a host writes down a lifetime it would otherwise write down in a dict: put it
-    on the bot for process lifetime, on a cog for extension lifetime, on a session or a request for
-    theirs. Nothing about :class:`~squid_reactivity.shared_state.SharedState` changes -- constructing and passing
-    handles directly remains supported, and a scope used outside a pool may still be mutable or
-    unhashable.
+    For example, ``pool.get(member_id)`` returns the same instance on each call
+    until that scope is deleted. Consumers may continue to use an instance after
+    it leaves the pool; deleting it does not reset its state or disconnect its bus.
 
-    ``namespace`` is declared twice in the overloads, as a class and as the constructor that class
-    already is. The callable spelling is what lets a type checker read ``ScopeT`` off
-    ``SharedState[ScopeT]`` rather than having to solve it from a type-parameter bound, which Pyrefly 1.2
-    will not do (see ``docs/plans/squid-ui-redesign/spikes/59/``). Only a namespace *class* is
-    accepted at runtime; a bare function is refused at construction, because the identity check a
-    pool performs on what its factory returns needs a class to check against.
+    The callable constructor overload lets type checkers infer ScopeT directly from
+    SharedState[ScopeT]. Pyrefly 1.2 could not infer it through the SharedT bound; see
+    docs/plans/squid-ui-redesign/spikes/59/ for the original comparison.
 
     Args:
-        namespace: The one :class:`~squid_reactivity.shared_state.SharedState` subclass this pool owns.
-        bus: The host's topic bus. Every handle this pool retains must hold exactly this bus.
-        factory: How to build a namespace that needs more than ``(bus, scope)``. Annotate it as a
-            function rather than passing a lambda: a lambda takes its parameter types from the
-            expected type, which still contains the unsolved scope, so it infers as unknown.
+        namespace: SharedState subclass to construct. This must be a class, even
+            though the constructor overload describes it as a callable for inference.
+        bus: Topic bus shared by every instance in the pool.
+        factory: Constructor for namespaces that need more than ``(bus, scope)``.
+            Use an annotated function so type checkers can infer the scope type.
     """
 
     @overload
@@ -83,10 +73,11 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         self._constructing: set[ScopeT] = set()
 
     def get(self, scope: ScopeT) -> SharedT:
-        """Return the canonical namespace for `scope`, constructing it on the first ask.
+        """Return the cached instance for ``scope``, constructing it if absent.
 
-        One synchronous lookup: there is no await between the miss and the insertion, so two
-        asyncio tasks cannot both construct. A factory that raises leaves no entry behind.
+        Construction is synchronous, so asyncio tasks cannot interleave this lookup.
+        A factory failure leaves no cached entry. Recursive construction of the same
+        scope raises RuntimeError.
         """
         existing = self._handles.get(scope)
         if existing is not None:
@@ -98,41 +89,31 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return self._handles.get(scope)
 
     def delete(self, scope: ScopeT) -> SharedT | None:
-        """Retire `scope`, returning the handle that was canonical, or None if it was absent.
+        """Remove a scope and return its cached instance, or None if absent.
 
-        The retired handle is not invalidated or mutated: components still holding it keep reading
-        and writing the same state, and its writes still reach the bus. What changes is only that a
-        later `get(scope)` builds a **new generation** rather than returning this one. Callers that
-        cannot tolerate two generations being live at once must coordinate their consumers before
-        dropping -- the pool does not know who is holding what.
+        Existing consumers can still read and write the removed instance. A later
+        ``get(scope)`` creates another instance. Hosts that require a single shared
+        instance must release its consumers before deleting the scope.
         """
         return self._handles.pop(scope, None)
 
     def clear(self) -> None:
-        """Retire every scope, on the same terms as `drop`.
-
-        No cleanup hook runs, because a namespace has none; adding one here would make a pooled
-        handle behave differently from one constructed directly, which is the whole thing this
-        module is trying not to do.
-        """
+        """Remove all cached instances without changing the instances themselves."""
         self._handles.clear()
 
     def active(self) -> Mapping[ScopeT, SharedT]:
-        """Snapshot the retained handles, copied at the moment of the call.
+        """Return a read-only copy of the scope-to-instance mapping.
 
-        The result is not a view: mutating the pool afterwards -- get, drop, clear -- leaves a
-        snapshot already returned unchanged, so a caller may iterate it while retiring the very
-        scopes it names. It is read-only at runtime as well as statically, holds strong references
-        to the handles it names, and never invokes the factory.
+        Later pool changes do not affect this mapping. It holds strong references
+        to the instances, so retaining it also extends their lifetimes.
         """
         return MappingProxyType(dict(self._handles))
 
     def _create(self, scope: ScopeT) -> SharedT:
-        """Build and validate a handle for `scope` without retaining it.
+        """Construct and validate an instance without caching it.
 
-        Runs the factory under the same-scope reentrancy guard and applies the three validations.
-        The pool is unchanged whether this returns or raises. Exposed for an owner that must
-        prepare a handle -- hydrate it from a store, say -- before it becomes canonical.
+        The factory must return the configured namespace type with this pool's bus
+        and the requested scope. Hosts can prepare the result before calling _adopt.
         """
         if scope in self._constructing:
             message = (
@@ -148,11 +129,11 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return self._validated(created, scope)
 
     def _adopt(self, scope: ScopeT, handle: SharedT) -> SharedT:
-        """Retain `handle` as canonical for `scope`, or return the incumbent if one already exists.
+        """Cache ``handle`` unless another instance already occupies ``scope``.
 
-        Never calls the factory. Returns whichever handle is canonical afterwards; a caller that
-        released control between `_create` and here compares identity to learn whether it won, which
-        is how an owner with an await in the middle avoids publishing a second canonical handle.
+        Return the cached instance in either case. A caller that awaits between
+        _create and _adopt must use this return value: another caller may have
+        filled the cache while it was waiting.
         """
         incumbent = self._handles.get(scope)
         if incumbent is not None:

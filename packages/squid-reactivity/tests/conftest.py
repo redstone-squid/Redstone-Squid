@@ -1,4 +1,4 @@
-"""Package-local test configuration; the repo-root conftest does not reach this directory."""
+"""Package test configuration; tests/conftest.py does not apply to this directory."""
 
 import os
 

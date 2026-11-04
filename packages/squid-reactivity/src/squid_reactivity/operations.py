@@ -1,4 +1,11 @@
-"""Repeatable operation definitions and one-shot causally identified executions."""
+"""Run explicitly started asynchronous work and expose its progress to renders.
+
+An operation definition is reusable; each `start()` creates a separate execution,
+such as one export requested by a user. Awaiting the execution runs or joins its
+loader in the caller's task. Progress and terminal outcomes invalidate the owner
+so its next render can display them. Work that publishes reactive state can open
+a causally linked action through the execution's `start_action` method.
+"""
 
 import asyncio
 import uuid
@@ -25,10 +32,9 @@ from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
 
 
 class OperationOwner(Protocol):
-    """The behaviour a bound operation definition needs from its declaring owner.
+    """An object that requests a render when an operation changes.
 
-    The instance dictionary is reached through `vars()`; see
-    `squid_ui.runtime.histories.HistoryOwner`.
+    Descriptors also require an instance dictionary to cache the bound definition.
     """
 
     def invalidate(self) -> None: ...
@@ -36,7 +42,7 @@ class OperationOwner(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class OperationContext:
-    """Stable execution identity and its initiating causal relation."""
+    """Identify an execution and the action or event that caused it."""
 
     execution_id: uuid.UUID
     cause: CausalRef | None
@@ -82,7 +88,7 @@ type OperationStatus[ValueT, ProgressT] = (
 
 
 class ProgressReporter[ProgressT]:
-    """The explicit capability through which an execution reports reactive progress."""
+    """Update the progress exposed by an operation execution."""
 
     def __init__(self, execution: OperationExecution[Any, ProgressT]) -> None:
         self._execution = execution
@@ -93,7 +99,13 @@ class ProgressReporter[ProgressT]:
 
 
 class OperationExecution[ValueT, ProgressT](AsyncBinding):
-    """One one-shot execution. Awaiting it runs or joins it until terminal status."""
+    """One execution of an operation, shared by all callers that await it.
+
+    The first waiter runs the loader in its own task. Later waiters join the
+    same execution. Cancelling the loading task cancels the execution; cancelling
+    a joining waiter leaves it running. Awaiting returns the value or raises the
+    stored error, while status exposes progress and the final outcome.
+    """
 
     pending_mode = PendingMode.EXPLICIT
     reconcile_while_pending = True
@@ -123,7 +135,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     @property
     @override
     def pending(self) -> bool:
-        """Whether this execution still requests its one settlement attempt."""
+        """Whether the execution has not yet succeeded, failed, or been cancelled."""
         return isinstance(self._status, Pending)
 
     def _set_progress(self, value: ProgressT) -> None:
@@ -215,7 +227,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
 
 
 class OperationDefinition[ValueT, ProgressT]:
-    """A repeatable bound definition that starts a fresh one-shot execution each time."""
+    """A bound loader that creates a new execution on each call to start."""
 
     def __init__(
         self,
@@ -236,7 +248,11 @@ class OperationDefinition[ValueT, ProgressT]:
         cause: CausalRef | None = None,
         root_action_id: ActionId | None = None,
     ) -> OperationExecution[ValueT, ProgressT]:
-        """Create a fresh execution causally linked to the current action by default."""
+        """Create an execution without running its loader.
+
+        Omitted cause and root identifiers come from the current action, if any.
+        Await the returned execution, or let the host settle it during rendering.
+        """
         action = current_action()
         if action is not None:
             cause = cause or action.causal_ref()
@@ -294,7 +310,11 @@ def operation[OwnerT: OperationOwner, ValueT, ProgressT](
     [Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]]],
     _OperationDescriptor[OwnerT, ValueT, ProgressT],
 ]:
-    """Declare a repeatable operation definition."""
+    """Declare an asynchronous operation with an initial progress value.
+
+    The decorated method receives a ProgressReporter. Accessing the attribute
+    returns an OperationDefinition; call its start method for each execution.
+    """
 
     def decorate(
         loader: Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]],

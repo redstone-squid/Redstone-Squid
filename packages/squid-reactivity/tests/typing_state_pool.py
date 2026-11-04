@@ -1,11 +1,10 @@
-"""Pins `SharedStatePool`'s inference under `just typecheck`; nothing here runs.
+"""Check SharedStatePool scope and instance inference with the project type checker.
 
-The pool's whole claim is that the namespace's `SharedState[ScopeT]`, the lookup scope, the factory
-argument and the returned handle are one inferred pair. The assertions below are on the **full**
-pool type rather than on the handle alone, because the failure mode this guards against is
-`SharedStatePool[Any, Preferences]` -- which would satisfy a handle-only assertion while silently
-accepting the wrong scope. See `docs/plans/squid-ui-redesign/spikes/59/` for the measurement
-that chose this signature.
+Assert the full pool type: checking only the returned instance would miss a
+regression to SharedStatePool[Any, Preferences], which accepts invalid scopes.
+This file is checked statically and is not a pytest module.
+The inference experiments behind this signature are in
+docs/plans/completed/squid-layouts-redesign/spikes/59/.
 """
 
 from dataclasses import dataclass

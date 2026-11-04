@@ -1,4 +1,14 @@
-"""Transactional reactive state with no hosting or presentation opinions."""
+"""Keep view state reactive and publish related changes together.
+
+Declare fields with `state` and derived values with `computed` on a StateOwner.
+Reads record dependencies; assignments advance versions so later reads can
+refresh derived values. A `transaction` stages related assignments and publishes
+them when the block succeeds. SharedState adds topic-bus notifications for
+multiple mounted components that use the same instance.
+
+The resources and operations modules add asynchronous loading and progress while
+keeping component renders synchronous.
+"""
 
 from squid_reactivity.actions import (
     ActionCommit,

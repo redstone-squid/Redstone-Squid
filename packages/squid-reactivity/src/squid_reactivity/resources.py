@@ -1,4 +1,14 @@
-"""Reactive async values observed by synchronous component renders."""
+"""Make asynchronous data available to synchronous component renders.
+
+A resource holds a loader and its current Pending, Ready, or Failed status.
+Rendering discovers the resource without starting I/O; the host runs pending
+loads in owned tasks, then renders again. A loader's reactive reads become its
+dependencies, so changed inputs cause a later read to request a new value.
+
+Each invalidation or replacement starts a new generation. A load belongs to the
+generation that started it and can install a result only while that generation
+is current, preventing an older request from overwriting newer data.
+"""
 
 import asyncio
 import uuid
@@ -39,11 +49,9 @@ from squid_reactivity.topics import Address
 
 
 class ResourceOwner(ReactiveOwner, Protocol):
-    """The behaviour a bound resource needs from whatever declared it.
+    """An owner that requests a render when its resource changes.
 
-    The instance dictionary the descriptor caches into is reached through `vars()`, not
-    declared here: see `squid_ui.runtime.histories.HistoryOwner` for why declaring it
-    excludes every owner with a metaclass.
+    Descriptors also require an instance dictionary to cache bound resources.
     """
 
     def invalidate(self) -> None: ...
@@ -63,12 +71,10 @@ class AsyncBinding(Protocol):
 
 
 class AddressedOwner(Protocol):
-    """An owner whose resources are named, so their changes can be published.
+    """Publish resource changes to consumers other than the resource owner.
 
-    A component's resource is private to one instance and needs no address: the mount
-    re-renders it and nobody else is looking. A namespace's resource is shared by every
-    mount holding the namespace, so a reload has to reach the others the way a shared cell
-    write does -- by publishing an address they follow.
+    SharedState resources use addresses so every mount that read them receives
+    updates. A component's private resource only needs to invalidate that component.
     """
 
     def _resource_binding(self, name: str) -> tuple[Address, Callable[[Address], None]]:
@@ -77,12 +83,11 @@ class AddressedOwner(Protocol):
 
 
 class LoadScope(Protocol):
-    """A cancellable region around one generation's loader, entered in the loading task.
+    """A cancellation scope entered in the task running one load.
 
-    Ends when the loader returns or raises, or when `cancel` is called because the generation
-    was superseded; exiting swallows only the cancellation this scope itself delivered.
-    `anyio.CancelScope` satisfies this as it stands, which is what `sd` installs --
-    this package has no dependencies, so it supplies the seam rather than the cancellation.
+    Cancel stops a superseded loader. Exiting the scope must suppress only
+    cancellation raised by that scope. Hosts can supply anyio.CancelScope
+    without making this package depend on anyio.
     """
 
     def __enter__(self) -> object: ...
@@ -98,10 +103,7 @@ class LoadScope(Protocol):
 
 
 class _NoAbandonment:
-    """The region a load gets when nothing is installed: it runs to completion regardless.
-
-    Stateless and shared, because it ends nothing and holds nothing to end.
-    """
+    """Let superseded loaders finish when no cancellation scope is installed."""
 
     __slots__ = ()
 
@@ -117,7 +119,7 @@ class _NoAbandonment:
         return False
 
     def cancel(self) -> None:
-        """Nothing to stop: the loader keeps its own completion and only its result is dropped."""
+        """Leave the loader running; its obsolete result will be discarded."""
 
 
 _NO_ABANDONMENT = _NoAbandonment()
@@ -127,14 +129,14 @@ _ABANDONMENT: ContextVar[Callable[[], LoadScope] | None] = ContextVar("squid_rea
 
 @contextmanager
 def abandon_superseded_loads(scope: Callable[[], LoadScope]) -> Iterator[None]:
-    """Cancel a resource load whose generation is superseded, for loads started in this context.
+    """Install cancellation scopes for loads started within this context.
 
-    Read when a load starts rather than when a resource is constructed: a resource is built
-    lazily on first access, during a render that may be nowhere near the task that later loads
-    it. Context variables copy into child tasks, so one installation covers a whole settle group.
+    The factory is consulted when loading starts, not when the resource is
+    created. Child tasks inherit it through the context. Each superseded load
+    is cancelled through its own scope.
 
-    Without it a superseded loader runs to completion and only its result is discarded, which is
-    correct -- the contract makes a loader safe to run zero, one or many times -- just wasteful.
+    Without a factory, obsolete loaders run to completion and their results are
+    discarded. Loaders must be safe to repeat or abandon in either mode.
     """
     token = _ABANDONMENT.set(scope)
     try:
@@ -199,7 +201,7 @@ _CURRENT_BINDINGS: ContextVar[list[AsyncBinding] | None] = ContextVar(
 
 
 class _Missing:
-    """A staged replacement of `None` is a value; the absence of one is not."""
+    """Distinguish an absent replacement from a replacement whose value is None."""
 
     __slots__ = ()
 
@@ -221,10 +223,10 @@ class _Replacement:
         self.value: Any = _MISSING
 
     def prepare(self, view: TransactionView) -> dict[_ReactiveSource, int] | None:
-        """Settle every source while the action can still roll back.
+        """Settle dependencies before publication, while failure can still abort the action.
 
-        `None` means this participant staged no replacement, which is why `apply` can be
-        total: there is no state it has to check before trusting what it was handed.
+        Return None if no replacement was staged; otherwise return the dependency
+        versions that apply should retain.
         """
         if isinstance(self.value, _Missing):
             return None
@@ -241,19 +243,16 @@ class _Replacement:
         self.value = _MISSING
 
     def finalize(self, prepared: dict[_ReactiveSource, int] | None) -> None:
-        """Installing already invalidated the owner, which is the only watcher there is."""
+        """Do nothing: applying the replacement already sent its notifications."""
 
 
 class _Load[ValueT]:
-    """One generation's private notebook: what it read, how to stop it, and how to wake joiners.
+    """Keep one load's dependencies, cancellation scope, and completion signal.
 
-    The reads are held here rather than on the resource because a superseded loader does not
-    stop at the bump. It resumes inside its own task with its own `_CONSUMER` still pointing
-    here -- until its next checkpoint where `abandon_superseded_loads` is installed, and to
-    completion where it is not -- and goes on recording, so a single dict on the resource would
-    collect the reads of every generation that ever started, and the live value would end up
-    subscribed to state it never looked at. Only the generation that still holds the token
-    publishes what it read.
+    A superseded loader may continue running until cancellation reaches it, or
+    until completion when no cancellation scope exists. Its tracked reads must
+    remain separate from the next load's reads. Only the load whose token is
+    still current installs its dependencies on the resource.
     """
 
     __slots__ = ("completion", "owner", "scope", "sources", "token")
@@ -283,7 +282,13 @@ def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
 
 
 class Resource[ValueT](AsyncBinding):
-    """One component-bound async value with synchronous observable state."""
+    """An asynchronous value with a synchronous status for render code.
+
+    Reading status never starts a load. Await the resource to load it and get
+    its value, or let the host load pending resources discovered during render.
+    Loads track their dependencies. A later read notices changed versions and
+    marks the resource pending again. Concurrent waiters share the current load.
+    """
 
     reconcile_while_pending = False
     settle_without_delivery = False
@@ -318,12 +323,11 @@ class Resource[ValueT](AsyncBinding):
         self._generation_root = None if causality is None else causality[1]
         self._rechecking = False
         self.version = 0
-        """Dates this resource's state, so a reader can tell whether it has moved.
+        """Version checked by dependent resources and computed values.
 
-        Every transition moves it: a load reaching `Ready` or `Failed`, a `replace`, and a
-        re-pend. Including the re-pend is what lets an invalidation reach a dependent
-        immediately rather than one load later, and it is safe because a dependent awaits its
-        input rather than racing it -- see `__await__`.
+        Loading a value, recording a failure, replacing a value, and marking it pending
+        all advance the version. Dependents can therefore notice invalidation before
+        the next load finishes.
         """
         self.sources: dict[_ReactiveSource, int] = {
             source: version for source, version in declared_cells(owner).items()
@@ -336,7 +340,7 @@ class Resource[ValueT](AsyncBinding):
 
     @property
     def status(self) -> ResourceStatus[ValueT]:
-        """Return the current synchronous state, re-pending it if what it read has moved."""
+        """Return the status, marking it pending if a dependency changed."""
         staged = self._staged()
         if not isinstance(staged, _Missing):
             # This action already declared the value authoritative, so nothing it reads next
@@ -347,12 +351,7 @@ class Resource[ValueT](AsyncBinding):
         return self._status
 
     def track(self) -> None:
-        """Record a read of this resource with whatever is consuming reads.
-
-        The same call `_Cell.read` makes, and for the same reason: a value derived from this
-        one has to know when this one moves. It is what lets one resource derive from
-        another, and a computed derive from a resource.
-        """
+        """Record this resource and its version as a dependency of the current reader."""
         consumer = _CONSUMER.get()
         if consumer is None or consumer is self:
             return
@@ -363,63 +362,42 @@ class Resource[ValueT](AsyncBinding):
         consumer.sources[self] = self.version
 
     def settle(self) -> int:
-        """The version a reader should compare against, as `_Cell.settle` does for a cell.
-
-        Re-checks first, so asking whether this resource moved also propagates a move from
-        whatever *it* reads. That is what carries an invalidation down a chain: the topic
-        moves, this resource re-pends, and its dependent sees a new version to compare
-        against.
-        """
+        """Recheck dependencies and return the resulting version without starting a load."""
         self._recheck()
         return self.version
 
     def _landed(self) -> None:
-        """A new value is installed: date it, and tell anyone following this address.
+        """Advance the version and publish the installed value's address.
 
-        Only where a value lands -- `Ready`, `Failed`, `replace` -- and never on a re-pend.
-        Publishing a re-pend would wake every follower to look at a value that is still on
-        its way, and the reload that follows publishes anyway.
+        Pending transitions do not publish here. The load that follows publishes
+        once it installs a ready value or a failure.
         """
         self._moved()
         if self.address is not None and self._publish is not None:
             self._publish(self.address)
 
     def _notify(self) -> None:
-        """Tell whoever is watching that this resource moved.
-
-        A component's resource invalidates its component, the only thing looking at it. A
-        namespace's resource has already published its address, and the namespace renders
-        nothing itself, so the publish *is* the notification and there is nobody else to tell.
-        """
+        """Request a render for a private resource. Shared resources notify through the bus."""
         if self.address is None:
             self._owner.invalidate()
 
     def _moved(self) -> None:
-        """Date this resource's state anew, and tell settled readers to look again.
-
-        The epoch half matters as much as the version: a computed that reads this resource
-        short-circuits on the epoch, so without it a computed value would never re-derive.
-        """
+        """Advance the resource version and the epoch used by computed caches."""
         self.version += 1
         _bump_epoch()
 
     def _recheck(self) -> None:
-        """Give up a value whose inputs moved since the load that produced it.
+        """Mark the resource pending when any dependency version changes.
 
-        Pulled here rather than pushed at commit: the write that moved the input already
-        invalidated the owner, so the only thing left is for the next reader to notice.
-
-        Re-entrant through a chain -- asking a source whether it moved re-checks it too -- so
-        a cycle is broken by reporting the version in hand rather than recursing forever. The
-        cycle itself is caught in `_load`, where it can be named.
+        Dependencies are checked on read rather than at commit. Recursive checks
+        stop at this resource while it is already checking; _load detects and
+        reports dependency cycles when a loader runs.
         """
         if self._rechecking:
             return
-        # While a load is in flight, its own notebook is the live read set: `self.sources`
-        # describes the settled value's inputs and is emptied for the duration, so consulting
-        # it here would make a move in something the loader has *already read* invisible. The
-        # generation would then run to completion and install a value built from inputs that
-        # have since changed, and nothing would supersede it.
+        # During loading, check the dependencies already read by that load. self.sources
+        # belongs to the previous value and is empty while loading, so checking it would
+        # miss changes to inputs the active loader has used.
         watched = self._loading.sources if self._loading is not None else self.sources
         self._rechecking = True
         try:
@@ -434,7 +412,11 @@ class Resource[ValueT](AsyncBinding):
 
     @property
     def value(self) -> ValueT:
-        """Return the ready value or fail instead of smuggling pending into its type."""
+        """Return a ready value or raise ResourceNotReadyError.
+
+        A read that would depend on the currently running loader raises
+        ReactiveCycleError instead. This property does not wait for a load.
+        """
         status = self.status
         if isinstance(status, Ready):
             return status.value
@@ -465,12 +447,11 @@ class Resource[ValueT](AsyncBinding):
             self._notify()
 
     def replace(self, value: ValueT) -> None:
-        """Install an authoritative value and supersede every in-flight request.
+        """Supply a value and supersede any load in progress.
 
-        Inside an action this stages like any other write: the action reads back what it
-        replaced, nobody else sees it until the commit lands, and a rollback drops it. A
-        resource is the application's value, so it may not be the one thing that survives a
-        handler that failed.
+        Inside an action, the replacement is staged: reads in that action see it,
+        other readers keep seeing the committed value, and rollback discards it.
+        Outside an action, the replacement is installed immediately.
         """
         staged = enlist(self, lambda: _Replacement(self))
         if staged is None:
@@ -495,16 +476,12 @@ class Resource[ValueT](AsyncBinding):
         return staged.value if isinstance(staged, _Replacement) else _MISSING
 
     def __await__(self) -> Generator[Any, None, ValueT]:
-        """`value = await self.other` inside a loader: settle that resource, then use it.
+        """Load this resource if pending, then return its value or raise its error.
 
-        A resource derived from another resource has to wait for it, and `value` cannot --
-        it is synchronous, and raises for a pending resource because a render has nowhere to
-        wait. Awaiting is the loader's version: it settles the dependency if it is pending,
-        registers the read so a later change re-pends this resource too, and raises whatever
-        the dependency raised.
-
-        Only meaningful inside another resource's loader, or anywhere else already async.
-        A render cannot await, which is the point: a render reads what has settled.
+        A resource loader can use ``value = await self.other`` to wait for another
+        resource and track it as a dependency. Tracking happens after loading, so
+        the caller records the version of the value it actually receives.
+        Synchronous renders should inspect status or value instead.
         """
         return self._awaited().__await__()
 
@@ -531,19 +508,15 @@ class Resource[ValueT](AsyncBinding):
 
     @override
     async def _load(self) -> ResourceStatus[ValueT]:
-        """Settle the current pending generation, sharing an identical in-flight load.
+        """Load the current pending generation, joining an existing load when possible.
 
-        Reads `_status` rather than `status` throughout, here and below. The public read
-        tracks, and tracking from inside the machinery would register whoever is loading
-        against the version this resource holds *before* it settles -- leaving them stale
-        against the value they are about to receive. Only `_awaited` tracks, and only once
-        the value is in hand.
+        Use _status internally to avoid tracking the resource's pending version as
+        a dependency of its caller. _awaited records the read after loading finishes.
         """
         self._recheck()
         if not isinstance(self._status, Pending):
             return self._status
-        # Before the shared wait below, which for a cycle would be this load waiting on
-        # itself -- a hang with nothing to report rather than an error naming the ring.
+        # Check for a cycle before joining a load, or the loader could wait on itself.
         with settling(self):
             return await self._loaded()
 
@@ -560,9 +533,8 @@ class Resource[ValueT](AsyncBinding):
         self._loading = load
         generation = (self._generation_id, self._generation_cause, self._generation_root)
         self._emit_generation("started", generation)
-        # Emptied here as well as tracked into `load`, because `_recheck` reads this one and
-        # must stay inert while a load is in flight: re-pending mid-load would supersede the
-        # very generation that is about to answer.
+        # The active load tracks its own dependencies. Retire the old value's dependencies
+        # so they do not remain subscribed after this generation installs its result.
         self.sources = {}
         consumer = _CONSUMER.set(load)
         try:
@@ -574,8 +546,7 @@ class Resource[ValueT](AsyncBinding):
                 with load.scope:
                     value = await self._loader()
             except asyncio.CancelledError as error:
-                # A cancellation from outside this generation's scope, which is the caller's to
-                # answer for. Install nothing and let it through.
+                # Preserve external cancellation so the caller's task or deadline can handle it.
                 self._emit_generation("cancelled", generation, error)
                 raise
             except Exception as error:
@@ -589,9 +560,8 @@ class Resource[ValueT](AsyncBinding):
                     self._emit_generation("superseded", generation)
             else:
                 if isinstance(value, _Missing):
-                    # Abandoned rather than superseded: `_new_generation` stopped this loader
-                    # instead of letting it finish. The generation that replaced it is already
-                    # `Pending`, so there is nothing to install and nothing to say about state.
+                    # The scope cancelled this loader before it returned. Keep the newer
+                    # generation's state, which may already have finished loading.
                     self._emit_generation("abandoned", generation)
                 elif token == self._request_token:
                     self.sources = load.sources
@@ -612,10 +582,8 @@ class Resource[ValueT](AsyncBinding):
     def _new_generation(self) -> None:
         self._request_token += 1
         if self._loading is not None:
-            # The bump just superseded whatever is in flight, so ask it to stop. The single
-            # place that needs to: `_invalidate` and `_replace_now` are the only two callers,
-            # which is both ways a generation can be superseded. Without an installed scope
-            # this is inert and the loader runs to completion as before.
+            # Invalidation and replacement both come through here. Stop the obsolete load
+            # if a cancellation scope is installed; otherwise its result is discarded later.
             self._loading.scope.cancel()
         self._generation_id = uuid.uuid7()
         causality = current_causality()
@@ -644,10 +612,11 @@ class Resource[ValueT](AsyncBinding):
 
 
 class AtomicResource[ValueT](Resource[ValueT]):
-    """A resource whose render-visible state is always settled.
+    """Expose a settled status during rendering, retaining the previous value while loading.
 
-    The mount catches a pending read during discovery, settles the resource, and retries the
-    render. Direct reads before a mount has settled the resource raise ``ResourceNotReadyError``.
+    If no previous value exists, reading pending status raises
+    ResourceNotReadyError. The mount catches the internal subtype, loads the
+    resource, and retries the render.
     """
 
     @property
@@ -800,10 +769,15 @@ def resource(
     *,
     pending: PendingMode = PendingMode.EXPLICIT,
 ) -> Any:
-    """Declare a lazy async value whose current state is available during synchronous render.
+    """Declare an asynchronous value that render code can read synchronously.
 
-    The loader's reads are tracked, so the state it consults is its dependency set and a
-    write to any of it re-pends the resource at the next read.
+    The loader's tracked reads become dependencies. When their versions change,
+    the next read marks the resource pending. Loaders may run repeatedly and
+    obsolete results may be discarded, so use operations for one-time effects.
+
+    With the default EXPLICIT mode, status can be Pending, Ready, or Failed.
+    ATOMIC mode exposes the previous ready value while reloading, or asks the
+    host to load before rendering when no previous value exists.
     """
 
     def decorate(

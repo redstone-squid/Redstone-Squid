@@ -1,4 +1,11 @@
-"""Action identity, immutable results, and bounded diagnostic retention."""
+"""Describe why a reactive transaction ran and what it committed or rolled back.
+
+ActionContext gives the transaction an identity and links it to the event that
+caused it. A completed transaction produces an ActionCommit or ActionRollback;
+history can use the commit's reversible changes, while diagnostic sinks receive
+portable summaries. Operations and resource loads carry causal references so
+their later results can still be traced to the initiating action.
+"""
 
 import json
 import logging
@@ -26,7 +33,7 @@ _EMPTY_METADATA: Mapping[str, str] = MappingProxyType({})
 
 
 class ActionPurpose(Enum):
-    """The semantic reason an action exists."""
+    """Why an action was started."""
 
     NORMAL = "normal"
     UNDO = "undo"
@@ -58,7 +65,7 @@ class CausalRef:
 
 @dataclass(frozen=True, slots=True)
 class ActorRef:
-    """A safe application-defined actor identity."""
+    """An application-defined actor identifier included in diagnostics."""
 
     kind: str
     identity: str
@@ -124,7 +131,11 @@ class CommitSequence:
 
 @dataclass(frozen=True, slots=True)
 class ExceptionReport:
-    """A retention-safe exception description without traceback or arbitrary values."""
+    """An exception type and message without references to its traceback.
+
+    The message is captured unchanged and may contain sensitive data. Apply a
+    RedactionPolicy before storing or sharing the report.
+    """
 
     type_name: str
     message: str
@@ -136,7 +147,7 @@ class ExceptionReport:
 
 @dataclass(frozen=True, slots=True)
 class ObservedRead:
-    """One strong input version used by a publishing action."""
+    """The committed version of a shared cell read by an action."""
 
     target_id: str
     version: int
@@ -152,7 +163,7 @@ class ChangeReport:
 
 @dataclass(frozen=True, slots=True)
 class ConflictDetail:
-    """A stable target and its expected and actual lineage."""
+    """A target identifier and the versions that caused a conflict."""
 
     target_id: str
     expected_version: int
@@ -160,11 +171,11 @@ class ConflictDetail:
 
 
 class ChangeToken[InverseT = Any](Protocol):
-    """A participant's handle to work it can plan and then stage an inverse for.
+    """A participant's reversible change.
 
-    Opaque in what the inverse *is* -- that belongs to whichever backend produced it -- but
-    not in what can be asked of the handle. `sl.history()` calls exactly these two methods,
-    and typing the field `Any` meant neither the calls nor the implementations were checked.
+    The participant defines the inverse type. History first asks plan_inverse
+    whether the change can still be undone, then passes the returned inverse
+    to stage_inverse inside a transaction.
     """
 
     def plan_inverse(self) -> InverseT | ConflictDetail: ...
@@ -197,7 +208,7 @@ class ActionCommit:
 
 @dataclass(frozen=True, slots=True)
 class ActionRollback:
-    """The immutable record of an action whose transaction is dead and published nothing."""
+    """The result of an action that discarded its staged writes."""
 
     context: ActionContext
     rolled_back_at: datetime
@@ -215,7 +226,7 @@ type ActionResult = ActionCommit | ActionRollback
 
 @dataclass(frozen=True, slots=True)
 class ActionResultSnapshot:
-    """The bounded, portable default projection of an result."""
+    """A portable action summary containing change counts instead of cell values."""
 
     action_id: str
     root_action_id: str
@@ -347,7 +358,12 @@ type CausalEventSnapshot = (
 
 
 class ActionResultCodec:
-    """Schema-versioned count-only JSON codec for portable result snapshots."""
+    """Encode and decode action summaries as versioned JSON.
+
+    Decoding rejects unsupported versions, malformed records, and inputs larger
+    than max_encoded_bytes. Encoding preserves the supplied snapshot, so callers
+    must apply any required redaction before passing it here.
+    """
 
     schema_version = 1
     max_encoded_bytes = 1_048_576
@@ -484,7 +500,11 @@ class DurableResultSink:
 
 
 class ActionLedger:
-    """A bounded diagnostic ledger. Calling :meth:`close` ends its sink registration."""
+    """Keep the most recent diagnostic events, up to the configured limit.
+
+    Register this ledger with add_action_result_sink or action_result_sink to
+    receive events. Calling close removes that registration.
+    """
 
     def __init__(self, limit: int = 100) -> None:
         if limit < 1:
@@ -532,7 +552,7 @@ def next_commit_sequence() -> CommitSequence:
 
 
 def current_action() -> ActionContext | None:
-    """Return the live lexical action context, if any."""
+    """Return the action context installed in this context, if any."""
     return _CURRENT_ACTION.get()
 
 
@@ -543,7 +563,7 @@ def current_causality() -> tuple[CausalRef, ActionId | None] | None:
 
 @contextmanager
 def action_scope(context: ActionContext) -> Iterator[ActionContext]:
-    """Install an action context until the lexical scope exits."""
+    """Install an action context until the with block exits."""
     token = _CURRENT_ACTION.set(context)
     causal = _CURRENT_CAUSALITY.set((context.causal_ref(), context.root_action_id))
     try:
@@ -555,7 +575,7 @@ def action_scope(context: ActionContext) -> Iterator[ActionContext]:
 
 @contextmanager
 def causal_scope(cause: CausalRef, root_action_id: ActionId | None) -> Iterator[None]:
-    """Install detached immutable causality without granting live transaction authority."""
+    """Set cause and root identifiers without opening a transaction."""
     token = _CURRENT_CAUSALITY.set((cause, root_action_id))
     try:
         yield
@@ -588,7 +608,7 @@ def remove_action_result_sink(sink: ActionResultSink) -> None:
 def action_result_sink(
     sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION
 ) -> Iterator[ActionResultSink]:
-    """Register a sink until the lexical scope exits.
+    """Register a sink until the with block exits.
 
     The scoped form of :func:`add_action_result_sink`, for observers -- a test collector, a
     bounded diagnostic capture -- whose life is a block rather than the process.
@@ -626,7 +646,7 @@ def emit_result(result: ActionResult) -> None:
 
 
 def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
-    """Fan out one bounded diagnostic node without allowing a sink to veto runtime work."""
+    """Send an event to live sinks, logging sink failures and continuing delivery."""
     live: list[_SinkRegistration] = []
     for registration in _sinks:
         sink = registration.reference()
@@ -641,7 +661,7 @@ def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
 
 
 def emit_continuation_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
-    """Record a redacted post-result failure causally beneath its immutable result."""
+    """Report a callback failure linked to its action, with the message redacted."""
     exception = DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
     assert exception is not None
     emit_causal_event(
@@ -658,7 +678,7 @@ def emit_continuation_failure(result: ActionResult, stage: str, callback: str, e
 
 
 class ActionContinuation:
-    """Authority to start fresh causal work after a result; the callback ends it."""
+    """Start work linked to an action that has already committed or rolled back."""
 
     def __init__(self, result: ActionResult) -> None:
         self.result = result
@@ -684,7 +704,7 @@ class ActionContinuation:
 
 @contextmanager
 def continuation_callback() -> Iterator[None]:
-    """Mark the lexical scope as post-result continuation work."""
+    """Mark this with block as continuation work after an action result."""
     token = _continuation_depth.set(_continuation_depth.get() + 1)
     try:
         yield

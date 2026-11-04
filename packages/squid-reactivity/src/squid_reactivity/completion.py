@@ -1,10 +1,14 @@
-"""Caller-owned asynchronous completion shared by resources and operations."""
+"""Share an asynchronous result without letting one waiter cancel other waiters."""
 
 import asyncio
 
 
 class Completion[ValueT]:
-    """A lazily loop-bound signal that ends when its owner resolves or cancels it."""
+    """A result that its owner can resolve or cancel once.
+
+    The first resolve, cancel, or wait call binds it to the running event loop.
+    Cancelling a waiter leaves the shared result available to other waiters.
+    """
 
     def __init__(self) -> None:
         self._future: asyncio.Future[ValueT] | None = None
@@ -16,22 +20,22 @@ class Completion[ValueT]:
 
     @property
     def done(self) -> bool:
-        """Whether this generation has reached any terminal outcome."""
+        """Whether the result has been resolved or cancelled."""
         return self._future is not None and self._future.done()
 
     @property
     def cancelled(self) -> bool:
-        """Whether its owner cancelled before resolving the generation."""
+        """Whether the owner cancelled the result before resolving it."""
         return self._future is not None and self._future.cancelled()
 
     def resolve(self, value: ValueT) -> None:
-        """Publish a successful outcome once."""
+        """Set the result, or do nothing if it has already resolved or been cancelled."""
         future = self._bound()
         if not future.done():
             future.set_result(value)
 
     def cancel(self) -> None:
-        """Wake joiners by cancelling this generation's completion signal."""
+        """Cancel the shared result and wake waiters with CancelledError."""
         future = self._bound()
         if not future.done():
             future.cancel()
