@@ -1,4 +1,7 @@
-"""The epoch trigger: one bump per statement, and a notification after commit."""
+"""Permission changes advance the epoch used to invalidate cached rules.
+
+The trigger increments this version once per statement and notifies listeners after commit.
+"""
 
 import asyncio
 from collections.abc import AsyncGenerator
@@ -85,7 +88,6 @@ async def test_a_bulk_grant_bumps_the_epoch_once(
 async def test_a_delete_bumps_the_epoch_too(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Revocation is the direction staleness must never favour."""
     async with async_session_factory.begin() as session:
         await session.execute(
             text("INSERT INTO permission_grants (pattern, effect, subject_account_id) VALUES ('build.**', 1, 1)")
@@ -99,7 +101,7 @@ async def test_a_delete_bumps_the_epoch_too(
 
 
 async def test_a_committed_write_notifies_listeners(async_engine: AsyncEngine) -> None:
-    """The latency hint half of the contract; the poll is what makes it durable."""
+    """Committed grants publish the new epoch so listeners can refresh cached permissions promptly."""
     url = async_engine.url.set(drivername="postgresql").render_as_string(hide_password=False)
     connection = await asyncpg.connect(url)
     received: asyncio.Queue[str] = asyncio.Queue()

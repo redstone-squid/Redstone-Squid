@@ -1,1 +1,1 @@
-"""squid-ui persistence integration tests."""
+"""PostgreSQL storage and topic delivery used by the UI runtime."""

@@ -198,6 +198,7 @@ async def test_failed_commit_rolls_back_and_finishes_the_uow(
     async with factory() as uow:
         settings = await uow.settings.get_or_create_for_update(456)
         settings.locale = "fr"
+        # This channel already belongs to server 123, so the uniqueness constraint rejects the commit.
         settings.smallest_channel_id = 1001
         with pytest.raises(IntegrityError):
             await uow.commit()

@@ -1,17 +1,7 @@
-"""Squid's telemetry surface, exercised against a live OpenTelemetry SDK.
+"""Telemetry integration with the optional OpenTelemetry SDK.
 
-Not a test of the third-party instrumentors. Every assertion here is about Squid code
-whose behaviour only exists once composed with them, and which nothing else can check:
-`correlation_id` resolving to the trace an operator can search for, `TraceContextFilter`
-stamping that trace onto log records, and `trace_context_headers`/`extracted_trace_span`
-carrying a trace across the schematic process boundary. Unit tests of those functions can
-only assert against a mocked tracer, which is how they would keep passing after the
-composition broke.
-
-The one genuinely third-party claim - a SQL span nesting under the HTTP server span -
-earns its place because the two instrumentors are configured independently by Squid, and
-a flat trace is exactly what a misconfiguration produces.
-"""
+The live SDK connects HTTP and SQL spans, correlation IDs in logs, and trace headers passed
+to schematic workers. These tests also read exported worker metrics without an external collector."""
 
 import logging
 from typing import Any, cast
@@ -51,12 +41,7 @@ from squid.observability import (
 
 
 def test_squid_telemetry_composes_with_a_live_sdk() -> None:
-    """One setup, five claims: nesting, correlation id, log stamping, propagation, privacy.
-
-    Kept as a single test because instrumenting FastAPI and SQLAlchemy and standing up a
-    provider is the expensive part; splitting it would repeat that four more times to
-    assert against the same trace.
-    """
+    """Use one instrumented app and provider to check nesting, correlation, and trace propagation."""
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
@@ -140,7 +125,6 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
 
 
 def test_worker_without_trace_header_starts_a_root_span() -> None:
-    """A request from an uninstrumented supervisor must not inherit ambient state."""
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))

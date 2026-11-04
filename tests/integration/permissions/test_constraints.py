@@ -1,9 +1,4 @@
-"""The permission CHECK constraints, exercised against a real database.
-
-These are the guards that survive a bug in the service layer, so they are worth
-proving rather than assuming: the anti-escalation rule in particular is enforced
-in three places, and this is the only one an application mistake cannot bypass.
-"""
+"""Permission constraints reject invalid writes made directly through SQL, bypassing service validation."""
 
 from collections.abc import Iterator
 
@@ -21,7 +16,7 @@ PERMISSION_DATABASE = "redstone_squid_permissions"
 
 @pytest.fixture
 def permission_database_url(postgres_container: PostgresContainer) -> Iterator[str]:
-    """An isolated database with the full migration chain applied."""
+    """Create an empty isolated database; migrated_engine applies the migration chain."""
     admin_url = postgres_container.get_connection_url(driver="psycopg2")
     admin_dsn = admin_url.replace("postgresql+psycopg2://", "postgresql://")
     connection = psycopg2.connect(admin_dsn)
@@ -66,7 +61,6 @@ def _account(connection) -> int:
 
 
 def test_a_role_from_one_guild_cannot_carry_authority_into_another(migrated_engine) -> None:
-    """The escalation this whole design exists to prevent, refused in storage."""
     with migrated_engine.begin() as connection, pytest.raises(DBAPIError, match="role_subject_stays_home"):
         connection.execute(
             text(
@@ -77,8 +71,7 @@ def test_a_role_from_one_guild_cannot_carry_authority_into_another(migrated_engi
 
 
 def test_a_role_subject_without_its_guild_is_refused(migrated_engine) -> None:
-    """A role snowflake means nothing without the guild it lives in, and the
-    anti-escalation CHECK compares against that column."""
+    """The guild column is required to enforce the role subject's scope constraint."""
     with migrated_engine.begin() as connection, pytest.raises(DBAPIError, match="role_subject_has_guild"):
         connection.execute(
             text("INSERT INTO permission_grants (pattern, effect, subject_role_id) VALUES ('settings.**', 1, 42)")
@@ -99,7 +92,10 @@ def test_a_rule_needs_exactly_one_subject(migrated_engine) -> None:
 
 
 def test_a_duplicate_rule_is_refused(migrated_engine) -> None:
-    """`NULLS NOT DISTINCT`, so two global rules for one subject collide."""
+    """A subject cannot have two global rules for the same pattern, even with different effects.
+
+    NULLS NOT DISTINCT treats their absent guild scopes as equal for the unique constraint.
+    """
     with migrated_engine.begin() as connection:
         account_id = _account(connection)
         connection.execute(

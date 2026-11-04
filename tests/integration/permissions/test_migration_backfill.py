@@ -1,9 +1,4 @@
-"""Nobody loses access when the tiers become role assignments.
-
-The equivalence table below is the point: for each (subject, node) pair the new
-resolver has to answer what the old predicate answered, so the cut-over is a
-change of mechanism rather than a change of who can do what.
-"""
+"""The role-assignment backfill preserves authorization for the legacy administrator and trusted tiers."""
 
 from collections.abc import AsyncGenerator, Iterator
 from functools import partial
@@ -160,7 +155,7 @@ async def test_the_new_resolver_matches_the_old_tiers(
 async def test_the_original_grant_provenance_survives(
     backfilled: tuple[async_sessionmaker, dict[str, int]],
 ) -> None:
-    """A backfill that forgets who granted what destroys the audit trail it inherits."""
+    """Carry the original granting account and timestamp into the new role assignment."""
     session_factory, accounts = backfilled
 
     async with session_factory() as session:

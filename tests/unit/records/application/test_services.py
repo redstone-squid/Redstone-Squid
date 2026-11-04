@@ -43,6 +43,12 @@ class FakeCandidates:
 
 
 class FakeRuns:
+    """Capture computed batches and supply the configured record queries.
+
+    RecordScope copies this state and publishes it on commit, so a failed rebuild leaves the
+    fixture unchanged. Queue methods record calls without enforcing claim-token ownership.
+    """
+
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}

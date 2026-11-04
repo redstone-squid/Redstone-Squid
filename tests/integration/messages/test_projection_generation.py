@@ -1,8 +1,4 @@
-"""Coverage for the generation counter that decides whether a Discord post is stale.
-
-The counter is maintained entirely by a Postgres trigger drawing from a sequence, so
-its failure modes only appear against a real database.
-"""
+"""PostgreSQL sequence generations identify Discord posts that need another render."""
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -54,16 +50,9 @@ async def _applied(session: AsyncSession) -> int:
 async def test_generation_survives_job_completion(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A build stays editable after a coalesced refresh has been rendered and acknowledged.
+    """A new queue row must have a generation newer than the revision already applied to a post.
 
-    With a per-resource counter this aborted the third edit: acknowledging the job
-    deleted the queue row, the next enqueue restarted at 1, and projecting that 1 onto a
-    row already applied at a higher generation violated a check constraint — inside the
-    statement doing the edit, so it took the user's write down with it.
-
-    Each step commits separately because `enqueue_discord_sync` stamps `now()`, which is
-    the transaction timestamp: coalescing two edits inside one transaction would leave
-    `enqueued_at` unchanged and never re-enqueue.
+    Separate transactions model an edit, a completed render, queue acknowledgement, and a later edit.
     """
     async with migrated_session_factory.begin() as session:
         build_id = await _seed(session)
@@ -90,7 +79,7 @@ async def test_generation_survives_job_completion(
             {"key": str(build_id)},
         )
 
-    # The edit that used to abort.
+    # A later edit recreates the deleted queue row.
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET ai_generated = false WHERE id = :id"), {"id": build_id})
 
@@ -106,11 +95,6 @@ async def test_generation_survives_job_completion(
 async def test_generations_are_unique_across_resources(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Generations come from one sequence, so no two enqueues collide.
-
-    A per-resource counter made generation 1 mean different things for different builds,
-    which is only safe while nothing compares them.
-    """
     async with migrated_session_factory.begin() as session:
         await session.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
         account_id = (await session.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id"))).scalar_one()

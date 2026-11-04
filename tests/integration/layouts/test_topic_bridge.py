@@ -1,4 +1,4 @@
-"""Cross-process topic delivery over a real PostgreSQL LISTEN/NOTIFY channel."""
+"""Topic delivery between independent pools and buses over PostgreSQL LISTEN/NOTIFY."""
 
 import uuid
 from functools import partial
@@ -54,8 +54,7 @@ async def test_two_processes_exchange_topics_over_one_channel(postgres_container
                 bridge_here.publish(resource_topic("build", "42"))
                 while not seen_there:
                     await anyio.sleep(0.05)
-                # The publisher's own connection receives the notification too; dropping it
-                # is the only thing keeping this off a loop.
+                # Ignore the publisher's notification because its local bus was already updated.
                 while bridge_here.snapshot().ignored < 1:
                     await anyio.sleep(0.05)
 

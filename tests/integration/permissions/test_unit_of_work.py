@@ -80,6 +80,7 @@ async def test_role_creation_commits_with_audit_and_rolls_back_if_audit_fails(
                 guild_id=None,
                 rank=0,
                 created_by_account_id=None,
+                # The missing audit actor fails after role insertion, testing rollback of both writes.
                 audit=AuditEntry(action="role_create", actor_account_id=-1),
             )
     async with factory() as uow:

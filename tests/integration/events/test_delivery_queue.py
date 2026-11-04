@@ -1,9 +1,4 @@
-"""Claim, fencing, and backoff semantics of the domain-event delivery queue.
-
-These moved out of `tests/integration/persistence/test_claimed_row_queue.py`, which
-they outgrew: `PostgresDomainEventRepository` stopped using `ClaimedRowQueue` at
-commit `72cca02` and has minted its own database-side UUID tokens ever since.
-"""
+"""Claim tokens, acknowledgement, and retry limits for domain-event deliveries."""
 
 from functools import partial
 
@@ -116,6 +111,7 @@ async def test_a_failed_delivery_backs_off_and_a_ceiling_failure_dead_letters_it
     (retried,) = await transact(
         repository, lambda uow: uow.domain_events.claim(consumer="discord", limit=10), commit=True
     )
+    # Keep the current claim token while advancing the attempt snapshot to the failure ceiling.
     ceiling = DomainEventDelivery(
         event=retried.event,
         consumer=retried.consumer,

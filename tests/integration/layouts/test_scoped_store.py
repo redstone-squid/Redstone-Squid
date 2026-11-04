@@ -28,6 +28,7 @@ async def test_postgres_scoped_store_round_trip_version_expiry_touch_and_purge(
             await store.get(older, "guild")
 
         await anyio.sleep(0.2)
+        # Touch extends the deadline: the next read is past the original TTL but inside the new one.
         assert await store.get(slot, "guild", touch=True) == {"theme": 1}
         await anyio.sleep(0.2)
         assert await store.get(slot, "guild") == {"theme": 1}

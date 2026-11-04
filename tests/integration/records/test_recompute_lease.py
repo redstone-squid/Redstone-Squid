@@ -1,9 +1,7 @@
-"""Fencing for the record recomputation lease.
+"""Record recomputation leases protect each claimed scope with a token.
 
-This queue leases whole scopes rather than rows and acknowledges by scope, which
-was the stated reason it could not be fenced. It stamped `locked_at` per row all
-along, so it could carry a token the same way -- and without one it lost work.
-"""
+Re-enqueueing clears the old claim so new work can be leased without allowing an earlier
+worker to acknowledge it. Expired claims become available again."""
 
 from functools import partial
 from typing import Any
@@ -19,11 +17,7 @@ from tests.support.unit_of_work import transact
 
 @pytest.fixture(autouse=True)
 async def empty_queue(migrated_session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Start from an empty queue.
-
-    Migrations seed a door and an extender rebuild, which would otherwise ride
-    along in every claim and hide which rows a lease actually covers.
-    """
+    """Remove the door and extender rebuilds seeded by migrations so claims cover only test data."""
     async with migrated_session_factory.begin() as session:
         await session.execute(text("DELETE FROM record_recompute_queue"))
 
@@ -49,13 +43,7 @@ async def _count(session_factory: async_sessionmaker[AsyncSession]) -> int:
 async def test_a_scope_lease_cannot_acknowledge_work_enqueued_during_the_run(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Acknowledging by kind silently destroyed work that arrived mid-run.
-
-    `enqueue` upserts on `scope_key` and clears the lock, so new DOOR work arriving
-    while worker A rebuilt DOOR was claimed by worker B -- and then deleted by A's
-    `WHERE build_kind IN (...) AND locked_at IS NOT NULL`. The recomputation was
-    dropped and never ran.
-    """
+    """A replacement claim must survive acknowledgement by the worker that held the earlier token."""
     await _enqueue(migrated_session_factory, "door")
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
@@ -79,11 +67,6 @@ async def test_a_scope_lease_cannot_acknowledge_work_enqueued_during_the_run(
 async def test_a_crashed_workers_lease_is_reclaimed(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The claim filtered `locked_at IS NULL` with no visibility timeout at all.
-
-    A row locked by a killed worker was never handed to anyone again, and
-    `squid/worker/queue_health.py` reported it as in-flight forever.
-    """
     await _enqueue(migrated_session_factory, "door")
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     abandoned = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
@@ -99,7 +82,7 @@ async def test_a_crashed_workers_lease_is_reclaimed(
 async def test_a_failed_lease_backs_off_and_stays_queued(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """`max_attempts=None`: a stuck recomputation stays visible rather than vanishing."""
+    """Recomputation has no retry ceiling, so failures remain queued after backoff."""
     await _enqueue(migrated_session_factory, "door")
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     lease = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)

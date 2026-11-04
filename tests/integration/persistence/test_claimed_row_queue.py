@@ -1,9 +1,7 @@
-"""Claim, fencing, and backoff semantics shared by the outbox queues.
+"""Claim ownership and retry behavior shared by outbox queues.
 
-Every case runs against the migrated schema rather than hand-written DDL. The
-hand-written table used to omit the triggers the real `discord_sync_queue` carries,
-which is precisely the class of regression these tests exist to catch.
-"""
+The migrated schema includes the production triggers on discord_sync_queue, so retries
+and acknowledgements are checked together with their effects on render generations."""
 
 import logging
 from functools import partial
@@ -104,8 +102,7 @@ async def test_a_reclaimed_row_cannot_be_failed_by_the_previous_holder(
         migrated_session_factory,
         "SELECT attempts, last_error, claim_token IS NOT NULL FROM discord_sync_queue",
     )
-    # The attempts increment, the error text, and the new holder's claim all survive:
-    # `attempts` is owned by `fail`, so a rejected one leaves it where the claim left it.
+    # Rejecting the old token must leave the retry state and the new holder's claim untouched.
     assert (attempts, last_error, claimed) == (0, None, True)
 
 
@@ -113,7 +110,6 @@ async def test_a_lost_fence_is_logged_and_counted(
     migrated_session_factory: async_sessionmaker[AsyncSession],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A queue that has begun doing its work twice must not look like a healthy one."""
     await _seed_sync_job(migrated_session_factory)
     queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     (stale,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
@@ -155,11 +151,7 @@ async def test_a_claim_abandoned_past_the_visibility_timeout_is_reclaimed(
 async def test_a_retry_backs_off_available_at_and_leaves_enqueued_at_alone(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Backoff must not rewrite when the work was requested.
-
-    Overloading `enqueued_at` destroyed FIFO fairness and made a job that had been
-    failing for an hour report as fresh to `squid.queue.oldest_ready_age`.
-    """
+    """Backoff makes the row temporarily unavailable while preserving a past enqueue timestamp."""
     await _seed_sync_job(migrated_session_factory)
     queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
@@ -177,13 +169,7 @@ async def test_a_retry_backs_off_available_at_and_leaves_enqueued_at_alone(
 async def test_a_retry_leaves_the_sync_generation_alone(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A transient failure must not invalidate the message-projection fence.
-
-    Backoff used to write `enqueued_at`, which a trigger watched to bump
-    `generation`, so one failed Discord call re-rendered every projected message of
-    the resource. The trigger is gone; this is the guard against a domain write
-    creeping back onto the retry path.
-    """
+    """Retrying delivery must not create a new content revision for projected messages."""
     await _seed_sync_job(migrated_session_factory)
     queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
@@ -198,7 +184,7 @@ async def test_a_retry_leaves_the_sync_generation_alone(
 async def test_a_reenqueue_clears_the_claim_and_the_backoff(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The enqueue trigger must reset the token, or a re-enqueued row keeps a stale fence."""
+    """Re-enqueueing must clear the old claim so its worker cannot acknowledge the new work."""
     async with migrated_session_factory.begin() as session:
         account_id = (await session.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id"))).scalar_one()
         session_id = (
@@ -239,6 +225,7 @@ async def test_failing_at_the_attempt_ceiling_dead_letters_the_row(
     await _seed_sync_job(migrated_session_factory)
     queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     (job,) = await transact(queue, lambda uow: uow.reconciliation.claim(limit=10), commit=True)
+    # Exercise the ceiling with the current claim token without waiting through seven retries.
     ceiling_job = ReconciliationJob(
         id=job.id,
         resource_kind=job.resource_kind,
@@ -281,7 +268,10 @@ async def test_a_caller_owned_claim_is_not_committed(
 async def test_completing_with_values_retains_the_row(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The `schematic_jobs` acknowledgement shape, through the shared helper."""
+    """Schematic completion retains the result row instead of deleting it from the queue.
+
+    Supplying completed_at to the shared helper records completion and prevents another claim.
+    """
     async with migrated_session_factory.begin() as session:
         job_id = (
             await session.execute(
@@ -318,7 +308,7 @@ async def test_the_sql_and_python_backoff_agree(
     migrated_session_factory: async_sessionmaker[AsyncSession],
     attempts: int,
 ) -> None:
-    """`fail` and `fail_batch` must back off identically, or a lease drifts from a row."""
+    """Single-row and batch failures must calculate the same retry delay."""
     async with migrated_session_factory() as session:
         in_postgres = await session.scalar(select(retry_delay_sql(literal(attempts))))
     assert in_postgres == retry_delay(attempts)
@@ -328,6 +318,7 @@ async def test_batch_and_single_retries_use_each_rows_incremented_attempt_count(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     queue = ClaimedRowQueue(DISCORD_SYNC_QUEUE_SPEC)
+    # Include a large count to exercise capped backoff; one transaction keeps SQL now() fixed.
     previous_attempts = (0, 1, 8, 10_000)
     async with migrated_session_factory.begin() as session:
         for attempts in previous_attempts:

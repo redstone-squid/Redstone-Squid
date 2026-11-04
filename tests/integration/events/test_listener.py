@@ -1,4 +1,4 @@
-"""PostgreSQL wake hints survive disconnects and release their owned connection."""
+"""PostgreSQL commit notifications, resynchronization after reconnect, and listener cleanup."""
 
 import asyncio
 import uuid
@@ -36,6 +36,7 @@ async def test_listener_delivers_commit_hints_reconnects_and_closes_on_cancellat
         try:
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(listener.run, process_events)
+                # Startup resynchronization confirms LISTEN is installed before publishing.
                 await next_wake()
                 original_pid = await backend_pid()
                 assert original_pid is not None

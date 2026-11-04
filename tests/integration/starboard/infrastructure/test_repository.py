@@ -1,3 +1,5 @@
+"""Vote replacement and source matching using the starboard ORM tables without migration triggers."""
+
 from collections.abc import AsyncGenerator
 from typing import cast
 

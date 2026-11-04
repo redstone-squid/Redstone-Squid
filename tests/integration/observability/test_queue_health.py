@@ -1,9 +1,4 @@
-"""The generated queue-health union, against the real schema.
-
-`QUEUE_HEALTH_STATEMENT` is built from the same `QueueSpec` constants the claim
-path uses, so what this pins is that the generator covers every queue and that the
-predicate it emits is the one the adapters actually claim on.
-"""
+"""Queue-health labels and claim/backoff counts against the migrated schema."""
 
 from functools import partial
 
@@ -59,10 +54,7 @@ async def test_a_claim_moves_a_queue_from_ready_to_in_flight(
 async def test_a_backed_off_row_ages_from_when_it_was_enqueued(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """`oldest_ready_age` reads the retry clock, so a retry does not reset the age.
-
-    It also means a backed-off row is not ready, which is what the gauge should say.
-    """
+    """A retry waiting for its availability deadline is neither ready, in flight, nor dead-lettered."""
     async with migrated_session_factory.begin() as session:
         await session.execute(text("INSERT INTO discord_sync_queue (resource_kind, source_key) VALUES ('build', '1')"))
     queue = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
