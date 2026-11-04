@@ -1,15 +1,13 @@
 """Build editing values and lease coordination."""
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Final, Literal, Self, cast, override
 
 from squid.builds.application.commands import Dimensions
-from squid.builds.application.ports import BuildLockManager
 from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
-from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
+from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild
-from squid.core.errors import InvalidStateError
 
 
 class _Unset:
@@ -118,7 +116,7 @@ class BuildEditPatch:
         return patch
 
     def apply(self, build: Build) -> None:
-        """Apply the patch after the caller has acquired the build lock.
+        """Apply the patch to a loaded build or detached preview.
 
         Raises:
             InvalidBuildError: If a door-specific field is patched onto a build
@@ -251,79 +249,3 @@ class BuildEditPatch:
                 values["coordinates"] = value
             else:
                 values["command_to_build"] = value
-
-
-class BuildEditLease:
-    """Exception-safe lease for previewing and committing one build edit."""
-
-    def __init__(
-        self,
-        load: Callable[[int], Awaitable[Build | None]],
-        locks: BuildLockManager,
-        persist: Callable[[Build], Awaitable[None]],
-        build_id: int,
-        patch: BuildEditPatch,
-        *,
-        blocking: bool,
-        timeout: float,
-        expected_revision: int | None,
-    ) -> None:
-        self._load = load
-        self._locks = locks
-        self._persist = persist
-        self._build_id = build_id
-        self._patch = patch
-        self._blocking = blocking
-        self._timeout = timeout
-        self._expected_revision = expected_revision
-        self._build: Build | None = None
-        self._committed = False
-
-    @property
-    def build(self) -> Build:
-        if self._build is None:
-            msg = "The edit lease has not been entered."
-            raise InvalidStateError(msg)
-        return self._build
-
-    async def __aenter__(self) -> Self:
-        acquired = await self._locks.acquire(
-            self._build_id,
-            blocking=self._blocking,
-            timeout=self._timeout,
-        )
-        if not acquired:
-            raise BuildBusyError(self._build_id)
-        # Every exit path from here must release: the lease is held but __aexit__
-        # will not run until __aenter__ returns, so a cancellation at any await
-        # below would otherwise strand it for the lifetime of the process.
-        try:
-            build = await self._load(self._build_id)
-            if build is None:
-                raise BuildNotFoundError(self._build_id)  # noqa: TRY301
-            if self._expected_revision is not None and build.revision != self._expected_revision:
-                raise BuildRevisionMismatchError(  # noqa: TRY301
-                    self._build_id,
-                    expected_revision=self._expected_revision,
-                    current_revision=build.revision,
-                )
-            self._build = build
-            self._patch.apply(build)
-        except BaseException:
-            self._build = None
-            await self._locks.release(self._build_id)
-            raise
-        return self
-
-    async def commit(self) -> Build:
-        if self._committed:
-            msg = "This build edit has already been committed."
-            raise InvalidStateError(msg)
-        build = self.build
-        await self._persist(build)
-        self._committed = True
-        return build
-
-    async def __aexit__(self, *_exc: object) -> None:
-        if self._build is not None:
-            await self._locks.release(self._build_id)

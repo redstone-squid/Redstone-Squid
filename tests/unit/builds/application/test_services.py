@@ -1,12 +1,12 @@
 """Build application service tests."""
 
-import asyncio
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from copy import copy
 from typing import Literal, cast, override
 from uuid import UUID
 
+import anyio
 import pytest
 from whenever import Instant
 
@@ -261,136 +261,76 @@ def existing_build() -> DoorBuild:
     )
 
 
-async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_build: DoorBuild) -> None:
+async def test_edit_prepares_a_detached_patch_then_commits(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)
-    patch = BuildEditPatch(
-        dimensions=(10, 11, 12),
-        locationality="Not locational",
-        extra_user_info=None,
-        server_ip="new.example",
-        coordinates=None,
-    )
-
-    lease = service.edit(42, patch)
+    result = await service.edit(42, BuildEditPatch(dimensions=(10, 11, 12), extra_user_info="changed"))
+    assert result.dimensions == (10, 11, 12)
     assert existing_build.dimensions == (None, None, None)
-
-    async with lease:
-        assert lease.build.dimensions == (10, 11, 12)
-        assert lease.build.miscellaneous_restrictions == ["Directional with fixes", "Other"]
-        assert "user" not in lease.build.extra_info
-        assert lease.build.extra_info.get("server_info") == {"server_ip": "new.example"}
-
-    assert repository.saved == []
-    assert locks.acquisitions == [(42, False, 30)]
+    assert repository.saved[0].description == "changed"
     assert locks.releases == [42]
 
 
-async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: DoorBuild) -> None:
+async def test_invalid_patch_does_not_acquire_a_write_lock(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
-    service = build_service(repository, locks)
-
-    async with service.edit(42, BuildEditPatch(door_dimensions=(2, 3, 4))) as lease:
-        result = await lease.commit()
-
-    assert result.id == existing_build.id
-    assert isinstance(result, DoorBuild)
-    assert result.door_dimensions == (2, 3, 4)
-    assert repository.saved == [result]
-    assert locks.acquisitions == [(42, False, 30)]
-    assert locks.releases == [42]
-
-
-async def test_edit_releases_lock_when_patch_application_fails(existing_build: DoorBuild) -> None:
-    repository = FakeBuildRepository(existing_build)
-    locks = FakeBuildLocks()
-    service = build_service(repository, locks)
     invalid_dimensions = cast(tuple[int | None, int | None, int | None], (1, 2))
-    patch = BuildEditPatch(dimensions=invalid_dimensions)
-
     with pytest.raises(ValueError, match="not enough values to unpack"):
-        async with service.edit(42, patch):
-            pass
+        await build_service(repository, locks).edit(42, BuildEditPatch(dimensions=invalid_dimensions))
+    assert locks.acquisitions == []
+    assert repository.saved == []
 
-    assert locks.releases == [42]
 
-
-async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: DoorBuild) -> None:
-    """__aexit__ never runs if __aenter__ is cancelled, so __aenter__ must release itself.
-
-    Without this, the process-local lease survives forever and every later
-    acquire for the build spins the backoff loop until it reports the build busy.
-    """
-    loading = asyncio.Event()
+async def test_cancellation_during_preparation_holds_no_write_lock(existing_build: DoorBuild) -> None:
+    loading = anyio.Event()
 
     class BlockingRepository(FakeBuildRepository):
         @override
         async def get_by_id(self, build_id: int) -> Build | None:
             loading.set()
-            await asyncio.sleep(3600)
-            raise AssertionError("unreachable")
+            await anyio.sleep_forever()
 
     locks = FakeBuildLocks()
     service = build_service(BlockingRepository(existing_build), locks)
-
-    async def enter() -> None:
-        async with service.edit(42, BuildEditPatch()):
-            pass
-
-    task = asyncio.create_task(enter())
-    await loading.wait()
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-
-    assert len(locks.acquisitions) == 1
-    assert locks.releases == [42]
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(service.edit, 42, BuildEditPatch())
+        await loading.wait()
+        tasks.cancel_scope.cancel()
+    assert locks.acquisitions == []
 
 
 async def test_edit_reports_missing_and_busy_builds(existing_build: DoorBuild) -> None:
-    missing_locks = FakeBuildLocks()
-    missing_service = build_service(FakeBuildRepository(), missing_locks)
     with pytest.raises(BuildNotFoundError):
-        async with missing_service.edit(42, BuildEditPatch()):
-            pass
-    assert missing_locks.releases == [42]
-
-    busy_locks = FakeBuildLocks()
-    busy_locks.acquire_result = False
-    busy_service = build_service(FakeBuildRepository(existing_build), busy_locks)
-    with pytest.raises(BuildBusyError):
-        async with busy_service.edit(42, BuildEditPatch()):
-            pass
-
-
-async def test_edit_loads_build_only_after_acquiring_lease(existing_build: DoorBuild) -> None:
+        await build_service(FakeBuildRepository()).edit(42, BuildEditPatch())
     locks = FakeBuildLocks()
+    locks.acquire_result = False
+    with pytest.raises(BuildBusyError):
+        await build_service(FakeBuildRepository(existing_build), locks).edit(42, BuildEditPatch())
+
+
+async def test_edit_rechecks_revision_after_preparation(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
-    original_get = repository.get_by_id
+    service = build_service(repository)
 
-    async def get_after_lock(build_id: int) -> Build | None:
-        assert locks.acquisitions == [(42, False, 30)]
-        return await original_get(build_id)
+    class ConcurrentEdit(FakeEmbeddings):
+        async def prepare(self, build: Build) -> None:
+            existing_build.revision += 1
 
-    repository.get_by_id = get_after_lock  # type: ignore[method-assign]
-
-    async with build_service(repository, locks).edit(42, BuildEditPatch()):
-        pass
+    service._embeddings = ConcurrentEdit()
+    with pytest.raises(BuildRevisionMismatchError):
+        await service.edit(42, BuildEditPatch(extra_user_info="stale"), expected_revision=1)
+    assert repository.saved == []
 
 
 async def test_edit_rejects_a_stale_expected_revision(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
-
     with pytest.raises(BuildRevisionMismatchError) as error:
-        async with build_service(repository, locks).edit(42, BuildEditPatch(dimensions=(1, 2, 3)), expected_revision=2):
-            pass
-
+        await build_service(repository, locks).edit(42, BuildEditPatch(dimensions=(1, 2, 3)), expected_revision=2)
     assert error.value.public_context == {"build_id": 42, "expected_revision": 2, "current_revision": 1}
+    assert locks.acquisitions == []
     assert existing_build.dimensions == (None, None, None)
-    assert locks.releases == [42]
 
 
 async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorBuild) -> None:
@@ -559,3 +499,29 @@ class TestAuthorizedEditing:
 
         with pytest.raises(InvalidStateError):
             await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+
+
+async def test_permission_revoked_during_preparation_prevents_commit(existing_build: DoorBuild) -> None:
+    class Permissions(EmptyPermissions):
+        held = True
+
+        async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+            return SubjectRecords(
+                epoch=1,
+                grants=(PermissionGrant(pattern="build.submission.edit", effect=1, subject_account_id=2),)
+                if self.held
+                else (),
+            )
+
+    permissions = Permissions()
+    repository = FakeBuildRepository(existing_build)
+    service = build_service(repository, permissions=permissions)
+
+    class RevokeDuringPreparation(FakeEmbeddings):
+        async def prepare(self, build: Build) -> None:
+            permissions.held = False
+
+    service._embeddings = RevokeDuringPreparation()
+    with pytest.raises(AuthorizationError):
+        await service.apply_edit(BuildEditor(Subject(account_id=2)), 42, BuildEditPatch(extra_user_info="denied"))
+    assert repository.saved == []

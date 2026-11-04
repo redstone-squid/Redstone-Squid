@@ -130,7 +130,12 @@ class BuildLockUnitOfWork(UnitOfWork, Protocol):
 
 
 class BuildLockService:
-    """Coordinate reentrant leases using short acquisition and release transactions."""
+    """Coordinate reentrant leases recorded in a build's lock fields.
+
+    Acquisition commits is_locked and a token before returning. The application
+    lease lasts until release or expiry; database row locks end with each short
+    acquisition or release transaction.
+    """
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[BuildLockUnitOfWork]) -> None:
         self._uow_factory = uow_factory

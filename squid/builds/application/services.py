@@ -6,7 +6,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.builds.application.editing import BuildEditLease, BuildEditPatch
+from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.ports import (
     BuildEmbeddingCoordinator,
     BuildLockManager,
@@ -16,7 +16,7 @@ from squid.builds.application.ports import (
 from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
 from squid.builds.domain import BuildDraft, RestrictionTypeLiteral, Status, sort_restrictions
-from squid.builds.errors import BuildNotFoundError
+from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application.services import PermissionService
@@ -38,7 +38,13 @@ class BuildEditor:
 
 
 class BuildService:
-    """Framework-free application operations for builds."""
+    """Coordinate build preparation and persistence.
+
+    Edits prepare detached values, including embeddings, before acquiring a
+    build lease or row lock. Concurrent edits can prepare together; saving
+    reloads the build and rejects a changed revision. Authorized edits also
+    recheck the actor's permissions inside the write transaction.
+    """
 
     def __init__(
         self,
@@ -112,25 +118,11 @@ class BuildService:
         await self._prepare_for_persistence(build)
         return build
 
-    def edit(
-        self,
-        build_id: int,
-        patch: BuildEditPatch,
-        *,
-        blocking: bool = False,
-        timeout: float = 30,
-        expected_revision: int | None = None,
-    ) -> BuildEditLease:
-        return BuildEditLease(
-            self.get,
-            self._locks,
-            self._persist_without_lock,
-            build_id,
-            patch,
-            blocking=blocking,
-            timeout=timeout,
-            expected_revision=expected_revision,
-        )
+    async def edit(self, build_id: int, patch: BuildEditPatch, *, expected_revision: int | None = None) -> Build:
+        """Apply a trusted caller's patch using a short, revision-checked write."""
+        build = await self._prepare_edit(build_id, patch, expected_revision=expected_revision)
+        await self._persist_prepared(build)
+        return build
 
     async def apply_edit(
         self,
@@ -140,20 +132,29 @@ class BuildService:
         *,
         expected_revision: int | None = None,
     ) -> Build:
-        """Edit an owned pending build, or any build with `build.submission.edit`.
+        """Prepare an edit, then recheck current authority and revision before writing."""
+        build = await self._get_required(build_id)
+        await self.authorize_edit(actor, build)
+        self._check_revision(build, expected_revision)
+        patch.apply(build)
+        await self._prepare_for_persistence(build)
+        await self._persist_prepared(build, actor=actor)
+        return build
 
-        The authorizing wrapper around `edit()`, not a replacement for it. This
-        policy used to live in the HTTP route, which read the leased build's
-        status and submitter and decided there -- so the bot's two edit paths
-        could not reuse it, and the rule existed only for HTTP callers.
+    async def _prepare_edit(self, build_id: int, patch: BuildEditPatch, *, expected_revision: int | None) -> Build:
+        build = await self._get_required(build_id)
+        self._check_revision(build, expected_revision)
+        patch.apply(build)
+        await self._prepare_for_persistence(build)
+        return build
 
-        Authorization happens inside the lease because it reads the build: a
-        check before the load would race an approval that flips the build out of
-        `PENDING` between the two.
-        """
-        async with self.edit(build_id, patch, blocking=False, expected_revision=expected_revision) as lease:
-            await self.authorize_edit(actor, lease.build)
-            return await lease.commit()
+    @staticmethod
+    def _check_revision(build: Build, expected_revision: int | None) -> None:
+        if expected_revision is not None and build.revision != expected_revision:
+            assert build.id is not None
+            raise BuildRevisionMismatchError(
+                build.id, expected_revision=expected_revision, current_revision=build.revision
+            )
 
     async def authorize_edit(self, actor: BuildEditor, build: Build) -> None:
         """Apply the shared live edit policy to the caller's current build snapshot."""
@@ -167,6 +168,20 @@ class BuildService:
         )
         if not owns and not await self._permissions.allows(actor.subject, BUILD_SUBMISSION_EDIT):
             raise AuthorizationError
+
+    async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: BuildEditor, build: Build) -> None:
+        if self._permissions is None:
+            msg = "Authorized editing requires a permission service."
+            raise InvalidStateError(msg)
+        owns = (
+            build.submission_status is Status.PENDING
+            and actor.subject.account_id is not None
+            and build.submitter_account_id == actor.subject.account_id
+        )
+        if not owns:
+            capabilities = await self._permissions.capabilities_in(uow, actor.subject, (BUILD_SUBMISSION_EDIT,))
+            if BUILD_SUBMISSION_EDIT.name not in capabilities:
+                raise AuthorizationError
 
     async def prepare_edit(self, actor: BuildEditor, build: Build, patch: BuildEditPatch) -> Build:
         """Resolve an authorized edit before its caller's revision-fenced transaction."""
@@ -203,18 +218,28 @@ class BuildService:
         return build
 
     async def _persist(self, build: Build) -> None:
-        if build.id is None:
-            await self._persist_without_lock(build)
-            return
-        async with self._locks.locked(build.id):
-            await self._persist_without_lock(build)
-
-    async def _persist_without_lock(self, build: Build) -> None:
-        """Persist a build when the caller already owns any required edit lease."""
         await self._prepare_for_persistence(build)
-        async with self._uow_factory() as uow:
-            await uow.builds.save(build)
-            await uow.commit()
+        await self._persist_prepared(build)
+
+    async def _persist_prepared(self, build: Build, *, actor: BuildEditor | None = None) -> None:
+        """Save prepared values within a short write scope.
+
+        For existing builds, the application lease covers this scope, and
+        get_for_update holds a database row lock until commit. Embedding index
+        updates run after both locks have been released.
+        """
+        if build.id is None:
+            async with self._uow_factory() as uow:
+                await uow.builds.save(build)
+                await uow.commit()
+        else:
+            async with self._locks.locked(build.id), self._uow_factory() as uow:
+                current = await self._get_for_update(uow, build.id)
+                self._check_revision(current, build.revision)
+                if actor is not None:
+                    await self.authorize_edit_in(uow, actor, current)
+                await uow.builds.save(build)
+                await uow.commit()
         await self._embeddings.index(build)
 
     async def _prepare_for_persistence(self, build: Build) -> None:
