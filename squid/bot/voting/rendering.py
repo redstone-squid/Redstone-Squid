@@ -1,9 +1,4 @@
-"""Vote card rendering, independent of where the cards live.
-
-Kept apart from the session classes so a card can be produced from a snapshot alone.
-Rendering used to be a method that also fetched and edited its own messages, which is
-why every session had to track the messages it had sent.
-"""
+"""Render vote snapshots into cards without fetching or editing Discord messages."""
 
 import dataclasses
 from collections.abc import Mapping
@@ -59,9 +54,8 @@ def render_build_review(
     # The vote state is Never: a review whose tallies were trimmed away is worse than a
     # review whose build description was.
     state = (sd.v2.separator(), sd.v2.text(vote_text, overflow=sl.primitives.Never()))
-    # The build card is now sl.section()'s semantic Section rather than a bare primitive
-    # Panel, so splice into its own children instead of nesting a second container — one
-    # accent-coloured box, and the vote text is solved in the same pass as the card's fields.
+    # Add vote state to the card's children to keep one container and one shared
+    # display budget for build fields and voting instructions.
     if isinstance(card, sl.semantic.Section):
         post: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = dataclasses.replace(
             card, children=(*card.children, *state)
@@ -70,8 +64,7 @@ def render_build_review(
         children = cast(tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...], card.children)
         post = sd.v2.panel(*children, *state, accent=card.accent)
     else:
-        # Not currently reachable — render_node() always returns a Section — kept as a safe
-        # fallback for any future card producer that returns something else entirely.
+        # Other node types have no container children to extend.
         post = sl.group(card, *state)
     return render_payload([post])
 

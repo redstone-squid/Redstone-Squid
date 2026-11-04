@@ -1,8 +1,9 @@
-"""The narrow poll facade the wizard views talk to.
+"""Publish polls created by the wizard into Discord.
 
-The wizard used to hold the whole `VoteCog`, which gave a modal reach over reaction
-dispatch and every service on the bot. It needs exactly three things: the guild's
-emoji palette, option parsing, and "create this poll and put it in this channel".
+Create the voting session first, send a placeholder in the chosen channel, then
+attach that message to the session. The post reconciler fills in the poll card
+and maintains it afterwards. Publication errors retain the session ID and any
+returned message so a retry can reuse the work already completed.
 """
 
 import logging
@@ -36,7 +37,7 @@ class PollPublication:
 
 @dataclass(frozen=True, slots=True)
 class PendingPollPublication:
-    """The durable state a failed publication can resume from."""
+    """The existing session ID and optional returned message for retrying publication."""
 
     vote_session_id: int
     message: discord.Message | None
@@ -104,12 +105,11 @@ class DiscordPollPublisher:
         options: Sequence[VoteOption],
         scope: PollScope = PollScope.GUILD,
     ) -> PollPublication:
-        """Persist the poll, then hand one Discord message to the reconciler.
+        """Create a durable poll, then attach its initial card with one automatic retry.
 
-        Creation comes first and takes no channel, so a send that fails leaves an
-        attachable poll rather than a half-made one. The card's location is a human
-        decision -- the channel the command was run in -- so it is sent here and
-        adopted, rather than the renderer inventing somewhere to put it.
+        Publication failure raises `PollPublicationError` with the same session ID
+        and any message returned by Discord. Network polls use unscoped options
+        so cards in other guilds can offer the same choices.
         """
         if scope is PollScope.NETWORK:
             # Aliases resolved against the author's guild would leave every other

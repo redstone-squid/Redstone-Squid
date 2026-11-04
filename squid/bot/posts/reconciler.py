@@ -1,10 +1,15 @@
-"""Bring the bot's own Discord posts back in line with what a resource wants.
+"""Reconcile recorded Discord posts with the content and destinations a renderer requests.
 
-One diff loop serves every surface. It replaces the per-surface idempotency schemes
-that grew up separately: an "already posted?" set in the confirmed-build handler, a
-stable-nonce send in the review session, and a posted-message-id column in the
-starboard entry table. All three were answering "does a post already exist here?",
-which is now a unique index.
+A resource is the application entity being shown, such as a build, voting session, or starboard
+entry. Its renderer reads the current state and describes the posts it should have in each channel.
+PostReconciler compares that answer with the post registry, then sends, edits, or removes messages.
+Commands can request an immediate refresh; ReconciliationCog runs the same workflow from durable
+queued work so failed delivery can be retried.
+
+Each refresh has a queue generation. A post's applied_revision records the generation it last
+rendered, allowing an already-current post to skip an edit. This is separate from a build's edit
+revision. Discord writes and registry writes are separate operations, so a failure after sending
+can leave a message that has not yet been recorded.
 """
 
 import contextlib
@@ -47,11 +52,10 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         resource_key: str,
         surface: Surface,
     ) -> None:
-        """Take ownership of a message someone else already sent.
+        """Register an already-sent message so future reconciliation can update it.
 
-        Some cards go where a person chose rather than where configuration says — a
-        delete-log vote, a published poll — so the command sends the message and hands
-        it over. From then on it is an ordinary post the diff loop keeps rendered.
+        Callers use this for cards whose destination a person chose, such as a
+        delete-log vote. The initial applied revision is zero.
         """
         await self.bot.services.messages.observe(to_message_fact(message))
         await self.bot.services.posts.record(
@@ -64,7 +68,12 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         )
 
     async def reconcile(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
-        """Send, edit, or delete posts until Discord matches the renderer's answer."""
+        """Apply one renderer snapshot using `generation` to skip already-current edits.
+
+        Missing renderers and unreachable destinations are skipped. Deletion also
+        tolerates missing messages and denied access. Other transport or persistence
+        errors propagate; the durable caller can retry the resource.
+        """
         renderer = self._renderers.get(resource_kind)
         if renderer is None:
             logger.warning("No renderer is registered for %s posts", resource_kind)
@@ -84,17 +93,15 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
             post = live.get(want.channel_id)
             if post is not None and await self._edit(post, want, generation):
                 continue
-            # Either there was never a post here, or the one there is has vanished and
-            # was just tombstoned. Both mean the channel now needs a fresh post.
+            # No live post was recorded, or editing could not fetch its message.
+            # The renderer decides whether a previously recorded post may be replaced.
             was_removed = post is not None or want.channel_id in suppressed
             if was_removed and not renderer.repost_if_deleted:
-                # Someone removed this post deliberately; putting it back would be an
-                # argument with a moderator, not a repair.
+                # Preserve suppression for surfaces where deletion ends publication.
                 continue
             await self._send(renderer, resource_kind, resource_key, want, generation)
 
-        # A post whose channel is no longer wanted is stale in the strongest sense: the
-        # resource says nothing belongs here any more.
+        # Remove live posts from destinations the renderer no longer requests.
         await self._remove_all([post for channel_id, post in live.items() if channel_id not in wanted_channels])
 
     async def _send(
@@ -128,11 +135,11 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         await renderer.after_send(resource_key, message)
 
     async def _edit(self, post: DiscordPost, want: DesiredPost, generation: int) -> bool:
-        """Bring one post up to date, reporting whether it still exists.
+        """Return whether the post needs no replacement after applying this generation.
 
-        False means Discord no longer has the message, so the caller decides between
-        reposting and leaving the channel empty. Repairing it in this pass rather than
-        waiting to be enqueued again is what keeps a mirrored surface prompt.
+        An already-current revision returns `True` without checking Discord.
+        Otherwise an unavailable message returns `False`; this includes missing
+        channels and denied access, not only deleted messages.
         """
         if post.applied_revision >= generation:
             return True
@@ -155,11 +162,10 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         await self.bot.services.posts.forget(post.message_id)
 
     async def _fetch(self, post: DiscordPost) -> discord.Message | None:
-        """Resolve a post's message, tombstoning it if Discord says it is gone.
+        """Fetch a recorded message, returning `None` when unavailable.
 
-        This is the one place a read still writes, and it is confined to the reconcile
-        loop rather than sitting inside the shared message fetcher where every caller
-        paid for it.
+        Discord `NotFound` suppresses the post and marks the message deleted.
+        An unavailable channel or `Forbidden` returns without changing those rows.
         """
         channel = await self.bot.get_or_fetch_messageable_channel(post.channel_id)
         if channel is None:

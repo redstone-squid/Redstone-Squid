@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
     """Keep a vote session's cards current wherever they were published.
 
-    Publication location is not derived the same way for every kind. A build review
-    belongs in each guild's configured vote channel, so a guild that has none yet gets
-    one. A delete-log vote and a generic poll were placed by a person in a channel they
-    chose, so those are rendered where they already are and published explicitly.
+    While open, build reviews and network polls request cards in configured vote
+    channels as well as their existing locations. Guild polls and delete-log votes
+    stay in the channels where they were explicitly published. Closed sessions
+    update their existing cards without adding new destinations.
     """
 
     resource_kind: ResourceKind = "vote_session"
@@ -53,8 +53,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         if snapshot is None or snapshot.status == "closed":
             return
         guild_id = message.guild.id if message.guild is not None else 0
-        # settle_all, not gather: one channel denying reactions must not abort the batch
-        # and leave its siblings unawaited.
+        # Attempt every option even if one reaction fails, then report the failures.
         outcomes = await settle_all(
             [_add_reaction(message, option.emoji) for option in snapshot.options_for_guild(guild_id)],
             limit=DISCORD_FANOUT_LIMIT,

@@ -84,7 +84,13 @@ def parse_option_lines(
     palette: Sequence[VoteOption],
     emoji_is_usable: Callable[[str], bool] = lambda _emoji: True,
 ) -> tuple[VoteOption, ...]:
-    """Validate ``emoji | label`` lines, filling missing aliases from the guild palette."""
+    """Parse two to ten nonblank `emoji | label` or plain-label option lines.
+
+    Plain labels use the palette entry at that line's position, including earlier
+    lines with explicit emojis. IDs are one-based strings in input order. Invalid
+    counts, empty fields, unusable emojis, or duplicate emojis raise
+    `InvalidVoteConfigurationError`.
+    """
     cleaned = [line.strip() for line in lines if line.strip()]
     if not 2 <= len(cleaned) <= 10:
         raise InvalidVoteConfigurationError(tr(t"Enter between 2 and 10 option lines."))

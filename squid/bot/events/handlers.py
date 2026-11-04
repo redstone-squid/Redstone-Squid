@@ -75,8 +75,7 @@ def build_handler_registry(bot: squid.bot.app.RedstoneSquid) -> dict[str, tuple[
     """Map each handled event type to the handlers that react to it."""
     return {
         "build.submitted": (PostSubmittedBuildHandler(bot),),
-        # `build.confirmed` needs no handler: confirming a build updates its row, which
-        # enqueues a Discord sync job, and the reconciler publishes the card. Posting it
-        # from the event as well raced the reconciler and needed its own idempotency check.
+        # Confirming a build enqueues reconciliation through the database, so the
+        # reconciler owns publication of confirmed cards.
         "vote_session.closed": (DeleteVotedMessageHandler(bot),),
     }

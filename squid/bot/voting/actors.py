@@ -1,8 +1,4 @@
-"""The Discord side of who is voting, and why a ballot was refused.
-
-Both halves used to live on `VoteCog`, which made them unreachable from a button on a
-vote card: a component callback has an interaction and a client, not a cog.
-"""
+"""Translate Discord members into vote actors and localize vote refusals."""
 
 from typing import TYPE_CHECKING
 
@@ -41,15 +37,11 @@ def describe_rejection(rejection: VoteRejection) -> str:
 
 
 async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> VoteActor:
-    """Resolve one member's vote capabilities in a single permission load.
+    """Resolve the member's vote capabilities in one permission query.
 
-    The tiers this replaces cost up to four round trips here -- a global admin lookup, a
-    guild lookup and a settings read, twice over. Every kind's nodes are loaded together,
-    so the caller does not say which kind it is asking about.
-
-    The account id is required rather than resolved here. This used to mint one on sight,
-    which meant a raw reaction wrote a row naming somebody who had never been asked; every
-    caller now establishes consent first, and the ones that cannot ask refuse instead.
+    The caller supplies an account ID after checking consent when needed. This
+    function loads permissions and uses roles from the supplied member object;
+    it does not create an account or refresh Discord membership.
     """
     subject = await build_subject(bot, member, member.guild.id)
     capabilities = await bot.services.permissions.capabilities(

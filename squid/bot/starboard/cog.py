@@ -140,11 +140,10 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         )
 
     async def _refresh_key(self, key: EntryKey, force: bool) -> None:
-        """Nudge the reconciler for one entry.
+        """Request a prompt refresh after the durable score update.
 
-        The debouncer exists for latency, not correctness: the score write already
-        enqueued durable work, so a dropped nudge costs a few seconds rather than a
-        missing post. Coalescing reaction storms is what it is actually for.
+        Reaction bursts share a debounced refresh. Database-triggered work remains
+        available if the process stops before this callback runs.
         """
         del force
         starboard_id, origin_message_id = key

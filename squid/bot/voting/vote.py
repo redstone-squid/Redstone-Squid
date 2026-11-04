@@ -87,11 +87,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
     @sd.context_menu(name="Vote to Delete", defer="private")
     async def delete_vote_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Open a vote on deleting the message that was right-clicked.
-
-        This was `/vote delete <message>`, which in slash form meant pasting a link to a
-        message you were already looking at (audit C4).
-        """
+        """Open a vote on deleting the message that was right-clicked."""
         if request.guild is None or message.guild != request.guild:
             return error_node(tr(t"Cannot vote on this message"), tr(t"The message is not from this guild."))
 
@@ -124,13 +120,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         return text_node(tr(t"Deletion vote opened."))
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Resolve current member facts for a service-level weight refresh.
+        """Resolve member roles and capabilities for a persisted voter's weight refresh.
 
-        A ballot records an account, so the snowflake to look the member up by is read
-        here. Somebody who is definitely not in the guild resolves to an actor holding
-        nothing, which weighs the default; `None` is kept for the questions we could
-        not ask, so the caller leaves the cached weight alone instead of rewriting it
-        from an answer we never got.
+        No linked Discord identity or a confirmed missing member produces an
+        actor with no roles. An unavailable guild or denied member lookup returns
+        `None`, which tells the service to retain the cached ballot weight.
         """
         guild = self.bot.get_guild(guild_id)
         account = await self.bot.services.accounts.get_account_by_id(account_id)

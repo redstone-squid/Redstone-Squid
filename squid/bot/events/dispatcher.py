@@ -1,4 +1,10 @@
-"""Drain the domain-event log for the Discord consumer."""
+"""Run Discord side effects for recorded application events.
+
+The Discord consumer receives its own delivery of each domain event. Handlers create or resume
+review delivery when a build is submitted and remove a message when a delete-log vote approves it.
+The dispatcher acknowledges the delivery after its handlers succeed; a retry runs those handlers
+again. Post content is kept current separately by the reconciliation workflow in squid.bot.sync.
+"""
 
 import logging
 from typing import TYPE_CHECKING, override
@@ -21,7 +27,7 @@ DELIVERY_REQUIRED_EVENTS = frozenset({"build.submitted"})
 
 
 class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
-    """Run one-shot side effects for recorded state transitions."""
+    """Deliver recorded transitions to Discord handlers with retries."""
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
@@ -42,7 +48,11 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await self.bot.background_tasks.cancel(self._task)
 
     async def process_domain_events(self) -> None:
-        """Dispatch bounded transition work to its handlers."""
+        """Process one batch after the bot is ready.
+
+        Handler failures follow the delivery retry policy. Errors in claiming or
+        acknowledging deliveries propagate and stop the batch.
+        """
         await self.bot.wait_until_ready()
         with trace_span("squid.background.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             for delivery in await self.bot.services.domain_events.claim(CONSUMER):

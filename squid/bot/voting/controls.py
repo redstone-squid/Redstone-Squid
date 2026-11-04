@@ -1,18 +1,8 @@
-"""The buttons a generic poll's own card carries.
+"""Close and refresh controls attached to generic poll cards.
 
-Closing and refreshing a poll used to be `/poll close` and `/poll refresh`, each taking a
-`discord.Message` — which in slash form means pasting a link to the card you are already
-looking at (audit C4). Both gestures belong on the card, so they live here as routed
-controls, and the poll a click refers to is the message the button sits on: nothing is
-encoded in the custom id, because nothing has to be.
-
-Neither action stores anything about whoever clicked, so neither asks for consent. The
-account id below is read, never minted; someone without one cannot be the poll's author,
-and staff closing another person's poll should not gain an account row for it.
-
-Labels are not translated. One card is read by everyone in the channel, so rendering it in
-the guild's locale would still be the wrong language for most of them; what a click
-*replies* is translated, because that reply has exactly one reader.
+The message containing the clicked control identifies the poll. Both actions use
+the session's close authorization and read an existing account without creating
+one. Shared card labels are fixed; personal replies use the caller's locale.
 """
 
 from typing import TYPE_CHECKING, Any
@@ -78,7 +68,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
         await bot.refresh_posts("vote_session", str(result.session.id))
     text = tr(tr(t"Poll weights refreshed."))
     if not result.complete:
-        # A count, not the raw account ids the command used to print (audit C5).
+        # Report unresolved voters as a count without exposing their account IDs.
         count = len(result.unresolved_account_ids)
         text += " " + tr(tr(t"{count} voter(s) could not be resolved, so their cached weight was kept."))
     await request.respond(text_node(text), audience="personal")

@@ -22,27 +22,25 @@ class DesiredPost:
 
 
 class PostRenderer(Protocol):
-    """Decides where one kind of resource should be posted, and what it says.
+    """Choose destinations and content for one resource kind.
 
-    Renderers answer only "what should be true now". Sending, editing, deleting and
-    recording are the reconciler's job, so a renderer never has to be idempotent or
-    know whether a post already exists.
+    `desired` may read existing posts when location or threshold decisions depend
+    on them. The reconciler owns sending, editing, deletion, and post registration;
+    `after_send` handles additions such as baseline reactions.
     """
 
     resource_kind: ResourceKind
 
     repost_if_deleted: bool
-    """Whether to post again after someone deletes a post by hand.
+    """Whether a previously recorded post may be replaced when it is unavailable.
 
-    The surfaces genuinely disagree. A starboard entry is a mirror and should return;
-    a moderator deleting a build card meant to remove it.
+    Starboard mirrors allow replacement; build and vote cards preserve removal.
     """
 
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
-        """Return every post this resource should have, or None if it is gone.
+        """Return at most one desired post per channel, or `None` if the resource is gone.
 
-        None means "delete everything for this resource", which is how a deleted build
-        or a closed-and-cleaned-up session removes its cards.
+        Both `None` and an empty sequence remove the resource's existing posts.
         """
         ...
 

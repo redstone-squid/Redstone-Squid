@@ -1,4 +1,11 @@
-"""Converge live and recovered Discord reactions into persisted vote selections."""
+"""Translate Discord reactions into stored ballots for voting sessions.
+
+A voting session may have cards in several channels, but an account has one
+selection across them. Live events update that selection; periodic scans recover
+reactions left behind by interrupted handling. Anonymous votes are stored before
+the user's reaction is removed, so a leftover reaction can be retried. Missing
+reactions alone never prove a stored ballot was withdrawn.
+"""
 
 import asyncio
 import contextlib
@@ -39,7 +46,11 @@ class _ObservedReaction:
 
 
 class VoteReactionHandler:
-    """Converge vote reactions until close detaches routing and cancels owned work."""
+    """Handle and reconcile vote reactions for one loaded voting cog.
+
+    close detaches this handler and cancels its background jobs; closing a voting
+    session is a separate operation performed by the voting service.
+    """
 
     def __init__(self, bot: squid.bot.app.RedstoneSquid, *, consumer: str) -> None:
         self.bot = bot
@@ -177,11 +188,12 @@ class VoteReactionHandler:
         await self._restore_reactions(event.payload.message_id)
 
     async def reconcile_open_reactions(self) -> None:
-        """Periodically converge every open vote from its Discord reactions.
+        """Recover reactions and restore options across open vote sessions.
 
-        The job ends when the cog unloads. Public reactions are the desired ballot state;
-        anonymous reactions remain only until their corresponding database mutation commits,
-        so a reaction left behind is a retryable ballot without exposing stored selections.
+        Scan failures are collected so other sessions can still be repaired, then
+        raised together. Anonymous reactions left after a failed attempt can be
+        retried without toggling an already-stored selection. Missing reactions
+        alone do not withdraw stored ballots.
         """
         await self.bot.wait_until_ready()
         errors: list[Exception] = []
@@ -209,7 +221,7 @@ class VoteReactionHandler:
             raise ExceptionGroup(message, errors)
 
     async def reconcile_message_reactions(self, message_id: int) -> None:
-        """Make one open session agree with the reactions currently on its card."""
+        """Scan every card of the open session containing this message for recoverable votes."""
         async with self._lock:
             snapshot = await self.vote_service.get_session(message_id)
             if snapshot is None or not snapshot.is_open:
@@ -240,7 +252,16 @@ class VoteReactionHandler:
         return await self.vote_service.cast_vote(message_id, actor, emoji), True
 
     async def _reconcile_session_reactions(self, snapshot: VoteSessionSnapshot) -> None:
-        """Converge all of one session's cards without multi-card vote oscillation."""
+        """Recover votes across all reachable cards without alternating between aliases.
+
+        If an account still reacts for its stored option, keep that option.
+        Otherwise use its first observed reaction in message and option order.
+        Public polls keep only reactions for the accepted option, falling back to
+        the previous selection if casting is refused. Anonymous polls remove all
+        observed reactions. Accounts with no observed reactions keep their stored
+        ballots, since a missing card or cleared reactions is not evidence of
+        withdrawal.
+        """
         cards: list[tuple[VoteMessage, discord.Message, dict[str, discord.Reaction]]] = []
         observed: dict[int, list[_ObservedReaction]] = {}
         for location in snapshot.messages:
@@ -319,11 +340,10 @@ class VoteReactionHandler:
             return None
 
     async def _restore_reactions(self, message_id: int) -> None:
-        """Put the configured baseline reactions back, without inferring lost ballots.
+        """Restore baseline reactions without changing stored ballots.
 
-        Ballots live in the database, so a clear costs the affordance and not the
-        vote. Nothing here tries to reconstruct who had reacted: for an anonymous
-        session that information was never on the message to begin with.
+        A clear removes the voting controls from Discord, not the database's
+        selections. Anonymous ballots cannot be reconstructed from reaction lists.
         """
         snapshot = await self.vote_service.get_session(message_id)
         if snapshot is None or not snapshot.is_open:
@@ -357,11 +377,10 @@ class VoteReactionHandler:
             await send_to(message.channel)(payload)
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
-        """Resolve a voter's account without creating one.
+        """Return an existing account ID only when its consent is current.
 
-        A reaction is not evidence that anybody asked to be remembered, and casting a ballot
-        stores a row naming them. There is no ephemeral surface on a raw reaction to ask in, so
-        the answer here is only ever "already agreed" or "not yet".
+        Raw reaction events have no private consent prompt, so this path never
+        creates an account or refreshes consent.
         """
         account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(discord_id))
         if account is None or account.id is None or account.needs_consent_refresh:
@@ -374,11 +393,11 @@ class VoteReactionHandler:
         user: discord.Member | discord.User,
         emoji: discord.PartialEmoji | str,
     ) -> None:
-        """Take the reaction back and say, once and briefly, how to make it count.
+        """Remove the reaction and send a consent instruction that expires after 30 seconds.
 
-        A raw reaction has no ephemeral surface, so this is in-channel and self-deleting. It is
-        deliberately not a DM: an unsolicited consent prompt arriving from a bot is worse than the
-        gap it closes.
+        The notice appears in the source channel because raw reactions cannot
+        receive an ephemeral interaction response. Repeated attempts can each
+        produce a notice.
         """
         await self._remove_reaction(message, emoji, user)
         locale = await resolve_locale(message, self.bot.services.settings)

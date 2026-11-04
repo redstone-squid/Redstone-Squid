@@ -39,7 +39,11 @@ class StarboardOperations(Protocol):
 
 
 class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
-    """A guild starboard workspace that ends when closed, replaced, or timed out."""
+    """A guild configuration session that rechecks permission before each mutation.
+
+    Initial capabilities choose visible controls; the authorizer checks current
+    permission when an action is submitted, including deletion confirmation.
+    """
 
     timeout = 300
 

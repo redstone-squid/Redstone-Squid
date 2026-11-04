@@ -14,7 +14,11 @@ type RefreshCallback = Callable[[EntryKey, bool], Awaitable[None]]
 
 
 class EntryDebouncer:
-    """Coalesce bursts into one refresh per entry until close cancels pending work."""
+    """Delay each entry's first refresh and coalesce activity until it starts.
+
+    Scheduling during the callback requests another delayed pass. Different entries
+    run independently; closing cancels pending work through the shared supervisor.
+    """
 
     def __init__(
         self,
@@ -45,11 +49,12 @@ class EntryDebouncer:
         )
 
     async def drain(self) -> None:
+        """Wait for the handles present at entry, including their additional passes."""
         for handle in tuple(self._handles.values()):
             await handle.finished.wait()
 
     async def close(self) -> None:
-        """Cancel pending refreshes and bound extension unload latency."""
+        """Reject new schedules and cancel existing refreshes through the supervisor."""
         if self._closing:
             return
         self._closing = True
