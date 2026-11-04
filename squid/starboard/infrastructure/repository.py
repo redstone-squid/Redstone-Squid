@@ -19,7 +19,12 @@ from squid.starboard.models import (
 
 
 class PostgresStarboardRepository:
-    """Persist configs and serialize each origin's score mutations with an advisory lock."""
+    """Stage starboard writes in the caller's transaction.
+
+    Vote changes and score refreshes share an advisory lock per origin message,
+    preventing concurrent mutations from publishing a score based on partial votes.
+    The lock lasts until the caller commits or rolls back.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -252,6 +257,7 @@ class PostgresStarboardRepository:
         )
 
     async def create(self, config: StarboardConfig) -> StarboardConfig:
+        """Assign an ID and subscribe the new board to all channels in its guild."""
         session = self._session()
         del config.id
         session.add(config)
@@ -323,6 +329,12 @@ class PostgresStarboardRepository:
         force: bool,
         origin: OriginMessage | None = None,
     ) -> Sequence[EntryKey]:
+        """Recalculate scores while the caller holds the origin's advisory lock.
+
+        `None` selects all existing entries; an empty set selects none. Return keys
+        whose score differs from the last rendered score, or every selected key
+        when forced. Raw count includes both upvotes and downvotes.
+        """
         if starboard_ids is not None and not starboard_ids:
             return ()
         statement = select(StarboardEntry).where(StarboardEntry.origin_message_id == origin_message_id)

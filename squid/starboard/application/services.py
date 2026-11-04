@@ -1,4 +1,4 @@
-"""Starboard orchestration over ports that name no framework."""
+"""Apply starboard policy and commit votes, scores, and configuration changes."""
 
 from dataclasses import dataclass
 from math import isfinite
@@ -22,14 +22,24 @@ from squid.unit_of_work import UnitOfWorkFactory
 
 @dataclass(frozen=True, slots=True)
 class StarboardVoteResult:
-    """Plans and source-reaction cleanup requested by one reaction."""
+    """Entry keys needing a refresh and whether the source reaction should be removed."""
 
     keys: tuple[EntryKey, ...]
     remove_reaction: bool = False
 
 
 class StarboardService:
-    """Authorize, weight, and atomically plan starboard entries."""
+    """Evaluate reactions and keep each starboard entry's votes and score together.
+
+    One reaction can affect several boards that watch the source channel. Each
+    board applies its own eligibility rules and role/emoji multipliers. Upvotes
+    add weight and downvotes subtract it; the repository saves the votes and
+    recalculates the score in the same transaction.
+
+    Returned entry keys tell the bot which displays need refreshing. The renderer
+    decides whether to create, update, or remove the Discord post from the score
+    and the board's publication thresholds.
+    """
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[StarboardUnitOfWork]) -> None:
         self._uow_factory = uow_factory
@@ -52,6 +62,12 @@ class StarboardService:
         return emoji in configured
 
     async def record_vote(self, origin: OriginMessage, actor: ReactionActor, emoji: str) -> StarboardVoteResult:
+        """Record accepted votes across matching boards in one transaction.
+
+        A member has one vote per origin and board, so another emoji replaces it.
+        Removal is requested if any rejecting board asks for cleanup, even when
+        another board accepts the same reaction.
+        """
         async with self._uow_factory() as uow:
             weight_policy = self._weight_policy(uow.starboards)
             pending: list[PendingVote] = []
@@ -82,6 +98,12 @@ class StarboardService:
     async def recount(
         self, origin: OriginMessage, reactions: tuple[tuple[ReactionActor, str], ...]
     ) -> tuple[EntryKey, ...]:
+        """Replace the origin's stored votes from a complete reaction snapshot.
+
+        Later accepted reactions win when a member has several emojis on the same
+        board. The repository removes old votes across all boards for this origin,
+        including votes whose boards no longer accept the source.
+        """
         async with self._uow_factory() as uow:
             weight_policy = self._weight_policy(uow.starboards)
             configs = await uow.starboards.configs_for_source(origin.guild_id, origin.channel_id)
@@ -210,9 +232,11 @@ class StarboardService:
             await uow.commit()
 
     async def disable_channel(self, channel_id: int) -> None:
+        """Disable boards targeting the channel; cached emoji lookups are not invalidated."""
         async with self._uow_factory() as uow:
             await uow.starboards.disable_channel(channel_id)
             await uow.commit()
 
     def invalidate_cache(self, guild_id: int) -> None:
+        """Discard this service instance's cached reaction aliases for one source guild."""
         self._emoji_cache.pop(guild_id, None)

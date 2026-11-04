@@ -34,10 +34,9 @@ EDITABLE_SETTINGS: dict[str, SettingKind] = {
     "name": "text",
     "display_emoji": "text",
 }
-"""Every setting `/starboard edit` accepts, and how its value is parsed.
+"""Settings accepted by the configuration form, with their value parsers.
 
-Shared with the suggestion registry so the names a user can be offered and the names the command
-will actually accept cannot drift apart.
+The form's choices and the service's update allowlist share this registry.
 """
 
 
@@ -69,7 +68,12 @@ def evaluate_vote(
     *,
     now: Instant | None = None,
 ) -> VoteVerdict:
-    """Authorize a configured reaction using the loaded configuration and message facts."""
+    """Evaluate one board's policy against the supplied message and actor facts.
+
+    `allow_bots` concerns the message author; transport adapters reject bot voters.
+    A removal verdict is a recommendation: the caller applies
+    `remove_invalid_reactions` before removing anything from Discord.
+    """
     option = next((item for item in config.emojis if item.emoji == emoji), None)
     if option is None or not config.enabled or not origin.present:
         return VoteVerdict.ignore()
@@ -90,12 +94,12 @@ def entry_should_be_posted(
     origin_present: bool,
     currently_posted: bool,
 ) -> bool:
-    """Whether this entry warrants a post right now, with a stable hysteresis band.
+    """Return whether the score warrants a post, retaining its state between thresholds.
 
-    Replaces a four-way send/update/remove/noop decision. Those verbs described what
-    to *do* about a post, which only made sense while the entry row remembered whether
-    one existed; the reconciler compares this answer against the posts that are
-    actually there and works out the verb itself.
+    At or below `required_remove`, remove the post. At or above `required`, create
+    it. Between those bounds, preserve `currently_posted`. If the origin is gone,
+    retain an existing post only when `link_deletes` is disabled; this decision
+    does not establish whether Discord can still supply content for rendering.
     """
     if not origin_present:
         # A deleted source removes its mirror only where the board links deletions.

@@ -1,4 +1,13 @@
-"""SQLAlchemy starboard models."""
+"""Store the reactions that qualify messages for a starboard channel.
+
+A board's configuration selects source channels, accepted emojis, and thresholds.
+OriginMessage holds facts about a source message; StarboardVote records each
+member's weighted reaction; StarboardEntry holds their total for one board.
+The same source message can have independent entries on several boards.
+
+An entry's published Discord message is tracked separately as a DiscordPost.
+Having an entry here does not imply that its score qualifies it for publication.
+"""
 
 from math import isfinite
 
@@ -59,12 +68,16 @@ class StarboardConfig(Base, kw_only=True):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     required: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("3.0"), default=3.0)
+    """Score at or above which an unposted entry qualifies for publication."""
     required_remove: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0.0"), default=0.0)
+    """Score at or below which an existing entry no longer qualifies for publication."""
     self_vote: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     allow_bots: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    """Whether messages authored by bots may qualify; this does not authorize bot voters."""
     require_image: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     min_age_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     max_age_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    """Maximum source-message age in seconds; zero disables the upper age limit."""
     autoreact_upvote: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     autoreact_downvote: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     remove_invalid_reactions: Mapped[bool] = mapped_column(
@@ -168,6 +181,7 @@ class StarboardSource(Base, kw_only=True):
         BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), primary_key=True
     )
     channel_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, server_default=text("0"), default=0)
+    """Source channel ID, or zero to include every channel in the source guild."""
     approved_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     approved_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
 
@@ -228,7 +242,7 @@ class StarboardVote(Base, kw_only=True):
 
 
 class StarboardEntry(Base, kw_only=True):
-    """The materialized-post state for one source message on one starboard."""
+    """Current vote totals and rendering bookkeeping for one source message on one starboard."""
 
     __tablename__ = "starboard_entries"
     __table_args__ = (

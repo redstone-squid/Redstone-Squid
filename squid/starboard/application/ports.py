@@ -25,10 +25,10 @@ type EntryKey = tuple[int, int]
 
 @dataclass(frozen=True, slots=True)
 class EntryState:
-    """Everything needed to decide and render one entry.
+    """A board's configuration, source-message facts, and current score.
 
-    Carries no action. Whether a post should exist is derived from the score and the
-    posts that are actually there, rather than remembered on the entry row.
+    Post existence is read separately from the posts service when deciding whether
+    the entry crosses a publication threshold.
     """
 
     config: StarboardConfig
@@ -37,7 +37,7 @@ class EntryState:
 
 
 class StarboardRepository(Protocol):
-    """Persistence operations required by :class:`StarboardService`."""
+    """Starboard reads and writes within the caller's unit-of-work transaction."""
 
     async def relevant_emojis(self, guild_id: int) -> frozenset[str]: ...
 
