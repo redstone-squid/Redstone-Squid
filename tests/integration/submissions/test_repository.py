@@ -272,6 +272,7 @@ async def test_concurrent_same_revision_changes_have_one_winner(
         _change(key="operation-b", operation_id="00000000-0000-4000-8000-000000000204"),
     )
 
+    # The revision conflict is expected; wait for the winning transaction to settle as well.
     results = await asyncio.gather(
         *(
             transact(
@@ -471,6 +472,7 @@ async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
     )
     assert replayed.snapshot.id == accepted[0].snapshot.id
 
+    # Inferred and manually created drafts consume separate admission limits.
     other_pool = replace(template, inferred=not inferred, snapshot=replace(template.snapshot, id=UUID(int=802)))
     assert (
         await transact(repository, lambda uow: uow.submission_drafts.create(other_pool, capacity=1), commit=True)

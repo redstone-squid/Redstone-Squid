@@ -1,8 +1,7 @@
-"""Integration coverage for schematic persistence.
+"""Schematic storage and preview publication against PostgreSQL.
 
-Exercised against real PostgreSQL because the behaviours that matter here — content-addressed
-upsert, the partial unique index enforcing one primary per build, and the version-scoped
-fingerprint indexes — are all database semantics rather than Python ones.
+Exercise content-addressed files, one primary attachment per build, version-scoped
+fingerprint lookups, and coordination between preview publication and storage cleanup.
 """
 
 import hashlib
@@ -120,8 +119,7 @@ async def _ready_preview_object(
 async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
     repository: SchematicStorageService,
 ) -> None:
-    """Content addressing is what makes "this is byte-identical to an existing submission"
-    free to detect, so a resubmission must be an upsert rather than a conflict."""
+    """Repeated uploads of identical bytes must reuse their content-addressed file."""
     first = await repository.put_file(b"schematic-bytes", source_format=SchematicFormat.LITEMATIC)
     second = await repository.put_file(b"schematic-bytes", source_format=SchematicFormat.LITEMATIC)
 
@@ -150,7 +148,7 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
     repository: SchematicStorageService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """An engine upgrade re-analyses; accumulating a row per pass would corrupt every count."""
+    """Reanalysis updates the existing attachment rather than accumulating duplicate measurements."""
     digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, digest, make_analysis(block_count=10), primary=True)
 
@@ -168,7 +166,6 @@ async def test_uploader_account_attribution_reaches_the_persisted_attachment(
     repository: SchematicStorageService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Provider-neutral account identity must survive the repository boundary."""
     async with async_session_factory.begin() as session:
         account = Account()
         session.add(account)
@@ -193,8 +190,7 @@ async def test_uploader_account_attribution_reaches_the_persisted_attachment(
 
 
 async def test_promoting_a_new_primary_demotes_the_previous_one(repository: SchematicStorageService) -> None:
-    """A partial unique index allows only one primary per build, so the swap has to happen in
-    a single transaction or the second insert fails."""
+    """Demote the old primary before promoting its replacement to satisfy the partial unique index."""
     first = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, first, make_analysis(), primary=True, original_filename="first.litematic")
@@ -545,8 +541,7 @@ async def test_an_exact_file_lookup_finds_every_build_using_the_same_bytes(
 async def test_a_fingerprint_from_another_engine_version_never_matches(
     repository: SchematicStorageService,
 ) -> None:
-    """Fingerprints are hashes whose definition can change between releases. Comparing across
-    versions would return confident garbage, so the version is part of every lookup."""
+    """Fingerprint definitions can change between engine releases, so lookups must include the version."""
     digest = await repository.put_file(b"original", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, digest, make_analysis(shape="s", analyzer_version="engine-1"), primary=True)
 
@@ -573,8 +568,7 @@ async def test_metric_neighbours_shortlist_builds_of_comparable_size(
 async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
     repository: SchematicStorageService,
 ) -> None:
-    """`source_format` and `byte_size` describe the bytes, not the analysis, so they live on
-    the content-addressed row and are joined back in rather than duplicated per attachment."""
+    """Read format and byte size from the file metadata, even when the analysis reports different values."""
     digest = await repository.put_file(b"sponge-bytes", source_format=SchematicFormat.SPONGE_SCHEM)
     await repository.record_analysis(1, digest, make_analysis(), primary=True)
 

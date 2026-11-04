@@ -1,4 +1,4 @@
-"""PostgreSQL transaction and claim-fence coverage for submission execution."""
+"""Submission execution commits builds, receipts, and events under the current job claim."""
 
 from dataclasses import replace
 from functools import partial
@@ -44,6 +44,7 @@ class PreparedBuilds:
 async def claimed_submission(
     sessions: async_sessionmaker[AsyncSession], *, with_media: bool = False
 ) -> ClaimedFinalizationJob:
+    """Persist a draft and finalization claim, optionally seeding completed media metadata."""
     owner = await seed_account_and_version(sessions)
     now = Instant.now()
     draft_id = UUID(int=991)
@@ -127,6 +128,7 @@ async def test_receipt_failure_rolls_back_build_and_events(
         PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     )
 
+    # Fail after build persistence to verify that the enclosing transaction rolls it back.
     async def fail_receipt(*args: object, **kwargs: object) -> bool:
         raise RuntimeError("receipt unavailable")
 

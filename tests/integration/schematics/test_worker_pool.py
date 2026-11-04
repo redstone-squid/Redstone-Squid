@@ -1,8 +1,7 @@
-"""Integration coverage for the supervised schematic worker pool.
+"""Native schematic analysis and subprocess recovery.
 
-These exercise the two properties the whole subprocess design exists for: that the engine's
-answers are the ones the duplicate detector depends on, and that when the engine dies the bot
-does not.
+Check fingerprint semantics used by duplicate detection, error propagation, and the ability
+to serve another request after a worker crashes or exceeds its deadline.
 """
 
 import functools
@@ -33,7 +32,10 @@ pytestmark = [pytest.mark.schematic, pytest.mark.asyncio]
 
 
 def owned_pool(test: Callable[..., Awaitable[None]]) -> Callable[..., Awaitable[None]]:
-    """Run one test inside the pool lifetime owned by that same pytest task."""
+    """Keep pool startup, the test, and shutdown in the same pytest task.
+
+    The pool owns an AnyIO task group, whose cancel scope must exit in the task that entered it.
+    """
     signature = inspect.signature(test)
     parameters = [parameter for name, parameter in signature.parameters.items() if name != "pool"]
 
@@ -50,12 +52,7 @@ def owned_pool(test: Callable[..., Awaitable[None]]) -> Callable[..., Awaitable[
 
 @owned_pool
 async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWorkerPool) -> None:
-    """The worker must report the engine *this* environment installed.
-
-    Fingerprints are version-scoped, so a worker quietly running a different build than
-    its parent would poison duplicate lookups. Which version that is, is pyproject's exact
-    pin to state; repeating the literal here only guaranteed a failure on every bump.
-    """
+    """Fingerprint lookups are version-scoped, so the worker must report the installed engine version."""
     capabilities = await pool.capabilities()
 
     assert capabilities.available is True
@@ -67,8 +64,7 @@ async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWor
 async def test_analysis_reads_tight_dimensions_not_allocated_bounds(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
-    """`dimensions()` reports the region the file allocates; only `tight_dimensions()` is a
-    measurement of the build, and it is the one a record can be argued from."""
+    """Measure occupied blocks rather than the larger region allocated by the file."""
     analysis = await pool.analyze(periodic_door(), limits=SchematicLimits(), source_format=SchematicFormat.LITEMATIC)
 
     metrics = analysis.metrics
@@ -117,8 +113,7 @@ async def test_java_structure_containers_cross_the_real_worker(
 async def test_the_shape_fingerprint_survives_translation(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
-    """The load-bearing assumption for duplicate detection: the same build reposted at other
-    coordinates must hash the same."""
+    """Duplicate detection must recognize the same build at different coordinates."""
     here = await pool.analyze(periodic_door(), limits=SchematicLimits())
     moved = await pool.analyze(periodic_door(offset=13), limits=SchematicLimits())
 
@@ -130,8 +125,7 @@ async def test_the_shape_fingerprint_survives_translation(
 async def test_shape_separates_builds_that_structural_lumps_together(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
-    """`structural` is a coarse bucket: one added glass block still matches. That is why the
-    duplicate index is `shape` and `structural` is only ever a pre-filter."""
+    """The structural fingerprint is coarse: this added glass block changes only the shape comparison."""
     original, altered = periodic_door(), periodic_door(extra_block=True)
 
     structural = await pool.compare(original, altered, preset=FingerprintPreset.STRUCTURAL)
@@ -207,11 +201,7 @@ async def test_tick_simulation_prefers_an_insign_input_when_controls_are_ambiguo
 async def test_a_named_input_overrides_the_insign_annotation(
     pool: SchematicWorkerPool, insign_piston_door: bytes
 ) -> None:
-    """A moderator naming a coordinate is answering the question the annotation answers.
-
-    Preferring the annotation anyway would time the door's button while reporting a result for
-    the command they ran against the other one.
-    """
+    """An explicit input coordinate takes precedence over the annotated control."""
     result = await pool.simulate(insign_piston_door, request=SimulationRequest(input_position=(5, 1, 0)))
 
     assert result.input_position == (5, 1, 0)
@@ -222,7 +212,7 @@ async def test_a_named_input_overrides_the_insign_annotation(
 async def test_a_named_input_that_is_not_a_control_comes_back_with_the_ones_that_are(
     pool: SchematicWorkerPool, insign_piston_door: bytes
 ) -> None:
-    """The candidates have to survive the worker pipe, or the refusal is unactionable."""
+    """Carry valid control coordinates through the worker pipe so callers can correct the request."""
     with pytest.raises(AmbiguousSimulationInputError) as raised:
         await pool.simulate(insign_piston_door, request=SimulationRequest(input_position=(2, 1, 0)))
 
@@ -281,8 +271,7 @@ async def test_corrupt_bytes_come_back_as_a_typed_error_and_the_pool_keeps_servi
 async def test_a_worker_killed_mid_request_is_replaced_and_the_bot_survives(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes], slow_schematic: bytes
 ) -> None:
-    """The test that proves the isolation design: a dead engine is one failed request, not an
-    outage. Nothing is retried, because a payload that killed a worker would kill the next."""
+    """Kill a busy worker, then check the failed request and a new request on its replacement."""
     await pool.capabilities()
     process = pool._workers[0]._process
     assert process is not None
@@ -314,7 +303,7 @@ async def test_a_worker_killed_mid_request_is_replaced_and_the_bot_survives(
 async def test_a_clean_shutdown_does_not_look_like_a_failure(
     pool: SchematicWorkerPool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Operators page on WARNING, so an orderly stop must not emit one."""
+    """Orderly shutdown should not produce warnings that suggest a worker failure."""
     await pool.capabilities()
 
     with caplog.at_level(logging.INFO, logger="squid.schematics.infrastructure.worker"):
@@ -344,7 +333,7 @@ async def test_an_operation_past_its_deadline_is_killed_rather_than_left_running
 async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_forever(
     slow_schematic: bytes, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A user who keeps retrying a poison file must not be able to fork-bomb the host."""
+    """Repeated timeouts must exhaust the restart budget and stop spawning workers."""
     pool = SchematicWorkerPool(
         SchematicConfig(
             workers=1,

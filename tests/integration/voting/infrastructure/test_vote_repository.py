@@ -87,11 +87,12 @@ def _kind_subtype_sql() -> list[str]:
 
 @pytest.fixture(autouse=True)
 async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
-    """Create the voting tables from the models rather than from a hand-written copy.
+    """Create voting tables and foreign-key targets from mapped metadata.
 
-    The DDL this replaces had to be edited by hand every time a voting column changed,
-    and any column it forgot was one the repository was never tested against. Building
-    from the real metadata means the constraints under test are the shipped ones.
+    Using the model definitions keeps repository tests aligned with the shipped columns
+    and constraints, including references to accounts, guilds, and builds.
+    Install the deferred kind/subtype functions and triggers separately because
+    metadata.create_all does not create those managed PostgreSQL entities.
     """
     async with async_engine.begin() as connection:
         # `builds` is in the closure through build_vote_sessions.build_id, and it carries a
@@ -110,13 +111,7 @@ async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
 
 @pytest.fixture(autouse=True)
 async def referenced_rows(vote_schema: None, async_session_factory: async_sessionmaker[AsyncSession]) -> None:
-    """Satisfy the account, guild and build foreign keys the real schema declares.
-
-    The hand-written schema this replaces declared none of them, so a vote session could
-    reference a build or an account that did not exist. Written through the mapped tables
-    so the ids stay the fixed literals the assertions read, which the generated primary
-    keys do not allow through the ORM.
-    """
+    """Seed fixed account, guild, and build IDs required by vote foreign keys."""
     async with async_session_factory.begin() as session:
         await session.execute(
             insert(Account).values([{"id": account_id} for account_id in (*AUTHOR_ACCOUNT_IDS, *VOTER_ACCOUNT_IDS)])
@@ -149,11 +144,7 @@ async def seed_generic_poll(
     guild_id: int | None = GUILD_ID,
     attach: bool = True,
 ) -> tuple[int, int | None]:
-    """Open a generic poll through the repository and optionally put a message on it.
-
-    Every value a test asserts on stays in the caller's hands; only the message row,
-    which no assertion reads, lives here.
-    """
+    """Create a poll and return its session ID and optional attached message ID."""
     session_id = await transact(
         repository,
         lambda uow: uow.votes.create_generic_session(
@@ -256,10 +247,10 @@ async def test_target_failure_rolls_back_vote_root(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The build exists, so the only thing that can fail here is the unserializable payload.
+    """Use an existing build so unserializable target data causes the StatementError.
 
-    Worth stating because a missing build would also raise `StatementError`, and the test
-    would then pass without ever reaching the two-insert sequence it is about.
+    A missing foreign-key target could raise the same exception without reaching
+    the write whose rollback this test checks.
     """
     with pytest.raises(StatementError):
         await transact(
@@ -410,7 +401,7 @@ async def test_concurrent_votes_report_exactly_one_closure(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Row-level locking, not the application, is what makes the second vote a no-op."""
+    """Both transactions target one row; only the vote that closes it may be recorded."""
     _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-10)
 
     results = await asyncio.gather(
@@ -484,7 +475,7 @@ async def test_generic_polls_store_null_thresholds_rather_than_sentinels(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Read with raw SQL because the domain refuses to represent the sentinels at all."""
+    """Inspect persisted thresholds directly, without relying on domain reconstruction."""
     session_id, _ = await seed_generic_poll(
         async_session_factory,
         repository,
@@ -543,7 +534,6 @@ async def test_a_guild_less_poll_becomes_addressable_once_a_card_is_attached(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Creation and publication are separate steps, so this is the second one."""
     session_id, _ = await seed_generic_poll(
         async_session_factory,
         repository,
@@ -649,11 +639,7 @@ async def test_the_schema_rejects_kind_threshold_combinations_the_domain_forbids
     pass_threshold: int | None,
     fail_threshold: int | None,
 ) -> None:
-    """Direct SQL on purpose: this asserts the database constraint, not the repository.
-
-    The repository cannot produce these rows, which is exactly why the constraint has
-    to be tested at the level that would still accept them.
-    """
+    """Bypass domain validation with SQL to exercise the database constraint."""
     with pytest.raises(IntegrityError):
         async with async_session_factory.begin() as session:
             await session.execute(
@@ -702,6 +688,7 @@ async def test_kind_and_subtype_can_transition_atomically(
         commit=True,
     )
 
+    # The deferred invariant permits intermediate mismatches but requires a valid shape at commit.
     async with async_session_factory.begin() as session:
         await session.execute(
             text("DELETE FROM build_vote_sessions WHERE vote_session_id = :id"),

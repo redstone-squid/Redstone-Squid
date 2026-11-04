@@ -1,4 +1,4 @@
-"""Real-PostgreSQL coverage for durable schematic execution."""
+"""Durable schematic jobs using PostgreSQL, local artifacts, and a fake native analyzer."""
 
 from collections.abc import AsyncGenerator, Coroutine, Mapping
 from functools import partial
@@ -61,6 +61,7 @@ def durable_components(
 
 
 async def _with_runner[ResultT](runner: SchematicJobRunner, request: Coroutine[Any, Any, ResultT]) -> ResultT:
+    """Pump the durable queue until the client request finishes, then propagate its result or error."""
     finished = anyio.Event()
     results: list[ResultT] = []
     failures: list[Exception] = []
@@ -178,6 +179,8 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
     started, release = anyio.Event(), anyio.Event()
 
     class DelayedUpload(LocalArtifactStore):
+        """Pause the first result upload so a replacement worker can finish before it resumes."""
+
         delayed: bool = False
 
         @override

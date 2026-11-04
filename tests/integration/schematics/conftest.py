@@ -1,8 +1,6 @@
-"""Fixtures that build schematic bytes with the real engine.
+"""Generate small schematic fixtures with native exports and explicit NBT encodings.
 
-Fixtures are generated programmatically rather than committed as binary files: a `.litematic`
-of uncertain provenance in the repository is neither reviewable nor reproducible, and the
-engine can produce exactly the shapes each test needs.
+Constructing bytes here keeps each test shape reviewable and avoids opaque binary fixtures.
 """
 
 import base64
@@ -87,11 +85,7 @@ def native_format_inputs() -> dict[SchematicFormat, bytes]:
 
 @pytest.fixture
 def periodic_door() -> Callable[..., bytes]:
-    """Return a builder for a small build with a genuine 4-block period.
-
-    Periodic on purpose so the same fixture exercises repeating-structure detection, and
-    translatable so the fingerprint-invariance test has something to move.
-    """
+    """Return a six-column fixture with a four-block period and optional translation."""
 
     def build(*, offset: int = 0, extra_block: bool = False) -> bytes:
         schematic = nucleation.Schematic.create("test-door")
@@ -137,11 +131,7 @@ def insign_piston_door(piston_door: bytes) -> bytes:
 
 @pytest.fixture(scope="session")
 def slow_schematic() -> bytes:
-    """A build large enough that analysing it takes long enough to interrupt.
-
-    Sized so a request is reliably still running a fraction of a second in, which is what lets
-    the timeout and mid-request-kill tests be deterministic rather than a race.
-    """
+    """Build a large input to keep analysis busy during timeout and worker-kill tests."""
     schematic = nucleation.Schematic.create("wide")
     for index in range(200_000):
         schematic.set_block_from_string(index % 500, (index // 500) % 500, index // 250_000, "minecraft:stone")

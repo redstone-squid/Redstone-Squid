@@ -1,4 +1,4 @@
-"""PostgreSQL coverage for atomic finalization and UUID claim fencing."""
+"""Finalization state transitions, payload integrity, and claim ownership against PostgreSQL."""
 
 import asyncio
 from collections.abc import AsyncGenerator
@@ -330,6 +330,7 @@ async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
 ) -> None:
     finalizations = partial(SqlAlchemyUnitOfWork, async_session_factory)
     drafts = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    # Let both transactions settle: whichever loses must report the resulting draft state.
     enqueue_result, delete_result = await asyncio.gather(
         transact(
             finalizations,

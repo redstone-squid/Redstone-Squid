@@ -43,12 +43,9 @@ IMMUTABLE_FINALIZATION_INPUT_REVISION = "c8e2a5b0d3f6"
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
 
-`search_document_facets_text_prefix_idx` declares `text_pattern_ops` inline because
-`postgresql_ops` is keyed by column name and is silently dropped for an expression;
-`squid/search/infrastructure/models.py` documents the choice and notes that Alembic
-skipping the comparison is correct, since the migration creates exactly that index.
-The suite promotes warnings to errors, so without this every command that autogenerates
-fails on an outcome the schema deliberately accepts.
+`search_document_facets_text_prefix_idx` declares `text_pattern_ops` inline in
+`squid/search/models.py`. Suppress the comparison warning for that known limitation;
+these drift checks do not verify the skipped index expression.
 """
 
 
@@ -87,12 +84,9 @@ def test_migrations_create_schema_without_drift(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A clean PostgreSQL database reaches head with all managed entities in sync.
+    """Check a fresh schema, downgrade through dynamic voting, and upgrade without drift.
 
-    The dynamic-voting downgrade is exercised here rather than in a test of its own on
-    purpose: reaching a downgradable state costs a full run of the chain, and a downgrade
-    is the one path that never runs in production, so it is the one most likely to be
-    wrong. Fusing the two pays the setup cost once.
+    Reuse the migrated database to exercise both directions of the chain.
     """
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")
@@ -265,9 +259,8 @@ def test_migrations_create_schema_without_drift(
     }
     assert queue_health_after["discord_sync"].ready == queue_health_before["discord_sync"].ready + 1
     assert queue_health_after["discord_sync"].in_flight == queue_health_before["discord_sync"].in_flight
-    # Generations come from a shared sequence, so assert the relationships rather than
-    # literal values. A post recorded below the queued generation reads as stale, and
-    # re-enqueueing keeps the generation rather than restarting it.
+    # Sequence values are not fixed. A lower applied revision is stale; this direct
+    # UPDATE changes action and enqueue time without issuing a new generation.
     assert stale_post is True
     assert reissued_generation == seeded_generation
 
@@ -276,7 +269,11 @@ def test_notification_delivery_owner_migration_rejects_corruption_and_downgrades
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The forward key validates old rows and the downgrade restores the legacy shape."""
+    """Require each delivery to belong to the same account as its notification.
+
+    Upgrade rejects existing ownership mismatches; downgrade restores the foreign key
+    that checked only whether the notification existed.
+    """
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")
     command.upgrade(config, f"{NOTIFICATION_DELIVERY_OWNER_REVISION}-1")
@@ -440,7 +437,7 @@ def test_notification_delivery_owner_migration_rejects_corruption_and_downgrades
 def test_notification_delivery_owner_offline_sql_preserves_safe_ddl_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The forward DDL builds its key before validating and replacing the legacy FK."""
+    """Build the supporting index and validate ownership before removing the old foreign key."""
     monkeypatch.setenv("SQUID_DATABASE_URL", "postgresql+asyncpg://squid:squid@localhost/squid")
     output = StringIO()
     config = Config("alembic.ini", toml_file="pyproject.toml", output_buffer=output)
@@ -652,7 +649,7 @@ def test_vote_subtype_invariant_upgrade_rejects_existing_incoherence(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The rollout refuses a root that has no matching subtype payload."""
+    """Reject existing voting sessions without the detail row required by their kind."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")
     command.upgrade(config, f"{VOTE_SUBTYPE_INVARIANT_REVISION}-1")
@@ -790,7 +787,7 @@ def test_finalization_result_metadata_migration_expands_and_downgrades(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Build-only writers coexist with legacy metadata writers during the drain window."""
+    """The migration makes legacy result metadata nullable; downgrade restores both NOT NULL constraints."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")
     command.upgrade(config, f"{FINALIZATION_RESULT_METADATA_REVISION}-1")
@@ -1344,12 +1341,10 @@ def test_migration_history_records_the_chain_and_guards_edited_scripts(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The ledger records every applied step and refuses a chain whose scripts have changed.
+    """The migration ledger records applied steps and rejects changed scripts.
 
-    Fused into one test for the reason `test_migrations_create_schema_without_drift` gives:
-    every assertion below needs a database at head, and reaching head costs a full run of the
-    chain. Digests are corrupted in the table rather than by editing a revision on disk, because
-    an edit left behind by a failing assertion would be a change to the migration chain itself.
+    Reuse one database at head for the ledger checks. Corrupt stored digests to simulate
+    script changes without modifying migration files in the working tree.
     """
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     # BuildConfig requires the pair, which is what the image supplies.
@@ -1376,8 +1371,7 @@ def test_migration_history_records_the_chain_and_guards_edited_scripts(
         assert {row.direction for row in recorded} == {"upgrade"}
         assert {row.release_version for row in recorded} == {"0123456789abcdef"}
         assert all(row.script_sha256 == script_digest(scripts[row.revision]) for row in recorded)
-        # now() is the transaction timestamp and the whole chain shares one transaction, so it
-        # would date every step of a release to the same instant.
+        # The recorded chain should contain distinct application times, not one release timestamp.
         assert len({row.applied_at for row in recorded}) > 1
 
         command.downgrade(config, f"{DYNAMIC_VOTING_REVISION}-1")
