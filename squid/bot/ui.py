@@ -1,10 +1,9 @@
-"""squid-ui glue: localized chrome, house colours, and the semantic layout vocabulary.
+"""Provide the bot's translated chrome, colour palette, and reusable layout helpers.
 
-This module is the bot's front door to the `squid_ui` package. The package resolves text,
-while this host supplies the gettext catalogue and translatable chrome messages.
-
-The bot owns only localized chrome and audience policy; rendering and delivery stay in
-``squid_ui``.
+Chrome is the shared text for controls and notices, such as Close and Loading.
+The node helpers build composable layout descriptions; render_payload turns a
+complete description into a Discord message payload. The squid-ui packages plan
+the layout and handle delivery, using the caller's render-time localization.
 """
 
 from collections.abc import Sequence
@@ -184,13 +183,7 @@ def truncate_display_text(content: str, limit: int) -> str:
 
 
 HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve())
-"""What the bot installs with: the chrome and rendering palette every panel shares.
-
-Only the half that can be written down as a value. The other half -- a challenge presenter,
-which needs the session registry and the background runner -- is assembled by
-`sd.install` and reached back through `DiscordUIRuntime.of`, so a panel built from a click
-gets the same wiring as one opened through `bot.mounts`.
-"""
+"""Shared chrome and palette defaults; `sd.install` supplies runtime services and challenge handling."""
 
 
 def _fields(fields: Sequence[CardField]) -> tuple[ui.semantic.Field, ...]:
@@ -198,8 +191,7 @@ def _fields(fields: Sequence[CardField]) -> tuple[ui.semantic.Field, ...]:
 
 
 def _groups(sections: Sequence[CardSection]) -> tuple[ui.semantic.Section, ...]:
-    # A nested section per group: each field steps its own Condense ladder independently
-    # rather than a whole group stepping in lockstep — finer-grained, not a regression.
+    # Separate field nodes can condense independently when the message budget is tight.
     return tuple(ui.section(ui.heading(s.title), ui.fields(*_fields(s.fields))) for s in sections if s.fields)
 
 
@@ -217,8 +209,7 @@ def card_node(
     extra_media = media[1:]
     return ui.section(
         ui.heading(title),
-        # The body is the card's shock absorber: truncate lets it give up characters under
-        # pressure before a field or the footer loses any.
+        # Shorten the description before reducing fields or the footer.
         description and ui.truncate(ui.paragraph(description)),
         # `fields`/`extra_media` are tuples: an empty one is falsy but not `False`, and
         # `_children` only skips `None`/`False`, so the truthiness check must be explicit.
@@ -244,6 +235,7 @@ def text_node(
 
 
 def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
+    """Prefix text while preserving deferred translation, plural forms, and markup metadata."""
     if isinstance(value, ui.text.Message):
         plural = None if value.plural is None else prefix + value.plural
         return ui.text.Message(prefix + value.template, value.params, value.markup, plural)

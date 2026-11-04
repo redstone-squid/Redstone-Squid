@@ -1,4 +1,4 @@
-"""Defines how the help command works in the bot."""
+"""Render command discovery, focused command help, and project links."""
 
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
@@ -34,12 +34,7 @@ DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     ),
     (tr(t"Information"), frozenset({"help"})),
 )
-"""How the directory groups top-level commands, by command name.
-
-Out here rather than inline so a name that no longer exists is a failing test instead of a
-silently empty category — `patterns` and `vote` both outlived their commands in this map.
-Staff groups remain listed because the help screen already respects Discord's command visibility.
-"""
+"""Top-level command categories, kept separate so tests can check registered command names."""
 
 
 type AnyCommand = Command[Any, ..., Any] | app_commands.Command[Any, ..., Any] | app_commands.Group
@@ -148,12 +143,7 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
 
 
 def _summary(command: AnyCommand) -> str:
-    """One line about a command, from wherever that surface keeps it.
-
-    A prefix command carries `short_doc`, an app command a `description`. The directory
-    lists both, because the app-only ones are exactly the commands a user cannot discover
-    any other way.
-    """
+    """Return a prefix command's short documentation or an app command's description."""
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
     return text or tr(tr(t"No details provided"))
 
@@ -184,7 +174,10 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         return HelpScreen(self.bot, self._all_commands(), command)
 
     def _all_commands(self) -> list[AnyCommand]:
-        """Every command in either public tree, de-duplicated by qualified name."""
+        """Combine loaded prefix and app commands, preferring prefix entries for duplicate names.
+
+        This collection does not filter hidden commands or evaluate caller permissions.
+        """
         commands_: list[AnyCommand] = list(self.bot.walk_commands())
         known = {item.qualified_name for item in commands_}
         for root in self.bot.tree.get_commands(type=discord.AppCommandType.chat_input):
@@ -196,12 +189,9 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         return commands_
 
     def _root_commands(self) -> list[AnyCommand]:
-        """Every top-level command a user could run, prefix tree and app tree alike.
+        """Combine visible prefix roots with app-only roots, preferring prefix duplicates.
 
-        The directory used to read `bot.commands` alone, which meant an app-only command
-        was undiscoverable from the one surface built for discovery — `/poll`, `/help`
-        and `/notifications` were all missing. Hybrid commands appear in both trees, so the
-        prefix spelling wins and the app tree only contributes what it alone has.
+        Only the prefix `hidden` flag is checked; no caller-specific authorization runs.
         """
         prefix_commands = [item for item in self.bot.commands if not item.hidden]
         named = {item.name for item in prefix_commands}
@@ -250,9 +240,7 @@ class Help(commands.MinimalHelpCommand):
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
         commands_ = list(self.context.bot.commands)
 
-        # We do not filter commands here, because it is too slow.
-        # Every command needs to run its own checks even if the same check is used.
-        # filtered_commands = await self.filter_commands(commands_, sort=True)
+        # Avoid running each command's authorization checks just to render the directory.
         description = sl.raw_md(self.context.bot.description)
         commands = sl.raw_md(self.get_commands_brief_details(commands_))
         more_information = sl.raw_md(tr(MORE_INFORMATION))
@@ -286,10 +274,10 @@ class Help(commands.MinimalHelpCommand):
     def get_commands_brief_details(
         commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
     ) -> list[str] | str:
-        """
-        Formats the prefix, command name and signature, and short doc for an iterable of commands.
+        """Format names, signatures, and short descriptions in input order.
 
-        return_as_list is helpful for passing these command details into the paginator as a list of command details.
+        Return separate lines when `return_as_list` is True, or concatenate them for
+        a message body. Each entry begins with a newline.
         """
         no_details = tr(tr(t"No details provided"))
         details: list[str] = []
@@ -308,9 +296,7 @@ class Help(commands.MinimalHelpCommand):
             return details
         return "".join(details)
 
-    # !help <group>
-    # In our case, send_cog_help is the same as send_group_help, since every group is defined in a cog class under the same name.
-    # In general though, @group may be used outside a cog, and in that case, send_cog_help would be different.
+    # Group help lists immediate children; cog help below walks all of the cog's commands.
     @override
     async def send_group_help(self, group: Group[Any, ..., Any], /) -> None:
         """Sends help for a group command."""

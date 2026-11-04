@@ -25,7 +25,12 @@ type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
-    """An account workspace that ends when closed, replaced, or timed out."""
+    """Combine account linking, profile controls, creator claims, and account merges.
+
+    AccountScreen supplies the overview tab. Other tabs carry the workflows that
+    create or change account relationships; claim reviewers also get the shared
+    moderation component. Rebuilding reloads the account before choosing tabs.
+    """
 
     timeout = 300
 
@@ -64,6 +69,7 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
         await self._rebuild()
 
     async def _rebuild(self) -> None:
+        """Reload the account and rebuild tabs from its current identity and consent state."""
         self._account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(self._actor_id))
         account_id = None if self._account is None else self._account.id
         self._overview = None
@@ -191,6 +197,11 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
         await self._request_consent(event, answered)
 
     async def _link(self, event: sd.SubmitEvent) -> None:
+        """Reserve the link code while the user reviews its identity and credit effects.
+
+        The continuation consumes the reservation on acceptance. Cancellation,
+        abandonment, or a failed link releases it; `settled` prevents duplicate cleanup.
+        """
         account = self._account
         form = _LinkForm.from_submission(event)
         code = form.code
@@ -304,6 +315,7 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
         )
 
     async def _request_merge(self, event: sd.SubmitEvent) -> None:
+        """Preview the merge and retain its code until the user confirms or cancels."""
         form = _MergeForm.from_submission(event)
         code = form.code
         preview = await self._accounts.preview_merge(self._account_id(), code)

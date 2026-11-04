@@ -1,15 +1,9 @@
-"""Discord autocomplete bound to the shared suggestion registry.
+"""Adapt registered suggestion sources to Discord autocomplete.
 
-Autocomplete is unlike every other command path, and this module exists to handle the differences
-in one place rather than in sixty callbacks:
-
-- Discord discards a response after three seconds and there is no deferral, so a slow source must
-  degrade to an empty dropdown rather than an error.
-- discord.py does not run a command's checks before its autocomplete callback ("Parent checks are
-  ignored within an autocomplete"), so a command gated on a permission node has an ungated
-  autocomplete unless the source itself is gated.
-- `SquidCommandTree._call` short-circuits autocomplete interactions before error handling, so
-  anything raised here would surface as a silent Discord-side failure with no log line.
+Autocomplete cannot defer its response and does not run the parent command's
+checks. This adapter applies a short response budget and passes an authorizer
+to the suggestion service. Failures are logged and return an empty dropdown
+because autocomplete bypasses the command tree's normal error handler.
 """
 
 import logging
@@ -76,8 +70,7 @@ def suggests(
     ) -> list[app_commands.Choice[Any]]:
         with trace_span("suggestions.autocomplete", {"squid.suggestion.source": source}):
             try:
-                # `move_on_after` rather than the service's own bound: the budget here is set by
-                # Discord's window, and a partial dropdown beats a late one.
+                # Include identity and permission lookups in Discord's response budget.
                 with anyio.move_on_after(RESPONSE_BUDGET_SECONDS):
                     return await _choices(interaction, source, current, context, multi=multi)
             except Exception:
@@ -149,8 +142,7 @@ async def _choices(
             context=dict(context(interaction)) if context is not None else {},
             locale=str(interaction.locale),
             viewer=await _viewer(interaction, source),
-            # Discord never reports a caret position, and someone typing is at the end of what
-            # they have typed, so the end of the input is the only caret this surface can know.
+            # Discord provides no caret position; the suggestion service assumes the input end.
             cursor=None,
         ),
         authorizer=_InteractionAuthorizer(interaction),

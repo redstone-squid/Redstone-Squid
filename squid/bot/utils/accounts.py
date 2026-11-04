@@ -1,9 +1,6 @@
-"""Discord-side account conveniences.
+"""Create Discord account identities for bot actions that need a persisted account.
 
-`AccountService` is keyed on `(provider, subject)` because a caller may arrive over
-Discord, the CLI, or a Minecraft server. The bot is the one transport that genuinely
-always holds a Discord identity, so the Discord spelling of "get me an account id" lives
-here rather than widening the service back out.
+Permission checks use the read-only `AccountIdCache` instead.
 """
 
 import discord
@@ -13,14 +10,10 @@ from squid.accounts.domain import IdentityProvider
 
 
 async def account_id_for(accounts: AccountService, user: discord.User | discord.Member | discord.abc.User | int) -> int:
-    """The account id behind a Discord user, created on first sight.
+    """Return a Discord user's account ID, creating the identity if needed.
 
-    A gateway event is evidence of the snowflake it carries, which is what makes creating
-    an account here legitimate — unlike a permission check, which only observes one and so
-    must go through `AccountIdCache` instead.
-
-    A bare snowflake is accepted for the vote call sites, which are handed an id rather
-    than a user object.
+    Accept a user object or a snowflake. This helper does not ask for consent;
+    callers that require it must complete the consent flow separately.
     """
     discord_id = user if isinstance(user, int) else user.id
     account = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(discord_id))

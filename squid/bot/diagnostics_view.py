@@ -1,8 +1,7 @@
-"""Interactive Components V2 rendering for stored error reports.
+"""Browse stored error reports and download complete traceback and log attachments.
 
-The browser is a mounted squid-ui component: the list ↔ detail switch is a state change,
-the traceback pages through the engine's budget solver (which replaced the hand-tuned
-PAGE_CHARS constant), and author lock, expiry, and error routing belong to the mount.
+The mounted screen owns reader access and expiry. Periodic checks compare the
+recent report IDs and offer refresh without replacing the report being read.
 """
 
 import dataclasses
@@ -182,7 +181,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
 
     @override
     async def on_load(self) -> None:
-        """Load the requested report or the current diagnostic window after delivery wins."""
+        """Load a requested reference or the recent-report list when the screen mounts."""
         if self._reference is not None:
             self._detail, self._matches = await self._operations.lookup(self._reference)
             return

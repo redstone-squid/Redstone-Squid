@@ -32,7 +32,12 @@ type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class AccessScreen(sd.UserSessionScreen, session_name="access"):
-    """A guild access workspace that ends when closed, replaced, or timed out."""
+    """Browse and administer one subject's access in a guild.
+
+    Initial capabilities determine which tabs are displayed. Mutation handlers
+    recheck authorization and obtain a fresh administrative actor; the application
+    service then enforces role rank, scope, and delegation limits.
+    """
 
     timeout = 300
 
@@ -340,6 +345,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         await event.notice(tr(t"Internal role updated."))
 
     async def _decide_delete(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
+        """Recheck authority and reload the role after the user confirms deletion."""
         slug = self._pending_delete
         self._pending_delete = None
         self._decision = None

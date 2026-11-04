@@ -17,7 +17,12 @@ class MediaUploadError(InfrastructureError):
 
 
 class CatboxClient:
-    """Upload public media through one reusable, explicitly bounded session."""
+    """Upload public media with a reusable HTTP session.
+
+    The client creates a session lazily unless one is supplied. `aclose` closes
+    only an owned session. Upload responses have a size limit and redirects are
+    rejected; callers supplying a session also supply its timeout policy.
+    """
 
     def __init__(self, config: CatboxConfig, session: aiohttp.ClientSession | None = None) -> None:
         self._config = config
@@ -68,7 +73,7 @@ class CatboxClient:
 
 
 def validate_catbox_url(value: str) -> str:
-    """Accept only Catbox's HTTPS file origin, never an error string or active URL."""
+    """Validate an HTTPS URL on files.catbox.moe with a nonempty path and no credentials."""
     url = value.strip()
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname != "files.catbox.moe" or not parsed.path.strip("/"):

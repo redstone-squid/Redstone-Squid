@@ -1,4 +1,12 @@
-"""Asking one Discord user for informed consent, and continuing what they asked for."""
+"""Ask a Discord user for consent before continuing an account operation.
+
+Commands use ensure_consented_account and can wait for the answer. An action on
+an already displayed panel uses with_consented_account: it opens a separate
+prompt and returns, then continues from the acceptance click. This releases the
+panel's UI action transaction and dispatch lock while the user reads the notice.
+request_consent provides the same callback flow for operations such as linking
+an identity that need their own acceptance and cleanup logic.
+"""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -32,7 +40,7 @@ type ConsentContinuation = Callable[[sd.PressEvent, AccountConsent | None], Awai
 """What to do once the reader has answered, run by the prompt's own press.
 
 The awaiting form is only safe where the caller owns the wait. Inside a mounted action
-handler it is not: the handler runs in the mount's transaction and, under the default
+handler it is not: the handler runs in the mount's UI action transaction and, under the default
 `EXCLUSIVE` policy, in its dispatch lock, so awaiting an answer holds both for as long as
 the reader takes to read. A continuation runs in the *prompt's* dispatch instead, which is
 a separate mount, so the press that opened it is already finished by then.
@@ -54,7 +62,11 @@ class _Answer:
 
 
 class ConsentPrompt(sd.UserSessionScreen):
-    """A semantic consent prompt with a native-free waiting lifecycle."""
+    """A user-owned notice supporting either a waiting caller or an answer callback.
+
+    Accept and cancel signal waiting callers before running the callback. Unmount
+    also releases waiters but does not invoke the answer callback.
+    """
 
     session = sd.SessionSpec(
         "consent",
@@ -141,6 +153,10 @@ class ConsentPrompt(sd.UserSessionScreen):
         self._done.set()
 
     async def wait(self) -> AccountConsent | None:
+        """Wait for an answer, returning None on user cancellation, unmount, or wait timeout.
+
+        The wait deadline does not itself close the prompt's mount.
+        """
         with anyio.move_on_after(self._wait_timeout) as scope:
             await self._done.wait()
         return None if scope.cancel_called else self._answer.consent
@@ -172,7 +188,11 @@ async def _show_prompt(
     on_abandon: Callable[[], Awaitable[None]] | None,
     parent: sd.MessageRoot | None,
 ) -> ConsentPrompt | None:
-    """The notice this reader is owed, worded for what agreeing would actually store."""
+    """Present a consent prompt and attach cleanup for an unanswered mount.
+
+    Return None if presentation is rejected. In that case no abandonment callback
+    is registered, so the caller must release any reservation itself.
+    """
     prompt = _consent_prompt(
         user_id=user_id,
         preview=preview,
@@ -264,11 +284,11 @@ async def prompt_for_consent(
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
 ) -> AccountConsent | NotAskedType | None:
-    """Show the notice and wait, returning the consent the user granted.
+    """Present a notice and wait for the user's answer.
 
-    For callers that own their own wait -- a command, which holds no mount state while it
-    blocks. A mounted action handler wants `request_consent` instead, because the wait it
-    would do here happens inside the mount's transaction and dispatch lock.
+    Return consent on acceptance, None on cancellation, unmount, or wait timeout,
+    and NOT_ASKED when presentation is rejected. Use `request_consent` inside
+    mounted action handlers to avoid holding their transaction and dispatch lock.
     """
     component = await _show_prompt(
         request,
@@ -324,17 +344,12 @@ async def with_consented_account(
     *,
     timeout: float = 120.0,
 ) -> None:
-    """Run `work` with the reader's consented account id, asking first when consent is stale.
+    """Run work with the current user's consented account ID.
 
-    The mounted counterpart of `ensure_consented_account`, which may not be called from an
-    action handler: this one never awaits the answer, so the press that called it ends and
-    the panel's transaction and dispatch lock end with it.
-
-    `work` receives whichever press is live when it runs -- this one when the reader had
-    already agreed, the prompt's own when the question had to be put -- so a notice always
-    answers the click the reader last made. On the asking path the panel is redrawn here,
-    through its own handle: the prompt's interaction addresses the prompt's message, and
-    flushing the panel through it would draw the panel into the dialog.
+    If consent is missing or stale, open a prompt and return without waiting.
+    Acceptance creates or updates the account and runs `work` from the prompt's
+    action; cancellation performs no work. The callback receives the live action
+    for notices, and the original panel is scheduled to redraw afterwards.
     """
     request = event.context
     user = request.user

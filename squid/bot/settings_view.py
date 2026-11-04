@@ -59,10 +59,10 @@ KIND_LABELS: dict[VoteKind, Message] = {
 
 @dataclass(frozen=True, slots=True)
 class SettingsCapabilities:
-    """What the caller may do, resolved once when the panel opens.
+    """Capabilities captured when the panel opens, used to choose visible pages and controls.
 
-    The panel is author-locked and expires, but a grant can still be revoked while it
-    sits open, so the write paths re-check rather than trusting these.
+    Action handlers use the separate authorizer for permission checks; these flags
+    do not refresh automatically when a grant changes.
     """
 
     view_server: bool
@@ -74,7 +74,12 @@ type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
-    """A semantic, mount-owned settings workspace."""
+    """Edit a guild's publication channels, language, voting emojis, and role weights.
+
+    Changes are saved as the user makes them. Channel and language changes also
+    record undo actions for this UI session, including the writes needed to restore
+    stored settings; voting changes are saved without that history.
+    """
 
     timeout = SESSION_SECONDS
 
@@ -135,11 +140,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
 
     @override
     async def on_load(self) -> None:
-        """Open the first page allowed by the caller.
-
-        Both branches are the same methods the page buttons call, so nothing here is a
-        lifecycle hook masquerading as a re-fetch API.
-        """
+        """Load server settings when visible, otherwise load voting settings."""
         if self.shows_server:
             await self.open_server()
         else:
@@ -436,6 +437,10 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         return False
 
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
+        """Write a channel selection and record its previous value for undo.
+
+        The caller must authorize the write. None clears the setting.
+        """
         previous = self._channels[setting]
         await self._write_channel(setting, channel_id)
         self._channels = {**self._channels, setting: channel_id}
@@ -449,7 +454,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         )
 
     async def _write_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
-        """The stored half of a channel change; `_channels` is the framework's to restore."""
+        """Persist a channel change; history restores the component's cached value separately."""
         if channel_id is None:
             await self._settings.clear(self._guild.id, setting)
         else:
@@ -469,16 +474,19 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         )
 
     async def _write_locale(self, override: str | None, effective: str | None, message_root: sd.MessageRoot) -> None:
-        """The stored locale and the mount's, neither of which is component state.
+        """Update stored locale and mounted localization from explicitly captured values.
 
-        Both halves of the effective locale are captured at the call site rather than read
-        back here, because an inverse runs before the framework restores `locale` and
-        `_locale_override` -- so reading them here would see the values being reversed.
+        Compensation runs before component state is restored, so it must use the
+        supplied previous values rather than reading the state being undone.
         """
         await self._settings.set_locale(self._guild.id, override)
         message_root.localize(localization_for(effective))
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
+        """Set or remove a role multiplier for the selected vote kind, then reload the page.
+
+        None removes the override. The caller must authorize the operation.
+        """
         if multiplier is None:
             await self._votes.remove_role_weight(self._guild.id, self.kind, role_id)
         else:

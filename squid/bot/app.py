@@ -89,22 +89,20 @@ EXTENSIONS = (
     "squid.bot.version_tracking",
     "squid.bot.welcome_relay",
 )
-"""Every cog the bot loads, in load order.
-
-Module-level rather than local to `setup_hook` so a test can load the real set. A name collision
-between two cogs is only raised when they are registered onto the same bot, which no per-cog test
-does -- it used to surface as the process failing to start.
-"""
+"""Production extensions in load order. Tests load this same set to detect registration conflicts."""
 
 DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.layout_showcase")
-"""Loaded on top of `EXTENSIONS`, in development mode only.
-
-Owner-gated either way. Keeping them off a production process is the second lock: a mount id
-in a log line is then not one command away from a dump of that session's state.
-"""
+"""Additional extensions loaded only in development mode."""
 
 
 class RedstoneSquid(Bot):
+    """Discord client owning transport services, UI sessions, and supervised jobs.
+
+    The process runtime owns application services and outlives this client. Enter
+    `background_tasks.running()` before starting the bot so extension jobs share
+    one task group; `close` cancels that work before the runtime releases services.
+    """
+
     def __init__(
         self,
         services: BotServices,
@@ -251,12 +249,14 @@ class RedstoneSquid(Bot):
 
     @override
     async def setup_hook(self) -> None:
-        """Called when the bot is ready to start."""
+        """Start shared services, load extensions, and register routes before gateway connection.
+
+        If an extension fails to load, unload those already loaded in reverse order.
+        The caller remains responsible for closing the bot and its background jobs.
+        """
         self.background_tasks.capture_failures_into(self.services.error_reports)
         await self.tree.set_translator(SquidAppCommandTranslator())
-        # Not a cog: every command's permission check reads through the cache this
-        # watcher keeps honest, so it runs before any extension loads rather than
-        # as a side effect of one of them being enabled.
+        # Permission cache invalidation is needed regardless of which cogs are enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
         self.background_tasks.start(self.ui.run(), name="layout-runtime")
         if self.database_config is not None:
@@ -299,16 +299,11 @@ class RedstoneSquid(Bot):
         return channel
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
-        """
-        Fetches a message from the cache or the API.
+        """Fetch a Discord message after resolving its channel from cache or the API.
 
-        Purely a read. This used to delete the message's tracking row when Discord
-        answered 404, which made a lookup quietly destroy state and forced four of its
-        eight callers to opt out. Deleted messages are now recorded by the raw delete
-        event, and by the reconciler when it finds a post missing.
-
-        Raises:
-            discord.HTTPException: Fetching the channel or message failed.
+        Return None when the channel is inaccessible, is not messageable, or the
+        message cannot be found or read. This lookup does not change stored message
+        facts. Other HTTP failures propagate to the caller.
         """
         channel = await self.get_or_fetch_messageable_channel(channel_id)
         if channel is None:
@@ -322,15 +317,15 @@ class RedstoneSquid(Bot):
         return None
 
     def for_build(self, build: Build) -> BuildHandler[Self]:
-        """A helper function to create a BuildHandler with the bot instance."""
+        """Bind the bot's services and Discord helpers to a build."""
         return BuildHandler(self, build)
 
     async def refresh_posts(self, resource_kind: ResourceKind, resource_key: str) -> None:
-        """Render a resource's posts now instead of waiting for the reconciler.
+        """Publish a topic hint and reconcile any pending generation for a resource.
 
-        A latency nudge into the same diff loop the background job uses, not a second
-        way to publish: the write that prompted it already enqueued durable work, so a
-        failure here is retried rather than lost, and a duplicate run is a no-op.
+        Callers must first enqueue durable post work through the application service.
+        This method does not create a pending generation; background reconciliation
+        can retry one if immediate delivery fails.
         """
         self.topic_publisher.publish(resource_topic(resource_kind, resource_key))
         generation = await self.services.posts.pending_generation(resource_kind, resource_key)
@@ -396,5 +391,5 @@ async def main(
 
 
 if __name__ == "__main__":
-    # You probably want to run app.py instead, this is just for convenience
+    # Support running this module directly as well as through the process launcher.
     asyncio.run(main())

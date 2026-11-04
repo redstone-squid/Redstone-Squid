@@ -8,7 +8,12 @@ _registry: dict[str, Sentinel] = {}
 
 
 class Sentinel:
-    """Unique sentinel values."""
+    """Intern a marker by module name and name.
+
+    Repeated construction returns the existing object and ignores new display or
+    truth-value arguments. Compare markers by identity: equality returns False,
+    even when comparing a marker with itself.
+    """
 
     _name: str
     _repr: str

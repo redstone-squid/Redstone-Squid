@@ -20,7 +20,11 @@ type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
-    """A mounted claim queue whose choices and decisions share one semantic surface."""
+    """Review selected creator-credit claims with authorization checks before decisions.
+
+    An approval that conflicts with an existing owner arms a second approval for
+    that claim. Changing selection clears that confirmation state.
+    """
 
     selected_id: int | None = sl.state(None)
     reassign_armed: int | None = sl.state(None)
@@ -159,6 +163,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         *,
         approve: bool,
     ) -> None:
+        """Resolve the selected claim or arm explicit reassignment after an ownership conflict."""
         try:
             if approve:
                 resolved = await self._accounts.approve_alias_claim(

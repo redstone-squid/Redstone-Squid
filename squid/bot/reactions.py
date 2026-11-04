@@ -1,4 +1,10 @@
-"""Centralized Discord raw-reaction dispatch."""
+"""Route Discord reaction events to voting, starboard, and other subscribers.
+
+ReactionRouterCog receives the gateway events and hands them to ReactionRouter.
+Subscribers share message and member lookups for each event. The router keeps
+events for one message ordered; each subscriber decides what a reaction means
+and supplies any recovery needed when shutdown interrupts its work.
+"""
 
 import asyncio
 import contextlib
@@ -36,7 +42,10 @@ class ReactionResolver:
     _member_loaded: bool = field(default=False, init=False, repr=False, compare=False)
 
     async def message(self, channel_id: int, message_id: int) -> discord.Message | None:
-        """Fetch the reacted-to message at most once across all subscribers."""
+        """Share one completed message lookup across subscribers, including a missing result.
+
+        A raised lookup error is not memoized, so a later subscriber can try again.
+        """
         async with self._message_lock:
             if self._message_loaded:
                 return self._message
@@ -46,7 +55,10 @@ class ReactionResolver:
             return message
 
     async def member(self, guild_id: int | None, user_id: int) -> discord.Member | None:
-        """Resolve the reacting guild member at most once, only when a subscriber needs it."""
+        """Reuse payload or cached membership, fetching only when needed.
+
+        Missing membership is memoized; lookup errors that propagate are not.
+        """
         async with self._member_lock:
             if self._member_loaded:
                 return self._member
@@ -71,11 +83,11 @@ class ReactionEvent:
     _resolver: ReactionResolver = field(repr=False, compare=False)
 
     async def message(self) -> discord.Message | None:
-        """Fetch the reacted-to message at most once across all callbacks."""
+        """Return this dispatch's shared message lookup result."""
         return await self._resolver.message(self.payload.channel_id, self.payload.message_id)
 
     async def resolve_member(self) -> discord.Member | None:
-        """Resolve the reacting member at most once across all callbacks."""
+        """Return this dispatch's shared member lookup result."""
         return await self._resolver.member(self.payload.guild_id, self.payload.user_id)
 
 
@@ -137,12 +149,15 @@ type _QueuedEvent = _QueuedReaction[ReactionEvent] | _QueuedReaction[ReactionCle
 
 
 class ReactionRouter:
-    """Dispatch reactions through bounded FIFO shards until :meth:`close` stops them.
+    """Dispatch reactions through bounded FIFO queues partitioned by message ID.
 
-    Calls admitted before shutdown wait for capacity rather than dropping a ballot. A dispatch
-    is accepted once its item enters the queue; returning from ``dispatch_*`` confirms that
-    acceptance. Events for one message share a shard and remain ordered, while different shards
-    and the callbacks in one registration snapshot may run concurrently.
+    Events for one message share a worker and preserve queue order. Subscribers
+    for one event run concurrently, as do different queues. Ordinary dispatch
+    waits for queue capacity and returns after acceptance, not callback completion.
+
+    During shutdown, dispatch may instead attempt recovery and return without
+    queueing. Recovery is bounded and may require operator reconciliation; normal
+    callback failures are logged without automatic replay.
     """
 
     def __init__(
@@ -188,13 +203,12 @@ class ReactionRouter:
         recover_clear: ReactionClearCallback | None = None,
         recover_clear_emoji: ReactionClearCallback | None = None,
     ) -> ReactionSubscription:
-        """Register only the reaction callbacks one consumer implements.
+        """Register callbacks and optional shutdown recovery for one consumer.
 
-        Events use a snapshot of registrations taken before enqueue, so detaching does not
-        retract work the router has already accepted. A ``recover_*`` callback is the
-        consumer-owned reconciliation path for an event that cannot enter its shard before
-        shutdown exhausts the drain deadline; it must either complete the state transition or
-        record durable intent for a later retry.
+        Dispatch captures registrations before enqueueing, so detaching does not
+        retract that snapshot. Recovery can run for events that never entered a queue
+        or for accepted events interrupted during shutdown. It must tolerate partial
+        prior processing and either reconcile state or record durable retry intent.
         """
         if all(callback is None for callback in (add, remove, clear, clear_emoji)):
             msg = "A reaction subscription requires at least one callback."
@@ -237,7 +251,12 @@ class ReactionRouter:
         await self._dispatch(_QueuedReaction("clear_emoji", event, callbacks, recoveries, time.monotonic()))
 
     async def close(self) -> None:
-        """Stop intake, drain accepted events, then stop every owned shard worker."""
+        """Stop intake, drain work within the deadline, then cancel workers.
+
+        On timeout, abort pending enqueues and attempt bounded recovery for accepted
+        unfinished events. A second call returns immediately, even if the first is
+        still shutting down.
+        """
         async with self._intake_changed:
             if self._closing:
                 return
@@ -425,7 +444,7 @@ class ReactionRouter:
         return accepted
 
     async def _recover_unadmitted(self, item: _QueuedEvent) -> None:
-        """Hand a shutdown-aborted event to each consumer that declared recovery."""
+        """Run declared recovery callbacks concurrently for an event interrupted by shutdown."""
         if not item.recoveries:
             return
         add_counter(

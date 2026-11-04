@@ -1,4 +1,11 @@
-"""Root route group, router lifecycle hooks, and process-wide middleware."""
+"""Route persistent Discord controls to feature handlers.
+
+A routed control carries an action ID in Discord's custom_id, so it can still be
+handled after the original UI session or bot process has ended. Feature modules
+register handlers beneath the r: namespace; those handlers recover the resource
+from the route arguments or the clicked message. This module supplies the shared
+router, tracing, and unavailable-control/error replies.
+"""
 
 from typing import TYPE_CHECKING, override
 
@@ -21,7 +28,10 @@ _FEATURE_GROUPS: dict[str, sd.routing.RouteGroup[RedstoneSquid]] = {}
 
 
 def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], bool]:
-    """Return a feature-owned group and whether this import created it."""
+    """Return the cached feature group and whether it was newly created.
+
+    Callers use the boolean to install middleware only once across extension reloads.
+    """
     if group := _FEATURE_GROUPS.get(prefix):
         return group, False
     group = routes.group(prefix)

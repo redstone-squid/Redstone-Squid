@@ -1,5 +1,5 @@
 # type: ignore
-"""Magical stuff, don't worry about it."""
+"""Award the configured Redstoner role from community messages and expose role controls."""
 
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Protocol, Self, cast
@@ -51,7 +51,11 @@ remove_redstoner_role = redstoner_roles.define("self:remove", aliases=("remove:r
 
 @redstoner_roles.route(remove_redstoner_role)
 async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.RedstoneSquid]) -> None:
-    """Let a member drop the redstoner role the bot gave them."""
+    """Temporarily remove the member's Redstoner role, announce it, and restore it after ten seconds.
+
+    The route middleware limits this action to the owner guild. Removal and
+    restoration are separate Discord calls; interruption can leave the role removed.
+    """
     assert interaction.guild is not None
     member = interaction.user
     community = interaction.client.community_config

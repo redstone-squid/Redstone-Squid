@@ -1,10 +1,4 @@
-"""The panel behind `/notifications`.
-
-Four commands used to answer what one screen shows: `status` read the two channels,
-`channels` wrote both, `list` printed the subscriptions, and `unfollow` took an id you had
-to read off `list` and type back. A subscription is a thing you look at and then remove, so
-looking at it and removing it belong to the same message (audit C5's retyping half).
-"""
+"""Manage notification channels, follows, and the newest visible inbox items."""
 
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, cast, override
@@ -29,7 +23,7 @@ if TYPE_CHECKING:
 SESSION_SECONDS = 300
 
 MAX_LISTED = 25
-"""A select holds 25 options, which is also as many as a card should list."""
+"""Maximum subscriptions or inbox items offered by one Discord select."""
 
 type VisibilityResolver = Callable[[sd.ActionEvent], Awaitable[InboxVisibility]]
 
@@ -52,7 +46,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
     selected_ids: tuple[str, ...] = sl.state(())
     selected_inbox_ids: tuple[str, ...] = sl.state(())
     closed: bool = sl.state(default=False)
-    # Refreshed from the service by load(), so a snapshot would only restore them stale.
+    # Reload service data on mount instead of restoring it from a snapshot.
     _preferences: NotificationPreferences | None = sl.state(None, persist=False)
     _subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
     _inbox: tuple[InboxNotification, ...] = sl.state((), persist=False)
@@ -77,7 +71,11 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
         await self._refresh()
 
     async def _refresh(self, event: sd.ActionEvent | None = None) -> None:
-        """Re-read this account's channels and follows. Also what unfollowing calls afterwards."""
+        """Reload preferences, subscriptions, and the first visible inbox page.
+
+        When an event is supplied, resolve inbox visibility again. Remove selections
+        that no longer appear in the displayed subscriptions or inbox.
+        """
         if event is not None:
             await self._resolve_visibility(event)
         self._preferences = await self._notifications.preferences(self._account_id)
@@ -311,6 +309,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
         await self._followed(event, tr(t"Following that creator."))
 
     async def _follow_record(self, event: sd.SubmitEvent) -> None:
+        """Follow the stable competition UUID, so the subscription survives record rebuilds."""
         competition = self._uuid(event.values["competition"])
         if competition is None:
             await event.notice(tr(t"Enter a record competition ID in UUID form."))
@@ -433,10 +432,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:
-    """Render a structured record filter as the predicates a person wrote.
-
-    `list` used to print `str(filter.as_dict())`, dict braces and all.
-    """
+    """Format a structured subscription filter as readable predicate values."""
     parts = [
         ", ".join(sorted(values))
         for values in (record_filter.build_kinds, record_filter.record_classes, record_filter.version_scopes)

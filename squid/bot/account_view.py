@@ -1,11 +1,8 @@
-"""The panel behind `/account`.
+"""Render account identities, visibility controls, and an editable creator profile.
 
-Five commands used to answer what one screen shows: `identities` printed the linked accounts
-and their ids, `unlink` took one of those ids back, `visibility` took it too — or nothing at all,
-in which case it hid the whole creator page instead — and `profile` and `profile-edit` showed and
-edited the card the rest of it hangs off. An identity is a thing you look at and then show, hide
-or drop, so looking at it and acting on it belong to the same message (audit C5's retyping half,
-the shape 5.3 and 5.4 already removed from notifications and claim review).
+Identity and profile data are reloaded from the account service. Changes that
+need current consent continue from a separate prompt so the panel does not hold
+its UI action transaction open while the user reads the notice.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
@@ -39,7 +36,7 @@ from squid.core.errors import ValidationError
 SESSION_SECONDS = 300
 
 MAX_LISTED = 25
-"""A select holds 25 options, and only a long merge history reaches even a handful."""
+"""Maximum identities offered by one Discord select."""
 
 type ConsentAnswer = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
 
@@ -90,13 +87,17 @@ def _error_detail(error: ValidationError) -> sl.TextLike:
 
 
 class AccountScreen(sd.UserSessionScreen, session_name="account"):
-    """An account workspace that ends when closed, replaced, or timed out."""
+    """Edit one account's profile and choose which linked identities appear publicly.
+
+    Used as the overview within AccountWorkspace. Identity visibility changes are
+    saved immediately; profile fields stay in the editor until Save profile.
+    """
 
     timeout = SESSION_SECONDS
 
     selected_id: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
-    # Refreshed from the service by load(), so a snapshot would only restore them stale.
+    # Reload these values on mount instead of restoring stale service data from a snapshot.
     _identities: tuple[AccountIdentity, ...] = sl.state((), persist=False)
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
@@ -125,7 +126,7 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
         await self._refresh()
 
     async def _refresh(self) -> None:
-        """Re-read the account this panel is about. Also what a write calls to show its result."""
+        """Reload account and profile data, clearing a selection that is no longer displayed."""
         account = await self._accounts.get_account_by_id(self._account_id)
         if account is None:
             raise AccountNotFoundError(self._account_id)
@@ -170,8 +171,7 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(self._profile.display_name or tr(t"Your account")),
-                # The bio is the card's shock absorber: truncate lets it give up characters
-                # under pressure before the fields or footer lose any.
+                # Shorten the bio before reducing the identity fields or footer.
                 self._profile.bio and sl.truncate(sl.paragraph(self._profile.bio)),
                 sl.fields(*fields),
                 bool(extra_media) and sl.media(*extra_media, key="media"),
@@ -407,13 +407,12 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
         self._profile_editor = None
 
     async def _with_consent(self, event: sd.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
-        """Run `work` now, or once the reader has agreed to be recorded.
+        """Run the change immediately or after acceptance in a separate consent prompt.
 
-        Opening the notice ends this press: `request_consent` returns as soon as it is on
-        screen, so the panel's transaction closes and its dispatch lock is released rather
-        than being held for as long as the reader takes to read. `work` then runs inside the
-        prompt's own press, and the panel redraws through its own handle -- never through the
-        prompt's interaction, which addresses the prompt's message rather than the panel's.
+        The prompt is opened without waiting for its answer, releasing this panel's
+        action transaction and dispatch lock. On acceptance, record consent and run
+        the change from the prompt's action. The injected consent requester arranges
+        for the parent panel to redraw.
         """
         if not self._needs_consent:
             await work()
@@ -421,8 +420,7 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
 
         async def answered(_prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
             if consent is None:
-                # Cancelled. The notice said agreeing is what stores anything, and the prompt
-                # closing is the whole answer; the panel already shows the unchanged truth.
+                # Cancelling leaves the account and the displayed panel unchanged.
                 return
             await self._accounts.grant_current_consent(self._account_id)
             self._needs_consent = False

@@ -1,4 +1,10 @@
-"""Shared Discord error notice and framework hooks."""
+"""Present Discord errors and retain unexpected failures for diagnosis.
+
+Known domain and command errors become actionable notices. Unexpected exceptions
+receive a short reference tied to a stored report and correlated logs, keeping
+tracebacks out of the public reply. UI_ERRORS connects this policy to managed UI
+requests; the command tree and context hooks cover discord.py error dispatch.
+"""
 
 import logging
 from collections.abc import Awaitable, Callable, Mapping
@@ -61,7 +67,11 @@ class ErrorNotice:
 
 
 def _sanitize_log_value(value: object) -> object:
-    """Remove Discord account identifiers from one recursively nested log value."""
+    """Recursively remove mapping entries with recognized Discord user-ID keys.
+
+    Values under other keys and free text are retained; this is not general
+    identifier detection or text redaction.
+    """
     if isinstance(value, Mapping):
         return {
             key: _sanitize_log_value(item)
@@ -76,7 +86,7 @@ def _sanitize_log_value(value: object) -> object:
 
 
 def _safe_log_context(context: Mapping[str, object] | None) -> dict[str, object]:
-    """Return diagnostic context without stable Discord account identifiers."""
+    """Copy diagnostic context while removing recognized Discord user-ID fields."""
     sanitized = _sanitize_log_value(context or {})
     assert isinstance(sanitized, dict)
     return sanitized
@@ -104,23 +114,20 @@ def unwrap_error(error: BaseException) -> BaseException:
 
 
 def is_error_presented(error: BaseException) -> bool:
-    """Return whether this error has already received a Discord response."""
+    """Return whether a Discord error hook has marked the underlying exception as handled."""
     return bool(getattr(unwrap_error(error), _PRESENTED_ATTRIBUTE, False))
 
 
 def mark_error_presented(error: BaseException) -> None:
-    """Mark an error so another Discord hook does not render it again."""
+    """Mark the underlying exception to prevent another Discord hook from handling it again."""
     setattr(unwrap_error(error), _PRESENTED_ATTRIBUTE, True)
 
 
 def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | None:
-    """Best-effort Discord-native locale for error notice.
+    """Use Discord's guild or user locale without a database lookup.
 
-    Deliberately skips the admin-configured guild override (which requires a
-    database lookup): this runs on every error, including ones raised from
-    generic views/modals that don't carry a concrete bot type, so it stays
-    synchronous-cheap and safe to call with test doubles. Regular command
-    responses use the fully accurate `squid.bot.i18n.resolve_locale` instead.
+    Error handling may run when settings access has failed, so this fallback
+    does not consult the configured guild override.
     """
     if interaction is None:
         return None
@@ -165,9 +172,7 @@ def build_error_notice(error: BaseException, locale: str | None = None) -> Error
 def _build_error_notice(error: BaseException) -> ErrorNotice:
     error = unwrap_error(error)
     if isinstance(error, ConsentRequiredError):
-        # Every Discord path that needs consent asks for it first, so reaching here means one
-        # slipped the gate. Name the command that can fix it rather than rendering the API's
-        # wording, which tells a Discord user to go and accept a notice somewhere they are not.
+        # Give Discord users an in-bot recovery path when an operation requires consent.
         return ErrorNotice(
             tr(tr(t"Consent required")),
             tr(tr(t"Run `/account consent` to read the privacy notice and accept it.")),
@@ -248,12 +253,7 @@ async def _capture(
     context: Mapping[str, object],
     reports: ErrorReportService | None,
 ) -> None:
-    """Store the failure, if this process was wired with somewhere to store it.
-
-    Guarded even though `ErrorReportService.record` already swallows: the buffer drain and the
-    service lookup happen out here, and this runs inside a handler that owes the user a reply.
-    Losing the diagnostic is survivable; losing the reply is a command that silently does nothing.
-    """
+    """Record an unexpected failure without letting diagnostic errors prevent the reply."""
     if reports is None or notice.error_id is None or notice.reference is None:
         return
     command = context.get("command")
@@ -281,6 +281,12 @@ async def _handle_discord_error(
     locale: str | None = None,
     reports: ErrorReportService | None = None,
 ) -> None:
+    """Present an error once, recording unexpected failures before sending the notice.
+
+    Mark the exception as handled even when the responder raises. Discord HTTP
+    failures while sending are logged and suppressed; other response failures
+    propagate after the marker is set.
+    """
     if is_error_presented(error):
         return
 

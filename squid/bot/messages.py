@@ -1,9 +1,4 @@
-"""Keep recorded Discord message facts current.
-
-Content and liveness are properties of the message itself, so they are maintained
-from Discord's own events rather than discovered when some unrelated read happens
-to fetch the message and find it gone.
-"""
+"""Update recorded message content and deletion state from raw Discord events."""
 
 import logging
 from typing import TYPE_CHECKING

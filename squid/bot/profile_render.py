@@ -1,9 +1,7 @@
-"""Rendering for creator profiles in Discord.
+"""Render identity labels and fields for private and public creator profiles.
 
-Kept out of `verify.py` because the same card is built from two different inputs: the caller's own
-profile, which shows hidden fields, and a stranger's, which has already been filtered by
-`present_public_profile`. Sharing the field layout here means the two views cannot drift into
-describing the same profile differently.
+Public rendering accepts the account service's already-filtered view. Private
+rendering can include the caller's hidden identities and avatar.
 """
 
 from squid.accounts.domain import IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity, avatar_url_for
@@ -43,12 +41,7 @@ def render_links(links: tuple[ProfileLink, ...]) -> str:
 
 
 def own_profile_fields(profile: AccountProfile) -> list[CardField]:
-    """Describe the free-text half of the caller's own profile.
-
-    The linked accounts are not here, unlike in the public view: the panel that renders this lists
-    them one field each, because it also has to say whether each is published and offer the
-    controls for it (docs/plans/completed/command-redesign/07-account.md).
-    """
+    """Render pronouns and links; the account panel renders identity visibility separately."""
     fields: list[CardField] = []
     if profile.pronouns:
         fields.append(CardField(tr(tr(t"Pronouns")), profile.pronouns))
@@ -109,17 +102,11 @@ def _alias_credit_label(name: str, count: int) -> str:
 
 
 def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
-    """Name a claimant by the most recognisable identity loaded for them.
+    """Choose a readable claimant label from the identities loaded with the claim.
 
-    One function for every surface that shows a claimant — the review queue, its select, an
-    approval and a rejection — so a reviewer reads the same thing everywhere.
-
-    A Discord mention is preferred because it is the only handle a reviewer can click, and because a
-    Discord identity never gets a stored `display_name`; Discord resolves the snowflake client-side.
-    `mention=False` is for the places Discord renders no chip — a select option's description shows
-    `<@id>` as raw text — and falls back to the names a reviewer can actually read. The internal
-    account ID is last and is labelled as a diagnostic, since it identifies a row rather than a
-    person.
+    Prefer a Discord mention when allowed, then a Java name, public creator ID,
+    Discord ID, and finally the internal account ID. Disable mentions for select
+    descriptions, where Discord would display the raw mention syntax.
     """
     claimant = claim.claimant
     if claimant is not None:

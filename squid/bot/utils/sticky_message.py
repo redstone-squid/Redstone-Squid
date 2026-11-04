@@ -1,4 +1,4 @@
-"""Reusable sticky message coordinator with debounced channel repositioning."""
+"""Coordinate sticky messages with per-channel locks and delayed repositioning."""
 
 import abc
 import asyncio
@@ -19,12 +19,18 @@ DEFAULT_DEBOUNCE_DELAY = 5.0
 
 
 class StickyMessage(abc.ABC):
-    """Coordinate sticky channel messages until close cancels their pending work.
+    """Track and reposition one sticky message per channel.
 
-    Maintains a single message per channel by deleting the prior instance and sending a new one.
-    To avoid rate-limit churn and message spam during active conversations, repositioning is
-    debounced: it allows up to `stale_threshold` messages before forcing an immediate reposition,
-    and uses a trailing timer (`debounce_delay`) during quiet periods.
+    Repositioning deletes the old message and sends a new one at the bottom of
+    the channel. Grouping activity avoids doing that for every message in a busy
+    conversation.
+
+    A trigger counts as activity. The first post and a reached staleness threshold
+    reposition immediately; other triggers share one delayed job. Further activity
+    does not reset that job's timer. `close` cancels scheduled jobs.
+
+    Deleting the previous message is best effort, so a failed deletion can leave
+    more than one visible message even though only the latest is tracked.
     """
 
     def __init__(
@@ -67,10 +73,10 @@ class StickyMessage(abc.ABC):
             self._messages_since_reposition[channel_id] = self._messages_since_reposition.get(channel_id, 0) + 1
 
     async def trigger(self, channel: TextChannel) -> None:
-        """Request the sticky message be posted or refreshed in the channel.
+        """Count activity and reposition immediately or schedule one delayed refresh.
 
-        If no sticky message exists or the staleness threshold has been reached, repositions
-        immediately. Otherwise, schedules a trailing debounce timer.
+        Raise RuntimeError after closing. Repeated triggers below the staleness
+        threshold reuse the pending timer without extending its delay.
         """
         self._require_open()
         channel_id = channel.id
@@ -101,7 +107,7 @@ class StickyMessage(abc.ABC):
         self._debounce_tasks[channel_id] = handle
 
     async def reposition(self, channel: TextChannel) -> None:
-        """Force immediate deletion of the old sticky message and posting of a new one."""
+        """Cancel a pending timer and replace the tracked message, tolerating deletion failures."""
         self._require_open()
         await self._reposition(channel, cancel_debounce=True)
 
@@ -137,7 +143,7 @@ class StickyMessage(abc.ABC):
                 logger.warning("Failed to send sticky message in channel %s", channel.id, exc_info=True)
 
     async def dismiss(self, channel: TextChannel) -> None:
-        """Delete the current sticky message and remove it from active tracking."""
+        """Forget the tracked message, cancel its timer, and attempt to delete it from Discord."""
         async with self._lock_for(channel.id):
             await self._cancel_debounce(channel.id)
             old_id = self._last_message_id.pop(channel.id, None)
@@ -150,7 +156,10 @@ class StickyMessage(abc.ABC):
                     pass
 
     async def close(self) -> None:
-        """Stop accepting triggers and settle every pending reposition."""
+        """Reject future refreshes and cancel scheduled reposition jobs.
+
+        This does not delete posted messages or wait for direct calls to `reposition`.
+        """
         self._closed = True
         await self._supervisor.cancel(*tuple(self._debounce_tasks.values()))
         self._debounce_tasks.clear()

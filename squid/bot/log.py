@@ -20,9 +20,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         """Write an operational message without adding Discord I/O to the hot path."""
         logger.info("%s", message)
 
-    # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready
-    # This function is not guaranteed to be the first event called. Likewise, this function is not guaranteed to only be called once.
-    # This library implements reconnection logic and thus will end up calling this event whenever a RESUME request fails.
+    # Reconnection can emit on_ready again; log each ready event without treating it as one-time startup.
     @Cog.listener("on_ready")
     async def log_on_ready(self):
         """Logs when the bot is ready."""
@@ -51,7 +49,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
 
     @Cog.listener("on_command_error")
     async def log_command_error(self, ctx: Context[BotT], exception: CommandError):
-        """Global error handler for the bot."""
+        """Present errors without a command or cog handler; ignore unknown prefix commands."""
         command = ctx.command
         if command and command.has_error_handler():
             return

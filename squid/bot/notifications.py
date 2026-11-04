@@ -126,7 +126,11 @@ def render_delivery(
     *,
     locale: str = DEFAULT_LOCALE,
 ) -> str:
-    """Localize transport-safe DM text when it is delivered."""
+    """Localize a delivery and append a public build link when one is available.
+
+    Staff-review notifications retain their Discord instructions and do not receive
+    a site link, even when `site_url` is configured.
+    """
     with localization_scope(localization_for(locale)):
         rendered = tr(delivery_message(delivery))
     build_id = delivery.payload.get("build_id")

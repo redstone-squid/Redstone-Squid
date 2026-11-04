@@ -1,9 +1,9 @@
-"""Public interactive showcase for the squid-ui engine.
+"""Interactive demonstrations of layout planning, state, forms, and action history.
 
-Written for whoever runs the command rather than for the engine's authors: each exhibit
-names one problem a Discord message really runs into, makes it happen on screen, and says
-which button to press. The declaration that produced it sits behind a disclosure, so the
-message a reader gets is the demonstration and not a code listing.
+Each exhibit introduces a problem a Discord message runs into, demonstrates it,
+and tells the reader what to press. Source examples sit behind a disclosure so
+the demonstration stays readable. This development-only extension uses a simulated
+external channel service and local replicas rather than production resources.
 """
 
 import asyncio
@@ -48,13 +48,7 @@ type DemoSection = Literal[
 _ACCENTS = (DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW)
 
 _PAGE_SIZE = 6
-"""Entries the pagination exhibit asks for per page.
-
-Small on purpose. Letting the solver fill Discord's whole text budget is the more
-impressive demonstration and produces a wall of sample rows nobody reads; a page a reader
-can take in at a glance still shows the two things that matter — that nothing was dropped,
-and that the footer and buttons were measured as part of the page.
-"""
+"""Requested entries per page, kept small enough to compare the list with its controls."""
 
 _DOOR_KINDS = ("piston door", "trapdoor", "hipster door", "bridge door", "vault door", "glass door")
 _DOOR_SIZES = ("2x2", "3x3", "4x4", "5x5", "3x2", "4x3", "6x6")
@@ -487,11 +481,9 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target, sd.Request]):
         steps: Sequence[sl.TextLike] = (),
         accent: int = DISCORD_BLUE,
     ) -> sl.semantic.Section[sl.ComponentsV2Target]:
-        """The shape every exhibit shares: name the problem, explain it, say what to press.
+        """Give each exhibit a heading, explanation, body, and optional instructions.
 
-        One instruction reads as an aside and becomes a note; several are an order that
-        matters, so they become a numbered list. The uniform shape is the point — a reader
-        who has understood one exhibit knows where to look in the next eleven.
+        Render one instruction as a note and multiple instructions as an ordered list.
         """
         match steps:
             case ():
@@ -878,11 +870,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
     def _source_example(self) -> sl.semantic.Details[sl.ComponentsV2Target]:
-        """The engine's own disclosure, holding the part of the message only authors want.
-
-        Collapsed, this costs one button; expanded, several hundred characters. Making it the
-        reader's choice is what keeps every exhibit above short enough to read.
-        """
+        """Show the selected exhibit's illustrative source behind an expandable disclosure."""
         return sl.details(
             sl.summary(tr(t"Show the code behind this exhibit")),
             sl.paragraph(tr(t"This is what the author wrote. Everything above is what planning made of it.")),
@@ -1120,11 +1108,10 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
 
 class Appearance(sl.runtime.SharedState[UserScope]):
-    """View state two live panels agree on, scoped to one reader.
+    """Appearance values shared by a reader's live panels and retained by the cog's pool.
 
-    Nothing outside the screen wants a theme name, so it is not a service and not a row: it
-    is a namespace the panels hold. Writes join the action's transaction, and a change
-    reaches the other panel through the bot's topic bus with nothing declared for it.
+    Writes participate in UI action transactions. Topic notifications redraw
+    other panels that read the changed values.
     """
 
     accent: int = sl.state(DISCORD_BLUE)
@@ -1143,11 +1130,10 @@ _DENSITIES = ("comfortable", "compact")
 
 
 class AppearanceControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
-    """A leaf that never receives the namespace as an argument -- it injects it.
+    """Controls that inject shared appearance state during rendering.
 
-    `inject` is render-time, so the handlers close over the handle the render found rather
-    than looking it up again. That is the same rule every injected dependency follows here,
-    and a namespace is a dependency.
+    Handlers capture the injected state because dependency lookup is available
+    during render, not during later action dispatch.
     """
 
     history: sl.runtime.History = sl.runtime.history(limit=5)
@@ -1354,9 +1340,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
     def __init__(self, bot: BotT) -> None:
         super().__init__(bot)
-        # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so
-        # a reader's accent survives closing and reopening the demo. The pool is the retention
-        # policy, written down where the lifetime is known.
+        # The cog-owned pool retains appearance after a reader closes all demo panels.
         self._appearance = sl.runtime.SharedStatePool(Appearance, bot.topic_bus)
 
     @commands.hybrid_group(name="layout")
@@ -1389,9 +1373,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         request = await self.ui.request(ctx)
         scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
-        # Co-existence state: only the two panels hold it, so it is collected when the second
-        # of them finishes. Nothing was looking at it, so it wants no pool -- the lifetime the
-        # handle already has is the correct one.
+        # Only this pair of panels shares focus; it is not retained for the next invocation.
         session = Session(self.bot.topic_bus, scope)
         for component in (
             AppearancePanel(appearance, session),

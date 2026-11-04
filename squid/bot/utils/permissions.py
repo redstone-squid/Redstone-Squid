@@ -1,9 +1,8 @@
-"""Permission checking utilities for the bot.
+"""Translate Discord callers into permission subjects and enforce declared nodes.
 
-Commands declare the permission *nodes* they need with `requires(...)`, and the
-engine in `squid.permissions` decides. Nothing here knows about tiers any more:
-`check_is_home_server` is the one remaining non-node check, and it asks where a
-command runs rather than who is running it.
+requires supplies checks for discord.py commands; enforce performs the same
+check from a command body, component callback, or context-menu handler. The
+home-server check separately limits where community features are available.
 """
 
 from collections.abc import Callable
@@ -51,17 +50,12 @@ class PermissionNodeRequired(CheckFailure):
 
 
 class AccountIdCache:
-    """Discord id to account id, held briefly.
+    """Cache Discord-to-account lookups without creating accounts.
 
-    A permission check must never create an account row — that would write one
-    for every unauthenticated caller — so this only ever reads, and caches the
-    absence of an account too. Misses expire faster than hits because linking an
-    account is exactly the event that invalidates one.
-
-    This is why the read goes through `get_account_by_identity` and not
-    `get_or_create_identity`: observing a snowflake in a permission check is not
-    evidence anybody asked us to remember them. `account_id_for` is the
-    get-or-create counterpart, for the command paths that did.
+    Known accounts live for `ttl_seconds`; missing accounts use the shorter
+    `miss_ttl_seconds` so new links become visible sooner. Reaching `max_entries`
+    clears the whole cache rather than evicting one entry. `forget` invalidates
+    a known identity change immediately.
     """
 
     def __init__(self, *, ttl_seconds: float = 300, miss_ttl_seconds: float = 30, max_entries: int = 4096) -> None:
@@ -91,7 +85,7 @@ class AccountIdCache:
 
 
 def has_manage_server(member: discord.Member) -> bool:
-    """Whether a member holds what Discord calls administrative control of a guild."""
+    """Return whether the member owns the guild or has Administrator or Manage Server."""
     permissions = member.guild_permissions
     return member.id == member.guild.owner_id or permissions.administrator or permissions.manage_guild
 
@@ -101,10 +95,10 @@ async def build_subject(
     user: discord.User | discord.Member | discord.abc.User,
     guild_id: int | None,
 ) -> Subject:
-    """Describe a caller for the permission engine.
+    """Build a permission subject from the supplied Discord user and guild context.
 
-    Discord role membership is not cached here: `member.roles` is gateway-fresh
-    already, and caching it would add staleness the gateway does not have.
+    Member roles come from the supplied object without a REST refresh. Account
+    identity uses the shared lookup cache; the owner check is delegated to the bot.
     """
     member = user if isinstance(user, discord.Member) else None
     return Subject(
@@ -147,15 +141,13 @@ async def enforce(
     *nodes: PermissionNode | str,
     mode: CheckMode = "all",
 ) -> None:
-    """Deny an interaction the way `requires(...)` denies a command.
+    """Check an interaction's permission nodes and raise the shared command-check error.
 
-    Context menus and component callbacks cannot carry a `commands.check`, so the check has to
-    happen in the body — and answering it with a hand-written "you cannot do that" card would
-    make the same refusal read differently depending on which surface it came from. Raising
-    what the decorator raises means one presenter renders both, `forbid` explanation included.
+    The common error presenter renders the same refusal for commands and component
+    actions, including a distinct explanation for forbid rules.
 
     Raises:
-        PermissionNodeRequired: If the caller does not hold the nodes.
+        PermissionNodeRequired: The caller does not satisfy the requested mode.
     """
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
     subject = await subject_for_interaction(caller)
@@ -223,12 +215,10 @@ def _satisfied(decisions: tuple[Decision, ...], mode: CheckMode) -> bool:
 
 @cache
 def check_is_home_server():
-    """Require the guild configured for home-community-specific features.
+    """Require the configured home guild, or any guild if none is configured.
 
-    Feature availability, not authorization: it asks *where* a command is being
-    run, never *who* is running it. Conflating the two is what produced the four
-    overlapping tiers this module is replacing, so it stays a separate check
-    applied alongside `requires(...)`.
+    This limits feature availability and does not check the caller's authority.
+    Combine it with `requires` when both restrictions apply. DMs are rejected.
     """
 
     async def predicate(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:

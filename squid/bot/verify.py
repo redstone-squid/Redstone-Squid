@@ -1,4 +1,4 @@
-"""A cog for verifying minecraft accounts."""
+"""Open the account workspace and render public creator profiles."""
 
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Self
@@ -122,11 +122,10 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         )
 
     async def _refresh_discord_avatar_key(self, account: Account, user: discord.Member | discord.User) -> None:
-        """Store the viewer's current Discord avatar hash, which only the gateway supplies.
+        """Persist the supplied Discord user's avatar hash when it differs from the stored identity.
 
-        Opportunistic: this is the one place the bot reliably holds both the account and a fresh
-        `discord.User`, so an avatar that would otherwise render as null gets filled in whenever
-        someone looks at their own page.
+        Opening the owner's account provides both the linked identity and a Discord
+        user object; public profile rendering can then use the stored hash.
         """
         identity = account.identity_for(IdentityProvider.DISCORD, str(user.id))
         if account.id is None or identity is None or identity.id is None:

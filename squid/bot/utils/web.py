@@ -29,7 +29,12 @@ class Preview(TypedDict):
 
 
 class MediaPreviewClient:
-    """Resolve previews only from allowlisted HTTPS origins with bounded responses."""
+    """Fetch previews from allowed Discord HTTPS hosts without following redirects.
+
+    Cache up to `MAX_PREVIEW_CACHE_ENTRIES` URLs in access order, including empty
+    results from failed requests. Entries have no time-based expiry. The client
+    closes only HTTP sessions it creates itself.
+    """
 
     def __init__(self, session: aiohttp.ClientSession | None = None) -> None:
         self._session = session
@@ -37,7 +42,12 @@ class MediaPreviewClient:
         self._cache: OrderedDict[str, Preview] = OrderedDict()
 
     async def get(self, url: str) -> Preview:
-        """Return cached metadata or an empty preview when the origin is not trusted."""
+        """Return a shallow copy of cached or fetched metadata.
+
+        Untrusted URLs, unsupported content, oversized HTML, and handled network
+        failures produce empty previews. Image responses supply their URL without
+        downloading the image body.
+        """
         cached = self._cache.get(url)
         if cached is not None:
             self._cache.move_to_end(url)
@@ -76,7 +86,12 @@ class MediaPreviewClient:
 
 
 async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10) -> io.BytesIO:
-    """Extract one bounded frame from already-downloaded bytes, never a remote URL."""
+    """Decode downloaded video bytes into one PNG frame, scaled to fit 1920 by 1080.
+
+    Kill ffmpeg on timeout or cancellation. Nonzero exit status and output larger
+    than `MAX_VIDEO_FRAME_BYTES` raise RuntimeError; the size check occurs after
+    the subprocess output has been read.
+    """
     process = await asyncio.create_subprocess_exec(
         "ffmpeg",
         "-v",
@@ -123,7 +138,7 @@ async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10)
 
 
 def is_trusted_preview_url(url: str) -> bool:
-    """Return whether a URL is safe for the server itself to request."""
+    """Require an allowed Discord HTTPS host, no credentials, and the default HTTPS port."""
     try:
         parsed = urlsplit(url)
         port = parsed.port
