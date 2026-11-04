@@ -38,7 +38,7 @@ class SchematicPublication:
 
     @property
     def is_public_downloadable(self) -> bool:
-        """Whether public callers may receive the stored original bytes."""
+        """Whether this attachment permits downloading; callers must also check build access."""
         return (
             self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD
             and self.license is not None

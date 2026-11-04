@@ -38,12 +38,10 @@ class SchematicAnalyzer(Protocol):
         with_lattice: bool = False,
         source_format: SchematicFormat | None = None,
     ) -> SchematicAnalysis:
-        """Read every fact worth persisting about one schematic file.
+        """Read metrics, fingerprints, and optionally a repeating lattice from the supplied bytes.
 
-        `source_format` is what the caller's own content sniff concluded, filename hint
-        included. Implementations sniff the bytes themselves when it is omitted, but they
-        cannot see the filename, so passing it through gives a better answer for formats whose
-        root compounds are ambiguous.
+        source_format carries the caller's format hint, including filename-based detection. When
+        omitted, adapters infer the format from bytes alone. The hint does not replace parsing.
         """
         ...
 
@@ -59,7 +57,7 @@ class SchematicAnalyzer(Protocol):
         preset: FingerprintPreset,
         timeout_seconds: float | None = None,
     ) -> SchematicComparison:
-        """Compare two files, optionally under a stricter caller-owned deadline."""
+        """Compare two files; timeout_seconds requests an adapter-specific operation deadline."""
         ...
 
     async def render(
@@ -84,7 +82,12 @@ class SchematicStore(Protocol):
         """Store bytes content-addressed by SHA-256 and return the digest."""
         ...
 
-    async def get_file(self, sha256: str) -> bytes | None: ...
+    async def get_file(self, sha256: str) -> bytes | None:
+        """Return verified bytes, or None if no metadata exists for the digest.
+
+        Raise DataIntegrityError if registered bytes are missing or fail integrity checks.
+        """
+        ...
 
     async def record_analysis(
         self,
@@ -103,7 +106,11 @@ class SchematicStore(Protocol):
     async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None: ...
 
     async def get_featured(self, build_id: int) -> StoredSchematic | None:
-        """Return the attachment selected to supply a build's generated preview."""
+        """Return the attachment marked is_primary, or None if the build has no primary.
+
+        This is the featured attachment used for generated previews, conversion, and timing.
+        Secondary attachments are not used as a fallback.
+        """
         ...
 
     async def find_file_matches(
@@ -168,7 +175,9 @@ class SchematicPreviewPublisher(Protocol):
         sha256: str,
     ) -> PreviewObjectReservation: ...
 
-    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None: ...
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
+        """Record readiness after the caller verifies the reserved upload."""
+        ...
 
     async def publish_fresh_preview(
         self,

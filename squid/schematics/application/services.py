@@ -60,12 +60,18 @@ class IngestedSchematic:
 
 
 class SchematicService:
-    """Accept, analyze, store, and re-encode schematic files.
+    """Analyze schematic files and make their results available to build workflows.
 
-    The service owns the order in which an upload is vetted, and that order is the security
-    property: cheap stdlib checks run to exhaustion on the caller's thread before a single byte
-    is handed to the native engine, and the engine only ever sees bytes that have already been
-    proven to be a bounded, well-formed NBT stream.
+    Ingestion stores the uploaded bytes and measures the structure they contain.
+    Recording that analysis creates a build attachment: several builds can share
+    the same file while keeping their own primary selection and publication rights.
+    A build's featured attachment supplies conversions and timing measurements;
+    SchematicPreviewService uses it for generated previews.
+
+    Ingestion checks compressed and decompressed size before invoking the native
+    analyzer. Format sniffing chooses a likely parser; the analyzer validates the
+    NBT structure. The application receives plain analysis values, never native
+    engine objects.
     """
 
     def __init__(
@@ -99,8 +105,7 @@ class SchematicService:
         self._duplicate_result_limit = duplicate_result_limit
         self._duplicate_total_timeout_seconds = duplicate_total_timeout_seconds
         self._poisoned: set[str] = set()
-        """Digests of files that killed a worker. Re-analysing one would kill the next worker
-        too, so this process refuses them outright rather than retrying."""
+        """Digests that crashed a worker during this service's lifetime, shared with preview checks."""
         self._preview_service = SchematicPreviewService(
             analyzer,
             store,
@@ -135,11 +140,11 @@ class SchematicService:
         return await self._analyzer.capabilities()
 
     async def ingest(self, request: IngestRequest) -> IngestedSchematic:
-        """Vet, store, and analyze one uploaded file.
+        """Check, store, and analyze one uploaded file.
 
-        Storing happens *before* analysis so that a file which crashes the engine is still on
-        disk to reproduce with, and so a byte-identical resubmission is recognised without
-        paying for analysis twice.
+        Store the bytes before analysis so a file that crashes the engine remains available to
+        reproduce the failure. Identical uploads share stored bytes but are analyzed again. Digests
+        that crashed a worker during this service's lifetime are refused before analysis.
         """
         self._require_available()
         source_format = self._vet(request.data, filename=request.filename)
@@ -178,11 +183,10 @@ class SchematicService:
         primary: bool = True,
         publication: SchematicPublication | None = None,
     ) -> int:
-        """Attach an already-analyzed file to a build.
+        """Attach an already-analyzed file to an existing build and return its attachment ID.
 
-        Split out from :meth:`attach` because the submission flow has to analyze *before* the
-        build exists — the measured dimensions are prefilled into the form the user is about to
-        fill in — and can only record once `submit` has assigned an id.
+        Submission forms can ingest first to obtain measurements, then call this after saving the
+        build. This method does not analyze the file again.
         """
         return await self._store.record_analysis(
             build_id,
@@ -212,18 +216,10 @@ class SchematicService:
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 50,
     ) -> Page[StoredSchematic]:
-        """Return one page of a build's publicly downloadable attachments.
+        """Return an offset page of attachments allowed by their publication policy.
 
-        Paging belongs here rather than in the route, which was the last list
-        endpoint slicing its own results after builds, records, and notifications
-        moved theirs into their services.
-
-        Slicing in memory is deliberate for now: a single build's attachment
-        count is small and bounded in practice, and the store port has no
-        offset/limit. The trigger to change that is one build's attachments no
-        longer fitting comfortably in one query -- then `list_for_build` gains
-        `offset`/`limit` and a count, and this body changes without the route
-        noticing.
+        Load all attachments for the build, filter them, then slice the result in memory. Build-level
+        access must be checked by the caller.
         """
         return offset_page(
             await self.list_public_for_build(build_id),
@@ -253,7 +249,7 @@ class SchematicService:
         )
 
     async def featured_for_build(self, build_id: int) -> StoredSchematic | None:
-        """Return the attachment selected to supply this build's generated preview."""
+        """Return this build's primary attachment, used for previews, conversion, and timing."""
         return await self._store.get_featured(build_id)
 
     async def find_duplicates(
@@ -262,20 +258,24 @@ class SchematicService:
         *,
         exclude_build_id: int | None = None,
     ) -> list[DuplicateCandidate]:
-        """Find earlier submissions that are identical to or resemble an upload.
+        """Rank earlier submissions that are identical to or resemble an upload.
 
-        Cheap indexed facts decide only the two trustworthy tiers: content SHA-256 proves
-        byte identity, and a version-scoped shape fingerprint proves the same build under
-        translation or rotation. Structural hashes and metric ranges only make a shortlist;
-        every fuzzy verdict comes from loading both files and comparing them in the worker.
+        Matching file digests produce the identical tier. Matching shape fingerprints from the same
+        analyzer version identify the same structure under translation or rotation and produce the
+        structural-match tier. Despite that tier's name, the coarser structural fingerprint only
+        shortlists candidates; it does not establish a match.
 
-        `exclude_build_id` omits only the submission currently being edited, so its existing
-        attachment is not reported as a duplicate of itself.
+        Structural hashes and metric ranges form a shortlist for pairwise comparisons, ordered by
+        metric similarity. Those comparisons can produce a structural-match or near result.
+
+        The comparison count and remaining time budget limit that second pass. Worker errors are
+        logged and skipped, so the result can be partial. exclude_build_id omits the build being edited.
         """
         self._require_available()
         analysis = ingested.analysis
         found: dict[int, DuplicateCandidate] = {}
 
+        # Establish byte identity and shape matches without loading the candidate files.
         file_matches = await self._store.find_file_matches(
             ingested.sha256,
             exclude_build_id=exclude_build_id,
@@ -298,6 +298,7 @@ class SchematicService:
         if self._duplicate_max_comparisons == 0:
             return _rank_duplicates(found.values(), self._duplicate_result_limit)
 
+        # Shortlist remaining candidates before spending the native comparison budget.
         structural_matches = await self._store.find_fingerprint_matches(
             analysis.fingerprints.structural,
             preset=FingerprintPreset.STRUCTURAL,
@@ -371,13 +372,7 @@ class SchematicService:
         return _rank_duplicates(found.values(), self._duplicate_result_limit)
 
     async def prepare_render(self, build_id: int) -> RenderPreparation:
-        """Decide what a build's preview should be: a fresh PNG, a cached URL, or a skip.
-
-        Every permanent outcome is named by a `RenderSkipReason` so the durable render queue
-        can acknowledge it and a moderator surface can explain it. Operational failures — no
-        resource pack, a dead worker, a renderer that answered with something other than a
-        PNG — propagate instead, so the queue retries or dead-letters the intent.
-        """
+        """Prepare a fresh, cached, or skipped preview through the preview service."""
         return await self._preview_service.prepare_render(build_id)
 
     def render_recipe(
@@ -389,13 +384,7 @@ class SchematicService:
         pitch: float | None = None,
         zoom: float | None = None,
     ) -> RenderRequest:
-        """Return this instance's configured framing with the caller's overrides applied.
-
-        Transports build their request through here rather than constructing one, so a caller
-        who asks for nothing in particular reproduces the recipe the durable queue renders
-        with — and therefore hits its cached preview instead of paying for an identical image
-        under a different hash.
-        """
+        """Return configured preview framing with the caller's overrides applied."""
         return self._preview_service.render_recipe(
             width=width,
             height=height,
@@ -405,27 +394,11 @@ class SchematicService:
         )
 
     async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
-        """Render a build's primary schematic for a caller who is waiting for the image.
-
-        Distinct from `prepare_render`, which serves durable preview publication: that path
-        decides what a build's *published* preview should be and hands its transport a PNG to
-        upload, while this one answers one request and publishes nothing. A recipe the queue
-        has already rendered is served from its stored artifact, so the default framing costs
-        an object-storage read rather than a render.
-
-        Deliberately not written back to the cache. Recording a render also publishes it onto
-        the build as its preview, and a request whose only claim to authority is that somebody
-        asked for it must not decide what a build looks like to everyone else.
-        """
+        """Return a preview for this request without publishing or storing a new render."""
         return await self._preview_service.render_now(build_id, request=request)
 
     async def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
-        """Say why this attachment will never be previewed, or `None` if it is eligible.
-
-        A moderator asking what the bot knows about a build must not set a GPU render going.
-        This checks only configuration, stored analysis, and whether the source artifact still
-        exists; it never acquires rendering capabilities or a resource pack.
-        """
+        """Return the current skip reason without starting the renderer, or None if eligible."""
         return await self._preview_service.explain_render_skip(stored)
 
     async def publish_fresh_preview(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
@@ -437,7 +410,7 @@ class SchematicService:
         return await self._preview_service.reserve_preview_object(render, object_key)
 
     async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
-        """Make a verified upload eligible for generated-link publication."""
+        """Record readiness after the caller verifies the reserved upload."""
         await self._preview_service.mark_preview_object_ready(reservation)
 
     async def cleanup_preview_objects(self, *, retention_hours: int = 24, limit: int = 50) -> int:
@@ -460,13 +433,9 @@ class SchematicService:
         operation: str,
         stored: StoredSchematic | None = None,
     ) -> Generator[None]:
-        """Quarantine a file that kills a worker, so the next request refuses it outright.
+        """Remember a digest when its operation crashes a worker, then propagate the error.
 
-        Analysis, rendering, and simulation all have to do this, and all three used to spell
-        it out themselves. Only the log line differs per operation, so only that is a
-        parameter; whether the caller then skips, retries, or fails is left to the caller,
-        because that policy genuinely does differ — a render is durable work the queue will
-        retry, an upload is a user waiting on an answer.
+        The shared set lasts for this service instance and is also checked by preview operations.
         """
         try:
             yield
@@ -481,7 +450,7 @@ class SchematicService:
             raise
 
     def _refuse_poisoned(self, sha256: str) -> None:
-        """Refuse a file that has already killed a worker here, rather than killing another."""
+        """Refuse a digest that has already crashed a worker during this service's lifetime."""
         if sha256 in self._poisoned:
             msg = "This file has already crashed the schematic engine on this instance."
             raise InvalidSchematicError(
@@ -493,7 +462,11 @@ class SchematicService:
     async def convert(
         self, build_id: int, request: ConvertRequest, *, version_label: str | None = None
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
-        """Re-encode a build's primary schematic, optionally retargeting its data version."""
+        """Re-encode the featured schematic and optionally target a Minecraft data version.
+
+        A supplied data_version takes precedence over version_label. Return the converted bytes and
+        the engine's report of fidelity losses.
+        """
         self._require_available()
         stored = await self._store.get_featured(build_id)
         if stored is None:
@@ -519,7 +492,7 @@ class SchematicService:
         return await self._analyzer.convert(data, target=request.target_format, data_version=data_version)
 
     async def detect_lattice(self, build_id: int) -> AutostackLattice | None:
-        """Return the opportunistically detected repeating unit for a build."""
+        """Return stored lattice evidence for the featured schematic without reanalyzing it."""
         self._require_available()
         stored = await self._store.get_featured(build_id)
         if stored is None:
@@ -567,15 +540,13 @@ class SchematicService:
         return data
 
     def _vet(self, data: bytes, *, filename: str) -> SchematicFormat:
-        """Prove the bytes are a bounded, recognisable schematic before the engine sees them.
+        """Check upload and inflation budgets, then infer a supported format.
 
-        Each step is cheap and total, and each one runs only on input the previous step already
-        accepted: size, then inflation budget, then content typing.
+        The native analyzer validates the schematic structure after these checks succeed.
         """
         if len(data) > self._limits.max_upload_bytes:
             raise SchematicTooLargeError(actual=len(data), limit=self._limits.max_upload_bytes, measure="file size")
 
-        # Raises DecompressionBudgetExceededError long before the bomb costs us anything.
         inflated_size_at_most(data, self._limits.max_inflated_bytes)
 
         source_format = sniff_schematic_format(

@@ -9,7 +9,7 @@ from squid_ui.text import Message
 
 @dataclass(frozen=True, slots=True)
 class StoredRender:
-    """A persisted, recipe-keyed generated preview."""
+    """A stored generated preview identified by its rendering recipe."""
 
     schematic_id: int
     recipe_hash: str
@@ -30,7 +30,7 @@ class PreviewObjectReservation:
 
 
 class RenderSkipReason(StrEnum):
-    """Why a build will never get a generated preview under the current recipe."""
+    """Why preview preparation skips this build under its current state and configuration."""
 
     RENDERING_DISABLED = "rendering_disabled"
     NO_PRIMARY_SCHEMATIC = "no_primary_schematic"
@@ -79,7 +79,7 @@ class CachedRender:
 
 @dataclass(frozen=True, slots=True)
 class SkippedRender:
-    """A build the renderer will not produce a preview for, and why."""
+    """A preview attempt that needs no rendering work under the current conditions."""
 
     reason: RenderSkipReason
 
@@ -98,4 +98,4 @@ class RenderedSchematic:
 
 
 type RenderPreparation = FreshRender | CachedRender | SkippedRender
-"""The explicit fresh, cached, or permanent-skip result of preview preparation."""
+"""The fresh, cached, or skipped result of preview preparation."""

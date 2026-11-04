@@ -36,7 +36,7 @@ class ClaimedSchematicJob:
     input_keys: tuple[str, ...]
     attempts: int
     claim_token: uuid.UUID
-    """The database-minted fence this worker's acknowledgement must still match."""
+    """The token that must still match when this worker records an outcome."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +98,14 @@ class SchematicJobRepository(Protocol):
 
 
 class SchematicJobService:
-    """Validate and coordinate durable schematic jobs."""
+    """Keep native-operation requests and their results available across process boundaries.
+
+    QueuedSchematicAnalyzer submits an operation with keys for its stored input bytes, then polls
+    for the result. SchematicJobRunner claims the request, executes it, and records an outcome.
+    Results remain available until retention expires so the submitting client can retrieve them.
+    Each submission, claim, or outcome is committed in its own transaction; native execution and
+    object storage operations happen between those transactions.
+    """
 
     def __init__(
         self,
@@ -130,6 +137,7 @@ class SchematicJobService:
             return await uow.schematic_jobs.get(job_id)
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedSchematicJob]:
+        """Commit and return up to limit leases that workers can begin processing."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 32:
                 msg = tr(t"Schematic job claim limit must be between 1 and 32.")
@@ -151,6 +159,7 @@ class SchematicJobService:
         result: Mapping[str, Any],
         result_object_key: str | None,
     ) -> bool:
+        """Commit the result and return whether this claim still owned the job."""
         async with self._uow_factory() as uow:
             applied = await uow.schematic_jobs.complete(
                 job,
@@ -170,6 +179,10 @@ class SchematicJobService:
         error_context: Mapping[str, Any],
         terminal: bool,
     ) -> bool:
+        """Record a failure and return whether this call moved the job to its terminal failed state.
+
+        False can mean either a retry was scheduled or the claim no longer owns the job.
+        """
         async with self._uow_factory() as uow:
             result = await uow.schematic_jobs.fail(
                 job,
@@ -184,6 +197,12 @@ class SchematicJobService:
             return result
 
     async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int = 100) -> int:
+        """Delete expired jobs and their retained output objects, returning the number of jobs removed.
+
+        Commit cleanup claims before deleting bytes. Ordinary deletion errors release the claims and
+        propagate; cancellation can leave them reserved until their leases expire. Shared input
+        objects are not part of job cleanup.
+        """
         if not 1 <= limit <= 500:
             msg = tr(t"Schematic job cleanup limit must be between 1 and 500.")
             raise InvalidStateError(msg)

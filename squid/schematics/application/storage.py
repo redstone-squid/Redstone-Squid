@@ -18,6 +18,8 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class SchematicMetadataRepository(Protocol):
+    """Schematic metadata operations within the caller-owned transaction."""
+
     async def register_file(self, file: SchematicFile) -> None: ...
     async def get_file_metadata(self, sha256: str) -> SchematicFile | None: ...
     async def record_analysis(
@@ -53,7 +55,11 @@ class SchematicMetadataRepository(Protocol):
 
 
 class SchematicStorageService:
-    """Store payloads outside transactions and commit related metadata together."""
+    """Store schematic bytes separately from metadata transactions.
+
+    Uploads are read back and verified before their metadata is committed. If that transaction
+    fails, the content-addressed object can remain in storage for a later upload to reuse.
+    """
 
     def __init__(self, artifacts: ArtifactStore, *, uow_factory: UnitOfWorkFactory[SchematicStorageUnitOfWork]) -> None:
         self._artifacts = artifacts
@@ -74,6 +80,10 @@ class SchematicStorageService:
         return digest
 
     async def get_file(self, sha256: str) -> bytes | None:
+        """Read and verify registered bytes, or return None if the digest is unregistered.
+
+        Missing or corrupt bytes for an existing metadata row raise DataIntegrityError.
+        """
         async with self._uow_factory() as uow:
             row = await uow.schematic_metadata.get_file_metadata(sha256)
         if row is None:

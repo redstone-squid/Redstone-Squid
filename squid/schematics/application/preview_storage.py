@@ -17,6 +17,8 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 @dataclass(frozen=True, slots=True)
 class PreviewCleanupClaim:
+    """An object reserved for deletion, with the token required to finish or release that claim."""
+
     object_key: str
     token: UUID
 
@@ -32,6 +34,8 @@ class PreviewCleanupInProgressError(InvalidStateError):
 
 
 class PreviewMetadataRepository(Protocol):
+    """Preview publication and cleanup operations within the caller-owned transaction."""
+
     async def get_render(
         self, schematic_id: int, recipe_hash: str
     ) -> tuple[StoredRender, SchematicPreviewObject] | None: ...
@@ -51,13 +55,26 @@ class PreviewMetadataRepository(Protocol):
 
 
 class SchematicPreviewStorage:
-    """Publish metadata after checking storage, and delete only reserved objects."""
+    """Track stored preview images and the build links that publish them.
+
+    An upload reservation records the expected size and digest before SchematicPreviewWorker writes
+    the image. After the worker verifies the upload, it marks the object ready and asks to publish
+    its URL. Cached previews can skip the upload when their stored metadata still matches.
+
+    Storage operations run outside database transactions. Reservations and cleanup claims are
+    committed first so competing workers see them. Cleanup removes metadata only if its claim token
+    still matches after deleting the bytes.
+    """
 
     def __init__(self, artifacts: ArtifactStore, *, uow_factory: UnitOfWorkFactory[PreviewUnitOfWork]) -> None:
         self._artifacts = artifacts
         self._uow_factory = uow_factory
 
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
+        """Return a ready preview whose storage metadata still matches, or None.
+
+        This checks object size and any digest supplied by storage; it does not download the content.
+        """
         async with self._uow_factory() as uow:
             retained = await uow.schematic_previews.get_render(schematic_id, recipe_hash)
         if retained is None:
@@ -79,6 +96,7 @@ class SchematicPreviewStorage:
         return PreviewObjectReservation(object_key, byte_size, sha256, upload_required=True)
 
     async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
+        """Record readiness after the caller has uploaded and verified the reserved object."""
         async with self._uow_factory() as uow:
             await uow.schematic_previews.mark_preview_object_ready(reservation)
             await uow.commit()
@@ -108,6 +126,11 @@ class SchematicPreviewStorage:
             return applied
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
+        """Read a ready preview within max_bytes and verify its size and recorded digest.
+
+        Return None for an absent, unready, oversized, or corrupt preview. Missing or corrupt bytes
+        also clear the object's ready marker.
+        """
         async with self._uow_factory() as uow:
             row = await uow.schematic_previews.render_object(recipe_hash)
         if row is None or row.ready_at is None or row.byte_size > max_bytes:
@@ -123,6 +146,11 @@ class SchematicPreviewStorage:
         return content
 
     async def cleanup_unreferenced_preview_objects(self, *, older_than: Instant, limit: int) -> int:
+        """Delete up to limit old, unreferenced objects and return the number removed.
+
+        Ordinary deletion failures release the claim and propagate. Cancellation can leave the claim
+        reserved until its lease expires.
+        """
         removed = 0
         for _ in range(limit):
             async with self._uow_factory() as uow:

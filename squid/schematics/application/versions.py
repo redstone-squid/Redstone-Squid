@@ -7,6 +7,8 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class SchematicVersionService:
+    """Read the shared version catalogue in a separate transaction for each lookup."""
+
     def __init__(self, *, uow_factory: UnitOfWorkFactory[SchematicVersionUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 

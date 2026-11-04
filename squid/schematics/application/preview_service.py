@@ -43,7 +43,7 @@ _MAX_RENDER_CONTENT_BYTES = 8 * 1024 * 1024
 
 
 class SchematicPreviewService:
-    """Prepare, render, publish, and clean previews until `aclose` releases their provider."""
+    """Prepare and publish previews, sharing the analyzer and owning the resource-pack provider."""
 
     def __init__(
         self,
@@ -72,7 +72,12 @@ class SchematicPreviewService:
         self._warning_emitted = False
 
     async def prepare_render(self, build_id: int) -> RenderPreparation:
-        """Decide whether durable work should use fresh bytes, a cache, or a permanent skip."""
+        """Prepare fresh PNG bytes, reuse a stored recipe, or explain why this attempt is skipped.
+
+        Skipped results let the durable queue finish without retrying. Configuration or attachment
+        changes can make a later attempt eligible. Operational failures propagate for queue handling;
+        fresh bytes still need upload and publication by the caller.
+        """
         if not self._render_enabled:
             return SkippedRender(RenderSkipReason.RENDERING_DISABLED)
         stored = await self._store.get_featured(build_id)
@@ -115,7 +120,11 @@ class SchematicPreviewService:
         pitch: float | None = None,
         zoom: float | None = None,
     ) -> RenderRequest:
-        """Return configured framing with caller overrides applied."""
+        """Apply caller overrides to the configured preview recipe.
+
+        Using the configured defaults keeps interactive requests eligible for the published preview's
+        cache entry when their framing is unchanged.
+        """
         base = self._render_request
         return dataclasses.replace(
             base,
@@ -127,7 +136,12 @@ class SchematicPreviewService:
         )
 
     async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
-        """Render the featured attachment for a waiting caller without publishing it."""
+        """Return a cached or newly rendered PNG without publishing it.
+
+        A matching stored recipe is read from object storage. New renders are not written to that cache:
+        recording a preview also publishes it as the build's generated image, which is outside the
+        scope of an individual render request.
+        """
         if not self._available:
             raise SchematicSupportUnavailableError
         if not self._render_enabled:
@@ -173,7 +187,10 @@ class SchematicPreviewService:
         )
 
     async def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
-        """Return a permanent preview refusal without starting renderer I/O."""
+        """Return the current skip reason without starting the renderer or loading a resource pack.
+
+        This checks configuration, stored measurements, and source bytes in object storage.
+        """
         if not self._render_enabled:
             return RenderSkipReason.RENDERING_DISABLED
         if reason := self._render_skip_reason(stored):
@@ -203,7 +220,7 @@ class SchematicPreviewService:
         )
 
     async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
-        """Make a verified upload eligible for generated-link publication."""
+        """Record readiness after the caller verifies the reserved upload."""
         await self._publisher.mark_preview_object_ready(reservation)
 
     async def cleanup_preview_objects(self, *, retention_hours: int = 24, limit: int = 50) -> int:
@@ -315,6 +332,7 @@ class SchematicPreviewService:
 
 
 def _render_recipe_hash(stored: StoredSchematic, request: RenderRequest, pack_sha256: str) -> str:
+    """Hash the source digest, analysis version, resource pack, and framing into a cache key."""
     dimensions = stored.analysis.metrics.dimensions
     recipe = {
         "file_sha256": stored.file_sha256,

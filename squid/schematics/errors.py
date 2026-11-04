@@ -25,12 +25,10 @@ class InvalidSchematicError(ValidationError):
 
 
 class AmbiguousSimulationInputError(InvalidSchematicError):
-    """The tick simulator could not be told which control to actuate.
+    """No usable input was selected, or several controls could be actuated.
 
-    Choosing between several levers would silently time a different circuit than the one a
-    moderator meant, so the engine refuses instead. Refusing is only useful if the caller is
-    told what to choose *between*, which is why the candidates travel as public context: they
-    are coordinates inside a file the caller uploaded, so there is nothing to withhold.
+    candidates lists valid lever and button coordinates for the caller to choose. rejected records
+    an explicit coordinate that was not usable; only the candidates are included in public context.
     """
 
     def __init__(
@@ -80,10 +78,10 @@ class SchematicTooLargeError(ValidationError):
 
 
 class DecompressionBudgetExceededError(SchematicTooLargeError):
-    """A compressed upload inflates past the allowed budget.
+    """The inflated upload exceeds its budget before native parsing.
 
-    Raised before any byte reaches the native engine, so a decompression bomb costs us only
-    the streaming read that detected it.
+    actual is reported as limit + 1 because the streaming check stops once it knows the limit was
+    exceeded, without measuring the entire decompressed file.
     """
 
     def __init__(self, *, limit: int) -> None:
@@ -108,12 +106,10 @@ class SchematicSupportUnavailableError(ServiceUnavailableError):
 
 
 class SchematicRenderRefusedError(ConflictError):
-    """This attachment will never render under the requested recipe.
+    """The attachment is ineligible for a preview under the current configuration.
 
-    A refusal is about the stored schematic, not about the request: an unsanitized file, one
-    that already crashed the engine, or one past a preview budget answers the same way however
-    the camera is pointed. The reason travels as public context because it is the only thing
-    that tells a caller whether to fix something or to stop asking.
+    The public reason lets callers explain a skip such as a quarantined file or an exceeded budget.
+    Changing the source or configuration may make a later attempt eligible.
     """
 
     default_message = tr(t"This build's schematic cannot be previewed.")
@@ -135,7 +131,11 @@ class SchematicRenderUnavailableError(ServiceUnavailableError):
 
 
 class SchematicTimeoutError(InfrastructureError, TimeoutError):
-    """A schematic operation exceeded its deadline and its worker was killed."""
+    """A schematic operation or wait for a durable result exceeded its deadline.
+
+    The subprocess adapter kills a worker running a timed-out request. A durable client timeout
+    only stops polling; the queued job can continue.
+    """
 
     default_message = tr(t"The schematic operation took too long and was cancelled.")
     default_code = ErrorCode.SCHEMATIC_TIMEOUT
@@ -153,8 +153,8 @@ class SchematicTimeoutError(InfrastructureError, TimeoutError):
 class SchematicWorkerCrashedError(InfrastructureError, RuntimeError):
     """A schematic worker process died while handling a request.
 
-    The supervisor respawns the worker; the request itself is never retried, because
-    retrying a payload that just killed a process is how you build a crash loop.
+    The pool can start a replacement for later work, but does not replay the failed request.
+    Services can remember its digest to refuse further attempts during their lifetime.
     """
 
     default_message = tr(t"The schematic engine failed while reading this file.")

@@ -1,8 +1,7 @@
-"""Schematic domain values.
+"""Immutable values returned by schematic analysis.
 
-Every type here is frozen, slotted, and built from standard-library types only. Results from
-the native engine are translated into these values inside the infrastructure adapter, so no
-engine type ever crosses into the application or transport layers.
+Infrastructure adapters translate native handles into these Python values before returning
+them to application and transport code.
 """
 
 from dataclasses import dataclass, field
@@ -69,11 +68,11 @@ class SchematicLicense(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SchematicLimits:
-    """Resource budgets applied to attacker-controlled schematic uploads.
+    """Budgets used when accepting and processing schematic uploads.
 
-    Enforced at three points: `max_upload_bytes` before the file is downloaded from Discord,
-    `max_inflated_bytes` while streaming decompression, and `max_allocated_volume` in the
-    worker immediately after the engine loads the file.
+    Callers bound downloads with max_upload_bytes. Ingestion checks the upload and decompressed
+    sizes; the native adapter checks allocated volume and axis lengths after loading. These values
+    do not enforce themselves, and max_sniff_bytes only limits format detection.
     """
 
     max_upload_bytes: int = SCHEMATIC_FILE_SCHEMA_MAX_BYTES
@@ -153,11 +152,11 @@ class VersionLossEntry:
 
 @dataclass(frozen=True, slots=True)
 class SchematicMetrics:
-    """Authoritative facts read out of one schematic file.
+    """Measurements and metadata recovered from one schematic file.
 
-    `block_count` is the number of non-air blocks. It is **not** the Door Rules cumulative
-    volume, which includes air pockets and carries hallway, frame, and hitbox exceptions;
-    keep the two separate when presenting record evidence.
+    block_count counts non-air blocks, while bounding_volume includes air inside the tight bounds.
+    Neither is the Door Rules cumulative volume, which has hallway, frame, and hitbox exceptions
+    that require separate review.
     """
 
     source_format: SchematicFormat
@@ -178,12 +177,11 @@ class SchematicMetrics:
 
 @dataclass(frozen=True, slots=True)
 class SchematicAnalysis:
-    """Everything one pass over a schematic file produced.
+    """Measurements, fingerprints, and optional lattice evidence from one analysis.
 
-    `analyzer_version` and `analysis_schema_version` are load-bearing: fingerprints are not
-    stable across engine upgrades, so persisted fingerprints record what produced them and
-    duplicate lookups filter on it. A version bump therefore becomes a backfill job instead
-    of a silent correctness regression.
+    Compare fingerprints only when analyzer_version matches: an engine upgrade can change them.
+    analysis_schema_version identifies the application's analysis format, independently of the
+    engine version.
     """
 
     metrics: SchematicMetrics
@@ -219,10 +217,11 @@ class SimulationSample:
 
 @dataclass(frozen=True, slots=True)
 class SimulationResult:
-    """Piston-door timing evidence from the vanilla-accurate tick engine.
+    """Piston timing and observations from one simulated input actuation.
 
-    This is moderator-facing evidence, never a record value: simulated timings must not
-    populate a build's declared opening or closing time.
+    trustworthy records whether the adapter's checks passed, including settling and unsupported
+    simulation features. It is evidence for moderator review, not permission to overwrite a build's
+    declared opening or closing time. notes explain limitations encountered during the run.
     """
 
     ticks_run: int

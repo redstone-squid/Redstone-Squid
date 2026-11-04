@@ -1,14 +1,8 @@
-"""Container and format detection for uploaded schematic files.
+"""Recognize schematic containers and estimate their decompressed size before native parsing.
 
-This module is deliberately standard-library only. It runs on attacker-controlled bytes
-straight off a Discord attachment, *before* anything reaches the native engine, so it must be
-cheap, total, and impossible to turn into a decompression bomb: every entry point either
-returns a value or raises a :mod:`squid.schematics.errors` exception, and nothing here ever
-materialises more than the caller's budget.
-
-Detection is content-first. A filename extension is only consulted when the bytes are a valid
-NBT stream whose root compound carries none of the marker names we recognise, so renaming
-`bomb.gz` to `door.litematic` cannot buy an attacker anything.
+Format detection searches a bounded prefix for characteristic NBT names. It is a heuristic,
+not an NBT validator; the native loader still has to parse the selected format. A filename
+extension is used only when the prefix resembles an NBT root but contains no known markers.
 """
 
 import zlib
@@ -38,10 +32,9 @@ SCHEMATIC_EXTENSIONS: Mapping[str, SchematicFormat] = {
 
 
 def format_from_filename(filename: str) -> SchematicFormat | None:
-    """Return the format a filename claims, or `None` if its extension is not one of ours.
+    """Return the format claimed by the final extension, case-insensitively.
 
-    Case-insensitive, and it looks only at the final extension. This is a *claim*, never a
-    verdict; pair it with :func:`sniff_schematic_format` before trusting it.
+    Return None for an unknown extension. The filename alone does not establish the file's format.
     """
     lowered = filename.lower()
     for extension, schematic_format in SCHEMATIC_EXTENSIONS.items():
@@ -69,18 +62,16 @@ def sniff_container(data: bytes) -> Container:
 
 
 def inflated_size_at_most(data: bytes, limit: int) -> int:
-    """Return the inflated size of `data`, refusing to inflate more than `limit` bytes.
+    """Count decompressed bytes and reject a stream that exceeds the limit.
 
-    Decompression is streamed in bounded chunks and abandoned the moment the budget is
-    exceeded, so a bomb costs us `limit` bytes of scratch memory rather than the gigabytes it
-    wanted. Uncompressed NBT is its own inflated size.
+    Compressed output is discarded in 64 KiB chunks, so the entire inflated file is never retained.
+    Counting stops at the end of the first compressed stream; trailing data is not validated here.
+    Uncompressed data only needs a plausible NBT header and is measured directly.
 
     Raises:
-        DecompressionBudgetExceededError: the stream inflates past `limit`.
-        InvalidSchematicError: the stream is corrupt, truncated, or not a container this
-            application accepts. Zip archives are rejected here: world archives are out of
-            scope, and honouring their declared sizes would mean trusting attacker-written
-            headers.
+        DecompressionBudgetExceededError: The decompressed size exceeds the limit.
+        InvalidSchematicError: The compressed stream is corrupt or incomplete, or the container
+            is unsupported. ZIP archives are not accepted.
     """
     container = sniff_container(data)
     if container == "gzip":
@@ -105,16 +96,11 @@ def sniff_schematic_format(
     filename_hint: str | None = None,
     max_sniff_bytes: int = 64 * 1024,
 ) -> SchematicFormat | None:
-    """Identify the schematic format of `data`, or `None` if it is not one we read.
+    """Infer a supported format from a bounded prefix, or return None.
 
-    Only the first `max_sniff_bytes` of inflated output are examined, which is ample: every
-    format we support names its top-level members in the root compound, at the front of the
-    stream. Truncation partway through is therefore expected and not an error here.
-
-    `filename_hint` is consulted only as a last resort, and only once the bytes have been
-    shown to be a real NBT stream - an unrecognised root compound from a format version we do
-    not know is worth handing to the engine, whereas arbitrary garbage with a `.litematic`
-    name is not.
+    Only the first max_sniff_bytes of decompressed output are searched. Matching length-prefixed
+    names does not establish their position in the NBT tree or validate the rest of the file.
+    If the prefix has a plausible NBT root but no known markers, fall back to filename_hint.
     """
     container = sniff_container(data)
     if container == "zip" or container == "unknown":
@@ -156,18 +142,16 @@ def _looks_like_raw_nbt(data: bytes) -> bool:
     """Report whether `data` opens like an uncompressed NBT root compound."""
     if len(data) < 3 or data[0] != _TAG_COMPOUND:
         return False
-    # The root name length is two bytes; accept either endianness, since Bedrock writes
-    # little-endian NBT and both readings must fit within the data for the file to be usable.
+    # Accept a root name that fits in either byte order; Bedrock uses little-endian NBT.
     big = int.from_bytes(data[1:3], "big")
     little = int.from_bytes(data[1:3], "little")
     return min(big, little) + 3 <= len(data)
 
 
 def _names_present(payload: bytes, names: tuple[str, ...], *, little_endian: bool = False) -> bool:
-    """Report whether every name appears in `payload` as an NBT length-prefixed string.
+    """Check for each length-prefixed name anywhere in the prefix.
 
-    Requiring the two-byte length immediately before the name is what keeps this from firing
-    on block identifiers and sign text that happen to contain the same word.
+    Including the length reduces accidental matches, but does not prove these bytes are tag names.
     """
     byte_order: Literal["little", "big"] = "little" if little_endian else "big"
     return all(
@@ -200,10 +184,9 @@ def _streamed_inflated_size(data: bytes, limit: int, *, wbits: int) -> int:
 
 
 def _inflated_prefix(data: bytes, size: int, *, container: Container) -> bytes:
-    """Return at most `size` bytes of inflated output, tolerating a truncated stream.
+    """Return a bounded prefix without requiring the compressed stream to end.
 
-    Used for sniffing only, where a partial read is the normal case and a corrupt tail tells
-    us nothing we need: the root compound has already gone past.
+    Return empty bytes if decompression fails while reading the prefix. The unread tail is not checked.
     """
     if container == "raw-nbt":
         return data[:size]

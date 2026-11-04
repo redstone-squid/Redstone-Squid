@@ -29,12 +29,7 @@ class ConvertRequest:
 
 MIN_RENDER_EXTENT = 64
 MAX_RENDER_EXTENT = 4096
-"""Pixel bounds on a rendered image, matching the deployment's configured render size.
-
-Enforced in the request object rather than at each transport because the framing is now
-caller-chosen: a render is sized in the worker's memory, so an unbounded extent is a way to
-kill the engine from a Discord command or an unauthenticated GET.
-"""
+"""Pixel bounds shared by all callers, limiting image allocations in the render worker."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,11 +75,11 @@ class RenderRequest:
 
 @dataclass(frozen=True, slots=True)
 class SimulationRequest:
-    """A redstone simulation run.
+    """An input actuation and the positions to observe during simulation.
 
-    `input_position` is the block to right-click. It is never guessed: it comes from Insign
-    sign annotations inside the schematic, from a lone unambiguous lever, or from an explicit
-    coordinate supplied by a moderator.
+    input_position selects a lever or button explicitly. With None, the adapter first looks for a
+    single usable Insign input annotation, then for a single lever or button. Ambiguous controls
+    raise AmbiguousSimulationInputError rather than selecting one arbitrarily.
     """
 
     input_position: Vector3 | None = None
