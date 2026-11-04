@@ -1,4 +1,8 @@
-"""Typed transaction scopes for identity service fixtures."""
+"""Typed transaction scopes for identity service fixtures.
+
+CLI and Minecraft scopes copy accounts for reads but only publish their authorization
+repository. WebScope also publishes account changes when it commits.
+"""
 
 from copy import deepcopy
 

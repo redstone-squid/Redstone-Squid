@@ -1,9 +1,4 @@
-"""Shared support builders for voting tests.
-
-Snapshots and seeded sessions are needed by the domain, application, API, bot and
-persistence suites alike, and every one of them used to hand-roll its own. Keeping
-one set of builders here means a field added to the domain is added once.
-"""
+"""Voting snapshots and database fixtures shared across domain and adapter tests."""
 
 from collections.abc import Mapping, Sequence
 from copy import copy
@@ -70,8 +65,8 @@ def build_snapshot(
 ) -> VoteSessionSnapshot:
     """Build a threshold-closing snapshot, defaulting to an open build review.
 
-    The target defaults to the payload required by `kind`; pass an explicit value to
-    exercise invalid domain combinations.
+    Infer the delete-log target for DELETE_LOG and the build target otherwise. Pass an
+    explicit target to test invalid combinations; use poll_snapshot for generic polls.
     """
     if target is _INFER_TARGET:
         target = DEFAULT_DELETE_LOG_TARGET if kind is VoteKind.DELETE_LOG else DEFAULT_BUILD_TARGET
@@ -136,10 +131,8 @@ async def attach_vote_message(
 ) -> None:
     """Register the Discord message a vote session is rendered on.
 
-    The message row is the bare fact that a message exists; the post row is what makes
-    it a card for this session. The repository addresses sessions through
-    `discord_posts`, so a message without a post is not findable, which is why both
-    are written here.
+    Insert both the message record and its discord_posts link so repositories can resolve
+    the session from the message. The caller owns the transaction and commit.
     """
     await record_vote_message(
         session,
@@ -190,9 +183,9 @@ async def seed_delete_log_vote(
 ) -> tuple[int, int]:
     """Persist an open delete-log vote session and return its session/message IDs.
 
-    Written against the mapped tables rather than the repository under test: these rows
-    stand in for sessions an earlier release created, so building them through the code
-    being tested would make several of the tests using this tautological.
+    Insert mapped rows directly so repository read tests do not depend on repository writes.
+    Prerequisite account and target-message rows must already exist. Signed fixture weights
+    choose approve/deny options; stored weights use their positive magnitude.
     """
     async with session_factory.begin() as session:
         vote_session_id = (
@@ -257,6 +250,12 @@ async def seed_delete_log_vote(
 
 
 class VoteUnitOfWork[RepositoryT](PublishingFakeUnitOfWork[RepositoryT]):
+    """Publish replaced repository attributes on commit.
+
+    The copy is shallow: in-place changes to nested objects also change the fixture before
+    commit. Tests using this scope must not rely on rollback of those changes.
+    """
+
     def __init__(self, repository: RepositoryT) -> None:
         super().__init__(repository, clone=copy)
 

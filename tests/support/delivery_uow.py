@@ -1,4 +1,8 @@
-"""Transaction snapshots for delivery-service fixtures."""
+"""Delivery-service scopes that publish shallow repository copies on commit.
+
+Nested mutable objects remain shared with the fixture; these scopes do not isolate in-place
+changes to those objects. Use repository methods that replace state when testing rollback.
+"""
 
 from copy import copy
 

@@ -9,14 +9,9 @@ from squid.persistence.base import Base
 def with_foreign_key_targets(*tables: Table) -> tuple[Table, ...]:
     """Return the given tables plus every table they reference, in creation order.
 
-    Repository tests want to create the few tables their subject touches rather than the
-    whole database, but writing out the transitive foreign-key targets by hand is how a
-    subset turns into a second copy of the schema that drifts from the models. Deriving
-    the closure keeps the test's list down to the tables it actually cares about.
-
-    Resolving a foreign key needs its target mapped, which is why this module imports the
-    registry: a caller that only imported its own models would otherwise fail here with a
-    `NoReferencedTableError` for something two hops away.
+    Walk foreign keys transitively and order the result with Base.metadata.sorted_tables.
+    Inputs must belong to that metadata; tables from another metadata collection are omitted.
+    The model registry import ensures indirect foreign-key targets are available to the walk.
     """
     required: set[Table] = set()
     pending = list(tables)

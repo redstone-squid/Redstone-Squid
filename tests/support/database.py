@@ -11,7 +11,11 @@ from squid.persistence.base import Base
 
 
 def assert_loaded_detached(entity: Base, *, attributes: Collection[str] | None = None) -> None:
-    """Check detached access to the requested attributes, defaulting to scalar columns."""
+    """Assert that an entity is detached and the selected attributes are already loaded.
+
+    Defaults to scalar columns; relationships must be named explicitly. The check inspects
+    loader state without accessing values or issuing SQL.
+    """
     state = inspect(entity)
     assert state.detached
     required = set(state.mapper.column_attrs.keys()) if attributes is None else set(attributes)
@@ -21,7 +25,11 @@ def assert_loaded_detached(entity: Base, *, attributes: Collection[str] | None =
 
 @contextmanager
 def record_queries(sessions: async_sessionmaker[AsyncSession]) -> Iterator[list[str]]:
-    """Collect executed statements until the context exits, including failed operations."""
+    """Collect statements reaching before_cursor_execute on the factory's bound engine.
+
+    The listener also sees other sessions using that engine. Statements that fail during
+    execution are included; failures before the cursor event are not.
+    """
     statements: list[str] = []
     engine = sessions.kw["bind"].sync_engine
 

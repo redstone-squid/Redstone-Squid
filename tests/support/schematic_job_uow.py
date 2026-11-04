@@ -1,4 +1,8 @@
-"""Commit-visible scopes for schematic worker fakes."""
+"""Schematic worker scopes that publish shallow repository copies on commit.
+
+Nested objects remain shared. These fixtures model repository attribute replacement, not
+isolation of in-place mutations to nested state.
+"""
 
 from copy import copy
 

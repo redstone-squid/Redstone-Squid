@@ -11,7 +11,11 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 @dataclass
 class CommittedState[StateT]:
-    """Committed data shared by successive fake transactions."""
+    """State and copy policy shared by successive fake transactions.
+
+    The default deep copy isolates nested mutations. A shallow or identity copier shares
+    nested objects, so tests using one must not assume full rollback isolation.
+    """
 
     value: StateT
     clone: Callable[[StateT], StateT] = deepcopy
@@ -19,7 +23,13 @@ class CommittedState[StateT]:
 
 
 class FakeUnitOfWork[StateT]:
-    """Work on a copy and publish a separate snapshot only when committed."""
+    """Give a service a working copy of state and publish its changes when it commits.
+
+    The copy policy comes from CommittedState and defaults to a deep copy.
+    Exiting does not commit or restore the working copy. Uncommitted work is discarded only
+    by dropping the scope, and committed changes survive a later exception. This fake does
+    not model locking, concurrent writers, or a database transaction's closed-state checks.
+    """
 
     def __init__(self, committed: CommittedState[StateT]) -> None:
         self._committed = committed
@@ -49,7 +59,11 @@ async def transact[UowT: UnitOfWork, ResultT](
 
 
 class PublishingFakeUnitOfWork[StateT](FakeUnitOfWork[StateT]):
-    """Publish committed snapshots into the fixture object assertions inspect."""
+    """Copy committed attributes into the original fixture object so assertions see them.
+
+    Support dataclass instances or objects with __dict__. Attributes are assigned or updated;
+    keys deleted from a regular object's working copy are not removed from the fixture.
+    """
 
     def __init__(self, state: StateT, *, clone: Callable[[StateT], StateT] = deepcopy) -> None:
         self._published = state

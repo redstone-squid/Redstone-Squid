@@ -221,9 +221,8 @@ def make_autocomplete_interaction(
 ) -> discord.Interaction[discord.Client]:
     """Create the interaction contract an autocomplete callback reads.
 
-    Unlike `make_interaction`, this carries a client with a services container, because an
-    autocomplete callback answers from `bot.services.suggestions` rather than from a cog.
-    `allowed_nodes` is what the permission engine would grant this user.
+    Install suggestions, a fixed account resolver, and a permission fake that grants only
+    allowed_nodes. The fake ignores the subject and does not exercise the permission engine.
     """
 
     async def is_owner(_user: object) -> bool:
@@ -290,10 +289,9 @@ def make_reaction_payload(
     emoji: str = "⭐",
     event_type: Literal["REACTION_ADD", "REACTION_REMOVE"] = "REACTION_ADD",
 ) -> discord.RawReactionActionEvent:
-    """Build the real gateway payload rather than a look-alike namespace.
+    """Decode a normal reaction event using discord.py's gateway event class.
 
-    The router shards on `message_id` and stringifies `emoji`; a duck-typed stand-in
-    would keep passing if discord.py renamed or retyped either one.
+    This exercises the library's message ID and emoji representation used by the router.
     """
     data: dict[str, Any] = {
         "message_id": message_id,
@@ -329,10 +327,9 @@ class _ReactionBotSource:
 def make_reaction_bot(
     *, guild: discord.Guild | None = None, message: discord.Message | None = None
 ) -> ReactionBotHarness:
-    """Create the two-method bot surface `ReactionRouter` and `ReactionEvent` depend on.
+    """Create a bot double returning the supplied guild and recording message fetches.
 
-    Keeping the cast here rather than at each call site means the tests state what they
-    need from the bot once, instead of repeating an `arg-type` suppression per test.
+    Guild lookup ignores the requested ID; tests requiring real lookup behavior need a client.
     """
     get_or_fetch_message = AsyncCallRecorder(result=message)
     bot = cast(
@@ -343,11 +340,9 @@ def make_reaction_bot(
 
 
 class FakeClient:
-    """A bot stand-in a layout host can be installed on.
+    """A bot double with caller-supplied attributes that sd.install can register.
 
-    `sd.install` keys a weak table on the client, which rules plain namespace bags out.
-    Everything else about these doubles is unchanged: attributes are whatever the code under
-    test reads off a bot.
+    The UI runtime keeps weak references to clients, which a SimpleNamespace cannot support.
     """
 
     def __init__(self, **attributes: Any) -> None:
@@ -359,11 +354,14 @@ class FakeClient:
 
 
 def make_layout_bot(**attributes: Any) -> Any:
-    """A bot double with the layout runtime installed, the way `RedstoneSquid` installs it.
+    """Install the application UI defaults and error handling on a bot double.
 
-    Panels reach their chrome, error hook and challenge presenter through
-    `DiscordUIRuntime.of(source)`, so a test building one needs a real installation rather than a
-    bare `SessionManager`. The installation is weakly keyed, so it leaves with the double.
+    Panels find their configuration through DiscordUIRuntime.of(source), so tests need a
+    registered runtime as well as a session manager.
+
+    Reuse a supplied topic bus or create a local one. Localization uses the supplied settings
+    service when present and NEUTRAL otherwise. Expose the runtime as ui and its manager as
+    sessions, matching the attributes application code reads from the bot.
     """
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})

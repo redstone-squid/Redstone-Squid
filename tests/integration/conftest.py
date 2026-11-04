@@ -41,7 +41,7 @@ async def async_engine(postgres_container: PostgresContainer) -> AsyncGenerator[
 
 @pytest.fixture
 def async_session_factory(async_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    """Create sessions suitable for repositories that manage their own transactions."""
+    """Keep loaded values available after commit so tests can inspect them outside the transaction."""
     return async_sessionmaker(async_engine, expire_on_commit=False)
 
 
