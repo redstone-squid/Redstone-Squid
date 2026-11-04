@@ -1,8 +1,6 @@
-"""Claim fencing and backoff for the search projection queue.
+"""Search projection retries and claim ownership against PostgreSQL.
 
-These replace two unit tests that drove `SearchProjectionStore` with a mocked
-session and asserted on mutated ORM attributes. Acknowledgement is now a fenced
-`UPDATE`, so the assertions have to look at the row the database actually holds.
+Read the committed queue row to verify backoff and rejection of stale claim tokens.
 """
 
 from sqlalchemy import text
@@ -24,7 +22,6 @@ async def _enqueue(session: AsyncSession, source_key: str = "42", *, attempts: i
 async def test_a_failed_projection_backs_off_instead_of_rerunning_every_poll(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Opting out of the shared helper cost this queue its exponential backoff."""
     async with migrated_session_factory() as session, session.begin():
         await _enqueue(session)
         store = SearchProjectionStore(session)
@@ -76,7 +73,7 @@ async def test_a_projection_at_the_attempt_limit_is_retained_as_a_dead_letter(
 async def test_a_reclaimed_projection_cannot_be_completed_by_the_previous_holder(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """`complete` was a bare `session.delete(item)`, so both holders deleted the row."""
+    """Reclaiming changes the token; completion with the previous token must leave the row."""
     async with migrated_session_factory() as session, session.begin():
         await _enqueue(session)
         stale_store = SearchProjectionStore(session)

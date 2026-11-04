@@ -1,9 +1,8 @@
 """Query-language value completion against live PostgreSQL.
 
-Two things here can only be checked against a real server. Prefix matching has to be case-folded
-the same way the index is built, or it silently misses values; and the index has to actually be
-chosen, because the fallback is a sequential scan over every facet row in the corpus, which is
-exactly the shape of query that must not do that on every keystroke.
+Check case-insensitive prefix matching through the service and index selection with a
+representative SQL query. Autocomplete runs on each keystroke, so selective prefixes should
+avoid scanning the entire facet table.
 """
 
 from collections.abc import AsyncGenerator
@@ -63,8 +62,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession]) -> None:
             session.add(
                 SearchDocumentFacet(document_id=document.id, field_name="restriction", ordinal=0, text_value=name)
             )
-        # Filler rows under other field names, so a sequential scan is measurably wrong rather
-        # than merely inelegant.
+        # Give the planner enough unrelated rows to favor a selective prefix index scan.
         for index in range(2_000):
             filler = SearchDocument(
                 resource_kind="build",
@@ -121,7 +119,7 @@ async def test_facet_values_are_distinct_and_bounded(
 async def test_the_prefix_query_uses_the_prefix_index(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The point of the migration: without the index this is a sequential scan per keystroke."""
+    """A selective prefix should use the index without disabling sequential scans."""
     await seed(async_session_factory)
     async with async_session_factory() as session:
         plan = "\n".join(
@@ -145,7 +143,7 @@ async def test_the_prefix_query_uses_the_prefix_index(
 async def test_a_half_typed_field_expression_suggests_values_instead_of_raising(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """`restriction:sea` is a syntax error to the parser; to a user it is a question."""
+    """Completion replaces only the value, preserving the field and colon."""
     await seed(async_session_factory)
     provider = SearchQueryProvider(
         StaticFields(),

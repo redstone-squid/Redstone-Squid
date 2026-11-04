@@ -1,8 +1,7 @@
 """Offset pagination against live PostgreSQL.
 
-The paging arithmetic is only as good as the SQL underneath it, and the failure this file exists
-for -- a document with several values for the sort field being counted more than once -- is
-invisible against an in-memory fake, because the duplication happens in the join.
+Documents can have several values for a sort field. The SQL join must still count and page
+each document once.
 """
 
 from collections.abc import AsyncGenerator
@@ -115,12 +114,7 @@ async def test_a_document_with_several_sort_values_is_paged_once(
     search_tables: None,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The bug the aggregated join exists to prevent.
-
-    Facets are unique per `(document_id, field_name, ordinal)`, so a build recorded at two widths
-    has two `width` rows. Joining the facet table directly would return that document once per row
-    and shift every later OFFSET by the number of duplicates that fell before it.
-    """
+    """Aggregate repeated width facets before paging to avoid shifting later offsets."""
     await seed_builds(
         async_session_factory,
         ["Alpha door", "Bravo door", "Charlie door"],

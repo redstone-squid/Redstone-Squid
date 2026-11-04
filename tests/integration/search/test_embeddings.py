@@ -1,4 +1,9 @@
-"""Integration coverage for pgvector embedding ownership and fencing."""
+"""Embedding jobs and semantic search against PostgreSQL with pgvector.
+
+Workers may save an embedding only for the source content they claimed. Search must
+filter those vectors by model and visibility, with lexical results available if vector
+comparison fails.
+"""
 
 from collections.abc import AsyncGenerator
 from dataclasses import replace

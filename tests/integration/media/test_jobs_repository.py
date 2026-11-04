@@ -1,4 +1,4 @@
-"""Real-PostgreSQL coverage for durable media metadata and queue fencing."""
+"""Persisted media jobs, claim ownership, and artifact cleanup against PostgreSQL."""
 
 import asyncio
 import hashlib
@@ -129,6 +129,7 @@ def upload(
 
 
 def completed_artifacts() -> tuple[StoredMediaArtifact, ...]:
+    """Return shared artifact metadata without creating files in object storage."""
     output = b"normalized"
     report = b'{"schema_version":1}'
     return (
@@ -465,6 +466,7 @@ async def test_bounded_lease_pruning_never_exposes_an_unprocessed_publisher(
     async def delete(object_key: str) -> None:
         deleted.append(object_key)
 
+    # One pruning pass cannot remove both publishers' leases for these shared objects.
     assert (await cleanup_artifacts(repository, delete, limit=1)).attempted == 0
     assert deleted == []
     assert (await cleanup_artifacts(repository, delete, limit=1)).deleted == 1
@@ -571,6 +573,7 @@ async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
     await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
     (_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
+    # Bypass normal publication tracking to simulate artifact rows written by an older worker.
     async with async_session_factory.begin() as session:
         await session.execute(
             update(MediaNormalizationJobRecord)
@@ -755,6 +758,7 @@ async def test_concurrent_delete_and_enqueue_never_leave_live_or_untracked_media
         )
     assert account_id is not None
 
+    # Deletion must settle even if enqueue loses the race and raises a missing-draft error.
     enqueue_result, delete_result = await asyncio.gather(
         transact(media, lambda uow: uow.media_jobs.enqueue(metadata, LIMITS), commit=True),
         transact(drafts, lambda uow: uow.submission_drafts.delete_owned(DRAFT_ID, account_id), commit=True),
@@ -837,6 +841,8 @@ async def test_deleting_one_draft_keeps_objects_referenced_by_another_draft(
 
 
 class CleanupArtifacts(LocalArtifactStore):
+    """Route deletion to the test callback without touching object storage."""
+
     def __init__(self, directory: Path, delete: Callable[[str], Awaitable[None]]) -> None:
         super().__init__(directory)
         self._delete = delete
