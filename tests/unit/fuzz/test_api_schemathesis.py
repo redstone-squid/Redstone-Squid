@@ -32,6 +32,8 @@ from tests.fuzz.api.schemathesis import (
 
 
 class FakeProcess:
+    """Script wait results and record timeouts without launching or signaling a process."""
+
     def __init__(self, outcomes: list[int | subprocess.TimeoutExpired]) -> None:
         self.pid = 4321
         self.outcomes = outcomes
@@ -239,6 +241,8 @@ async def test_live_contract_preflight_compares_the_attested_endpoint(tmp_path: 
 
 
 def _unused_running_api() -> RunningApi:
+    """Supply only the URL; ownership and reset hooks must remain unused by contract comparison."""
+
     async def unused() -> None:
         raise AssertionError("not used")
 

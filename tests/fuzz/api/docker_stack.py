@@ -1,4 +1,9 @@
-"""Concrete, resource-bounded Docker composition for local API fuzzing."""
+"""Assemble the API fuzz stack from PostgreSQL, Redis, fake upstreams, and the API.
+
+All four containers share an internal Docker network. A loopback proxy lets the local
+coordinator call the API without publishing container ports. Controllers prepare and
+reset database state; the environment registers cleanup as resources are acquired.
+"""
 
 import asyncio
 import secrets
@@ -76,12 +81,10 @@ _FAKE_HEALTHCHECK = (
 
 @dataclass(frozen=True, slots=True)
 class _ContainerLimits:
-    """One statement of a container's hardening, in both spellings it needs.
+    """Container limits shared by launch arguments and cleanup attestation.
 
-    `containers.run` takes a size string and the removal attestation takes a
-    byte count. Written twice, they drift, and the attestation then refuses to
-    remove the container it was protecting -- so the safety layer leaks the
-    disposable containers it exists to clean up.
+    The SDK accepts memory as a size string while inspection returns bytes.
+    Derive both from one value so cleanup does not reject our own containers.
     """
 
     memory_mib: int
@@ -157,7 +160,7 @@ class DockerRunningApi(RunningApi):
         return self.database_controller.verification_code_count()
 
     def redis_keys(self) -> set[bytes]:
-        """Return the bounded dedicated Redis namespace contents."""
+        """List Redis keys using the controller's size check and scan."""
         return self.redis_controller.keys()
 
     def fake_snapshot(self) -> SnapshotDocument:
@@ -166,7 +169,12 @@ class DockerRunningApi(RunningApi):
 
 
 async def start_docker_stack(identity: RunIdentity, stack: AsyncExitStack) -> RunningApi:
-    """Build and launch one attested PostgreSQL, Redis, fake-upstream, and API stack."""
+    """Build and launch the disposable stack, registering cleanup on stack.
+
+    Startup runs in a worker thread and requires a local Docker daemon whose
+    internal bridge addresses are reachable from the coordinator. Cancelling
+    the await does not stop that worker thread.
+    """
     return await asyncio.to_thread(_start_docker_stack_sync, identity, stack)
 
 

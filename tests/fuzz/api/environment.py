@@ -1,4 +1,10 @@
-"""Safety and lifecycle boundary for one disposable API fuzzing stack."""
+"""Create and reset an isolated API stack for fuzzing campaigns.
+
+Each run has its own resource names and secret sentinel values. Attestation means
+reading those facts back from live resources to verify that they belong to this run
+before resetting them. RunningApi restores the seeded baseline between campaigns;
+ApiEnvironment arranges cleanup when the surrounding context exits.
+"""
 
 import asyncio
 import base64
@@ -98,7 +104,7 @@ class ResourceAttestation:
     application_name: str
 
     def verify(self, identity: RunIdentity, *, expected_network_id: str) -> None:
-        """Refuse any resource set that is not exactly owned by this run."""
+        """Compare the supplied facts with this run; the caller must obtain them from the live stack."""
         failures: list[str] = []
         for key, expected in identity.labels.items():
             if self.labels.get(key) != expected:
@@ -121,7 +127,11 @@ class ResourceAttestation:
 
 @dataclass(frozen=True, slots=True)
 class ResetHooks:
-    """Narrow operations needed to rebuild one deterministic example baseline."""
+    """Operations and expected seed results used by RunningApi.reset.
+
+    quiesce must stop application writes before database and Redis replacement;
+    resume runs only after every reset step and baseline check succeeds.
+    """
 
     quiesce: AsyncAction
     reset_database: AsyncAction
@@ -218,7 +228,11 @@ class RunningApi:
         return attestation
 
     async def reset(self) -> None:
-        """Quiesce, reset, and reseed one worker after fresh live attestation."""
+        """Rebuild the seeded baseline after verifying live ownership.
+
+        Resets on this instance are serialized. Failures propagate, and a failure
+        between quiesce and resume leaves the API stopped for the caller to handle.
+        """
         async with self._reset_lock:
             await self.attest()
             hooks = self.reset_hooks
@@ -238,7 +252,12 @@ class RunningApi:
 
 
 class ApiEnvironment:
-    """Own every disposable resource through one asynchronous exit stack."""
+    """Manage a disposable stack's registered cleanup callbacks.
+
+    The starter receives the exit stack and must register cleanup as it acquires
+    resources. Registered callbacks run if startup or attestation fails, and on
+    context exit; the environment does not discover unregistered resources.
+    """
 
     def __init__(self, starter: StackStarter, *, identity: RunIdentity | None = None) -> None:
         self._starter = starter
@@ -279,7 +298,7 @@ def _require_identity(running: RunningApi, expected: RunIdentity) -> None:
 
 @dataclass(frozen=True, slots=True)
 class SyntheticEndpoints:
-    """Loopback endpoints assigned to harness-owned fake services."""
+    """Service addresses and listener port supplied to the isolated API container."""
 
     api_container_port: int
     postgres_url: str
@@ -295,7 +314,11 @@ def synthetic_api_environment(
     *,
     secrets_: SyntheticSecrets | None = None,
 ) -> dict[str, str]:
-    """Build an allowlisted API environment containing only synthetic credentials."""
+    """Build API configuration without inheriting the host environment.
+
+    Callers supply isolated service URLs and any explicit synthetic secrets;
+    endpoint URLs are copied unchanged. Omitted secrets are derived from the run.
+    """
     if not 1 <= endpoints.api_container_port <= 65_535:
         msg = "The API container port must be between 1 and 65535."
         raise ValueError(msg)

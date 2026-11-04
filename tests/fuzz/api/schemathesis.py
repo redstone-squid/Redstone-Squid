@@ -1,4 +1,10 @@
-"""Bounded Schemathesis subprocess campaigns against an attested API stack."""
+"""Run a Schemathesis campaign against a fresh API baseline and classify its outcome.
+
+A campaign is one subprocess run with a profile's limits and one persona's credentials.
+Reset and schema checks precede request generation. The subprocess exit code alone
+cannot distinguish a product finding from a harness failure, so classification also
+uses the completion and failure events in its NDJSON report.
+"""
 
 import asyncio
 import json
@@ -310,7 +316,11 @@ def supervise(
     cleanup_grace_seconds: float,
     signal_group: GroupSignaler = _kill_group,
 ) -> SupervisionResult:
-    """Enforce a wall-clock budget over the complete Schemathesis process group."""
+    """Wait for the child, interrupt on budget expiry, then kill after the grace period.
+
+    On POSIX the child must lead its own process group so signals reach its
+    descendants. The final wait after a forced kill has no timeout.
+    """
     try:
         return SupervisionResult(returncode=process.wait(timeout=budget_seconds), timed_out=False, forced_kill=False)
     except subprocess.TimeoutExpired:
@@ -325,7 +335,11 @@ def supervise(
 
 
 def read_event_summary(path: Path) -> EventSummary:
-    """Parse capped sanitized NDJSON without trusting the ambiguous child exit code."""
+    """Read size-checked NDJSON and classify its event evidence.
+
+    Read only after the writer has stopped. The launch command requests output
+    sanitization; this parser validates structure and size, not secret redaction.
+    """
     if not path.is_file() or path.stat().st_size > MAX_NDJSON_BYTES:
         msg = "Schemathesis NDJSON is missing or exceeds its size limit."
         raise InvalidCampaignArtifactError(msg)
@@ -352,7 +366,7 @@ def read_event_summary(path: Path) -> EventSummary:
 
 
 def classify_campaign(supervision: SupervisionResult, events: EventSummary | None) -> CampaignState:
-    """Map process and NDJSON evidence to exactly one terminal state."""
+    """Classify evidence with timeout and execution errors taking precedence over findings."""
     if supervision.timed_out:
         return CampaignState.BUDGET_EXHAUSTED
     if events is None:
@@ -376,7 +390,11 @@ async def verify_live_contract(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> None:
-    """Require the attested live schema to equal the committed canonical document."""
+    """Compare the live and committed schemas as parsed JSON.
+
+    The caller must attest the stack first. This validates the loopback URL but
+    does not repeat ownership checks; formatting and object-key order may differ.
+    """
     origin = validate_target_url(running.base_url)
     timeout = httpx.Timeout(2)
     async with httpx.AsyncClient(
@@ -407,7 +425,12 @@ async def run_campaign(
     persona: Persona = ANONYMOUS,
     seed: int = 0,
 ) -> CampaignOutcome:
-    """Reset, preflight, and run one bounded independent Schemathesis campaign."""
+    """Reset, preflight, and run one bounded independent Schemathesis campaign.
+
+    Use a fresh run/persona/profile artifact directory and exclusive access to
+    the stack: only reset itself is serialized. Preflight errors become outcomes;
+    artifact creation, configuration writes, and invalid command arguments can raise.
+    """
     paths = CampaignPaths.create(artifact_root, run_id=running.identity.run_id, persona=persona, profile=profile)
     try:
         await running.attest()
@@ -523,6 +546,7 @@ def _error_type(payload: dict[str, object]) -> str | None:
 
 
 def _capture_bounded_output(source: BinaryIO, destination: BinaryIO) -> None:
+    """Keep a bounded prefix while draining the rest so the child cannot block on its output pipe."""
     try:
         remaining = MAX_CONSOLE_BYTES
         while chunk := source.read(64 * 1024):

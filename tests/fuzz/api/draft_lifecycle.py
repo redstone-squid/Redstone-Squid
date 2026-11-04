@@ -1,4 +1,10 @@
-"""Deterministic Alice/web submission-draft lifecycle model."""
+"""Check the submission-draft lifecycle using Alice's seeded browser session.
+
+The scenario creates a draft, edits it, retries the edit, checks a stale revision,
+and requests finalization before deleting it. Its answers are intentionally incomplete,
+so finalization should retain issues for the editor rather than create a build.
+A Hypothesis wrapper applies the same ordered transitions after resetting the stack.
+"""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -177,7 +183,12 @@ class DraftLifecycleState:
 
 @dataclass(slots=True)
 class DraftLifecycleScenario:
-    """Execute the first deterministic draft lifecycle over a narrow client protocol."""
+    """Check one draft lifecycle through a synchronous client.
+
+    Use a fresh scenario against a reset environment. Methods update local state
+    after checking responses but do not enforce call order; run_once and the
+    state-machine preconditions supply that ordering.
+    """
 
     client: DraftLifecycleClient
     auth: DraftWebAuth
@@ -333,7 +344,11 @@ class DraftLifecycleStateMachine(RuleBasedStateMachine):
         auth_factory: Callable[[], DraftWebAuth],
         reset_callback: Callable[[], None],
     ) -> None:
-        """Configure process-local factories before Hypothesis constructs an instance."""
+        """Replace the class-wide factories used by subsequently initialized scenarios.
+
+        Configure before running Hypothesis; simultaneous campaigns on this class
+        would share and overwrite these factories.
+        """
         cls.factories = _ScenarioFactories(client_factory, auth_factory, reset_callback)
 
     @initialize()

@@ -13,7 +13,11 @@ from tests.fuzz.api.environment import RunIdentity, UnsafeEnvironmentError
 
 @dataclass(frozen=True, slots=True)
 class RedisLocation:
-    """Coordinator and container-network locations for one Redis service."""
+    """Coordinator and container-network addresses for one Redis service.
+
+    The controller currently uses container_port for both addresses, so the
+    coordinator must reach Redis on that same port.
+    """
 
     coordinator_host: str
     coordinator_port: int
@@ -45,7 +49,7 @@ class RedisController:
 
     @property
     def container_url(self) -> str:
-        """Return the key-scoped application URL reachable only on the Docker network."""
+        """Return the application credential at the supplied container address."""
         return self._url("application", self.credentials.application_password, self.location.container_host)
 
     @property
@@ -80,14 +84,18 @@ class RedisController:
             raise UnsafeEnvironmentError(msg)
 
     def clear(self) -> None:
-        """Flush only this attested logical database and immediately replant its sentinel."""
+        """Verify this database, flush it, and restore the run sentinel.
+
+        The caller must quiesce application writes. Flush and sentinel restoration
+        are separate commands; a failure can leave the database without a sentinel.
+        """
         self.verify()
         with self._client() as client:
             client.flushdb()
             client.set(self.sentinel_key, self.identity.sentinel)
 
     def keys(self) -> set[bytes]:
-        """Return bounded keys for lifecycle integration assertions."""
+        """Scan the database after checking its current size is at most 2,048 keys."""
         with self._client() as client:
             size = client.dbsize()
             if size > 2_048:
@@ -96,7 +104,10 @@ class RedisController:
             return set(client.scan_iter(count=256))
 
     def application_cannot_control(self) -> bool:
-        """Prove the API credential cannot read the sentinel or clear its logical database."""
+        """Return whether the application role is denied both sentinel reads and FLUSHDB.
+
+        This probe executes FLUSHDB if permissions are wrong; use only the disposable database.
+        """
         with Redis.from_url(
             self.application_coordinator_url,
             socket_connect_timeout=2,

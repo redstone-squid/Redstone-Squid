@@ -181,7 +181,7 @@ def verify_container(attrs: Mapping[str, object], identity: RunIdentity, expecte
 
 
 def verify_network(attrs: Mapping[str, object], identity: RunIdentity, expected: NetworkExpectation) -> None:
-    """Require the exact empty internal network before removal."""
+    """Require this run's internal network and the exact expected set of attached containers."""
     failures: list[str] = []
     if attrs.get("Id") != expected.network_id:
         failures.append("network_id")
@@ -208,7 +208,11 @@ def guarded_remove_container(
 
 
 def guarded_remove_network(handle: DockerNetworkHandle, identity: RunIdentity, expected: NetworkExpectation) -> None:
-    """Re-inspect and remove only the exact still-attested empty network."""
+    """Re-inspect the network before asking Docker to remove it.
+
+    Cleanup callers should expect no attached containers. A failed attestation
+    leaves the resource in place, and Docker removal errors propagate.
+    """
     handle.reload()
     verify_network(handle.attrs, identity, expected)
     handle.remove()

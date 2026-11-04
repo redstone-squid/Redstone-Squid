@@ -11,7 +11,12 @@ _PRIVATE_NETWORKS = tuple(IPv4Network(network) for network in ("10.0.0.0/8", "17
 
 
 class LoopbackTcpProxy:
-    """Forward a bounded number of loopback connections to one fixed target."""
+    """Forward loopback connections to a fixed loopback or RFC 1918 IPv4 address.
+
+    Construction binds the listener; start begins accepting, and close releases it.
+    Excess connections are closed immediately. Each accepted connection has idle,
+    lifetime, and combined bidirectional byte limits.
+    """
 
     def __init__(
         self,
@@ -74,7 +79,12 @@ class LoopbackTcpProxy:
             raise RuntimeError(msg)
 
     def close(self) -> None:
-        """Stop accepting, close live sockets, and join the bounded worker thread."""
+        """Close the listener and tracked sockets, then join the accept thread.
+
+        Connection threads are daemons and are not joined; they exit as their sockets
+        close or they observe the stop flag. Raise RuntimeError if the accept thread
+        has not stopped within two seconds.
+        """
         self._stop.set()
         with suppress(OSError):
             self._listener.close()

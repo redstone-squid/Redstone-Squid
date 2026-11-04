@@ -11,12 +11,11 @@ _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
 
 def _committed_operation_ids() -> frozenset[str]:
-    """Read operation ids from the committed document.
+    """Read operation IDs without importing the application's route declarations.
 
-    `tests/fuzz/api/schemathesis.py` already asserts the live application matches this file
-    byte-for-byte, so reading from it instead of importing `squid.api.openapi.OPERATIONS`
-    keeps this manifest valid regardless of whether an operation's contract metadata still
-    lives in that table or has moved onto its route.
+    The campaign preflight separately compares the live and committed schemas
+    as parsed JSON, so this manifest can follow the committed contract regardless
+    of where routes declare their metadata.
     """
     document = json.loads(_OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
     return frozenset(

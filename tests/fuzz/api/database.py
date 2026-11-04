@@ -1,4 +1,9 @@
-"""Disposable PostgreSQL roles, template reset, and deterministic API seed data."""
+"""Prepare PostgreSQL state that can be restored between API fuzzing campaigns.
+
+Migrate a template once, then clone and seed an active database for each baseline.
+The API uses an application role; invariant checks use a read-only observer role.
+Privileged setup and reset operations stay in the coordinator's DatabaseController.
+"""
 
 import hashlib
 import hmac
@@ -160,7 +165,7 @@ class DatabaseController:
         return seeded_ids, self.checksum()
 
     def wait_until_ready(self) -> None:
-        """Wait for the final PostgreSQL server, not its temporary initialization server."""
+        """Wait for the coordinator TCP connection to answer SELECT 1, or raise TimeoutError."""
         deadline = time.monotonic() + DATABASE_STARTUP_SECONDS
         while time.monotonic() < deadline:
             try:
@@ -177,7 +182,12 @@ class DatabaseController:
         raise TimeoutError(msg)
 
     def reset_database(self) -> None:
-        """Replace only this run's attested active database from its sealed template."""
+        """Replace this run's attested active database from its sealed template.
+
+        The caller must stop new application connections first. Existing sessions
+        are terminated only if their role and application name match this run.
+        The clone is configured but left unseeded; failures do not restore the old database.
+        """
         self.verify()
         with (
             closing(self._connect_admin(POSTGRES_DATABASE, autocommit=True)) as connection,
@@ -364,7 +374,11 @@ class DatabaseController:
         return ids
 
     def checksum(self) -> str:
-        """Hash a narrow ordered baseline without creating a second database read model."""
+        """Hash selected seed rows, mutable-table counts, sequences, and migration revision.
+
+        This baseline detects reset drift in the facts queried here; it is not a
+        digest of every database row or column.
+        """
         statements = (
             "SELECT id, public_creator_id::text, consent_version FROM accounts ORDER BY id",
             "SELECT id, account_id, provider, subject FROM account_identities ORDER BY id",
@@ -470,7 +484,7 @@ class DatabaseController:
             raise UnsafeEnvironmentError(msg)
 
     def observer_cannot_write(self) -> bool:
-        """Return whether the observer role is denied application-table mutation."""
+        """Return whether PostgreSQL denies the observer a rolled-back INSERT into accounts."""
         with (
             closing(
                 self._connect_role(
@@ -554,8 +568,7 @@ class DatabaseController:
             check=False,
         )
         if result.returncode != 0:
-            # Include the child's output: swallowing it turned every migration problem
-            # into the same opaque sentence.
+            # Preserve Alembic's diagnostics so failed startup identifies the migration error.
             msg = f"Disposable PostgreSQL template migration failed.\n{result.stdout}\n{result.stderr}"
             raise RuntimeError(msg)
 

@@ -1,4 +1,4 @@
-"""Deterministic loopback-only Mojang and Discord services for API fuzzing."""
+"""Deterministic Mojang and Discord substitutes for the isolated API fuzz stack."""
 
 import hashlib
 import hmac
@@ -69,7 +69,10 @@ class FakeUpstreamState:
         return supplied is not None and hmac.compare_digest(supplied, self._control_nonce)
 
     def observe(self, request: Request) -> None:
-        """Record only a keyed digest of an upstream Authorization header."""
+        """Record method, path, authorization scheme, and a keyed header digest.
+
+        Requests beyond MAX_OBSERVATIONS are silently omitted until reset.
+        """
         if len(self.requests) >= MAX_OBSERVATIONS:
             return
         authorization = request.headers.get("authorization")
