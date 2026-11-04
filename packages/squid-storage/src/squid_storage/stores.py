@@ -1,4 +1,4 @@
-"""Fenced durable-session store contracts and local implementations."""
+"""Durable session records protected by expiring claims and scope reservations."""
 
 import asyncio
 import math
@@ -18,7 +18,10 @@ _DEFAULT_TABLE_NAME = "squid_sessions"
 
 @dataclass(frozen=True, slots=True)
 class SessionRecord:
-    """One published durable session and its admission snapshot."""
+    """One published session, keyed globally and grouped by scope.
+
+    The store preserves both payload strings without interpreting or validating them.
+    """
 
     key: str
     scope: str
@@ -51,13 +54,27 @@ class AdmissionToken:
 
 @runtime_checkable
 class DurableSessionStore(Protocol):
-    """Claim-fenced storage and distributed scope admission.
+    """Store sessions under expiring claims and admit replacements atomically.
 
-    Token-conditional operations fail after expiry, takeover, or retirement.
-    ``inspect`` returns ``None`` for a lost reservation and an empty tuple for
-    a valid empty scope. ``commit`` consumes a valid reservation, retires only
-    named records in that reservation's scope, and publishes the claimed
-    newcomer atomically. A target already present must be named as a victim.
+    A claim lets one host update an existing session for a limited time. To open
+    a session, reserve its scope, inspect the existing records, choose which ones
+    to retire, and commit the newcomer. This admission reservation lets competing
+    hosts coordinate replacement decisions for the same scope. The returned claim
+    then authorizes saving the new session; renew it to keep that authority.
+
+    Reads do not require a claim, and lease expiry leaves published records intact.
+    Renewal, saving, and deletion require an unexpired claim with the current fence.
+    Release and abandon also accept expired tokens if no newer token superseded them.
+    Reclaiming or reserving as the same owner still invalidates the previous token.
+
+    Inspect returns None for a lost reservation and an empty tuple for a valid empty
+    scope. Commit consumes a valid reservation, retires the named victims, and publishes
+    one claimed newcomer atomically. Existing victims must belong to that scope; absent
+    victims are harmless. An existing destination key must be named as a victim.
+    A lost reservation or conflicting record makes commit return None without consuming
+    the reservation. Invalid arguments raise validation errors.
+
+    Keys, owners, and scopes must be nonempty; leases must be finite and positive.
     """
 
     async def list(self) -> tuple[SessionRecord, ...]: ...
@@ -100,7 +117,7 @@ class _MemoryLease:
 
 
 class MemorySessionStore:
-    """In-process implementation of the complete fenced store contract."""
+    """Serialize the session-store contract under one in-process lock."""
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
         self._records: dict[str, SessionRecord] = {}

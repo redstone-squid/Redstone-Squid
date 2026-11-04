@@ -1,4 +1,10 @@
-"""Best-effort persistence for a reactive shared namespace."""
+"""Restore shared view state on load and save snapshots after reactive commits.
+
+PersistentStatePool wraps SharedStatePool with asynchronous storage. The first
+load creates an instance, restores its saved fields, and only then makes it
+available to other consumers. Later commits queue snapshots for a worker, so
+storage latency does not hold up the reactive action.
+"""
 
 import asyncio
 import logging
@@ -15,22 +21,16 @@ _logger = logging.getLogger(__name__)
 
 
 class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
-    """Hydrate one shared namespace per scope and persist committed changes.
+    """Hydrate one shared namespace per scope and persist its committed state.
 
-    Loading is explicit and asynchronous because it reads the store. Once a namespace is
-    loaded, commits enqueue a snapshot synchronously and a supervised anyio worker performs
-    the best-effort write. Store failures are sent to on_error and never travel back
-    through the action that produced the state change.
+    Start run in a host-owned task group before the first load. Hydration completes
+    before a handle enters the cache, so concurrent loads share fully restored state.
 
-    The pool owns that worker for the whole life of :meth:`run`, which the host supervises;
-    :meth:`close` drains what is queued and lets `run` return. A pool is loadable only while
-    it is running, because hydration is a read and a read must not quietly acquire a task.
-
-    The canonical-handle machinery is a :class:`~squid_reactivity.state_pool.SharedStatePool` held privately.
-    This class composes one rather than subclassing it because `SharedStatePool.get` is synchronous and
-    would publish a handle before the store had been read: a concurrent `load` of the same scope
-    would then be handed an un-hydrated namespace and hydrate nothing. The pool's `_create` and
-    `_adopt` halves exist for exactly this, so hydration can happen between them.
+    Commits synchronously stage snapshots for an asynchronous worker. Pending writes
+    coalesce by scope: only the newest queued snapshot is kept, with no ordering across
+    scopes. Failed writes are reported to on_error, or logged, without retrying or
+    rolling back the committed action. Store reads during load still propagate errors.
+    Close drains the queue and permanently stops accepting loads and new writes.
     """
 
     def __init__(
@@ -67,12 +67,11 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return self._pool.bus
 
     async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
-        """Own the persistence worker until :meth:`close` drains it, or the caller cancels.
+        """Own the persistence worker until close drains it or the caller cancels.
 
-        The task group is entered and exited by this one coroutine. An earlier version
-        entered it inside `load` and exited it inside `close`, which anyio rejects whenever
-        those run in different tasks -- the ordinary case, since `load` belongs to whichever
-        request first needed the namespace.
+        Use await tasks.start(pool.run) to wait until loading can begin. This coroutine
+        owns both entry and exit of the task group, even when requests load or close the
+        pool from other tasks.
         """
         if self._running:
             msg = "persisted pool is already running"
@@ -104,6 +103,8 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
                 msg = "persisted pool is not running; start run() before loading a namespace"
                 raise RuntimeError(msg)
             created = self._pool._create(scope)
+            # Restore before adoption: the synchronous pool's normal get() would
+            # expose the instance before its persisted fields had been loaded.
             values = await self.store.get(self.slot, scope)
             if values is not None:
                 restore_state(created, values)
@@ -123,13 +124,11 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return self._pool.active()
 
     async def delete(self, scope: ScopeT) -> SharedT | None:
-        """Retire scope and stop persisting through the handle that owned it.
+        """Retire a cached handle and detach its persistence listener, preserving stored data.
 
-        The retired namespace stays usable, reactive and readable; it simply stops writing to a
-        slot it no longer owns. Detaching is not optional: two generations sharing one slot would
-        race for the row, and retired state would resurrect on the next load. Anything this handle
-        already staged still gets written -- a drop retires a lifetime, it does not undo a
-        committed action -- which is why this drains before returning.
+        Wait for queued writes to be attempted before returning. A later load restores the
+        stored value into a new handle. The retired handle remains reactive, but its future
+        commits cannot overwrite the new handle's slot. Return None if the scope was not loaded.
         """
         async with self._load_lock:
             retired = self._pool.delete(scope)
@@ -140,7 +139,7 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return retired
 
     async def clear(self) -> None:
-        """Retire every scope on the same terms as `drop`."""
+        """Retire every cached handle as delete does, preserving the stored values."""
         async with self._load_lock:
             for scope, handle in self._pool.active().items():
                 self._detach(handle, scope)
@@ -148,7 +147,11 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         await self.flush()
 
     async def flush(self) -> None:
-        """Wait until every snapshot queued so far has been attempted."""
+        """Wait until the worker is idle, including any writes queued while waiting.
+
+        Coalesced snapshots are not written individually, and failed writes do not make
+        flush raise. Return immediately if the worker is not running.
+        """
         if not self._running:
             return
         await self._idle.wait()

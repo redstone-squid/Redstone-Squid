@@ -1,4 +1,12 @@
-"""Backing stores and their backend discipline for Squid applications."""
+"""Persist UI sessions and application-scoped values.
+
+DurableSessionStore keeps published sessions and coordinates which host may
+update or replace them. ScopedStore holds typed values under a slot name and
+scope, such as preferences for one member. PersistentStatePool connects scoped
+storage to reactive SharedState, restoring values on load and queuing snapshots
+after commits. Memory, SQLite, and PostgreSQL implementations share these
+contracts; PostgresTopicBridge carries change notifications between processes.
+"""
 
 from squid_storage.persistent_state import PersistentStatePool
 from squid_storage.postgres import PostgresSessionStore, PostgresTopicBridge, TopicBridgeSnapshot

@@ -87,10 +87,10 @@ async def test_store_failures_are_reported_without_failing_the_action(
 async def test_the_worker_outlives_the_task_that_first_loaded(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
-    """`load` from a request task, `close` from shutdown -- the ordinary case.
+    """Loading and shutdown may occur in different tasks from the worker.
 
-    The worker's task group used to be entered by `load` and exited by `close`, which anyio
-    refuses across tasks: the loading task could not even exit its own cancel scope.
+    Anyio requires the task that enters a task group to exit it. A request must be able
+    to finish its own cancellation scope while the pool worker remains alive.
     """
     store = MemoryScopedStore()
     await store.put(slot, "guild", {"theme": "light"})
@@ -195,7 +195,7 @@ async def test_a_dropped_generation_stops_persisting_to_the_slot_it_no_longer_ow
 async def test_drop_writes_out_what_the_retired_handle_already_committed(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
-    """A drop retires a lifetime; it does not undo a committed action."""
+    """Deleting a cached handle preserves its last committed value for future hydration."""
     store = MemoryScopedStore()
     pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
 
@@ -250,7 +250,6 @@ async def test_active_snapshots_the_loaded_namespaces(slot: Slot[str, Mapping[st
 
 
 async def test_a_closed_pool_stops_persisting(slot: Slot[str, Mapping[str, object]]) -> None:
-    """A closed pool refuses the write, so a later commit cannot queue onto a stopped worker."""
     store = MemoryScopedStore()
     pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
 

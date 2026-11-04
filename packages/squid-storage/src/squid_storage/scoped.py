@@ -1,4 +1,10 @@
-"""Typed, scoped values with fixed or touchable expiry."""
+"""Store typed values under a declared slot and an application scope.
+
+A Slot names the kind of value and supplies its codec, schema version, and
+default expiry. The scope identifies whose value it is: for example, the same
+preferences slot can hold separate values for many member IDs. Store operations
+encode and decode at this boundary; they do not retain live application objects.
+"""
 
 import asyncio
 import json
@@ -30,7 +36,7 @@ _MISSING = object()
 
 
 class StorageError(Exception):
-    """Base class for every failure squid-storage raises deliberately."""
+    """Base class for storage-specific errors; validation can also raise standard exceptions."""
 
 
 class SlotVersionError(StorageError, ValueError):
@@ -38,7 +44,11 @@ class SlotVersionError(StorageError, ValueError):
 
 
 class SlotCodec[ValueT](Protocol):
-    """Encode one slot value and decode it from the version that wrote it."""
+    """Encode values as strings and decode them using the version that wrote them.
+
+    The decoder handles migrations from older versions. The store rejects values newer
+    than the reading slot declaration before calling the decoder.
+    """
 
     def encode(self, value: ValueT) -> str: ...
 
@@ -47,7 +57,11 @@ class SlotCodec[ValueT](Protocol):
 
 @dataclass(frozen=True, slots=True)
 class Slot[ScopeT: Hashable, ValueT]:
-    """One declared, typed place for a value belonging to an application scope."""
+    """Declare a value stored under a slot name and application scope.
+
+    The name identifies the slot independently of this declaration's object identity.
+    TTL defaults to no expiry; a configured duration and version must be positive.
+    """
 
     name: str
     codec: SlotCodec[ValueT]
@@ -66,7 +80,18 @@ class Slot[ScopeT: Hashable, ValueT]:
 
 @runtime_checkable
 class ScopedStore(Protocol):
-    """Store declared values by exact slot and application scope."""
+    """Store encoded values by slot name and application scope.
+
+    Get returns None for missing or expired values, so a stored None is indistinguishable
+    from absence. Touch extends a live value by the TTL saved with that value. Expired
+    rows remain until deleted, overwritten, or purged.
+
+    Put uses the slot's default TTL when its ttl argument is None and records the slot's
+    current version. Decode may migrate older versions; newer versions raise SlotVersionError.
+    Separate get and put calls do not provide atomic read-modify-write semantics.
+    Delete reports whether a row existed, including an expired row; purge counts removed
+    expired rows.
+    """
 
     async def get[S: Hashable, V](self, slot: Slot[S, V], scope: S, *, touch: bool = False) -> V | None: ...
 
@@ -126,7 +151,12 @@ def _encode_scope(scope: Hashable, encoder: Callable[[Hashable], str] | None) ->
 
 
 def _default_scope_key(scope: Hashable) -> str:
-    """Encode common scopes without claiming to define an application's wire format."""
+    """Encode common scope types for the SQL stores.
+
+    This convenience format can collide across types: the string "int:1" and integer 1
+    have the same key. Applications mixing types or persisting custom objects should
+    supply a stable, collision-free scope_encoder instead of relying on repr.
+    """
     if isinstance(scope, str):
         return scope
     if isinstance(scope, bytes):
@@ -146,7 +176,10 @@ def _decode(slot: Slot[Any, Any], stored: _StoredValue) -> Any:
 
 
 class MemoryScopedStore:
-    """In-process implementation of ScopedStore."""
+    """Keep encoded slot values in memory, keyed by the actual hashable scope.
+
+    Values still pass through the codec on every write and read, matching SQL storage.
+    """
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
         self._values: dict[tuple[str, Hashable], _MemoryValue] = {}
@@ -202,8 +235,9 @@ class MemoryScopedStore:
 class SQLiteScopedStore:
     """Persist scoped values in SQLite using sqlite3 outside the event loop.
 
-    SQLite expiry uses the supplied process wall clock. Every process sharing one
-    database file must therefore have a sufficiently synchronized clock.
+    Operations open their own connections and create the schema lazily. Hosts sharing
+    one file need synchronized wall clocks for expiry. Supply a stable scope_encoder
+    when scopes need a persistent format beyond the default type-based encoding.
     """
 
     def __init__(
@@ -359,7 +393,11 @@ class SQLiteScopedStore:
 
 
 class PostgresScopedStore:
-    """Persist scoped values in PostgreSQL with database-owned expiry deadlines."""
+    """Persist scoped values with PostgreSQL-owned expiry deadlines.
+
+    The caller owns the asyncpg pool; the store creates its tables lazily. Scope keys
+    use the same encoding rules as SQLiteScopedStore.
+    """
 
     def __init__(
         self,
@@ -512,7 +550,11 @@ class PostgresScopedStore:
 
 @dataclass(frozen=True, slots=True)
 class JsonSlotCodec[ValueT]:
-    """A small JSON codec for values already represented by JSON-compatible data."""
+    """Encode JSON-compatible values, optionally decoding them into application types.
+
+    A supplied decoder receives the parsed JSON and stored version. Without one, JSON
+    values are returned as decoded and the version is ignored.
+    """
 
     decoder: Callable[[Any, int], ValueT] | None = None
 

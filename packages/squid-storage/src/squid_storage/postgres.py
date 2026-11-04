@@ -49,7 +49,7 @@ _ORIGIN_SEPARATOR = ":"
 _NORMAL_DELIVERY = "normal"
 _TRANSACTION_DELIVERY = "transaction"
 _MAX_NOTIFY_PAYLOAD = 8000
-"""PostgreSQL refuses a NOTIFY payload of 8000 bytes or more, counting the terminator."""
+"""Exclusive upper bound for the complete encoded NOTIFY payload, in bytes."""
 
 
 class PostgresSessionStore:
@@ -62,7 +62,7 @@ class PostgresSessionStore:
     sequence and therefore increase monotonically across all callers.
 
     Args:
-        pool: An asyncpg connection pool.
+        pool: Caller-owned asyncpg connection pool; the store creates its tables lazily.
         table_name: Unqualified database table name. Derived helper objects use
             the same prefix.
     """
@@ -397,7 +397,11 @@ def _stored_record(row: Record) -> SessionRecord:
 
 @dataclass(frozen=True, slots=True)
 class TopicBridgeSnapshot:
-    """One immutable diagnostic view of a cross-process topic bridge."""
+    """Diagnostic counters for this bridge instance.
+
+    Notified counts successful pg_notify calls, including calls in transactions that
+    may later roll back; it does not confirm delivery to another process.
+    """
 
     origin: str
     channel: str
@@ -411,30 +415,28 @@ class TopicBridgeSnapshot:
 
 
 class PostgresTopicBridge:
-    """Carry encodable host topics between processes over PostgreSQL LISTEN/NOTIFY.
+    """Carry topic addresses between processes over PostgreSQL LISTEN/NOTIFY.
 
-    The bridge is one more caller of `TopicBus.publish`, never a relay attached to the bus:
-    a remote notification becomes a local publish, so the bus contract composes unchanged,
-    and nothing loops back out. The payload is an encoded *address* and never application
-    state, so subscribers still re-read their source of truth.
-
-    Delivery is exactly as durable as the bus itself, which is to say not at all. NOTIFY is
-    delivered only to processes listening at commit time, so a restart, a dropped connection
-    or a full outbound queue costs latency rather than correctness; every consumer must still
-    have a path that converges without a notification.
+    Hosts publish through the bridge to reach other processes; publishing directly on
+    the local bus stays local. Incoming notifications publish on that bus without
+    being sent out again, so peers do not echo one another indefinitely.
+    Payloads identify topics, not application state; subscribers re-read their source
+    of truth. Delivery is best effort: queue overflow, send failure, or disconnected
+    listeners can lose notifications, so consumers need another way to resynchronize.
 
     Args:
-        pool: An asyncpg connection pool. `run` holds one connection for the whole process.
-        bus: The local bus that receives remote publishes and this host's own.
-        codec: The wire form for this channel. Defaults to `kind:key`, which carries
-            every `Topic`; supply one only to speak a format someone else defined.
-        channel: PostgreSQL channel name shared by every process in the deployment.
-        on_resync: Awaited after each successful (re)connection, for hosts that want to
-            republish their coarse topics once notifications may have been missed.
+        pool: Caller-owned asyncpg pool. The listener reserves one connection while
+            connected; sending requires another available connection.
+        bus: Local bus receiving this host's publishes and accepted notifications.
+        codec: Topic address encoding, defaulting to kind:key. Cell addresses stay local.
+        channel: PostgreSQL channel shared by the participating processes.
+        on_resync: Awaited after LISTEN succeeds on each connection, before the listener
+            is marked ready, to refresh state after potentially missed notifications.
         reconnect_seconds: Delay before rebuilding a lost listener connection.
-        queue_size: Outbound notifications held while the sender is busy or stopped.
-        origin: This process's identity, used to drop its own notifications. Defaults to a
-            fresh UUID, which is what every process should use.
+        queue_size: Maximum outbound notifications queued while the sender is busy or stopped.
+        origin: Identity used to suppress echoes of immediate local publishes. Transactional
+            publishes keep their own echo so local delivery also waits for commit.
+            Defaults to a fresh UUID; use a distinct identity for each bridge.
     """
 
     def __init__(
@@ -478,13 +480,12 @@ class PostgresTopicBridge:
         self._undecodable = 0
 
     def publish(self, *addresses: Address) -> None:
-        """Publish on the local bus now, and queue a notification for the named topics.
+        """Publish locally now and queue encodable topics for best-effort remote delivery.
 
-        Synchronous like `TopicBus.publish`, and with the same guarantee for local
-        subscribers. The notification leaves on the bridge's own connection shortly after
-        this returns, so it is *not* ordered against a write the caller has not committed
-        yet. Use `publish_in()` when the notification must be ordered with an application
-        transaction.
+        Identical payloads coalesce while queued; a full queue drops the remote notification.
+        Queued notifications wait for run if the sender is stopped. Sending uses the bridge's
+        connection and is not ordered with an uncommitted application write; use publish_in
+        when delivery must wait for that transaction.
         """
         self.bus.publish(*addresses)
         for address in addresses:
@@ -505,16 +506,16 @@ class PostgresTopicBridge:
             self._pending.add(payload)
 
     async def publish_in(self, connection: _NotifyConnection, topic: Topic) -> None:
-        """Publish `topic` when the supplied PostgreSQL transaction commits.
+        """Notify through the supplied connection, delivering locally through the listener too.
 
-        The supplied connection owns the `pg_notify` call, so PostgreSQL holds the
-        notification until its current transaction commits. The bridge listener then
-        publishes it to this process's bus as well as to listeners in other processes.
-        This method does not commit the transaction.
+        Wait for the running listener to be ready, then call pg_notify on the supplied
+        connection. With an active transaction, delivery waits for commit and rollback
+        suppresses it. Without one, the statement commits immediately. This method neither
+        starts nor commits the caller's transaction.
 
         Raises:
-            RuntimeError: If the bridge has not been started with :meth:`run`.
-            ValueError: If the topic cannot fit on the configured NOTIFY channel.
+            RuntimeError: If the bridge is not running.
+            ValueError: If the topic cannot be encoded within the NOTIFY payload limit.
         """
         payload = self._wire_payload(topic, _TRANSACTION_DELIVERY)
         if payload is None:
@@ -542,11 +543,10 @@ class PostgresTopicBridge:
         return payload
 
     async def run(self) -> None:
-        """Serve the channel in both directions until the host cancels this coroutine.
+        """Own the listener and sender until the host cancels this coroutine.
 
-        A process that only publishes still has to run the bridge: the outbound sender lives
-        here. Its listener is then harmless, and keeps the process ready to consume topics
-        the day it grows a subscriber.
+        Even a publishing-only host must run the sender. Cancellation does not guarantee
+        that queued notifications have been sent and does not close the caller's pool.
         """
         if self._running:
             message = "topic bridge is already running"
@@ -616,7 +616,7 @@ class PostgresTopicBridge:
                 self._queue.task_done()
 
     def _notified_by(self, _connection: object, _process_id: int, _channel: str, payload: str) -> None:
-        """Republish one remote notification locally, on the event loop thread."""
+        """Republish an accepted notification on the local event loop, including transaction echoes."""
         origin, separator, remainder = payload.partition(_ORIGIN_SEPARATOR)
         if not separator:
             self._undecodable += 1
