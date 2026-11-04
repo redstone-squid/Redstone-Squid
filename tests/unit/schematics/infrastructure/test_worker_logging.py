@@ -111,6 +111,7 @@ class ChildProcessFactory(Protocol):
 
 @pytest.fixture
 async def child_process() -> AsyncIterator[ChildProcessFactory]:
+    """Spawn real Python children and reap them after each test, including on cancellation."""
     children: list[asyncio.subprocess.Process] = []
 
     async def spawn(
@@ -136,6 +137,7 @@ async def child_process() -> AsyncIterator[ChildProcessFactory]:
             for process in children:
                 if process.returncode is None:
                     process.kill()
+                # communicate() would re-raise a stream exception deliberately injected by a test.
                 if process.stderr is not None and process.stderr.exception() is not None:
                     await process.wait()
                 else:

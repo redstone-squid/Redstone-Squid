@@ -28,6 +28,7 @@ def _compound(name: str, entries: list[bytes]) -> bytes:
 
 
 def _structure(*, size: tuple[int, int, int] = (1, 1, 1), extra: bytes = b"") -> bytes:
+    """Encode one stair block at the origin, with optional root tags for malformed-input tests."""
     properties = _tag(8, "facing", _string("east")) + b"\x00"
     palette_entry = _tag(8, "Name", _string("minecraft:oak_stairs")) + _tag(10, "Properties", properties) + b"\x00"
     block_entry = (

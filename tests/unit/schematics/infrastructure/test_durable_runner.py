@@ -114,7 +114,7 @@ async def test_a_missing_input_artifact_is_classified_and_failed_terminally(tmp_
 
     assert len(repository.failures) == 1
     failure = repository.failures[0]
-    # Wrapped, this classified as a retryable unknown with no context at all.
+    # ExceptionGroup wrapping would hide the missing-artifact type from failure classification.
     assert failure.terminal is True
     assert failure.error_kind == "internal"
     assert failure.error_context["object_key"] == "schematics/ab/missing"

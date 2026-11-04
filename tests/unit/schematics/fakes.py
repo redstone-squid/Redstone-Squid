@@ -1,8 +1,4 @@
-"""Test doubles for the schematic ports.
-
-Kept free of the native engine so the whole unit suite runs on a machine without the optional
-extra installed, which is the deployment the null analyzer exists to support.
-"""
+"""In-memory schematic ports that do not load the optional native engine."""
 
 from whenever import Instant
 
@@ -63,7 +59,7 @@ def make_analysis(
 
 
 class FakeSchematicAnalyzer:
-    """Return a canned analysis, and record what it was asked to do."""
+    """Return canned results and record calls without parsing schematic bytes or enforcing limits."""
 
     def __init__(self, analysis: SchematicAnalysis | None = None, *, failure: Exception | None = None) -> None:
         self.analysis = analysis or make_analysis()
@@ -153,7 +149,10 @@ class FakeSchematicAnalyzer:
 
 
 class FakeSchematicStore:
-    """An in-memory stand-in for the schematic repository."""
+    """Store attachments and preview metadata in memory.
+
+    Preview reservations always require upload; object readiness and cleanup are not modeled.
+    """
 
     def __init__(self) -> None:
         self.files: dict[str, bytes] = {}
@@ -162,8 +161,10 @@ class FakeSchematicStore:
         self.stored: list[StoredSchematic] = []
         self.renders: dict[tuple[int, str], StoredRender] = {}
         self.render_content: dict[str, bytes] = {}
-        """Preview bytes as object storage would hold them, keyed by recipe hash. Populated
-        separately from `renders` because the real transport uploads the artifact itself."""
+        """Preview bytes keyed by recipe hash, separate from the metadata in renders.
+
+        Tests populate these bytes explicitly because recording a render does not upload its PNG.
+        """
         self.simulations: dict[int, SimulationResult] = {}
 
     async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:
@@ -329,7 +330,7 @@ class FakeSchematicStore:
 
 
 class FakeVersionResolver:
-    """Resolve exactly one version, so tests can exercise both branches."""
+    """Resolve labels from a supplied mapping, defaulting to one known Java version."""
 
     def __init__(self, known: dict[str, int] | None = None) -> None:
         self.known = known if known is not None else {"Java 1.16.5": 2586}

@@ -33,7 +33,10 @@ BUILD_TOPIC = Topic("build", "7")
 
 
 class MemoryRenderJobs:
-    """Keep acknowledgement outcomes at the persistence boundary."""
+    """Return the configured render job and record its acknowledgements.
+
+    Every claim returns the same job, even after completion, so tests control retries directly.
+    """
 
     def __init__(self) -> None:
         self.job = ClaimedRenderJob(7, 0, uuid.uuid4())

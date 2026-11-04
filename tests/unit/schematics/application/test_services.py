@@ -52,7 +52,10 @@ from tests.unit.schematics.fakes import (
 
 
 def litematic_bytes(payload: bytes = b"") -> bytes:
-    """Return gzipped NBT whose root compound names the litematic marker members."""
+    """Return a gzipped NBT prefix with litematic markers for sniffing.
+
+    It is not a complete engine-readable schematic; the analyzer is stubbed in these tests.
+    """
     body = (
         b"\x0a\x00\x00"
         + b"\x0a"
@@ -663,6 +666,10 @@ async def test_render_skips_a_schematic_over_a_budget(
 
 
 async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
+    """Propagate the initial crash, then refuse the same bytes across builds in this service instance.
+
+    The durable queue is not exercised here; repeated service calls check the poisoned-file guard.
+    """
     analyzer = FakeSchematicAnalyzer()
     schematics, _, store = service(analyzer, render_enabled=True, resource_pack=FakeResourcePack())
     await schematics.attach(
