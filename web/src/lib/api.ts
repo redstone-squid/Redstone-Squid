@@ -66,6 +66,7 @@ function timedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respo
   return fetch(input, { ...init, signal });
 }
 
+/** Create an isolated locale-specific client with a five-second timeout per request. */
 export function createCatalogueClient(
   locale: Locale,
   config: RuntimeConfig = getRuntimeConfig(),
@@ -78,7 +79,7 @@ export function createCatalogueClient(
   });
 }
 
-/** How a request addresses one page. At most one field is meaningful at a time. */
+/** Page address: afterId takes precedence over beforeId, then a nonzero offset. */
 export type PageQuery = {
   offset?: number;
   afterId?: number;
@@ -151,6 +152,7 @@ export async function fetchRecord(locale: Locale, id: number): Promise<RecordDet
   return unwrap(result);
 }
 
+/** Fetch the first page of up to 50 schematics; this does not follow pagination links. */
 export async function fetchSchematics(
   locale: Locale,
   buildId: number,

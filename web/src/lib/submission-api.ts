@@ -1,3 +1,11 @@
+/**
+ * Browser API clients for private drafts, consent, and device approval.
+ *
+ * These clients send the browser session cookie and obtain a CSRF token for mutations.
+ * Each factory owns its token cache; UI components handle sign-in and consent prompts.
+ * Request retries preserve their idempotency key or upload ID where supported, while
+ * draft revision conflicts require the editor to fetch and reconcile the latest draft.
+ */
 import {
   accountConsentGrant,
   browserCsrfGet,
@@ -153,13 +161,7 @@ function mutationHeaders(csrf: string, idempotencyKey?: string): Record<string, 
   };
 }
 
-/**
- * Where to send a browser to log in.
- *
- * `/v1/auth/{provider}` is templated server-side, and `"discord"` is one instance of the
- * template rather than a special case -- adding a second provider is a caller passing a
- * different slug, not another URL builder. This used to be three identical copies.
- */
+/** Build the provider login URL; the server validates the requested return destination. */
 function signInUrl(config: RuntimeConfig, returnTo: string, provider = "discord"): string {
   const url = new URL(`${config.apiBaseUrl}/v1/auth/${provider}`);
   url.searchParams.set("redirect_to", returnTo);
@@ -187,6 +189,12 @@ type MutationSession = {
   ) => Promise<T>;
 };
 
+/**
+ * Cache CSRF credentials for one API instance and retry a refused mutation once.
+ *
+ * A 403 forces a token fetch and disables the cookie shortcut for this instance. The replay
+ * keeps the supplied idempotency key; other failures propagate to the calling API method.
+ */
 function createMutationSession(client: Client): MutationSession {
   let cachedToken: string | undefined;
   let pendingToken: Promise<string> | undefined;
@@ -201,6 +209,7 @@ function createMutationSession(client: Client): MutationSession {
         return localToken;
       }
     }
+    // Concurrent mutations share the token request, including when the API cookie is cross-origin.
     pendingToken ??= browserCsrfGet({ client }).then((result) => unwrap(result).csrf_token);
     try {
       cachedToken = await pendingToken;
@@ -250,6 +259,12 @@ async function uploadRawMedia(
   );
 }
 
+/**
+ * Create a credentialed, uncached client for private drafts.
+ *
+ * Draft creation and media upload retry a network failure once, keeping the request identity.
+ * Other methods leave network retries to callers. Mutations share the CSRF refresh policy.
+ */
 export function createSubmissionApi(
   locale: Locale,
   config: RuntimeConfig = getRuntimeConfig(),
@@ -360,6 +375,7 @@ export function createSubmissionApi(
   };
 }
 
+/** Approve a player code, retrying one network failure with the same idempotency key. */
 export function createMinecraftLinkApi(
   locale: Locale,
   config: RuntimeConfig = getRuntimeConfig(),
@@ -390,6 +406,7 @@ export function createMinecraftLinkApi(
   };
 }
 
+/** Preview a device or approve it, retrying approval once on network failure with the same key. */
 export function createCliLinkApi(
   locale: Locale,
   config: RuntimeConfig = getRuntimeConfig(),
@@ -433,12 +450,10 @@ export function asSubmissionError(error: unknown): SubmissionApiError {
 }
 
 /**
- * Read the privacy notice, and record acceptance of the exact version that was read.
+ * Fetch the server-authored privacy notice and record acceptance of its displayed version.
  *
- * Lives here rather than in its own module so it inherits the CSRF and idempotency handling
- * every other mutation already goes through. The notice itself is fetched from the API rather
- * than kept in the web dictionary: the version a receipt names has to identify one piece of
- * text, and a second copy on the client is how that stops being true.
+ * The grant uses the shared CSRF refresh policy and an idempotency key. Keeping the notice
+ * text and version together on the server avoids accepting a different client-side copy.
  */
 export function createConsentApi(
   locale: Locale,
@@ -465,12 +480,11 @@ export function createConsentApi(
 }
 
 /**
- * Wrap an API so a consent refusal hands back the call that was refused.
+ * Capture a rejected promise call so the caller can retry it after obtaining consent.
  *
- * `SubmissionFlow` can fail the consent gate on any of a dozen calls -- creating a draft,
- * changing a field, uploading media, finalizing -- and each one would otherwise need its own
- * copy of "remember this and retry it". Wrapping once means every method recovers, including
- * ones added later, and the components keep their existing error handling untouched.
+ * The original promise still rejects. The supplied retry repeats the method with the same
+ * arguments but discards its result; it does not resume the original awaiting UI handler.
+ * Callers must arrange any state refresh after replay and handle replay failures themselves.
  */
 export function withConsentRetry<T extends object>(
   api: T,

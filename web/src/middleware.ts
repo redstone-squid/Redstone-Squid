@@ -4,6 +4,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const startedAt = performance.now();
   try {
     const renderedResponse = await next();
+    // Finish rendering before reading responseStatus: nested views set it while producing the body.
     const body = context.request.method === "HEAD" ? null : await renderedResponse.arrayBuffer();
     const response = new Response(body, {
       status: context.locals.responseStatus ?? renderedResponse.status,

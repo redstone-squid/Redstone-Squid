@@ -37,6 +37,12 @@ export class SubmissionSchemaError extends Error {
   }
 }
 
+/**
+ * Return the same manifest if this browser can render its web fields, or throw SubmissionSchemaError.
+ *
+ * Checks protocol compatibility, required categories, duplicate fields per category, controls,
+ * value kinds, and required capabilities. Server-side answer validation remains authoritative.
+ */
 export function validateSubmissionManifest(manifest: FormManifestResponse): FormManifestResponse {
   if (
     manifest.minimum_protocol > SUBMISSION_PROTOCOL ||
@@ -105,6 +111,7 @@ export function sectionsForDraft(
     .filter((section) => section.fields.length > 0);
 }
 
+/** Copy answers and fill absent keys from form defaults without persisting those defaults. */
 export function materializedAnswers(
   sections: FormSectionResponse[],
   answers: StoredDraftResponse["answers"],
@@ -141,6 +148,7 @@ export function draftValue(value: unknown): DraftValue | undefined {
 
 // The unit vocabulary is shared with the other surfaces; contracts/fixtures/duration-cases.json
 // is the authority, and tests/unit/submission-form.test.ts asserts every core case against it.
+/** Return nonnegative whole game ticks for explicit gt/t, rt, or s units; reject fractional ticks. */
 export function parseDuration(value: string): number | undefined {
   const match = /^\s*(\d+(?:\.\d+)?|\.\d+)\s*(gt|rt|t|s)\s*$/i.exec(value);
   if (!match?.[1] || !match[2]) return undefined;
@@ -159,6 +167,12 @@ export function fieldInputValue(field: FormFieldResponse, value: unknown): strin
   return "";
 }
 
+/**
+ * Convert control text to a draft value, an error, or an empty object meaning unset.
+ *
+ * Lists trim and omit blank lines; scalar text preserves whitespace. Form constraints are
+ * checked separately by the server.
+ */
 export function parseFieldInput(
   field: FormFieldResponse,
   raw: string,

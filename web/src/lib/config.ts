@@ -42,6 +42,12 @@ function checkedUrl(
   return parsed.toString().replace(/\/$/, "");
 }
 
+/**
+ * Read and normalize runtime HTTP(S) URLs, removing a trailing slash.
+ *
+ * Production requires all four settings and rejects known development/placeholder hosts.
+ * Missing production values or invalid URLs throw; development uses defaults for absent values.
+ */
 export function getRuntimeConfig(
   environment: RuntimeEnvironment = process.env,
   production = import.meta.env.PROD,

@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 
+// Count every emitted JavaScript chunk, including lazy chunks, rather than one page's downloads.
 const budgetBytes = 100 * 1024;
 const assetDirectory = path.resolve("dist/client/_astro");
 const assets = (await readdir(assetDirectory)).filter((file) => file.endsWith(".js")).sort();

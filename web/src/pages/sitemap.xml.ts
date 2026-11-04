@@ -5,6 +5,7 @@ import { getRuntimeConfig } from "../lib/config";
 import { localizePath, type Locale } from "../lib/i18n";
 
 const CACHE_MS = 60 * 60 * 1_000;
+// Process-local cache of successful crawls; an expired entry is not served on refresh failure.
 let cached: { expiresAt: number; xml: string } | undefined;
 
 function escapeXml(value: string): string {

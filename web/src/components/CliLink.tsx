@@ -65,6 +65,10 @@ function rememberCode(value: string): void {
   }
 }
 
+/**
+ * Consume the fragment code, which the browser does not send in its HTTP request.
+ * Remove it from the address bar and retain a valid code in session storage across OAuth login.
+ */
 function consumeFragmentCode(): string {
   const fragment = new URLSearchParams(window.location.hash.slice(1));
   const code = normalizedCode(fragment.get("code") ?? "");
@@ -82,6 +86,11 @@ function consumeFragmentCode(): string {
   }
 }
 
+/**
+ * Let the signed-in account review and approve a CLI device enrollment.
+ * The preview shows the device label and key fingerprint before approval; changing the code
+ * clears that preview so a different device must be reviewed again.
+ */
 export default function CliLink({
   locale,
   config,

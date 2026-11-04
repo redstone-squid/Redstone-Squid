@@ -3,6 +3,7 @@ import { formatNumber, translate, translateTaxonomy, type Locale } from "./i18n"
 
 export type MediaItem = { kind: "render" | "image"; url: string; label: string };
 
+/** Normalize an absolute HTTPS URL, or return undefined for invalid URLs and other schemes. */
 export function safeHttpsUrl(value: string): string | undefined {
   try {
     const url = new URL(value);
@@ -34,6 +35,7 @@ export function formatTag(locale: Locale, tag: BuildTag): string {
   return `${name}: ${value}${tag.unit ? ` ${translateTaxonomy(locale, tag.unit, tag.unit)}` : ""}`;
 }
 
+/** Collect HTTPS renders before images, preserving order within each group. */
 export function buildMedia(build: { links: { renders: string[]; images: string[] } }): MediaItem[] {
   return [
     ...build.links.renders.map((url, index) => ({

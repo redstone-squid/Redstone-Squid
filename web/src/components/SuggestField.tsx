@@ -35,12 +35,11 @@ type Props = {
 };
 
 /**
- * A combobox backed by one suggestion source.
+ * A combobox backed by the localized, same-origin suggestion proxy.
  *
- * Suggestions are fetched from the site's own proxy rather than the API, so the browser never
- * needs a credential and the locale comes from the route it was loaded under. A failure shows
- * nothing rather than an error: the field still works as a plain text input, which is what it was
- * before suggestions existed.
+ * Requests are debounced and aborted when their inputs change. Whole-value sources need
+ * two trimmed characters; cursor-aware sources can complete an empty input. Failures show
+ * a status message while leaving the field editable.
  */
 export default function SuggestField({
   locale,
@@ -70,8 +69,8 @@ export default function SuggestField({
   const visible = enabled ? items : [];
 
   useEffect(() => {
-    // No clearing here: `visible` already gates on `enabled`, so stale items cannot be shown, and
-    // keeping them means backspacing below the threshold and typing again does not refetch.
+    // Below the threshold, retained items are hidden. Re-enabling starts a new request;
+    // the previous items can appear until that request replaces them.
     if (!enabled) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
@@ -87,8 +86,7 @@ export default function SuggestField({
           return (await response.json()) as { items: SuggestionItem[]; replacement: Replacement | null };
         })
         .then((result) => {
-          // Defensive rather than paranoid: a proxy or gateway can return a 200 whose body is not
-          // the shape we asked for, and a search box must not take the page down with it.
+          // A response without an items array behaves like an empty suggestion list.
           setItems(Array.isArray(result.items) ? result.items : []);
           setReplacement(result.replacement ?? null);
           setFailed(false);

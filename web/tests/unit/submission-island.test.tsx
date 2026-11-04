@@ -206,6 +206,8 @@ const emptyMedia: DraftMediaListResponse = {
   media: [],
 };
 
+// Keep draft revisions and answers across calls so queued edits observe earlier saves.
+// Deliberately omit backend validation; individual tests inject conflicts and other failures.
 function fakeApi(overrides: Partial<SubmissionApi> = {}): SubmissionApi {
   let serverDraft = storedDraft();
   return {

@@ -504,6 +504,7 @@ export function localeFromPath(pathname: string): Locale {
   return pathname === "/zh-cn" || pathname.startsWith("/zh-cn/") ? "zh-CN" : "en";
 }
 
+/** Replace the locale prefix while preserving the query and fragment; return a path, not an origin. */
 export function localizePath(path: string, locale: Locale): string {
   const url = new URL(path, "https://catalogue.invalid");
   const unprefixed = url.pathname.replace(/^\/zh-cn(?=\/|$)/, "") || "/";

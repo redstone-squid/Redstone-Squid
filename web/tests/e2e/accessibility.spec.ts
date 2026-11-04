@@ -5,8 +5,8 @@ import { installMediaRoutes } from "./support";
 
 const layouts = ["/", "/builds", "/builds/1", "/records/11", "/search?q=door", "/zh-cn/about"];
 
-// Interactive islands render client-side; wait for a settled state (a start
-// surface or an error alert) so axe never scans a transitional frame.
+// Interactive islands render client-side. Wait for a control or error alert before
+// scanning their initial surface; this does not exercise every later interaction state.
 const islands = ["/submit", "/cli/link", "/minecraft/link"];
 
 for (const path of layouts) {

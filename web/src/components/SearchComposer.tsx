@@ -17,6 +17,11 @@ type Props = {
 
 const EMPTY_GUIDED: GuidedSearch = {};
 
+/**
+ * Submit either guided fields or a hand-written query to the same search route.
+ * Each mode retains its own input when switching. Guided fields produce query syntax;
+ * advanced input is not parsed back into those fields.
+ */
 export default function SearchComposer({
   locale,
   action,

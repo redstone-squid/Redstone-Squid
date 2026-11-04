@@ -27,6 +27,7 @@ function maximum(name: string, value?: string): string | undefined {
   return `${name}<=${normalized}`;
 }
 
+/** Quote text as literal query values and omit empty fields or invalid numeric maxima. */
 export function composeGuidedQuery(input: GuidedSearch): string {
   return [
     input.keywords?.trim() ? quoteQueryValue(input.keywords.trim()) : undefined,
@@ -49,6 +50,7 @@ export function creatorQuery(name: string): string {
   return `creator:${quoteQueryValue(name)}`;
 }
 
+/** Parse a nonzero decimal identifier that fits in a JavaScript safe integer. */
 export function readPositiveInteger(value: string | null): number | undefined {
   if (!value || !/^[1-9]\d*$/.test(value)) return undefined;
   const parsed = Number(value);

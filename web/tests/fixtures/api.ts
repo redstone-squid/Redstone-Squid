@@ -14,6 +14,7 @@ import type {
   SearchSuggestions,
 } from "../../src/generated/types.gen";
 
+// Deterministic public catalogue data for browser checks; this is not a full API emulator.
 const port = Number(process.env.FIXTURE_API_PORT ?? 8787);
 const frozenDate = "2026-08-10T12:00:00Z";
 
@@ -214,6 +215,7 @@ async function routeRequest(request: Request): Promise<Response> {
     if (query.includes("force:unavailable")) return problem(request, 503, "service_unavailable");
     return json(buildPage(url) satisfies PageBuildSummary);
   }
+  // Both detail reads exceed the catalogue client's five-second deadline.
   if (url.pathname === "/v1/builds/998") {
     await new Promise((resolve) => setTimeout(resolve, 5_500));
     return json(detail);

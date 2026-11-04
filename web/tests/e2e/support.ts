@@ -8,6 +8,7 @@ const PNG = Buffer.from(
 export async function installMediaRoutes(page: Page): Promise<void> {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("https://**/*", async (route) => route.abort("blockedbyclient"));
+  // Playwright tries the most recently registered route first, so fixture media overrides the block.
   await page.route("https://media.fixture.invalid/**", async (route) => {
     if (route.request().url().endsWith("/broken.png")) {
       await route.abort("failed");

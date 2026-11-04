@@ -34,6 +34,7 @@ const navItems = [
   ["nav.submit", "/submit"],
   ["nav.about", "/about"],
 ] as const;
+// Escape HTML script delimiters without changing the parsed JSON-LD value.
 const jsonLd = Astro.props.structuredData
   ? JSON.stringify(Astro.props.structuredData).replaceAll("<", "\\u003c")
   : undefined;

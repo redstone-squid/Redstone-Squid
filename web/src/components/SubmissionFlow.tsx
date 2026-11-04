@@ -177,6 +177,15 @@ function mediaFailureMessage(error: SubmissionApiError, copy: Copy): string {
   return error.kind === "unavailable" ? copy.mediaUnavailable : failureMessage(error, copy);
 }
 
+/**
+ * Render the server's form manifest and edit a private submission draft.
+ *
+ * Load the current form, resume or create a draft, then save field changes in order.
+ * Visible answers update immediately while draftRef retains the latest saved revision.
+ * Submission waits for queued saves before starting finalization; polling follows media
+ * processing and the finalization attempt until the server reports their outcomes.
+ * Local storage holds resume identifiers, not draft answers.
+ */
 export default function SubmissionFlow({ locale, config, api: suppliedApi, consentApi }: Props) {
   // Memoized because the effects below take `copy` as a dependency: a fresh
   // object each render would re-run them forever.
@@ -188,14 +197,15 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
     () => suppliedApi ?? createSubmissionApi(locale, config),
     [config, locale, suppliedApi],
   );
-  // Any refused call is recoverable in place: the gate appears, and accepting re-runs exactly
-  // the call that was refused rather than restarting the flow.
+  // Capture the refused API call for the consent gate. Replaying it does not resume
+  // the handler that originally awaited its result; see withConsentRetry.
   const api = useMemo(
     () => withConsentRetry(baseApi, (retry) => setPendingRetry(() => retry)),
     [baseApi],
   );
   const [manifest, setManifest] = useState<FormManifestResponse>();
   const [draft, setDraft] = useState<StoredDraftResponse>();
+  // Keep the server revision separate from optimistic answers so saves cannot overwrite newer input.
   const draftRef = useRef<StoredDraftResponse | undefined>(undefined);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [selectedCategory, setSelectedCategory] = useState("door");
@@ -214,6 +224,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
   const saveErrorsRef = useRef(new Set<string>());
   const [pendingFields, setPendingFields] = useState<Set<string>>(new Set());
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  // Local per-field edit counters distinguish overlapping saves; these are not server draft revisions.
   const fieldVersions = useRef(new Map<string, number>());
   const clientId = useRef<string | undefined>(undefined);
 
@@ -359,6 +370,8 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
     }
   };
 
+  // Serialize every edit against the latest server revision. Older saves still run, but only
+  // the newest edit to a field may clear its pending state or publish its error.
   const commitField = (field: FormFieldResponse, value: DraftValue | undefined): void => {
     const current = draftRef.current;
     if (!current) return;
@@ -409,6 +422,8 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         } catch (error) {
           const failure = asSubmissionError(error);
           if (failure.kind !== "conflict") throw failure;
+          // A conflict needs fresh operation IDs against the new revision; a network retry above
+          // reuses the original change because the server may already have applied it.
           const latest = await api.getDraft(base.id);
           base = latest;
           draftRef.current = latest;
@@ -532,6 +547,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
     if (!draft) return;
     setBusy(true);
     setActionError(undefined);
+    // Read the refs after queued saves settle; React state may still reflect the previous render.
     await saveQueue.current;
     if (saveErrorsRef.current.size > 0) {
       setBusy(false);
@@ -582,9 +598,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
   }
   if (!manifest) return null;
 
-  // A blocking step, so it replaces the flow rather than sitting inside one of its branches:
-  // nothing further can succeed until the notice is accepted, and the draft lives server-side,
-  // so returning to it afterwards costs nothing.
+  // Show the notice in place of the editor while retaining this component's draft state.
   if (pendingRetry) {
     return (
       <ConsentGate
@@ -594,7 +608,6 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
         onAccepted={async () => {
           setPendingRetry(null);
           setActionError(undefined);
-          // Its own failure is already reported through the normal error path.
           await pendingRetry().catch(() => undefined);
         }}
         onCancel={() => setPendingRetry(null)}

@@ -14,10 +14,10 @@ function positiveInteger(
 }
 
 /**
- * Read a page address from a URL, ignoring anything malformed.
+ * Select one positive integer page address, preferring after_id, then before_id, then offset.
  *
- * A bad value means a hand-edited or truncated link, and the first page is a better answer there
- * than an error page.
+ * Values use JavaScript numeric parsing. Invalid or nonpositive values are skipped; if none
+ * remain, return the first page so a hand-edited link can still render.
  */
 export function readPageParams(params: URLSearchParams): PageQuery {
   const afterId = positiveInteger(params.get("after_id"), { minimum: 1 });

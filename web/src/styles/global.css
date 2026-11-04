@@ -372,6 +372,7 @@ h3 {
   background: var(--deepslate-900);
 }
 
+/* The image covers this fallback until an error hides it, preserving the reserved layout. */
 .remote-image__fallback {
   position: absolute;
   inset: 0;
@@ -408,6 +409,7 @@ h3 {
   text-decoration: none;
 }
 
+/* Extend the title link over the card; creator links sit above it to remain independently clickable. */
 .card-link::after {
   position: absolute;
   inset: 0;

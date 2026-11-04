@@ -17,16 +17,16 @@ type Options = {
 };
 
 type Props = Options & {
-  /** Re-run whatever was refused. Called once, after the grant is recorded. */
+  /** Called after each successful grant; the parent owns the action to retry. */
   onAccepted: () => void | Promise<void>;
   onCancel?: () => void;
 };
 
 /**
- * Fetch the notice, and record acceptance of the version that was actually displayed.
+ * Load the notice on mount and accept the version displayed to the reader.
  *
- * The notice is loaded lazily, when a consent failure has already happened, because most visitors
- * never see this and the request is pointless for them.
+ * Parents mount the gate after a consent refusal, avoiding this request for other visitors.
+ * A stale-version refusal reloads the notice so the reader can review the replacement.
  */
 export function useConsentGate({ locale, config, api: suppliedApi }: Options) {
   const api = useMemo(
@@ -93,8 +93,7 @@ export default function ConsentGate({ onAccepted, onCancel, ...options }: Props)
             {translate(locale, "consent.version", { version: notice.version })}
           </p>
           <h4>{notice.title}</h4>
-          {/* Plain text from the API, split on blank lines. Never markup: the same string is
-              rendered into a Discord card and a terminal, and neither could parse it. */}
+          {/* Render API text as paragraphs; React escapes it instead of interpreting HTML. */}
           {notice.body.split("\n\n").map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}

@@ -13,6 +13,7 @@ interface ImportMeta {
 
 declare namespace App {
   interface Locals {
+    /** Final status set by nested views and applied after rendering by middleware. */
     responseStatus?: number;
   }
 }

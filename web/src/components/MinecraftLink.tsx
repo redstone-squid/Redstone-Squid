@@ -46,6 +46,7 @@ function errorMessage(error: SubmissionApiError, locale: Locale): string {
   return error.message;
 }
 
+/** Approve an in-game player challenge using the signed-in browser account. */
 export default function MinecraftLink({
   locale,
   config,

@@ -10,14 +10,11 @@ const UNAVAILABLE_TITLE: Record<Locale, string> = {
 };
 
 /**
- * Answer one suggestion-source request on behalf of the browser.
+ * Proxy a suggestion source using the locale selected by the route.
  *
- * Shared by the per-locale route files, which exist because this site prefixes localized pages
- * rather than negotiating a locale per request. Only the locale differs between them, so it is
- * the only thing they pass in.
- *
- * An empty result is a 200 with no items rather than an error: a dropdown with nothing in it is
- * the correct answer to a prefix that matches nothing.
+ * Validate the source slug, query length, and numeric cursor before contacting the API.
+ * Successful pages, including empty results, are privately cacheable for 30 seconds.
+ * Upstream failures preserve their status and disable caching.
  */
 export async function respondWithSuggestions(
   locale: Locale,
