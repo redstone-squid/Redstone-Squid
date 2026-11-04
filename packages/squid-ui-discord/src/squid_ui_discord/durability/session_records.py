@@ -1,4 +1,9 @@
-"""Canonical records for durable logical sessions and their mount graphs."""
+"""Store a session and its tree of message roots as one versioned JSON record.
+
+Each root record contains component state, message coordinates, and its parent ID. The
+root appears first and every parent precedes its children, so recovery can rebuild the
+attachment relationships. Membership, capacity, and quota remain session-wide facts.
+"""
 
 import json
 import math

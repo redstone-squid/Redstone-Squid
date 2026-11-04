@@ -1,4 +1,10 @@
-"""Discord adapter for portable component action events."""
+"""Carry portable action responses through a mounted Discord interaction.
+
+ActionResponder gives the event its acknowledgement, notice, and form operations while
+retaining the originating MessageRoot. Mounted forms return through dispatch_submit,
+which evaluates the schema and applies the root's action policy. Closure and on_success
+work are recorded during the handler, then accepted only after its transaction commits.
+"""
 
 import asyncio
 from collections.abc import Awaitable, Callable

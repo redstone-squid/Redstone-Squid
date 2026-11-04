@@ -1,4 +1,8 @@
-"""Explicit authorization policies for Discord message roots."""
+"""Decide who may interact with a mounted Discord component.
+
+MessageRoot checks its AccessPolicy before dispatching an interaction. This controls
+who may use the panel; the response audience separately controls who can see it.
+"""
 
 from collections.abc import Awaitable, Callable
 from collections.abc import Set as AbstractSet

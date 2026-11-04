@@ -1,9 +1,9 @@
-"""Composing classic Discord messages: `squid_ui_discord.classic.render_message` and friends.
+"""Render classic Discord messages and contribute regions to host-owned payloads.
 
-A separate module rather than a mode flag on `squid_ui_discord.render_message`, because the author picks
-the message mode and should have to say so. The two produce different messages with different
-capabilities, and a default that silently decides which one you get is the thing this whole
-target exists to avoid.
+Classic messages split their display across content, embeds, and an optional control
+view; MessagePayload keeps those parts together for delivery. Use this module's
+render_message or render_static to choose that mode explicitly. The package-level
+rendering helpers produce Components V2, whose layout view owns the whole display.
 """
 
 import logging
@@ -170,22 +170,21 @@ def render_static(
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     **options: Unpack[StaticPlanOptions],
 ) -> MessagePayload:
-    """Plan and draw a sessionless classic document as one complete message.
+    """Render a sessionless classic payload without mounting or sending it.
 
-    A presentation, never a bare view: the embeds *are* the message here, and handing back
-    only the controls would leave the caller to reassemble the half that carries the content.
+    A Component is rendered once, without starting its reactive lifecycle. Use routed
+    controls for interactions; local callbacks require a mounted frontend.
     """
     return render_message(nodes.render() if isinstance(nodes, Component) else nodes, target=target, **options).payload
 
 
 @dataclass(slots=True)
 class AttachedClassicContribution:
-    """A Squid region placed into a host-owned classic message, and how to take it back.
+    """A merged classic payload and the controls inserted into its host view.
 
-    The host's `View` is mutated transactionally: its items are moved, never cloned, because
-    a control's callback registration belongs to the view that owns it. Content, embeds, and
-    the asset tuple are immutable values, so `payload` is a new whole message rather
-    than a patch applied to the host's.
+    The host view is mutated; content, embed references, and assets are collected into
+    a new payload. remove only removes inserted controls, so the host must rebuild the
+    payload to remove contributed content, embeds, or files.
     """
 
     payload: MessagePayload
@@ -206,7 +205,7 @@ class AttachedClassicContribution:
         return files_for(self.assets)
 
     def stale(self) -> bool:
-        """Whether the host message has changed since this region was planned against it."""
+        """Compare the merged payload's current measurements with its attachment-time fingerprint."""
         return measure(self.payload).fingerprint != self.fingerprint
 
     def remove(self) -> None:
@@ -256,6 +255,9 @@ def contribute(
     Contributed controls stay limited to links and routed actions. The host view's callbacks
     remain under its owner, arbitrary native callback items cannot enter, and a contributed
     region is never reactive independently of the host.
+
+    followed_by_controls currently requires an existing host View; without one those
+    trailing controls are not inserted. Supply an empty View when adding only trailing controls.
 
     This never sends: delivery stays with the owner of the message. Note that routed controls
     do not run the host view's checks and do not refresh its timeout.

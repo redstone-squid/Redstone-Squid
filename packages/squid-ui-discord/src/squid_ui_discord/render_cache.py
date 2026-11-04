@@ -1,4 +1,10 @@
-"""Bounded callback-free constructor-program caching for Discord renderers."""
+"""Reuse the steps for drawing a scene while creating fresh Discord objects each time.
+
+A drawing program records constructors and scene values, without mounted callbacks.
+Renderers execute it with the current plan and wiring to build a new view. A certified
+program has also passed the renderer's audit, allowing unchanged static draws to skip
+that check. Native extensions and custom wiring still need a fresh audit.
+"""
 
 from collections import OrderedDict
 from collections.abc import Hashable
@@ -23,7 +29,12 @@ class _Entry:
 
 
 class RenderProgramCache:
-    """A bounded LRU of callback-free Discord constructor programs."""
+    """A bounded LRU of callback-free Discord constructor programs.
+
+    Callers must key every input that affects the program and its audit result. Calling put
+    preserves an existing certificate for the same key, so reusing a key for a different
+    program can incorrectly skip an audit. Cache entries never hold mounted callbacks.
+    """
 
     def __init__(self, capacity: int = 32) -> None:
         if capacity < 1:
@@ -67,7 +78,7 @@ class RenderProgramCache:
         )
 
     def clear(self) -> None:
-        """Discard every retained program and audit certificate."""
+        """Discard programs and certificates while retaining cumulative counters."""
         self._entries.clear()
 
     def __len__(self) -> int:

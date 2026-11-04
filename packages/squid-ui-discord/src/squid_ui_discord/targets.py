@@ -1,10 +1,9 @@
-"""The registry that lets a durable snapshot name its target and get that target back.
+"""Resolve durable snapshots to registered targets with matching planning settings.
 
-A recovered mount must be rebuilt against the same budgets its stored render was fitted to.
-A protocol id alone is not enough: two targets can share `discord.components-v1` and differ
-in adapter, capabilities or limits, and rebuilding against the wrong one produces a message
-that is legal only by luck. So a snapshot records the *triple* — both axes — plus the version
-and a fingerprint, and recovery refuses anything it cannot resolve exactly.
+Recovery checks the target triple, version, limits, and recorded adapter capabilities
+so a restored render uses the budgets under which it was planned.
+A triple identifies the dialect and adapter profile together. Two targets can share
+that identity while using different limits, so the fingerprint must match as well.
 """
 
 from squid_ui.errors import LayoutInvariantError
@@ -13,18 +12,15 @@ from squid_ui_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
 
 
 class TargetRegistry:
-    """Targets a durable record may name, by triple.
+    """Targets available for durable recovery, indexed by target triple.
 
-    The built-in two are registered by default because every consumer has them. A custom
-    target — one with tightened limits, or an extra capability — has to be registered
-    explicitly: nothing else can reconstruct it from a triple.
+    Built-in classic and Components V2 targets are registered by default. Registering
+    replaces any target with the same triple; older snapshots still need to pass the
+    version and fingerprint checks before they can use the replacement.
 
-    Registering replaces, including over a built-in, because `classic(limits=...)`
-    deliberately keeps the built-in triple — it is still a classic message over discord.py,
-    just a smaller one — and refusing the override would make customized limits unusable
-    with durability. Nothing is lost by allowing it: `resolve` compares the recorded
-    *fingerprint*, so a snapshot planned against the target that was replaced is still
-    refused by name.
+    Replacement lets an application register tighter limits for a built-in target,
+    whose triple stays the same. Snapshots made with the old limits are then refused
+    by the fingerprint check rather than silently planned against a different budget.
     """
 
     def __init__(self, *targets: Target, builtins: bool = True) -> None:
@@ -45,11 +41,13 @@ class TargetRegistry:
         fingerprint: str,
         adapter_capabilities: tuple[str, ...] | frozenset[str] | None = None,
     ) -> Target:
-        """The exact target a snapshot recorded.
+        """Resolve the recorded target and restrict it to its recorded adapter capabilities.
+
+        Extra currently available capabilities are excluded before comparing fingerprints.
 
         Raises:
-            LayoutInvariantError: The target is unregistered, or is registered with a
-                different version or profile than the snapshot was planned against.
+            LayoutInvariantError: The target is absent, required capabilities are missing,
+                or the version or restricted fingerprint differs from the snapshot.
         """
         target = self._targets.get(triple)
         if target is None:

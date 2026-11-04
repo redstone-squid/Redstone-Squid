@@ -22,8 +22,7 @@ def scene_nodes(document: scene.Scene) -> tuple[scene.Node, ...]:
         case scene.ComponentsV2(children=children):
             return children
         case scene.ClassicMessage(rows=rows):
-            # A classic body's text lives in embeds, which cannot reference a file; only its
-            # controls can carry a link, and only rows hold controls.
+            # Classic scene file downloads lower to row controls; embeds are not scene nodes.
             return tuple(control for row in rows for control in row.controls)
         case _:
             return ()

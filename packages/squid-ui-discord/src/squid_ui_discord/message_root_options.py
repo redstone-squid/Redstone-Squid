@@ -26,10 +26,9 @@ class MessageRootDefaults[
 ](MessageRootConfig[RenderTargetT, AdapterT]):
     """Host-wide values used to construct message roots.
 
-    The values and their defaults come from :class:`MessageRootConfig`; this adds the one
-    thing a host wants from them, which is to build a mount. Access remains deliberately
-    absent: it identifies the actor allowed to use a specific mount and must be supplied at
-    each construction site.
+    Call ``mount(component, access=...)`` to construct a message root with these defaults
+    and any per-call overrides. Access must be supplied for each root because the allowed
+    actors depend on the particular presentation.
     """
 
     def mount(
@@ -39,7 +38,7 @@ class MessageRootDefaults[
         access: AccessPolicy,
         **overrides: Unpack[MessageRootBehaviorOptions],
     ) -> MessageRoot[RenderTargetT, AdapterT]:
-        """Construct a mount, applying per-call overrides over these defaults."""
+        """Construct a message root, applying per-call overrides over these defaults."""
         return MessageRoot(component, access=access, config=self, **overrides)
 
 

@@ -24,18 +24,13 @@ from squid_ui_discord.inspection import cost
 type ItemFactory = Callable[[], discord.ui.Item[Any]]
 
 DISCORD_ITEM = ExtensionKind[ItemFactory, discord.ui.Item[Any]]("discord.item")
-"""Embed one discord.py item, measured, behind a portable fallback.
-
-The pairing the kind string could not state: authored with a zero-argument factory,
-drawn as the `discord.ui.Item` that factory returns.
-"""
+"""A zero-argument factory for a measured native item with a portable fallback."""
 
 
 class _DiscordItemExtension:
     def prepare(self, payload: ItemFactory) -> PreparedExtension[discord.ui.Item[Any]]:
         """Build and measure one native item during target planning."""
-        # Still checked, though `ExtensionKind` now states it: a scene can be authored from
-        # untyped code, and "not a factory" is a better report than "the factory failed".
+        # Untyped callers can bypass the extension payload annotation.
         if not callable(payload):
             message = "discord.item extension payload must be a zero-argument factory"
             raise LayoutInvariantError(message)
@@ -60,14 +55,10 @@ DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     {DISCORD_ITEM.name: _DiscordItemExtension()},
     frontend="discord",
 )
-"""Declared at the family, not at `DiscordPy27Adapter`, which is what `family` still records.
+"""Verified discord.py 2.7 profile, annotated at the family accepted by renderer defaults.
 
-Every `adapter=` parameter in this package is typed `AdapterProfile[DiscordPyAdapter]`, and a
-frozen dataclass field is only read, so the narrower inference should have been usable there.
-BasedPyright infers variance from `family: type[AdapterT]` as if it were writable and calls the
-parameter invariant, which made this value unusable as the default it exists to be. Widening the
-declaration says the same thing the version expression already says, and loses nothing: no caller
-reads `family` off this constant.
+The wider annotation accommodates BasedPyright's invariant inference for the frozen
+profile. The runtime family remains DiscordPy27Adapter.
 """
 
 
@@ -90,7 +81,11 @@ def discord_py_adapter_profile(
     capabilities: frozenset[AdapterCapability] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] | None = None,
 ) -> AdapterProfile[DiscordPyAdapter]:
-    """Declare an application-verified discord.py adapter profile."""
+    """Declare the SDK versions and capabilities verified by the application.
+
+    This factory records the claim without testing SDK behavior. Adapter boundaries
+    check the installed version and required capabilities against this declaration.
+    """
     return AdapterProfile(
         DiscordPyAdapter,
         name,

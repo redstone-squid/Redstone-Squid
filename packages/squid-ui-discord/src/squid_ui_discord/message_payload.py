@@ -1,15 +1,8 @@
-"""The whole outgoing Discord message surface, as one value.
+"""The content, embeds, components, and assets owned by one Discord message payload.
 
-A Discord message has two halves. Squid's renderer owns the components; content and embeds
-were owned by nobody, so delivery guessed at them from whatever `discord.Message` happened to
-be in reach. A :class:`MessagePayload` is both halves plus the files that go with them,
-so delivering is replacing a message rather than patching one field of it and hoping about
-the rest.
-
-Coherence is checked at construction because the incoherent combinations are exactly the ones
-Discord answers with a 400 that names nothing useful. discord.py sets the Components V2 flag
-implicitly -- `handle_message_parameters` turns it on whenever `view.has_components_v2()` --
-and never checks that the rest of the payload agrees with it.
+Construction checks that content and view agree with the declared message mode.
+Delivery uses the mode to clear replaced fields and reject a transition from
+Components V2 back to classic. Size and structural audits belong to the renderers.
 """
 
 from collections.abc import Sequence
@@ -69,11 +62,11 @@ def _incoherent(
 
 @dataclass(frozen=True, slots=True)
 class MessagePayload:
-    """Everything Squid puts on one Discord message, as one replacement value.
+    """The message fields Squid replaces, plus declarative attachment assets.
 
-    Absent content and embeds are explicit clears rather than omitted kwargs: a payload
-    describes the whole surface Squid owns, so what it does not name is what the message must
-    stop showing.
+    Missing classic content, embeds, and view are explicit clears during edits. The
+    frozen record does not freeze its discord.py views or embeds; callers still own
+    mutations to those objects.
     """
 
     mode: MessageMode

@@ -65,15 +65,19 @@ class AttachedFragment:
         return files_for(self.assets)
 
     def attachments(self, host_files: Sequence[discord.File] = ()) -> list[discord.File]:
-        """Merge the host's files with the fragment's, in that order.
+        """Return host files followed by fresh wrappers for the fragment's upload assets.
 
-        Exists because `[*host_files, *fragment.build_files()]` is the one line a host can forget,
-        and forgetting it breaks `attachment://` references rather than raising.
+        Include these files in delivery so the fragment's attachment:// references resolve.
         """
         return [*host_files, *self.build_files()]
 
     def stale(self) -> bool:
-        """Whether the host has changed since this fragment was planned against it."""
+        """Compare the view's current measurements with its attachment-time fingerprint.
+
+        Content changes preserving those measurements are not detected. The comparison
+        omits external attachment counts, so a nonzero attachments argument at attach time
+        makes this report stale even when the view has not changed.
+        """
         return measure(self.view).fingerprint != self.fingerprint
 
     def remove(self) -> None:
@@ -89,7 +93,11 @@ class AttachedFragment:
 
 @dataclass(slots=True)
 class Fragment:
-    """A planned, drawn, sessionless Squid region waiting to be placed."""
+    """A planned, drawn, sessionless region waiting for one attach or release attempt.
+
+    A failed reservation or preflight check consumes the fragment; re-plan before
+    trying again. Failed insertion restores staging so that attempt can be retried.
+    """
 
     items: tuple[discord.ui.Item[Any], ...]
     plan: PlanResult[ComponentsV2]
@@ -109,21 +117,21 @@ class Fragment:
         return files_for(self.assets)
 
     def release(self) -> tuple[discord.ui.Item[Any], ...]:
-        """Hand the items over for manual placement, dropping the atomicity promise.
+        """Release rendered items for manual placement, consuming this fragment.
 
-        Deliberately not called `detach`: the inverse of `attach` is
-        `AttachedFragment.remove`, and a pair of names that look like inverses but are not is
-        a trap. After this the caller owns ordering, preflight, and rollback.
+        The caller takes responsibility for ordering, preflight, and rollback. followed_by
+        items are not included in the returned tuple.
         """
         self._claim()
         self._detach_all()
         return self.items
 
     def attach(self, view: discord.ui.LayoutView, *, attachments: int = 0) -> AttachedFragment:
-        """Validate the complete prospective view, then append this fragment to it.
+        """Check the reservation and prospective view, then append the region and trailing items.
 
-        Nothing is moved until the whole result is known to be legal, and a host subclass
-        that raises from `add_item` gets everything rolled back.
+        Uses attachments for host files beyond this fragment's assets. Checks run before
+        insertion; if add_item fails, successfully inserted items are removed and the
+        fragment's items are restaged. A reservation or preflight failure requires replanning.
         """
         staging = self._staging
         self._claim()
@@ -288,7 +296,7 @@ def _preflight(
     assets: Sequence[Asset],
     limits: V2Limits = LIMITS,
 ) -> None:
-    """Prove the whole prospective view is legal before one item moves."""
+    """Check ownership, budgets, IDs, and local item limits before inserting into the host."""
     for item in fragment_items:
         if item.view is not None and item.view is not staging:
             message = "a fragment item is already parented in another view"

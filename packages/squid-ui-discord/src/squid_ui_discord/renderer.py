@@ -1,4 +1,10 @@
-"""Mechanical drawing of resolved Discord Components V2 scenes."""
+"""Turn planned Components V2 scenes into discord.py message payloads.
+
+Planning has already chosen the layout and fitted its content. This renderer compiles
+the scene into drawing steps, executes them to build a fresh view, and audits the native
+result. Local action controls ask the MessageRoot's wire callback to attach dispatch;
+routed controls carry their route ID and are dispatched separately by a Router.
+"""
 
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
@@ -37,13 +43,10 @@ type ViewFactory = Callable[[], discord.ui.LayoutView]
 
 
 class MountedRenderer[BodyT: scene.Body](Renderer[BodyT, MessagePayload], Protocol):
-    """A renderer a live `MessageRoot` can hand its dispatch to.
+    """A message renderer that accepts a mount's control-wiring callback.
 
-    `Renderer` is the mechanical contract: a scene in, a drawn thing out. A mount needs one
-    more thing from it -- `wire`, which turns each interactive control into an item bound to
-    that mount's generation -- and a mount picks its renderer by dialect id at runtime, so
-    the two concrete renderers have to be reachable through one type. Without this, the call
-    went through `cast(Any, renderer)` and nothing checked either half.
+    wire builds SDK items bound to the current mount generation using the matching
+    plan's bindings. Both classic and Components V2 renderers implement this contract.
     """
 
     @override
@@ -257,7 +260,7 @@ def _compile_item(node: scene.Node) -> _V2Instruction:
 
 
 def _opaque(instruction: _V2Instruction) -> bool:
-    """Whether drawing this step needs a plan resource, so its program cannot be certified."""
+    """Return whether a native extension prevents reuse of the program's audit result."""
     match instruction:
         case _V2Extension():
             return True
@@ -275,7 +278,13 @@ def _compile_program(document: scene.Scene[scene.ComponentsV2]) -> _V2Program:
 
 
 class V2Renderer:
-    """Draw a resolved Components V2 scene without making layout decisions."""
+    """Draw a resolved Components V2 scene without making layout decisions.
+
+    The optional plan must belong to the supplied scene: its fingerprint selects the
+    cached drawing program, and its resources supply extensions and attachments.
+    Mounted controls require both plan and wire; routed controls need neither.
+    Cached programs construct new views and controls on each draw.
+    """
 
     def __init__(
         self,
@@ -299,12 +308,7 @@ class V2Renderer:
         plan: PlanResult[scene.ComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> MessagePayload:
-        """Draw the complete message this scene resolves to.
-
-        A payload rather than a view, because a message is both halves. For Components
-        V2 the layout happens to be the whole message, so this looks like ceremony — it stops
-        looking like it the moment the other renderer has content and embeds to return.
-        """
+        """Draw a view and include upload assets from the matching plan, when supplied."""
         return MessagePayload.components_v2(
             self.view(document, plan=plan, wire=wire),
             # `attachment_assets` is body-agnostic; BasedPyright infers `PlanResult`'s frozen
@@ -319,6 +323,12 @@ class V2Renderer:
         plan: PlanResult[scene.ComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
+        """Build a fresh view, checking the scene protocol and target first.
+
+        With audit enabled, inspect the result unless an unchanged static program already
+        passed. Custom factories, mounted wiring, and native extensions are audited on
+        every draw because their SDK objects can differ between calls.
+        """
         if document.protocol != scene.Codec.protocol:
             message = f"V2Renderer cannot draw scene protocol {document.protocol}"
             raise DrawInvariantError(message)

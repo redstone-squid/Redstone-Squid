@@ -1,4 +1,9 @@
-"""Discord event aliases with a request as their invocation context."""
+"""Discord event aliases with a Request as their invocation context.
+
+The ``on_*`` helpers mark a callback as the Discord implementation of a portable handler.
+Frontend selection then chooses it when rendering for Discord, and the callback can use
+``event.context`` for Discord-specific request information.
+"""
 
 from collections.abc import Awaitable, Callable
 from typing import Any, cast

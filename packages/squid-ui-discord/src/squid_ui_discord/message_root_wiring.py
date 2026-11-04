@@ -1,7 +1,8 @@
 """Scene controls wired to discord.py: mounted views, buttons, and selects.
 
-Each wired control carries its mount, key, and render generation, and funnels its callback
-into :meth:`MessageRoot.dispatch`; nothing here decides behaviour beyond that routing.
+Each wired control carries its message root, binding key, and render generation, then
+forwards clicks to :meth:`MessageRoot.dispatch`. The generation identifies the view that
+the actor clicked, allowing the root to reject or rebind an outdated action.
 """
 
 import hashlib

@@ -1,4 +1,13 @@
-"""Response policy and outcomes for the owner-scoped Discord facade."""
+"""Describe how a Discord response should be presented and what delivery produced.
+
+ResponseSpec combines audience, access, and lifetime settings. The facade overlays
+runtime defaults with a Screen's policy, then call-specific overrides; UNSET inherits
+the earlier value, while None is an explicit setting. For example, timeout=None disables
+the idle timeout rather than inheriting the runtime's timeout.
+
+Delivery returns Sent for static content or Presented for a live component, with
+Rejected and Abandoned recording admission refusal and deliberate non-delivery.
+"""
 
 from dataclasses import dataclass, fields
 from enum import Enum

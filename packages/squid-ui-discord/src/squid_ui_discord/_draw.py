@@ -1,10 +1,7 @@
-"""The plan-then-draw pipeline both Discord dialects run.
+"""Shared planning, profiling, drawing, and degradation logging for Discord messages.
 
-`squid_ui_discord.render_message` and `squid_ui_discord.classic.render_message` are separate
-entry points on purpose -- the author picks the message mode and should have to say so -- but
-what they *do* between a document and a payload never differed: plan, record the planner's
-metrics, draw, warn about degradation. That part lives here so the two stay one implementation
-while remaining two APIs.
+Classic and Components V2 entry points choose their own target and renderer, then
+use this pipeline to produce a payload alongside its bindings and plan report.
 """
 
 import logging
@@ -28,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder | None]:
-    """Time one phase when a recorder is present, and cost nothing when it is not."""
+    """Record one phase when profiling is enabled; otherwise yield None."""
     if profile is None:
         yield None
         return

@@ -1,15 +1,9 @@
-"""Boundary gate that keeps built views inside Discord's limits.
+"""Audit built Discord views and apply the available repairs in place.
 
-Defense in depth: the layout engine should never produce an oversized view, but a measurement
-bug or a discord.py serialization change would otherwise surface as HTTP 50035 at send time.
-discord.py validates child *counts* locally and no string lengths at all, so this gate walks a
-built view, clamps every length it can, and reports each intervention. Tests treat any clamp as
-a failure; production degrades to an ugly-but-delivered message.
-
-Detection for views lives in `inspection.audit`; this module is the repair half over the same
-measurements. A fragment's preflight uses `audit` alone, because trimming a host's own content
-would violate its ownership of the message. Modals keep detection here: they are not views, and
-`audit` deliberately walks view structure only.
+Some violations, including duplicate custom IDs and excess component counts, have
+no repair. A returned report does not mean the view is now valid. Renderers use
+strict mode to reject any violation; fragment preflight uses the read-only audit
+because it must not trim host-owned content.
 """
 
 from typing import Any, cast
@@ -42,15 +36,19 @@ def trim(text: str, limit: int) -> str:
 
 
 def conform(view: discord.ui.LayoutView, *, strict: bool = False, limits: V2Limits = LIMITS) -> list[str]:
-    """Clamp ``view`` in place to Discord's limits and describe every clamp applied.
+    """Audit a view, apply supported repairs, and report the original violations.
+
+    Repairs mutate the view even in strict mode. Unrepairable violations remain in the
+    report, and the result is not audited again. Select option values may be truncated,
+    so callers should not assume repaired identifiers retain their original meaning.
 
     Args:
-        view: The built view; mutated when anything exceeds a limit.
-        strict: Raise :class:`LimitViolationError` after clamping instead of returning quietly.
+        view: The built view to inspect and repair.
+        strict: Raise LimitViolationError after repairs if any violation was found.
         limits: The limit table to enforce.
 
     Returns:
-        One human-readable description per intervention; empty when the view already fit.
+        Original violation messages, including issues that could not be repaired.
     """
     report = audit(view, limits=limits)
     for violation in report.violations:
@@ -134,14 +132,7 @@ def conform_modal(
 
 
 def _report_custom_id(item: object, limits: ComponentLimits, notes: Notes) -> None:
-    """Report an over-budget custom id, never clamp it.
-
-    Every other string here degrades gracefully when trimmed. A custom id does not: a
-    shortened one routes to a different handler or to none, so the only safe outcome is to
-    say so. `Route.id` refuses the same thing earlier and with a better message, but a
-    `RoutedButton` built by hand or read back through the codec never passes through it, and
-    an invalid state that only Discord rejects is exactly what this gate exists to catch.
-    """
+    """Report an over-budget custom ID without changing its routing identity."""
     custom_id = getattr(item, "custom_id", None)
     if isinstance(custom_id, str) and len(custom_id) > limits.custom_id:
         _note(notes, f"custom id {len(custom_id)} > {limits.custom_id} (not clampable): {custom_id[:32]!r}...")

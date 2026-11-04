@@ -1,17 +1,8 @@
-"""Mechanical drawing of resolved classic Discord messages, and the audit that proves them.
+"""Draw classic Discord content, embeds, and controls from a resolved scene.
 
-Two facts shape everything here, and neither is obvious.
-
-`discord.ui.View` rejects `ActionRow` items outright, and an ActionRow-only `LayoutView` is
-not a substitute: `ActionRow._is_v2()` returns True by deliberate upstream design, so such a
-view sets the Components V2 flag on the message even though its payload is byte-identical to a
-classic one. That flag is irreversible. So rows become explicit `row=` indices on bare
-`Button` and `Select` items in a real `View`.
-
-And almost nothing about an embed is checked before it reaches Discord. discord.py enforces
-`len(embeds) > 10` and the 25-child cap on a view; the 6,000-character aggregate and every
-per-value cap are server-only. A payload that would come back as a 400 naming nothing useful
-therefore has to be caught here, by walking what will actually be sent.
+Rows use explicit row indices on bare buttons and selects in a View. ActionRow
+objects require a LayoutView, which would set the Components V2 message flag.
+The final audit checks message and embed limits that SDK construction does not.
 """
 
 from collections.abc import Callable, Hashable
@@ -109,7 +100,12 @@ class StaticClassicView(discord.ui.View):
 
 
 class ClassicRenderer:
-    """Draw a resolved classic scene. It makes no layout decisions and repairs nothing."""
+    """Draw a classic scene and optionally audit the resulting message.
+
+    Supply the matching plan for bindings, assets, and its cached scene fingerprint.
+    Mounted controls also require wire. Set always_view for mounted prose-only screens
+    whose empty view must still own a timeout; static prose normally returns no view.
+    """
 
     def __init__(
         self,

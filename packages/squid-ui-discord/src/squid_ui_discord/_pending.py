@@ -37,7 +37,7 @@ class _ManagedResult[ValueT](Component):
 
     @property
     def initial(self) -> DocumentLike:
-        """Return the scene shown while the callback is running."""
+        """Return the document shown while the callback is running."""
         return self._initial
 
     @property
@@ -62,5 +62,5 @@ class _ManagedResult[ValueT](Component):
 
     @operation(initial=None)
     async def _run(self, _progress: ProgressReporter[None]) -> ValueT:
-        """Run the callback once the initial scene has been delivered."""
+        """Run the callback once the pending card has been delivered."""
         return await self._work()

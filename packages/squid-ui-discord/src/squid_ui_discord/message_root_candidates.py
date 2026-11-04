@@ -261,10 +261,11 @@ _REFUSED = _Admission(admitted=False)
 class _BusyPaint:
     """One action's interim "working" render, and the ordering between it and the flush.
 
-    The paint is scheduled by the acknowledgement watchdog and the flush by the handler
-    returning, so the two race. They are ordered by this object's lock rather than by
+    A delayed task paints while the handler runs, and the handler's return starts the
+    final refresh, so the two race. They are ordered by this object's lock rather than by
     cancellation: `close()` waits out a paint already in flight and then latches, so a
-    watchdog that wakes late paints nothing over the final render.
+    delayed paint that wakes late writes nothing over the final render. The separate
+    acknowledgement watchdog remains free to defer while painting waits for delivery.
     """
 
     def __init__(

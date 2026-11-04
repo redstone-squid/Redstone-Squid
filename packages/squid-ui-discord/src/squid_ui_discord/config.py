@@ -33,7 +33,7 @@ class ErrorPolicy:
 
 @dataclass(frozen=True, slots=True)
 class Config:
-    """Process-wide rendering services and response defaults."""
+    """Rendering services and response defaults for one client's installed UI runtime."""
 
     # `default_factory=MessageRootDefaults` leaves both parameters unsolved instead of falling
     # back to their PEP 696 defaults; calling the class applies them.

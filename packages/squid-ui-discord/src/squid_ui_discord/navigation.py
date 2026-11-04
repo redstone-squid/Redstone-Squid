@@ -1,10 +1,9 @@
 """Stack navigation by composition.
 
-`StackNavigator` embeds whichever child component is on top of its stack and appends the
-Back/Home/Close row *last, because it renders last* — no `__init_subclass__` machinery
-rewriting subclass constructors to keep controls in order. It is an ordinary consumer of
-`Component.boundary`: the screens are children in the component tree, reaching the mount through
-their parent rather than through a mount reference the navigator hands out.
+`StackNavigator` embeds the child component at the top of its stack, followed by the
+Back/Home/Close row. Pushing a child preserves the previous screen for Back; Home discards
+all but the root screen. Each visible child enters the component tree through
+`Component.boundary`, so its controls and state use the normal parent-child lifecycle.
 """
 
 from typing import override

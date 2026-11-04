@@ -1,4 +1,10 @@
-"""Plan documents and render complete Discord message payloads."""
+"""Plan documents and render complete Discord message payloads.
+
+The planner chooses a scene that fits the target; the renderer constructs its native
+discord.py view and attachments. RenderedMessage keeps the payload beside its plan,
+whose bindings and proposed presentation-state updates a live frontend needs after
+delivery. These helpers construct messages without sending them or mounting components.
+"""
 
 import logging
 from dataclasses import dataclass
@@ -103,7 +109,11 @@ def render_static(
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     **options: Unpack[StaticPlanOptions],
 ) -> MessagePayload:
-    """Plan and draw a sessionless Components V2 document as a complete message."""
+    """Render a sessionless Components V2 payload without mounting or sending it.
+
+    A Component is rendered once, without starting its reactive lifecycle. Use routed
+    controls for interactions; local callbacks require a mounted frontend.
+    """
     return render_message(nodes.render() if isinstance(nodes, Component) else nodes, target=target, **options).payload
 
 

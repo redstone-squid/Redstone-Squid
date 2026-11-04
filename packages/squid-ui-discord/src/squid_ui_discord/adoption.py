@@ -1,17 +1,15 @@
-"""Squid takes over an *unsent* discord.py view.
+"""Use an unsent discord.py view as a Squid component, preserving its callbacks.
 
-A live view — one that has been sent and will edit its own message — stays rejected, and
-`docs/plans/squid-ui-redesign/90-deferred.md` records why: two writers on one message make
-budget measurement unsound. An unsent view claims nothing. It is items and callbacks that have
-not met Discord, so Squid can translate the items into its own exact primitives, become the
-sole writer, and keep the legacy object as a model plus a set of handlers. Renderer ownership,
-the property the rejection protects, is preserved rather than traded away: Squid constructs
-every item it draws.
+``adopt(view)`` translates the view's items into layout nodes. Squid then constructs the
+native controls and owns delivery, while the legacy view remains the mutable model read
+on each render. Already-dispatching views are rejected because two independent writers
+could invalidate each other's layout measurements; see
+``docs/plans/squid-ui-redesign/90-deferred.md`` for that ownership constraint.
 
-The seam is the interaction proxy. `await interaction.response.edit_message(view=self)` is the
-last line of nearly every discord.py callback, and here it means "I am done mutating; flush" --
-it performs no HTTP, and the mount answers the interaction itself. Everything that would make
-the legacy object a second writer raises `AdoptionError` instead of being quietly swallowed.
+Callbacks receive an interaction proxy. The common
+``await interaction.response.edit_message(view=self)`` marks the proxy response as done
+without sending HTTP; the message root refreshes after the callback. Direct edits through
+the proxy's message and original-response methods raise AdoptionError.
 """
 
 from collections.abc import Awaitable, Callable, Sequence
@@ -575,7 +573,7 @@ class _AdoptedView(Component[Any, Any]):
         return on_select
 
     async def _invoke(self, key: str, event: Any, values: list[Any] | None) -> None:
-        """Run one legacy callback behind the proxy, then tell the runtime the view moved."""
+        """Run one legacy callback behind the proxy, then report mutations to the runtime."""
         view = self._view
         if isinstance(view, discord.ui.LayoutView):
             item = self._layout_key_map().get(key)

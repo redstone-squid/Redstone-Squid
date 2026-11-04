@@ -1,8 +1,12 @@
 """Read-only measurement and validation of a host-owned Discord layout.
 
-Fragment composition needs to know what a view already spends without changing it, so every
-function here walks public item structure and returns values. `conform` is the repair adapter
-over the same measurements; nothing in this module mutates a view.
+Before adding a fragment, Squid needs to reserve the space already occupied by its host.
+The measure functions return both actual usage and the capacity that planning must leave
+alone; those differ when the host owns an indivisible field such as classic content.
+The reservation also carries an audit report, so composition can reject an invalid host.
+
+Audits report violations without repairing them. conformance.conform consumes the same
+Components V2 audit when a caller permits repairs; nothing here mutates a view.
 """
 
 import hashlib
@@ -28,9 +32,10 @@ from squid_ui.planning.resources import ResourceCost
 from squid_ui_discord.message_payload import MessageMode, MessagePayload
 
 type Path = tuple[int, ...]
+"""Zero-based child indices from the view root; a section's accessory follows its text children."""
 
 ALLOWED_SCHEMES = frozenset({"http", "https", "attachment"})
-"""What Discord accepts in an embed URL. Anything else is rejected before it is sent."""
+"""URL schemes accepted by the local embed audit."""
 
 
 class ViolationCode(StrEnum):
@@ -122,7 +127,11 @@ class MessageReservation:
 
     @property
     def fingerprint(self) -> str:
-        """A digest of the measurement, for detecting a host that changed since planning."""
+        """Digest usage, reservations, custom IDs, and mode for stale-budget detection.
+
+        This does not hash full content: edits preserving these measurements can leave
+        the fingerprint unchanged.
+        """
         canonical = repr(
             (
                 sorted(self.usage.values.items()),
@@ -182,12 +191,14 @@ def measure(
     *,
     attachments: int = 0,
 ) -> MessageReservation:
-    """Measure what a host message or view already spends, mutating and repairing nothing.
+    """Measure a host payload or view without changing it.
 
-    One function over three shapes because a caller reserving room does not care which one
-    it holds — it cares what is left. What it holds decides the axes, not the API, and it
-    decides the limits too: a V2 host is measured against the V2 table and a classic one
-    against the classic table, with nothing for a caller to get wrong.
+    attachments counts host files beyond any assets already in a MessagePayload.
+    A bare View accounts for controls only; include its content and embeds in a
+    MessagePayload when reserving space for a complete classic message.
+
+    Classic validation currently groups controls by their authored row values. Give
+    automatically placed controls explicit rows to avoid false row-limit violations.
     """
     if isinstance(host, MessagePayload):
         if host.mode is MessageMode.CLASSIC:
@@ -233,7 +244,11 @@ def measure_classic(
     attachments: int = 0,
     limits: ClassicLimits = CLASSIC_LIMITS,
 ) -> MessageReservation:
-    """Measure a complete classic host message across the axes a classic target budgets."""
+    """Measure classic content, embeds, controls, and attachments without mutation.
+
+    attachments is additional to host.assets. The report uses audit_classic_payload;
+    set explicit control rows to avoid its automatic-placement limitation.
+    """
     if host.mode is not MessageMode.CLASSIC:
         message = f"measure_classic expects a classic payload, not {host.mode.value}"
         raise TypeError(message)
@@ -320,7 +335,7 @@ def audit(
     attachments: int = 0,
     limits: V2Limits = LIMITS,
 ) -> AuditReport:
-    """Find every limit `view` breaks, repairing nothing."""
+    """Report the structural and size violations covered by this view audit without repairing them."""
     violations: list[Violation] = []
     text_total = 0
     seen_ids: dict[str, Path] = {}
@@ -582,12 +597,16 @@ def audit_classic_payload(
     attachments: int = 0,
     limits: ClassicLimits = CLASSIC_LIMITS,
 ) -> list[str]:
-    """Every way this payload would be rejected, found before it is sent.
+    """Report covered classic message limits, embed fields, URLs, and control identities.
 
-    Walks `Embed.to_dict()` because that is the wire shape, and cross-checks the aggregate
-    against `Embed.__len__`, which already computes exactly Discord's definition — title,
-    description, field names and values, footer text, author name. Re-deriving that sum here
-    would be a second, drifting definition of the same rule.
+    Embed values are checked from to_dict, the shape that will be serialized. Aggregate
+    text length uses len(embed), keeping discord.py's definition of counted fields rather
+    than maintaining a second sum here.
+    This is a local audit, not a guarantee that Discord will accept the payload.
+
+    Control row checks use item.row rather than discord.py's assigned row. Set explicit
+    rows on automatically placed controls to avoid valid multirow views being reported
+    as one oversized row.
     """
     problems: list[str] = []
 

@@ -1,4 +1,10 @@
-"""Factories shared by classic and Components V2 messages."""
+"""Build Discord layout primitives shared by classic and Components V2 messages.
+
+These factories choose a concrete control or text representation. For example, button
+remains a button, whereas a portable semantic action may become a menu entry during
+planning. Structural helpers retain their own rules: row fixes one row, while controls
+allows the planner to distribute buttons across rows.
+"""
 
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Literal
