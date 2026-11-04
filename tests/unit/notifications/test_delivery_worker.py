@@ -22,7 +22,7 @@ from tests.support.delivery_uow import NotificationUnitOfWork
 
 @dataclass
 class DeliveryRepository:
-    """One claimed delivery and its persisted outcome."""
+    """Track one in-memory claim and its outcome; no retry timing or database locking is modeled."""
 
     delivery: PendingNotificationDelivery
     status: Literal["pending", "claimed", "completed", "failed", "suspended"] = "pending"
@@ -82,8 +82,8 @@ async def worker(mocker: MockerFixture) -> AsyncIterator[DeliveryWorker]:
     )
     async with discord.Client(intents=discord.Intents.none()) as client:
         runtime = sd.install(client)
-        # Discord's gateway owns readiness and user caching in production. Only the DM send
-        # crosses the network here; the cog, UI scope, and notification service are real.
+        # Bypass gateway readiness and seed a mock user whose send method records delivery.
+        # The cog, UI scope, and notification service are real; no network send occurs.
         client._ready.set()  # pyright: ignore[reportPrivateUsage]
         user = mocker.Mock(spec=discord.User, id=repository.delivery.discord_id)
         client._connection._users[user.id] = user  # pyright: ignore[reportPrivateUsage]

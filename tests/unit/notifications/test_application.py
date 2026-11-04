@@ -19,6 +19,8 @@ SUBJECT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
 @dataclass(slots=True)
 class NotificationRepositoryFake:
+    """Return fixed policy inputs and fail if a rejected subscription reaches insertion."""
+
     preferences: NotificationPreferences
     target_exists: bool = True
     attempted_add: bool = False
