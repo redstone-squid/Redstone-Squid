@@ -1,13 +1,9 @@
-"""Cursor-aware analysis of a partially typed search query.
+"""Find the part of a query being edited so the UI can offer completions.
 
-`SearchQueryParser` cannot help here. It calls `_fail()` on the first token it cannot complete,
-and a query being typed is *always* in that state — `restriction:` is a syntax error right up to
-the moment it stops needing completion. So this re-reads the same token shapes without ever
-raising, and reports what the caret is sitting in.
-
-It deliberately looks only at the token under the caret rather than parsing the whole query. What
-may be suggested at a position depends on that token and, at most, the field name in front of it;
-whether the rest of the query is well-formed is not this module's problem.
+Incomplete input such as `restriction:` fails full query parsing but still needs
+suggestions. This module examines the text before the caret without validating
+the whole query. The result identifies a field value, range, or bare term and
+the span that a selected completion should replace.
 """
 
 from dataclasses import dataclass
@@ -16,10 +12,10 @@ from enum import StrEnum
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 
 _TOKEN_BREAKS = frozenset(" \t\n()[]")
-"""Characters that end a token. Mirrors the parser's word breaks, minus the ones a caret sits in."""
+"""Token boundaries outside quotes; field operators stay within the token."""
 
 _OPERATORS = (":", "<=", ">=", "<", ">")
-"""Longest first, so `<=` is not read as `<` followed by a stray `=`."""
+"""Check two-character comparisons before their one-character forms."""
 
 BOOLEAN_KEYWORDS = ("AND", "OR", "NOT")
 
@@ -47,7 +43,7 @@ class CompletionContext:
 
     start: int
     end: int
-    """The half-open span to replace, so a client splices instead of clobbering."""
+    """Exclusive end of the replacement span `query[start:end]`."""
 
     field: FieldDefinition | None = None
     quoted: bool = False
@@ -59,7 +55,11 @@ def analyze(
     cursor: int | None = None,
     registry: FieldRegistry = DEFAULT_FIELD_REGISTRY,
 ) -> CompletionContext:
-    """Describe what may be completed at `cursor`, defaulting to the end of the query."""
+    """Describe the token before `cursor`, defaulting to the end of the query.
+
+    Cursor positions outside the string are clamped to its bounds. The replacement
+    span ends at the cursor, so any text after it is left for the caller to handle.
+    """
     position = len(query) if cursor is None else max(0, min(cursor, len(query)))
     if (open_bracket := _open_range(query, position)) is not None:
         # A range spans whitespace, so it has to be detected before tokenizing. Only syntax can be
@@ -88,10 +88,9 @@ def analyze(
 
 
 def completes_values(field: FieldDefinition) -> bool:
-    """Whether listing indexed values makes sense for a field.
+    """Return whether the field offers indexed text values as completions.
 
-    Numbers and timestamps have no useful value list: nobody wants the twelve hundred widths that
-    happen to be indexed. Those get syntax help from `range_hint` instead.
+    Other types use `range_hint` to explain their accepted syntax.
     """
     return field.value_type is FieldType.TEXT
 
@@ -106,10 +105,12 @@ def range_hint(field: FieldDefinition) -> str | None:
 
 
 def render_value(value: str, *, quoted: bool) -> str:
-    """Render a chosen value so it parses back as one token.
+    """Quote a completion containing whitespace or field and grouping punctuation.
 
-    A value containing a space has to be quoted or the parser reads the tail as a separate term,
-    which silently widens the search instead of narrowing it.
+    Embedded quotes and backslashes are escaped inside the quoted value. Otherwise,
+    a name such as `slime door` would become two search terms. This does not yet
+    quote bare query keywords or unsupported modifiers, so it is not a general
+    query-literal encoder.
     """
     if quoted or any(character in value for character in ' \t()[]:<>"'):
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
@@ -120,8 +121,8 @@ def render_value(value: str, *, quoted: bool) -> str:
 def _token_start(query: str, position: int) -> int:
     """Find where the token under the caret begins.
 
-    An open quote wins over whitespace: inside `creator:"Nu`, the space in a name being typed is
-    part of the value, not the end of it.
+    Whitespace inside an open quote belongs to the value. For example,
+    `creator:"Red Stone` is one token even though the name contains a space.
     """
     if (quote := _open_quote(query, position)) is not None:
         return _token_start(query, quote)
@@ -167,11 +168,10 @@ def _field_before(query: str, bracket: int, registry: FieldRegistry) -> FieldDef
 
 
 def _split_field(token: str, registry: FieldRegistry) -> tuple[FieldDefinition | None, int]:
-    """Find the field an operator in `token` names, and where its value begins.
+    """Return the registered field and the offset where its value begins.
 
-    Returns `(None, 0)` when the token is not a field expression, including when it names something
-    the registry does not publish — an unknown field is completed as a field name, not as a value
-    of a field that does not exist.
+    Return `(None, 0)` for bare terms and unknown field names. Unknown names receive
+    field-name suggestions rather than value suggestions.
     """
     for operator in _OPERATORS:
         head, separator, _ = token.partition(operator)

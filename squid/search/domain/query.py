@@ -1,4 +1,10 @@
-"""Typed search query syntax tree."""
+"""Represent a parsed search query independently of the database.
+
+TextExpression searches the combined document, while FieldExpression selects a
+named field such as width. BooleanExpression and NotExpression combine those
+clauses into a tree. The parser resolves field aliases and converts values before
+the backend compiles the tree into a filter.
+"""
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -65,7 +71,7 @@ class NotExpression:
 
 @dataclass(frozen=True, slots=True)
 class BooleanExpression:
-    """A flattened Boolean combination."""
+    """Two or more expressions joined by the same Boolean operator."""
 
     operator: BooleanOperator
     operands: tuple[QueryExpression, ...]
@@ -81,7 +87,7 @@ type QueryExpression = TextExpression | FieldExpression | NotExpression | Boolea
 
 @dataclass(frozen=True, slots=True)
 class SearchQuery:
-    """Parsed query and its normalized representation."""
+    """A parsed query and its normalized spelling; expression is None for blank input."""
 
     expression: QueryExpression | None
     normalized: str

@@ -1,4 +1,4 @@
-"""Durable search-embedding application coordination."""
+"""Generate embeddings for queued search documents outside database transactions."""
 
 import asyncio
 import uuid
@@ -13,10 +13,10 @@ from squid.core.i18n import tr
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
-"""Backstop for one embedding call, sized above the OpenAI adapter's own budget.
+"""Maximum time for one embedding call, including the adapter's retries.
 
-Deliberately looser than OPENAI_REQUEST_TIMEOUT_SECONDS and its retries, so a
-well-behaved adapter reports its own failure rather than being pre-empted here.
+This exceeds the OpenAI adapter's timeout and retry budget so that it can report
+its own failure before this service cancels the call.
 """
 
 
@@ -38,11 +38,11 @@ class SearchEmbeddingJob:
     text: str
     attempts: int
     claim_token: uuid.UUID
-    """The database-minted fence this worker's acknowledgement must still match."""
+    """Token identifying this claim; completion must not overwrite a later claim."""
 
 
 class SearchEmbeddingQueue(Protocol):
-    """Claim-fenced persistence for embedding work."""
+    """Store embedding jobs and accept updates only from the current claim owner."""
 
     async def claim(self, *, limit: int) -> Sequence[SearchEmbeddingJob]: ...
 
@@ -52,7 +52,7 @@ class SearchEmbeddingQueue(Protocol):
 
 
 class SearchEmbeddingService:
-    """Drain changed search documents into pgvector."""
+    """Generate vectors for queued documents and save them in separate transactions."""
 
     def __init__(
         self,
@@ -69,7 +69,16 @@ class SearchEmbeddingService:
         self._max_attempts = max_attempts
 
     async def process_batch(self, *, limit: int = 8) -> tuple[int, int]:
-        """Embed a bounded batch, retaining exhausted documents as dead letters."""
+        """Claim and embed up to limit documents, returning (succeeded, failed).
+
+        The claim is committed before calling the model. Each completion or failure
+        is then committed separately. Success counts only vectors accepted by the
+        queue; stale completions are ignored. Failure counts model or persistence
+        exceptions, even if another worker has since claimed the job.
+
+        Failed jobs are retried until max_attempts, then retained for inspection.
+        Cancellation propagates without recording a failure.
+        """
         if not 1 <= limit <= 32:
             msg = tr(t"Embedding claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
@@ -79,11 +88,9 @@ class SearchEmbeddingService:
             await uow.commit()
         for job in jobs:
             try:
-                # The model port is a Protocol, so the adapter's own timeout is not
-                # something this loop can rely on. Without a bound here a hung
-                # provider stalls the periodic job that awaits process_batch to
-                # completion, staling its heartbeat and failing worker readiness.
-                # TimeoutError lands in the handler below and retries the job.
+                # Bound even adapters without their own timeout. A hung call would
+                # stall the worker's heartbeat; the handler below records the timeout
+                # as a failed attempt so the job can be retried.
                 with anyio.fail_after(EMBEDDING_CALL_TIMEOUT_SECONDS):
                     embedding = await self._model.embed(job.text)
                 embedding = _require_embedding(embedding)

@@ -24,7 +24,13 @@ SEARCH_EMBEDDING_QUEUE_SPEC = QueueSpec(
 
 
 class PostgresSearchEmbeddingQueue:
-    """Claim changed search documents and fence vector writes by source hash."""
+    """Claim documents for embedding and reject results from stale jobs.
+
+    Completion checks the source hash so a vector for old text cannot replace
+    one for the current document. The claim token separately prevents a worker
+    from completing a job another worker has reclaimed. SearchEmbeddingService
+    commits these queue and document updates in its unit of work.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -34,9 +40,8 @@ class PostgresSearchEmbeddingQueue:
         rows = await self._queue.claim(limit=limit, session=self._session())
         if not rows:
             return ()
-        # The document text is not on the queue row, so it is read after the claim
-        # rather than joined into it. A document cannot change underneath the job:
-        # `source_hash` is part of the fence, and any edit re-enqueues a new hash.
+        # Read text from the document after claiming its queue row. If the document
+        # changes while embedding runs, complete() rejects the old source hash.
         session = self._session()
         documents = {
             document.id: document
@@ -59,6 +64,7 @@ class PostgresSearchEmbeddingQueue:
         )
 
     async def complete(self, job: SearchEmbeddingJob, embedding: list[float], model: str) -> bool:
+        """Save the vector and remove the job; return False if its claim or source is stale."""
         session = self._session()
         # Projection updates lock documents before queue rows. Keep that order.
         document = await session.scalar(
@@ -76,6 +82,7 @@ class PostgresSearchEmbeddingQueue:
         return True
 
     async def fail(self, job: SearchEmbeddingJob, error: str, *, max_attempts: int) -> bool:
+        """Record a failed attempt and return whether the job became a dead letter."""
         outcome = await self._queue.fail(
             self._identity(job),
             job.claim_token,

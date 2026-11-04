@@ -103,14 +103,12 @@ class SearchDocumentFacet(Base, kw_only=True):
             postgresql_where=text("text_value IS NOT NULL"),
         ),
         Index(
-            # Equality on the plain index above cannot serve a prefix scan: under any non-C
-            # collation a btree's ordering is not the byte ordering `LIKE 'x%'` needs. Typeahead
-            # matches case-folded, so the index is on `lower(text_value)` with `text_pattern_ops`.
-            # The operator class is inline rather than in `postgresql_ops` because that mapping is
-            # keyed by column name and is silently dropped for an expression, which would emit an
-            # index without `text_pattern_ops` and diverge from the migration. Alembic cannot
-            # compare an expression carrying an operator clause and skips it, which is correct
-            # here: the migration creates exactly this.
+            # Prefix completion uses lower(text_value) LIKE 'prefix%'. text_pattern_ops
+            # lets PostgreSQL use this index when the collation's ordering differs
+            # from the byte ordering needed for prefix matches.
+            # Keep the operator class inside the SQL expression: postgresql_ops keys
+            # do not identify this unlabeled expression. Alembic skips comparison of
+            # this form, so changes must also be made explicitly in a migration.
             "search_document_facets_text_prefix_idx",
             "field_name",
             text("lower(text_value) text_pattern_ops"),
@@ -177,11 +175,11 @@ class SearchProjectionQueueItem(Base, kw_only=True):
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
-    """When this row next becomes claimable, and the only column backoff writes."""
+    """Earliest time a worker may claim this item; retries move it into the future."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The database-minted fencing token handed to the worker that claimed this row."""
+    """Token generated for the current claim; stale workers cannot acknowledge a newer claim."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
@@ -210,10 +208,10 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
-    """When this row next becomes claimable, and the only column backoff writes."""
+    """Earliest time a worker may claim this item; retries move it into the future."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The database-minted fencing token handed to the worker that claimed this row."""
+    """Token generated for the current claim; stale workers cannot acknowledge a newer claim."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

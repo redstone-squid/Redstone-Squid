@@ -1,4 +1,10 @@
-"""Ranking helpers that mention no table, column, or index."""
+"""Combine ordered search results without depending on database score scales.
+
+A ranking branch is one way of finding candidates: exact title, full-text,
+trigram, or semantic matching. Each branch supplies its own best-first list.
+Reciprocal rank fusion rewards documents near the top of those lists and adds
+their contributions when several branches find the same document.
+"""
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
@@ -29,7 +35,7 @@ DEFAULT_RRF_WEIGHTS: Mapping[RankingBranch, float] = {
 
 @dataclass(frozen=True, slots=True)
 class RankedCandidate:
-    """A document identity and deterministic display-order fields."""
+    """A result identity, title for breaking ties, and optional ranking score."""
 
     source_id: str
     resource_kind: Literal["record", "build", "metadata"]
@@ -53,7 +59,20 @@ def reciprocal_rank_fusion(
     k: int = 60,
     branch_limit: int = 200,
 ) -> tuple[RankedCandidate, ...]:
-    """Fuse ranked candidate branches with deterministic tie-breaking."""
+    """Combine result lists by weighted reciprocal rank.
+
+    Each branch must already be ordered from best to worst. A document receives
+    `weight / (k + rank)` from each branch that contains it, with ranks starting
+    at one. Input scores are ignored because the branches use different scales.
+
+    Only the first `branch_limit` entries of each branch are considered. Repeated
+    identities within that window count once and do not consume a rank. Ties in
+    the final score are ordered by case-folded title, resource kind, and source ID.
+
+    Raises:
+        ValidationError: If k or branch_limit is not positive, or a used weight
+            is negative.
+    """
     if k <= 0:
         raise ValidationError(tr(t"k must be positive"))
     if branch_limit <= 0:

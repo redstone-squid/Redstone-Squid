@@ -1,4 +1,4 @@
-"""Compile the typed search AST to bound SQLAlchemy predicates."""
+"""Turn parsed search expressions into SQLAlchemy predicates with bound values."""
 
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -38,7 +38,7 @@ class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
 
     @override
     def compile(self, query: SearchQuery) -> ColumnElement[bool]:
-        """Compile a complete Boolean predicate."""
+        """Compile the full expression; an empty query matches every document."""
         if query.expression is None:
             return true()
         return self._compile_expression(query.expression)
@@ -90,6 +90,8 @@ class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
             if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
                 return false()
             return SearchDocument.tags.contains([str(expression.value)])
+        # Use a separate EXISTS for each clause: a document may satisfy two clauses
+        # through different facet rows, and matching rows must not duplicate results.
         facet = SearchDocumentFacet
         value_column = {
             FieldType.TEXT: facet.text_value,
@@ -141,6 +143,7 @@ def _database_value(value: str | int | float | Decimal | bool, field_type: Field
         return Decimal(str(value))
     if field_type is FieldType.TIMESTAMP:
         parsed = datetime.fromisoformat(str(value))
+        # Dates and timestamps without an explicit offset are interpreted as UTC.
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=UTC)
         return Instant(parsed)

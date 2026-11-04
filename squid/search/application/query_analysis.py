@@ -13,7 +13,12 @@ _RANKED_TEXT_FIELDS = frozenset({"title", "description", "tag", "restriction", "
 
 
 def positive_text_expressions(query: SearchQuery) -> tuple[TextExpression | FieldExpression, ...]:
-    """Return positive text clauses usable for ranking after full Boolean filtering."""
+    """Return text clauses outside an odd number of NOT operators.
+
+    These clauses supply ranking terms only. Their original AND/OR relationships
+    are discarded here; the backend must still apply the complete query to filter
+    results. For example, `piston NOT slime` contributes only `piston`.
+    """
     expressions: list[TextExpression | FieldExpression] = []
     if query.expression is not None:
         _collect_positive_text(query.expression, expressions, negated=False)

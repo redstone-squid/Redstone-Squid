@@ -1,4 +1,14 @@
-"""Durable refresh infrastructure for indexed search documents."""
+"""Refresh search documents from queued changes to builds, records, and metadata.
+
+The loader assembles a SearchProjection: display text, result data, and typed
+filter values called facets. The store replaces the document and its facets
+together. A document can have several values for one field, such as its creators.
+
+The worker processes each queued resource in a savepoint, so one failed refresh
+can be retried without losing the other refreshes in the batch. SearchProjectionService
+commits the batch. Embedding jobs are queued here but run separately, because
+their model calls should not keep this database transaction open.
+"""
 
 import hashlib
 import json
@@ -85,7 +95,7 @@ class SearchProjection:
 
 @dataclass(frozen=True, slots=True)
 class RecordProjectionSource:
-    """Application-owned fields needed to project one computed record."""
+    """Record fields needed to build its search document."""
 
     result_id: int
     definition_id: int
@@ -112,7 +122,7 @@ class RecordHolderProjectionSource:
 
 @dataclass(frozen=True, slots=True)
 class TagProjectionSource:
-    """Application-owned fields needed to project one taxonomy tag."""
+    """Tag fields needed to build its search document."""
 
     tag_id: int
     display_name: str
@@ -129,9 +139,8 @@ class SearchProjectionStore:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        # No session factory: every call passes this store's session, so the claim
-        # and both acknowledgements join the projector's unit of work rather than
-        # committing underneath it.
+        # Claims, document updates, and acknowledgements share the caller's
+        # transaction so a rollback cannot leave the queue ahead of the index.
         self._queue = ClaimedRowQueue(SEARCH_PROJECTION_QUEUE_SPEC)
 
     async def claim(self, *, limit: int = 50) -> tuple[SearchProjectionQueueItem, ...]:
@@ -139,13 +148,7 @@ class SearchProjectionStore:
         return await self._queue.claim(limit=limit, session=self._session)
 
     async def complete(self, item_id: int, claim_token: uuid.UUID) -> bool:
-        """Remove a processed queue item, if this worker still owns it.
-
-        This used to be a bare `session.delete(item)` with no fence at all. It
-        relied on holding the row lock for the whole unit of work, but the reclaim
-        predicate hands the row to a second worker after the visibility timeout
-        regardless, and then both of them delete it.
-        """
+        """Remove a processed item and return True if its claim token still matches."""
         outcome = await self._queue.complete(
             (SearchProjectionQueueItem.id == item_id,),
             claim_token,
@@ -162,10 +165,10 @@ class SearchProjectionStore:
         *,
         max_attempts: int = PROJECTION_MAX_ATTEMPTS,
     ) -> bool:
-        """Release failed work or retain it as a dead letter after exhaustion.
+        """Schedule another attempt, or retain exhausted work as a dead letter.
 
-        The shared backoff comes with the shared fence. Without it a permanently
-        failing projection re-ran on every poll until it exhausted its attempts.
+        Return True only when this call marks the item as a dead letter. A stale
+        claim token leaves the item unchanged.
         """
         if max_attempts < 1:
             msg = "Projection max_attempts must be positive."
@@ -181,11 +184,11 @@ class SearchProjectionStore:
         return outcome.dead_lettered
 
     def token_of(self, item: SearchProjectionQueueItem) -> uuid.UUID:
-        """Read the fence off a row this store just claimed."""
+        """Return the claim token from a row this store just claimed."""
         return self._queue.token_of(item)
 
     async def delete_document(self, resource_kind: str, source_key: str) -> None:
-        """Delete a projected resource and its cascading facets/embedding work."""
+        """Delete the document; database cascades remove its facets and embedding job."""
         await self._session.execute(
             delete(SearchDocument).where(
                 SearchDocument.resource_kind == resource_kind,
@@ -194,7 +197,13 @@ class SearchProjectionStore:
         )
 
     async def replace(self, projection: SearchProjection) -> int:
-        """Upsert a document and replace all typed facets in the same transaction."""
+        """Insert or update a document and replace its facets; return its database ID.
+
+        A changed source hash clears the old embedding. Builds and records also
+        enqueue embedding work. An existing queue item with the same hash is left
+        alone so that refreshing a projection does not reset its claim or retries.
+        The caller owns the transaction.
+        """
         normalized_title = normalize_search_text(projection.title)
         tags = sorted({normalize_search_text(tag) for tag in projection.tags if tag.strip()})
         fuzzy_text = " ".join(
@@ -305,14 +314,14 @@ class SearchProjectionStore:
 
 
 class SearchProjectionLoader:
-    """Build search projections from current application-owned data."""
+    """Build search documents from current builds, active records, and approved metadata."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._build_mapper = BuildLoader()
 
     async def load(self, resource_kind: str, source_key: str) -> SearchProjection | None:
-        """Load the requested resource, returning None when its source was deleted."""
+        """Load a searchable resource, or return None for missing, ineligible, or invalid keys."""
         parsed = parse_projection_key(resource_kind, source_key)
         if parsed is None:
             return None
@@ -326,6 +335,7 @@ class SearchProjectionLoader:
         return None
 
     async def _build(self, build_id: int) -> SearchProjection | None:
+        # Gather the resource and related names needed for both display text and filters.
         build = await self._session.scalar(
             select(Build)
             .where(Build.id == build_id)
@@ -359,6 +369,7 @@ class SearchProjectionLoader:
         canonical_title: str | None = None
         canonical_subtitle: str | None = None
         title_diagnostics: list[dict[str, str | list[str]]] = []
+        # Keep imperfect builds searchable even when the category formatter cannot describe them.
         try:
             domain_build = await self._build_mapper.load(self._session, build)
             formatted = format_build_category(domain_build)
@@ -406,6 +417,7 @@ class SearchProjectionLoader:
         }
         assert build.submission_status is not None
         assert build.submission_time is not None and build.edited_time is not None
+        # Facets preserve typed values; the text tags above support lexical matching instead.
         facets = [
             *(ProjectionFacet("restriction", name) for name in restriction_names),
             *(ProjectionFacet("type", name) for name in type_names),
@@ -570,9 +582,8 @@ class SearchProjectionWorker:
         succeeded = 0
         failed = 0
         for item in await self._store.claim(limit=limit):
-            # Read everything the acknowledgement needs before entering the
-            # savepoint: rolling one back expires the attributes touched inside it,
-            # and reloading them would need the very session that just failed.
+            # Keep plain values for retry handling. Rolling back the savepoint can
+            # expire ORM attributes, whose later access would require an async reload.
             item_id = item.id
             token = self._store.token_of(item)
             attempts = item.attempts
@@ -606,6 +617,8 @@ class SearchProjectionWorker:
 
 
 class PostgresSearchProjection:
+    """Run projection work in the transaction supplied by the unit of work."""
+
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
@@ -614,7 +627,12 @@ class PostgresSearchProjection:
 
 
 def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int] | None:
-    """Parse one durable projection key without touching persistence."""
+    """Return the subtype and numeric ID encoded by a queue key.
+
+    Builds use a bare ID, records use `result:ID`, and metadata uses `subtype:ID`.
+    Return None for an unsupported resource kind or malformed key. Metadata
+    subtypes are checked later by the loader.
+    """
     if resource_kind == "build" and source_key.isdecimal():
         return "build", int(source_key)
     if resource_kind == "record":
@@ -633,7 +651,11 @@ def build_record_projection(
     source: RecordProjectionSource,
     holders: Sequence[RecordHolderProjectionSource] = (),
 ) -> SearchProjection:
-    """Compile one computed-record search document from loaded application data."""
+    """Build a record document using the first holder's title and metrics.
+
+    Holders must be ordered by rank. With no holders, use the record rule's title
+    and subtitle instead.
+    """
     first_holder = holders[0] if holders else None
     holder_ids = tuple(holder.build_id for holder in holders)
     tags = (source.record_class, source.build_kind, source.version_scope)
@@ -667,7 +689,7 @@ def build_record_projection(
 
 
 def build_tag_projection(source: TagProjectionSource) -> SearchProjection | None:
-    """Compile one approved taxonomy-tag search document from loaded application data."""
+    """Build a tag document, or return None when the tag is not approved."""
     if source.moderation_status != "approved":
         return None
     # The semantic kind makes `kind:pattern` and `kind:restriction` answerable;
@@ -709,6 +731,7 @@ def _metadata_projection(
 
 
 def build_facet_models(document_id: int, facets: Sequence[ProjectionFacet]) -> list[SearchDocumentFacet]:
+    """Create typed facet rows, numbering repeated values separately for each field."""
     models: list[SearchDocumentFacet] = []
     ordinals: dict[str, int] = {}
     for facet in facets:
@@ -741,10 +764,16 @@ def build_facet_models(document_id: int, facets: Sequence[ProjectionFacet]) -> l
 
 
 def normalize_search_text(value: str) -> str:
+    """Case-fold text and collapse whitespace to single spaces."""
     return " ".join(value.casefold().split())
 
 
 def projection_source_hash(projection: SearchProjection) -> str:
+    """Hash document content to detect changes that invalidate an embedding.
+
+    Dictionary keys are sorted, but tag and facet order remains significant.
+    Resource identity is excluded because the hash tracks content within a document.
+    """
     serialized = json.dumps(
         {
             "title": projection.title,

@@ -22,6 +22,7 @@ class PostgresFieldRegistryProvider:
         self._session = session
 
     async def registry(self) -> FieldRegistry:
+        """Add approved tags with query names and typed values to the built-in fields."""
         session = self._session()
         definitions = tuple(
             (
@@ -56,6 +57,7 @@ def _field_definition(
         for unit in units.values():
             if unit.dimension != canonical.dimension:
                 continue
+            # Query values must use the tag's canonical unit, which may differ from the base unit.
             scale = unit.scale_to_base / canonical.scale_to_base
             aliases.extend((alias, scale) for alias in {unit.key, unit.symbol, *unit.aliases})
         unit_scales = tuple(aliases)

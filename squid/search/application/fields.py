@@ -30,13 +30,21 @@ class FieldDefinition:
     supports_range: bool = False
     aliases: tuple[str, ...] = ()
     storage_name: str | None = None
+    """Facet key used in storage, such as `tag:42`; None uses the public name."""
     supports_sort: bool = False
     unit_scales: tuple[tuple[str, Decimal], ...] = ()
+    """Accepted suffixes and multipliers that convert values to the canonical unit."""
     numeric_step: Decimal | None = None
 
 
 class FieldRegistry:
-    """Resolve field names and coerce values without exposing persistence identifiers."""
+    """Define the field names, aliases, and value types accepted in search queries.
+
+    Built-in fields cover properties such as width and status. Approved data tags
+    can add fields with a public query name and a stable storage key such as tag:42.
+    The parser uses this registry to resolve names and convert values; the backend
+    uses the resulting field definitions for filtering and explicit sorting.
+    """
 
     def __init__(self, fields: Iterable[FieldDefinition]) -> None:
         self._fields: dict[str, FieldDefinition] = {}
@@ -48,7 +56,7 @@ class FieldRegistry:
                 self._fields[key] = field
 
     def resolve(self, name: str) -> FieldDefinition | None:
-        """Resolve a public field name or alias."""
+        """Resolve a field name or alias without regard to case; return None if unknown."""
         return self._fields.get(name.casefold())
 
     def suggestions(self, name: str, *, limit: int = 3) -> tuple[str, ...]:
@@ -58,7 +66,15 @@ class FieldRegistry:
 
     @staticmethod
     def coerce(field: FieldDefinition, raw: str) -> ScalarValue:
-        """Coerce a parsed literal according to an allowlisted field type."""
+        """Convert a literal to the field's value type.
+
+        Numbers accept the field's unit suffixes and must be finite and aligned
+        to its numeric step. Timestamps return normalized ISO strings. Booleans
+        accept true/false, yes/no, and 1/0 without regard to case.
+
+        Raises:
+            ValidationError: If the value does not meet the field's requirements.
+        """
         if field.value_type is FieldType.TEXT:
             return raw
         if field.value_type is FieldType.NUMBER:

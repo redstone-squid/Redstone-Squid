@@ -23,7 +23,17 @@ class SearchFieldRegistryProvider(Protocol):
 
 
 class SearchService:
-    """Parse and page searches, generating query embeddings outside database scopes."""
+    """Search builds, records, and metadata through the shared search index.
+
+    The field registry defines the names and value types accepted by the query
+    parser. The backend filters indexed documents with that parsed query and
+    orders the matches. Lexical ranking uses text matches; semantic mode adds
+    similarity between model-generated vectors to those lexical results.
+
+    Query vectors are generated before opening the search transaction, so a slow
+    model call does not hold a database connection. Filter-only queries and explicit
+    field sorts do not need a vector.
+    """
 
     def __init__(
         self,
@@ -35,6 +45,12 @@ class SearchService:
         self._embedding_model = embedding_model
 
     async def search(self, request: SearchRequest) -> SearchPage:
+        """Parse the request, fetch results, and add offset-based page links.
+
+        Semantic searches generate their query vector before opening the search
+        transaction. An embedding failure is logged and leaves the backend to
+        return lexical results with a warning.
+        """
         registry = await self.fields()
         query = SearchQueryParser(registry).parse(request.query)
         query_embedding = None
@@ -65,7 +81,7 @@ class SearchService:
         )
 
     async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
-        """Suggest indexed terms for a valid query."""
+        """Suggest indexed titles; limit must be between 1 and 25."""
         if not 1 <= limit <= 25:
             msg = "suggestion limit must be between 1 and 25"
             raise ValidationError(msg, public_context={"field": "limit", "minimum": 1, "maximum": 25})
@@ -82,6 +98,8 @@ class SearchService:
 
 
 class SearchUnitOfWork(UnitOfWork, Protocol):
+    """Read search documents and the field catalog in one transaction."""
+
     @property
     def search(self) -> SearchBackend: ...
 

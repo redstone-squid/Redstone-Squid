@@ -34,18 +34,17 @@ class SortDirection(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SearchSort:
-    """A caller-selected scalar field ordering."""
+    """A field and direction used to sort search results."""
 
     field: str
     direction: SortDirection = SortDirection.ASCENDING
 
     @classmethod
     def parse(cls, value: str | None) -> SearchSort | None:
-        """Parse a `-field` or `field` sort expression, or `None` for the default.
+        """Parse `field` as ascending and `-field` as descending.
 
-        The syntax belongs to the domain, not to one transport: the HTTP routes
-        and the bot's search command have to agree on what `-submission_time`
-        means, and they can only do that by parsing it in one place.
+        None selects the default ordering. Empty field names raise ValidationError;
+        whether a named field supports sorting is checked by the backend.
         """
         if value is None:
             return None
@@ -59,7 +58,7 @@ class SearchSort:
 
 @dataclass(frozen=True, slots=True)
 class SearchRequest:
-    """A normalized search request passed to an application service."""
+    """Search text, filters, and paging options shared by the bot and API."""
 
     query: str
     scope: SearchScope = SearchScope.RECORDS
@@ -128,10 +127,11 @@ type SearchHit = RecordSearchHit | BuildSearchHit | MetadataSearchHit
 
 @dataclass(frozen=True, slots=True)
 class SearchPage:
-    """One offset-addressed page of search results.
+    """One page of search results with offset-based navigation.
 
-    Relevance has no identifier sequence to anchor to, so both neighbours are always addressed by
-    offset; the shared anchor type is used so that every page in the system reads the same way.
+    Relevance order does not follow resource IDs, so neighbouring pages use offsets.
+    For ranked searches, total counts the collected candidates, which may be fewer
+    than all documents matching the query.
     """
 
     hits: tuple[SearchHit, ...]

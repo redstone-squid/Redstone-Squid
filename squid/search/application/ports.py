@@ -8,7 +8,7 @@ from squid.search.domain import SearchHit, SearchQuery, SearchRequest
 
 
 class SearchQueryCompiler[CompiledQueryT](Protocol):
-    """Compile a typed query AST into an adapter-specific, parameterized query."""
+    """Turn a parsed query into the parameterized form used by a storage backend."""
 
     def compile(self, query: SearchQuery) -> CompiledQueryT:
         """Compile without interpreting user text as identifiers or code."""
@@ -17,7 +17,11 @@ class SearchQueryCompiler[CompiledQueryT](Protocol):
 
 @dataclass(frozen=True, slots=True)
 class SearchSlice:
-    """One offset-addressed window of backend results and the size of the full result set."""
+    """A page of backend results and the total available for pagination.
+
+    Ranked searches may limit the candidate pool, so total need not count every
+    document that matches the filters.
+    """
 
     hits: tuple[SearchHit, ...]
     total: int

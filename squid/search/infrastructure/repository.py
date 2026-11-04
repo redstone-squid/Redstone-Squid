@@ -44,7 +44,18 @@ logger = logging.getLogger(__name__)
 
 
 class PostgresSearchBackend(SearchBackend):
-    """Rank and filter indexed documents using lexical and vector queries."""
+    """Filter search documents and choose their order for the requested page.
+
+    An explicit field sort orders all matches by that field. With no sort and no
+    positive text to rank, matches use title order. Otherwise, exact-title,
+    full-text, and trigram queries each collect a bounded list of candidates;
+    semantic mode adds a vector-similarity list. Reciprocal rank fusion combines
+    their positions into the final order.
+
+    Every branch applies the complete query and visibility filters. Ranked totals
+    count the combined candidate pool, while sorted and filter-only totals count
+    all matching documents.
+    """
 
     def __init__(
         self,
@@ -72,7 +83,6 @@ class PostgresSearchBackend(SearchBackend):
         if request.sort is not None:
             field = registry.resolve(request.sort.field)
             if field is None or not field.supports_sort:
-                # User input on both transports, so a message rather than a 500.
                 field_name = request.sort.field
                 raise ValidationError(
                     tr(t"Search results cannot be sorted by {field_name}."),
@@ -108,14 +118,12 @@ class PostgresSearchBackend(SearchBackend):
         offset: int,
         field: FieldDefinition,
     ) -> SearchSlice:
-        """Page documents by one scalar facet field, with no depth limit.
+        """Page matches by a field value, putting documents without that field last.
 
-        A document may hold several values for the same field -- facets are unique per
-        `(document_id, field_name, ordinal)` -- so joining the facet table directly would repeat
-        the document once per value and put OFFSET arithmetic out by however many duplicates fell
-        before the window. Aggregating to one row per document first makes the offset exact, and
-        picks the value a caller would expect to sort on: the smallest ascending, the largest
-        descending.
+        A document can have several values for a field. Use its smallest value for
+        ascending order and its largest for descending order. Aggregating before
+        joining also prevents duplicate documents from shifting page offsets.
+        Unlike relevance ranking, this path does not cap the candidate list.
         """
         ascending = request.sort is None or request.sort.direction is SortDirection.ASCENDING
         value_source = {
@@ -181,12 +189,11 @@ class PostgresSearchBackend(SearchBackend):
         offset: int,
         query_embedding: QueryEmbedding | None,
     ) -> SearchSlice:
-        """Page the fused relevance ranking.
+        """Combine the ranking branches and return one page of candidates.
 
-        `total` is the size of the fused candidate list, not of the corpus: ranking materializes at
-        most `_CANDIDATE_LIMIT` candidates per branch, so a query matching more documents than that
-        reports the capped figure and runs out of pages there. Deep relevance pages are not useful
-        enough to justify ranking the whole corpus, and an honest end beats a silently empty page.
+        Each branch contributes at most `_CANDIDATE_LIMIT` documents. Total counts
+        their deduplicated union, so pagination ends at the candidates we actually
+        ranked even when more documents match the filters.
         """
         terms = _ranking_text(query)
         branches: dict[RankingBranch, Sequence[RankedCandidate]] = {
@@ -243,11 +250,7 @@ class PostgresSearchBackend(SearchBackend):
 
     @staticmethod
     async def _count(session: AsyncSession, predicate: ColumnElement[bool]) -> int:
-        """Count matching documents.
-
-        The compiled predicate stands alone -- it never reaches through a join -- so a total needs
-        no facet join even when the page it accompanies was ordered through one.
-        """
+        """Count matches without joining facets, which could count a document more than once."""
         return await session.scalar(select(func.count()).select_from(SearchDocument).where(predicate)) or 0
 
     async def _exact_candidates(
@@ -306,7 +309,8 @@ class PostgresSearchBackend(SearchBackend):
         embedding: QueryEmbedding,
     ) -> tuple[RankedCandidate, ...]:
         distance = SearchDocument.embedding.cosine_distance(embedding.vector)
-        # Preserve the global candidate budget before applying the search predicate.
+        # Choose the nearest documents across the index first, then apply filters.
+        # A restrictive filter can therefore leave fewer than the candidate limit.
         nearest = (
             select(SearchDocument.id, distance.label("distance"))
             .where(SearchDocument.embedding.is_not(None), SearchDocument.embedding_model == embedding.model)
@@ -364,7 +368,7 @@ class PostgresSearchBackend(SearchBackend):
 
 
 def _visible_builds(statuses: frozenset[str]) -> ColumnElement[bool]:
-    """Apply the build moderation fence without excluding records or metadata."""
+    """Restrict build statuses while leaving records and metadata eligible."""
     return or_(
         SearchDocument.resource_kind != "build",
         func.lower(SearchDocument.status).in_(sorted(status.casefold() for status in statuses)),

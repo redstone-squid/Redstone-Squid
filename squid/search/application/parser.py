@@ -1,4 +1,4 @@
-"""Safe parser for the supported Lucene-style search subset."""
+"""Parse text, field comparisons, and Boolean search expressions."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -21,7 +21,7 @@ from squid.search.domain.query import (
 
 
 class QuerySyntaxError(ValidationError):
-    """A user-correctable query error with source location and suggestions."""
+    """A query error with a zero-based character position and suggested field names."""
 
     def __init__(self, message: str, position: int, *, suggestions: tuple[str, ...] = ()) -> None:
         super().__init__(
@@ -72,7 +72,14 @@ _WORD_BREAKS = frozenset('()[]:<>"*?~^')
 
 
 class SearchQueryParser:
-    """Parse an allowlisted, bounded Lucene-style query language."""
+    """Parse queries using registered fields and a small set of Lucene-style operators.
+
+    Adjacent terms mean AND. NOT binds more tightly than AND, which binds more
+    tightly than OR. Parentheses override that order. For example,
+    `width:3 piston OR slime` means `(width:3 AND piston) OR slime`.
+
+    Parsing stores tokens on this instance; do not share it across threads.
+    """
 
     def __init__(
         self,
@@ -90,7 +97,12 @@ class SearchQueryParser:
         self._index = 0
 
     def parse(self, source: str) -> SearchQuery:
-        """Parse source into a syntax tree that mentions no table or column."""
+        """Return the syntax tree and a normalized spelling of the query.
+
+        Blank input returns an empty query. Invalid syntax, unknown fields, and
+        unsupported operators raise QuerySyntaxError. Field values are converted
+        using the registry before they enter the tree.
+        """
         if len(source) > self._max_length:
             _fail(f"query exceeds {self._max_length} characters", self._max_length)
         self._tokens = self._tokenize(source)
