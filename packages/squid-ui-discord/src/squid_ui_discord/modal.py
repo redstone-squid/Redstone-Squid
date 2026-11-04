@@ -1,8 +1,8 @@
-"""Declarative modals: specs in, clamped discord.py modals out.
+"""Build native Discord modals from declarative input specs or portable form schemas.
 
-discord.py validates none of a modal's string lengths, so an oversized title or — the classic
-crash — a `default` joined from user data fails at `send_modal` time with HTTP 50035.
-`build_modal` runs every spec through the conform gate, making that unrepresentable.
+Builders clamp supported text lengths and check supported structure. They are not a
+complete validator for every Discord payload constraint. Submission callbacks receive
+raw control values; schema evaluation belongs to the caller.
 """
 
 import logging
@@ -74,7 +74,11 @@ class EntityField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Ex
 
 @dataclass(frozen=True, slots=True)
 class FileField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](ExtensionField[object, RequiredT]):
-    """One or more Discord attachments uploaded through a modal."""
+    """Modal uploads represented as metadata and lazily readable file contents.
+
+    Parsing checks attachment counts. It does not download the bytes; callers explicitly
+    read each returned UploadedFile when needed.
+    """
 
     minimum: int = 1
     maximum: int = 1
@@ -483,9 +487,10 @@ def build_modal(
     strict: bool = False,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
-    """Build a modal from a spec, clamped so `send_modal` can never 50035 on lengths.
+    """Build a modal, truncating supported text fields to their Discord limits.
 
-    ``on_submit`` receives the input values keyed by each field's ``key`` (or label).
+    Strict mode rejects repairs instead. Use unique effective input keys: an omitted key
+    uses the input label, and duplicate keys overwrite entries in the submission mapping.
     """
     require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
     modal = _SpecModal(spec, on_submit, timeout)
@@ -505,7 +510,11 @@ def build_form_modal(
     strict: bool = False,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
-    """Build a Discord modal from a portable form schema."""
+    """Build native controls for a portable form schema and adapter capabilities.
+
+    The callback receives raw values from the field readers. Evaluate the FormSpec before
+    using them as validated application values; mounted form dispatch does this for you.
+    """
     require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
     adapted = spec.adapt(
         frozenset(

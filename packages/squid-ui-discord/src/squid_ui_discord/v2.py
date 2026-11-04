@@ -49,7 +49,11 @@ type SectionText = Text | Heading | Footer | TextLike | Literal[False] | None
 
 
 def file(asset: Asset, *, spoiler: bool = False) -> File:
-    """Build a visible file component backed by ``asset``."""
+    """Reference an asset in a visible file component.
+
+    Include the Asset separately in the enclosing document's assets; this node retains
+    its key and metadata, not its bytes or stream.
+    """
     return File(asset.key, asset.name, asset.media_type, spoiler)
 
 

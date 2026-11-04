@@ -1,4 +1,14 @@
-"""Opt-in durable component snapshots and host-owned mount management."""
+"""Restore live UI sessions onto their existing messages after a process restart.
+
+ComponentRegistry names the recipes that rebuild components, callbacks, access policies,
+and host dependencies. Snapshots save persistent component fields and presentation state,
+such as the current page or selection; they do not serialize running Python objects.
+
+DurableSessionRuntime coordinates the session store with a frontend that can reconnect
+messages. DiscordFrontend records public message coordinates and replaces temporary
+interaction-token access with bot-token editing. Register restore recipes before starting
+recovery; DurableBot provides the login-before-recovery-before-gateway ordering.
+"""
 
 import json
 from collections.abc import Callable, Mapping
@@ -95,6 +105,8 @@ from squid_ui_discord.durability._json import (
 
 @dataclass(frozen=True, slots=True)
 class ComponentState:
+    """Persistable state for one component at its stable path in a rendered tree."""
+
     path: str
     type_id: str
     state: Mapping[str, object]
@@ -102,6 +114,8 @@ class ComponentState:
 
 @dataclass(frozen=True, slots=True)
 class PresentationSnapshot:
+    """Saved pagination, selection, disclosure, and strategy state for a message root."""
+
     cursors: Mapping[str, CursorState]
     selections: Mapping[str, SelectionState]
     disclosures: Mapping[str, DisclosureState]
@@ -110,6 +124,12 @@ class PresentationSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class MessageRootState:
+    """A versioned component tree and presentation snapshot with its target identity.
+
+    Callbacks, services, and access policy come from the registered restore recipe rather
+    than this snapshot. Only component fields exported as persistent state are included.
+    """
+
     protocol: int
     component_key: str
     component_version: int
@@ -118,13 +138,13 @@ class MessageRootState:
     target_triple: str = DISCORD_V2_DPY27.triple
     target_version: int = DISCORD_V2_DPY27.version
     target_fingerprint: str = ""
-    target_adapter_capabilities: tuple[str, ...] = ()
-    """A digest of the target this mount was planned against.
+    """Digest of the recorded target, including its limits.
 
-    Recorded beside the triple because neither axis alone pins the budgets. Recovery refuses
-    a target that has since changed rather than rebuilding a stored render against limits it
-    was never fitted to.
+    The same target name can be registered with different budgets. Recovery checks this
+    fingerprint before reconstruction so saved state is not silently fitted to new limits.
     """
+    target_adapter_capabilities: tuple[str, ...] = ()
+    """Adapter capabilities recorded when the snapshot was captured."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,11 +468,12 @@ class ComponentRegistry:
         migrations: Mapping[int, MessageRootStateMigration] | None = None,
         factory: Callable[[], AnyComponent] | None = None,
     ) -> None:
-        """Register one known root and every sequential migration to its current version.
+        """Register a root recipe and migrations indexed by their source version.
 
-        `restore` is the durable-session path: it reconstructs the complete mount, including
-        its explicit access policy and host dependencies. `factory` remains the low-level
-        component-only path for direct snapshot codec use.
+        Use ``restore`` for durable sessions: it builds the complete message root with its
+        access policy and host dependencies from RestoreContext. ``factory`` builds only a
+        component, for callers that supply message-root options separately. Supply one of
+        these recipes. Missing migration steps fail when an older snapshot needs them.
         """
         if not key or version < 1:
             message = "durable component keys must be non-empty and versions positive"
@@ -508,11 +529,12 @@ class ComponentRegistry:
         targets: TargetRegistry = DEFAULT_TARGETS,
         **message_root_options: Any,
     ) -> AnyMessageRoot:
-        """Rebuild a mount from a state, against the exact target it was planned for.
+        """Resolve the recorded target, migrate state, and reconstruct a mount without sending it.
 
-        The target is resolved *before* anything is built, so an unavailable or changed
-        profile fails while the record is still just data — not after a mount exists and a
-        reader could already be clicking it.
+        The reconstructed tree must have matching component paths and type identities. The
+        host owns access policy and services through its recipe. Custom restore callbacks and
+        explicit target overrides must return a mount configured for the resolved target;
+        this method does not recheck the returned mount's target.
         """
         target = targets.resolve(
             state.target_triple,

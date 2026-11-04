@@ -1,13 +1,9 @@
-"""Which message roots are live right now, so diagnostics can run while the bot does.
+"""Weak references to message roots that have committed a visible generation.
 
-Planning has reports, fingerprints and metrics, and every one of them describes a render that
-has already happened. None of them answer "show me every live UI session and why this one is
-odd". This registry does, and deliberately owns nothing: entries are weak, a message root appears
-when it first commits a render, and it leaves when it finishes. Nothing here keeps a message root
-alive, starts a task, or sits on a hot path.
-
-Distinct from :mod:`squid_ui_discord.durability`, which persists message roots across restarts,
-and from a host's own session registry, which by design holds only the message roots it keyed.
+The registry lets diagnostics list visible roots, including those opened without a keyed
+session. It keeps only weak references, so the owning scope or host controls their lifetime.
+Finish hooks remove roots when cleanup completes. Persistence across process restarts
+belongs to :mod:`squid_ui_discord.durability`.
 """
 
 import weakref

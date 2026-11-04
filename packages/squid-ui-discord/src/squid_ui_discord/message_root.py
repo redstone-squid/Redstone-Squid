@@ -1,9 +1,15 @@
-"""The mount: one component bound to one Discord message.
+"""Bind a live component tree to one Discord message and dispatch its local actions.
 
-Every interaction funnels through :meth:`MessageRoot.dispatch` — access policy, handler, error hook,
-and the re-render/edit cycle live here once instead of per view. The mount outlives its
-discord.py views: each render produces a fresh :class:`MountedView`, and the previous one is
-stopped after a successful edit so dispatch tables do not accumulate.
+MessageRoot is the Discord frontend for ComponentRuntime. It loads and renders the
+component tree, plans a candidate scene, then draws and delivers a native view. Only
+after delivery does it commit that candidate's handlers, presentation state, and visible
+generation. If the scene already matches the message, it can commit updated application
+state and bindings without another Discord edit.
+
+Mounted interactions enter dispatch for access checks, action policy, guards, and the
+handler transaction, followed by a refresh. A generation identifies the rendered controls
+so dispatch can reject or rebase a click from an older view. The message root outlives
+those views; successful replacement stops the old view and retires its dispatch entries.
 """
 
 import asyncio
@@ -22,8 +28,6 @@ from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
 import anyio
 import discord
 
-# `discord.ui.select` names the decorator, so the submodule holding `BaseSelect` is only
-# reachable by importing from it directly.
 from squid_reactivity.actions import ActionCommit, ActionContext, ActionContinuation, ActorRef, current_action
 from squid_reactivity.core import on_action_commit, readonly_transaction, transaction
 from squid_reactivity.internals import CURRENT_TRANSACTION
@@ -78,8 +82,6 @@ from squid_ui.profiling import (
     TraceResult,
     TraceStatus,
 )
-
-# (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_ui.runtime.component import Component, ComponentTree
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
@@ -155,13 +157,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class _DiscordBinding:
-    """Everything a Discord dialect decides about a mount, in one value.
-
-    The target decides how to plan and render, the renderer, the view factory, and the message
-    mode — and nothing else. Keying on the dialect id says so once, in place of four
-    branches that each re-derived the answer from a limits subclass. `MessageMode` keeps its
-    own job of describing an *observed* message through `message_mode`; it is no longer inferred.
-    """
+    """The renderer, native view factory, and message mode selected by a Discord dialect."""
 
     render_message: Callable[..., Any]
     mode: MessageMode
@@ -206,12 +202,10 @@ def _binding_for(target: AnyTarget) -> _DiscordBinding:
 _NOOP_PROFILER = NoOpProfiler()
 
 _MAX_LOAD_PASSES = 16
-"""Component/resource tiers one delivery loads through -- not retries.
+"""Maximum discovery passes for component loads and atomic resources per delivery.
 
-Each pass loads a tier and renders to reveal the next, so this bounds nesting depth. It
-only trips on an `on_load` that keeps embedding freshly unloaded components or a resource
-whose settled render reveals another pending atomic resource forever; either is a loop
-rather than a deep tree.
+Each loaded tier can reveal another, so very deep finite trees and recursive loading
+can both exceed this bound. Failed loads are not retried within the same delivery.
 """
 
 
@@ -348,7 +342,13 @@ class MessageRoot[
     RenderTargetT: DiscordTarget = ComponentsV2Target,
     AdapterT: DiscordPyAdapter = DiscordPy27Adapter,
 ]:
-    """Binds a component to a message and owns its whole interaction lifecycle."""
+    """Own a component tree's presentation and local interactions on one Discord message.
+
+    Construction prepares the runtime; send performs the first load, render, and delivery.
+    State changes mark the root pending, and refresh presents them through retained edit
+    authority or a new interaction. finish stops dispatch and hands service cleanup and
+    callbacks to the configured execution host; wait observes that shutdown's result.
+    """
 
     @overload
     def __init__(
@@ -613,7 +613,7 @@ class MessageRoot[
 
     @property
     def pending(self) -> bool:
-        """Whether a render is staged that Discord has not seen."""
+        """Whether invalidated state still needs presentation; a candidate need not be staged yet."""
         return self._dirty
 
     @property
@@ -628,11 +628,10 @@ class MessageRoot[
 
     @property
     def followed(self) -> tuple[Address, ...]:
-        """The bus addresses this mount is subscribed to, for diagnostics.
+        """The currently retained bus subscriptions, for diagnostics.
 
-        `observed`, minus everything a scheduler that cannot follow topics could not
-        subscribe to. A host that followed a topic of its own through the scheduler holds that
-        subscription itself and is not listed here.
+        These may cover both the committed generation and a staged successor. Topics followed
+        separately by the host through its scheduler are not listed here.
         """
         return self._subscriptions.followed
 
@@ -772,7 +771,7 @@ class MessageRoot[
         Private, because a staged generation is not the mount's state: nothing here moves
         handlers, lifecycle hooks, page positions or the live generation, so handing one to a
         send path shows Discord a generation the mount does not own. Delivery goes through
-        :meth:`send` or :meth:`flush`, which stage their own render and commit it; a view
+        :meth:`send` or :meth:`refresh`, which stage their own render and commit it; a view
         staged here and never delivered is superseded by the next one.
         """
         pending = self._pending
@@ -1066,11 +1065,10 @@ class MessageRoot[
     def _action_transaction(self, mode: ActionMode, context: ActionContext) -> Iterator[None]:
         """Run one handler in its transaction, watching for writes this mount renders.
 
-        A shared cell publishes on the bus rather than invalidating a component, so without
-        this the mount that *made* the write learns about it the same way a sibling does --
-        after the bus drains, one edit later, with the click already answered by a deferral.
-        Noticing one's own commit is not a second notification mechanism: there is no
-        subscriber index and no back-reference, only the delta the transaction already built.
+        Shared writes normally announce their addresses on the topic bus. Inspecting this
+        action's committed patches also invalidates the fields this root reads, including
+        when no bus scheduler is installed. Its ensuing refresh can then show the write
+        without waiting for a separate scheduled refresh.
         """
         if mode is ActionMode.PARALLEL_READ:
             with readonly_transaction(action_context=context):
@@ -1085,9 +1083,9 @@ class MessageRoot[
 
         Through `invalidate` rather than `_dirty` directly, because a candidate delivered
         while the handler ran commits `runtime.dirty` over whatever this set: the revision is
-        the only dirtiness a render in flight is measured against. Against `_watched` rather
-        than `_observed`, because a candidate that newly reads the written cell must not
-        commit a value it has already been told is stale.
+        the only dirtiness a render in flight is measured against. The reconciler's watched
+        addresses include a staged candidate's reads: a candidate that newly reads the
+        written cell must not commit a value it has already been told is stale.
         """
         watched = self._subscriptions.watched
         if not watched:
@@ -1160,11 +1158,7 @@ class MessageRoot[
         self._commit_delivery(candidate)
 
     def _settle(self, candidate: _ApplicationCandidate[RenderTargetT], ending: str) -> None:
-        """Record that `candidate` has reached its one ending, refusing a second.
-
-        The discipline `_Subscriptions.commit`/`discard` already keeps for the reactive
-        half, kept here for the visible half.
-        """
+        """Mark a candidate committed or discarded, rejecting a second settlement."""
         if candidate.settled:
             generation = candidate.generation if isinstance(candidate, _Candidate) else "undrawn"
             message = f"mount {self.id}: candidate generation {generation} already settled, cannot {ending}"
@@ -1260,8 +1254,8 @@ class MessageRoot[
     def _rollback(self, candidate: _Candidate[RenderTargetT]) -> None:
         """Discard an undelivered candidate; the message still shows the live generation.
 
-        Nothing to unwind: planning only read the session, so dropping the candidate drops
-        its presentation writes with it.
+        Planning only proposed presentation-state updates, so dropping the candidate
+        drops those updates without changing the committed cursor and selection state.
         """
         self._settle(candidate, "roll back")
         candidate.view.stop()
@@ -1373,19 +1367,16 @@ class MessageRoot[
         preflight: bool = False,
         reuse_committed: bool = False,
     ) -> _ApplicationCandidate[TargetT]:
-        """Stage a candidate whose components and atomic resources are settled.
+        """Load component and atomic-resource tiers before planning a candidate.
 
-        One pass per embedding tier: the root is known without rendering anything, and each
-        tier's loaded render is what reveals the next. Siblings within a tier load together.
-        A tier that still owes loads is never drawn -- only rendered, and only to find out
-        who they are -- so an incomplete document is never planned. A tree that declares no
-        loads is rendered and drawn exactly once, as it was before this existed.
+        Siblings in a tier load concurrently. Each render discovers the next tier; the pass
+        limit bounds deeply nested loads as well as cycles. Atomic resources must settle
+        before drawing, so their pending state never becomes a visible candidate. Explicit
+        resources can instead show a pending state and settle after delivery.
 
-        Pending atomic resources use the same discovery passes. Their pending render is
-        complete but deliberately not drawn or delivered; failed state is settled state.
-
-        A raise leaves every completed load completed, every other one eligible to retry, and
-        nothing staged, so the mount is exactly as deliverable as it was.
+        Failed on_load hooks remain eligible to retry; successfully completed hooks
+        are not run again. No candidate is committed here, and hook side effects are not
+        rolled back.
         """
         for pass_index in range(_MAX_LOAD_PASSES):
             cached_atomic = self.runtime.pending_cached_atomic_resources()
@@ -1607,16 +1598,15 @@ class MessageRoot[
     # --- Lifecycle ---------------------------------------------------------------------
 
     async def send(self, message_destination: deliver.MessageDestination) -> deliver.SendResult:
-        """Deliver this mount's first render through `message_destination`.
+        """Stage and deliver a render, then commit its handlers and visible generation.
 
-        The commit point for an initial send, and the same stage -> deliver -> commit sequence
-        `flush` runs for an interaction edit: the host chooses where the message goes, the
-        mount owns everything around the call. A message_destination that raises leaves the mount on
-        its previous generation with the render still pending, so a second `send` is a clean
-        retry.
+        An abandoned destination returns Abandoned. A destination exception discards the
+        candidate and propagates, retaining the previous generation. Retrying can repeat the
+        remote send if the destination failed after Discord accepted it; destinations own
+        any deduplication needed for that case.
 
-        The structured result distinguishes a committed delivery, including a handle-less
-        one, from a message_destination that deliberately abandoned delivery.
+        A Delivered result can have no edit handle. Explicit resources may continue settling
+        after the initial commit, and later settlement errors can occur after delivery.
         """
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
@@ -2067,17 +2057,14 @@ class MessageRoot[
         values: _SelectionValues,
         profile: _DispatchProfile,
     ) -> _Admission:
-        """Run this action's guard, answering the reader privately when it refuses.
+        """Evaluate the action guard before starting the handler transaction.
 
-        The access policy has already said this reader may use the panel; the guard says
-        whether this press may run now. A denial writes nothing, bumps no generation, and
-        opens no transaction -- it costs exactly one ephemeral message. A challenge costs the
-        same, and is not admission deferred but admission refused: the press is dropped, and
-        approving the question starts a new one.
+        Access has already established who may use the panel; the guard decides whether
+        this action may run now, for example after a cooldown or confirmation.
 
-        Every pass is staged and committed only when it did not end in a question, so the
-        guards that ran ahead of a challenge have spent nothing by the time the actor is
-        asked. Denial keeps its writes, exactly as it always has.
+        Allow and denial decisions commit staged guard-ledger changes; challenges discard
+        them and start a fresh dispatch only after approval. A denial sends its private
+        reason without running the handler or committing a new render generation.
         """
         guard = binding.guard
         if guard is None:
@@ -2266,8 +2253,8 @@ class MessageRoot[
                     profile.finish(DispatchDisposition.STALE)
                     return
                 binding = refreshed
-            # Inside the lock, so a `when(...)` closure reads component state nobody is
-            # writing, and before the transaction, so a denial writes nothing.
+            # Serialize guards for locked action modes; immediate actions can still run.
+            # Admission precedes the handler transaction.
             admission = await self._admit(binding, key, interaction, values, profile)
             if admission.challenge is None:
                 if not admission.admitted:
@@ -2755,11 +2742,11 @@ class MessageRoot[
         links: Sequence[TraceLink] = (),
         profile: _DispatchProfile | None = None,
     ) -> PresentationStatus:
-        """Re-render and deliver right now, reporting how the presentation settled.
+        """Present pending state through an interaction, or render using the standing handle.
 
-        With an `interaction`, the delivery is that interaction's edit; without one it is an
-        out-of-band render against the mount's own edit authority. One verb rather than the
-        three this used to have, because both do the same thing to the same subject.
+        With an interaction, unchanged state is only acknowledged and delivery can fall back
+        to the standing handle. Without one, refresh renders immediately when edit authority
+        is usable. Missing authority leaves the root pending and returns ABANDONED.
         """
         if interaction is not None:
             return await self._refresh_through(interaction, profile=profile)
@@ -2821,7 +2808,6 @@ class MessageRoot[
                     raise
                 if not delivered:
                     # `_rollback` leaves the mount dirty, so the next interaction shows this render.
-                    # `refresh` has always promised the next opportunity rather than this instant.
                     with profile.span("rollback"):
                         self._rollback(candidate)
                     logger.debug("mount %s has no live edit handle; render deferred", self.id)

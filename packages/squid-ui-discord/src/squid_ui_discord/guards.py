@@ -1,10 +1,8 @@
-"""Discord-layer admission sugar over the portable guard vocabulary.
+"""Discord role and permission checks for portable action guards.
 
-Roles are a Discord fact, so `requires_role` cannot live in the portable core the way
-`cooldown` or `until` can. It is `sl.guards.permission` with the lookup written once.
-
-Its relation to an access policy: `squid_ui_discord.Check` gates the whole mount, this gates one
-action on an otherwise reachable panel.
+An access policy controls who may interact with the whole message root. These guards
+control individual actions on an accessible panel, such as requiring a moderator role
+only for its Delete button.
 """
 
 from collections.abc import Awaitable, Callable

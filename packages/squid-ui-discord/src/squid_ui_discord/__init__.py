@@ -1,4 +1,14 @@
-"""Discord Components V2 target, renderer, and runtime adapter."""
+"""Present Squid layouts and live components through discord.py.
+
+Static rendering plans a document, converts its scene to a MessagePayload, and leaves
+delivery to the caller. A live component instead belongs to a MessageRoot: the frontend
+that delivers its message, dispatches interactions, and refreshes the display as state
+changes. The message root survives the native views replaced by each render.
+
+Install one DiscordUIRuntime per client to share services and defaults. Its scopes tie
+message-root lifetimes to application owners such as cogs, while Request supplies the
+reply and acknowledgement context for a particular command or interaction.
+"""
 
 # Deeper-tier namespaces: no names of their own promoted to squid_ui_discord's root, reachable
 # as squid_ui_discord.<name>.X. One namespace per physical module (modal.py -> modals, to avoid

@@ -1,4 +1,9 @@
-"""Frontend promotion and reconnection for durable Discord sessions."""
+"""Connect durable session state to messages Discord can edit after a restart.
+
+Promotion gives a delivered public message a bot-token edit handle and records its
+coordinates. Recovery uses those coordinates to fetch the messages, then redraws restored
+roots onto them. Ephemeral messages cannot be recovered through this path.
+"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -117,7 +122,12 @@ class DiscordFrontend:
         return Promoted(FrontendAddress(self.frontend, values), handle)
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult:
-        """Resolve a whole session before redrawing any of its restored message roots."""
+        """Fetch all recorded messages before redrawing any restored root.
+
+        Missing or inaccessible messages return a classified result before drawing begins.
+        Once drawing starts, an error can leave earlier roots already updated: reconnection
+        is not atomic across Discord messages. The caller owns failed-root cleanup.
+        """
         resolved: list[_ResolvedBinding] = []
         missing: list[tuple[str, str]] = []
         unreachable: list[tuple[str, str]] = []

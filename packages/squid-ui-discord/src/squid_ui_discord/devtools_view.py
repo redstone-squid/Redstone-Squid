@@ -1,13 +1,7 @@
-"""The `/dev ui` inspector: every live message root, and why one of them is odd.
+"""Discord dashboards for live message roots and operational diagnostics.
 
-squid-ui has excellent *planning* diagnostics — reports, fingerprints, plan metrics —
-and every one of them describes a render that already happened. Nothing answered "show me
-the UI sessions this process is holding right now". `squid_ui_discord.message_roots()` is that list, and
-this component is the reading of it.
-
-Deliberately untranslated, unlike the rest of `squid.bot`: it is owner-only, and most of what
-it prints is Python identifiers, state field names and planner event codes, which no
-catalogue would improve.
+The host authorizes access before opening a dashboard. Labels remain untranslated
+because the panels primarily display Python identifiers and diagnostic event codes.
 """
 
 import dataclasses
@@ -32,7 +26,7 @@ from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
 from squid_ui_discord.devtools_runtime import DevToolsAction, DevToolsRuntime, DurableRecordInspection
 
 if TYPE_CHECKING:
-    # Annotations only; see the note in operations.py about the `durable` extra.
+    # Annotations only; keep the optional `durable` extra out of runtime imports.
     from squid_ui_discord.durability import DurableRuntimeSnapshot, RecoveryReport
 
 
@@ -57,11 +51,9 @@ class DevToolsSection(StrEnum):
 
 
 class MessageRootInspector(sl.Component):
-    """The message roots, and one of them opened.
+    """Inspect current roots and one selected root, rereading process state each render.
 
-    Reads `squid_ui_discord.message_roots()` on every render rather than holding a list, so a panel left
-    open keeps telling the truth: sessions that finished while it was open are simply gone
-    from the next render.
+    The Refresh action invalidates the panel so finished roots disappear on its next render.
     """
 
     focus: str | None = sl.state(None)
@@ -820,7 +812,7 @@ def scene_attachment(snapshot: squid_ui_discord.MessageRootSnapshot) -> sl.docum
 def operational_attachment(
     snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot,
 ) -> sl.document.Asset:
-    """The bounded operational snapshot as an inline JSON download."""
+    """The operational snapshot as an inline JSON download."""
     encoded = json.dumps(dataclasses.asdict(snapshot), default=_json_default, indent=2, sort_keys=True).encode()
     return sl.document.Asset(
         key="operational-snapshot",
@@ -903,7 +895,7 @@ def _summary(snapshot: squid_ui_discord.MessageRootSnapshot) -> list[str]:
 
 
 def _access_text(access: squid_ui_discord.AccessPolicy) -> str:
-    """Describe the message root's admission policy without exposing callback internals."""
+    """Describe the message root's access policy without exposing callback internals."""
     if isinstance(access, squid_ui_discord.Everyone):
         return "Everyone"
     if isinstance(access, squid_ui_discord.Owner):
@@ -1036,11 +1028,7 @@ def _reactivity(message_root: squid_ui_discord.MessageRoot) -> list[str]:
 
 
 def _pair(topic: object) -> tuple[sl.runtime.SharedState[Any] | None, object]:
-    """An observed address split into its namespace and cell, or `(None, topic)` otherwise.
-
-    Read from what the render observed rather than from what it subscribed to, so a message root
-    with no scheduler still reports the shared state it is showing.
-    """
+    """Split a legacy (SharedState, descriptor) tuple; return (None, topic) otherwise."""
     match topic:
         case (sl.runtime.SharedState() as owner, descriptor):
             return owner, descriptor
@@ -1068,5 +1056,5 @@ def _members(session: squid_ui_discord.devtools_runtime.SessionInspection) -> st
 
 
 def _dump(value: object) -> str:
-    """Whatever this is, as something readable. `repr` is the floor, not the ideal."""
+    """Format diagnostic values as readable Python representations."""
     return pprint.pformat(value, width=88, sort_dicts=True) or "{}"

@@ -1,4 +1,9 @@
-"""Persistent, router-owned self-role panels for Discord."""
+"""Let guild members choose their own roles through persistent routed controls.
+
+A RolePanel groups available roles into categories with selection limits. Buttons toggle
+one role; a select replaces the chosen roles for its category. Each action fetches the
+member's current roles and preserves roles outside that category when applying the edit.
+"""
 
 import asyncio
 import re
@@ -30,7 +35,7 @@ from squid_ui_discord.routing import RouteComponent, RouteGroup
 
 @dataclass(frozen=True, slots=True)
 class Cardinality:
-    """The minimum and maximum number of roles a category may contain."""
+    """The minimum and maximum roles a member may select within a category."""
 
     minimum: int = 0
     maximum: int | None = None
@@ -355,7 +360,12 @@ async def _send_default_notice(interaction: discord.Interaction[Any], result: Ro
 
 
 class RolePanel(Component[DiscordTarget, Any]):
-    """A stateless, persistent panel for managing member self-roles."""
+    """A stateless self-role panel whose stable routes can survive a restart.
+
+    Use a dedicated empty RouteGroup and register it with the client's Router on each
+    startup. Transitions fetch current membership and serialize per guild/member within
+    this process. Other processes or unrelated role writers do not share that lock.
+    """
 
     def __init__(
         self,

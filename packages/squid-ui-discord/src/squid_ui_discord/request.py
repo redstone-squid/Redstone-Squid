@@ -1,4 +1,13 @@
-"""One request per Discord event, memoized on the event so every layer shares it."""
+"""Give commands and component callbacks one interface for replies and acknowledgement.
+
+A Request brings together the invoking user, locale, application-owner scope, and native
+Discord source. Its response ledger records managed deferral, delivered responses, and
+modal opening. Helpers resolving the same source share that record, so the first reply
+can complete a deferral and later replies use follow-ups without acknowledging twice.
+
+Requests are cached on source extras, or in a weak-key fallback when supported.
+Sources that support neither mechanism receive a fresh request on each resolution.
+"""
 
 import contextlib
 import weakref
@@ -87,12 +96,10 @@ def _memo_set(source: object, request: Request[Any]) -> None:
 
 @dataclass(slots=True, eq=False)
 class Request[OwnerT = Any]:
-    """One Discord event, normalized; its response authority ends with dispatch.
+    """One Discord source, its resolved owner and locale, and its facade response ledger.
 
-    Resolved by :func:`request` and memoized on the event, so a helper that receives the raw
-    interaction gets the same ledger the command handler is already writing to. `OwnerT` is
-    the scope owner's type where the entry point knows it (a decorated command); a click
-    resolves its scope at runtime and is `Request[Any]`.
+    The native source determines how long delivery credentials remain usable. Native sends
+    made outside this facade do not update the ledger.
     """
 
     runtime: DiscordUIRuntime[Any]
@@ -333,7 +340,12 @@ class Request[OwnerT = Any]:
         session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Answer this request; a managed defer fixes the audience unless one is given."""
+        """Present content through this request's scope and delivery policy.
+
+        A managed defer fixes the audience for this request; an incompatible explicit
+        audience raises. Each Screen instance may be presented only once, including attempts
+        that fail before delivery, so construct a fresh instance when retrying.
+        """
         if self._form_opened:
             message = "a form response cannot be followed by message content in the same dispatch"
             raise RuntimeError(message)
@@ -375,7 +387,11 @@ class Request[OwnerT = Any]:
         )
 
     async def defer(self, policy: Deferral = "private") -> None:
-        """Acknowledge this request; the first later response completes it."""
+        """Acknowledge an interaction so the first later response completes it.
+
+        Non-interaction sources are unchanged. Repeating a managed defer keeps its original
+        policy; a response already acknowledged outside this request cannot be deferred here.
+        """
         interaction = self.interaction
         if interaction is None:
             return
@@ -393,7 +409,12 @@ class Request[OwnerT = Any]:
         *,
         on_submit: Callable[[discord.Interaction[discord.Client], dict[str, object]], Awaitable[None]] | None = None,
     ) -> None:
-        """Open a declarative or native modal as this request's initial acknowledgement."""
+        """Open a modal as the initial acknowledgement, before deferring or responding.
+
+        For a FormSpec, ``on_submit`` receives raw values read from the native controls;
+        callers own schema evaluation and validation. ModalSpec and native Modal callbacks
+        remain responsible for their own submission handling.
+        """
         interaction = self.interaction
         if interaction is None:
             message = "forms require an interaction request"

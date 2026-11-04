@@ -1,4 +1,15 @@
-"""Live Discord sessions, their attachment trees, and keyed cardinality policy."""
+"""Manage groups of live Discord panels and decide which sessions may coexist.
+
+A Session groups one root MessageRoot with attached child message roots, such as a
+main panel and its confirmation dialog. Closing a parent closes its descendant panels.
+A SessionKey groups competing sessions by screen name and user, guild, or custom scope;
+admission policy decides how many may occupy that key and which may be replaced.
+
+Membership records users who joined the session, separately from the actors attributed
+to attached panels. Capacity limits members per session; quota limits sessions per user
+within a membership domain. These records inform admission and replacement protection;
+each message root's access policy still decides who may interact with it.
+"""
 
 import asyncio
 import logging
@@ -60,7 +71,11 @@ type SessionScope = UserScope | GuildScope | UserGuildScope | GlobalScope | Cust
 
 @dataclass(frozen=True, slots=True)
 class SessionKey:
-    """The conventional serializable spelling for a keyed logical session."""
+    """A named logical session and its hashable scope.
+
+    Durable storage accepts only the serializable scope shapes supported by its codec;
+    an arbitrary CustomScope value is not necessarily persistable.
+    """
 
     name: str
     scope: SessionScope
@@ -87,7 +102,7 @@ class SessionKey:
 
 
 class RejectionReason(Enum):
-    """Why a session request was refused before delivery."""
+    """Why a session was not admitted, including refusals discovered after delivery."""
 
     COLLISION = "collision"
     PROTECTED = "protected"
@@ -158,7 +173,11 @@ class Opened[SessionT]:
 
 @dataclass(frozen=True, slots=True)
 class Rejected:
-    """Admission was refused without attempting delivery."""
+    """A session request was not admitted.
+
+    Some checks run after delivery, so a refused child or root may already have appeared
+    in Discord before the manager requests its cleanup.
+    """
 
     occupants: tuple[SessionSnapshot, ...]
     reason: RejectionReason
@@ -254,7 +273,13 @@ class Unprotected:
 
 @dataclass(frozen=True, slots=True)
 class AdmissionSpec:
-    """Cardinality, collision, and replacement protection for one open."""
+    """Decide how a new session competes with existing sessions under the same key.
+
+    The limit caps simultaneous sessions. When an open would exceed it, collision
+    selects the exact sessions to retire, then replacement checks each selection.
+    Defaults keep one session and replace the oldest only when no other participant
+    is using it and a temporary newcomer would not displace a durable session.
+    """
 
     limit: int | None = 1
     collision: CollisionPolicy = field(default_factory=ReplaceOldest)
@@ -317,9 +342,8 @@ def _require_user_id(user_id: int) -> int:
 class _Membership:
     """One mount's place in a session: under which parent, and attributed to whom.
 
-    Attaching a mount used to write a list and two parallel dicts that had to stay in step
-    by inspection, and detaching had to unwind all three. One record per mount makes the
-    session's ownership a single entry that is either there or not.
+    Keeping parent and actor together lets attachment and detachment change one entry,
+    without separate indexes that could disagree about the mount's ownership.
     """
 
     parent: MessageRoot | None
@@ -740,7 +764,7 @@ class SessionManager:
         ``durable`` and ``local`` are descriptive admission facts.  A caller restoring a
         session may pass its immutable ``snapshot`` instead to retain the original identity
         and opening time.  ``capacity`` caps the session's explicit members; it is a fact of
-        this session rather than of the key contest, so it is not part of ``policy``.
+        this session rather than of the key contest, so it is not part of ``admission``.
 
         Once registered, the newcomer is admitted. Every selected incumbent is retired;
         cleanup failures are logged and remain available through its ``wait()``, without
@@ -860,25 +884,20 @@ class SessionManager:
         return session
 
     def get(self, key: Hashable) -> tuple[Session, ...]:
-        """Return every session currently occupying `key`, oldest first."""
+        """Return the sessions occupying ``key`` in registration order."""
         return tuple(self._by_key.get(key, ()))
 
     def session_for(self, message_root: MessageRoot) -> Session | None:
-        """Return the logical session that owns `mount`, if this registry knows it."""
+        """Return the logical session that owns message_root, if this registry knows it."""
         return self._by_root.get(message_root)
 
     def sessions_for_member(
         self, user_id: int, *, domain: str | None = None, excluding: Collection[Session] = ()
     ) -> tuple[Session, ...]:
-        """Every live session `user_id` is an explicit member of, oldest first.
+        """Return this user's explicit memberships in registration order.
 
-        Restrict to one membership family with `domain`. This answers "what is this user in
-        right now?" for quotas, for a "you are already in a game" affordance, and for
-        devtools.
-
-        `excluding` answers it as of a pending replacement instead: sessions being retired are
-        still registered while their replacement is being opened, and counting them would count
-        a seat twice.
+        ``domain`` restricts the membership family. ``excluding`` omits sessions being retired
+        during a replacement, so quota checks do not count both the old and new seats.
         """
         retiring = {session.id for session in excluding}
         return tuple(

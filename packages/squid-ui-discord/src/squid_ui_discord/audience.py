@@ -8,7 +8,12 @@ from squid_ui.text import TextLike
 
 @dataclass(frozen=True, slots=True)
 class Private:
-    """Deliver where a guild channel can never see the payload."""
+    """Require an ephemeral interaction response or private-message delivery.
+
+    For guild messages without an interaction, the payload goes to the actor's DMs and
+    ``reason`` accompanies a public delivery confirmation. The ``"personal"`` audience
+    alone does not provide this DM fallback.
+    """
 
     reason: TextLike
 

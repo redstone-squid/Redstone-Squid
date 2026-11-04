@@ -17,9 +17,11 @@ from squid_ui_discord.sessions import DEFAULT_ADMISSION, AdmissionSpec, Reject
 
 
 class Screen[OwnerT = Any](Component[ComponentsV2Target, Request[Any]]):
-    """A component whose class compiles immutable presentation policy once.
+    """A live component with response policy compiled when its class is created.
 
-    `Screen[Cog]` types `opening.owner`; the bare form leaves it `Any`.
+    Changing class policy attributes later does not rebuild that policy. A Screen instance
+    belongs to one presentation attempt; create another instance to retry or open it again.
+    ``Screen[Cog]`` gives ``opening.owner`` that Cog's type; a bare Screen leaves it as Any.
     """
 
     event_frontend: ClassVar[str | None] = "discord"

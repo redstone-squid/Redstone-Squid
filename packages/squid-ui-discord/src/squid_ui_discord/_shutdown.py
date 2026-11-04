@@ -30,6 +30,11 @@ class Shutdown:
             self._done_callbacks.append(callback)
 
     def start(self, host: UIExecutionHost | None, work: Callable[[], Awaitable[None]]) -> None:
+        """Register one cleanup operation with a running host; later starts are ignored.
+
+        Acceptance happens only after the host accepts the work. Cancelling a waiter does
+        not cancel that operation; its stored exception is raised to every later waiter.
+        """
         if self.accepted:
             return
         if host is None:

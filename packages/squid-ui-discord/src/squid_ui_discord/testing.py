@@ -1,15 +1,13 @@
-"""Doubles and payload assertions for exercising a message root with no Discord attached.
+"""Gateway-free Discord doubles and assertions for serialized component payloads.
 
-Two halves. `interaction_harness`, `message_harness`, `delivered_to` and `commit_render` stand in
-for the Discord boundary, so a test can send a message root to nowhere and then drive it through
-`MessageRoot.dispatch` — the same funnel a real press takes. `payload_problems`, `modal_problems`,
-`assert_within_limits` and the `payload_*` queries check the other end: they walk the
-serialized wire payload, not the Python objects, so they verify exactly what Discord will see,
-including any chrome discord.py adds during serialization.
+Use ``stage`` to present a component through an isolated running UI runtime and drive its
+controls. Lower-level tests can send a MessageRoot to ``delivered_to(message_harness())``
+and call dispatch with an ``interaction_harness``. The harnesses record sends and edits.
 
-This module is public and versioned like the rest of the package. It is imported by tests
-rather than by a running bot, so it is reachable as `squid_ui_discord.testing.X` and promotes no
-names to `squid_ui_discord` itself.
+The ``payload_*`` queries inspect serialized controls, while ``assert_within_limits``
+checks supported size limits. These helpers do not implement Discord's complete validation
+or network behavior. Import them from ``squid_ui_discord.testing``; the package root does
+not re-export testing helpers.
 """
 
 import asyncio
@@ -84,7 +82,7 @@ def _check_string(problems: list[str], component: ComponentPayload, key: str, li
 
 
 def payload_problems(components: list[ComponentPayload], *, limits: V2Limits = LIMITS) -> list[str]:
-    """Return every limit violation in a message component payload."""
+    """Report the component counts and string lengths checked by this helper."""
     problems: list[str] = []
     flattened = list(iter_component_payloads(components))
 
@@ -139,7 +137,7 @@ def payload_problems(components: list[ComponentPayload], *, limits: V2Limits = L
 
 
 def modal_problems(payload: dict[str, Any], *, limits: ComponentLimits = COMPONENT_LIMITS) -> list[str]:
-    """Return every limit violation in a modal payload."""
+    """Report supported modal size checks; this is not complete Discord schema validation."""
     problems: list[str] = []
     title = payload.get("title", "")
     if len(title) > limits.modal_title:
@@ -162,7 +160,11 @@ class CallRecord:
 
 
 class AsyncCallRecorder:
-    """A typed async endpoint that records calls and can inject one explicit fault."""
+    """An async endpoint recording every call before returning or raising.
+
+    Configured errors persist across calls until cleared. A callback, when present and no
+    error is configured, supplies the result and may be synchronous or asynchronous.
+    """
 
     def __init__(self, *, result: Any = None, error: BaseException | None = None) -> None:
         self.records: list[CallRecord] = []
@@ -280,10 +282,10 @@ class _FollowupHarness:
 
 
 class MessageHarness:
-    """A stateful Discord message harness.
+    """A message-shaped source with recorded edit and delete calls.
 
-    `delete` ends the source message's simulated availability. Production calls go through
-    `.source`; edit and deletion records remain on the harness for assertions.
+    Calls do not simulate server-side state changes or deletion. Configure endpoint errors
+    explicitly when testing a message that has become unavailable.
     """
 
     def __init__(
@@ -460,16 +462,11 @@ def delivered_to(message: Any, *, handle: EditHandle | None = None) -> MessageDe
 
 
 def commit_render(message_root: MessageRoot, *, disabled: bool = False) -> MountedView:
-    """Stage a render and commit it with no Discord delivery — `MessageRoot.send` to nowhere.
+    """Commit a staged V2 render without loading components or delivering to Discord.
 
-    `MessageRoot._stage_view` only stages; handlers and the live generation move when a delivery
-    lands. Tests that never touch Discord say where that point is with this, rather than
-    driving a destination that would only ever hand back `None`.
-
-    Reaches past `send` on purpose: the alternative is making every one of these call sites
-    await, for no coverage of anything the real send path does. For the same reason it runs no
-    `on_load` -- a test that wants a loaded render wants the real seam,
-    `await message root.send(delivered_to(message_harness()))`.
+    This advances handlers and generation directly for synchronous render assertions.
+    Use ``await root.send(delivered_to(message_harness()))`` to exercise the load and
+    send lifecycle.
     """
     view = _commit(message_root, disabled=disabled)
     assert isinstance(view, MountedView), "this message root draws a classic message; use commit_classic_render"
@@ -477,11 +474,7 @@ def commit_render(message_root: MessageRoot, *, disabled: bool = False) -> Mount
 
 
 def commit_classic_render(message_root: MessageRoot, *, disabled: bool = False) -> ClassicMountedView:
-    """`commit_render` for a message root whose target draws a classic message.
-
-    A separate function rather than a widened return type: a test knows which kind of message root
-    it built, and every V2 caller would otherwise have to narrow a union it can never see.
-    """
+    """Commit a classic render without loading or delivery, asserting its native view type."""
     view = _commit(message_root, disabled=disabled)
     assert isinstance(view, ClassicMountedView), "this message root draws a Components V2 message; use commit_render"
     return view
@@ -496,7 +489,7 @@ def _commit(message_root: MessageRoot, *, disabled: bool) -> AnyMountedView:
 
 
 def assert_within_limits(built: discord.ui.LayoutView | discord.ui.Modal, *, limits: V2Limits = LIMITS) -> None:
-    """Assert that a built view or modal serializes within every Discord limit."""
+    """Assert that the serialized view or modal passes the supported size checks."""
     if isinstance(built, discord.ui.Modal):
         problems = modal_problems(built.to_dict(), limits=limits.components)
     else:
@@ -597,12 +590,10 @@ def stale_http_error() -> discord.HTTPException:
 
 
 async def drain(scheduler: MessageRootScheduler, *, timeout: float = 1) -> None:
-    """Run `scheduler` until its queue is empty, then cancel it.
+    """Run the scheduler until its queue join completes, then cancel it.
 
-    Reaches into `_queue` on purpose, the way `commit_render` reaches past `send`: the queue's
-    join is the only honest "everything enqueued has been handled" signal, and the alternative
-    is polling a render count and hoping. Four test files each carried this, all four reaching
-    into the same private, and one of them took a `bus` argument it immediately discarded.
+    The timeout is in seconds. Newly queued work also contributes to the join, so tests
+    must avoid producers that enqueue forever.
     """
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
@@ -680,7 +671,7 @@ class StagedForm:
         return interaction
 
     def assert_within_limits(self) -> None:
-        """Assert that the generated modal is valid for Discord."""
+        """Check the generated modal against the supported serialization size limits."""
         assert_within_limits(self.modal)
 
 
@@ -771,7 +762,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
         return StagedForm(records[0].args[0], client=self._client, user_id=actor)
 
     def assert_within_limits(self) -> None:
-        """Assert that the current generated view is valid for Discord."""
+        """Check the current view against the supported serialization size limits."""
         assert_within_limits(self._view())
 
     def _view(self) -> discord.ui.LayoutView:
@@ -814,7 +805,12 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request]](
     config: Config | None = None,
     **overrides: Unpack[ResponseOverrides],
 ) -> AsyncIterator[StagedUI[ComponentT]]:
-    """Present a component through an isolated owner-scoped facade and run its runtime."""
+    """Present a component in an isolated UI runtime for the context's lifetime.
+
+    For example, ``async with stage(screen, owner=cog) as ui`` lets a test call
+    ``await ui.press("save")`` and inspect ``ui.texts()``. Exit closes the runtime and
+    its message roots, even if an assertion fails.
+    """
     client = commands.Bot(command_prefix="!", intents=discord.Intents.none())
     runtime = install(client, _owner_config(owner, config))
     client.ui = runtime  # type: ignore[attr-defined]

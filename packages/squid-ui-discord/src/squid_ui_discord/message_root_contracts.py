@@ -99,19 +99,11 @@ type ResumedPress = Callable[[], Awaitable[None]]
 
 
 class ChallengeSupervisor(Protocol):
-    """Somewhere to run an approved press that is not the press that approved it.
+    """Queue approved presses outside the approving handler's transaction context.
 
-    The requirement this exists for: `transaction()` flattens rather than nests, so running
-    the challenged press from inside the approving handler would run it in the *dialog's*
-    transaction -- staging the panel's writes in the dialog's overlay, committing with it,
-    and unwinding through its error hook. A `PARALLEL_READ` press would not even misbehave,
-    it would raise, because `readonly_transaction()` refuses to nest.
-
-    Spawning a task from the approving handler does not escape it either: the transaction is
-    held in a `ContextVar` and a task started there inherits the context. So `resume` must
-    hand the work to a task whose own context predates the press -- in practice a queue
-    drained by something started at host startup. It is deliberately synchronous: an
-    implementation that could await would be tempted to await the press itself.
+    Start the consumer before interactions arrive. Spawning directly from the approving
+    handler inherits its ContextVars, so a separate task alone does not isolate the resumed
+    action. ``resume`` enqueues work synchronously rather than awaiting it.
     """
 
     def resume(self, press: ResumedPress) -> None: ...
@@ -129,8 +121,10 @@ class ChallengeRequest:
 
     message_root: AnyMessageRoot
     interaction: discord.Interaction
-    """The interaction that asked. Its response has been spent on the question, so it is an
-    actor identity and a private answering channel -- never a handle to this mount's message."""
+    """The original press, whose response the presenter uses for the question.
+
+    Approval retains this actor identity but does not reuse its handle for the parent message.
+    """
     challenge: Challenge
     key: str
     """The routed binding key the approval resumes, which is what carries a grouped select's route."""
@@ -158,10 +152,10 @@ class ExpirySupervisor(Protocol):
 
 @runtime_checkable
 class TopicScheduler(Protocol):
-    """A scheduler backed by a topic bus (see `MessageRootScheduler`).
+    """A scheduler exposing the bus used for shared-state and topic subscriptions.
 
-    Separate from `Scheduler` because following is optional: a mount with no scheduler, or
-    one whose scheduler only absorbs refreshes, is simply not live-updated.
+    Schedulers without a bus can still refresh roots explicitly, but cannot subscribe
+    them to changes published elsewhere.
     """
 
     bus: TopicBus
@@ -180,6 +174,7 @@ class PauseUpdates:
     """Show status chrome before temporary edit authority expires."""
 
     warning: float = 60.0
+    """Seconds before the edit token expires to request the status update."""
 
     def __post_init__(self) -> None:
         _validate_warning(self.warning)
@@ -190,6 +185,7 @@ class RenewEphemeral:
     """Replace an expiring ephemeral panel with an explicit renewal screen."""
 
     warning: float = 90.0
+    """Seconds before the edit token expires to request the renewal screen."""
     label: TextLike | None = None
 
     def __post_init__(self) -> None:
@@ -265,6 +261,7 @@ class MessageRootConfig[
     palette: Palette = DEFAULT_PALETTE
     strict: bool = False
     timeout: float | None = 900
+    """Idle seconds since initial delivery or accepted interaction; None disables the timer."""
     retain_routed_on_timeout: bool = False
     on_error: ErrorHook | None = None
     middleware: Sequence[ActionMiddleware] = ()
@@ -277,7 +274,9 @@ class MessageRootConfig[
     nav: NavFactory | None = None
     challenge: ChallengePresenter | None = None
     acknowledgement_timeout: float = 2.5
+    """Seconds into handler execution before deferring an unanswered interaction."""
     pending_after: float = 1.0
+    """Seconds before a BusySpec action requests its interim presentation."""
     clock: Callable[[], float] = monotonic
 
     def replace(self, **changes: Unpack[MessageRootOptions[RenderTargetT, AdapterT]]) -> Self:
@@ -313,13 +312,11 @@ class MessageAddress:
 
 @dataclass(frozen=True, slots=True)
 class MessageRootSnapshot:
-    """One read-only look at a live message root, for host diagnostics.
+    """A shallow diagnostic snapshot of a message root.
 
-    A single call rather than a dozen properties: it fixes what a mount is willing to say
-    about itself, and a caller cannot accidentally mutate what it reads. Everything here is
-    either a scalar or already immutable, so nothing is copied. The deeper payloads — the
-    components' declared state and the presentation session — stay behind `runtime` and
-    `presentation`, because building them costs more than a list of sessions should.
+    Timing values use seconds. Component state and presentation state are inspected
+    separately through runtime and presentation. Objects such as a custom access policy
+    are referenced rather than copied; freezing this record does not freeze those objects.
     """
 
     id: str

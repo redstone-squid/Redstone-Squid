@@ -120,7 +120,11 @@ class MessageRootInspection:
 
 @dataclass(frozen=True, slots=True)
 class DurableRecordInspection:
-    """Metadata for one persisted durable session record."""
+    """Metadata for one persisted durable session record.
+
+    ``snapshot_bytes`` and ``record_bytes`` currently count Python string characters in
+    the JSON payloads, despite their names; they are not encoded byte lengths.
+    """
 
     key: str
     scope: str
@@ -130,7 +134,7 @@ class DurableRecordInspection:
 
 @dataclass(frozen=True, slots=True)
 class OperationalSnapshot:
-    """The bounded process-wide view rendered by the devtools dashboard."""
+    """The process-wide roots and configured services rendered by the devtools dashboard."""
 
     sessions: tuple[SessionInspection, ...]
     message_roots: tuple[MessageRootSnapshot, ...]
@@ -184,12 +188,7 @@ AuditHook = Callable[[DevToolsOperation], None]
 
 @runtime_checkable
 class SnapshotableBus(Protocol):
-    """A bus that can report its own queue depth.
-
-    `TopicBus` does not require this -- a bus that only delivers is a legal bus -- so the
-    capability is a separate shape rather than an optional method, and asking for it is an
-    `isinstance` rather than a `getattr` and a cast at each call site.
-    """
+    """Optional queue diagnostics for buses; delivery alone does not require this capability."""
 
     def snapshot(self) -> BusSnapshot: ...
 
@@ -200,7 +199,12 @@ def _bus_snapshot(bus: TopicBus) -> BusSnapshot | None:
 
 
 class DevToolsRuntime:
-    """Coordinate diagnostics and bounded operational actions for one process."""
+    """Inspect process state and execute operations permitted by the configured policy.
+
+    The host must authorize the actor before exposing this object. Policy checks enable
+    operations and require confirmation flags; they do not check a Discord user's identity.
+    Roots are discovered process-wide, while sessions come from the supplied manager.
+    """
 
     def __init__(
         self,
@@ -228,7 +232,7 @@ class DevToolsRuntime:
         self.audit = audit
 
     def snapshot(self) -> OperationalSnapshot:
-        """Return the current bounded process-wide diagnostic state."""
+        """Return all live roots and the configured services' current diagnostic state."""
         sessions = (
             () if self.sessions is None else tuple(_session_inspection(session) for session in self.sessions.active())
         )
@@ -330,7 +334,11 @@ class DevToolsRuntime:
         return True
 
     async def flush_persistence(self) -> OperationResult:
-        """Checkpoint pending durable sessions without resetting application state."""
+        """Attempt pending durable checkpoints without resetting application state.
+
+        The underlying runtime may log save failures and retain pending sessions even when
+        this operation returns a success result. Inspect durability health for those failures.
+        """
         self._authorize(DevToolsAction.FLUSH_PERSISTENCE, None, confirmed=True)
         runtime = self._require_durable()
         await runtime.flush()

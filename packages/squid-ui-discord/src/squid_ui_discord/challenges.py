@@ -1,15 +1,13 @@
-"""Showing a guard's challenge, and running the press the actor approves.
+"""Present guard challenges and resume approved presses in host-owned tasks.
 
-Two halves that a mount cannot supply for itself. It holds no session registry -- the lookup
-runs the other way -- so it cannot open the dialog; and it has no task of its own that
-predates a press, so it cannot run the resumption anywhere safe. Both are host-supplied,
-through `MessageRootDefaults(challenge=...)`.
+A guard can ask the actor to confirm before an action runs. DialogPresenter attaches
+that question to the parent's session; ChallengeRunner resumes the action after approval.
+The host starts the runner before dispatching interactions.
 
-The supervisor half is not a convenience. `transaction()` flattens rather than nests, so a
-press resumed from inside the approving handler would stage its writes in the dialog's
-overlay and commit with it, and a `PARALLEL_READ` press would raise outright. A task spawned
-from that handler inherits the same context. Only work handed across a queue to a task
-started earlier escapes it, which is what `ChallengeRunner` is.
+Approvals cross a queue because nested transactions share the outer transaction. Running
+the action in the approving handler would commit its changes with the dialog's changes.
+Even a newly spawned task inherits that transaction context, so the consumer must already
+be running when the approval arrives.
 """
 
 import asyncio
@@ -35,22 +33,15 @@ to the panel's own session and dies with it.
 
 
 class ChallengeRunner:
-    """Runs approved presses in a task whose context predates the press that approved it.
+    """Run approved presses from the context in which the host started ``run``.
 
-    `resume` is a plain queue push and copies no context, so it is safe to call from inside
-    the dialog's transaction; `run` is the host's background task that drains it. Started
-    once, alongside the scheduler:
+    Start ``run`` in the host task group before handling interactions. ``resume`` only
+    queues work; without a running consumer, approvals remain queued. ``concurrency``
+    limits running presses and ``capacity`` limits the queue. The consumer may also hold
+    one dequeued press while waiting for a concurrency slot.
 
-    ```python
-    background.start(runner.run(), name="layout-challenges")
-    ```
-
-    Without a running drain, approvals queue silently and nothing resumes -- which is the
-    honest failure for a host that wired the presenter but forgot the task.
-
-    `concurrency` bounds how many approved presses run at once and `capacity` how many wait;
-    past both, `resume` drops. A press that never returns holds its slot, so a host that
-    resumes work of unbounded duration should give it a timeout of its own.
+    A full queue drops new approvals with a warning. Presses have no automatic execution
+    timeout, and cancellation of the runner cancels its running presses.
     """
 
     def __init__(self, *, capacity: int = 256, concurrency: int = 16) -> None:
@@ -72,9 +63,8 @@ class ChallengeRunner:
         try:
             self._queue.put_nowait(press)
         except asyncio.QueueFull:
-            # Dropped rather than awaited: this is called from a handler holding an open
-            # transaction, and the actor can press again. Full now means genuinely saturated
-            # -- `concurrency` presses running and `capacity` more already waiting.
+            # Waiting here would hold the approving handler's transaction open.
+            # The actor can retry when the queue has room.
             logger.warning("challenge runner is full; an approved press was dropped")
 
     async def run(self) -> None:
@@ -134,11 +124,12 @@ class _Resolver:
 
 @dataclass(frozen=True, slots=True)
 class DialogPresenter:
-    """Asks the guard's question as an ephemeral panel attached to the one that asked.
+    """Show an ephemeral question attached to its parent's registered session.
 
-    A child mount rather than a modal: modals cannot be opened from an interaction whose
-    response has been spent, and a challenge is answered by controls the actor may take a
-    minute over.
+    The supplied session manager must already know the parent mount. A standalone mount
+    cannot acquire a challenge child through this presenter. The dialog is owner-only and
+    ends with its parent or its own deadline. A child panel can be sent after the original
+    interaction has been acknowledged; a modal would require its unused initial response.
     """
 
     sessions: SessionManager

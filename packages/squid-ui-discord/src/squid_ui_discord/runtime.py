@@ -1,18 +1,12 @@
-"""One installed Discord runtime, reachable from the client it was installed on.
+"""Install and locate the Discord UI services owned by one client.
 
-:class:`MessageRootDefaults` answered *construction*: the values every mount on this host shares.
-It cannot answer *lookup*, because it is a value — nothing hands one back from an
-interaction. A challenge presenter needs the session registry and the background runner, and
-a panel opened from a click holds neither, so a host that wanted both ended up minting a
-process global to stand in for the lookup this module now offers.
+Installation assembles sessions, challenge handling, an execution host, and optional
+scheduling without starting tasks. The application starts run in its task group and
+closes the runtime before cancelling that group.
 
-:func:`install` performs the assembly once — registry, challenge runner, dialog presenter,
-and optionally a scheduler — and records the result against the client. Anything carrying that
-client reaches it again through :meth:`DiscordUIRuntime.of`. The client-keyed weak table is the
-same shape :mod:`squid_ui_discord.routing` already uses for installed routers.
-
-Nothing here starts a task. `DiscordUIRuntime.run()` is offered for a host that wants one job, and
-declined by a host that wants per-job health granularity; either way the host supervises it.
+Commands and component callbacks recover those same services through DiscordUIRuntime.of,
+using their interaction or other client-bearing source. A Scope groups the message roots
+opened by one application owner, so unloading a cog can finish its live panels together.
 """
 
 import logging
@@ -80,10 +74,13 @@ def _candidates(source: RuntimeSource) -> Iterator[Any]:
 class DiscordUIRuntime[ClientT: discord.Client]:
     """The Discord runtime installed on one client; `close()` ends it.
 
-    Holds the objects whose construction is circular — the session registry, the challenge
-    runner, and the dialog presenter that needs both — plus the scheduler, when the installing
-    host gave a topic bus to build one from. Built by :func:`install`, never directly, so
-    exactly one host exists per client and :meth:`of` can be trusted.
+    Use install to assemble shared services and defaults, then run to supervise their
+    tasks in the application's task group. Requests use of to find this same runtime
+    from their source, and scope to associate live panels with an application owner.
+    Closing the runtime finishes its scopes and sessions before unregistering it.
+
+    Installation also resolves a construction dependency: the dialog presenter needs
+    the session manager and challenge runner, while new sessions need that presenter.
     """
 
     def __init__(
@@ -110,11 +107,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     @property
     def defaults(self) -> MessageRootDefaults:
-        """The values every mount on this host is built from.
-
-        The manager's own defaults, not a copy: a message root opened through `sessions.open` and one
-        built here are wired the same way, which is the whole reason this lookup exists.
-        """
+        """The session manager's current mount defaults, shared rather than copied."""
         return self.sessions.defaults
 
     @defaults.setter
@@ -288,18 +281,14 @@ def install[ClientT: discord.Client](
     client: ClientT,
     config: Config | None = None,
 ) -> DiscordUIRuntime[ClientT]:
-    """Assemble the Discord runtime for `client` and record it against the client.
+    """Assemble and register the UI runtime for a client without starting its tasks.
 
-    `config.bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
-    the scheduler becomes the default scheduler; without one, a mount is refreshed only by its
-    own clicks. `config.profiler` instruments that scheduler. `config.localization` is the host's one async
-    hook for resolving a request's render-time locale; it runs when `sd.request` first resolves
-    a native source.
+    A configured bus supplies a default scheduler for topic and shared-state updates.
+    Without one, callers can still refresh roots explicitly or use a scheduler supplied
+    in mount defaults. The localization callback resolves the locale for each new Request.
 
     Raises:
-        ValueError: A host is already installed on this client. One client has one host, the
-            way one client has one router per id language -- a second would give the same
-            click two answers.
+        ValueError: A runtime is already installed on the client.
     """
     selected = config or Config()
     defaults = selected.defaults

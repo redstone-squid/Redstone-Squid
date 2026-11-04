@@ -1,4 +1,9 @@
-"""Owner-only operational diagnostics for live Squid Layouts runtimes."""
+"""Discord commands for inspecting live UI sessions and operating their runtimes.
+
+DevTools uses the bot owner's identity by default; hosts can supply another authorization
+check. Commands and the interactive dashboard share DevToolsRuntime for snapshots and
+operations, whose policy separately controls which operations are enabled.
+"""
 
 import dataclasses
 import io
@@ -50,7 +55,7 @@ from squid_ui_discord.routing import routers
 from squid_ui_discord.sessions import SessionManager
 
 if TYPE_CHECKING:
-    # Annotation only; see the note in operations.py about the `durable` extra.
+    # Annotation only; keep the optional `durable` extra out of runtime imports.
     from squid_ui_discord.durability import RecoveryReport
 
 

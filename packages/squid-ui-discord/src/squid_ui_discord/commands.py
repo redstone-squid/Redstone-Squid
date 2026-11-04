@@ -166,7 +166,7 @@ class CommandPolicy:
     pending: PendingCard | None = None
 
     def overlay(self, other: CommandPolicy) -> CommandPolicy:
-        """`other`'s set fields over this one's."""
+        """Overlay non-None fields; None inherits rather than clearing an enclosing policy."""
         return replace(
             self,
             defer=self.defer if other.defer is None else other.defer,
@@ -235,7 +235,11 @@ def _group_policy(req: Request[Any]) -> CommandPolicy:
 
 
 async def present_return(req: Request[Any], result: CommandResult) -> ResponseResult | None:
-    """Present one supported handler return through its request."""
+    """Present a handler's content unless it already returned a settled outcome or None.
+
+    Returning new content after responding through the request raises instead of sending
+    a second implicit response. Forms must still have an unused initial response slot.
+    """
     if result is None or isinstance(result, _SETTLED_RESULTS):
         return result
     if req.responded:
@@ -333,10 +337,12 @@ def command(
     defer: Deferral | None = None,
     **native: Unpack[NativeCommandKwargs],
 ) -> CommandDecorator:
-    """`app_commands.command`, with the handler receiving a `Request` in the source slot.
+    """Build an app command whose source parameter receives a Request.
 
-    `defer` acknowledges before the handler runs; `pending` shows a card while it runs and
-    replaces it with the returned document. Both inherit from an enclosing `sd.Group`.
+    ``defer`` acknowledges before the handler runs. ``pending`` shows a card and replaces
+    it with the returned document; the handler must return document content or None,
+    which leaves the card visible. Both policies inherit from an enclosing Group.
+    Other command options pass through to discord.py.
     """
     own = CommandPolicy(defer=defer, pending=pending)
 
@@ -462,7 +468,7 @@ def hybrid_group(
     defer: Deferral | None = None,
     **native: Unpack[NativeHybridKwargs],
 ) -> Callable[[Callable[..., Awaitable[CommandResult]]], HybridGroup]:
-    """`commands.hybrid_group`; the decorated callback runs when no subcommand is named."""
+    """Build a Request-injecting hybrid group using discord.py's native invocation rules."""
     own = CommandPolicy(defer=defer, pending=pending)
 
     def decorate(callback: Callable[..., Awaitable[CommandResult]]) -> HybridGroup:
@@ -535,7 +541,11 @@ def autocomplete[OwnerT, **P]() -> Callable[
         Coroutine[None, None, list[app_commands.Choice[ChoiceValue]]],
     ],
 ]:
-    """Inject a request and normalize autocomplete choices to Discord's limit."""
+    """Inject a Request and normalize the first 25 autocomplete results in order.
+
+    Results may be native choices or supported label/value pairs. Entries beyond the
+    first 25 are discarded before validation.
+    """
 
     def decorate(
         callback: Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[Sequence[AutocompleteItem]]],

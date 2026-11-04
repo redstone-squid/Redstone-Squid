@@ -1,4 +1,14 @@
-"""Fenced admission, recovery, and checkpoint supervision for durable sessions."""
+"""Keep durable session records in step with live message roots.
+
+Opening a session reserves its key, delivers a recoverable message, then saves the initial
+record before replacing existing sessions. Later committed renders request checkpoints of
+the whole session, including attached panels and membership.
+
+A store claim identifies this runtime as the current writer. Periodic maintenance renews
+that claim and retries pending checkpoints; losing the claim finishes the local session
+so another runtime can own recovery. Store writes check the claim token to reject an old
+owner after ownership changes.
+"""
 
 import asyncio
 import json
@@ -75,7 +85,11 @@ class RecoveryItem:
 
 @dataclass(frozen=True, slots=True)
 class RecoveryReport:
-    """Per-record recovery outcomes; one bad record never aborts the sweep."""
+    """Recorded outcomes from a recovery sweep.
+
+    Reconstruction failures are classified per record. Store listing, claim acquisition,
+    or cleanup failures can still escape and abort the sweep.
+    """
 
     restored: tuple[RecoveryItem, ...] = ()
     missing: tuple[RecoveryItem, ...] = ()
@@ -170,18 +184,13 @@ class DurableSession(Session):
         actor_id: int | None = None,
         parent: MessageRoot | None = None,
     ) -> OpenResult:
-        """Deliver and durably attach one child mount to this session graph.
+        """Deliver a child using a registered restore recipe, then attempt its checkpoint.
 
-        `recipe` names the registered component the mount is rebuilt from after a restart, and
-        has no counterpart on `Session.attach`. It defaults so that this stays a valid override:
-        a caller holding a plain `Session` that happens to be durable -- which is every caller
-        going through `SessionManager.session_for` -- would otherwise raise `TypeError`. Attaching
-        without one is refused rather than served, because a mount this session cannot rebuild
-        would disappear from the graph at the next recovery.
-
-        A promotion that fails after delivery is reported as a refusal for the same reason the
-        base class only promises `OpenResult`: an override may not hand back an outcome its
-        callers have no way to know about.
+        ``recipe`` names how to reconstruct this child after restart. Its default preserves
+        the base Session.attach signature, but omitting it returns Rejected because the child
+        could not be recovered. Failed promotion also returns Rejected and may happen after the
+        message was delivered. A later checkpoint save failure can leave an opened child
+        pending persistence, which is visible through ``health``.
         """
         runtime = self._durable_runtime
         if runtime is None:
@@ -203,22 +212,20 @@ class DurableSession(Session):
         when: Callable[[frozenset[int]], bool] | None = None,
         expect: frozenset[int] | None = None,
     ) -> MembershipResult:
-        """Admit `user_id` and checkpoint the new membership."""
+        """Admit the user locally and attempt a checkpoint; inspect health for persistence status."""
         return await self._durably(await super().join(user_id, when=when, expect=expect))
 
     @override
     async def leave(self, user_id: int, *, expect: frozenset[int] | None = None) -> MembershipResult:
-        """Remove `user_id` and checkpoint the new membership."""
+        """Remove the user locally and attempt a checkpoint; inspect health for persistence status."""
         return await self._durably(await super().leave(user_id, expect=expect))
 
     async def _durably(self, result: MembershipResult) -> MembershipResult:
-        """Persist a committed membership change, outside the session lifecycle lock.
+        """Attempt persistence after releasing the session lifecycle lock.
 
-        Held inside it, a checkpoint that loses the claim would re-enter `finish` and
-        deadlock on the lock the operation still owns — so this follows `_attach`, which
-        mutates under the lock and persists after releasing it. A failed checkpoint leaves
-        the record dirty at `CHECKPOINT_PENDING` for the maintenance sweep to retry; a
-        caller needing read-your-write durability awaits `DurableSessionRuntime.flush`.
+        Claim loss can finish the session and reacquire that lock. Save failures are logged
+        and leave CHECKPOINT_PENDING for maintenance to retry; they do not undo membership.
+        Calling flush attempts another checkpoint but does not guarantee a successful save.
         """
         runtime = self._durable_runtime
         if result.committed and runtime is not None:
@@ -230,7 +237,12 @@ type DurableOpenResult = Opened[DurableSession] | Rejected | Abandoned | NotDura
 
 
 class DurableSessionRuntime:
-    """Coordinate fenced admission, whole-session checkpoints, and frontend recovery."""
+    """Recover sessions at startup, then maintain their claims and saved state.
+
+    Start ``run`` with the host task group's ``start`` method; it reports recovery results
+    before accepting new work. ``components`` supplies restore recipes, ``store`` persists
+    session records, and ``frontend`` reconnects those records to visible messages.
+    """
 
     def __init__(
         self,
@@ -283,7 +295,12 @@ class DurableSessionRuntime:
         )
 
     async def flush(self) -> None:
-        """Renew claims and checkpoint every dirty durable session now."""
+        """Renew claims and attempt checkpoints for dirty sessions while the runtime is running.
+
+        Save failures are logged and leave sessions at CHECKPOINT_PENDING for a later retry.
+        A normal return is not proof that every snapshot was saved; inspect session health.
+        Claim loss can finish affected local sessions. Other maintenance failures may propagate.
+        """
         self._require_running()
         await self._maintain()
 
@@ -326,7 +343,12 @@ class DurableSessionRuntime:
         quota: int | None = None,
         domain: str | None = None,
     ) -> DurableOpenResult:
-        """Reserve, deliver, persist, and register one durable session atomically."""
+        """Reserve admission, deliver, persist, and then register a durable session.
+
+        Existing occupants remain live until the new record is saved. Discord delivery and
+        storage are separate operations: failure after delivery requests cleanup of the new
+        mount, but cannot make its message never have appeared.
+        """
         self._require_running()
         if not self.components.has(recipe):
             message = f"durable component {recipe!r} is not registered"
@@ -428,7 +450,12 @@ class DurableSessionRuntime:
         *,
         task_status: TaskStatus[RecoveryReport] = anyio.TASK_STATUS_IGNORED,
     ) -> None:
-        """Own this runtime until cancellation releases its claims and ends supervision."""
+        """Supervise recovery, claim renewal, and checkpoints until cancelled.
+
+        Times and lease deadlines use epoch seconds from ``clock``. Shutdown stops supervision
+        and attempts to release claims; it does not finish the live message roots. The host
+        must close its sessions and UI execution runtime as part of its own shutdown.
+        """
         if self._running:
             message = "durable session runtime is already running"
             raise RuntimeError(message)

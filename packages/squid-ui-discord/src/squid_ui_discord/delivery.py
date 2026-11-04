@@ -1,24 +1,16 @@
-"""Send/edit mechanics for rendered Discord messages.
+"""Discord destinations and edit authority for complete message payloads.
 
-A mount does not hold a message, it holds an :class:`EditHandle` — a way to write to one
-already-sent message, and how long it is good for. Discord issues two kinds: the bot's own
-credentials, which never expire, and an interaction's, which do. Everything that knows about
-webhook tokens, `@original` semantics and HTTP error codes lives here, so callers only ever
-ask whether a handle is expired and catch :class:`StaleHandleError` when it turns out to be.
+The destination factories capture where and how to send, then return an async callable
+that accepts a MessagePayload. For example, MessageRoot.send(send_to(channel)) delivers
+the root's first render. Its DeliveryResult supplies message metadata and an EditHandle
+for later refreshes, even when delivery did not return a full discord.Message object.
 
-The initial send is the mirror image: a mount holds no message yet, so it asks for one
-through a :class:`MessageDestination`. The destination returns a :class:`DeliveryResult` naming
-both the observable message and the exact edit authority the operation created. It owns every
-discord.py kwarg; the mount owns the stage/deliver/commit sequence around it.
+Handles encapsulate bot-token or interaction-token writes, including transitions between
+classic messages and Components V2. Initial destinations disable mentions by default.
 
-Both halves move :class:`~squid_ui_discord.message_payload.MessagePayload` values,
-not views: a handle knows which mode the message it addresses is in, so the legacy fields a
-pre-Components-V2 message has to clear are a stated transition rather than a guess at a
-`discord.Message` that is very often `None`.
-
-Absorbs the three helpers that previously lived in the host bot (`edit_layout`,
-`edit_interaction_layout`, `reply_layout`): every path defaults to `AllowedMentions.none()`.
-Delivery *policy* (ephemeral rules, DM fallback) stays host-side.
+A handle's expiry is a local hint. Known expired-token errors become StaleHandleError;
+other Discord failures, including permission errors, propagate. A permanent handle has
+no interaction-token deadline, but the message or the bot's access can still disappear.
 """
 
 from collections.abc import Sequence
@@ -57,12 +49,10 @@ class StaleHandleError(LayoutError):
 
 
 class DeliveryAbandoned(Exception):
-    """A destination chose not to deliver, and has already told the user why.
+    """A destination declined the payload after explaining why to the user.
 
-    Distinct from a failure: nothing reached Discord, but nothing went wrong either. The
-    closed-DM path is the case — a payload too private for a channel, and no private channel
-    to put it in. `MessageRoot.send` discards the staged render rather than committing one nobody
-    will ever see.
+    MessageRoot.send discards its staged render and returns Abandoned. The destination
+    may have sent a separate explanation, such as a notice that private delivery failed.
     """
 
 
@@ -95,7 +85,7 @@ class DeleteHandle(Protocol):
 
 
 class EditHandle(Protocol):
-    """A way to update or delete one already-sent message."""
+    """Authority to update one already-sent message; deletion uses DeleteHandle."""
 
     permanent: bool
     """The bot's own credentials, which Discord does not expire."""
@@ -113,14 +103,14 @@ class EditHandle(Protocol):
         ...
 
     async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
-        """Replace what the message shows with `payload`.
+        """Replace the message fields owned by ``payload``.
 
-        `keep_attachments` leaves the message's files alone; without it the payload's
-        own assets become the message's whole attachment set.
+        With ``keep_attachments=True``, retain the existing attachments and ignore the payload's
+        assets. Otherwise replace the attachment set with fresh files built from those assets.
 
         Raises:
             StaleHandleError: This handle no longer addresses its message.
-            MessageModeError: The message cannot move to `payload.mode`.
+            MessageModeError: The message cannot transition to the payload's mode.
         """
         ...
 
@@ -437,7 +427,7 @@ def reply_to(
     allowed_mentions: discord.AllowedMentions | None = None,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> MessageDestination:
-    """Answer the command that asked, in whatever channel it asked from.
+    """Create a destination that replies through the invoking command context.
 
     Mentions stay off unless asked for. The classic target exists partly so a message can
     ping someone *and* be readable in the notification, so this has to be reachable — but a
@@ -496,7 +486,7 @@ def send_to(
     allowed_mentions: discord.AllowedMentions | None = None,
     delete_after: float | None = None,
 ) -> MessageDestination:
-    """Send a complete payload to a channel and retain bot-token edit authority.
+    """Create a channel destination that retains bot-token edit authority after sending.
 
     Takes a real discord.py messageable or anything shaped like one. The two overloads exist
     because discord.py's `send` is overloaded per channel type precisely so a `LayoutView`
@@ -532,7 +522,10 @@ def respond_to(
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     complete_deferred: bool = False,
 ) -> MessageDestination:
-    """Answer an interaction, whether or not it was already responded to.
+    """Create an interaction destination for an initial response or a follow-up.
+
+    Set complete_deferred when completing a managed deferral: that path edits the
+    original response instead of creating a follow-up message.
 
     `wait` costs a round trip only when the caller needs the message itself. A fresh response
     remains writable through `@original` without fetching it. Mentions stay off unless asked
@@ -577,7 +570,7 @@ def edit_to(
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
 ) -> MessageDestination:
-    """Write a mount's first render onto a message the bot already owns.
+    """Create a destination that replaces a message the bot already owns.
 
     The way a mount *arrives* on an existing message: `MessageRoot.send` runs its usual
     stage/deliver/commit around it, and the result names the permanent bot-token authority
@@ -612,7 +605,7 @@ def deliver_to(
     wait: bool = True,
     allowed_mentions: discord.AllowedMentions | None = None,
 ) -> MessageDestination:
-    """Answer whichever of the two invocation surfaces `target` is.
+    """Choose a reply destination for an interaction or command context.
 
     `respond_to` for an interaction, `reply_to` for anything a command arrived on. Chosen by
     shape -- only the latter can `send` -- so a test double is dispatched like the real thing.

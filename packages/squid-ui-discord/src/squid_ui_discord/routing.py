@@ -1,32 +1,24 @@
-"""Dispatch for stateless routed controls.
+"""Dispatch controls whose identity is stored in their Discord custom ID.
 
-The counterpart to `MessageRoot` for the tier that outlives the process. A mount owns handlers
-in memory and re-issues ids per generation; a router owns a table of `Route`s and resolves
-an incoming custom id against it, so a button drawn a year ago by a since-restarted
-process still reaches code.
-
-A handler takes the interaction and then its route's parameters by name, the way a Flask
-view takes its path variables:
+A Router matches an incoming custom ID against registered Routes and passes the extracted
+parameters to a handler. Re-registering the same routes at startup lets controls on old
+messages work after a process restart; no live MessageRoot or in-memory handler binding
+is needed for those messages.
 
     @router.route("build:edit:{build_id:int}")
     async def edit_build(interaction: discord.Interaction[Bot], build_id: int) -> None: ...
 
-A named `Route` is worth spelling out when something outside the handler's module has to
-build ids from it — which is the usual case, since the card that draws the button rarely
-lives beside the code that answers it.
+Name a Route separately when the code building control IDs lives outside the handler's
+module. Parameter names are checked when the handler registers, so a misspelling fails
+at registration instead of on a click. Call ``router.register(client)`` after defining
+routes to install dispatch; existing handlers can later be replaced during reloads.
 
-Names are checked against the route when the handler registers, so a typo is an import
-error rather than a click that fails in production. The interaction stays raw and is a
-deliberate asymmetry with `ActionControl`: a routed control's state lives in the message and the
-store, so handlers need `interaction.message`, `interaction.guild` and the client — facts
-no portable event can carry. The *node* stays portable; only dispatch is Discord's, which
-is why this lives here rather than beside the semantic layer.
+Handlers receive the raw Discord interaction so they can read the message and look up
+application state. They supply their own authorization, concurrency control, and
+transactions. MessageRoot's action lock and render-generation checks do not apply.
 
-None of the mount's guarantees apply: no author lock, no generation check, no transaction.
-A routed handler owns its own concurrency.
-
-`squid_ui_discord.testing.interaction_harness` plus `Router.dispatch` is this module's
-test client — a handler can be exercised without a bot, a gateway or a real message.
+Use ``squid_ui_discord.testing.interaction_harness`` with ``Router.dispatch`` to exercise
+handlers without a bot, gateway, or real message.
 """
 
 import annotationlib
@@ -525,9 +517,8 @@ class Router[BotT: discord.Client]:
 
         Replacement rather than rejection because loading an extension re-executes its
         module, so a reload registers every route in it a second time with a fresh function
-        object. The newest handler wins, exactly as it did when these were `DynamicItem`
-        classes keyed by template. It also leaves the template unchanged, which is why a
-        reload is allowed after `register` while a genuinely new route is not.
+        object. The newest handler wins while the installed template remains unchanged,
+        which is why a reload is allowed after `register` while a new route is not.
 
         A route that *shadows* another is rejected outright, by `Route.overlaps`, which is
         exact rather than sampled: the segment grammar makes "could one id belong to both"
@@ -608,15 +599,12 @@ class Router[BotT: discord.Client]:
         return re.compile("|".join(patterns) if patterns else r"(?!)")
 
     def register(self, client: discord.Client) -> None:
-        """Install this router's dispatch item on ``client``, freezing the route table.
+        """Install dynamic dispatch on a client and freeze route identities and middleware.
 
-        Safe to call for more than one client — a test suite builds a fresh bot per case —
-        but not before every route is added, since the template is built here. Registering
-        the same router on the same client again is a no-op: discord.py's `ViewStore`
-        schedules one call per matching dynamic item, so a second install would dispatch
-        every click twice. A *different* router is rejected when any custom id could reach
-        both, with the same exact-intersection check `add()` uses, because the losing
-        router would answer ids it does not own with a warning or its gone hook.
+        Registering the same router on the same client is idempotent. Existing handlers may
+        still be rebound for reloads, but new identities cannot be added after registration.
+        Different routers with overlapping IDs are rejected because discord.py dispatches
+        every matching dynamic-item template, which would run more than one handler per click.
         """
         for group in self._groups:
             group._freeze()
@@ -661,7 +649,13 @@ class Router[BotT: discord.Client]:
         component: RouteComponent = RouteComponent.BUTTON,
         values: tuple[str, ...] = (),
     ) -> None:
-        """Run the handler owning ``custom_id`` under the acknowledgement deadline."""
+        """Resolve a routed control and run its middleware and handler.
+
+        The acknowledgement watchdog defers an unanswered interaction; it does not impose
+        a handler execution deadline. Handlers must open modals before that response is spent.
+        Authorization and application transactions belong to the installed middleware or
+        handler; matching a custom id alone grants neither.
+        """
         found = self.resolve(custom_id, component=component)
         registration: _Registration | None = None
         params: Mapping[str, Any] = MappingProxyType({})

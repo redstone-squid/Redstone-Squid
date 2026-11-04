@@ -1,4 +1,13 @@
-"""Reusable recipes for opening logical Discord sessions."""
+"""Derive a session's key, access policy, and mount options from its opener.
+
+A SessionSpec is a reusable screen policy: for example, a user-scoped recipe named
+"settings" gives each user a separate session key while repeated opens by that user
+compete under the same admission policy. OpenContext supplies the user's and guild's
+identity. Opening constructs a message root and asks SessionManager to admit and deliver it.
+
+Session-key scope chooses which sessions compete. It is distinct from facade.Scope,
+which ties all panels opened by an application object to that object's lifetime.
+"""
 
 from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass, field
@@ -43,13 +52,7 @@ class OpenContext:
 
     @classmethod
     def of(cls, source: discord.Interaction[Any] | Replyable | discord.Message) -> OpenContext:
-        """Build an open context from an interaction or command context.
-
-        Read duck-typed, the way `reply_to` peeks at `ctx.interaction`: an interaction names
-        its user and guild directly, a command context names an `author` and a `guild`. The
-        two surfaces never meet in discord.py's type hierarchy, and a session recipe does
-        not care which one a reader arrived through.
-        """
+        """Extract opening identity from an interaction, command context, or message."""
         user = getattr(source, "user", None)
         if user is None:
             user = getattr(source, "author", None)
@@ -94,14 +97,11 @@ class ScopeKind(StrEnum):
     GLOBAL = "global"
 
     def resolve(self, open_context: OpenContext) -> SessionScope:
-        """Build this kind of scope as a value, for a kind chosen at runtime.
+        """Build the chosen scope; guild-based scopes raise when the opener has no guild.
 
-        `SessionSpec` declares its scope as a member and resolves it here, so this returns the union.
-        A caller that knows the kind statically should ask the open context instead --
-        `open_context.user_guild()` is a `UserGuildScope`, which is what lets a `SharedState[UserGuildScope]`
-        pool refuse the wrong scope at the call site rather than missing at runtime. Both spellings
-        build the same values, and those are the values a `SessionKey` already carries, so a panel
-        holding its session key reaches a pool through `key.scope` with nothing to convert.
+        When the kind is known statically, OpenContext.user_guild and its peers return
+        the specific scope type. The same values can key a SharedStatePool, allowing
+        a session's key.scope to identify shared state without a separate conversion.
         """
         match self:
             case ScopeKind.USER:
@@ -226,7 +226,12 @@ class SessionSpec:
         parent: MessageRoot,
         **overrides: Unpack[SessionOptions],
     ) -> OpenResult:
-        """Construct and attach a mount below one known live parent."""
+        """Construct a child mount under a known live parent's session.
+
+        The existing session supplies admission and membership policy. This recipe supplies
+        mount options and access, but does not open a separate session or apply its key limit,
+        capacity, quota, or domain.
+        """
         sessions = _manager(sessions)
         parent_session = sessions.session_for(parent)
         if parent_session is None:

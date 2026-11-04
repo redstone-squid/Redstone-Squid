@@ -63,7 +63,12 @@ class _Causes:
 
 
 class MessageRootScheduler:
-    """Own concurrent, per-mount-coalesced refreshes and live-update expiry checks.
+    """Refresh message roots after state changes and before their edit tokens expire.
+
+    The host runs ``run`` in its task group. ``schedule`` requests a refresh directly;
+    ``follow`` connects changes on a topic bus to the same queue. Repeated requests for
+    one queued root share a refresh. A change during that refresh schedules one more pass,
+    so the latest state is not lost while different roots can refresh concurrently.
 
     Args:
         bus: Process-local topic bus used by :meth:`follow`. Without one, the scheduler remains
@@ -195,10 +200,10 @@ class MessageRootScheduler:
         )
 
     async def wait_idle(self) -> None:
-        """Wait until every refresh queued before the call has settled.
+        """Wait for the refresh queue to drain, including work added while waiting.
 
-        A running scheduler owns the queue workers. Calling this while it is stopped would
-        otherwise wait forever, so an operator gets an explicit lifecycle error instead.
+        A stopped scheduler with pending work raises instead of waiting without workers.
+        A stopped, empty scheduler returns immediately.
         """
         if not self._running:
             if self._queued or self._in_flight:
@@ -214,7 +219,7 @@ class MessageRootScheduler:
     def follow(self, message_root: MessageRoot, *topics: CellAddress) -> Callable[[], None]: ...
 
     def follow(self, message_root: MessageRoot, *topics: Address) -> Callable[[], None]:
-        """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.
+        """Refresh ``message_root`` when an exact topic changes; return an unfollow callback.
 
         Call this before the mount's initial send so a write cannot land between its first
         read and subscription. The mount must use this scheduler as its scheduler; that lets
@@ -342,7 +347,7 @@ class MessageRootScheduler:
             self._sweep_once()
 
     def _sweep_once(self) -> None:
-        """Schedule the final honest refresh for handles approaching expiry."""
+        """Schedule the configured expiry notice before the current edit token expires."""
         now = self.clock()
         for message_root in tuple(self._watched):
             handle = message_root.handle

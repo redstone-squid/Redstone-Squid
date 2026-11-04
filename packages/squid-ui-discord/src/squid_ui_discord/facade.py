@@ -1,4 +1,10 @@
-"""A lifetime for the roots one application object opens."""
+"""Group live Discord panels under the application object that owns them.
+
+A Scope belongs to one runtime and one owner, such as a cog. Request-based replies and
+scheduled sends both use it to apply response defaults and track opened message roots.
+Closing the scope finishes those roots and their sessions, so unloading an owner does
+not leave interactive panels calling back into it.
+"""
 
 from collections.abc import Hashable, Sequence
 from dataclasses import replace
@@ -40,11 +46,15 @@ if TYPE_CHECKING:
 
 
 class Scope[OwnerT = Any]:
-    """The roots one owner opened; ``close()`` finishes them and unregisters the scope.
+    """Apply response policies and own the lifetime of one application object's panels.
 
     A request carries the scope of the cog (or app) it was dispatched to, so replies go
     through `Request`. `send` and `edit` cover the no-request case: a scheduled post, an
     edit of a message nobody just clicked.
+
+    Static content is rendered and delivered once. A Component opens a live message
+    root, optionally managed by a session policy, and is tracked until the scope closes.
+    Calling close finishes tracked roots and unregisters the scope.
     """
 
     def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT) -> None:
@@ -90,7 +100,11 @@ class Scope[OwnerT = Any]:
         return cast(Request[OwnerT], await _resolve_request(source, scope=self))
 
     def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
-        """Render supported static content through installed rendering defaults."""
+        """Render static content using the installed defaults.
+
+        A Component is rendered once without loading, mounting, or starting its services.
+        Native payloads, views, and embeds pass through without document planning or auditing.
+        """
         defaults = self._runtime.defaults
         selected = defaults.localization if localization is None else localization
         if isinstance(content, MessagePayload):
@@ -122,7 +136,12 @@ class Scope[OwnerT = Any]:
         files: Sequence[discord.File] = (),
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Send out-of-band content to a channel or DM destination."""
+        """Send content to a concrete channel or DM destination.
+
+        The resolved audience must be public, the default, because the destination already
+        determines visibility. Live content requires an access policy that can be resolved
+        without an opening actor; the default invoker-only policy cannot be used here.
+        """
         self._require_live()
         policy = self._policy(content, overrides)
         audience = self._setting(policy.audience, default="public")
