@@ -30,7 +30,7 @@ from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
 class RecordFilterJSON(TypeDecorator[RecordSubscriptionFilter]):
-    """Store validated subscription filters in the existing JSON format."""
+    """Convert subscription filters to JSONB and validate them when reading."""
 
     impl = JSONB(none_as_null=True)
     cache_ok = True
@@ -120,7 +120,7 @@ class NotificationSubscription(Base, kw_only=True):
 
 
 class InboxNotification(Base, kw_only=True):
-    """An idempotently materialized user notification."""
+    """An event-derived message for one recipient, shared by the web inbox and DM delivery."""
 
     __tablename__ = "notifications"
     __table_args__ = (
@@ -161,7 +161,7 @@ class InboxNotification(Base, kw_only=True):
 
 
 class NotificationDeliveryRecord(Base, kw_only=True):
-    """A durable at-least-once Discord DM delivery attempt."""
+    """A queued Discord DM retained across retries and after successful or terminal delivery."""
 
     __tablename__ = "notification_deliveries"
     __table_args__ = (

@@ -1,4 +1,16 @@
-"""Notification domain values and subscription validation."""
+"""Describe who receives event notifications and how they are delivered.
+
+A subscription follows a creator, a record series, or a filter selecting records.
+A matching event produces recipient-specific candidates. Account consent and
+channel preferences determine which candidates become stored notifications.
+Each stored notification supplies the same message data to the web inbox and,
+when enabled, a separate Discord DM delivery.
+
+A source key identifies one event-derived notification for one account, so event
+retries can reuse it. A delivery claim temporarily reserves one DM for a sender;
+it carries the message snapshot and identifiers needed to report that attempt's
+result without overwriting a newer claim.
+"""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -36,7 +48,13 @@ class NotificationKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class NotificationSource:
-    """The event identity shared by notification creation and account-merge replay."""
+    """Identify the event and notification kind before choosing its recipient.
+
+    `key_for` adds the account ID to make the source key used for deduplication.
+    Record-gain notifications also include the build ID because one record-run
+    event can produce separate messages for several builds. Account merges use
+    the same construction when moving a message to the surviving recipient.
+    """
 
     event_id: int
     kind: NotificationKind
@@ -92,7 +110,7 @@ DEFAULT_INBOX_VISIBILITY = InboxVisibility()
 
 @dataclass(frozen=True, slots=True)
 class NotificationCandidate:
-    """One recipient-specific notification awaiting preference materialization."""
+    """A possible notification whose recipient preferences have not yet been checked."""
 
     account_id: int
     source_key: str
@@ -104,10 +122,9 @@ class NotificationCandidate:
 class NotificationPreferences:
     """An account's notification channel switches, and whether it may use them yet.
 
-    There is no notification-specific notice any more. Notifications are described by the one
-    privacy notice, so `consent_pending` is the account's answer to that, read from the account
-    rather than stored again here. The channel switches stay independent: accepting the notice
-    permits notifications, it does not turn any on.
+    consent_pending comes from the account's privacy-consent policy, including any
+    exemption, rather than a separate notification notice. Consent permits opt-in;
+    it does not enable either channel automatically.
     """
 
     account_id: int
@@ -141,7 +158,7 @@ class TagPredicate:
             raise ValidationError(tr(t"exact predicates require a value"))
 
     def as_dict(self) -> dict[str, object]:
-        """Serialize the predicate into JSON-safe persistence data."""
+        """Return the tag ID, operator, and optional value for persistence."""
         result: dict[str, object] = {"tag_id": self.tag_id, "operator": self.operator}
         if self.value is not None:
             result["value"] = self.value
@@ -150,7 +167,11 @@ class TagPredicate:
 
 @dataclass(frozen=True, slots=True)
 class RecordSubscriptionFilter:
-    """Structured record-gain predicates; omitted fields are wildcards."""
+    """Conditions for following record gains.
+
+    Empty fields impose no restriction. Nonempty fields must all match; values
+    within each field are alternatives, and every tag predicate is required.
+    """
 
     build_kinds: frozenset[str] = frozenset()
     record_classes: frozenset[str] = frozenset()
@@ -177,7 +198,7 @@ class RecordSubscriptionFilter:
 
     @classmethod
     def from_dict(cls, value: dict[str, object]) -> RecordSubscriptionFilter:
-        """Parse trusted persisted JSON, raising when it no longer matches the contract."""
+        """Parse stored JSON, raising DataIntegrityError for invalid filter data."""
         raw_tags_value = value.get("tags", [])
         if not isinstance(raw_tags_value, list):
             raise DataIntegrityError(tr(t"tags must be a list"))
@@ -211,7 +232,16 @@ class RecordSubscriptionFilter:
 
 @dataclass(frozen=True, slots=True)
 class PendingNotificationDelivery:
-    """One fenced Discord DM claim with its materialized message data."""
+    """A claimed Discord DM with its recipient and message snapshot.
+
+    A sender passes this value back when reporting success or failure. The stored
+    generation and claim_token must still match, so a slow sender cannot overwrite
+    a later attempt or a delivery reassigned during an account merge.
+
+    The generation changes on account merge; the token changes on each claim.
+    The nonce is supplied to Discord and stays the same across ordinary retries,
+    but changes when accounts merge. It does not guarantee exactly-once delivery.
+    """
 
     id: int
     generation: int

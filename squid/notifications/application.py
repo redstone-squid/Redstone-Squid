@@ -77,7 +77,17 @@ class NotificationRepository(Protocol):
 
 
 class NotificationService:
-    """Manage opt-in notification state and idempotent event materialization."""
+    """Manage notification preferences, subscriptions, inbox access, and DM attempts.
+
+    `materialize` turns a domain event into stored notifications for eligible
+    recipients and queues their DMs. Repeated events reuse the same source keys.
+    The bot claims queued deliveries, sends them through Discord, and reports
+    success or failure here. Every write commits before returning, so the bot
+    holds no database transaction open while sending a message.
+
+    Inbox visibility is supplied by the authenticated caller's adapter; staff
+    messages require its permission check as well as the account's preferences.
+    """
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[NotificationUnitOfWork], retention_days: int = 90) -> None:
         if retention_days < 1:
@@ -92,7 +102,7 @@ class NotificationService:
             return await uow.notifications.get_preferences(account_id)
 
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
-        """Set both channels, once the account has accepted the privacy notice."""
+        """Set both channels when the account satisfies the privacy-consent policy."""
         async with self._uow_factory() as uow:
             preferences = await uow.notifications.update_preferences(
                 account_id,
@@ -205,20 +215,27 @@ class NotificationService:
             await uow.commit()
 
     async def materialize(self, event: DomainEvent) -> None:
-        """Project one event into inbox and DM work; safe on redelivery."""
+        """Create eligible recipients' stored notifications and queue their DMs.
+
+        Existing source keys are reused when the event is delivered again.
+        """
         async with self._uow_factory() as uow:
             await uow.notifications.materialize(event)
             await uow.commit()
 
     async def cleanup(self) -> int:
-        """Remove inbox and source events older than the configured retention window."""
+        """Remove expired inbox items and return their count.
+
+        Old source events are also removed when no inbox item or event-delivery
+        record still references them.
+        """
         async with self._uow_factory() as uow:
             result = await uow.notifications.cleanup(retention_days=self._retention_days)
             await uow.commit()
             return result
 
     async def claim_deliveries(self, *, limit: int = 20) -> Sequence[PendingNotificationDelivery]:
-        """Claim ready Discord DMs with database-clock UUID fencing tokens."""
+        """Reserve ready Discord DMs and commit their claim tokens before returning."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 100:
                 msg = tr(t"delivery claim limit must be between 1 and 100")
@@ -235,14 +252,18 @@ class NotificationService:
             return result
 
     async def fail_delivery(self, delivery: PendingNotificationDelivery, error: Exception) -> bool:
-        """Retry a failed or ambiguous send; duplicates are possible after timeouts."""
+        """Retry a failed send, or stop after eight attempts; return whether it became dead.
+
+        Stale claims do nothing and return False. A timeout may occur after Discord
+        accepted the message, so retrying can produce a duplicate.
+        """
         async with self._uow_factory() as uow:
             result = await uow.notifications.fail_delivery(delivery, str(error)[:4000], max_attempts=8)
             await uow.commit()
             return result
 
     async def suspend_dm(self, delivery: PendingNotificationDelivery, error: Exception) -> bool:
-        """Disable DMs after Discord explicitly rejects messages to the recipient."""
+        """Disable DMs after Discord rejects a send, returning False if its claim is stale."""
         async with self._uow_factory() as uow:
             result = await uow.notifications.suspend_dm(delivery, str(error)[:4000])
             await uow.commit()

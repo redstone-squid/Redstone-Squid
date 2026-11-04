@@ -4,14 +4,14 @@ from squid.core.errors import NotFoundError
 
 
 class NotificationSubscriptionNotFoundError(NotFoundError):
-    """Raised when a caller addresses a subscription they do not own."""
+    """The requested subscription or subscription target is unavailable to the caller."""
 
     default_message = "Notification subscription not found."
     default_resource = "notification_subscription"
 
 
 class NotificationNotFoundError(NotFoundError):
-    """Raised when a caller addresses an inbox item they cannot observe."""
+    """The requested inbox item is missing or hidden from the caller."""
 
     default_message = "Notification not found."
     default_resource = "notification"

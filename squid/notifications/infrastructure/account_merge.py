@@ -1,4 +1,14 @@
-"""Notification-owned account merge policy, participating in the caller's transaction."""
+"""Move notification preferences, subscriptions, and messages to a surviving account.
+
+Channel opt-ins from either account are retained, and equivalent subscriptions
+collapse to one. Notification source keys include the recipient, so moving a
+message requires rebuilding its key and combining any duplicate already held by
+the survivor. Compatible duplicates preserve web visibility and read history.
+
+Moved or combined DM deliveries receive a new generation and have their old claims cleared.
+A sender still holding a pre-merge claim can no longer record its result against
+them. All changes remain in the caller's account-merge transaction.
+"""
 
 import uuid
 
@@ -205,6 +215,7 @@ def _earliest_present(left: Instant | None, right: Instant | None) -> Instant | 
 
 
 def _fence_merged_delivery(delivery: NotificationDeliveryRecord, account_id: int) -> None:
+    # Invalidate in-flight results and give the merged recipient a fresh Discord nonce.
     delivery.account_id = account_id
     delivery.generation += 1
     delivery.nonce = uuid.uuid4()

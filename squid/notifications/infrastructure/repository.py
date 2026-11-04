@@ -46,15 +46,12 @@ from squid.tags.models import TagAssignment
 
 
 def _durable_staff_notification_role_ids():
-    """The durable staff-notification audience role's id, as a scalar subquery.
+    """Select the built-in role used to find staff notification recipients.
 
-    Background delivery has no request, guild, Discord-role membership, or configured-owner
-    context to resolve. Its deliberately narrower audience is therefore an active, global,
-    direct account assignment to the built-in `global-admin` role.
-
-    This answers only *whom do we notify*. Per-request staff inbox visibility separately
-    resolves `build.submission.view_pending`; holding that node through owner or custom-role
-    context does not implicitly subscribe an account to unsolicited staff notifications.
+    Background delivery uses direct global-admin account assignments because it has
+    no guild, Discord-role, or request-owner context. Request-time inbox visibility
+    separately checks build.submission.view_pending; that permission alone does not
+    subscribe an account to staff notifications.
     """
     return select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN.value)
 
@@ -97,7 +94,22 @@ class _RecordGain:
 
 
 class PostgresNotificationRepository:
-    """Persist opt-ins and project durable events into channel-specific work."""
+    """Store notification preferences and turn domain events into recipient messages.
+
+    Event-specific queries find candidates: build submitters, creator or record
+    subscribers, and staff recipients. Candidates that pass consent and channel
+    checks become InboxNotification rows. Those rows also hold the message data
+    for DMs, including when web delivery is disabled; NotificationDeliveryRecord
+    tracks the separate send attempts.
+
+    Source keys prevent an event retry from inserting the same notification twice.
+    DM claims recheck current consent and preferences and resolve the recipient's
+    current Discord identity. A claim token and account-merge generation ensure
+    only the current sender can settle an attempt.
+
+    All methods use the database session from NotificationService's unit of work.
+    The service commits each operation; this repository does not send messages.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -118,10 +130,8 @@ class PostgresNotificationRepository:
     ) -> NotificationPreferences | None:
         """Set both channels, creating the profile row on first use.
 
-        An upsert rather than an update because there is no longer a separate accept step to
-        have created the row: a consented account turning a channel on for the first time is one
-        call. The gate is read first and separately because an UPDATE cannot join to `accounts`,
-        and this runs when a human toggles a switch, so a second round trip costs nothing.
+        Return None when the account does not satisfy the consent policy. Enabling
+        DMs clears a previous suspension; disabling them terminates pending deliveries.
         """
         session = self._session()
         if await self._consent_pending(session, account_id):
@@ -301,6 +311,8 @@ class PostgresNotificationRepository:
         )
         return updated is not None
 
+    # Create notifications from events and expire retained notifications.
+
     async def materialize(self, event: DomainEvent) -> None:
         session = self._session()
         if event.event_type == "build.submitted":
@@ -329,14 +341,13 @@ class PostgresNotificationRepository:
         )
         return int(removed or 0)
 
+    # DM claims reserve work; completion and failure apply only to the current claim.
+
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
         session = self._session()
         claimable_staff = _is_durable_staff_notification_recipient(NotificationDeliveryRecord.account_id)
-        # The DM address is read at claim time rather than copied onto the delivery
-        # row at enqueue time. The write path already made this join to decide
-        # whether to enqueue at all, so the cost moves rather than appearing -- and
-        # the inner join means unlinking Discord suppresses a pending DM, which is
-        # the correct reading of an unlink.
+        # Resolve the current Discord identity here so unlinking prevents pending
+        # DMs from being claimed and relinking uses the new address.
         candidates = (
             select(
                 NotificationDeliveryRecord.id,
@@ -450,6 +461,8 @@ class PostgresNotificationRepository:
             )
         )
 
+    # Recipient selection for each supported event, followed by shared preference checks.
+
     async def _materialize_staff_submission(self, session: AsyncSession, event: DomainEvent) -> None:
         build = await session.get(Build, event.aggregate_id)
         if build is None or build.submission_status != Status.PENDING:
@@ -498,6 +511,7 @@ class PostgresNotificationRepository:
         if event.event_type != "build.confirmed" or not await self._is_first_confirmation(session, event):
             await self._insert_candidates(session, event=event, candidates=candidates)
             return
+        # Followers hear about a build's first confirmation, not every later review outcome.
         creator_ids = tuple(await self._creator_public_ids(session, build.id))
         if creator_ids:
             subscriber_ids = (
@@ -525,6 +539,8 @@ class PostgresNotificationRepository:
         await self._insert_candidates(session, event=event, candidates=candidates)
 
     async def _materialize_record_gains(self, session: AsyncSession, event: DomainEvent) -> None:
+        """Create one message per recipient and build, combining all newly gained records."""
+        # The baseline establishes existing holders; it does not represent newly won records.
         if event.payload.get("baseline") is True:
             return
         previous_run_id = event.payload.get("previous_run_id")
@@ -598,6 +614,7 @@ class PostgresNotificationRepository:
         ]
         if not values:
             return
+        # Keep the original visibility snapshot when replaying an existing source key.
         await session.execute(
             insert(InboxNotification)
             .values(values)
@@ -708,6 +725,11 @@ class PostgresNotificationRepository:
         session: AsyncSession,
         gains: dict[int, tuple[_RecordGain, ...]],
     ) -> dict[int, set[int]]:
+        """Collect creators and matching subscribers once per build.
+
+        Matching any gained record qualifies a subscriber. The resulting message
+        includes all of that build's gains, even when only one matched the filter.
+        """
         build_ids = set(gains)
         recipients = {build_id: set() for build_id in build_ids}
         if not build_ids:
