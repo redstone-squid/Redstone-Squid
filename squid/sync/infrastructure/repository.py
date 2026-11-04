@@ -26,12 +26,9 @@ DISCORD_SYNC_QUEUE_SPEC = QueueSpec(
 
 
 def _job(row: DiscordSyncQueueItem, token: uuid.UUID) -> ReconciliationJob:
-    """Map a claimed row, refusing values its check constraints should have rejected.
+    """Convert a claimed row to a job, validating its resource and action names.
 
-    These two columns used to be `cast()` into their types, so a row that escaped
-    its constraint reached the reconciler looking like a valid job and failed
-    somewhere else entirely. The constraints stay: they are the reason a bad value
-    here is a data-integrity failure rather than a validation error.
+    Invalid names violate database constraints and raise DataIntegrityError.
     """
     try:
         resource_kind = ReconciliationResource(row.resource_kind)
@@ -54,7 +51,11 @@ def _job(row: DiscordSyncQueueItem, token: uuid.UUID) -> ReconciliationJob:
 
 
 class PostgresDiscordSyncQueue:
-    """Claim coalesced reconciliation work with crash-safe claim tokens."""
+    """Lease reconciliation jobs in the caller's transaction.
+
+    Completion and failure updates only apply while the job's claim token still
+    matches. The caller must commit claims before dispatching jobs to workers.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session

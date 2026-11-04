@@ -12,22 +12,15 @@ from squid.persistence.types import InstantUTC, now
 
 
 class DiscordSyncQueueItem(Base, kw_only=True):
-    """A coalesced request to refresh one Discord-rendered resource.
+    """A pending refresh or deletion of a resource's Discord posts.
 
-    Not an event queue, despite the shape. Rows are coalesced on
-    `(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO
-    UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is where
-    the coalescing actually happens — deleted on acknowledgement, and carry a
-    `generation` compared against a post's applied revision as a staleness token
-    rather than read as an ordering. An event log would be append-only and
-    replayable; this table is neither. A row means "this resource's Discord posts
-    are stale", and re-reading it tells you what the resource should look like
-    now, not what happened to it.
+    Database triggers insert one row per resource and replace its action and
+    generation when another change arrives. They also clear any existing claim,
+    so a worker handling the older generation cannot acknowledge the new request.
+    Workers read the resource's current state and delete the row on completion.
 
-    Discord-specific on purpose: every row exists to repair a Discord post, and
-    the only consumer renders them (`squid/bot/sync/reconciler.py`). The
-    application layer speaks of *reconciliation* rather than *sync* because a
-    sync names a transfer, and nothing here transfers anything.
+    The generation is compared with each post's applied revision. Several changes
+    can share one pending row; this table does not retain their history.
     """
 
     __tablename__ = "discord_sync_queue"
@@ -55,17 +48,17 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
-    """When this row next becomes claimable, and the only column backoff writes.
+    """Earliest time a worker may claim this row.
 
-    Kept separate from `enqueued_at` so a repeatedly failing row keeps its place in
-    FIFO order and still reports its true age to the queue-health gauges.
+    Retries move this time forward without changing enqueued_at, preserving queue
+    order and the age reported by health metrics.
     """
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The database-minted fencing token handed to the worker that claimed this row.
+    """Token generated for the current claim.
 
-    Nullable for now so code from the previous release, which stamps only
-    `claimed_at`, can keep draining the queue across a deploy window.
+    Completion and failure updates require a matching token. Enqueuing another
+    update clears it, preventing an older worker from acknowledging the new work.
     """
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     generation: Mapped[int] = mapped_column(
@@ -74,11 +67,10 @@ class DiscordSyncQueueItem(Base, kw_only=True):
         server_default=text("nextval('discord_sync_generation_seq')"),
         default=None,
     )
-    """A globally monotonic staleness token, not a per-row counter.
+    """Sequence number used to compare requested work with a post's applied revision.
 
-    Acknowledging a job deletes its queue row, so a counter restarted at 1 on the next
-    enqueue and could name a revision below one a post had already applied. Sequence
-    values survive that because they are never rolled back or reused.
+    The sequence continues after a queue row is deleted, so the next request does
+    not restart at a revision the post has already rendered.
     """
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

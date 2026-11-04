@@ -1,4 +1,11 @@
-"""Application service for durable Discord reconciliation work."""
+"""Keep bot-owned Discord posts in step with their application resources.
+
+Reconciliation means reading a resource's current state and updating its posts
+to match. Database triggers queue refresh or deletion requests, and the bot
+claims those requests through DiscordReconciliationService before calling the
+appropriate renderer. Repeated changes to one resource share a pending request;
+this queue tracks the latest required display, not a history of every change.
+"""
 
 import uuid
 from collections.abc import Sequence
@@ -23,13 +30,10 @@ class ReconciliationResource(StrEnum):
 
     @property
     def post_kind(self) -> PostResourceKind:
-        """The same value, spelled as the posts context types it.
+        """Return the literal resource name expected by post renderers.
 
-        Written out rather than cast so adding a resource fails here instead of
-        at the renderer lookup. The two contexts naming one set of resources
-        twice is real debt; closing it means converting
-        `squid.posts.domain.ResourceKind` as well, which reaches the starboard
-        paths this review excludes.
+        Explicit cases let type checkers detect a newly added enum member that
+        has not been mapped here.
         """
         match self:
             case ReconciliationResource.BUILD:
@@ -53,15 +57,14 @@ class ReconciliationAction(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ReconciliationJob:
-    """One claimed request to bring a Discord resource back in line.
+    """One claimed request to update a resource's Discord posts.
 
-    This is a desired-state queue, not an event log, and the difference decides
-    how every field behaves. Rows are coalesced by `(resource_kind, source_key)`
-    in the database triggers that write them, deleted on acknowledgement, and
-    `generation` is a staleness token drawn from a sequence and compared against
-    the post's applied revision rather than an ordering. An event log would be
-    append-only and replayable; this is neither, and re-reading a row tells you
-    what the resource should look like *now*, not what happened to it.
+    Triggers keep one queue row per resource, replacing its requested action when
+    the resource changes again. Workers render the current state, so intermediate
+    changes need not produce separate Discord updates. Completion deletes the row.
+
+    The generation identifies the requested update. Compare it with each post's
+    applied revision to find posts that still need rendering.
     """
 
     id: int
@@ -71,7 +74,7 @@ class ReconciliationJob:
     generation: int
     attempts: int
     claim_token: uuid.UUID
-    """The database-minted fence this worker's acknowledgement must still match."""
+    """Token identifying this claim; acknowledgements must still match it."""
 
 
 class ReconciliationQueue(Protocol):
@@ -95,7 +98,7 @@ class DiscordReconciliationService:
         self._max_attempts = max_attempts
 
     async def claim(self, limit: int = 20) -> Sequence[ReconciliationJob]:
-        """Claim ready work, reclaiming jobs abandoned by crashed workers."""
+        """Claim ready work and commit its leases, including replacements for expired claims."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 100:
                 msg = tr(t"claim limit must be between 1 and 100")
@@ -105,7 +108,7 @@ class DiscordReconciliationService:
             return result
 
     async def complete(self, job: ReconciliationJob) -> bool:
-        """Acknowledge a job only if its claim is still current."""
+        """Remove a job and return True only if its claim still matches."""
         async with self._uow_factory() as uow:
             result = await uow.reconciliation.complete(job)
             await uow.commit()
@@ -114,7 +117,7 @@ class DiscordReconciliationService:
     async def fail(self, job: ReconciliationJob, error: Exception) -> bool:
         """Retry failed work with backoff, or dead-letter it at the attempt ceiling.
 
-        Returns whether the job was dead-lettered.
+        Return True if retries were stopped. False means a retry was scheduled or the claim was lost.
         """
         async with self._uow_factory() as uow:
             result = await uow.reconciliation.fail(job, str(error)[:4000], max_attempts=self._max_attempts)
