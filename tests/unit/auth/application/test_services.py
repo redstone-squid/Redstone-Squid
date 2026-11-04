@@ -25,6 +25,8 @@ def nodes(*raw: str) -> frozenset[Pattern]:
 
 
 class FakeApiKeyRepository:
+    """Store keys and record usage requests without updating last-used timestamps."""
+
     def __init__(self) -> None:
         self.keys: dict[str, ApiKey] = {}
         self.lookups: list[str] = []
@@ -90,6 +92,7 @@ class FakeApiKeyUnitOfWork(FakeUnitOfWork[FakeApiKeyRepository]):
 def _copy_repository(repository: FakeApiKeyRepository) -> FakeApiKeyRepository:
     copied = FakeApiKeyRepository()
     copied.keys = {key: replace(value) for key, value in repository.keys.items()}
+    # Keep attempted reads observable even when the transaction is not committed.
     copied.lookups = repository.lookups
     copied.touches = list(repository.touches)
     return copied
@@ -241,8 +244,7 @@ class TestDigestConstruction:
     """
 
     def test_a_known_answer_pins_the_construction(self) -> None:
-        """A change of primitive, key order, or encoding invalidates every
-        stored digest, so it should fail here rather than in production."""
+        """Changing the primitive, key order, or encoding would invalidate stored digests."""
         expected = bytes.fromhex("e85a71116346fb122fbf70bda5503f9d4afd28fd940c40b651ed37784439ed7b")
 
         assert service(_state()).hash_secret("a-known-secret") == expected
@@ -250,8 +252,7 @@ class TestDigestConstruction:
 
     @pytest.mark.asyncio
     async def test_a_rotated_pepper_stops_authenticating_old_tokens(self) -> None:
-        """The pepper is a key, not a salt: rotating it revokes every credential
-        it protected, which is the property that makes leaking the table safe."""
+        """A different pepper cannot authenticate a digest created with the old key."""
         repository = _state()
         issued = await service(repository).issue(label="CI", scopes={"account.verify.relay"})
         rotated = ApiKeyService(
@@ -267,9 +268,7 @@ class TestScopeValidation:
 
     @pytest.mark.asyncio
     async def test_a_malformed_pattern_is_rejected_without_a_permission_service(self) -> None:
-        """The owner-authority check is skipped on the CLI bootstrap path, so it
-        cannot be the thing that catches a typo: `buildsubmission.raed` used to
-        persist happily and then match nothing."""
+        """Scope syntax must be checked even when owner-authority validation is disabled."""
         repository = _state()
 
         with pytest.raises(InvalidPatternError):
@@ -279,8 +278,6 @@ class TestScopeValidation:
 
     @pytest.mark.asyncio
     async def test_equivalent_patterns_are_stored_once(self) -> None:
-        """Parsing strips before de-duplicating, so surrounding whitespace does
-        not smuggle a second copy of one pattern into the array."""
         repository = _state()
 
         issued = await service(repository).issue(label="CI", scopes=["build.**", " build.** ", "build.**"])
@@ -289,7 +286,7 @@ class TestScopeValidation:
 
 
 class TestIssuanceBoundary:
-    """A key may never carry authority its owner does not hold."""
+    """Owner-authority checks for issuance, with an explicit ownerless-key case."""
 
     @staticmethod
     def _authorized_service(repository: CommittedState[FakeApiKeyRepository], *held: str) -> ApiKeyService:
@@ -319,8 +316,7 @@ class TestIssuanceBoundary:
         assert issued.key.scopes == nodes("build.submission.create")
 
     async def test_a_pattern_beyond_the_owner_is_refused(self) -> None:
-        """Enforced at issue time as well as at request time, so an over-broad key
-        cannot be minted now and quietly wait for its owner to be promoted."""
+        """Reject excess authority at issuance even if the owner might gain that permission later."""
         repository = _state()
         api_keys = self._authorized_service(repository, "build.**")
 
@@ -330,8 +326,6 @@ class TestIssuanceBoundary:
         assert repository.value.keys == {}
 
     async def test_an_ownerless_key_is_bounded_only_by_its_own_nodes(self) -> None:
-        """There is nobody to intersect with, and the machine-to-machine case
-        would otherwise be impossible to serve."""
         repository = _state()
         api_keys = self._authorized_service(repository)
 

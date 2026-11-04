@@ -97,11 +97,7 @@ async def test_oauth_service_uses_configured_loopback_endpoints() -> None:
 
 
 async def test_a_second_provider_logs_in_and_lands_its_own_identity_namespace() -> None:
-    """The seam proof: nothing on the session path assumes Discord.
-
-    A full browser login through a provider that is not Discord issues a session and
-    resolves an account under that provider's own namespace.
-    """
+    """Exercise service login with a Bedrock fake and verify the namespace passed to account lookup."""
     repository = SessionRepository()
     fake = FakeXboxOAuthProvider()
     accounts = AccountServiceRecorder(account_id=7)
@@ -129,7 +125,7 @@ async def test_a_second_provider_logs_in_and_lands_its_own_identity_namespace() 
 
 
 async def test_a_state_minted_for_one_provider_is_not_redeemable_at_another() -> None:
-    """The IdP mix-up class: without the check, a state minted at A is spendable at B."""
+    """Bind saved authorization state to its provider to prevent cross-provider callbacks."""
     repository = SessionRepository()
     web = service(repository, discord_provider(), FakeXboxOAuthProvider())
 
@@ -141,7 +137,7 @@ async def test_a_state_minted_for_one_provider_is_not_redeemable_at_another() ->
 
 
 async def test_an_unknown_provider_slug_is_not_found_rather_than_unauthorized() -> None:
-    """ "This deployment has no GitHub login" is a fact about the resource, not a credential failure."""
+    """An unavailable login provider is a missing resource, not an invalid credential."""
     web = service(SessionRepository(), discord_provider())
 
     with pytest.raises(NotFoundError):

@@ -1,11 +1,7 @@
-"""Doubles for the browser-session service.
+"""Browser-session doubles using Discord and Bedrock identity namespaces.
 
-`FakeXboxOAuthProvider` claims `IdentityProvider.BEDROCK` rather than a test-only enum
-member: a `TEST` member would pollute the production `match` exhaustiveness that
-`AccountIdentity.for_provider` depends on, and reusing `DISCORD` would prove only the
-slug routing, not that a second namespace lands correctly in `account_identities`.
-Bedrock is a provider this project would plausibly add for real and already has subject
-validation.
+The Bedrock provider exercises provider selection without an external OAuth service
+or a test-only member in the production identity enum.
 """
 
 from dataclasses import dataclass, field
@@ -36,7 +32,11 @@ class AccountServiceRecorder(AccountService):
 
 
 class SessionRepository:
-    """Small stateful repository fake for the authorization-code exchange."""
+    """Store one OAuth state and one session in memory.
+
+    Saving another state or session replaces the previous one. Authentication always
+    reports consent_pending=False; consent behavior is outside this fake.
+    """
 
     def __init__(self) -> None:
         self.state: OAuthState | None = None
@@ -84,7 +84,7 @@ class SessionRepository:
 
 
 class FakeXboxOAuthProvider:
-    """A second provider, proving nothing on the session path assumes Discord."""
+    """Return a fixed Bedrock identity and record each code exchange."""
 
     slug = "bedrock"
     provider = IdentityProvider.BEDROCK
