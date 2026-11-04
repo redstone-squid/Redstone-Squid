@@ -56,6 +56,7 @@ async def test_chunked_body_is_bounded_without_a_content_length() -> None:
 async def test_bounded_media_upload_path_keeps_its_streaming_limit_owner() -> None:
     app = FastAPI()
 
+    # This stub proves the global cap is bypassed; production upload handlers enforce their own cap.
     @app.post("/v1/submissions/drafts/{draft_id}/media/{kind}")
     @streams_own_body
     async def upload(draft_id: UUID, kind: str, request: Request) -> dict[str, object]:

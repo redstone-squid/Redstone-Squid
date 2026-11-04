@@ -36,7 +36,7 @@ from tests.unit.api.fakes import (
 
 
 class MemoryIdempotencyRepository(IdempotencyRepository):
-    """Deterministic repository fake preserving the production key semantics."""
+    """Reserve and replay by caller/key; expiration and purging are intentionally not modeled."""
 
     def __init__(self) -> None:
         self.records: dict[tuple[str, str], ExistingRequest] = {}
@@ -95,6 +95,8 @@ class CountingAccounts(MockAccountManager):
 
 
 class CompletionRecorder:
+    """Pause completion between entry and persistence to exercise cancellation at that boundary."""
+
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
         self.responses: list[StoredResponse] = []
@@ -116,6 +118,7 @@ async def run_completion_middleware(
     *,
     sent: list[Message] | None = None,
 ) -> list[Message]:
+    # Inject an existing reservation so these checks isolate response completion from authentication.
     if sent is None:
         sent = []
     scope = cast(
@@ -258,6 +261,7 @@ def test_request_without_key_retains_normal_non_idempotent_behavior(
 
 @pytest.mark.asyncio
 async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller() -> None:
+    """Check the pending-request rule with sequential calls, without simulating a database race."""
     repository = MemoryIdempotencyRepository()
     service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
 
@@ -322,6 +326,7 @@ async def test_cancellation_after_handler_success_does_not_interrupt_completion(
     recorder.release.clear()
     async with create_task_group() as tasks:
         tasks.start_soon(run_completion_middleware, app, recorder)
+        # Cancel only once persistence has begun, while the completion coroutine is blocked.
         await recorder.started.wait()
         tasks.cancel_scope.cancel()
         recorder.release.set()

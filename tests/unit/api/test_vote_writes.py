@@ -108,7 +108,7 @@ async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: in
 
 @pytest.mark.asyncio
 async def test_a_cli_caller_with_no_discord_identity_can_vote() -> None:
-    """Refused before: the gate demanded a snowflake nothing on this path used."""
+    """The route resolves guild membership from the account-backed CLI caller."""
     session = snapshot()
     actor = VoteActor(1, 7, guild_id=10, role_ids=frozenset({99}))
     votes = VoteRecorder(session)

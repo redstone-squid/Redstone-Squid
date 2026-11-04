@@ -139,10 +139,9 @@ def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, 
 
 
 def test_unhandled_exception_still_carries_request_id(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
-    """A bare exception renders in ServerErrorMiddleware, outside the correlation middleware.
+    """ServerErrorMiddleware renders bare exceptions outside the correlation middleware.
 
-    The 500 response must still carry a Request-Id -- proving the exception path's explicit
-    header emission and the middleware's skip-unbind-on-raise both hold.
+    The exception handler must still emit the caller's Request-Id after that middleware raises.
     """
     app, _database = app_factory
 
@@ -159,11 +158,7 @@ def test_unhandled_exception_still_carries_request_id(app_factory: tuple[FastAPI
 
 
 def test_failures_are_captured_under_the_request_id_the_caller_sees() -> None:
-    """The Request-Id echoed back is the key the stored report is filed under.
-
-    Without that agreement a caller quoting the header they received would resolve nothing, which
-    is the whole point of storing the report.
-    """
+    """The response header must identify the same stored report staff will look up."""
     reports = MockErrorReports()
     app, _database = build_app(error_reports=reports)
 
@@ -186,7 +181,7 @@ def test_failures_are_captured_under_the_request_id_the_caller_sees() -> None:
 
 
 def test_a_validation_failure_is_not_captured() -> None:
-    """A 422 is the caller's mistake, fully explained in the response, and not a stored incident."""
+    """Request validation errors are returned to the caller without storing an incident."""
     reports = MockErrorReports()
     app, _database = build_app(error_reports=reports)
 

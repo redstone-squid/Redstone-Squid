@@ -1,9 +1,7 @@
-"""Guards that keep the API transport doubles honest about production.
+"""Runtime checks complement the API fakes' override-signature checks.
 
-Subclassing each service gives the type checker override-compatibility checking, and
-constructing a real `ApiServices` makes a new field a type error. Neither catches a
-double that keeps a method production no longer has: such a method type-checks, reads
-as covered, and is dead. These tests close that gap.
+Require collaborators to match their declared service types, reject stale public methods,
+and keep the set of absent optional collaborators explicit.
 """
 
 import inspect
@@ -15,8 +13,7 @@ from squid.runtime import ApiServices
 from tests.unit.api import fakes
 from tests.unit.api.fakes import build_services
 
-# Every collaborator now subclasses the service it replaces. Keeping this set named and
-# empty means reintroducing an untyped stand-in has to be an explicit edit here.
+# An exception to the declared service types requires an explicit entry here.
 UNTYPED_STANDINS: set[str] = set()
 
 
@@ -49,12 +46,7 @@ def test_double_defines_no_method_production_lacks(name: str, double: type) -> N
 
 
 def test_every_double_really_is_the_service_it_replaces() -> None:
-    """Each populated collaborator is an instance of its declared production type.
-
-    Construction alone only proves a value was passed. This proves the value would
-    satisfy the routes' declared types, so a double cannot quietly become a stand-in
-    for a service it has nothing to do with.
-    """
+    """Populated graph fields must be instances of their declared service types."""
     services = build_services()
     hints = get_type_hints(ApiServices)
     impostors = []

@@ -31,10 +31,8 @@ def _document_operations(document: dict[str, Any]) -> list[tuple[str, str, dict[
     ]
 
 
-# Locale negotiation (squid/api/i18n.py) sits in front of every response, including error
-# responses generated from schema-conformant-but-invalid requests. Fuzz Accept-Language
-# alongside the generated request to make sure header parsing itself never 500s, and that
-# ProblemDetail's title/detail stay non-empty strings regardless of what locale was requested.
+# Keep the request invalid while varying language headers, so each case exercises a localized
+# problem response rather than a successful handler. These are fixed cases, not generated fuzz input.
 def test_api_never_errors_on_accept_language(client: httpx.Client) -> None:
     for accept_language in ("en", "zh-CN", "zh-TW", "fr-FR;q=0.9,*;q=0.1", "not-a-locale-tag", ""):
         response = client.post(

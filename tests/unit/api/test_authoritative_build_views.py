@@ -19,8 +19,7 @@ from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
 from tests.unit.api.fakes import credential_nodes
 
-# A realistic key: the scopes a service credential is actually issued, which do
-# not include the moderation views.
+# This credential can read submissions but does not carry a moderation-view permission.
 SERVICE = Caller(
     kind="service",
     subject="api-key:test",
@@ -39,6 +38,8 @@ class ListPageCall:
 
 
 class BuildQueryRecorder(BuildQueryService):
+    """Record visibility filters and paginate supplied rows without applying those filters."""
+
     def __init__(self, builds: list[Build]) -> None:
         self.builds = builds
         self.calls: list[ListPageCall] = []
@@ -132,12 +133,7 @@ async def test_pending_view_requires_an_authenticated_human() -> None:
 
 @pytest.mark.asyncio
 async def test_a_service_key_without_the_node_cannot_read_unreviewed_submissions() -> None:
-    """The property is kept, but as policy rather than as a hardcoded branch.
-
-    No key is issued `build.submission.view_pending`, so a leaked key still
-    reads nothing unreviewed -- and a key that genuinely should read them can now
-    be given one, which the old `kind != "account"` branch made impossible.
-    """
+    """The credential boundary must refuse access even when the permission service allows it."""
     graph = fakes(is_admin=True)
 
     with pytest.raises(AuthorizationError):
@@ -154,7 +150,7 @@ async def test_a_service_key_without_the_node_cannot_read_unreviewed_submissions
 
 @pytest.mark.asyncio
 async def test_a_key_carrying_the_node_is_still_bounded_by_its_owner() -> None:
-    """AWS's permissions-boundary rule: revoking the owner defangs the key."""
+    """An unbounded credential still requires permission from its owning account."""
     graph = fakes(is_admin=False)
     owned = Caller(kind="service", subject="api-key:owned", nodes=UNBOUNDED, account_id=1)
 
@@ -339,11 +335,9 @@ async def test_an_account_submitter_can_list_builds_without_discord() -> None:
 
 @pytest.mark.asyncio
 async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
-    """Anchors are plain identifiers a caller can forge, so the scoping lives in the query.
+    """The route must pass the caller's ownership filter alongside an arbitrary anchor.
 
-    Every listing ANDs its anchor into an authorization-scoped predicate, which is why dropping
-    the signature that used to bind a cursor to one view leaks nothing: an anchor from someone
-    else's page still only selects rows this caller may read.
+    The recorder checks the query arguments; it does not enforce repository row visibility.
     """
     graph = fakes(builds=[persisted_build(5)])
     other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, account_id=2)

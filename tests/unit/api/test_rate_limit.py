@@ -52,6 +52,8 @@ class StubLimiter(RateLimiter):
 
 
 class StubRedis:
+    """Return a canned script result; these tests exercise decoding, not Lua execution."""
+
     def __init__(self, result: object) -> None:
         self.result = result
 

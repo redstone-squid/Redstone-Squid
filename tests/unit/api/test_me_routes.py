@@ -1,8 +1,6 @@
-"""Self-account route contracts.
+"""Self-account routes use account identity for browser, CLI and Minecraft callers.
 
-These routes used to demand a Discord ID, so a CLI device or a Minecraft player holding a
-perfectly good `account_id` was refused its own account. They are keyed on the account now, and
-these tests pin that along with the Minecraft refresh responses.
+These tests also cover public identity/profile projections and Minecraft rename results.
 """
 
 from dataclasses import replace
@@ -99,12 +97,12 @@ def _identity_of(response: Any, provider: IdentityProvider) -> Any:
 
 
 def _caller(kind: str = "account") -> Caller:
-    """A caller carries an account and nothing about how it authenticated."""
+    """An account-backed caller without a Discord-specific identity."""
     return Caller(kind=cast(Any, kind), subject=f"{kind}:1", nodes=UNBOUNDED, account_id=1)
 
 
 async def test_a_cli_caller_can_read_its_own_account() -> None:
-    """The regression: no Discord identity, but a real account."""
+    """A Java-only account remains readable through its CLI credential."""
     accounts = _accounts(account=_account(discord=False))
 
     response = await get_me(accounts, _caller("cli"))
@@ -117,12 +115,7 @@ async def test_a_cli_caller_can_read_its_own_account() -> None:
 
 
 async def test_the_response_lists_identities_rather_than_flattening_them() -> None:
-    """The self view is provider-neutral.
-
-    The old shape had one `discord_id` and one `minecraft_uuid` field, which could not describe
-    an account holding two identities from one provider — which a merge produces — and implied
-    Discord by omission for callers that have none.
-    """
+    """The self view identifies each linked provider separately."""
     response = await get_me(_accounts(), _caller())
 
     assert [identity.provider for identity in response.identities] == [

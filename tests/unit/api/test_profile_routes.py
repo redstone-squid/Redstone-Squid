@@ -214,7 +214,7 @@ class TestMerge:
         return AccountRecorder(merge_error=merge_error)
 
     async def test_a_code_is_minted_for_the_calling_account(self) -> None:
-        """Minted by the side being absorbed: it is that side's consent to disappear."""
+        """The account being absorbed issues the code that authorizes the merge."""
         accounts = self._merge_accounts()
 
         response = await create_merge_code(accounts, _caller())

@@ -1,9 +1,8 @@
-"""Shared fakes and test configuration for HTTP API transport tests.
+"""Transport-test services that answer from memory without external infrastructure.
 
-Every double here subclasses the service it stands in for, so the type checker rejects a
-double whose method drifts from production. `build_app` then constructs a real
-`ApiServices`, which makes a field added to the graph a type error here rather than an
-`AttributeError` in whichever route reads it first.
+Service subclasses retain override signature checking. ``build_services`` constructs a
+real ``ApiServices`` graph so required constructor fields remain checked. Unoverridden
+methods still inherit production behavior; each test must supply the methods its routes use.
 """
 
 import uuid
@@ -123,16 +122,14 @@ TEST_CONFIG = ApiProcessConfig.model_validate(
             "session_pepper": "session-pepper-for-tests",
             "idempotency_active_key_id": "test-v1",
             "idempotency_keys": {"test-v1": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="},
-            # The bootstrap secret no longer carries every node by default, so a
-            # deployment that still relays verifications with it has to say so.
+            # Grant the relay node explicitly; the bootstrap secret has no blanket permission.
             "secret_nodes": ["account.verify.relay"],
         },
         "cli_auth": {
             "pepper": "cli-authorization-pepper-for-tests-32-bytes",
             "verification_uri": "https://catalogue.example/cli/link",
         },
-        # Configured so the device-flow routes reach their handlers: an unconfigured
-        # verification URI answers 503, which is indistinguishable from a real fault.
+        # Configure device-flow routes so tests reach their handlers instead of the disabled-service 503.
         "minecraft_auth": {
             "pepper": "minecraft-authorization-pepper-for-tests",
             "verification_uri": "https://catalogue.example/minecraft/link",
@@ -181,11 +178,9 @@ class MockDatabaseManager:
 
 
 class MockCliAuthorization(CliAuthorizationService):
-    """Fail closed with a client-safe error for generated contract requests.
+    """Reject CLI authorization operations with a client-safe error.
 
-    Every operation the API can reach is named here rather than answered by a
-    `__getattr__` catch-all, so a route reaching a method this does not implement is a
-    type error instead of a stub that silently absorbs it.
+    Explicit overrides keep method signatures checked against the production service.
     """
 
     def __init__(self) -> None:
@@ -235,11 +230,7 @@ class MockCliAuthorization(CliAuthorizationService):
 
 
 _EMPTY_PAGE: Page[object] = Page(items=(), total=0, next=None, prev=None)
-"""What a paginated query returns when nothing matches.
-
-The routes hand this straight to `render_page`, so a bare `()` or `[]` here reads as an
-empty result but reaches production code as the wrong type and 500s.
-"""
+"""Empty query result with the pagination metadata required by ``render_page``."""
 
 
 class MockBuilds(BuildService):
@@ -812,11 +803,10 @@ def build_services(
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
 ) -> ApiServices:
-    """Build the full service graph from in-memory doubles.
+    """Build the complete API graph with empty stores and injectable service replacements.
 
-    Constructing the real `ApiServices` is the point: a field added to the graph fails
-    here at type-check time instead of surfacing as an `AttributeError` in whichever
-    route reads it first.
+    The real permission service resolves catalogue defaults; the empty suggestion registry
+    rejects unknown sources. Other services use the transport fakes above.
     """
     return ApiServices(
         api_keys=None,
@@ -829,13 +819,11 @@ def build_services(
         builds=MockBuilds(),
         accounts=accounts or MockAccountManager(),
         build_queries=MockBuildQueries(),
-        # The real service over an empty store, not a double: every node then falls to
-        # its catalogue default, which is the answer production gives an unruled subject.
+        # Empty stored rules exercise the permission catalogue defaults.
         permissions=PermissionService(uow_factory=permission_uow_factory(EmptyPermissionStore())),
         permission_epoch=MockPermissionEpoch(),
         search=MockSearch(),
-        # The real service over an empty registry, not a mock: every source id is
-        # then unknown, which is the 404 the route promises rather than a 500.
+        # An empty registry preserves the service's unknown-source error.
         suggestions=SuggestionService(SuggestionRegistry.of(())),
         tags=MockTags(),
         versions=MockVersions(),

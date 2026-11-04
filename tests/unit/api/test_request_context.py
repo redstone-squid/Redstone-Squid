@@ -61,7 +61,7 @@ def test_resolve_request_id_prefers_valid_inbound() -> None:
 
 
 def test_resolve_request_id_uses_traceparent_when_no_inbound_id() -> None:
-    # Without the observability extra, active_trace_id() is None and traceparent is the seed.
+    # No active trace is installed, so the incoming traceparent supplies the correlation ID.
     resolved = resolve_request_id(Headers({"traceparent": _TRACEPARENT}))
 
     assert resolved == _TRACE_ID

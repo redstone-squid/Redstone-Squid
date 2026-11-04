@@ -98,7 +98,7 @@ class PermissionAnswer(PermissionService):
 
 
 async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:
-    """Accepting the privacy notice permits notifications; it does not enable any channel."""
+    """An empty preference request must send disabled values for both channels."""
     notifications = NotificationRecorder()
 
     response = await update_preferences(
@@ -149,11 +149,10 @@ def test_empty_record_filter_is_rejected_at_the_api_boundary() -> None:
 
 @pytest.mark.parametrize("holds_node", [True, False])
 async def test_staff_inbox_access_follows_the_pending_submission_node(holds_node: bool) -> None:
-    """Rechecked on each read, and now against a credential rather than a snowflake.
+    """Pass the permission result into the inbox query on each read.
 
-    `caller_allows` intersects the credential's nodes with the permission engine's
-    answer, so a credential that does not carry the node cannot reach staff items at
-    all -- which the retired config allowlist, keyed on a snowflake, could not express.
+    The recorder returns its supplied item even when staff visibility is false; this test
+    checks the query scope, while repository tests cover filtering.
     """
     notifications = NotificationRecorder()
     item = InboxNotification(

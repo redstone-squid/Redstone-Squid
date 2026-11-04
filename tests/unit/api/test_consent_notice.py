@@ -22,8 +22,7 @@ async def test_the_notice_is_served_with_the_version_it_names() -> None:
 
 
 async def test_the_notice_is_negotiated_and_echoes_the_locale_it_chose() -> None:
-    """Echoed rather than assumed: a client asking for an unsupported language needs to know
-    it was given the fallback, because it is about to record consent to whatever it displays."""
+    """Clients need the actual notice locale when negotiation falls back to English."""
     chinese = await get_notice(request_with_locale("zh-CN"), Response())
     fallback = await get_notice(request_with_locale("fr-FR"), Response())
 
@@ -42,7 +41,7 @@ async def test_the_notice_response_varies_on_language() -> None:
 
 
 async def test_the_notice_body_is_paragraphs_of_plain_text() -> None:
-    """Rendered into a Discord card, an HTML page and a terminal; only one could parse markup."""
+    """All clients receive the same paragraph text, without embedded HTML."""
     notice = await get_notice(request_with_locale(None), Response())
 
     assert "\n\n" in notice.body

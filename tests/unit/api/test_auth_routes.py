@@ -75,6 +75,7 @@ def login() -> Iterator[BrowserLogin]:
         update={"api": TEST_CONFIG.api.model_copy(update={"cors_origins": ("https://catalogue.test",)})}
     )
     app, database = build_app(web_auth=auth, idempotency=idempotency, config=config)
+    # HTTPS keeps secure session cookies usable; redirects stay visible for OAuth assertions.
     with TestClient(app, base_url="https://test", follow_redirects=False) as client:
         try:
             yield BrowserLogin(client, sessions, accounts, auth, idempotency)

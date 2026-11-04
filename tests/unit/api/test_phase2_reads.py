@@ -1,4 +1,4 @@
-"""Focused contracts for the remaining public read resources."""
+"""Public tags, versions, creator profiles, schematic previews, and voting-session reads."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -33,11 +33,8 @@ from tests.unit.api.fakes import MockDatabaseManager
 CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")
 RENDER_RECIPE_HASH = "b" * 64
 
-# Each fake subclasses the service it replaces and marks its methods `@override`, so a
-# renamed method or a changed return type fails the type check here instead of leaving
-# these route tests green against a contract the routes no longer have. None of them run
-# the real `__init__`: the fakes replace every method a route reaches, so a service's
-# repositories are exactly what they must not have.
+# Overrides keep service signatures checked while omitting repository construction.
+# These fakes implement only the methods reached by the routes tested here.
 
 
 class PublicTagFake(TagService):
@@ -160,10 +157,10 @@ def _override(
     schematics: SchematicService | None = None,
     votes: VoteService | None = None,
 ) -> None:
-    """Install partial services for the routes under test.
+    """Replace dependencies with only the services required by the tested routes.
 
-    `ApiServices` has two dozen required capabilities and a route reaches one of them, so
-    this record stays partial; the service subclasses above are where behavior is checked.
+    The cast permits a partial graph; it does not verify that a newly reached collaborator
+    exists. The service subclasses retain method-signature checking.
     """
     fake_services = cast(
         ApiServices,
@@ -358,11 +355,9 @@ def test_vote_read_kind_visibility_target_matrix(
 
 
 class TestTypedNotFound:
-    """Each missing resource names itself, rather than sharing one bare
-    `NotFoundError` carrying a `resource=` string.
+    """Missing resources retain their specific error code, resource name and identifier.
 
-    The default app's fakes miss on every lookup, which is exactly the case
-    under test.
+    The default transport fakes return a miss for each lookup used here.
     """
 
     def test_a_missing_tag_names_its_identifier(self, client: TestClient) -> None:

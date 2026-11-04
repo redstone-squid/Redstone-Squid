@@ -40,7 +40,7 @@ async def call(gate: Callable[[Caller], object], caller: Caller) -> object:
 
 @pytest.mark.parametrize(("name", "gate"), GATES, ids=[name for name, _ in GATES])
 async def test_a_consent_pending_caller_is_told_how_to_consent(name: str, gate: Callable[[Caller], object]) -> None:
-    """One shared gate is only worth having if every surface reports it identically."""
+    """Each gate must expose both the notice and acceptance URLs."""
     del name
     with pytest.raises(ConsentRequiredError) as error:
         await call(gate, account(consent_pending=True))
@@ -55,7 +55,7 @@ async def test_a_consent_pending_caller_is_told_how_to_consent(name: str, gate: 
 async def test_an_anonymous_caller_is_refused_before_consent_is_considered(
     name: str, gate: Callable[[Caller], object]
 ) -> None:
-    """401 has to win over 400: "who are you" precedes "have you agreed"."""
+    """Missing authentication takes precedence over missing consent."""
     del name
     with pytest.raises(AuthenticationError):
         await call(gate, ANONYMOUS)
