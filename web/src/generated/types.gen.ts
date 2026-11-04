@@ -781,7 +781,7 @@ export type ConsentGrantRequest = {
 /**
  * ControlKind
  *
- * The small set of controls every client knows how to draw.
+ * Control types a submission client may render.
  */
 export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
 
@@ -2982,7 +2982,7 @@ export type SubmissionFinalizationResponse = {
 /**
  * SubmissionOrigin
  *
- * A transport that can own or finalize a submission draft.
+ * The client or platform from which a submission draft originated.
  */
 export type SubmissionOrigin = 'discord' | 'web' | 'cli' | 'paper' | 'fabric';
 
@@ -3316,7 +3316,7 @@ export type VersionDetail = {
 /**
  * VisibilityOperator
  *
- * Operators supported by the deliberately narrow visibility language.
+ * Comparisons supported by conditional field visibility.
  */
 export type VisibilityOperator = 'equals' | 'not_equals' | 'in';
 

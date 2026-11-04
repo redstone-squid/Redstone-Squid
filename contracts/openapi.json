@@ -19709,7 +19709,7 @@
           "boolean"
         ],
         "title": "ControlKind",
-        "description": "The small set of controls every client knows how to draw."
+        "description": "Control types a submission client may render."
       },
       "CreatorAliasDetail": {
         "properties": {
@@ -24088,7 +24088,7 @@
           "fabric"
         ],
         "title": "SubmissionOrigin",
-        "description": "A transport that can own or finalize a submission draft."
+        "description": "The client or platform from which a submission draft originated."
       },
       "SubscriptionKind": {
         "type": "string",
@@ -24671,7 +24671,7 @@
           "in"
         ],
         "title": "VisibilityOperator",
-        "description": "Operators supported by the deliberately narrow visibility language."
+        "description": "Comparisons supported by conditional field visibility."
       },
       "VisibilityRuleResponse": {
         "properties": {
