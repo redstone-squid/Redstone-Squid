@@ -1,12 +1,11 @@
 """Move every Squid UI distribution and its documented pins to a new version.
 
-The suite releases in lockstep, so the version literal appears in each package manifest,
-in the intra-suite ``==`` pins, in install instructions, and in the metadata tests that
-keep those manifests honest. This script rewrites all of them in one pass; the current
-version is read from ``packages/squid-ui/pyproject.toml`` rather than passed in, so a
-half-applied bump cannot be applied twice.
+Read the current version from ``packages/squid-ui/pyproject.toml`` and replace it
+in the listed manifests, dependency pins, tests, and installation instructions.
+Check required files and unexpected occurrences before writing. Writes are not
+atomic across files; an interrupted run needs manual review before retrying.
 
-Run ``uv lock`` afterwards; the lockfile records the workspace versions.
+Run from the repository root, then run ``uv lock`` to update workspace versions.
 """
 
 import argparse
@@ -87,8 +86,7 @@ def main() -> None:
     if old == new:
         sys.exit(f"the suite is already at {new}")
 
-    # Validate everything before writing anything, so a stale list cannot leave the
-    # tree half-bumped.
+    # Catch missing pins and unexpected occurrences before any files are changed.
     for path in REQUIRED_FILES:
         assert old in path.read_text(encoding="utf-8"), f"{path} no longer contains {old}; update REQUIRED_FILES"
     if strays := _strays(old):

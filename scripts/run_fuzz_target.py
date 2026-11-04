@@ -65,7 +65,11 @@ def parse_run(settings: Sequence[str], *, allow_long_run: bool) -> FuzzRun:
 
 
 def command_for(run: FuzzRun, root: Path) -> list[str]:
-    """Prepare native directories and return the exact bounded subprocess command."""
+    """Copy committed seeds into the persistent corpus and build the engine command.
+
+    Matching seed filenames are overwritten; other corpus files remain. The time
+    limit is passed to libFuzzer, not enforced by a separate process timeout.
+    """
     corpus = root / ".fuzz" / "corpus" / run.target.corpus
     artifacts = root / ".fuzz" / "artifacts" / run.target.corpus
     seeds = root / "tests" / "fuzz" / "corpus" / run.target.corpus

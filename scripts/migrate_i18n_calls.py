@@ -1,4 +1,9 @@
-"""Rewrite legacy localization calls without reformatting their source files."""
+"""Rewrite recognized legacy localization calls without reformatting whole files.
+
+Calls are matched by function name, without resolving imports. Run without
+``--write`` to report replacements and ambiguous calls, then review any written
+diff. Ambiguous calls remain unchanged and cause a nonzero exit status.
+"""
 
 import argparse
 import ast
@@ -25,6 +30,7 @@ def _offsets(source: str) -> list[int]:
 
 
 def _character_column(line: str, byte_column: int) -> int:
+    # AST columns count UTF-8 bytes; string slices count Python characters.
     return len(line.encode("utf-8")[:byte_column].decode("utf-8"))
 
 
@@ -65,6 +71,12 @@ def _template_source(source: str) -> str:
 
 
 class CallRewriter(ast.NodeVisitor):
+    """Collect source replacements and calls that need manual review.
+
+    Replaced calls are not visited recursively, avoiding overlapping edits.
+    Import rewrites only cover the known Squid localization modules.
+    """
+
     def __init__(self, source: str, path: Path) -> None:
         self.source = source
         self.path = path
@@ -170,11 +182,16 @@ class CallRewriter(ast.NodeVisitor):
 
 
 def rewrite(path: Path, *, write: bool) -> tuple[int, list[tuple[int, str]]]:
+    """Return the replacement count and ambiguous calls, optionally writing the recognized edits.
+
+    Recognized edits are written even when other calls need manual review.
+    """
     source = path.read_text(encoding="utf-8")
     rewriter = CallRewriter(source, path)
     rewriter.visit(ast.parse(source, filename=str(path)))
     if rewriter.replacements and write:
         updated = source
+        # Work backward so earlier source offsets remain valid after each replacement.
         for replacement in sorted(rewriter.replacements, key=lambda item: item.start, reverse=True):
             updated = updated[: replacement.start] + replacement.text + updated[replacement.end :]
         path.write_text(updated, encoding="utf-8", newline="")

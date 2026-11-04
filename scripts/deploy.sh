@@ -77,6 +77,8 @@ write_release() {
     mv "$temporary" "$destination"
 }
 
+# Restore service images after a failed cutover. Applied migrations are not reversed,
+# so the previous images must remain compatible with the migrated database.
 rollback() {
     local status=$?
     trap - ERR
