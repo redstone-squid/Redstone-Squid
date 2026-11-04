@@ -42,14 +42,16 @@ class BuildTaxonomyResolver(Protocol):
 
 
 async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) -> None:
-    """Resolve the editable taxonomy fields into ``build.tags`` before persistence.
+    """Resolve editable restriction and pattern names into tag assignments.
 
-    This is the write-side counterpart of the mapper deriving the restriction
-    fields from official tags on load. After it returns, the entity is in
-    canonical form: the typed fields hold exactly the display names a reload
-    would derive, names that resolve to no official tag (or ambiguously to
-    several) are recorded in ``extra_info`` instead of being dropped at save
-    time, and ``build.tags`` is the single source the repository persists.
+    The repository persists build.tags; BuildLoader derives the editable name
+    lists from those tags when reading a build. This function resolves edits in
+    the other direction, then rewrites the lists with the resolved display names
+    so the prepared build agrees with what a later reload will show.
+
+    Replace official restriction and pattern tags while retaining other tags.
+    Keep unknown or ambiguous input in extra_info for reviewers. Doors and
+    extenders with no requested pattern use Regular.
     """
     restrictions = [value for values in build.restrictions.values() for value in values or ()]
     patterns = list(build.patterns) or (

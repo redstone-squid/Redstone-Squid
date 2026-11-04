@@ -41,6 +41,7 @@ class RestrictionRepository:
         ]
 
     async def add_alias(self, restriction: str, alias: str) -> None:
+        """Add a normalized alias in a savepoint; the caller commits the transaction."""
         normalized_alias = _normalize(alias)
         session = self._session()
         restriction_id = await get_restriction_id(session, restriction)
@@ -63,6 +64,11 @@ class RestrictionRepository:
 
 
 async def get_restriction_id(session: AsyncSession, name_or_alias: str) -> int | None:
+    """Resolve an official restriction name or alias to one ID.
+
+    Return None if missing or ambiguous. This lookup does not filter moderation
+    status; use fetch_all_restrictions for the approved list.
+    """
     normalized = _normalize(name_or_alias)
     statement = (
         select(TagDefinition.id)

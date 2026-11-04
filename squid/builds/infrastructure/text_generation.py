@@ -35,8 +35,7 @@ class OpenAITextGenerator:
             AsyncOpenAI(
                 base_url=str(config.base_url),
                 api_key=config.api_key.get_secret_value(),
-                # The SDK default is ten minutes with retries, which is far longer
-                # than any interactive Discord surface is willing to wait.
+                # Bound provider waits so an interactive submission can report failure promptly.
                 timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
                 max_retries=OPENAI_MAX_RETRIES,
             ),
@@ -58,7 +57,12 @@ class OpenAITextGenerator:
         images: Sequence[InlineImage] = (),
         reasoning_effort: str | None = None,
     ) -> T | None:
-        """Generate a schema-validated response, with a compatibility fallback."""
+        """Generate a response validated against schema.
+
+        On a bad-request response, retry without strict output formatting and ask
+        for JSON in the prompt. Return None when disabled or when the response has
+        no content. Provider and JSON validation errors otherwise propagate.
+        """
         if self._client is None:
             return None
 

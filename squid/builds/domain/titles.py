@@ -91,7 +91,11 @@ def format_build_category(build: Build) -> FormattedTitle:
 
 
 def format_build_display_title(build: Build, *, markdown: bool, current_version: str | None = None) -> str:
-    """Decorate a canonical title with individual-build moderation and showcase UX."""
+    """Add moderation status, timing qualifiers, and compatibility to a category title.
+
+    With markdown enabled, unrecognized terms are italicized. Supplying a
+    current_version absent from the build's version list adds [BROKEN].
+    """
     category = format_build_category(build)
     terms: list[str] = []
     if build.submission_status == Status.PENDING:

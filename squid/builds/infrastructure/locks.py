@@ -10,10 +10,13 @@ from squid.builds.models import Build
 
 
 class PostgresBuildLockRepository:
+    """Change five-minute build leases within the caller's transaction."""
+
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
     async def acquire(self, build_id: int, token: UUID) -> bool:
+        """Claim an unlocked or expired build; return False if busy or missing."""
         session = self._session()
         acquired = await session.scalar(
             update(Build)
@@ -24,6 +27,7 @@ class PostgresBuildLockRepository:
         return acquired is not None
 
     async def release(self, build_id: int, token: UUID) -> None:
+        """Clear a lease only if its token still matches this worker's claim."""
         session = self._session()
         await session.execute(
             update(Build)
@@ -32,6 +36,7 @@ class PostgresBuildLockRepository:
         )
 
     async def clean_stale(self) -> Collection[int]:
+        """Clear expired leases using the database clock and return their build IDs."""
         session = self._session()
         reclaimed = await session.scalars(
             update(Build)

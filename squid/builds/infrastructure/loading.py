@@ -25,7 +25,7 @@ from squid.versions.models import Version
 
 @dataclass(frozen=True, slots=True)
 class _CrossContextValues:
-    """Cross-context rows for a batch of builds, loaded with four queries total."""
+    """Creator, account, version, and source-message facts indexed for a batch of builds."""
 
     creators: Mapping[int, list[str]]
     submitter_discord_ids: Mapping[int, int]
@@ -41,7 +41,11 @@ class BuildLoader:
         return mapped[0]
 
     async def load_many(self, session: AsyncSession, sql_builds: Sequence[Build]) -> list[Build]:
-        """Load related facts for a page in four queries, regardless of page size."""
+        """Populate related facts in place and return builds in the supplied order.
+
+        Use at most four queries for the batch. Tags and links must already be
+        loaded; this loader does not fetch them.
+        """
         if not sql_builds:
             return []
         values = await self._load_cross_context(session, sql_builds)
@@ -53,8 +57,7 @@ class BuildLoader:
         account_ids = {
             sql_build.submitter_account_id
             for sql_build in sql_builds
-            # `builds.submitter_account_id` is NOT NULL, but `Mapped[int]` also covers instances that
-            # have not been flushed yet, where SQLAlchemy reads an unset attribute back as None.
+            # The database requires an account, but an unsaved build may not have one yet.
             if sql_build.submitter_account_id is not None  # pyright: ignore[reportUnnecessaryComparison]
         }
 
@@ -86,8 +89,7 @@ class BuildLoader:
                 f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
             )
 
-        # Links and message facts in one statement: two tables, but one round trip, so
-        # provenance costs the same whether or not the page has any.
+        # Join source links to messages so the whole page needs one provenance query.
         source_messages: dict[int, list[SourceMessage]] = {build_id: [] for build_id in build_ids}
         for build_id, message in await session.execute(
             select(BuildSourceMessage.build_id, MessageRecord)

@@ -50,5 +50,5 @@ _DURATION_CASES = json.loads(_DURATION_FIXTURE.read_text(encoding="utf-8"))
     + [(case["input"], case["python_ticks"]) for case in _DURATION_CASES["client_rejects"]],
 )
 def test_parse_time_string_matches_shared_duration_fixture(time_string: str, expected: int | None) -> None:
-    """The fixture's `core` section is the cross-surface duration language; drift here breaks every client."""
+    """Shared cases keep server parsing aligned with client duration inputs."""
     assert parse_time_string(time_string) == expected

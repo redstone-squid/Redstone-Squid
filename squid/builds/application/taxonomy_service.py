@@ -35,6 +35,7 @@ class BuildTaxonomyService:
 
     @alru_cache
     async def fetch_all_restrictions(self) -> list[TagDefinition]:
+        """Return cached approved restriction definitions and their aliases."""
         async with self._uow_factory() as uow:
             return await uow.build_taxonomy.fetch_all_restrictions()
 
@@ -71,6 +72,11 @@ class BuildTaxonomyService:
         restrictions: list[str],
         type: RestrictionTypeLiteral,
     ) -> tuple[list[str], list[str]]:
+        """Split names into recognized display names and unrecognized input.
+
+        Match case-insensitively against approved names of the requested type.
+        This validation does not resolve aliases or normalize whitespace.
+        """
         valid_by_normalized = {value.casefold(): value for value in await self.get_valid_restrictions(type)}
         valid = [
             valid_by_normalized[value.casefold()] for value in restrictions if value.casefold() in valid_by_normalized
@@ -79,6 +85,7 @@ class BuildTaxonomyService:
         return valid, invalid
 
     async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]:
+        """Split door pattern names into recognized display names and unrecognized input."""
         valid_by_normalized = {value.casefold(): value for value in await self.get_valid_door_types()}
         valid = [
             valid_by_normalized[value.casefold()] for value in door_types if value.casefold() in valid_by_normalized

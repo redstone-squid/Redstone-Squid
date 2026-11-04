@@ -14,11 +14,11 @@ from squid.permissions.application.ports import PermissionUnitOfWork
 
 @dataclass(frozen=True, slots=True)
 class BuildSchematicSummary:
-    """The handful of schematic facts a build card needs, in plain scalars.
+    """Schematic measurements and sign text displayed on a build card.
 
-    Deliberately not the schematic read model: this is the whole of what `builds` is allowed to
-    know about schematics, so the two contexts stay decoupled and a change to the analysis
-    shape cannot ripple into build rendering.
+    This small value keeps build rendering independent of the full schematic
+    analysis model. SchematicServiceSummaryProvider selects these fields from
+    that model when a featured schematic is available.
     """
 
     width: int
@@ -50,7 +50,7 @@ class BuildRepository(Protocol):
 
 
 class BuildLockManager(Protocol):
-    """Coordinate exclusive, task-reentrant access to persisted builds."""
+    """Coordinate build leases that child tasks can inherit and reenter."""
 
     async def acquire(self, build_id: int, *, blocking: bool, timeout: float) -> bool: ...
 
@@ -76,11 +76,7 @@ class DefaultVersionResolver(Protocol):
 
 
 class BuildSchematicSummaryProvider(Protocol):
-    """Supply machine-read schematic facts for a build, if it has any.
-
-    The single seam between `builds` and the schematic context. `BuildService` never learns
-    what a schematic is; it asks this and gets scalars or nothing.
-    """
+    """Read the featured schematic facts needed to display a build."""
 
     async def summary_for(self, build_id: int) -> BuildSchematicSummary | None: ...
 

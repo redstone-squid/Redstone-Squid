@@ -33,9 +33,8 @@ class OpenAIEmbeddingModel:
             AsyncOpenAI(
                 base_url=str(config.base_url),
                 api_key=config.api_key.get_secret_value(),
-                # The SDK default is ten minutes with retries. The embedding job
-                # runs inside a periodic loop that awaits it to completion, so a
-                # hung provider would stale the heartbeat and fail readiness.
+                # The periodic worker awaits this request. Limit provider waits so
+                # it can report failures and resume processing the queue.
                 timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
                 max_retries=OPENAI_MAX_RETRIES,
             ),
@@ -54,6 +53,7 @@ class OpenAIEmbeddingModel:
         return self._model
 
     async def embed(self, text: str) -> list[float] | None:
+        """Return a vector, or None if disabled, the provider fails, or its dimensions differ."""
         if self._client is None:
             return None
         try:
@@ -83,12 +83,13 @@ class OpenAIEmbeddingModel:
 
 
 class PostgresBuildIndex:
-    """Store and query build vectors in the authoritative PostgreSQL row."""
+    """Read and update vectors on build rows within the caller's transaction."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
     async def upsert(self, build_id: int, embedding: list[float]) -> None:
+        """Update an existing row's embedding; a missing build is left unchanged."""
         if len(embedding) != EMBEDDING_DIMENSION:
             msg = f"Build embedding must contain exactly {EMBEDDING_DIMENSION} values."
             raise ValueError(msg)
@@ -96,6 +97,11 @@ class PostgresBuildIndex:
         await session.execute(update(Build).where(Build.id == build_id).values(embedding=embedding))
 
     async def find_nearest(self, embedding: list[float]) -> int | None:
+        """Return the nearest vector by cosine distance, regardless of submission status.
+
+        Return None for a vector of the wrong size or an empty index. Callers must
+        apply any visibility rules before exposing the result.
+        """
         if len(embedding) != EMBEDDING_DIMENSION:
             return None
         statement = (

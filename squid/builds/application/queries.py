@@ -16,12 +16,12 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 type BuildSortField = Literal["id", "submission_time"]
 BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__))
-"""Columns an authoritative build listing may order by; both are indexed."""
+"""Indexed columns available for sorting build listings."""
 
 
 @dataclass(frozen=True, slots=True)
 class BuildListSort:
-    """Display ordering for an authoritative build listing."""
+    """Display ordering for a build listing."""
 
     field: BuildSortField = "id"
     descending: bool = True
@@ -50,7 +50,7 @@ class PublicBuildPreview:
 
 @dataclass(frozen=True, slots=True)
 class PublicBuildSummary:
-    """Allowlisted build facts safe to embed in public read models."""
+    """Build fields exposed by public catalogue queries."""
 
     id: int
     revision: int
@@ -71,7 +71,11 @@ class PublicBuildSummary:
 
     @classmethod
     def from_build(cls, build: Build) -> PublicBuildSummary:
-        """Project one confirmed aggregate onto its stable public fields."""
+        """Copy display fields from a persisted build.
+
+        The caller must check visibility first; this method does not require the
+        build to be confirmed.
+        """
         if build.id is None:
             msg = "persisted build is missing its identifier"
             raise DataIntegrityError(msg)
@@ -159,7 +163,7 @@ class SemanticBuildSearch(Protocol):
 
 
 class BuildQueryService:
-    """Coordinate authoritative build reads and semantic build lookup."""
+    """Read stored builds by ID, listing filters, or a natural-language query."""
 
     def __init__(
         self,
@@ -175,16 +179,10 @@ class BuildQueryService:
             return await uow.builds.get_by_id(build_id)
 
     async def get_public(self, build_id: int) -> Build:
-        """Return a build the public catalogue may show, or raise `BuildNotFoundError`.
+        """Return a confirmed build, or raise BuildNotFoundError.
 
-        One rule, one place. Four routes each wrote `build is None or
-        build.submission_status is not Status.CONFIRMED`, which meant the
-        definition of "public" lived in the transport layer in four copies.
-
-        A pending build raises the same error as a missing one on purpose: the
-        two are indistinguishable to a caller without
-        `build.submission.view_pending`, which is what keeps a submission's
-        existence private until it is confirmed.
+        Missing, pending, and denied builds produce the same error so this public
+        lookup does not reveal unconfirmed submissions.
         """
         async with self._uow_factory() as uow:
             build = await uow.builds.get_by_id(build_id)
@@ -215,7 +213,11 @@ class BuildQueryService:
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
     ) -> Page[Build]:
-        """Return one page of authoritative builds in display order under a visibility policy."""
+        """Return a page filtered by the supplied statuses and optional submitter.
+
+        The caller chooses these filters according to its visibility policy. ID
+        sorting supports ID anchors; submission-time sorting uses offsets.
+        """
         async with self._uow_factory() as uow:
             rows = await uow.builds.list_page(
                 statuses=statuses,
@@ -241,6 +243,7 @@ class BuildQueryService:
             )
 
     async def semantic(self, query: str) -> Build | None:
+        """Return the nearest indexed build, or None if no match can be loaded."""
         build_id = await self._semantic_search.find_build_id(query)
         if build_id is None:
             return None

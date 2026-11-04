@@ -1,25 +1,19 @@
-"""Adapter supplying `builds` with schematic facts from the schematic context.
-
-Lives on the `builds` side of the seam on purpose: `builds` declares the port it wants, and
-this module is the only place that knows both vocabularies. The schematic context has no idea
-builds exist.
-"""
+"""Select schematic measurements for build cards without exposing the full analysis model."""
 
 from squid.builds.application.ports import BuildSchematicSummary
 from squid.schematics.application import SchematicService
 
 
 class SchematicServiceSummaryProvider:
-    """Map a build's featured schematic into the narrow summary `builds` asked for."""
+    """Read a build's featured schematic and select the facts used on its card."""
 
     def __init__(self, schematics: SchematicService) -> None:
         self._schematics = schematics
 
     async def summary_for(self, build_id: int) -> BuildSchematicSummary | None:
-        """Return the featured schematic's facts, or `None` when there is nothing to show.
+        """Return featured schematic facts, or None if none are available.
 
-        An instance without the engine installed has no schematics at all, so the `None` path
-        is the normal one there rather than an error.
+        An unavailable schematic engine also returns None.
         """
         if not self._schematics.available:
             return None

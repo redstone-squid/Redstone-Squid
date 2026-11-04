@@ -49,7 +49,7 @@ class UnknownRestrictions(TypedDict, total=False):
 
 
 class ServerInfo(TypedDict, total=False):
-    """Various additional information about the server"""
+    """Server address and directions for finding a build in the world."""
 
     server_ip: str
     coordinates: str
@@ -86,7 +86,7 @@ class AttachmentFailureInfo(TypedDict):
 
 
 class Info(TypedDict, total=False):
-    """A special JSON field in the database that stores various additional information about the build"""
+    """Additional submission details retained in the build's JSON metadata."""
 
     user: str  # Provided by the submitter if they have any additional information to provide.
     unknown_patterns: list[str]
@@ -153,16 +153,13 @@ def frozen_field(**kwargs: Any) -> Any:
 
 
 def freeze_fields[T](cls: type[T]) -> type[T]:
-    """
-    A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
+    """Replace dataclass fields marked with frozen metadata by write-once descriptors.
 
-    This is done by replacing the fields with FrozenField descriptors.
-
-    Args:
-        cls: The class to make immutable, must be a dataclass.
+    The presence of the metadata key is enough; its value is not checked.
+    Already-frozen dataclasses are returned unchanged.
 
     Raises:
-        TypeError: If cls is not a dataclass
+        InvalidStateError: If cls is not a dataclass.
     """
 
     cls_fields = getattr(cls, "__dataclass_fields__", None)
@@ -196,7 +193,10 @@ class SourceMessage:
 
     @property
     def link(self) -> str | None:
-        """The Discord jump link to the message."""
+        """Return the message jump link, or None if its channel is unknown.
+
+        DM links are unsupported and raise NotImplementedError.
+        """
         if self.channel_id is None:
             return None
         if self.guild_id is None:
@@ -256,14 +256,13 @@ def sort_restrictions(
     restrictions: Sequence[str],
     definitions: Mapping[str, RestrictionTypeLiteral | None],
 ) -> dict[RestrictionTypeLiteral, list[str]]:
-    """Group restriction names into their buckets, canonicalizing the spelling.
+    """Group known names by restriction type using their canonical spelling.
 
-    A free function rather than a method, because a caller staging an edit needs the buckets
-    without a build to write them onto: `/build edit` takes restrictions as one option and has
-    to distribute them across the workspace's per-bucket fields before anything is applied.
+    Matching ignores case. Unknown names are omitted; duplicates are retained
+    in input order within each group.
 
     Raises:
-        DataIntegrityError: If a known restriction has no type recorded.
+        DataIntegrityError: If a known restriction has no recorded type.
     """
     definitions_by_name: dict[str, tuple[str, RestrictionTypeLiteral | None]] = {
         name.lower(): (name, restriction_type) for name, restriction_type in definitions.items()
@@ -333,10 +332,15 @@ class StagedTaxonomy:
 
 @dataclass(kw_only=True)
 class BuildDraft(StagedMedia, StagedTaxonomy):
-    """A mutable pre-category accumulator for guided submission and inference.
+    """Build details collected before the category and required fields are known.
 
-    Every field is optional so transports can fill it progressively; nothing is
-    validated until :meth:`finalize` produces the category subclass.
+    This is an in-memory staging object used by inference and build creation.
+    It differs from a submission draft (DraftSnapshot), which retains a user's
+    form answers and revision in the submission workflow.
+
+    Callers can fill fields progressively. finalize() creates an unsaved Build
+    of the selected category and supplies defaults; submitting that build and
+    validating submission rules happen in the application services.
     """
 
     category: BuildCategory | None = None
@@ -403,7 +407,10 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
         self.door_width, self.door_height, self.door_depth = dimensions
 
     def finalize(self) -> Build:
-        """Produce the category entity, applying category defaults explicitly.
+        """Create an unsaved category entity and apply its defaults.
+
+        Lists are copied, but their entries and extra_info can still be shared with
+        the draft. Door width and height default to 1 and 2 when omitted.
 
         Raises:
             InvalidBuildError: If no category has been set.
@@ -493,14 +500,12 @@ _TICKS_PER_UNIT: Mapping[str, float] = {
 
 
 def parse_time_string(time_string: str | None) -> int | None:
-    """Parses a time string into an integer.
+    """Convert a time string to game ticks, or return None for unrecognized input.
 
-    Args:
-        time_string: The time string to parse, such as "1.5s", "~2 seconds", "21gt" or "3 redstone ticks".
-            A number without a unit is interpreted as seconds.
-
-    Returns:
-        The time in game ticks, rounded to the nearest tick, or None if the string is not a recognized time.
+    A bare number means seconds; one second is 20 game ticks and one redstone
+    tick is two game ticks. For example, "1.5s" gives 30 and "3 redstone ticks"
+    gives 6. Approximation markers such as "~" are ignored. Fractional ticks
+    use Python's round(), which rounds exact halves to the nearest even integer.
     """
     if time_string is None:
         return None

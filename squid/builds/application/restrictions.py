@@ -33,6 +33,7 @@ class RestrictionService:
         self._uow_factory = uow_factory
 
     async def add_alias(self, restriction: str, alias: str) -> None:
+        """Save an alias and invalidate this service's cached restriction list."""
         async with self._uow_factory() as uow:
             await uow.restrictions.add_alias(restriction, alias)
             await uow.commit()
@@ -43,6 +44,7 @@ class RestrictionService:
 
     @alru_cache
     async def fetch_all_restrictions(self) -> Sequence[RestrictionDefinition]:
+        """Return cached approved restriction names and their classifications."""
         async with self._uow_factory() as uow:
             return await uow.restrictions.fetch_all_restrictions()
 

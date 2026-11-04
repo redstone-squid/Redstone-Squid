@@ -1,4 +1,10 @@
-"""SQLAlchemy build and taxonomy models."""
+"""Stored builds and their category-specific details.
+
+Build holds common fields, moderation status, and relationships such as creators,
+media, and tags. Each category subclass adds its own table of details: a DoorBuild,
+for example, has opening dimensions and timings alongside the common build row.
+BuildService prepares these entities; the build repository saves their relationships.
+"""
 
 import typing
 import uuid
@@ -117,7 +123,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     """Declared width in blocks; None means unknown."""
     height: Mapped[int | None] = mapped_column(Integer, default=None)
     depth: Mapped[int | None] = mapped_column(Integer, default=None)
-    completion_time: Mapped[str | None] = mapped_column(Text, default=None)  # Given by user, not parsable as a datetime
+    completion_time: Mapped[str | None] = mapped_column(Text, default=None)
     """Completion date as supplied by the submitter, including partial dates."""
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
@@ -160,12 +166,9 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
         Boolean, nullable=False, server_default=text("false"), default=False, compare=False
     )
 
-    # Every one of these four child tables declares `ON DELETE CASCADE`, so
-    # `passive_deletes=True` lets PostgreSQL do the cascade in the same statement that
-    # deletes the build. Without it the ORM insists on its own cascade: it loads each
-    # collection and emits one DELETE per child row, re-doing work the database was
-    # going to do anyway. `delete-orphan` still applies to items removed from a
-    # collection on a live parent, which is the case that genuinely needs the ORM.
+    # PostgreSQL deletes related rows through ON DELETE CASCADE. passive_deletes
+    # avoids loading unloaded collections just to delete them. delete-orphan still
+    # removes items dropped from a collection while the parent remains.
     build_creators: Mapped[list[BuildCreator]] = relationship(
         back_populates="build",
         default_factory=list,
@@ -224,10 +227,10 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
 
     @property
     def original_link(self) -> str | None:
-        """The jump link to the message this build was submitted from, if any.
+        """Return the first source-message link with a known channel, or None.
 
-        The first source message is the submission itself; later ones are follow-ups
-        such as images, so linking anything else would point away from the request.
+        Source order prefers the initial submission over follow-up messages.
+        A source with a known channel but no guild raises NotImplementedError.
         """
         for message in self.source_messages:
             if (link := message.link) is not None:
@@ -236,7 +239,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
 
     @property
     def dimensions(self) -> tuple[int | None, int | None, int | None]:
-        """The dimensions of the build."""
+        """Width, height, and depth in blocks; None means that dimension is unknown."""
         return self.width, self.height, self.depth
 
     @dimensions.setter
@@ -245,13 +248,13 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
 
     @property
     def title(self) -> str:
-        """The user-facing title, including individual-build UX decoration."""
+        """The display title with moderation markers and Markdown formatting."""
         from squid.builds.domain.titles import format_build_display_title
 
         return format_build_display_title(self, markdown=True)
 
     def edit_values(self) -> dict[str, Any]:
-        """Return comparable application facts without traversing persistence relationships."""
+        """Return comparable fields, replacing related objects with their display data."""
         values = {item.name: getattr(self, item.name) for item in fields(self) if item.compare}
         values["links"] = [{"url": link.url, "media_type": link.media_type} for link in self.links]
         values["tags"] = [
@@ -270,7 +273,11 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
         return values
 
     def copy_for_edit(self, *, source_messages: tuple[SourceMessage, ...] | None = None) -> Build:
-        """Create an isolated edit preview with no session or ORM history."""
+        """Create an unsaved copy for previewing edits, without ORM history.
+
+        Most values are deep-copied. Links and tag assignments are rebuilt, but
+        assignments retain the original tag definitions.
+        """
         values = {
             item.name: deepcopy(getattr(self, item.name))
             for item in fields(self)
@@ -286,22 +293,14 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
         return type(self)(**values)
 
     def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
-        """
-        Returns the differences between this build and another of the same category.
+        """Return changed fields as (name, old value, new value) tuples.
 
-        Values are rendered as plain data — callers persist the result as JSON —
-        so link collections come back as one entry per media type rather than as
-        :class:`BuildLink` objects.
-
-        Args:
-            other: Another build to compare to.
-            allow_different_id: Whether the ID of the builds can be different.
-
-        Returns:
-            A list of tuples containing the attribute name, the value of this build, and the value of the other build.
+        Compare builds of the same category. Media changes are grouped by URL type.
+        IDs are checked but are not reported as changes.
 
         Raises:
-            InvalidBuildError: If the IDs differ and allow_different_id is False, or the categories differ.
+            InvalidBuildError: If categories differ, or IDs differ without
+                allow_different_id=True.
         """
         if type(self) is not type(other):
             msg = "Cannot diff builds of different categories."
@@ -326,7 +325,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
         return differences
 
     def get_attr_type(self, attribute: str) -> type:
-        """Gets the declared type of a field or property on this build's class."""
+        """Return a field or property annotation, unwrapping SQLAlchemy Mapped."""
         cls = type(self)
         for owner in cls.__mro__:
             annotations = get_annotations(owner, format=Format.STRING)
@@ -360,6 +359,7 @@ class DoorBuild(Build, kw_only=True):
     door_width: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     door_height: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
     door_depth: Mapped[int | None] = mapped_column(Integer, default=None)
+    # Timings are game ticks; None means the timing has not been supplied.
     normal_opening_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     normal_closing_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     visible_opening_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
@@ -367,7 +367,7 @@ class DoorBuild(Build, kw_only=True):
 
     @property
     def door_dimensions(self) -> tuple[int, int, int | None]:
-        """The dimensions of the door (hallway)."""
+        """Width, height, and optional depth of the door opening, in blocks."""
         return self.door_width, self.door_height, self.door_depth
 
 
@@ -467,9 +467,8 @@ class BuildCreator(Base):
     build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False, default=None)
 
 
-# Deliberately reachable only by explicit query, with no relationship on ``Build``:
-# ``BuildLoader`` batch-loads these joined to ``messages`` in a single statement, so an
-# eager load here would just add a second query to every page.
+# BuildLoader joins these links to messages in one batch query. A separate
+# relationship on Build would duplicate that loading.
 class BuildSourceMessage(Base):
     """Association table between builds and the Discord messages they came from.
 
@@ -517,7 +516,7 @@ class BuildVersion(Base):
 
 
 class BuildLink(Base):
-    """A link associated with a build (image, video, world download)."""
+    """A URL associated with a build, such as an image, schematic, or world download."""
 
     __tablename__ = "build_links"
     build_id: Mapped[int] = mapped_column(

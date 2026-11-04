@@ -115,6 +115,11 @@ async def _resolve_official_tag_rows(
     restrictions: Sequence[str],
     patterns: Sequence[str],
 ) -> tuple[list[TagDefinition], set[str], set[str]]:
+    """Match approved official names and aliases, optionally limited to a build kind.
+
+    Only unambiguous names select tags. Return selected rows in display order
+    and normalized names that could not be resolved, separated by semantic kind.
+    """
     restriction_names = {normalize_tag_name(name) for name in restrictions}
     pattern_names = {normalize_tag_name(name) for name in patterns}
     if not restriction_names and not pattern_names:

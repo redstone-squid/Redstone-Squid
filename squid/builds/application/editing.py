@@ -1,4 +1,4 @@
-"""Build editing values and lease coordination."""
+"""Partial build edits shared by submission forms and editing interfaces."""
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -28,7 +28,13 @@ def _latest[T](current: PatchValue[T], incoming: PatchValue[T]) -> PatchValue[T]
 
 @dataclass(slots=True, frozen=True)
 class BuildEditPatch:
-    """A partial build update which distinguishes omission from clearing."""
+    """A partial build update that distinguishes omitted fields from supplied values.
+
+    UNSET leaves a field unchanged. None clears nullable fields, except that a
+    None door orientation leaves the current orientation unchanged. Clearing a
+    door width or height restores that category's default; empty lists remove
+    all entries of that kind.
+    """
 
     version_spec: PatchValue[str | None] = UNSET
     dimensions: PatchValue[Dimensions] = UNSET
@@ -100,7 +106,11 @@ class BuildEditPatch:
 
     @classmethod
     def from_attributes(cls, changes: Mapping[str, object]) -> Self:
-        """Create a patch from build attribute names used by the generic edit UI."""
+        """Create a patch from attribute names supplied by the edit UI.
+
+        Reject unknown field names. Values are not type-checked here; callers must
+        validate them before applying the patch.
+        """
         supported = cls.__dataclass_fields__.keys()
         unknown = changes.keys() - supported
         if unknown:
@@ -116,11 +126,13 @@ class BuildEditPatch:
         return patch
 
     def apply(self, build: Build) -> None:
-        """Apply the patch to a loaded build or detached preview.
+        """Mutate a loaded build or detached preview without saving it.
+
+        Changes are applied in order, so an error can leave earlier fields changed.
+        Use a disposable preview or roll back the owning transaction on failure.
 
         Raises:
-            InvalidBuildError: If a door-specific field is patched onto a build
-                of another category.
+            InvalidBuildError: If a door-specific field targets another category.
         """
         direct_fields = (
             "version_spec",
@@ -168,8 +180,7 @@ class BuildEditPatch:
                 )
             if not isinstance(self.door_dimensions, _Unset):
                 width, height, depth = self.door_dimensions
-                # A cleared width or height falls back to the entity's declared
-                # defaults, matching the save-time coercion this replaced.
+                # Door width and height are required, so clearing restores their defaults.
                 door_fields_by_name = type(build).__dataclass_fields__
                 build.door_width = width if width is not None else cast(int, door_fields_by_name["door_width"].default)
                 build.door_height = (

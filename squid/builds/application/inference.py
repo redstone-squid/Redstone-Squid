@@ -1,4 +1,4 @@
-"""Infer build submissions from contextual message bundles, naming no chat client."""
+"""Infer build submissions from messages, context, and attached images."""
 
 import logging
 from collections.abc import Awaitable, Sequence
@@ -154,7 +154,7 @@ class VersionResolver(Protocol):
 
 
 class BuildInferenceService:
-    """Orchestrate structured generation and domain validation for inferred builds."""
+    """Turn structured model output into build drafts with recognized taxonomy names."""
 
     def __init__(
         self,
@@ -175,7 +175,13 @@ class BuildInferenceService:
         model: str,
         reasoning_effort: str | None = None,
     ) -> list[BuildDraft]:
-        """Infer zero or more builds from a normalized message bundle."""
+        """Infer drafts from the primary messages and their supporting context.
+
+        Discard inferred builds that reference no primary message. Keep recognized
+        source messages in submission order, and preserve unknown taxonomy names
+        for review. A missing model result returns an empty list; provider and
+        validation errors propagate to the caller.
+        """
         result = await self._generator.generate(
             self._system_prompt,
             self._render_user_message(source),
@@ -200,9 +206,8 @@ class BuildInferenceService:
                 )
                 continue
             resolved.sort(key=lambda message: source.primary.index(message))
-            # Every primary message is retained, not just the first: a bundle routinely
-            # spans a body message plus follow-up images, and each keeps its own content
-            # rather than being concatenated into one.
+            # Keep each selected message separately so reviewers can trace the
+            # inferred build to its text and follow-up attachments.
             build = BuildDraft(
                 source_messages=tuple(
                     SourceMessage(
@@ -257,8 +262,7 @@ class BuildInferenceService:
             destinations.append("door_types")
             validations.append(self._taxonomy.validate_door_types(inferred.door_type))
 
-        # A task group rather than gather: these run on a shared session, so a
-        # sibling left running after the first failure would use it concurrently.
+        # Finish or cancel all validation calls before leaving this inference step.
         results = await run_all_awaitables(validations)
         unknown = UnknownRestrictions()
         build.extra_info["unknown_restrictions"] = unknown

@@ -1,4 +1,4 @@
-"""Persistence and high-level operations for the Build domain object."""
+"""Load and persist builds, their relationships, and source-message facts."""
 
 import logging
 import uuid
@@ -59,14 +59,10 @@ def _page_filter[S: Select[Any]](
 
 
 def _mapper_load_options() -> tuple[Any, ...]:
-    """The relationship graph BuildLoader reads off a row.
+    """Load tags and links needed to populate a build.
 
-    Model-level ``lazy="selectin"`` would already load these, but stating the
-    contract here keeps every read path loading the same graph rather than
-    depending on which query happened to declare it. Creators and versions are
-    fenced off because the mapper batches them itself across the whole page;
-    ``raiseload`` makes a future traversal fail loudly instead of silently
-    reading an empty collection.
+    BuildLoader batches creator and version lookups itself. raiseload prevents
+    accidental per-build queries through those relationships.
     """
     return (
         selectinload(Build.tags).selectinload(TagAssignment.definition),
@@ -77,7 +73,7 @@ def _mapper_load_options() -> tuple[Any, ...]:
 
 
 def _write_load_options() -> tuple[Any, ...]:
-    """The graph the update path rebuilds, which does traverse every collection."""
+    """Load every relationship that _setup_relationships replaces during an update."""
     return (
         selectinload(Build.tags).selectinload(TagAssignment.definition),
         selectinload(Build.links),
@@ -166,7 +162,7 @@ def _public_summary_from_selected_row(
 
 
 class BuildRepository:
-    """Persistence and high-level operations on the Build domain object."""
+    """Load and save build entities within the caller's transaction."""
 
     __slots__ = ("_loader", "_session")
 
@@ -175,14 +171,7 @@ class BuildRepository:
         self._loader = BuildLoader()
 
     async def get_by_id(self, build_id: int) -> Build | None:
-        """Creates a new Build object from a database ID.
-
-        Args:
-            build_id: The ID of the build to retrieve.
-
-        Returns:
-            The Build object with the specified ID, or None if the build was not found.
-        """
+        """Load a build and its related display facts, or return None if missing."""
         session = self._session()
         stmt = select(Build).where(Build.id == build_id).options(*_mapper_load_options())
         result = await session.execute(stmt)
@@ -192,6 +181,7 @@ class BuildRepository:
         return await self._loader.load(session, sql_build)
 
     async def get_for_update(self, build_id: int) -> Build | None:
+        """Load a build and hold its row lock until the caller's transaction ends."""
         session = self._session()
         row = await session.scalar(
             select(Build).where(Build.id == build_id).options(*_mapper_load_options()).with_for_update(of=Build.id)
@@ -199,7 +189,7 @@ class BuildRepository:
         return None if row is None else await self._loader.load(session, row)
 
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
-        """Load several builds with one row query and preserve requested ordering."""
+        """Load builds in requested order, repeating duplicate IDs and omitting missing rows."""
         if not build_ids:
             return []
         session = self._session()
@@ -393,7 +383,7 @@ class BuildRepository:
         before_id: int | None = None,
         limit: int,
     ) -> list[Build]:
-        """Load one page of authoritative builds in display order for status and submitter views.
+        """Load a page in display order, filtered by status and optional submitter.
 
         ID anchors page relative to the display order, so they require the ID sort. A `before_id`
         page is fetched in reversed order and restored in memory; its overfetched row therefore
@@ -441,7 +431,6 @@ class BuildRepository:
             return 0
         session = self._session()
         statement = _page_filter(
-            # No DISTINCT: the identity join that could multiply rows is gone.
             select(func.count()).select_from(Build),
             statuses=statuses,
             submitter_account_id=submitter_account_id,
@@ -449,11 +438,7 @@ class BuildRepository:
         return await session.scalar(statement) or 0
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
-        """Return every build inferred from one Discord message.
-
-        Plural because a build-log message routinely yields a bundle, which the old
-        single `messages.build_id` column could not express.
-        """
+        """Return build IDs linked to the message, in ascending order."""
         session = self._session()
         return (
             await session.scalars(
@@ -464,10 +449,11 @@ class BuildRepository:
         ).all()
 
     async def save(self, build: Build) -> None:
-        """
-        Updates the build in the database with the given data.
+        """Insert a new build or update an existing build in the caller's transaction.
 
-        If the build does not exist in the database, it will be inserted instead.
+        A None ID selects insertion. A supplied ID must already exist; this is not
+        an upsert. Updates check the revision and reject changes to category,
+        existing draft provenance, or sponsor attribution.
         """
         build.edited_time = now()
 
@@ -505,16 +491,15 @@ class BuildRepository:
         sql_build = build
         build.links = list(build.links)
         session.add(sql_build)
-        # Mirror _update_existing: taxonomy and version lookups issue SELECTs, and
-        # letting them autoflush while tag assignments are wired to a not-yet-added
-        # build row raises SAWarning through TagDefinition.assignments.
+        # Relationship lookups issue SELECTs. Delay autoflush until the build and
+        # all its assignments are ready to be written together.
         with session.no_autoflush:
             await self._setup_relationships(build, session, sql_build)
         await session.flush()
         await self._sync_source_messages(build, session)
 
     async def _update_existing(self, build: Build) -> None:
-        """Persist an existing build while its repository lease is held."""
+        """Save an existing build using the caller's session."""
         session = self._session()
         await self._update(session, build)
 
@@ -584,13 +569,7 @@ class BuildRepository:
         build.revision = sql_build.revision
 
     async def _resolve_submitter_account_id(self, session: AsyncSession, build: Build) -> int:
-        """Check that the supplied owning account exists.
-
-        This used to mint an account from a snowflake when none was supplied -- the last
-        identity-creating path outside the accounts context, reached from a persistence
-        layer with no evidence anybody had asked to be remembered. Callers now resolve an
-        account before submitting.
-        """
+        """Require a supplied account ID that already exists."""
         if build.submitter_account_id is None:
             msg = "Submitter account ID must be set for new builds."
             raise InvalidStateError(msg, context={"resource": "build"})
@@ -604,7 +583,7 @@ class BuildRepository:
         return build.submitter_account_id
 
     async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: Build) -> None:
-        """Set up all relationships for the build using SQLAlchemy's relationship handling."""
+        """Rebuild creator, version, and tag relationships from the prepared build."""
         sql_build.build_creators = []
         sql_build.build_versions = []
         if build.creators_ign:
@@ -613,7 +592,6 @@ class BuildRepository:
 
         await self._setup_tag_assignments(build, session, sql_build)
 
-        # Handle versions
         version_objects = await self._get_versions(session, build.versions)
         sql_build.build_versions.extend(BuildVersion(version_id=version.id) for version in version_objects)
 
@@ -623,11 +601,10 @@ class BuildRepository:
         session: AsyncSession,
         sql_build: Build,
     ) -> None:
-        """Persist ``build.tags`` verbatim.
+        """Rebuild assignments against current tag definitions.
 
-        Taxonomy names are resolved into assignments at edit time by
-        ``squid.builds.application.taxonomy.apply_build_taxonomy``; the
-        repository no longer interprets the restriction string fields.
+        Taxonomy names must already be resolved by apply_build_taxonomy. Reject
+        missing definitions and definitions whose value type changed during editing.
         """
         assignments = list(build.tags)
         sql_build.tags = []
@@ -668,13 +645,12 @@ class BuildRepository:
 
     @staticmethod
     async def _get_or_create_aliases(session: AsyncSession, igns: list[str]) -> list[int]:
-        """Return the creator alias IDs for *igns*, creating missing names.
+        """Resolve creator credits, creating names not already known.
 
-        Names are matched case-insensitively via the ``normalized_name``
-        column, so ``Foo`` and ``foo`` share one credit. The insert relies on
-        that column's unique constraint rather than a read-then-write, so two
-        submissions naming the same creator cannot race. The column is written
-        from ``name`` by a column default, so it is never set here.
+        Trim names, skip blanks, and deduplicate by normalized spelling while
+        preserving input order. The unique constraint and conflict handling let
+        concurrent submissions reuse the same alias. The column default derives
+        normalized_name from name.
         """
         alias_ids: list[int] = []
         seen: set[str] = set()
@@ -705,7 +681,7 @@ class BuildRepository:
 
     @staticmethod
     async def _get_versions(session: AsyncSession, version_strings: list[str]) -> list[Version]:
-        """Get Version objects for the given version strings."""
+        """Resolve canonical version names, raising InvalidBuildError for unknown names."""
         qvn = func.get_quantified_version_names().table_valued("id", "quantified_name").alias("qvn")
 
         requested = set(version_strings)
@@ -725,16 +701,12 @@ class BuildRepository:
 
     @staticmethod
     async def _sync_source_messages(build: Build, session: AsyncSession) -> None:
-        """Record the message facts a build came from, then relink the build to them.
+        """Save source-message facts and replace the build's ordered links to them.
 
-        The message rows are upserted rather than inserted because the same Discord
-        message legitimately backs several builds: a build-log post that yields a
-        bundle is one message fact with one link row per build.
-
-        This writes `messages` directly instead of going through `MessageService`
-        because `build_source_messages.message_id` is RESTRICT: the fact and the link
-        have to land in one transaction, or the link has a window where its target
-        does not exist yet.
+        Several builds can share a source message, so message facts are upserted.
+        Write them here instead of through MessageService so the message and its
+        build link commit together; the link's foreign key requires the message
+        to exist before the link is inserted.
         """
         assert build.id is not None
         await session.execute(delete(BuildSourceMessage).where(BuildSourceMessage.build_id == build.id))
@@ -774,11 +746,7 @@ class BuildRepository:
         )
 
     async def confirm(self, build: Build) -> None:
-        """Marks the build as confirmed.
-
-        Raises:
-            ValueError: If the build could not be confirmed.
-        """
+        """Mark a persisted build confirmed, checking and advancing its revision."""
         if build.id is None:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "confirm"})
@@ -786,11 +754,7 @@ class BuildRepository:
         await self._set_status(build, Status.CONFIRMED, operation="confirm")
 
     async def deny(self, build: Build) -> None:
-        """Marks the build as denied.
-
-        Raises:
-            ValueError: If the build could not be denied.
-        """
+        """Mark a persisted build denied, checking and advancing its revision."""
         if build.id is None:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "deny"})
@@ -832,7 +796,7 @@ class BuildRepository:
         return await self._loader.load_many(session, list(result.unique().scalars().all()))
 
     async def get_builds_by_id(self, build_ids: list[int]) -> list[Build | None]:
-        """Fetches builds from the database with the given IDs."""
+        """Return one entry per requested ID, using None for missing builds."""
         if len(build_ids) == 0:
             return []
 

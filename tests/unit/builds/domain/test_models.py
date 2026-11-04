@@ -1,11 +1,4 @@
-"""Tests for the core functionality of the Build class.
-
-This module tests:
-1. Data validation and dimension properties
-2. Title generation
-3. Build comparison
-4. Attribute iteration
-"""
+"""Build categories, draft conversion, display titles, and change summaries."""
 
 import json
 
@@ -49,10 +42,7 @@ def sample_build() -> DoorBuild:
 
 
 class TestBuildValidation:
-    """Tests for Build data validation methods."""
-
     def test_dimensions_property(self, sample_build: DoorBuild):
-        """Test dimension property getter/setter round-trip."""
         sample_build.width = 2
         sample_build.height = 3
         sample_build.depth = 1
@@ -63,7 +53,6 @@ class TestBuildValidation:
         assert (sample_build.width, sample_build.height, sample_build.depth) == (4, 5, 6)
 
     def test_door_dimensions_property(self, sample_build: DoorBuild):
-        """Test door dimension property reflects the door fields."""
         sample_build.door_width = 2
         sample_build.door_height = 3
         sample_build.door_depth = 1
@@ -90,7 +79,7 @@ class TestBuildValidation:
 
 
 class TestBuildDraft:
-    """Tests for the pre-category accumulator."""
+    """Drafts acquire their category-specific fields and defaults during finalization."""
 
     def test_finalize_requires_a_category(self) -> None:
         from squid.builds.errors import InvalidBuildError
@@ -124,10 +113,7 @@ class TestBuildDraft:
 
 
 class TestBuildTitle:
-    """Tests for Build title generation."""
-
     def test_get_title_basic(self, sample_build: DoorBuild):
-        """Test basic title generation."""
         sample_build.submission_status = Status.PENDING
         sample_build.door_width = 2
         sample_build.door_height = 3
@@ -225,7 +211,7 @@ class TestBuildDiff:
 
 
 def replace_door(build: DoorBuild, **changes: object) -> DoorBuild:
-    """A copy of *build* with independent collections."""
+    """Copy a build for editing and apply the requested overrides."""
     copied = build.copy_for_edit()
     assert isinstance(copied, DoorBuild)
     for name, value in changes.items():

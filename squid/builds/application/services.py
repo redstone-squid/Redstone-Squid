@@ -27,18 +27,17 @@ from squid.unit_of_work import UnitOfWorkFactory
 
 @dataclass(frozen=True, slots=True)
 class BuildEditor:
-    """Who is editing a build, in the terms the edit policy asks about.
-
-    One fact and no transport: the permission subject behind the caller, which already
-    carries the account ownership is recorded against. An HTTP request, a slash command,
-    and a modal submission all reduce to this.
-    """
+    """The permission subject requesting a build edit."""
 
     subject: Subject
 
 
 class BuildService:
-    """Coordinate build preparation and persistence.
+    """Save new builds and apply edits to existing builds.
+
+    Preparation resolves taxonomy names, fills default versions, and generates
+    an embedding before persistence. save and edit serve trusted callers;
+    apply_edit checks the requesting account's permission.
 
     Edits prepare detached values, including embeddings, before acquiring a
     build lease or row lock. Concurrent edits can prepare together; saving
@@ -75,16 +74,21 @@ class BuildService:
             return await uow.builds.get_by_source_submission_draft_id(draft_id)
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
-        """Return every build inferred from one Discord message, newest bundle included."""
+        """Return IDs of builds linked to a Discord source message, in ascending order."""
         async with self._uow_factory() as uow:
             return await uow.builds.list_ids_for_source_message(message_id)
 
     async def save(self, build: Build) -> Build:
+        """Prepare and persist a build, then update its embedding index.
+
+        This trusted entry point does not check permissions. Indexing happens after
+        the database commit, so an indexing failure does not undo the saved build.
+        """
         await self._persist(build)
         return build
 
     async def clean_stale_locks(self, *, older_than: Instant) -> None:
-        """Release persisted build locks older than a cutoff."""
+        """Ask the lock manager to reclaim expired leases."""
         await self._locks.clean_stale(older_than=older_than)
 
     async def classify_restrictions[BuildT: (Build, BuildDraft)](
@@ -157,7 +161,7 @@ class BuildService:
             )
 
     async def authorize_edit(self, actor: BuildEditor, build: Build) -> None:
-        """Apply the shared live edit policy to the caller's current build snapshot."""
+        """Require edit permission unless the actor owns this pending submission."""
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
@@ -170,6 +174,7 @@ class BuildService:
             raise AuthorizationError
 
     async def authorize_edit_in(self, uow: BuildUnitOfWork, actor: BuildEditor, build: Build) -> None:
+        """Check edit permission using the caller's transaction and current build state."""
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
@@ -184,13 +189,18 @@ class BuildService:
                 raise AuthorizationError
 
     async def prepare_edit(self, actor: BuildEditor, build: Build, patch: BuildEditPatch) -> Build:
-        """Resolve an authorized edit before its caller's revision-fenced transaction."""
+        """Apply an authorized patch and prepare derived values without saving.
+
+        The caller must recheck permissions and the revision when it later writes
+        the build; this preparation does not reserve the current revision.
+        """
         await self.authorize_edit(actor, build)
         patch.apply(build)
         await self._prepare_for_persistence(build)
         return build
 
     async def confirm(self, build_id: int) -> Build:
+        """Confirm a build under its lease and commit the new status."""
         async with self._locks.locked(build_id), self._uow_factory() as uow:
             build = await self._get_for_update(uow, build_id)
             await uow.builds.confirm(build)
@@ -198,6 +208,7 @@ class BuildService:
         return build
 
     async def deny(self, build_id: int) -> Build:
+        """Deny a build under its lease and commit the new status."""
         async with self._locks.locked(build_id), self._uow_factory() as uow:
             build = await self._get_for_update(uow, build_id)
             await uow.builds.deny(build)

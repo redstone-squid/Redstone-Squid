@@ -146,11 +146,11 @@ class FakeEmbeddings:
 
 
 class FakeTaxonomyResolver:
-    """Echo known names back as official assignments, like the real resolver.
+    """Resolve configured restriction and pattern names to official tag assignments.
 
-    Restriction names must appear in ``known_restrictions`` (name -> bucket) to
-    resolve; patterns resolve when listed in ``known_patterns``. Anything else
-    is reported unknown, normalized.
+    known_restrictions maps names to restriction types; known_patterns supplies pattern names.
+    Matching normalizes case and whitespace. Unknown names are returned in normalized form.
+    The fake ignores build_kind and does not look up aliases.
     """
 
     def __init__(
@@ -423,13 +423,7 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
 
 
 class TestAuthorizedEditing:
-    """The edit policy the HTTP route used to hold.
-
-    It lived in the transport layer, reading the leased build's status and
-    submitter there, so the bot's two edit paths could not reuse it. Ownership is
-    now the account comparison it always meant, rather than a snowflake one made
-    while a perfectly good account id sat one attribute away.
-    """
+    """Pending submission owners can edit; other edits require the shared permission."""
 
     OWNER = BuildEditor(subject=Subject(account_id=1))
     STRANGER = BuildEditor(subject=Subject(account_id=2))
@@ -475,8 +469,7 @@ class TestAuthorizedEditing:
         assert build.extra_info.get("user") == "moderated"
 
     async def test_ownership_does_not_survive_confirmation(self, existing_build: DoorBuild) -> None:
-        """A submitter edits their build while it is pending; once it is
-        confirmed it is catalogue data, and changing it needs the node."""
+        """Confirmation ends the submitter's permission to edit through ownership alone."""
         existing_build.submission_status = Status.CONFIRMED
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
@@ -493,8 +486,7 @@ class TestAuthorizedEditing:
             await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
 
     async def test_authorized_editing_requires_a_permission_service(self, existing_build: DoorBuild) -> None:
-        """The bot builds the same service; wiring it without permissions must
-        fail loudly rather than authorize everything."""
+        """A missing permission service must not silently authorize edits."""
         service = build_service(FakeBuildRepository(existing_build))
 
         with pytest.raises(InvalidStateError):

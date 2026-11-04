@@ -1,12 +1,9 @@
-"""Process-local bookkeeping for context-reentrant build leases.
+"""Reserve existing builds while application operations modify them.
 
-The tracker records which execution context currently holds a build's
-in-process lease and how many times it has re-entered it. Leases are keyed on
-a ContextVar rather than on the running task, because a child task inherits
-its parent's context at spawn: keying on task identity meant a gather branch
-or task-group child could not re-enter a lease its own caller held, and would
-instead spin the acquire backoff against itself. BuildLockService combines
-that bookkeeping with the persisted lock flag.
+A lease records the holder's token and expiry in the database. BuildLockService
+combines this with a local tracker that counts nested acquisitions in the current
+context. Child tasks inherit that context, so they can reenter a lease held by
+their parent instead of waiting for the parent to release it.
 """
 
 import time
@@ -142,6 +139,13 @@ class BuildLockService:
         self._tracker = BuildLockTracker()
 
     async def acquire(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
+        """Acquire a lease, returning False if it cannot be obtained in time.
+
+        A negative timeout waits indefinitely. Nonblocking calls try once and ignore
+        the timeout. Nested calls in the same inherited context share a lease;
+        each successful acquire needs a matching release. The timeout is checked
+        between attempts; it does not set a deadline on database operations.
+        """
         if self._tracker.try_reenter(build_id):
             return True
         if not blocking:
@@ -168,6 +172,7 @@ class BuildLockService:
         return acquired
 
     async def release(self, build_id: int) -> None:
+        """Release one nesting level, clearing the database lease on the final release."""
         token = self._tracker.release(build_id)
         if token is not None:
             async with self._uow_factory() as uow:
@@ -176,6 +181,7 @@ class BuildLockService:
 
     @asynccontextmanager
     async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncGenerator[None]:
+        """Hold a lease for the block, shielding its release from cancellation."""
         if not await self.acquire(build_id, timeout=timeout):
             raise BuildBusyError(build_id)
         try:
@@ -185,7 +191,11 @@ class BuildLockService:
                 await self.release(build_id)
 
     async def clean_stale(self, *, older_than: Instant) -> None:
-        """Reclaim leases whose persisted expiry has passed."""
+        """Reclaim leases whose persisted expiry has passed.
+
+        The repository uses the database clock and lock_expires_at. The older_than
+        argument is retained for the interface but does not affect this operation.
+        """
         del older_than
         async with self._uow_factory() as uow:
             reclaimed = await uow.build_locks.clean_stale()
