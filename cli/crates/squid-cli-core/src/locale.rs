@@ -15,7 +15,9 @@ pub enum Locale {
 }
 
 impl Locale {
-    /// Resolve the first supported locale from standard process variables.
+    /// Try `LC_ALL`, `LC_MESSAGES`, then `LANG`, using English if none is supported.
+    ///
+    /// Unsupported or unreadable values are skipped, so a later variable can supply the locale.
     #[must_use]
     pub fn from_environment() -> Self {
         ["LC_ALL", "LC_MESSAGES", "LANG"]
@@ -591,7 +593,9 @@ impl LocalizedMessage {
         self
     }
 
-    /// Render using one complete compile-time catalog.
+    /// Substitute values in key order after selecting the locale's template.
+    ///
+    /// Values are not terminal-escaped. Callers must sanitize the result before display.
     #[must_use]
     pub fn render(&self, locale: Locale) -> String {
         let values = self
@@ -607,7 +611,10 @@ impl LocalizedMessage {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UnsupportedLocale;
 
-/// Substitute named placeholders in a trusted catalog string.
+/// Replace `{name}` placeholders in the supplied order, leaving missing placeholders unchanged.
+///
+/// This is repeated string replacement, not a template parser. Later replacements can affect
+/// text inserted by earlier values; no escaping or terminal sanitization is performed.
 #[must_use]
 pub fn format_message(template: &str, values: &[(&str, &str)]) -> String {
     values

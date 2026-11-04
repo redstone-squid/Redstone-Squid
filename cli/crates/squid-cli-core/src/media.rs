@@ -1,4 +1,4 @@
-//! Owner-scoped draft media upload and processing contract.
+//! Upload draft media and read its processing state through authenticated API requests.
 
 use std::path::Path;
 
@@ -40,7 +40,7 @@ pub struct MediaLimits {
     pub max_decoded_pixels_per_second: u64,
 }
 
-/// Safe normalized artifact facts retained for an owner.
+/// Dimensions and content type reported for a normalized media artifact.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MediaArtifact {
     pub role: String,
@@ -49,7 +49,7 @@ pub struct MediaArtifact {
     pub height: u32,
 }
 
-/// One durable normalization job projected onto public states.
+/// One draft upload and its current server-reported processing state.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DraftMedia {
     pub id: Uuid,
@@ -61,7 +61,9 @@ pub struct DraftMedia {
 }
 
 impl DraftMedia {
-    /// Reject cross-draft, unknown-state, or malformed media responses before display.
+    /// Check the draft ID, known kind and state, artifact count, roles, and nonzero dimensions.
+    ///
+    /// This does not validate content types or check that the upload ID matches a requested ID.
     pub fn validate(&self, expected_draft_id: Uuid) -> Result<(), MediaContractError> {
         if self.id.is_nil() || self.draft_id != expected_draft_id {
             return Err(MediaContractError::MismatchedIdentifier);
@@ -89,7 +91,7 @@ impl DraftMedia {
     }
 }
 
-/// Complete bounded media state for one draft.
+/// Media entries and upload limits returned for one draft.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DraftMediaList {
     pub limits: MediaLimits,
@@ -97,6 +99,7 @@ pub struct DraftMediaList {
 }
 
 impl DraftMediaList {
+    /// Check positive limits, the local safety bound, unique IDs, and each entry's draft ID.
     pub fn validate(&self, expected_draft_id: Uuid) -> Result<(), MediaContractError> {
         if self.limits.max_upload_bytes == 0
             || self.limits.max_images == 0
@@ -127,6 +130,9 @@ impl DraftMediaList {
 }
 
 /// Media operations bound to one trusted API origin.
+///
+/// These methods deserialize responses but do not call their validation methods. Callers
+/// must validate returned data before using server limits or displaying media state.
 #[derive(Clone, Copy, Debug)]
 pub struct SubmissionMediaApi<'a> {
     client: &'a ApiClient,
@@ -167,6 +173,10 @@ impl<'a> SubmissionMediaApi<'a> {
         )
     }
 
+    /// Stream a file using a caller-provided upload ID and the advertised source-byte limit.
+    ///
+    /// Keep the file unchanged until this call returns. The response describes a processing
+    /// job; it does not mean normalization has finished.
     #[allow(clippy::too_many_arguments)]
     pub fn upload(
         &self,

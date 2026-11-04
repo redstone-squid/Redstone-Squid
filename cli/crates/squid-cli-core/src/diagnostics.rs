@@ -37,7 +37,7 @@ pub struct ErrorReportSummary {
     pub work_lost: bool,
 }
 
-/// One stored failure with everything kept about it.
+/// A stored failure with its message, traceback, and available log tail.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ErrorReportDetail {
     pub reference: String,
@@ -79,14 +79,16 @@ impl ErrorReportPage {
     }
 }
 
-/// Validate a caller-supplied reference before it reaches a URL path.
+/// Strip surrounding whitespace and backticks, then validate a report reference.
+///
+/// Return a slice of the input containing at most 128 ASCII letters, digits, `_`, `-`, or `.`.
+/// Endpoint validation still rejects a whole segment equal to `.` or `..`.
 pub fn validate_reference(reference: &str) -> Result<&str, DiagnosticsContractError> {
     let trimmed = reference.trim().trim_matches('`').trim();
     if trimmed.is_empty() || trimmed.len() > MAXIMUM_REFERENCE_LENGTH {
         return Err(DiagnosticsContractError::InvalidReference);
     }
-    // Path segment, so anything that could escape it is refused here rather than percent-encoded
-    // into a request the server would only reject anyway.
+    // References become one URL path segment, so reject URL delimiters.
     if !trimmed
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
@@ -96,6 +98,10 @@ pub fn validate_reference(reference: &str) -> Result<&str, DiagnosticsContractEr
     Ok(trimmed)
 }
 
+/// Authenticated report lookups; the server checks diagnostics permissions.
+///
+/// Responses are deserialized here. Callers must validate page size and sanitize report text
+/// before displaying it in a terminal.
 pub struct DiagnosticsApi<'a> {
     client: &'a ApiClient,
 }
@@ -106,6 +112,7 @@ impl<'a> DiagnosticsApi<'a> {
         Self { client }
     }
 
+    /// Fetch reports, optionally limiting results to failures where work was lost.
     pub fn list_errors(
         &self,
         work_lost: bool,
@@ -118,6 +125,7 @@ impl<'a> DiagnosticsApi<'a> {
         self.client.send_json(request, Some(token))
     }
 
+    /// Look up one report by reference or a correlation ID accepted by the server.
     pub fn get_error(
         &self,
         reference: &str,

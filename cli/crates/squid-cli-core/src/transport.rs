@@ -1,4 +1,8 @@
-//! Fail-closed HTTP transport for one exact, explicitly trusted API origin.
+//! Blocking HTTP requests to one trusted API origin, with redirects and proxies disabled.
+//!
+//! API adapters build relative `/v1/` requests and supply the session bearer when needed.
+//! `ApiClient` sends each request once, bounds the response, and decodes either JSON data or
+//! backend problem details. The command layer coordinates retries and session renewal.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -63,7 +67,9 @@ impl ApiMethod {
         }
     }
 
-    /// Whether RFC semantics make a retry safe without an idempotency key.
+    /// Whether the method is idempotent by HTTP semantics (GET, PUT, or DELETE).
+    ///
+    /// This classification does not send or retry a request.
     #[must_use]
     pub const fn is_idempotent(self) -> bool {
         matches!(self, Self::Get | Self::Put | Self::Delete)
@@ -96,7 +102,10 @@ impl ClientInstanceId {
     }
 }
 
-/// One API request whose path is constrained to the same public origin.
+/// A request to be checked against the client's origin before sending.
+///
+/// Construction does not validate the path. `validate` and the send methods require a `/v1/`
+/// path without traversal, query text, or a fragment; add query values with `with_query_param`.
 pub struct ApiRequest {
     method: ApiMethod,
     path: String,
@@ -150,7 +159,7 @@ impl ApiRequest {
         Ok(self)
     }
 
-    /// Serialize a bounded JSON request body.
+    /// Replace the body with serialized JSON, rejecting it if it exceeds eight MiB.
     pub fn with_json(mut self, value: &impl Serialize) -> Result<Self, TransportError> {
         let body = serde_json::to_vec(value).map_err(TransportError::SerializeJson)?;
         if body.len() > MAXIMUM_REQUEST_BYTES {
@@ -160,7 +169,10 @@ impl ApiRequest {
         Ok(self)
     }
 
-    /// Open one regular non-symlink file as a bounded fixed-length request body.
+    /// Replace the body with an open, nonempty regular file for an image or video upload.
+    ///
+    /// Reject symlinks and files larger than `maximum_bytes`. Sending streams the file with
+    /// its recorded length; the caller must keep its contents unchanged until sending ends.
     pub fn with_file(
         mut self,
         path: &Path,
@@ -242,7 +254,10 @@ pub struct ApiResponse<T> {
     pub request_id: Option<String>,
 }
 
-/// Stable problem shape authored by the backend.
+/// Backend error details normalized from either supported problem-response format.
+///
+/// `code` and `context` let callers handle application conditions without parsing the localized
+/// message. `decode_problem` accepts the legacy error envelope and RFC problem details.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ApiProblem {
     pub code: String,
@@ -305,7 +320,11 @@ impl RfcProblemDetail {
     }
 }
 
-/// Immutable client tied to one normalized origin, protocol, locale, and instance.
+/// A blocking client tied to one origin, protocol, locale, and installation ID.
+///
+/// Redirects are disabled to keep credentials on the selected origin. Environment proxies are
+/// also disabled. Requests have a ten-second connection timeout and a sixty-second total timeout.
+/// This layer does not retry failed API operations; callers decide whether recovery is safe.
 #[derive(Clone, Debug)]
 pub struct ApiClient {
     origin: ApiOrigin,
@@ -387,7 +406,10 @@ impl ApiClient {
         })
     }
 
-    /// Send and decode a JSON response without following redirects.
+    /// Send once and decode a successful JSON response of at most eight MiB.
+    ///
+    /// Nonempty responses must declare JSON or problem+JSON. Non-success statuses return an
+    /// HTTP error with parsed problem details when available, including redirect statuses.
     pub fn send_json<T: DeserializeOwned>(
         &self,
         request: ApiRequest,

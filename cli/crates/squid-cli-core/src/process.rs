@@ -111,7 +111,11 @@ pub enum ChildOutcome {
     TimedOut,
 }
 
-/// Run one command directly and always wait for its process to be reaped.
+/// Run a command directly and wait for its exit, killing the child if its timeout expires.
+///
+/// This blocks the calling thread and supervises only the direct child, not its descendants.
+/// Spawn, wait, and termination errors are returned; reaping cannot be guaranteed after an OS
+/// error. The executable inherits the current environment and working directory.
 pub fn run_supervised(
     specification: &CommandSpec,
     timeout: Option<Duration>,
@@ -173,7 +177,10 @@ fn classify_status(status: ExitStatus) -> ChildOutcome {
     }
 }
 
-/// Bounded external editor that exchanges text through an owner-readable temporary file.
+/// Run an editor against a temporary UTF-8 file and read back a bounded result.
+///
+/// The initial file uses mode 0600 on Unix. The editor must wait until editing is finished;
+/// launchers that detach need their wait option (for example, `code --wait`).
 #[derive(Clone, Debug)]
 pub struct ExternalTextEditor {
     command: CommandSpec,
@@ -197,7 +204,11 @@ impl ExternalTextEditor {
         self
     }
 
-    /// Edit one UTF-8 document, rejecting replacement with a symlink or oversized output.
+    /// Edit a UTF-8 document with inherited terminal streams and return its new text.
+    ///
+    /// Append the temporary file path as the command's last argument. Reject nonzero editor
+    /// exits, timeouts, invalid UTF-8, oversized output, and non-regular replacement files.
+    /// The temporary directory is removed when this call ends, including on failure.
     pub fn edit(&self, initial: &str, timeout: Option<Duration>) -> Result<String, EditorError> {
         if initial.len() as u64 > self.maximum_document_bytes {
             return Err(EditorError::DocumentTooLarge);

@@ -1,4 +1,4 @@
-//! Exact API-origin normalization and trust boundaries.
+//! Normalize API origins for requests and local storage namespaces.
 
 use std::fmt;
 use std::net::IpAddr;
@@ -20,7 +20,11 @@ pub struct ApiOrigin {
 }
 
 impl ApiOrigin {
-    /// Parse and normalize an API origin, enforcing HTTPS outside literal loopback.
+    /// Normalize a bare HTTP or HTTPS origin, requiring HTTPS except for loopback IP addresses.
+    ///
+    /// For example, `https://EXAMPLE.com` becomes `https://example.com:443`. Paths other than
+    /// `/`, credentials, queries, and fragments are rejected. Loopback detection does not use
+    /// DNS: `http://127.0.0.1:8000` is accepted, but `http://localhost:8000` is not.
     pub fn parse(value: &str) -> Result<Self, OriginError> {
         let parsed = Url::parse(value).map_err(|_error| OriginError::InvalidUrl)?;
         if !parsed.username().is_empty() || parsed.password().is_some() {

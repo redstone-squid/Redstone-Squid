@@ -1,4 +1,9 @@
-//! Schema-versioned named profiles with locked atomic persistence.
+//! Choose an API server and non-secret preferences through named profiles.
+//!
+//! A profile records a trusted API origin, locale, and editor preference. The active profile
+//! supplies defaults when a command does not name one. Credentials and encrypted state are
+//! stored separately by normalized origin, so two profiles for the same origin share them.
+//! ProfileStore updates the TOML configuration under a lock and replaces the file atomically.
 
 use std::collections::BTreeMap;
 use std::env;
@@ -55,7 +60,9 @@ impl Profile {
         }
     }
 
-    /// Validate fields whose invariants involve the local filesystem or supported catalogs.
+    /// Check explicit trust, the locale, and whether a custom CA path is a regular file.
+    ///
+    /// Certificate parsing happens later when the HTTP client is built.
     pub fn validate(&self) -> Result<(), ProfileError> {
         if !self.trusted {
             return Err(ProfileError::TrustRequired);
@@ -80,7 +87,9 @@ impl Profile {
 pub struct ProfileName(String);
 
 impl ProfileName {
-    /// Accept lowercase ASCII names safe for logs and keyring coordinates.
+    /// Accept 1–32 ASCII characters starting with a lowercase letter.
+    ///
+    /// Later characters may also be digits, `-`, or `_`.
     pub fn parse(value: &str) -> Result<Self, ProfileError> {
         let valid = (1..=32).contains(&value.len())
             && value.bytes().enumerate().all(|(index, byte)| {
@@ -134,7 +143,7 @@ pub struct ProfilePaths {
 }
 
 impl ProfilePaths {
-    /// Resolve standard platform paths, permitting a test/operator-owned config override.
+    /// Resolve platform paths, or place config, state, and cache under `SQUID_CONFIG_HOME`.
     pub fn discover() -> Result<Self, ProfileError> {
         if let Some(root) = env::var_os("SQUID_CONFIG_HOME") {
             let root = PathBuf::from(root);
@@ -175,14 +184,14 @@ pub struct ProfileStore {
 }
 
 impl ProfileStore {
-    /// Open the standard per-user profile store.
+    /// Locate the standard per-user profile store without opening files.
     pub fn discover() -> Result<Self, ProfileError> {
         Ok(Self {
             paths: ProfilePaths::discover()?,
         })
     }
 
-    /// Open an explicitly located profile store.
+    /// Create a store handle for explicit paths without opening files.
     #[must_use]
     pub const fn new(paths: ProfilePaths) -> Self {
         Self { paths }
@@ -194,7 +203,10 @@ impl ProfileStore {
         &self.paths
     }
 
-    /// Load one consistent snapshot while holding a shared process lock.
+    /// Load and validate a snapshot while holding a shared advisory lock.
+    ///
+    /// A missing config file returns an empty configuration. Reading may create its parent
+    /// directory and lock file.
     pub fn load(&self) -> Result<ProfileConfig, ProfileError> {
         self.prepare_parent()?;
         let lock = self.open_lock()?;
@@ -204,7 +216,7 @@ impl ProfileStore {
         result
     }
 
-    /// Add a trusted profile and select it when it is the first entry.
+    /// Add a trusted profile and select it if no active profile is set.
     pub fn add(&self, name: &ProfileName, profile: Profile) -> Result<ProfileConfig, ProfileError> {
         profile.validate()?;
         self.update(|config| {
@@ -230,7 +242,10 @@ impl ProfileStore {
         })
     }
 
-    /// Remove one local profile and deterministically select another entry.
+    /// Remove a profile without deleting its credentials or encrypted state.
+    ///
+    /// If it was active, select the alphabetically first remaining name, or clear the selection
+    /// when no profiles remain. Otherwise preserve the active profile.
     pub fn remove(&self, name: &ProfileName) -> Result<ProfileConfig, ProfileError> {
         self.update(|config| {
             if config.profiles.remove(name.as_str()).is_none() {

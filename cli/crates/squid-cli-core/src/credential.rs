@@ -1,4 +1,9 @@
-//! Origin-isolated device credentials with native storage and explicit file fallback.
+//! Keep the CLI's device signing key and local encryption key for each API origin.
+//!
+//! The signing key proves the enrolled device's identity to the server. The draft-cache key
+//! encrypts local sessions, saved drafts, and pending operations through EncryptedStateStore.
+//! CredentialVault selects the system credential store, or an explicitly allowed file fallback,
+//! and saves that choice so later calls keep using the same backend for both keys.
 
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
@@ -78,7 +83,7 @@ pub enum CredentialBackend {
     OwnerFile,
 }
 
-/// Minimal secret-store port used by the fallback router and deterministic tests.
+/// Read, replace, and delete individual secrets in a credential backend.
 pub trait CredentialStore {
     fn get(&self, kind: CredentialKind) -> Result<Option<SecretBytes>, CredentialError>;
     fn set(&self, kind: CredentialKind, secret: &SecretBytes) -> Result<(), CredentialError>;
@@ -129,7 +134,11 @@ impl CredentialStore for SystemCredentialStore {
     }
 }
 
-/// Owner-readable raw files, selected only after an explicit fallback decision.
+/// Store unencrypted secret bytes in files under the origin's directory.
+///
+/// On Unix, directories use mode 0700 and new files use 0600. Other platforms rely on their
+/// filesystem permissions. Each operation takes a blocking advisory file lock. The vault
+/// decides whether the user has allowed this fallback; this backend does not ask.
 #[derive(Clone, Debug)]
 pub struct OwnerFileCredentialStore {
     directory: PathBuf,
@@ -255,12 +264,14 @@ impl<N: CredentialStore> CredentialVault<N> {
         }
     }
 
-    /// Report the persistent backend selection without probing or exposing a secret.
+    /// Read the saved backend selection, defaulting to native storage when no marker exists.
+    ///
+    /// This does not probe whether the backend is available.
     pub fn backend(&self) -> Result<CredentialBackend, CredentialError> {
         Ok(read_backend_marker(&self.marker_path)?.unwrap_or(CredentialBackend::System))
     }
 
-    /// Retrieve a credential from the persistently selected backend.
+    /// Retrieve a credential from the selected backend without trying another on failure.
     pub fn get(&self, kind: CredentialKind) -> Result<Option<SecretBytes>, CredentialError> {
         match self.backend()? {
             CredentialBackend::System => self.native.get(kind),
@@ -268,7 +279,11 @@ impl<N: CredentialStore> CredentialVault<N> {
         }
     }
 
-    /// Store a credential, falling back only when the caller explicitly permits it.
+    /// Store a credential using the origin's persistent backend selection.
+    ///
+    /// With no selection yet, try native storage, then file storage if `allow_file_fallback`
+    /// permits it. Once selected, the backend stays fixed even if this flag changes or native
+    /// storage fails. The marker and secret are separate writes; an error can leave one saved.
     pub fn set(
         &self,
         kind: CredentialKind,
@@ -299,7 +314,10 @@ impl<N: CredentialStore> CredentialVault<N> {
         }
     }
 
-    /// Delete all known local credentials from the selected backend.
+    /// Delete known credentials, then remove the backend selection marker.
+    ///
+    /// With no marker, return the native backend without deleting anything. This does not
+    /// remove encrypted state files. A failure can leave some credentials already deleted.
     pub fn purge(&self) -> Result<CredentialBackend, CredentialError> {
         let Some(backend) = read_backend_marker(&self.marker_path)? else {
             return Ok(CredentialBackend::System);
@@ -392,7 +410,10 @@ impl fmt::Debug for DeviceIdentity {
     }
 }
 
-/// Load an existing device identity or generate and persist a new one.
+/// Load a device identity or generate and persist one when absent.
+///
+/// Return the identity, whether it was created, and the selected backend. The read and write
+/// are separate operations; callers must serialize concurrent first-time initialization.
 pub fn load_or_create_device_identity<N: CredentialStore>(
     vault: &CredentialVault<N>,
     allow_file_fallback: bool,
@@ -410,7 +431,10 @@ pub fn load_or_create_device_identity<N: CredentialStore>(
     Ok((identity, true, backend))
 }
 
-/// Load or create the 256-bit key used to encrypt synchronized draft cache state.
+/// Load or create the 256-bit key used for local encrypted state, including sessions and drafts.
+///
+/// Return the key, whether it was created, and the selected backend. As with device identities,
+/// callers must serialize concurrent first-time initialization.
 pub fn load_or_create_draft_cache_key<N: CredentialStore>(
     vault: &CredentialVault<N>,
     allow_file_fallback: bool,

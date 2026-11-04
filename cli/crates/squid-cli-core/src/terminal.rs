@@ -1,6 +1,9 @@
-//! Defensive rendering for untrusted server-authored terminal text.
+//! Remove control characters from text before displaying it in a terminal.
 
-/// Remove terminal controls and bidirectional overrides while retaining line layout.
+/// Remove control characters and bidirectional overrides, preserving newlines and tabs.
+///
+/// This filters characters rather than parsing ANSI sequences. For example, an escape followed
+/// by `[31m` becomes visible `[31m` text. It does not escape markup for other renderers.
 #[must_use]
 pub fn sanitize_terminal_text(value: &str) -> String {
     value

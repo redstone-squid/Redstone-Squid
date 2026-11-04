@@ -39,7 +39,9 @@ impl<T: Serialize> SuccessEnvelope<T> {
     }
 }
 
-/// Stable, locale-independent error shape inside a failure envelope.
+/// Error fields inside a failure envelope.
+///
+/// Scripts should branch on `code`; message and field-error text may be localized.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct Problem {
     pub code: String,
@@ -83,7 +85,9 @@ impl FailureEnvelope {
     }
 }
 
-/// Write exactly one compact JSON value followed by a newline.
+/// Write one compact JSON value followed by a newline.
+///
+/// A serialization or I/O error can leave partial output. This does not flush the writer.
 pub fn write_json(value: &impl Serialize, output: &mut impl Write) -> io::Result<()> {
     serde_json::to_writer(&mut *output, value)
         .map_err(io::Error::other)

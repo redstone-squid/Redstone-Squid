@@ -1,4 +1,12 @@
 //! Browser-approved CLI device enrollment and short-lived session proofs.
+//!
+//! Enrollment associates this installation's signing key with the user's account after browser
+//! approval. The enrolled device can then sign a fresh server challenge to obtain another session
+//! without repeating that approval. API requests use the session's short-lived bearer token.
+//!
+//! `AuthState` retains the installation, device, and session identifiers for one profile origin;
+//! the signing key lives separately in the credential vault. The command layer coordinates
+//! enrollment polling, session renewal, and saving the updated state.
 
 use std::fmt;
 
@@ -16,7 +24,10 @@ use crate::transport::{
 const AUTH_STATE_SCHEMA_VERSION: u32 = 1;
 const MAXIMUM_PROOF_VALUE_BYTES: usize = u16::MAX as usize;
 
-/// One-time browser approval response. The device code must never be shown in the browser.
+/// Pending browser approval and the secret needed to exchange it for a session.
+///
+/// Show the user code and verification URI to the user. Keep the device code in the CLI;
+/// it is sent only to the enrollment exchange endpoint.
 #[derive(Debug, Deserialize)]
 pub struct CliEnrollment {
     pub id: Uuid,
@@ -75,7 +86,9 @@ pub struct CliDevice {
     pub revoked_at: Option<String>,
 }
 
-/// A short-lived bearer token that is redacted in diagnostics and zeroized on drop.
+/// A bearer token whose owned string is zeroized on drop and hidden by `Debug`.
+///
+/// Serde serialization includes the token. Persist it only through encrypted state storage.
 pub struct SessionToken(Zeroizing<String>);
 
 impl SessionToken {
@@ -113,7 +126,10 @@ pub struct IssuedCliSession {
     pub expires_at: String,
 }
 
-/// Encrypted local authorization state for one exact profile origin.
+/// Authorization state held in memory for one profile origin.
+///
+/// Mutators affect this value only. Call `save_auth_state` to persist changes in an encrypted
+/// envelope. Serialization by itself does not encrypt the session token.
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AuthState {
@@ -157,7 +173,7 @@ impl AuthState {
         self.session_id
     }
 
-    /// Server-authored session expiry for status display.
+    /// Server-provided session expiry for display; this value does not enforce expiry locally.
     #[must_use]
     pub fn expires_at(&self) -> Option<&str> {
         self.expires_at.as_deref()
@@ -177,7 +193,7 @@ impl AuthState {
         self.expires_at = Some(issued.expires_at);
     }
 
-    /// Remove only the short-lived bearer while preserving the device identity.
+    /// Clear the session ID, bearer, and expiry while preserving the enrolled device ID.
     pub fn clear_session(&mut self) {
         self.session_id = None;
         self.token = None;
@@ -228,7 +244,10 @@ impl fmt::Debug for AuthState {
     }
 }
 
-/// Load origin-bound authorization state, creating and persisting its instance ID once.
+/// Load authorization state, or create and save a new installation ID when it is absent.
+///
+/// Reading and writing use separate locks. Callers must serialize first-time initialization
+/// if concurrent processes must agree on the same new instance ID.
 pub fn load_or_create_auth_state(
     store: &EncryptedStateStore,
     key: &SecretBytes,
@@ -241,7 +260,9 @@ pub fn load_or_create_auth_state(
     Ok(state)
 }
 
-/// Read authorization state without creating local files for a status or logout command.
+/// Read existing authorization state without creating a session value.
+///
+/// The underlying store may create its directory and lock file even when no state exists.
 pub fn load_auth_state(
     store: &EncryptedStateStore,
     key: &SecretBytes,
@@ -368,7 +389,10 @@ impl<'a> CliAuthApi<'a> {
     }
 }
 
-/// Build the backend's byte-exact versioned enrollment proof message.
+/// Build the bytes the server expects for an enrollment signature.
+///
+/// The version prefix is followed by the binary enrollment UUID, then the UTF-8 device code
+/// with a two-byte big-endian byte length. The code is not base64-decoded.
 pub fn enrollment_proof_message(
     enrollment_id: Uuid,
     device_code: &str,
@@ -379,7 +403,10 @@ pub fn enrollment_proof_message(
     Ok(message)
 }
 
-/// Build the backend's byte-exact versioned session proof message.
+/// Build the bytes the server expects for a session signature.
+///
+/// The version prefix is followed by binary device and challenge UUIDs, then the UTF-8 nonce
+/// with a two-byte big-endian byte length. The nonce is not base64-decoded.
 pub fn session_proof_message(
     device_id: Uuid,
     challenge_id: Uuid,

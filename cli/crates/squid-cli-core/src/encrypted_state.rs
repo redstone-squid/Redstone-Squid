@@ -1,4 +1,10 @@
-//! Authenticated, origin-bound local state encrypted by a credential-store key.
+//! Persist private CLI sessions, draft caches, and pending operations as encrypted JSON.
+//!
+//! Callers obtain the draft-cache key from CredentialVault and choose a StateKind. The store
+//! serializes each value, encrypts it, and replaces its file under an advisory lock. Reads
+//! authenticate the origin and state kind before returning JSON, so a file copied into another
+//! origin's directory cannot silently become that server's state. CredentialVault owns the key;
+//! deleting these files does not delete it.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
@@ -51,7 +57,11 @@ impl StateKind {
     }
 }
 
-/// Locked encrypted JSON state for one exact API origin.
+/// Encrypted JSON files for one API origin, protected by a shared advisory lock file.
+///
+/// Reads take a shared lock; mutations take an exclusive lock. Both block the calling thread.
+/// Authentication binds each value to its normalized origin and state kind, so moving a file
+/// to another origin or kind fails authentication even when the encryption key is the same.
 #[derive(Clone, Debug)]
 pub struct EncryptedStateStore {
     directory: PathBuf,
@@ -74,7 +84,10 @@ impl EncryptedStateStore {
         }
     }
 
-    /// Read and authenticate one JSON value, returning `None` only when no file exists.
+    /// Read and authenticate a JSON value, returning `None` only when its file is absent.
+    ///
+    /// This may create the state directory and lock file. A wrong key, corrupt envelope, or
+    /// invalid JSON returns an error rather than an empty value.
     pub fn read<T: DeserializeOwned>(
         &self,
         kind: StateKind,
@@ -89,6 +102,8 @@ impl EncryptedStateStore {
     }
 
     /// Serialize, encrypt, and atomically replace one JSON value.
+    ///
+    /// A later sync or unlock failure can return an error after the replacement is visible.
     pub fn write<T: Serialize>(
         &self,
         kind: StateKind,
@@ -103,7 +118,11 @@ impl EncryptedStateStore {
         result
     }
 
-    /// Atomically read, mutate, and replace one encrypted JSON value under one exclusive lock.
+    /// Read, mutate, and replace a JSON value while holding one exclusive lock.
+    ///
+    /// Call `initial` only when no saved value exists. If `mutation` fails, leave the file
+    /// unchanged. Both callbacks run under the lock and must not call this store again.
+    /// External effects of a callback are not rolled back when saving fails.
     pub fn update<T, R, E>(
         &self,
         kind: StateKind,
@@ -145,7 +164,9 @@ impl EncryptedStateStore {
         result
     }
 
-    /// Delete every known encrypted state value for this origin.
+    /// Delete this origin's known state files without deleting its credential-store key.
+    ///
+    /// Files are removed in sequence; an error may leave the purge partly complete.
     pub fn purge(&self) -> Result<(), EncryptedStateError> {
         secure_directory(&self.directory)?;
         let lock = open_lock(&self.directory)?;
