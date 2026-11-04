@@ -19,7 +19,7 @@ from squid.core.errors import DataIntegrityError, ValidationError
 
 
 class ArtifactTooLargeError(ValidationError):
-    """An artifact exceeded the caller's download budget."""
+    """An upload or download exceeded the caller's byte limit."""
 
 
 class ArtifactSourceChangedError(DataIntegrityError):
@@ -27,7 +27,11 @@ class ArtifactSourceChangedError(DataIntegrityError):
 
 
 class LocalArtifactStore:
-    """Filesystem implementation used by development and single-host deployments."""
+    """Store artifacts in a local directory, replacing files atomically.
+
+    Content types are ignored. Writes return a digest, but stat reads only the
+    file size and does not hash the stored file.
+    """
 
     def __init__(self, directory: Path, *, prefix: str = "") -> None:
         self._directory = directory
@@ -89,7 +93,7 @@ class LocalArtifactStore:
             return
 
     async def aclose(self) -> None:
-        """Release resources owned by the adapter."""
+        """Do nothing; this adapter keeps no files or connections open between calls."""
 
     def _path(self, key: str) -> Path:
         normalized = PurePosixPath(key)
@@ -258,6 +262,8 @@ class S3ArtifactStore:
                 ContentType=content_type,
                 Metadata={"sha256": digest},
             )
+            # The object is already uploaded. Remove it if the source changed,
+            # because its stored digest may describe different bytes.
             try:
                 _require_unchanged(stream.fileno(), initial)
             except ArtifactSourceChangedError:
@@ -297,6 +303,7 @@ def _is_not_found(error: ClientError) -> bool:
 
 
 def _copy_regular_atomic(source: Path, destination: Path, max_bytes: int) -> ArtifactMetadata:
+    """Copy and hash a file, replacing the destination only after validation succeeds."""
     _require_positive_budget(max_bytes)
     with _open_regular(source, max_bytes) as (stream, initial):
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -323,7 +330,11 @@ def _copy_regular_atomic(source: Path, destination: Path, max_bytes: int) -> Art
 
 
 class _RegularSource:
-    """Context manager for a no-follow regular file and its initial identity."""
+    """Open a regular file and retain its initial stat result for change detection.
+
+    Reject a symlink at the final path component on systems with O_NOFOLLOW.
+    Parent path components are still followed.
+    """
 
     def __init__(self, path: Path, max_bytes: int) -> None:
         self._path = path
@@ -379,6 +390,11 @@ def _hash_stream(stream: Any, max_bytes: int) -> str:
 
 
 def _require_unchanged(descriptor: int, initial: os.stat_result) -> None:
+    """Reject changes to file identity, size, or modification time since opening.
+
+    This is a metadata check, not a lock. Callers must keep staged files unchanged
+    throughout a transfer; rewriting bytes while preserving metadata can evade it.
+    """
     current = os.fstat(descriptor)
     if (
         current.st_dev,

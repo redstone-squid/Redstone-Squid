@@ -1,4 +1,4 @@
-"""Content-addressed artifact storage ports and adapters."""
+"""Storage interfaces for binary artifacts such as schematics and previews."""
 
 from squid.artifacts.application import ArtifactMetadata, ArtifactStore
 
