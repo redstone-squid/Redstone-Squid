@@ -1,4 +1,9 @@
-//! Provider-neutral submission form and synchronized-draft API contract.
+//! Server form definitions and retained submission drafts used by the CLI.
+//!
+//! A draft stores answers on the server so editing can continue across invocations and clients.
+//! Its pinned form manifest defines the fields, choices, and validation rules for those answers.
+//! This adapter resolves server field definitions into the controls in `form`; `SubmissionApi`
+//! provides the requests used to create drafts, save edits, and finalize them into builds.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,7 +22,10 @@ use crate::version::{MAXIMUM_PROTOCOL, MINIMUM_PROTOCOL};
 
 const MAXIMUM_DISCOVERED_DRAFTS: usize = 10;
 
-/// Server-authored immutable form manifest.
+/// A versioned form definition returned by the server.
+///
+/// A draft's `schema_id` and `schema_revision` select its manifest. Resuming that draft uses
+/// the pinned revision even when the server offers a newer form for newly created drafts.
 #[derive(Debug, Deserialize)]
 pub struct FormManifest {
     pub schema_id: String,
@@ -130,7 +138,11 @@ pub struct FormFieldSchema {
 }
 
 impl FormManifest {
-    /// Validate protocol overlap, stable identifiers, uniqueness, and one requested category.
+    /// Check protocol overlap, category codes, and the requested category's field identifiers.
+    ///
+    /// Also reject excessive inline options or fields mixing inline and dynamic options.
+    /// Control support and constraints are checked later during field adaptation; this is
+    /// not a complete validation of every category in the manifest.
     pub fn validate_for_category(&self, category: &str) -> Result<(), SubmissionContractError> {
         if self.revision == 0
             || self.minimum_protocol == 0
@@ -174,7 +186,9 @@ impl FormManifest {
             .collect()
     }
 
-    /// Common plus category-specific fields in server display order.
+    /// Return common fields followed by category fields in server display order.
+    ///
+    /// Visibility rules are not applied here.
     pub fn fields_for(
         &self,
         category: &str,
@@ -190,7 +204,10 @@ impl FormManifest {
             .collect())
     }
 
-    /// Assess exact required backend capability codes for visible CLI fields.
+    /// Assess declared capabilities for fields currently visible to the CLI.
+    ///
+    /// This checks `required_capability` declarations only. A field with no declaration can
+    /// still fail adaptation or require a control the selected renderer does not support.
     pub fn assess_capabilities(
         &self,
         category: &str,
@@ -222,7 +239,10 @@ impl FormManifest {
 }
 
 impl FormFieldSchema {
-    /// Whether this field currently applies to a CLI-origin draft.
+    /// Apply the CLI origin filter and this field's visibility rule to current answers.
+    ///
+    /// Missing answers compare as JSON null. Unknown operators and non-array `in` operands
+    /// hide the field. Defaults are not added to the answer map here.
     #[must_use]
     pub fn is_visible(&self, answers: &BTreeMap<String, Value>) -> bool {
         if !self.origins.iter().any(|origin| origin == "cli") {
@@ -243,7 +263,12 @@ impl FormFieldSchema {
         }
     }
 
-    /// Convert the server field into a validated renderer field using resolved dynamic options.
+    /// Convert a supported control/value pair into a validated CLI field.
+    ///
+    /// Supplied dynamic options replace inline options. The caller resolves option sources
+    /// and visibility first. Numeric bounds must fit i64; duration fields are whole game ticks.
+    /// Defaults and `must_equal` are not applied here, and the server remains responsible for
+    /// final validation.
     pub fn adapt(
         &self,
         dynamic_options: Option<&[FormOption]>,
@@ -335,7 +360,7 @@ pub struct FormOptionSet {
     pub options: Vec<FormOption>,
 }
 
-/// Active synchronized draft summary.
+/// One active submission draft's metadata for discovery, without its answers.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DraftSummary {
     pub id: Uuid,
@@ -375,7 +400,11 @@ impl DraftList {
     }
 }
 
-/// Full synchronized draft snapshot.
+/// A snapshot of a submission draft retained by the server, including its answers.
+///
+/// `schema_revision` identifies the form definition; `revision` identifies the draft state
+/// used for edit-conflict checks. Saving an answer advances the draft revision while retaining
+/// the same form definition.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct StoredDraft {
     pub id: Uuid,
@@ -407,7 +436,7 @@ pub enum FieldOperationKind {
     Unset,
 }
 
-/// One append-only stable-field operation.
+/// One set or unset operation identified for server-side replay handling.
 #[derive(Debug, Serialize)]
 pub struct FieldOperation {
     pub operation_id: Uuid,
@@ -417,7 +446,10 @@ pub struct FieldOperation {
     pub value: Option<Value>,
 }
 
-/// Optimistic atomic change request.
+/// A batch of field operations against one expected draft revision.
+///
+/// The server checks the revision and applies the batch atomically. Callers supply operation
+/// IDs and an idempotency key so a lost response can be retried as the same request.
 #[derive(Debug, Serialize)]
 pub struct DraftChangeRequest {
     pub base_revision: u64,
@@ -440,7 +472,10 @@ pub struct SubmissionIssue {
     pub reason: String,
 }
 
-/// Owner-visible durable finalization status.
+/// Server-retained progress of turning a submission draft into a build.
+///
+/// `build_id` identifies the resulting build when completed. Issues describe answers that need
+/// attention; callers inspect `status` to distinguish completion, pending work, and failures.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SubmissionFinalization {
     pub draft_id: Uuid,
@@ -450,7 +485,10 @@ pub struct SubmissionFinalization {
     pub build_id: Option<i64>,
 }
 
-/// Submission API operations bound to one same-origin transport.
+/// Submission operations through an origin-bound HTTP client.
+///
+/// Methods deserialize responses but do not validate manifests, draft lists, or returned IDs.
+/// Callers perform those checks and retain request IDs and idempotency keys needed for recovery.
 #[derive(Clone, Copy, Debug)]
 pub struct SubmissionApi<'a> {
     client: &'a ApiClient,
@@ -553,6 +591,9 @@ impl<'a> SubmissionApi<'a> {
         )
     }
 
+    /// Submit a change batch with an idempotency header matching the key in its body.
+    ///
+    /// This method does not check that the two caller-provided keys agree.
     pub fn change_draft(
         &self,
         draft_id: Uuid,
@@ -587,6 +628,7 @@ impl<'a> SubmissionApi<'a> {
         )
     }
 
+    /// Request finalization and return its current state; completion may require polling.
     pub fn submit_draft(
         &self,
         draft_id: Uuid,

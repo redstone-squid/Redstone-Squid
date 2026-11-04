@@ -24,7 +24,14 @@ use crate::terminal::sanitize_terminal_text;
 
 const MAXIMUM_TUI_INPUT_CHARACTERS: usize = 1024 * 1024;
 
-/// Render one form field in an alternate screen and restore the terminal on every return path.
+/// Collect one answer in a full-screen editor drawn to stderr.
+///
+/// The caller must ensure interactive terminal use is allowed. Input starts empty; invalid
+/// answers remain in the editor for correction. Esc or Ctrl-C returns `FormError::Cancelled`.
+/// An omitted optional answer returns `None`; this function never changes a draft.
+///
+/// A drop guard attempts to leave the alternate screen and disable raw mode on return or
+/// unwinding. Cleanup errors are ignored.
 pub fn read_answer_tui(field: &FormField, locale: Locale) -> Result<Option<FormAnswer>, FormError> {
     field.validate()?;
     enable_raw_mode().map_err(FormError::Io)?;
@@ -58,6 +65,7 @@ pub fn read_answer_tui(field: &FormField, locale: Locale) -> Result<Option<FormA
     }
 }
 
+// Keep restoration independent of the ratatui terminal so construction failures also clean up.
 struct TerminalRestoreGuard;
 
 impl Drop for TerminalRestoreGuard {
@@ -79,6 +87,7 @@ struct TuiFieldState {
     input: String,
     option_cursor: usize,
     selected: BTreeSet<usize>,
+    // An optional single-choice field stays unset until the user moves its cursor.
     choice_touched: bool,
     boolean: Option<bool>,
     validation_error: bool,
@@ -189,6 +198,7 @@ impl TuiFieldState {
         self.finish_or_mark_invalid(answer)
     }
 
+    /// Append sanitized input up to the field or global limit, discarding excess characters.
     fn insert_text(&mut self, field: &FormField, value: &str) {
         let maximum = match field.control {
             FormControl::Text {

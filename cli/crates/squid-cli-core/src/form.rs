@@ -1,4 +1,9 @@
-//! Backend-schema-neutral form validation, capability gating, and terminal prompts.
+//! Form controls and answers shared by the CLI's prompt and full-screen editors.
+//!
+//! The submission adapter turns visible server fields into `FormField` values with resolved
+//! choices and local input constraints. A renderer collects a `FormAnswer`; the command layer
+//! converts that answer to JSON and saves it to the submission draft. Stable field and option
+//! codes identify the answers across locales, while labels are only for display.
 
 use std::collections::BTreeSet;
 use std::io::{self, BufRead, Write};
@@ -34,7 +39,9 @@ const CAPABILITY_REPEATABLE_TEXT: &str = "repeatable_text";
 pub struct FormCode(String);
 
 impl FormCode {
-    /// Accept compact ASCII identifiers that remain safe in operations and terminal selectors.
+    /// Accept 1–96 ASCII characters starting with a lowercase letter.
+    ///
+    /// Later characters may also be digits, `_`, `-`, or `.`.
     pub fn parse(value: &str) -> Result<Self, FormError> {
         let valid = (1..=MAXIMUM_FIELD_CODE_BYTES).contains(&value.len())
             && value.bytes().enumerate().all(|(index, byte)| {
@@ -62,7 +69,10 @@ pub struct ChoiceOption {
     pub label: String,
 }
 
-/// Renderer-independent control constraints.
+/// Controls shared by the prompt and full-screen renderers.
+///
+/// Character limits count Unicode scalar values, not bytes or terminal columns. Constructing
+/// a control does not validate its ranges; call `FormField::validate` before using it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FormControl {
     Text {
@@ -193,7 +203,10 @@ fn validate_range<T: Ord>(minimum: Option<T>, maximum: Option<T>) -> Result<(), 
     Ok(())
 }
 
-/// A renderer answer ready to become one stable-field set operation.
+/// An answer represented independently of the input renderer.
+///
+/// Variants can be constructed directly, so this type alone does not guarantee that an answer
+/// satisfies a field's constraints.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FormAnswer {
     Text(String),
@@ -205,7 +218,7 @@ pub enum FormAnswer {
 }
 
 impl FormAnswer {
-    /// Convert the validated answer to the primitive JSON value used by an API adapter.
+    /// Convert an answer to its JSON value without validating field constraints.
     #[must_use]
     pub fn to_json(&self) -> Value {
         match self {
@@ -287,7 +300,10 @@ impl RendererCapabilities {
             .collect()
     }
 
-    /// Evaluate required controls separately from ignorable optional presentation hints.
+    /// Report unsupported capabilities, separating required ones from optional ones.
+    ///
+    /// Missing required capabilities set `web_continuation_required`; they are not errors.
+    /// Invalid capability codes return an error. Both result lists are sorted and deduplicated.
     pub fn assess(
         &self,
         requirements: &[CapabilityRequirement],
@@ -344,7 +360,10 @@ pub enum InteractionMode {
     NonInteractive,
 }
 
-/// A one-attempt prompt renderer; callers own retry, cancellation, and draft-operation policy.
+/// Collect one field's answer through line prompts, optionally using an external text editor.
+///
+/// Each call reads one attempt. The command layer retries invalid answers and saves accepted
+/// ones to the draft.
 #[derive(Debug)]
 pub struct PromptRenderer<'a> {
     mode: InteractionMode,
@@ -365,7 +384,7 @@ impl<'a> PromptRenderer<'a> {
         }
     }
 
-    /// Localize renderer-authored prompt chrome independently of server field text.
+    /// Localize the renderer prompts while preserving the server-provided field text.
     #[must_use]
     pub const fn with_locale(mut self, locale: Locale) -> Self {
         self.locale = locale;
@@ -384,13 +403,22 @@ impl<'a> PromptRenderer<'a> {
         self
     }
 
-    /// Capabilities that are truthful for this exact renderer configuration.
+    /// Return capabilities enabled by this renderer configuration.
     #[must_use]
     pub fn capabilities(&self) -> RendererCapabilities {
         RendererCapabilities::prompt(self.external_editor.is_some())
     }
 
-    /// Render and parse one currently visible field.
+    /// Prompt for one field and return a validated answer, or `None` when it is skipped.
+    ///
+    /// Non-interactive mode fails before reading or writing. Blank input skips an optional
+    /// field; repeatable fields also require their minimum item count to permit an empty list.
+    /// `None` leaves the caller to decide whether to preserve or unset an existing answer.
+    /// Invalid input returns an error without retrying. Multiline editing starts an empty file.
+    ///
+    /// Choices accept stable codes or one-based numbers; multiple choices use commas and are
+    /// returned sorted by code with duplicates removed. Repeatable text uses one line per item,
+    /// ending on a blank line or the maximum item count.
     pub fn read_answer(
         &self,
         field: &FormField,
@@ -698,7 +726,7 @@ fn resolve_choice<'a>(value: &str, options: &'a [ChoiceOption]) -> Option<&'a Ch
     options.iter().find(|option| option.code.as_str() == value)
 }
 
-/// Fail-closed errors from internal form adaptation and terminal input.
+/// Invalid form definitions, unsupported controls, or failures while collecting an answer.
 #[derive(Debug, Error)]
 pub enum FormError {
     #[error("the form code is invalid")]
