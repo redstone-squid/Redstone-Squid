@@ -1,9 +1,7 @@
-"""Discord message content must not reach the public API.
+"""Keep the Discord message context out of public API modules.
 
-`messages.content` is retained for internal work — offline build inference, the edit
-context menu, rendering a delete-log card without refetching — and `docs/plans/rest-api.md`
-records that it is deliberately never exposed. Nothing structural stops a serialiser
-from picking it up, so this asserts it.
+The import scan catches direct coupling to message repositories and values. It supplements
+response tests; it cannot prove that content never arrives through another service or alias.
 """
 
 import ast
@@ -16,7 +14,7 @@ MESSAGE_MODULES = {"squid.messages", "squid.messages.application", "squid.messag
 
 
 def test_the_api_never_imports_the_message_context() -> None:
-    """The one reliable guard: message facts have no business in a public serialiser."""
+    """Reject direct imports of the message context from API source files."""
     offenders: list[str] = []
     for path in API_ROOT.rglob("*.py"):
         tree = source_tree(path)

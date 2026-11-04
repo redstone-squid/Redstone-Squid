@@ -12,8 +12,7 @@ from pytest_archon import archrule
 from squid.core.extract import deferred_msgid, locale_str_msgid
 from tests.support.source_tree import source_tree
 
-# Roots for the AST scans that state repo-wide invariants. The squid-ui workspace member
-# is held to the same rules as squid itself.
+# Production Python roots shared by the syntax checks below. Individual rules may narrow this scope.
 SCAN_ROOTS = (
     Path("squid"),
     Path("packages/squid-reactivity/src"),
@@ -153,7 +152,7 @@ def test_submission_domain_and_application_do_not_import_pydantic() -> None:
 
 
 def test_background_tasks_use_owned_anyio_task_groups() -> None:
-    """Task lifetime stays with an anyio owner instead of escaping through asyncio."""
+    """Reject asyncio task creation in framework packages. Application code is outside this scan."""
     banned = {"TaskGroup", "create_task", "ensure_future"}
     violations: list[str] = []
     for path in _scanned_files(SCAN_ROOTS[1:]):
@@ -191,7 +190,7 @@ def test_background_tasks_use_owned_anyio_task_groups() -> None:
 
 
 def test_framework_runtime_imports_are_declared_in_package_metadata() -> None:
-    """A direct import needs a direct dependency or an explicitly named extra."""
+    """Imports listed in FRAMEWORK_DISTRIBUTIONS need a direct dependency or a named extra."""
     violations: list[tuple[str, str]] = []
     for package in sorted(Path("packages").iterdir()):
         metadata_path = package / "pyproject.toml"
@@ -311,7 +310,7 @@ def test_layouts_package_stays_standalone() -> None:
 
 
 def test_discord_package_stays_a_leaf() -> None:
-    """The transport adapter is downstream of everything; nothing may point back at it."""
+    """Keep Discord adapter imports independent of the host application and its frameworks."""
     (
         archrule("squid-ui-discord depends on the engine, not on the host")
         .match("squid_ui_discord*")
@@ -340,12 +339,10 @@ def test_slack_package_stays_a_leaf() -> None:
 
 
 def test_private_names_do_not_cross_distribution_boundaries() -> None:
-    """A leading-underscore name imported from a sibling distribution is an undocumented ABI.
+    """Reject leading-underscore names imported from sibling distributions.
 
-    Inside one distribution, private imports between modules are that package's own
-    business. Across distributions they couple separately versioned wheels to
-    implementation details, so the only sanctioned crossing is squid_reactivity.internals,
-    which exists to re-export exactly what the suite's siblings need.
+    Modules within one distribution may share private names. Sibling packages use public
+    exports, including the supported exports in `squid_reactivity.internals`.
     """
     framework_packages = {
         "squid_reactivity",
@@ -397,11 +394,7 @@ def test_reactive_package_has_no_hard_dependencies() -> None:
 
 
 def test_patterns_package_is_transport_free() -> None:
-    """State machines render through the engine; they never name a runtime.
-
-    The payoff of the extraction: `squid_ui_widgets` sits beside `squid_ui_discord`, not below it,
-    so a pattern cannot quietly acquire a Discord dependency and become unusable anywhere else.
-    """
+    """Keep widget state machines independent of the host, transport, and storage runtimes."""
     (
         archrule("squid-ui-widgets is frontend-neutral")
         .match("squid_ui_widgets*")
@@ -509,9 +502,8 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
             if not isinstance(target, ast.Name):
                 continue
             resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
-            # These are dotted *call* targets (package attribute -> function), not module
-            # paths: squid_ui_discord.rendering defines render_message(), so a call resolves
-            # to "squid_ui_discord.render_message" regardless of which file render_message() lives in.
+            # Resolve the spelling used at the call site through its import alias.
+            # This checks the public facade paths, not the function's defining module.
             if resolved in {"squid_ui_discord.render_message", "squid_ui_discord.render_static"}:
                 violations.append(f"{path}:{node.lineno}")
 
@@ -694,17 +686,11 @@ def test_development_launcher_supervises_separate_process_entry_points() -> None
 
 
 def test_the_api_layer_names_a_discord_id_only_where_it_reads_one_off_an_account() -> None:
-    """No module under `squid/api/` may name `discord_id`, with one exception.
+    """Reserve API references to `discord_id` for the account identity response schema.
 
-    `squid/api/v1/schemas/me.py` reads it off the authenticated account's identities,
-    which is the correct pattern: it is a *response* field derived from stored identity,
-    not an attribute of the caller. `subject_for` hardcodes `guild_id=None`, so an HTTP
-    caller can never act on a Discord fact anyway -- an identifier here would have no
-    legitimate use, and the one that existed produced an
-    `assert caller.discord_id is not None` on a submission path that had an account id
-    in hand.
-
-    Comments are excluded, so prose explaining the absence does not trip the ratchet.
+    HTTP callers use account identities rather than Discord permission subjects. This
+    check inspects names, attributes, parameters, and keyword arguments; comments and
+    string contents are outside its scope.
     """
     allowed = Path("squid/api/v1/schemas/me.py")
     offenders: list[str] = []
@@ -772,21 +758,14 @@ def _raises_application_layer_paths() -> list[Path]:
 
 
 def test_application_and_domain_layers_raise_only_structured_errors() -> None:
-    """An exception's base class is its user-facing contract, so builtins are never right here.
+    """Reject direct raises of the listed builtin exceptions in application and domain code.
 
-    Both transports classify a failure purely by type. `build_error_presentation`
-    (`squid/bot/errors.py`) renders friendly localized text for a `DomainError` and drops everything
-    else into a generic "Something went wrong" card that also logs at error level and files an error
-    report; `handle_squid_error` (`squid/api/errors.py`) does the equivalent for problem details. A
-    bare `ValueError` is therefore reported to operators as a crash no matter how expected it was --
-    which is exactly how an admin mistyping a record category came to look like a bug (`b03322f1d85e`).
+    Transports use exception types to select user-facing responses. Expected failures
+    therefore need a structured application error, or they can appear as unexpected
+    server errors. Assertions and unimplemented stubs remain allowed.
 
-    The `SquidError` vocabulary covers every case, so no site needs a builtin: caller-contract
-    violations become `InvalidStateError` and broken persisted invariants become `DataIntegrityError`.
-    Neither changes what a user sees, but both keep this rule total and checkable.
-
-    `BARE_RAISE_ALLOWLIST` is a ratchet over the violations that predate the rule. It pins a count per
-    file so a new raise in an already-listed module still fails. Shrink it; never grow it.
+    The allowlist pins existing counts per file: both new violations and stale entries
+    fail. This syntax check does not resolve aliases or infer exception types.
     """
     counts: dict[str, int] = {}
     locations: dict[str, list[int]] = {}
@@ -840,12 +819,11 @@ def test_minecraft_authorization_does_not_import_account_persistence() -> None:
 
 
 def test_the_engine_needs_no_transport_install() -> None:
-    """Portable authoring, planning, runtime, scenes, and HTML need no Discord install.
+    """Reject transport and storage imports throughout the portable UI engine.
 
-    This used to skip a `discord/` directory inside the same distribution. Now that the
-    adapter is its own package the rule is flat, and the blocked set widens to the packages
-    that sit above the engine: nothing here may import them, in a function body or under
-    TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
+    The scan includes function bodies and TYPE_CHECKING blocks. Only the two execution
+    backend modules may import AnyIO; a separate subprocess test checks that importing
+    the engine works when AnyIO is unavailable.
     """
     root = Path("packages/squid-ui/src/squid_ui")
     blocked = {
@@ -897,11 +875,11 @@ def _irrefutable(pattern: ast.pattern) -> bool:
 
 
 def test_planner_traversals_keep_their_exhaustiveness_proof() -> None:
-    """A traversal's terminal catch-all must be assert_never or a raise, never a quiet default.
+    """Require terminal catch-all arms to raise or call `assert_never` in three planner files.
 
-    The planner dispatches are proven exhaustive by `assert_never` final arms (ADR 0075);
-    the proof dies silently if someone reintroduces `case _: return ...`. Scoped to the
-    three traversal files on purpose -- `case _:` is legitimate everywhere else.
+    These traversals rely on type checking to catch missing cases. A fallback return
+    would hide new node types from that check. Other match statements are outside
+    this rule.
     """
     traversals = (
         COMPILER_PASS_ROOT / "html_planner.py",

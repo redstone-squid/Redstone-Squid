@@ -1,1 +1,1 @@
-"""Static deployment contract tests."""
+"""Deployment configuration checks and explicitly marked Docker image tests."""

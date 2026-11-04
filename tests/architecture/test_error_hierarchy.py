@@ -1,9 +1,7 @@
-"""Every framework exception derives from its distribution's documented root.
+"""Require public framework-defined exceptions to inherit the package's error root.
 
-`except SquidUiError` (or `ReactivityError`, `StorageError`, `ReplicationError`) is the
-supported way to catch everything a distribution raises deliberately, so an exception
-class added outside the hierarchy silently escapes those handlers. This scan keeps the
-promise structural rather than a review convention.
+The scan excludes private classes and listed control-flow signals. It does not cover
+standard-library or dependency exceptions that framework calls may also raise.
 """
 
 import importlib

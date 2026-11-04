@@ -1,15 +1,8 @@
-"""Guard the one ephemerality rule against the trap that hides its violations.
+"""Reject literal ephemeral=True on calls spelled ctx.send, ctx.reply, or ctx.defer.
 
-`Context.send` forwards to `Messageable.send`, which has no `ephemeral` parameter, so a hybrid
-command that writes `ephemeral=True` is *public* whenever it is invoked as a prefix command —
-silently, and only on the path nobody tests by hand. That is how `!error <ref>` posted
-tracebacks (phase 3) and how `!account merge-code` posted an account-takeover credential
-(phase 5.7).
-
-So a literal `True` is banned on a `Context` reply. `Scope` owns the public/personal
-transport distinction, and a payload that must never reach a channel uses `Private`, which
-uses direct messages instead. Interactions are untouched: there `ephemeral=True` means what
-it says.
+Hybrid commands can also run as prefix commands, where an ephemeral reply is unavailable.
+Application replies use Scope audience policy; Private can deliver by direct message.
+This AST check covers the literal call pattern, not aliases or dynamically supplied kwargs.
 """
 
 import ast

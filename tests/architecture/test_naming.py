@@ -1,18 +1,10 @@
-"""Naming rules that keep the vocabulary in `docs/squid-vocabulary.md` from eroding.
+"""Check naming conventions from `docs/squid-vocabulary.md`.
 
-Lifetime is carried by verbs, not by nouns. What nouns owe instead is consistency, which
-needs no dictionary: one meaning per word, and one word per meaning.
-
-The rules here are denylists rather than allowlists, which is deliberate and measured. An
-allowlist of legal suffixes was considered and rejected on the suite measurement: the original six packages
-export 555 classes with 273 distinct last words, 179 of them used exactly once, and
-restricting to multi-word names only brings that to 173 and 102. A closed set would have to
-reject `MessageRoot`, `Chrome`, `Palette` and every authoring node -- `Heading`, `Paragraph`,
-`Gallery` -- or grow an exemption list longer than the rule. A denylist scales to names
-nobody has written yet, which is the same reasoning `DISCOURAGED_VERBS` was written under.
-
-What is enforced is that the words the sweep retired stay retired, that an agent noun names
-a verb the dictionary has, and that no prefix is a single unreadable letter.
+The checks reject selected retired names and track deliberate exceptions. They do not
+restrict every class suffix to a fixed vocabulary: domain names such as Heading and
+Palette should not need an exception just because they are new to the checker.
+Exported names are inspected at runtime; source-level checks also cover private and
+nested definitions.
 """
 
 import ast
@@ -62,52 +54,41 @@ UI_PUBLIC_PACKAGES = (
 )
 
 TERMINATING_VERBS = frozenset({"close", "detach", "finish", "cancel", "discard", "run"})
-"""What ends something, and nothing else. See `docs/squid-ui-architecture.md`."""
+"""Preferred verbs for the distinct lifetime operations described in `docs/squid-ui-architecture.md`."""
 
 OBJECT_ENDING_VERBS = frozenset({"close", "finish"})
-"""The two that end *the object itself*, and so may not appear on one class together.
+"""A class may expose either `close` or `finish` to end its own lifetime.
 
-`run` ends an owner's tasks, `discard` ends staged work, `cancel` ends unfinished async
-work. Those name other subjects, so pairing them with `close` is correct --
-`PersistentStatePool` has `run` and `close`, `SubscriptionReconciler` has `discard` and `close`.
+Other verbs can name separate work: `cancel` ends unfinished async work and `discard`
+ends staged changes. Those operations may coexist with `close`.
 """
 
 DISCOURAGED_VERBS = frozenset({"shutdown", "stop", "dispose", "teardown", "destroy", "terminate", "kill"})
-"""Synonyms for the six that would reintroduce the ambiguity they were chosen to remove.
+"""Alternative lifetime verbs that the package conventions exclude.
 
-A denylist rather than an allowlist, so it scales to names nobody has written yet.
-`release` and `abort` are deliberately absent: `Fragment.release` documents why it is not
-`detach`, the stores release a *claim* rather than themselves, and `abort` is two-phase
-commit vocabulary paired with `prepare`/`apply`.
+`release` and `abort` remain available for operations such as releasing a claim or
+aborting a prepared transaction, which need not end the object itself.
 """
 
 RETIRED_SUFFIXES = frozenset(
     {"Outcome", "Verdict", "Feedback", "Receipt", "Summary", "Locator", "Protection", "Strategy"}
 )
-"""Words that each meant what another word already meant, and what they retired into.
+"""Class suffixes replaced by more specific vocabulary.
 
-`Outcome` and `Receipt` are a `Result` or a `Status`; `Verdict` is a `Decision`; `Summary`
-is a `Snapshot` of something live or a `Report` about something finished; `Locator` is an
-`Address`; `Protection` is a `Policy`; `Strategy` is a `Mode` when it is an enum and a
-`Policy` when it is injected; `Feedback` was never an answer at all and became a `Spec`.
+Use `Result` or `Status` for `Outcome` and `Receipt`, and `Decision` for `Verdict`.
+A `Summary` becomes a live `Snapshot` or a completed `Report`; `Locator` becomes
+`Address`; `Protection` becomes `Policy`. Use `Mode` for an enumerated `Strategy`
+or `Policy` for an injected one. The former `Feedback` concept is now a `Spec`.
 """
 
 RETIRED_SUFFIX_EXEMPTIONS = frozenset({"Summary"})
-"""`semantic.Summary` is the `<summary>` of a `Details` disclosure, not a suffix.
-
-HTML's own `details`/`summary` pair is the term of art the node mirrors, and the head noun
-carries the whole meaning. Listed rather than assumed, like every other exemption.
-"""
+"""`semantic.Summary` mirrors the HTML `<summary>` element inside a `Details` disclosure."""
 
 RETIRED_IDENTIFIER_WORDS = frozenset({"feedback", "locator", "outcome", "protection", "reactor", "receipt", "verdict"})
-"""Unambiguous retired words forbidden in functions, attributes, parameters, and locals.
-
-Unlike `Summary`, `Strategy`, and `Policy`, these have no surviving second meaning in the
-suite packages. Checking identifiers closes the gap left by the first class-and-method sweep.
-"""
+"""Retired words checked in definition names, attributes, parameters, and local references."""
 
 RETIRED_IDENTIFIERS = frozenset({"summary_bytes", "summary_payload"})
-"""Ambiguous retired words in durable identifiers whose complete spelling is unambiguous."""
+"""Exact retired identifiers whose individual words remain valid elsewhere."""
 
 RETIRED_CLASS_NAMES = frozenset(
     {
@@ -141,16 +122,7 @@ RETIRED_CLASS_NAMES = frozenset(
         "SessionRegistry",
     }
 )
-"""Exact public concepts replaced in the whole-suite naming pass.
-
-These cannot join `RETIRED_IDENTIFIER_WORDS`: words such as ``action``, ``scope``, and
-``mount`` remain valid verbs or domain words even though the ambiguous class names retired.
-
-`Screen` and `Scope` left this set the same way, by being reclaimed on purpose rather than
-drifting back: `sd.Screen` is the declarative product API, and `sd.Scope` is the lifetime of
-what one owner opened. `Scope` names no session scoping -- that is `ScopeKind` and the
-`SessionScope` family, and the two never meet in a signature.
-"""
+"""Exact retired class names. Their component words may still be valid in other identifiers."""
 
 RETIRED_PACKAGE_IMPORTS = frozenset(
     {
@@ -183,17 +155,16 @@ ANNOTATION_VOCABULARY = {
     "SessionSnapshot": frozenset({"summary"}),
     "UndoMode": frozenset({"strategy"}),
 }
-"""Words whose ambiguity disappears once an identifier's annotated type is known."""
+"""Forbidden identifier words for selected annotation or constructor names."""
 
 ANNOTATION_IDENTIFIER_EXEMPTIONS = frozenset({("MessageRoot", "mount")})
 """Deliberate verb uses that happen to return the noun their action creates."""
 
 RETIRED_VERBS = frozenset({"format_prefill", "list_records", "purge_expired", "drop", "allows", "refresh_now"})
-"""Callable names that said in two words what one dictionary verb already said.
+"""Retired callable names, checked at every nesting level.
 
-`flush` is deliberately absent: persistence `flush` names a different subject -- writing
-pending bytes -- and `PersistentStatePool.flush` and `DurableSessionRuntime.flush` keep it. What
-retired was `MessageRoot.flush`, which delivered a render and is now `MessageRoot.refresh`.
+`flush` remains valid for writing pending state. Message delivery uses `refresh`,
+but this check does not ban persistence methods named `flush`.
 """
 
 AGENT_NOUNS = {
@@ -223,15 +194,11 @@ AGENT_NOUNS = {
     "Scheduler": "schedule",
     "Supervisor": "supervise",
 }
-"""`Xer` performs the verb `x`, so the family is self-checking.
-
-This is what caught `Reactor`: there is no verb `react`, and the class actually schedules
-re-renders in response to topic traffic, so it is a `MessageRootScheduler`.
-"""
+"""Approved class suffixes and the operations their names describe."""
 
 NOT_AGENT_NOUNS = frozenset(
     {
-        # Plain nouns that happen to end in -er/-or. None of them performs a verb.
+        # These nouns are accepted without an entry in AGENT_NOUNS.
         "Actor",
         "Answer",
         "Author",
@@ -256,12 +223,11 @@ NOT_AGENT_NOUNS = frozenset(
         "Trigger",
     }
 )
-"""Words the `-er` rule must not read as derivations, listed so a new one is a decision."""
+"""Accepted suffixes exempt from the operation-name mapping."""
 
 
 SAME_CONCEPT_TWO_LAYERS = {
-    # A semantic node and the exact primitive it lowers to. The parallel spelling is the
-    # point: `sl.Heading` and what planning emits for it are the same idea, twice.
+    # Semantic nodes and their planned primitives share names across namespaces.
     "ControlGroup",
     "Code",
     "Heading",
@@ -270,11 +236,9 @@ SAME_CONCEPT_TWO_LAYERS = {
     "Failed",
     "Pending",
     # Each transport's complete message kwargs. The package namespace selects the wire
-    # protocol; both values own the same role between drawing and host delivery.
+    # protocol; both values carry rendered output to message delivery.
     "MessagePayload",
-    # `sl.scene.X` is what `sl.X` lowers to. The `Scene` prefix that used to keep these
-    # apart repeated the import path and said nothing else, so it was dropped; the pairing
-    # is the whole point, and `sl.scene` is the namespace that disambiguates.
+    # Authoring nodes and their scene equivalents use their namespaces for distinction.
     "Asset",
     "Button",
     "EntitySelect",
@@ -297,22 +261,14 @@ SAME_CONCEPT_TWO_LAYERS = {
 """Shared names that are deliberate: the same concept at two layers, or a namespaced form."""
 
 UNRELATED_CONCEPTS_SHARING_A_WORD = {
-    # `sd.Group` absorbs `app_commands.Group`, so discord.py picks the word: a cog writing
-    # `class Admin(sd.Group)` is reading discord.py's docs, not this suite's vocabulary.
-    # `sl.Group` is the layout node. Neither package's users ever see the other's.
+    # Discord command groups and semantic layout groups retain their domain names.
     "Group",
 }
-"""Real collisions, recorded rather than renamed.
-
-`Destination`, `ProgressReporter`, and `ActionKind` used to be here. They were settled by renaming the semantic
-node and leaving the load-bearing word alone: `semantic.Destination` is `NavOption` beside
-`delivery.MessageDestination`; `semantic.Progress` is `ProgressBar` beside `ProgressReporter`; and the
-frontend and transactional classifications are `InteractionKind` and `ActionPurpose`.
-"""
+"""Deliberate name collisions for concepts distinguished by their package namespaces."""
 
 
 def _exported_classes() -> dict[str, set[str]]:
-    """Every class reachable through a package `__all__`, by short name to defining module."""
+    """Map each class name listed in a package module's `__all__` to its defining locations."""
     found: dict[str, set[str]] = defaultdict(set)
     for package in PUBLIC_PACKAGES:
         modules: list[ModuleType] = [package]
@@ -329,7 +285,7 @@ def _exported_classes() -> dict[str, set[str]]:
 
 
 def test_ui_public_callables_have_docstrings() -> None:
-    """Every exported UI class and function explains its contract at the definition."""
+    """Exported UI classes and functions must have a docstring, including inherited docstrings."""
     missing: set[str] = set()
     for package in UI_PUBLIC_PACKAGES:
         modules: list[ModuleType] = [package]
@@ -370,11 +326,7 @@ def _method_names(node: ast.ClassDef) -> set[str]:
 
 
 def test_one_public_name_means_one_class() -> None:
-    """Two classes sharing a short name is the defect, whatever the word happens to be.
-
-    `MessageRootSnapshot` named both a view of a live mount and the serialized state that
-    outlives it, and both were exported from `squid_ui_discord`.
-    """
+    """Require an explicit exception when exported classes share a short name."""
     collisions = {name: sorted(where) for name, where in _exported_classes().items() if len(where) > 1}
     known = SAME_CONCEPT_TWO_LAYERS | UNRELATED_CONCEPTS_SHARING_A_WORD
     assert collisions.keys() == known, (
@@ -395,7 +347,7 @@ def test_no_class_claims_to_end_itself_twice() -> None:
 
 
 def test_termination_uses_the_agreed_verbs() -> None:
-    """A seventh synonym for "it is over" puts the reader back where they started."""
+    """Reject the listed alternative lifetime verbs on classes."""
     offenders = [
         f"{path}::{node.name}.{verb}"
         for path, node in _classes_in_source()
@@ -411,11 +363,7 @@ def _last_word(name: str) -> str:
 
 
 def test_retired_words_stay_retired() -> None:
-    """A synonym that came back would undo the sweep one class at a time.
-
-    `Outcome` alone named a `Status` enum in profiling and a `Result` union in the reactive
-    kernel, and nothing said they were different kinds of thing.
-    """
+    """Reject retired class suffixes except the explicitly allowed names."""
     offenders = [
         f"{path}::{node.name}"
         for path, node in _classes_in_source()
@@ -473,7 +421,7 @@ def _annotation_names(annotation: ast.expr | None) -> set[str]:
 
 
 def test_retired_identifier_words_stay_retired() -> None:
-    """The noun reset reaches functions, attributes, parameters, and private locals."""
+    """Reject retired words and exact names across definitions and identifier references."""
     offenders: list[str] = []
     seen: set[tuple[Path, str]] = set()
     for root in PACKAGE_SOURCE_ROOTS:
@@ -556,11 +504,7 @@ def test_constructor_assigned_identifiers_follow_their_type_vocabulary() -> None
 
 
 def test_agent_nouns_name_a_verb_the_dictionary_has() -> None:
-    """`Xer` is a derivation, not a free word: it claims to perform `x`.
-
-    A new `-er` class is therefore a decision -- either it performs a listed verb, or it is
-    an ordinary noun that happens to end in those letters and says so in `NOT_AGENT_NOUNS`.
-    """
+    """Require an explicit classification for exported class suffixes ending in `-er` or `-or`."""
     unclassified = sorted(
         {
             _last_word(name)
@@ -578,7 +522,7 @@ def test_agent_nouns_name_a_verb_the_dictionary_has() -> None:
 
 
 def test_no_single_letter_prefixes() -> None:
-    """`RText` and `RPanel` spent a word on a letter; the word is `Measured`."""
+    """Reject class names beginning with two capitals followed by a lowercase letter."""
     offenders = [
         f"{path}::{node.name}" for path, node in _classes_in_source() if re.match(r"^[A-Z][A-Z][a-z]", node.name)
     ]

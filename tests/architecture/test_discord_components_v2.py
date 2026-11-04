@@ -1,4 +1,8 @@
-"""Guard the Discord transport against reintroducing legacy message UI."""
+"""Scan bot and portable UI source for legacy Discord message construction.
+
+The scan roots do not include the separate squid-ui-discord package. Its renderer behavior
+is covered by package tests; the old frontend path allowances below remain in this visitor.
+"""
 
 import ast
 from collections import defaultdict
@@ -11,17 +15,10 @@ BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-ui" / "src"
 MESSAGE_METHODS = {"edit", "edit_message", "send", "send_message"}
 LEGACY_KEYWORDS = {"content", "embed", "embeds"}
-# The framework has to *name* the classic message vocabulary to model it: a
-# `MessagePayload` says which mode a payload is in, and the delivery protocol says what a
-# host `send` must accept. Naming the types is allowed there; building one is not.
-# `rendering.py` names `View` only in a generic bound: a `RenderedMessage` is typed by which
-# kind of view its mode produces, and it never builds one.
+# Allow type references in modules at the former squid_ui/discord path.
 LEGACY_TYPE_HOMES = {"message_payload.py", "delivery.py", "rendering.py", "adoption.py"}
 
-# The classic target *is* the classic message vocabulary, so these modules build it on
-# purpose: they draw embeds and plain views, measure a host's, and mount one. This is the
-# whole point of the target and not a regression. Everything else in the package — and every
-# line of the bot — stays on Components V2, which is what the rest of this test guards.
+# These modules were allowed to construct classic payloads at that former path.
 CLASSIC_TARGET_HOMES = {"classic.py", "classic_renderer.py", "inspection.py", "message_root.py", "targets.py"}
 
 
@@ -99,10 +96,10 @@ def test_bot_uses_components_v2_outside_archive_relay() -> None:
 
 
 def test_reaction_router_owns_all_raw_reaction_listeners() -> None:
-    """Every gateway reaction event enters through the router, and only through it.
+    """Keep the four raw-reaction handler names in reactions.py.
 
-    Compared as a name-per-file mapping rather than a count: a cog that grows its own
-    listener and a router that loses one are different bugs, and the diff says which.
+    Comparing names by file catches both an extra handler and a missing router method.
+    This checks definitions, not the event registration performed at runtime.
     """
     listeners: dict[str, set[str]] = defaultdict(set)
     for path in BOT_ROOT.rglob("*.py"):
