@@ -1,4 +1,13 @@
-"""Mechanical drawing of resolved Slack Block Kit scenes."""
+"""Render resolved Slack scenes as validated SDK objects without sending them.
+
+Each renderer checks the scene's target and the SDK profile, audits its Block Kit
+surface, then builds SDK objects and invokes their validation. Layout choices belong
+to planning; drawing preserves the selected blocks and action IDs. The application
+owns delivery and the mapping from incoming actions to the plan's live bindings.
+
+Asset URLs must already be published by the host. Resolution checks URL syntax,
+not public reachability, and does not upload asset bytes.
+"""
 
 import hashlib
 from collections.abc import Sequence
@@ -85,7 +94,7 @@ def _plain(value: scene.SlackText, role: str) -> PlainTextObject:
 
 
 def _safe_url(value: str, *, https_only: bool = False) -> str | None:
-    """Return an absolute web URL when it meets the requested policy."""
+    """Check the URL scheme and host without making a network request."""
     parsed = urlsplit(value)
     schemes = {"https"} if https_only else {"http", "https"}
     return value if parsed.scheme in schemes and parsed.netloc else None
@@ -351,7 +360,11 @@ class _Drawer:
             raise DrawInvariantError(message) from error
 
     def resolve_asset(self, reference: scene.SlackAssetRef) -> str:
-        """Resolve an asset reference to a public HTTPS URL."""
+        """Resolve matching scene asset metadata to an absolute HTTPS URL.
+
+        Try the custom resolver first, then a StoredAsset in plan.resources. This checks
+        URL syntax only; the host must make the asset publicly reachable.
+        """
         metadata = self.assets.get(reference.key)
         if metadata is None or (metadata.name, metadata.media_type) != (reference.name, reference.media_type):
             message = f"Slack asset {reference.key!r} has no matching scene metadata"
@@ -550,7 +563,11 @@ def _audit_surface(blocks: Sequence[scene.SlackBlock], *, surface: str, limits: 
 
 
 class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
-    """Draw planned Slack message scenes into SDK blocks."""
+    """Draw planned Slack messages into validated SDK blocks.
+
+    asset_resolver takes precedence over StoredAsset references in the optional plan.
+    The returned payload contains text and blocks; the host chooses where to send it.
+    """
 
     def __init__(
         self,

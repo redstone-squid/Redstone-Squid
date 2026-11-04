@@ -41,7 +41,11 @@ def slack_sdk_adapter_profile(
     *,
     capabilities: frozenset[AdapterCapability] = SLACK_SDK_BEHAVIOR_CAPABILITIES,
 ) -> AdapterProfile[SlackSdkAdapter]:
-    """Declare an application-verified Slack SDK adapter profile."""
+    """Declare the SDK versions and capabilities verified by the application.
+
+    This factory records that claim; it does not test SDK behavior. Renderers check
+    the installed version and required capabilities against the declaration.
+    """
     return AdapterProfile(SlackSdkAdapter, name, version_expression, capabilities, frontend="slack")
 
 

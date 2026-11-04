@@ -1,4 +1,4 @@
-"""A complete outgoing Slack message payload."""
+"""Text and blocks for an outgoing Slack message."""
 
 from dataclasses import dataclass
 from typing import TypedDict
@@ -21,7 +21,7 @@ class MessagePayload:
     blocks: tuple[Block, ...] = ()
 
     def to_kwargs(self) -> MessagePayloadKwargs:
-        """Return keyword arguments accepted by Slack message client methods."""
+        """Return message content kwargs; the caller supplies the channel and other delivery options."""
         return {"text": self.text, "blocks": list(self.blocks)}
 
 
