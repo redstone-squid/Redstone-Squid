@@ -88,9 +88,8 @@ async def edit_build(
 async def get_build(build_id: int, response: Response, build_queries: BuildQueries) -> BuildDetail:
     """Return one confirmed public build.
 
-    A pending build answers 404, not 403: a submission's existence is private
-    until it is confirmed, so "not published" and "not there" have to be
-    indistinguishable to a caller without `build.submission.view_pending`.
+    Pending and denied builds return 404, as do missing builds. This endpoint does
+    not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id)
     _set_build_etag(response, build)
@@ -117,7 +116,12 @@ async def list_builds(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[BuildSummary]:
-    """Search public builds, or list one authoritative moderation-status view."""
+    """Search confirmed builds, or list builds with a selected moderation status.
+
+    Supplying q selects indexed search and cannot be combined with status. Search
+    uses offset pagination. Without q, results come from the build repository;
+    unpublished statuses require build.submission.view_pending permission.
+    """
     if q is not None:
         if status is not None:
             msg = "status cannot be combined with q"
@@ -164,14 +168,7 @@ async def list_builds(
 
 
 async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:
-    """Gate non-public moderation views on the node, credential included.
-
-    "A service key never reads unreviewed submissions" used to be a hardcoded
-    branch on the caller kind. It is now an expressible policy: no key is
-    issued `build.submission.view_pending` by default, so a leaked key still
-    cannot read them -- and a key that should read them can be given one,
-    which the branch made impossible.
-    """
+    """Require permission to view unpublished submissions, including credential restrictions."""
     if not await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING):
         raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
 
@@ -189,6 +186,11 @@ def _set_build_etag(response: Response, build: Build) -> None:
 
 
 def _expected_revision(build_id: int, if_match: str | None) -> int:
+    """Read the revision from a single strong build ETag.
+
+    Missing If-Match raises BuildRevisionRequiredError. A malformed tag or a tag
+    for another build raises BuildRevisionMismatchError.
+    """
     if if_match is None:
         raise BuildRevisionRequiredError(build_id)
     match = _BUILD_ETAG.fullmatch(if_match.strip())

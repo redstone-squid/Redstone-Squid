@@ -40,10 +40,10 @@ async def get_creator_alias(
     openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_creator_profile(creator_id: UUID, accounts: Accounts) -> CreatorProfileDetail:
-    """Return a creator's public page, following permanent merge redirects.
+    """Return a creator's public profile, following account-merge redirects.
 
-    Visibility is applied in the domain, not here: `present_public_profile` is the one authority
-    on what a stranger sees, so this route cannot accidentally disagree with the bot about it.
+    The account service applies profile and identity visibility before this route
+    serializes the result.
     """
     profile = await accounts.get_public_profile(creator_id)
     if profile is None:

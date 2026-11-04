@@ -34,7 +34,7 @@ class DraftMediaArtifactRole(StrEnum):
 
 
 class DraftMediaArtifactResponse(StrictSchema):
-    """Safe facts about one normalized visual artifact."""
+    """Dimensions and media type of one normalized image, video, or thumbnail."""
 
     role: DraftMediaArtifactRole
     content_type: str
@@ -43,7 +43,7 @@ class DraftMediaArtifactResponse(StrictSchema):
 
 
 class DraftMediaResponse(StrictSchema):
-    """Safe state for one upload without storage or normalization internals."""
+    """Upload status and normalized output metadata, excluding storage keys and worker details."""
 
     id: UUID
     draft_id: UUID
@@ -54,7 +54,11 @@ class DraftMediaResponse(StrictSchema):
 
     @classmethod
     def from_snapshot(cls, snapshot: MediaJobSnapshot) -> Self:
-        """Project a durable job snapshot onto the public owner-only contract."""
+        """Convert worker state to the draft owner's media response.
+
+        Pending and claimed jobs both appear as processing. Include visual outputs and
+        thumbnails, but omit internal reports and storage details.
+        """
         status = {
             MediaJobStatus.PENDING: DraftMediaStatus.PROCESSING,
             MediaJobStatus.CLAIMED: DraftMediaStatus.PROCESSING,

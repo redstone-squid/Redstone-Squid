@@ -51,7 +51,7 @@ type InboxAccess = Annotated[InboxVisibility, Depends(resolve_inbox_visibility)]
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def get_preferences(notifications: Notifications, caller: UserCaller) -> NotificationPreferencesDetail:
-    """Return disabled defaults before the notification notice has been accepted."""
+    """Return channel preferences, with disabled defaults until privacy consent is accepted."""
     return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(caller)))
 
 

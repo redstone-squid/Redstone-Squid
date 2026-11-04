@@ -49,15 +49,11 @@ def _route_template(request: Request) -> str | None:
 
 
 async def _capture(request: Request, error: Exception, request_id: str) -> None:
-    """Store the failure, if this process was wired with somewhere to store it.
+    """Store a failure when the application has an error-report service.
 
-    Reached through `app.state` rather than a dependency because an exception handler runs after
-    dependency resolution has already been unwound, and because the handler must still render a
-    response on a deployment (or a test app) that has no service graph attached.
-
-    Guarded even though `ErrorReportService.record` already swallows: the buffer drain and the
-    service lookup happen out here, and a handler that raises turns a rendered 500 into a bare
-    ASGI failure with no problem document at all.
+    Exception handlers may run after dependency resolution fails, so look up the
+    service on app.state and allow it to be absent. Catch lookup, buffer, and
+    storage errors so reporting cannot prevent the HTTP error response.
     """
     from squid.observability import correlated_log_buffer, correlation_reference
 
@@ -96,11 +92,8 @@ class ProblemDetail(BaseModel):
 
 
 _PINNED_REASON_PHRASES = {
-    # Python 3.13 renamed 422 from "Unprocessable Entity" to "Unprocessable
-    # Content", so `HTTPStatus.phrase` makes the exported document depend on the
-    # interpreter that generated it. The unit suite runs on 3.12, 3.13 and 3.14,
-    # and the committed-document assertion only catches a forgotten regeneration
-    # if the document is the same on all three.
+    # Python changed the 422 reason phrase between versions. Pin it so generated
+    # OpenAPI does not change with the interpreter used to export it.
     HTTPStatus.UNPROCESSABLE_ENTITY: "Unprocessable Content",
 }
 

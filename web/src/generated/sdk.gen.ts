@@ -142,7 +142,11 @@ export const browserAuthorizationCallback = <ThrowOnError extends boolean = fals
 /**
  * List Builds
  *
- * Search public builds, or list one authoritative moderation-status view.
+ * Search confirmed builds, or list builds with a selected moderation status.
+ *
+ * Supplying q selects indexed search and cannot be combined with status. Search
+ * uses offset pagination. Without q, results come from the build repository;
+ * unpublished statuses require build.submission.view_pending permission.
  */
 export const buildsList = <ThrowOnError extends boolean = false>(options?: Options<BuildsListData, ThrowOnError>): RequestResult<BuildsListResponses, BuildsListErrors, ThrowOnError> => (options?.client ?? client).get<BuildsListResponses, BuildsListErrors, ThrowOnError>({
     security: [
@@ -186,9 +190,8 @@ export const buildsCreate = <ThrowOnError extends boolean = false>(options: Opti
  *
  * Return one confirmed public build.
  *
- * A pending build answers 404, not 403: a submission's existence is private
- * until it is confirmed, so "not published" and "not there" have to be
- * indistinguishable to a caller without `build.submission.view_pending`.
+ * Pending and denied builds return 404, as do missing builds. This endpoint does
+ * not expose unpublished submissions, even to callers who can view them elsewhere.
  */
 export const buildsGet = <ThrowOnError extends boolean = false>(options: Options<BuildsGetData, ThrowOnError>): RequestResult<BuildsGetResponses, BuildsGetErrors, ThrowOnError> => (options.client ?? client).get<BuildsGetResponses, BuildsGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}', ...options });
 
@@ -356,10 +359,10 @@ export const cliSessionRevoke = <ThrowOnError extends boolean = false>(options?:
 /**
  * Get Notice
  *
- * Return the notice a client must display before recording consent to it.
+ * Return the privacy notice in the negotiated language.
  *
- * One msgid shared with the Discord prompt, so the version a receipt names refers to a single
- * piece of text however the reader met it.
+ * Clients should display this text and submit its version when recording consent.
+ * The API and Discord use the same notice text and version.
  */
 export const consentNoticeGet = <ThrowOnError extends boolean = false>(options?: Options<ConsentNoticeGetData, ThrowOnError>): RequestResult<ConsentNoticeGetResponses, ConsentNoticeGetErrors, ThrowOnError> => (options?.client ?? client).get<ConsentNoticeGetResponses, ConsentNoticeGetErrors, ThrowOnError>({ url: '/v1/consent/notice', ...options });
 
@@ -378,28 +381,27 @@ export const diagnosticsErrorsClear = <ThrowOnError extends boolean = false>(opt
  *
  * List the most recent unexpired error reports, newest first.
  *
- * Most reports are failures something recovered from, because capture follows the logs. Set
- * `work_lost` to see only the ones that permanently abandoned work.
+ * Reports include failures that were caught and logged. Set work_lost to include
+ * only failures that permanently abandoned work, such as a dead-lettered job.
  */
 export const diagnosticsErrorsList = <ThrowOnError extends boolean = false>(options?: Options<DiagnosticsErrorsListData, ThrowOnError>): RequestResult<DiagnosticsErrorsListResponses, DiagnosticsErrorsListErrors, ThrowOnError> => (options?.client ?? client).get<DiagnosticsErrorsListResponses, DiagnosticsErrorsListErrors, ThrowOnError>({ url: '/v1/diagnostics/errors', ...options });
 
 /**
  * Get Error Report
  *
- * Resolve a quoted reference to the failure behind it.
+ * Find a stored failure by its short reference or full correlation ID.
  *
- * Accepts either width: the short form a Discord error card shows, and the full correlation ID
- * that appears in logs and in the `Request-Id` response header.
+ * Short references appear in Discord error cards. Full IDs appear in logs and
+ * the Request-Id response header.
  */
 export const diagnosticsErrorGet = <ThrowOnError extends boolean = false>(options: Options<DiagnosticsErrorGetData, ThrowOnError>): RequestResult<DiagnosticsErrorGetResponses, DiagnosticsErrorGetErrors, ThrowOnError> => (options.client ?? client).get<DiagnosticsErrorGetResponses, DiagnosticsErrorGetErrors, ThrowOnError>({ url: '/v1/diagnostics/errors/{reference}', ...options });
 
 /**
  * Get Me
  *
- * Return the authenticated user's own linked account.
+ * Return the caller's account, linked identities, and profile.
  *
- * Keyed on `account_id`, not `discord_id`: a CLI device and a Minecraft player both carry a
- * perfectly good account and no Discord identity, and used to be refused their own account.
+ * An account ID is required; the caller does not need a Discord identity.
  */
 export const accountGet = <ThrowOnError extends boolean = false>(options?: Options<AccountGetData, ThrowOnError>): RequestResult<AccountGetResponses, AccountGetErrors, ThrowOnError> => (options?.client ?? client).get<AccountGetResponses, AccountGetErrors, ThrowOnError>({
     security: [{
@@ -416,8 +418,8 @@ export const accountGet = <ThrowOnError extends boolean = false>(options?: Optio
  *
  * Accept the current privacy notice for future writes.
  *
- * A client that names the version it displayed is held to it: consent recorded against text the
- * user never saw is the failure that versioning the notice exists to prevent.
+ * If a notice version is supplied, it must match the current version. This lets
+ * clients detect that the displayed notice has become outdated.
  */
 export const accountConsentGrant = <ThrowOnError extends boolean = false>(options?: Options<AccountConsentGrantData, ThrowOnError>): RequestResult<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError> => (options?.client ?? client).post<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError>({
     security: [{
@@ -496,9 +498,8 @@ export const accountIdentityVisibilitySet = <ThrowOnError extends boolean = fals
  *
  * Unlink one identity from the caller's account.
  *
- * Refuses the last one with 409: every sign-in path resolves an account from a provider
- * subject, so an account with no identities is one nobody can reach again. Creator credit is
- * untouched — attribution is a fact about a build, not about how its author signs in.
+ * Removing the last identity returns 409 so the account retains a sign-in method.
+ * Existing creator credits remain attached to the account.
  */
 export const accountIdentityUnlink = <ThrowOnError extends boolean = false>(options: Options<AccountIdentityUnlinkData, ThrowOnError>): RequestResult<AccountIdentityUnlinkResponses, AccountIdentityUnlinkErrors, ThrowOnError> => (options.client ?? client).delete<AccountIdentityUnlinkResponses, AccountIdentityUnlinkErrors, ThrowOnError>({
     security: [
@@ -521,11 +522,11 @@ export const accountIdentityUnlink = <ThrowOnError extends boolean = false>(opti
 /**
  * Create Merge Code
  *
- * Offer this account up to be absorbed by another one you hold.
+ * Create a code allowing another account to absorb this account.
  *
- * Run this as the account you are giving up: it loses its public creator id to a permanent
- * redirect, so minting the code is that side's consent. Redeem it as the account you are
- * keeping. The code is shown once and replaces any previous one.
+ * Create the code while signed in to the account being given up, then redeem it
+ * as the account being kept. Completing the merge permanently redirects the old
+ * creator ID. The code is shown on creation and replaces any previous code.
  */
 export const accountMergeCodeCreate = <ThrowOnError extends boolean = false>(options?: Options<AccountMergeCodeCreateData, ThrowOnError>): RequestResult<AccountMergeCodeCreateResponses, AccountMergeCodeCreateErrors, ThrowOnError> => (options?.client ?? client).post<AccountMergeCodeCreateResponses, AccountMergeCodeCreateErrors, ThrowOnError>({
     security: [
@@ -648,10 +649,10 @@ export const accountMinecraftRefreshFor = <ThrowOnError extends boolean = false>
 /**
  * Clear Profile
  *
- * Reset another account's profile to empty, for staff handling abuse.
+ * Clear another account's profile content, for staff handling abuse.
  *
- * Deliberately leaves the profile visible: `hidden` belongs to its owner, and a takedown that
- * also flipped it would take that decision away from them.
+ * Reset profile visibility to public. Creator aliases and linked identities
+ * are retained.
  */
 export const accountProfileClear = <ThrowOnError extends boolean = false>(options: Options<AccountProfileClearData, ThrowOnError>): RequestResult<AccountProfileClearResponses, AccountProfileClearErrors, ThrowOnError> => (options.client ?? client).delete<AccountProfileClearResponses, AccountProfileClearErrors, ThrowOnError>({
     security: [{
@@ -681,7 +682,10 @@ export const paperInstallationsList = <ThrowOnError extends boolean = false>(opt
 /**
  * Create Installation
  *
- * Register a Paper server and return its plaintext secret exactly once.
+ * Register a Paper server and return its new plaintext secret.
+ *
+ * Retrying with the same Idempotency-Key can replay this response. Installation
+ * listings omit the secret; rotate the credential if it is lost.
  */
 export const paperInstallationCreate = <ThrowOnError extends boolean = false>(options: Options<PaperInstallationCreateData, ThrowOnError>): RequestResult<PaperInstallationCreateResponses, PaperInstallationCreateErrors, ThrowOnError> => (options.client ?? client).post<PaperInstallationCreateResponses, PaperInstallationCreateErrors, ThrowOnError>({
     security: [{
@@ -700,7 +704,7 @@ export const paperInstallationCreate = <ThrowOnError extends boolean = false>(op
 /**
  * Rotate Installation
  *
- * Fence an owned installation's old credentials and return one replacement secret.
+ * Revoke an owned installation's old credential and return its replacement secret.
  */
 export const paperInstallationRotate = <ThrowOnError extends boolean = false>(options: Options<PaperInstallationRotateData, ThrowOnError>): RequestResult<PaperInstallationRotateResponses, PaperInstallationRotateErrors, ThrowOnError> => (options.client ?? client).post<PaperInstallationRotateResponses, PaperInstallationRotateErrors, ThrowOnError>({
     security: [{
@@ -749,7 +753,7 @@ export const paperInstallationRevoke = <ThrowOnError extends boolean = false>(op
 /**
  * Start Paper Challenge
  *
- * Start player authorization bound to the authenticated Paper credential generation.
+ * Start player authorization bound to the authenticated Paper credential version.
  */
 export const paperChallengeStart = <ThrowOnError extends boolean = false>(options: Options<PaperChallengeStartData, ThrowOnError>): RequestResult<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError> => (options.client ?? client).post<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError>({
     security: [{ name: 'Squid-Installation-ID', type: 'apiKey' }, { name: 'Squid-Installation-Secret', type: 'apiKey' }],
@@ -779,7 +783,10 @@ export const paperChallengeExchange = <ThrowOnError extends boolean = false>(opt
 /**
  * Start Fabric Challenge
  *
- * Start an anonymous Fabric challenge committed to a client-held S256 verifier.
+ * Start Fabric authorization using the client's S256 PKCE challenge.
+ *
+ * The client keeps its verifier and supplies it when exchanging the approved
+ * challenge for a player grant.
  */
 export const fabricChallengeStart = <ThrowOnError extends boolean = false>(options: Options<FabricChallengeStartData, ThrowOnError>): RequestResult<FabricChallengeStartResponses, FabricChallengeStartErrors, ThrowOnError> => (options.client ?? client).post<FabricChallengeStartResponses, FabricChallengeStartErrors, ThrowOnError>({
     url: '/v1/minecraft/auth/fabric/challenges',
@@ -841,7 +848,7 @@ export const minecraftGrantRevoke = <ThrowOnError extends boolean = false>(optio
 /**
  * Get Preferences
  *
- * Return disabled defaults before the notification notice has been accepted.
+ * Return channel preferences, with disabled defaults until privacy consent is accepted.
  */
 export const notificationPreferencesGet = <ThrowOnError extends boolean = false>(options?: Options<NotificationPreferencesGetData, ThrowOnError>): RequestResult<NotificationPreferencesGetResponses, NotificationPreferencesGetErrors, ThrowOnError> => (options?.client ?? client).get<NotificationPreferencesGetResponses, NotificationPreferencesGetErrors, ThrowOnError>({
     security: [{
@@ -982,12 +989,10 @@ export const buildSchematicContentGet = <ThrowOnError extends boolean = false>(o
 /**
  * Render Build Schematic
  *
- * Render a confirmed build's primary schematic and answer with the PNG.
+ * Return a PNG preview of a confirmed build's primary schematic.
  *
- * Every camera parameter is optional and defaults to the deployment's own framing, so a
- * caller who wants "the picture of this build" gets the same recipe the durable queue
- * renders, served from its stored artifact. Anything else is rendered on the spot, which
- * takes as long as the engine takes.
+ * Omitted camera parameters use deployment defaults. Reuse a stored preview
+ * when its recipe matches; otherwise render it during this request.
  */
 export const buildSchematicRenderGet = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicRenderGetData, ThrowOnError>): RequestResult<BuildSchematicRenderGetResponses, BuildSchematicRenderGetErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicRenderGetResponses, BuildSchematicRenderGetErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics/render', ...options });
 
@@ -1216,7 +1221,10 @@ export const submissionFinalizationGet = <ThrowOnError extends boolean = false>(
 /**
  * Submit Draft
  *
- * Validate an owned draft and start retry-safe durable finalization.
+ * Validate a draft and request finalization.
+ *
+ * If files are still processing or fields need correction, return preparation
+ * state. Otherwise return the durable attempt that performs finalization.
  */
 export const submissionFinalizationStart = <ThrowOnError extends boolean = false>(options: Options<SubmissionFinalizationStartData, ThrowOnError>): RequestResult<SubmissionFinalizationStartResponses, SubmissionFinalizationStartErrors, ThrowOnError> => (options.client ?? client).post<SubmissionFinalizationStartResponses, SubmissionFinalizationStartErrors, ThrowOnError>({
     security: [
@@ -1368,9 +1376,8 @@ export const suggestionSourcesList = <ThrowOnError extends boolean = false>(opti
  *
  * Return ranked completions for a partially typed value.
  *
- * An unknown source is a 404, because that is a bad URL. Anything else — a gated source the
- * caller cannot read, a provider that failed — is an empty list, matching what the other
- * surfaces do: a dropdown with nothing in it, not an error under a half-typed word.
+ * Unknown sources return 404. Sources hidden from the caller and provider
+ * failures return an empty list. Request validation errors still return errors.
  */
 export const suggestionsGet = <ThrowOnError extends boolean = false>(options: Options<SuggestionsGetData, ThrowOnError>): RequestResult<SuggestionsGetResponses, SuggestionsGetErrors, ThrowOnError> => (options.client ?? client).get<SuggestionsGetResponses, SuggestionsGetErrors, ThrowOnError>({ url: '/v1/suggest/{source}', ...options });
 
@@ -1398,10 +1405,10 @@ export const creatorAliasGet = <ThrowOnError extends boolean = false>(options: O
 /**
  * Get Creator Profile
  *
- * Return a creator's public page, following permanent merge redirects.
+ * Return a creator's public profile, following account-merge redirects.
  *
- * Visibility is applied in the domain, not here: `present_public_profile` is the one authority
- * on what a stranger sees, so this route cannot accidentally disagree with the bot about it.
+ * The account service applies profile and identity visibility before this route
+ * serializes the result.
  */
 export const creatorProfileGet = <ThrowOnError extends boolean = false>(options: Options<CreatorProfileGetData, ThrowOnError>): RequestResult<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError> => (options.client ?? client).get<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError>({ url: '/v1/creators/{creator_id}', ...options });
 

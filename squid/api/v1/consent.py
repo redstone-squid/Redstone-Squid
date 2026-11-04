@@ -1,7 +1,7 @@
 """The published privacy notice.
 
-Deliberately outside `/users/me`: a notice that can only be read once you are signed in cannot
-inform the decision to sign in, and the web and CLI both need to show it before an account exists.
+The notice is public so clients can display it before the user signs in or
+creates an account.
 """
 
 from fastapi import APIRouter, Request, Response
@@ -25,10 +25,10 @@ router = APIRouter(prefix="/consent", tags=["users"])
     openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_notice(request: Request, response: Response) -> PrivacyNoticeDetail:
-    """Return the notice a client must display before recording consent to it.
+    """Return the privacy notice in the negotiated language.
 
-    One msgid shared with the Discord prompt, so the version a receipt names refers to a single
-    piece of text however the reader met it.
+    Clients should display this text and submit its version when recording consent.
+    The API and Discord use the same notice text and version.
     """
     locale = locale_for_request(request)
     # The notice changes only when its version does, but it is negotiated per language, so the

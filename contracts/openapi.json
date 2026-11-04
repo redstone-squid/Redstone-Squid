@@ -1432,7 +1432,7 @@
           "builds"
         ],
         "summary": "Get Build",
-        "description": "Return one confirmed public build.\n\nA pending build answers 404, not 403: a submission's existence is private\nuntil it is confirmed, so \"not published\" and \"not there\" have to be\nindistinguishable to a caller without `build.submission.view_pending`.",
+        "description": "Return one confirmed public build.\n\nPending and denied builds return 404, as do missing builds. This endpoint does\nnot expose unpublished submissions, even to callers who can view them elsewhere.",
         "operationId": "builds_get",
         "security": [
           {}
@@ -1556,7 +1556,7 @@
           "builds"
         ],
         "summary": "List Builds",
-        "description": "Search public builds, or list one authoritative moderation-status view.",
+        "description": "Search confirmed builds, or list builds with a selected moderation status.\n\nSupplying q selects indexed search and cannot be combined with status. Search\nuses offset pagination. Without q, results come from the build repository;\nunpublished statuses require build.submission.view_pending permission.",
         "operationId": "builds_list",
         "security": [
           {},
@@ -3508,7 +3508,7 @@
           "users"
         ],
         "summary": "Get Notice",
-        "description": "Return the notice a client must display before recording consent to it.\n\nOne msgid shared with the Discord prompt, so the version a receipt names refers to a single\npiece of text however the reader met it.",
+        "description": "Return the privacy notice in the negotiated language.\n\nClients should display this text and submit its version when recording consent.\nThe API and Discord use the same notice text and version.",
         "operationId": "consent_notice_get",
         "responses": {
           "200": {
@@ -3581,7 +3581,7 @@
           "diagnostics"
         ],
         "summary": "List Error Reports",
-        "description": "List the most recent unexpired error reports, newest first.\n\nMost reports are failures something recovered from, because capture follows the logs. Set\n`work_lost` to see only the ones that permanently abandoned work.",
+        "description": "List the most recent unexpired error reports, newest first.\n\nReports include failures that were caught and logged. Set work_lost to include\nonly failures that permanently abandoned work, such as a dead-lettered job.",
         "operationId": "diagnostics_errors_list",
         "security": [
           {}
@@ -3861,7 +3861,7 @@
           "diagnostics"
         ],
         "summary": "Get Error Report",
-        "description": "Resolve a quoted reference to the failure behind it.\n\nAccepts either width: the short form a Discord error card shows, and the full correlation ID\nthat appears in logs and in the `Request-Id` response header.",
+        "description": "Find a stored failure by its short reference or full correlation ID.\n\nShort references appear in Discord error cards. Full IDs appear in logs and\nthe Request-Id response header.",
         "operationId": "diagnostics_error_get",
         "security": [
           {}
@@ -4015,7 +4015,7 @@
           "users"
         ],
         "summary": "Get Me",
-        "description": "Return the authenticated user's own linked account.\n\nKeyed on `account_id`, not `discord_id`: a CLI device and a Minecraft player both carry a\nperfectly good account and no Discord identity, and used to be refused their own account.",
+        "description": "Return the caller's account, linked identities, and profile.\n\nAn account ID is required; the caller does not need a Discord identity.",
         "operationId": "account_get",
         "responses": {
           "200": {
@@ -4150,7 +4150,7 @@
           "users"
         ],
         "summary": "Grant Consent",
-        "description": "Accept the current privacy notice for future writes.\n\nA client that names the version it displayed is held to it: consent recorded against text the\nuser never saw is the failure that versioning the notice exists to prevent.",
+        "description": "Accept the current privacy notice for future writes.\n\nIf a notice version is supplied, it must match the current version. This lets\nclients detect that the displayed notice has become outdated.",
         "operationId": "account_consent_grant",
         "security": [
           {
@@ -4907,7 +4907,7 @@
           "users"
         ],
         "summary": "Unlink Identity",
-        "description": "Unlink one identity from the caller's account.\n\nRefuses the last one with 409: every sign-in path resolves an account from a provider\nsubject, so an account with no identities is one nobody can reach again. Creator credit is\nuntouched — attribution is a fact about a build, not about how its author signs in.",
+        "description": "Unlink one identity from the caller's account.\n\nRemoving the last identity returns 409 so the account retains a sign-in method.\nExisting creator credits remain attached to the account.",
         "operationId": "account_identity_unlink",
         "security": [
           {
@@ -5121,7 +5121,7 @@
           "users"
         ],
         "summary": "Create Merge Code",
-        "description": "Offer this account up to be absorbed by another one you hold.\n\nRun this as the account you are giving up: it loses its public creator id to a permanent\nredirect, so minting the code is that side's consent. Redeem it as the account you are\nkeeping. The code is shown once and replaces any previous one.",
+        "description": "Create a code allowing another account to absorb this account.\n\nCreate the code while signed in to the account being given up, then redeem it\nas the account being kept. Completing the merge permanently redirects the old\ncreator ID. The code is shown on creation and replaces any previous code.",
         "operationId": "account_merge_code_create",
         "security": [
           {
@@ -6373,7 +6373,7 @@
           "users"
         ],
         "summary": "Clear Profile",
-        "description": "Reset another account's profile to empty, for staff handling abuse.\n\nDeliberately leaves the profile visible: `hidden` belongs to its owner, and a takedown that\nalso flipped it would take that decision away from them.",
+        "description": "Clear another account's profile content, for staff handling abuse.\n\nReset profile visibility to public. Creator aliases and linked identities\nare retained.",
         "operationId": "account_profile_clear",
         "security": [
           {
@@ -6561,7 +6561,7 @@
           "minecraft-authentication"
         ],
         "summary": "Create Installation",
-        "description": "Register a Paper server and return its plaintext secret exactly once.",
+        "description": "Register a Paper server and return its new plaintext secret.\n\nRetrying with the same Idempotency-Key can replay this response. Installation\nlistings omit the secret; rotate the credential if it is lost.",
         "operationId": "paper_installation_create",
         "security": [
           {
@@ -6883,7 +6883,7 @@
           "minecraft-authentication"
         ],
         "summary": "Rotate Installation",
-        "description": "Fence an owned installation's old credentials and return one replacement secret.",
+        "description": "Revoke an owned installation's old credential and return its replacement secret.",
         "operationId": "paper_installation_rotate",
         "security": [
           {
@@ -7513,7 +7513,7 @@
           "minecraft-authentication"
         ],
         "summary": "Start Paper Challenge",
-        "description": "Start player authorization bound to the authenticated Paper credential generation.",
+        "description": "Start player authorization bound to the authenticated Paper credential version.",
         "operationId": "paper_challenge_start",
         "security": [
           {
@@ -7963,7 +7963,7 @@
           "minecraft-authentication"
         ],
         "summary": "Start Fabric Challenge",
-        "description": "Start an anonymous Fabric challenge committed to a client-held S256 verifier.",
+        "description": "Start Fabric authorization using the client's S256 PKCE challenge.\n\nThe client keeps its verifier and supplies it when exchanging the approved\nchallenge for a player grant.",
         "operationId": "fabric_challenge_start",
         "security": [
           {}
@@ -8706,7 +8706,7 @@
           "notifications"
         ],
         "summary": "Get Preferences",
-        "description": "Return disabled defaults before the notification notice has been accepted.",
+        "description": "Return channel preferences, with disabled defaults until privacy consent is accepted.",
         "operationId": "notification_preferences_get",
         "security": [
           {
@@ -10817,7 +10817,7 @@
           "schematics"
         ],
         "summary": "Render Build Schematic",
-        "description": "Render a confirmed build's primary schematic and answer with the PNG.\n\nEvery camera parameter is optional and defaults to the deployment's own framing, so a\ncaller who wants \"the picture of this build\" gets the same recipe the durable queue\nrenders, served from its stored artifact. Anything else is rendered on the spot, which\ntakes as long as the engine takes.",
+        "description": "Return a PNG preview of a confirmed build's primary schematic.\n\nOmitted camera parameters use deployment defaults. Reuse a stored preview\nwhen its recipe matches; otherwise render it during this request.",
         "operationId": "build_schematic_render_get",
         "security": [
           {}
@@ -13524,7 +13524,7 @@
           "submissions"
         ],
         "summary": "Submit Draft",
-        "description": "Validate an owned draft and start retry-safe durable finalization.",
+        "description": "Validate a draft and request finalization.\n\nIf files are still processing or fields need correction, return preparation\nstate. Otherwise return the durable attempt that performs finalization.",
         "operationId": "submission_finalization_start",
         "security": [
           {
@@ -16092,6 +16092,7 @@
           "submissions"
         ],
         "summary": "History",
+        "description": "List revision proposals for a source message after checking the caller's access.",
         "operationId": "submission_revision_history",
         "security": [
           {
@@ -16200,6 +16201,7 @@
           "submissions"
         ],
         "summary": "Get Proposal",
+        "description": "Return a revision proposal after checking the caller's access.",
         "operationId": "submission_revision_get",
         "security": [
           {
@@ -16305,6 +16307,7 @@
           "submissions"
         ],
         "summary": "Match Proposal",
+        "description": "Match a proposal to a source-linked build and capture the diff for review.\n\nWith renew set, create a new proposal and retain the previous review.",
         "operationId": "submission_revision_match",
         "security": [
           {
@@ -16421,6 +16424,7 @@
           "submissions"
         ],
         "summary": "Approve Proposal",
+        "description": "Apply the reviewed diff if the build still matches its expected revision.\n\nAn already applied proposal returns its existing approval result.",
         "operationId": "submission_revision_approve",
         "security": [
           {
@@ -16619,7 +16623,7 @@
           "submissions"
         ],
         "summary": "Upload File",
-        "description": "Register a supplied source, or a new replacement identity, before resolving its old requirement.",
+        "description": "Register a supplied file, then discard the requirement it replaces if requested.\n\nUse a new source_id when replacing a file. The previous requirement is kept\nuntil the new upload has been registered successfully.",
         "operationId": "submission_supplied_file_upload",
         "security": [
           {
@@ -16960,7 +16964,7 @@
           "suggest"
         ],
         "summary": "Suggest",
-        "description": "Return ranked completions for a partially typed value.\n\nAn unknown source is a 404, because that is a bad URL. Anything else — a gated source the\ncaller cannot read, a provider that failed — is an empty list, matching what the other\nsurfaces do: a dropdown with nothing in it, not an error under a half-typed word.",
+        "description": "Return ranked completions for a partially typed value.\n\nUnknown sources return 404. Sources hidden from the caller and provider\nfailures return an empty list. Request validation errors still return errors.",
         "operationId": "suggestions_get",
         "security": [
           {}
@@ -17540,7 +17544,7 @@
           "creators"
         ],
         "summary": "Get Creator Profile",
-        "description": "Return a creator's public page, following permanent merge redirects.\n\nVisibility is applied in the domain, not here: `present_public_profile` is the one authority\non what a stranger sees, so this route cannot accidentally disagree with the bot about it.",
+        "description": "Return a creator's public profile, following account-merge redirects.\n\nThe account service applies profile and identity visibility before this route\nserializes the result.",
         "operationId": "creator_profile_get",
         "security": [
           {}
@@ -18509,7 +18513,7 @@
           "links"
         ],
         "title": "BuildDetail",
-        "description": "Stable item representation with build-specific facts.\n\nCategory-specific facts live under ``details``, a union discriminated by\n``category``, so a client reads a door's opening size from a door and never\nfrom a nullable field on a utility."
+        "description": "A build summary with category-specific details, restrictions, and media links.\n\nRead details.category to determine which fields are available. For example,\na door has door_dimensions; utility builds have no category-specific fields."
       },
       "BuildDetails": {
         "oneOf": [
@@ -18978,7 +18982,7 @@
           "website_url"
         ],
         "title": "BuildSponsor",
-        "description": "Immutable public sponsor metadata captured when the build was finalized."
+        "description": "Public sponsor details captured when the build was finalized."
       },
       "BuildStatusFilter": {
         "type": "string",
@@ -19856,7 +19860,7 @@
           "identities"
         ],
         "title": "CreatorProfileDetail",
-        "description": "A creator's public page.\n\n`hidden` is the shape switch: a hidden profile still serves `id`, `canonical_id` and\n`aliases`, because build credit is a fact about a build and a page that vanished would strand\nevery build crediting it. Everything else is null or empty in that case."
+        "description": "A creator's public profile, including the destination of an account merge.\n\nA hidden profile still includes id, canonical_id, and aliases so existing build\ncredits remain usable. Other profile details are null or empty."
       },
       "CreditedAliasDetail": {
         "properties": {
@@ -19996,7 +20000,7 @@
           "visible_closing_time"
         ],
         "title": "DoorDetails",
-        "description": "Facts owned by doors.\n\nThe headline ``opening_time`` and ``closing_time`` stay on the summary: the\ncard projection and the search grammar both already name them there, so\nrepeating them here would give one value two addresses in one payload."
+        "description": "Measurements and patterns specific to doors.\n\nBuildSummary already includes opening_time and closing_time. This section\nadds the visible timings and opening dimensions without repeating those fields."
       },
       "DoorPatch": {
         "properties": {
@@ -20107,7 +20111,7 @@
           "operations"
         ],
         "title": "DraftChangeRequest",
-        "description": "An atomic optimistic draft edit with retry-safe identity."
+        "description": "A group of field edits applied against an expected draft revision.\n\nReuse the same idempotency_key when retrying the same change. The base_revision\nlets the service detect another edit made since the client read the draft."
       },
       "DraftChangeResponse": {
         "properties": {
@@ -20264,7 +20268,7 @@
           "height"
         ],
         "title": "DraftMediaArtifactResponse",
-        "description": "Safe facts about one normalized visual artifact."
+        "description": "Dimensions and media type of one normalized image, video, or thumbnail."
       },
       "DraftMediaArtifactRole": {
         "type": "string",
@@ -20383,7 +20387,7 @@
           "artifacts"
         ],
         "title": "DraftMediaResponse",
-        "description": "Safe state for one upload without storage or normalization internals."
+        "description": "Upload status and normalized output metadata, excluding storage keys and worker details."
       },
       "DraftMediaStatus": {
         "type": "string",
@@ -20432,7 +20436,7 @@
           "issues"
         ],
         "title": "DraftPreparationResponse",
-        "description": "A retained draft request that has not produced an executable attempt."
+        "description": "A finalization request waiting for files or corrections before an attempt can run."
       },
       "DraftSchematicResponse": {
         "properties": {
@@ -21372,7 +21376,7 @@
           "is_public"
         ],
         "title": "IdentityDetail",
-        "description": "One identity linked to the caller's own account.\n\nCarries the internal `id` because that is the handle every write takes: an account can hold\ntwo identities from one provider once it has absorbed another account in a merge, so\n\"the Discord one\" is not a usable address."
+        "description": "One identity linked to the caller's account.\n\nUse id when editing an identity. An account may have several identities from\nthe same provider after a merge, so the provider alone does not identify it."
       },
       "IdentityProvider": {
         "type": "string",
@@ -21751,7 +21755,7 @@
           "expires_at"
         ],
         "title": "MergeCodeDetail",
-        "description": "A freshly minted, single-use merge code.\n\nThe plaintext appears here and nowhere else: persistence keeps only a digest, so a lost code\nis reminted rather than recovered."
+        "description": "A new single-use merge code and its expiry.\n\nThe account service stores only a digest. If the plaintext code is lost, create\na replacement rather than trying to retrieve it."
       },
       "MergePreviewDetail": {
         "properties": {
@@ -21985,7 +21989,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "NotificationPreferenceUpdate",
-        "description": "A complete pair of independently configurable notification channels."
+        "description": "Replacement settings for the web inbox and Discord direct messages.\n\nAn omitted channel defaults to disabled; this model is not a partial update."
       },
       "NotificationPreferencesDetail": {
         "properties": {
@@ -22015,7 +22019,7 @@
           "dm_suspended"
         ],
         "title": "NotificationPreferencesDetail",
-        "description": "Independent channel switches, and whether the account may use them yet.\n\n`consent_pending` is spelled as it is on `UserMe`: it is the same fact about the same one\nprivacy notice, and there is no notification-specific notice to report separately."
+        "description": "Channel preferences and the account's privacy-consent status.\n\nConsent_pending refers to the same notice as UserMe. Notifications do not have\na separate consent notice."
       },
       "NotificationSubscriptionCreate": {
         "properties": {
@@ -22051,7 +22055,7 @@
           "kind"
         ],
         "title": "NotificationSubscriptionCreate",
-        "description": "A creator, exact-record, or record-filter subscription request."
+        "description": "A subscription to a creator, a record competition, or a record filter.\n\nCreator and record subscriptions require subject_id and forbid filter.\nRecord-filter subscriptions require filter and forbid subject_id."
       },
       "NotificationSubscriptionDetail": {
         "properties": {
@@ -22826,7 +22830,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ProfileUpdateRequest",
-        "description": "A partial profile edit.\n\nOmitting a field leaves it alone; sending `null` clears it. Pydantic cannot express that\ndifference in the annotation alone, so `to_domain` reads `model_fields_set` — which is also\nwhy every field defaults to `None` rather than to a sentinel clients would have to send."
+        "description": "A partial profile edit.\n\nOmitted fields remain unchanged. Null clears text and avatar fields, empties\nlinks, and sets hidden to false. Conversion uses model_fields_set to distinguish\nomission from an explicit null."
       },
       "ProtocolCapabilities": {
         "properties": {
@@ -22891,7 +22895,7 @@
           "display_name"
         ],
         "title": "PublicIdentityDetail",
-        "description": "A linked identity the creator has chosen to publish.\n\nCarries no verification timestamp and no internal id: when it was verified is nobody else's\nbusiness, and the id is the handle used to change it."
+        "description": "A linked identity the creator has chosen to publish.\n\nInternal identity IDs and verification timestamps are omitted from this public\nrepresentation."
       },
       "RecordDetail": {
         "properties": {
@@ -23114,7 +23118,7 @@
           "metrics"
         ],
         "title": "RecordSearchEntry",
-        "description": "Projection facts for a matched computed record.\n\nEvery field here is derived by record computation rather than submitted by a user, so unlike\na build projection it carries no free text and can be served without hydration."
+        "description": "Record facts copied from the search index.\n\nThese values are returned without reloading the record or its holder build.\nThey reflect the last projection update and may lag behind current data."
       },
       "RecordSearchResult": {
         "properties": {
@@ -23571,7 +23575,7 @@
         },
         "type": "object",
         "title": "SanitizationCapabilities",
-        "description": "Artifact transformations whose availability is compatibility-relevant."
+        "description": "Supported artifact transformations advertised to clients."
       },
       "SchematicSize": {
         "properties": {
@@ -24498,7 +24502,7 @@
           "uuid"
         ],
         "title": "User",
-        "description": "A user model."
+        "description": "Minecraft Java UUID to associate with a verification code."
       },
       "UserMe": {
         "properties": {
@@ -24560,7 +24564,7 @@
           "profile"
         ],
         "title": "UserMe",
-        "description": "The caller's own account: who they are, how they sign in, and what they publish.\n\nThe identity list supports any number of Discord, Java, or future provider identities. The\nprevious shape flattened one Discord identity and one Java identity into four top-level fields,\nwhich could not describe a caller with two of either and implied Discord for callers with none."
+        "description": "The caller's account, linked sign-in identities, and profile.\n\nIdentities may include several entries from the same provider, or no entry from\na particular provider. Clients should not assume the account has Discord linked."
       },
       "ValidationError": {
         "properties": {
@@ -24894,7 +24898,7 @@
           "own_selection"
         ],
         "title": "VoteSessionDetail",
-        "description": "A vote session with aggregate-only ballot data."
+        "description": "Vote status, permitted totals, and the caller's own selection if present.\n\nOther voters' selections and identities are omitted. Tallies are null while\nthe session's visibility rules hide them."
       },
       "VoteSessionResult": {
         "type": "string",
@@ -24955,7 +24959,7 @@
           "net"
         ],
         "title": "VoteTallies",
-        "description": "Aggregate results which cannot identify individual voters."
+        "description": "Vote totals by option, with raw counts and weighted scores."
       },
       "VoteVisibility": {
         "type": "string",

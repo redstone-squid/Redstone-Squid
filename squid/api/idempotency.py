@@ -1,4 +1,11 @@
-"""FastAPI integration for durable mutation replay."""
+"""Let clients retry a mutation without running it again.
+
+An Idempotency-Key identifies a request within its caller's namespace. The route
+dependency reserves that key before the handler runs; the middleware stores the
+response before sending it. A later request with the same key and fingerprint
+receives the stored response. The fingerprint includes the original body bytes,
+so clients must resend the same representation, not merely equivalent JSON.
+"""
 
 import hashlib
 from dataclasses import dataclass
@@ -62,7 +69,11 @@ async def reserve_idempotent_request_for(
     caller: str,
     idempotency_key: str | None,
 ) -> None:
-    """Reserve a key in a server-derived caller namespace."""
+    """Reserve a mutation key, or raise IdempotencyReplay for a completed matching request.
+
+    Read-only methods and requests without a key are ignored. New reservations
+    are attached to request.state for the response-completion middleware.
+    """
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
@@ -92,7 +103,13 @@ async def replay_response(_request: Request, error: Exception) -> Response:
 
 
 class CompleteIdempotentResponseMiddleware:
-    """Buffer and durably complete responses for newly reserved requests."""
+    """Store a reserved request's response before sending it to the client.
+
+    Responses without a reservation pass through unchanged. Reserved responses
+    are buffered up to the configured limit; exceeding it raises RuntimeError.
+    Completion is shielded from cancellation so a successful mutation can still
+    retain its response after the client disconnects.
+    """
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -152,7 +169,11 @@ def assert_idempotency_completion_installed(app: FastAPI) -> None:
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:
-    """Identify the concrete mutation, including the resource within its route."""
+    """Hash the method, route, concrete URL path, query, content type, and body.
+
+    Length prefixes separate the components. Bodies and query strings are hashed
+    as received, so semantically equivalent JSON with different spacing differs.
+    """
     digest = hashlib.sha256()
     for value in (
         request.method.encode(),

@@ -78,11 +78,10 @@ export type AvatarDetail = {
 /**
  * BuildDetail
  *
- * Stable item representation with build-specific facts.
+ * A build summary with category-specific details, restrictions, and media links.
  *
- * Category-specific facts live under ``details``, a union discriminated by
- * ``category``, so a client reads a door's opening size from a door and never
- * from a nullable field on a utility.
+ * Read details.category to determine which fields are available. For example,
+ * a door has door_dimensions; utility builds have no category-specific fields.
  */
 export type BuildDetail = {
     /**
@@ -312,7 +311,7 @@ export type BuildSearchResult = {
 /**
  * BuildSponsor
  *
- * Immutable public sponsor metadata captured when the build was finalized.
+ * Public sponsor details captured when the build was finalized.
  */
 export type BuildSponsor = {
     /**
@@ -809,11 +808,10 @@ export type CreatorAliasDetail = {
 /**
  * CreatorProfileDetail
  *
- * A creator's public page.
+ * A creator's public profile, including the destination of an account merge.
  *
- * `hidden` is the shape switch: a hidden profile still serves `id`, `canonical_id` and
- * `aliases`, because build credit is a fact about a build and a page that vanished would strand
- * every build crediting it. Everything else is null or empty in that case.
+ * A hidden profile still includes id, canonical_id, and aliases so existing build
+ * credits remain usable. Other profile details are null or empty.
  */
 export type CreatorProfileDetail = {
     /**
@@ -913,11 +911,10 @@ export type Dimensions = {
 /**
  * DoorDetails
  *
- * Facts owned by doors.
+ * Measurements and patterns specific to doors.
  *
- * The headline ``opening_time`` and ``closing_time`` stay on the summary: the
- * card projection and the search grammar both already name them there, so
- * repeating them here would give one value two addresses in one payload.
+ * BuildSummary already includes opening_time and closing_time. This section
+ * adds the visible timings and opening dimensions without repeating those fields.
  */
 export type DoorDetails = {
     /**
@@ -1048,7 +1045,10 @@ export type DoorSubmission = {
 /**
  * DraftChangeRequest
  *
- * An atomic optimistic draft edit with retry-safe identity.
+ * A group of field edits applied against an expected draft revision.
+ *
+ * Reuse the same idempotency_key when retrying the same change. The base_revision
+ * lets the service detect another edit made since the client read the draft.
  */
 export type DraftChangeRequest = {
     /**
@@ -1114,7 +1114,7 @@ export type DraftListResponse = {
 /**
  * DraftMediaArtifactResponse
  *
- * Safe facts about one normalized visual artifact.
+ * Dimensions and media type of one normalized image, video, or thumbnail.
  */
 export type DraftMediaArtifactResponse = {
     role: DraftMediaArtifactRole;
@@ -1191,7 +1191,7 @@ export type DraftMediaListResponse = {
 /**
  * DraftMediaResponse
  *
- * Safe state for one upload without storage or normalization internals.
+ * Upload status and normalized output metadata, excluding storage keys and worker details.
  */
 export type DraftMediaResponse = {
     /**
@@ -1655,11 +1655,10 @@ export type HttpValidationError = {
 /**
  * IdentityDetail
  *
- * One identity linked to the caller's own account.
+ * One identity linked to the caller's account.
  *
- * Carries the internal `id` because that is the handle every write takes: an account can hold
- * two identities from one provider once it has absorbed another account in a merge, so
- * "the Discord one" is not a usable address.
+ * Use id when editing an identity. An account may have several identities from
+ * the same provider after a merge, so the provider alone does not identify it.
  */
 export type IdentityDetail = {
     /**
@@ -1877,10 +1876,10 @@ export type MediaKind = 'image' | 'video';
 /**
  * MergeCodeDetail
  *
- * A freshly minted, single-use merge code.
+ * A new single-use merge code and its expiry.
  *
- * The plaintext appears here and nowhere else: persistence keeps only a digest, so a lost code
- * is reminted rather than recovered.
+ * The account service stores only a digest. If the plaintext code is lost, create
+ * a replacement rather than trying to retrieve it.
  */
 export type MergeCodeDetail = {
     /**
@@ -2024,7 +2023,9 @@ export type MinecraftIdentityRefresh = {
 /**
  * NotificationPreferenceUpdate
  *
- * A complete pair of independently configurable notification channels.
+ * Replacement settings for the web inbox and Discord direct messages.
+ *
+ * An omitted channel defaults to disabled; this model is not a partial update.
  */
 export type NotificationPreferenceUpdate = {
     /**
@@ -2040,10 +2041,10 @@ export type NotificationPreferenceUpdate = {
 /**
  * NotificationPreferencesDetail
  *
- * Independent channel switches, and whether the account may use them yet.
+ * Channel preferences and the account's privacy-consent status.
  *
- * `consent_pending` is spelled as it is on `UserMe`: it is the same fact about the same one
- * privacy notice, and there is no notification-specific notice to report separately.
+ * Consent_pending refers to the same notice as UserMe. Notifications do not have
+ * a separate consent notice.
  */
 export type NotificationPreferencesDetail = {
     /**
@@ -2067,7 +2068,10 @@ export type NotificationPreferencesDetail = {
 /**
  * NotificationSubscriptionCreate
  *
- * A creator, exact-record, or record-filter subscription request.
+ * A subscription to a creator, a record competition, or a record filter.
+ *
+ * Creator and record subscriptions require subject_id and forbid filter.
+ * Record-filter subscriptions require filter and forbid subject_id.
  */
 export type NotificationSubscriptionCreate = {
     kind: SubscriptionKind;
@@ -2398,9 +2402,9 @@ export type ProfileLinkDetail = {
  *
  * A partial profile edit.
  *
- * Omitting a field leaves it alone; sending `null` clears it. Pydantic cannot express that
- * difference in the annotation alone, so `to_domain` reads `model_fields_set` — which is also
- * why every field defaults to `None` rather than to a sentinel clients would have to send.
+ * Omitted fields remain unchanged. Null clears text and avatar fields, empties
+ * links, and sets hidden to false. Conversion uses model_fields_set to distinguish
+ * omission from an explicit null.
  */
 export type ProfileUpdateRequest = {
     /**
@@ -2459,8 +2463,8 @@ export type ProtocolInterval = {
  *
  * A linked identity the creator has chosen to publish.
  *
- * Carries no verification timestamp and no internal id: when it was verified is nobody else's
- * business, and the id is the handle used to change it.
+ * Internal identity IDs and verification timestamps are omitted from this public
+ * representation.
  */
 export type PublicIdentityDetail = {
     provider: IdentityProvider;
@@ -2557,10 +2561,10 @@ export type RecordFilterInput = {
 /**
  * RecordSearchEntry
  *
- * Projection facts for a matched computed record.
+ * Record facts copied from the search index.
  *
- * Every field here is derived by record computation rather than submitted by a user, so unlike
- * a build projection it carries no free text and can be served without hydration.
+ * These values are returned without reloading the record or its holder build.
+ * They reflect the last projection update and may lag behind current data.
  */
 export type RecordSearchEntry = {
     /**
@@ -2693,7 +2697,7 @@ export type RendererControl = 'text' | 'number' | 'choice' | 'multi_choice' | 'd
 /**
  * SanitizationCapabilities
  *
- * Artifact transformations whose availability is compatibility-relevant.
+ * Supported artifact transformations advertised to clients.
  */
 export type SanitizationCapabilities = {
     /**
@@ -3194,7 +3198,7 @@ export type UploadCapabilities = {
 /**
  * User
  *
- * A user model.
+ * Minecraft Java UUID to associate with a verification code.
  */
 export type User = {
     /**
@@ -3206,11 +3210,10 @@ export type User = {
 /**
  * UserMe
  *
- * The caller's own account: who they are, how they sign in, and what they publish.
+ * The caller's account, linked sign-in identities, and profile.
  *
- * The identity list supports any number of Discord, Java, or future provider identities. The
- * previous shape flattened one Discord identity and one Java identity into four top-level fields,
- * which could not describe a caller with two of either and implied Discord for callers with none.
+ * Identities may include several entries from the same provider, or no entry from
+ * a particular provider. Clients should not assume the account has Discord linked.
  */
 export type UserMe = {
     /**
@@ -3398,7 +3401,10 @@ export type VotePollSummary = {
 /**
  * VoteSessionDetail
  *
- * A vote session with aggregate-only ballot data.
+ * Vote status, permitted totals, and the caller's own selection if present.
+ *
+ * Other voters' selections and identities are omitted. Tallies are null while
+ * the session's visibility rules hide them.
  */
 export type VoteSessionDetail = {
     /**
@@ -3446,7 +3452,7 @@ export type VoteStatus = 'open' | 'closed';
 /**
  * VoteTallies
  *
- * Aggregate results which cannot identify individual voters.
+ * Vote totals by option, with raw counts and weighted scores.
  */
 export type VoteTallies = {
     /**

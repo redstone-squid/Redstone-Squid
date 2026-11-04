@@ -1,7 +1,10 @@
 """Submission form and draft routes.
 
-The form describes fields and constraints; whether they become a Discord modal,
-an HTML form, or a CLI prompt is the client's decision.
+The form manifest describes fields and constraints; whether they become a
+Discord modal, an HTML form, or a CLI prompt is the client's decision. A draft
+stores answers against a particular manifest revision. Submitting it either
+reports required corrections or processing waits, or starts a durable
+finalization attempt that produces a build.
 """
 
 from dataclasses import dataclass
@@ -202,6 +205,12 @@ async def authenticated_submission_actor(
 
 
 def _submission_actor(caller: Caller) -> AuthenticatedSubmissionActor:
+    """Build submission identity from authenticated credentials and check consent.
+
+    Only browser, CLI, and Minecraft player credentials may submit. CLI and
+    Minecraft identities must include the identifiers required for their origin;
+    a Paper player also needs an installation ID.
+    """
     if caller.account_id is None or caller.kind not in {"account", "cli", "minecraft_player"}:
         raise AuthenticationError
     require_consented_account(caller)
@@ -495,7 +504,11 @@ async def submit_draft(
     finalization: Finalization,
     account_id: AccountId,
 ) -> SubmissionAttemptResponse | DraftPreparationResponse:
-    """Validate an owned draft and start retry-safe durable finalization."""
+    """Validate a draft and request finalization.
+
+    If files are still processing or fields need correction, return preparation
+    state. Otherwise return the durable attempt that performs finalization.
+    """
     snapshot = await finalization.submit(
         draft_id,
         account_id,

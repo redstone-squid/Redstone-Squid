@@ -62,10 +62,9 @@ _ALL_STATUSES = frozenset(Status)
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def get_me(accounts: Accounts, caller: UserCaller) -> UserMe:
-    """Return the authenticated user's own linked account.
+    """Return the caller's account, linked identities, and profile.
 
-    Keyed on `account_id`, not `discord_id`: a CLI device and a Minecraft player both carry a
-    perfectly good account and no Discord identity, and used to be refused their own account.
+    An account ID is required; the caller does not need a Discord identity.
     """
     if caller.account_id is None:
         raise AuthenticationError
@@ -95,8 +94,8 @@ async def grant_consent(
 ) -> UserMe:
     """Accept the current privacy notice for future writes.
 
-    A client that names the version it displayed is held to it: consent recorded against text the
-    user never saw is the failure that versioning the notice exists to prevent.
+    If a notice version is supplied, it must match the current version. This lets
+    clients detect that the displayed notice has become outdated.
     """
     if caller.account_id is None:
         raise AuthenticationError
@@ -183,9 +182,8 @@ async def set_identity_visibility(
 async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCaller) -> IdentityDetail:
     """Unlink one identity from the caller's account.
 
-    Refuses the last one with 409: every sign-in path resolves an account from a provider
-    subject, so an account with no identities is one nobody can reach again. Creator credit is
-    untouched — attribution is a fact about a build, not about how its author signs in.
+    Removing the last identity returns 409 so the account retains a sign-in method.
+    Existing creator credits remain attached to the account.
     """
     if caller.account_id is None:
         raise AuthenticationError
@@ -204,11 +202,11 @@ async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCa
     ),
 )
 async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCodeDetail:
-    """Offer this account up to be absorbed by another one you hold.
+    """Create a code allowing another account to absorb this account.
 
-    Run this as the account you are giving up: it loses its public creator id to a permanent
-    redirect, so minting the code is that side's consent. Redeem it as the account you are
-    keeping. The code is shown once and replaces any previous one.
+    Create the code while signed in to the account being given up, then redeem it
+    as the account being kept. Completing the merge permanently redirects the old
+    creator ID. The code is shown on creation and replaces any previous code.
     """
     if caller.account_id is None:
         raise AuthenticationError
@@ -305,10 +303,10 @@ async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) ->
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def clear_profile(account_id: int, accounts: Accounts) -> ProfileDetail:
-    """Reset another account's profile to empty, for staff handling abuse.
+    """Clear another account's profile content, for staff handling abuse.
 
-    Deliberately leaves the profile visible: `hidden` belongs to its owner, and a takedown that
-    also flipped it would take that decision away from them.
+    Reset profile visibility to public. Creator aliases and linked identities
+    are retained.
     """
     profile = await accounts.clear_profile(account_id)
     return ProfileDetail.from_domain(profile, await accounts.list_identities(account_id))

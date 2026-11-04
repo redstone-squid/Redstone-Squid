@@ -15,9 +15,7 @@ from squid.core.pagination import offset_page
 from squid.diagnostics.domain import MAX_REFERENCE_LENGTH
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
-# No router-level dependency: clearing every report is a distinct, more dangerous capability
-# than reading one, so each route declares the permission it actually needs instead of the GET
-# routes' `diagnostics.error.read` leaking onto the DELETE route below.
+# Reading and clearing reports require different permissions, declared per route.
 router = APIRouter(prefix="/diagnostics/errors", tags=["diagnostics"])
 
 WorkLostParam = Annotated[
@@ -54,8 +52,8 @@ async def list_error_reports(
 ) -> Page[ErrorReportSummary]:
     """List the most recent unexpired error reports, newest first.
 
-    Most reports are failures something recovered from, because capture follows the logs. Set
-    `work_lost` to see only the ones that permanently abandoned work.
+    Reports include failures that were caught and logged. Set work_lost to include
+    only failures that permanently abandoned work, such as a dead-lettered job.
     """
     reports = await error_reports.recent(limit=page_size, work_lost_only=work_lost)
     return render_page(offset_page(reports, offset=0, page_size=page_size), ErrorReportSummary.from_domain)
@@ -80,10 +78,10 @@ async def list_error_reports(
     ),
 )
 async def get_error_report(reference: ReferenceParam, error_reports: ErrorReports) -> ErrorReportDetail:
-    """Resolve a quoted reference to the failure behind it.
+    """Find a stored failure by its short reference or full correlation ID.
 
-    Accepts either width: the short form a Discord error card shows, and the full correlation ID
-    that appears in logs and in the `Request-Id` response header.
+    Short references appear in Discord error cards. Full IDs appear in logs and
+    the Request-Id response header.
     """
     report, matches = await error_reports.lookup(reference)
     return ErrorReportDetail.of(report, matches)

@@ -283,7 +283,11 @@ class FieldOperationRequest(StrictSchema):
 
 
 class DraftChangeRequest(StrictSchema):
-    """An atomic optimistic draft edit with retry-safe identity."""
+    """A group of field edits applied against an expected draft revision.
+
+    Reuse the same idempotency_key when retrying the same change. The base_revision
+    lets the service detect another edit made since the client read the draft.
+    """
 
     base_revision: int = Field(ge=0)
     client_instance_id: ClientInstanceIdentifier
@@ -465,7 +469,7 @@ class SubmissionAttemptResponse(StrictSchema):
 
 
 class DraftPreparationResponse(StrictSchema):
-    """A retained draft request that has not produced an executable attempt."""
+    """A finalization request waiting for files or corrections before an attempt can run."""
 
     draft_id: UUID
     draft_revision: int

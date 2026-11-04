@@ -11,10 +11,10 @@ from squid.notifications.models import InboxNotification, NotificationSubscripti
 
 
 class NotificationPreferencesDetail(BaseModel):
-    """Independent channel switches, and whether the account may use them yet.
+    """Channel preferences and the account's privacy-consent status.
 
-    `consent_pending` is spelled as it is on `UserMe`: it is the same fact about the same one
-    privacy notice, and there is no notification-specific notice to report separately.
+    Consent_pending refers to the same notice as UserMe. Notifications do not have
+    a separate consent notice.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -35,7 +35,10 @@ class NotificationPreferencesDetail(BaseModel):
 
 
 class NotificationPreferenceUpdate(BaseModel):
-    """A complete pair of independently configurable notification channels."""
+    """Replacement settings for the web inbox and Discord direct messages.
+
+    An omitted channel defaults to disabled; this model is not a partial update.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -83,7 +86,11 @@ class RecordFilterInput(BaseModel):
 
 
 class NotificationSubscriptionCreate(BaseModel):
-    """A creator, exact-record, or record-filter subscription request."""
+    """A subscription to a creator, a record competition, or a record filter.
+
+    Creator and record subscriptions require subject_id and forbid filter.
+    Record-filter subscriptions require filter and forbid subject_id.
+    """
 
     model_config = ConfigDict(extra="forbid")
 

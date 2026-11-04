@@ -49,6 +49,11 @@ class SchematicSummary(FromDomain[StoredSchematic]):
     @classmethod
     @override
     def from_domain(cls, schematic: StoredSchematic, /, *, download_url: str | None = None) -> Self:
+        """Render a published schematic with a URL obtained from the API router.
+
+        Raise ValueError if publication is not allowed, its license is missing,
+        or no download URL was supplied.
+        """
         analysis = schematic.analysis
         metrics = analysis.metrics
         license = schematic.publication.license

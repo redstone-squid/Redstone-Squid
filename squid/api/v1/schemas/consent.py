@@ -14,8 +14,7 @@ class PrivacyNoticeDetail(BaseModel):
 
     title: str
     body: str
-    """Paragraphs separated by blank lines. Plain text, never markup: it is rendered into a
-    Discord card, an HTML page and a terminal, and only one of those could parse anything else."""
+    """Plain text with blank lines between paragraphs, suitable for web, Discord, and terminal display."""
 
 
 class ConsentGrantRequest(BaseModel):
@@ -24,5 +23,4 @@ class ConsentGrantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: str | None = None
-    """Optional so an older client keeps working; supplied, it is checked against the published
-    version so a stale cached notice cannot record consent to text nobody read."""
+    """Version shown to the user. If supplied, it must match the currently published notice."""

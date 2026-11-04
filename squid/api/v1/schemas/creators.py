@@ -39,8 +39,8 @@ class CreditedAliasDetail(BaseModel):
 class PublicIdentityDetail(BaseModel):
     """A linked identity the creator has chosen to publish.
 
-    Carries no verification timestamp and no internal id: when it was verified is nobody else's
-    business, and the id is the handle used to change it.
+    Internal identity IDs and verification timestamps are omitted from this public
+    representation.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -68,11 +68,10 @@ class ProfileLinkDetail(BaseModel):
 
 
 class CreatorProfileDetail(BaseModel):
-    """A creator's public page.
+    """A creator's public profile, including the destination of an account merge.
 
-    `hidden` is the shape switch: a hidden profile still serves `id`, `canonical_id` and
-    `aliases`, because build credit is a fact about a build and a page that vanished would strand
-    every build crediting it. Everything else is null or empty in that case.
+    A hidden profile still includes id, canonical_id, and aliases so existing build
+    credits remain usable. Other profile details are null or empty.
     """
 
     model_config = ConfigDict(extra="forbid")

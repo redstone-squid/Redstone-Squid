@@ -66,6 +66,7 @@ _WRITE = contract(security=[WEB_WRITE, DEVICE], cli=transport_only())
 
 @router.get("/source/{message_id}", operation_id="submission_revision_history", openapi_extra=_READ)
 async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) -> list[RevisionProposalResponse]:
+    """List revision proposals for a source message after checking the caller's access."""
     require_consented_account(caller)
     return [
         RevisionProposalResponse.from_domain(item)
@@ -75,6 +76,7 @@ async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) 
 
 @router.get("/{proposal_id}", operation_id="submission_revision_get", openapi_extra=_READ)
 async def get_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RevisionProposalResponse:
+    """Return a revision proposal after checking the caller's access."""
     require_consented_account(caller)
     return RevisionProposalResponse.from_domain(await proposals.get(proposal_id, subject_for(caller)))
 
@@ -83,6 +85,10 @@ async def get_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Prop
 async def match_proposal(
     proposal_id: UUID, payload: RevisionMatchRequest, caller: CurrentCaller, proposals: Proposals
 ) -> RevisionProposalResponse:
+    """Match a proposal to a source-linked build and capture the diff for review.
+
+    With renew set, create a new proposal and retain the previous review.
+    """
     require_consented_account(caller)
     return RevisionProposalResponse.from_domain(
         await proposals.match(proposal_id, payload.build_id, subject_for(caller), renew=payload.renew)
@@ -91,5 +97,9 @@ async def match_proposal(
 
 @router.post("/{proposal_id}/approve", operation_id="submission_revision_approve", openapi_extra=_WRITE)
 async def approve_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RevisionProposalResponse:
+    """Apply the reviewed diff if the build still matches its expected revision.
+
+    An already applied proposal returns its existing approval result.
+    """
     require_consented_account(caller)
     return RevisionProposalResponse.from_domain(await proposals.approve(proposal_id, subject_for(caller)))

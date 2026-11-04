@@ -1,4 +1,10 @@
-"""Strict HTTP routes for browser-approved CLI device authorization."""
+"""Approve a CLI device in the browser, then issue sessions from its key proofs.
+
+Enrollment gives the CLI a device code and the user a code to approve in their
+signed-in browser. The CLI exchanges that approval and a signature for its first
+session. Later sessions use a fresh signed nonce from the enrolled device,
+without repeating browser approval. Device revocation invalidates its sessions.
+"""
 
 import hashlib
 from typing import Annotated, Protocol, cast
@@ -100,7 +106,7 @@ def get_cli_verification_uri(request: Request) -> AnyHttpUrl:
 
 
 async def current_cli_identity(caller: Annotated[Caller, Depends(current_caller)]) -> CliIdentity:
-    """Require an authenticated CLI session with its exact device provenance."""
+    """Require a CLI session and retain its account, device, and session IDs."""
     if (
         caller.kind != "cli"
         or caller.account_id is None
@@ -120,7 +126,11 @@ async def enforce_anonymous_cli_idempotency(
     request: Request,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
-    """Partition one-time anonymous responses by a digest of the observed peer."""
+    """Keep anonymous retries in a namespace derived from the client's IP address.
+
+    Before enrollment establishes a caller identity, different observed IP
+    addresses separate clients that happen to choose the same idempotency key.
+    """
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
     await reserve_idempotent_request_for(request, f"cli-anonymous:{peer_digest}", idempotency_key)

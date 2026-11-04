@@ -1,4 +1,12 @@
-"""Strict HTTP routes for Minecraft installation and player authorization."""
+"""Authorize Minecraft clients to act for a player's linked account.
+
+A Paper installation credential identifies a server, not a player. Paper and
+Fabric clients both start a player challenge, ask the user to approve its code
+in the browser, then exchange it for a player grant. Paper ties this exchange
+to its installation's credential version; Fabric proves possession of a PKCE
+verifier retained by the client. Browser routes also manage installations and
+revoke grants.
+"""
 
 import hashlib
 from typing import Annotated
@@ -86,7 +94,11 @@ async def enforce_paper_request_idempotency(
     installation: AuthenticatedPaper,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
-    """Partition one-time Paper responses by an authenticated credential generation."""
+    """Scope Paper retries to the installation and its current credential version.
+
+    Rotating the credential starts a new namespace, so a key used with the old
+    credential cannot replay its response under the replacement credential.
+    """
     caller = f"minecraft-installation:{installation.id}:{installation.credential_version}"
     await reserve_idempotent_request_for(request, caller, idempotency_key)
 
@@ -95,7 +107,7 @@ async def enforce_fabric_request_idempotency(
     request: Request,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
-    """Partition anonymous Fabric retries by the transport's observed network peer."""
+    """Scope anonymous Fabric retries to a digest of the client's observed IP address."""
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
     await reserve_idempotent_request_for(request, f"minecraft-fabric:{peer_digest}", idempotency_key)
@@ -122,7 +134,11 @@ async def create_installation(
     installations: MinecraftInstallations,
     account_id: BrowserAccountId,
 ) -> IssuedInstallationResponse:
-    """Register a Paper server and return its plaintext secret exactly once."""
+    """Register a Paper server and return its new plaintext secret.
+
+    Retrying with the same Idempotency-Key can replay this response. Installation
+    listings omit the secret; rotate the credential if it is lost.
+    """
     issued = await installations.register(
         owner_account_id=account_id,
         label=payload.label,
@@ -162,7 +178,7 @@ async def rotate_installation(
     installations: MinecraftInstallations,
     account_id: BrowserAccountId,
 ) -> IssuedInstallationResponse:
-    """Fence an owned installation's old credentials and return one replacement secret."""
+    """Revoke an owned installation's old credential and return its replacement secret."""
     issued = await installations.rotate(installation_id=installation_id, owner_account_id=account_id)
     return IssuedInstallationResponse.from_domain(issued)
 
@@ -223,7 +239,7 @@ async def start_paper_challenge(
     installation: AuthenticatedPaper,
     verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
-    """Start player authorization bound to the authenticated Paper credential generation."""
+    """Start player authorization bound to the authenticated Paper credential version."""
     challenge = await players.start_paper_challenge(installation=installation, java_uuid=payload.java_uuid)
     return ChallengeCreateResponse.from_domain(challenge, verification_uri=verification_uri)
 
@@ -260,7 +276,11 @@ async def start_fabric_challenge(
     players: MinecraftPlayerAuthorization,
     verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
-    """Start an anonymous Fabric challenge committed to a client-held S256 verifier."""
+    """Start Fabric authorization using the client's S256 PKCE challenge.
+
+    The client keeps its verifier and supplies it when exchanging the approved
+    challenge for a player grant.
+    """
     challenge = await players.start_fabric_challenge(
         java_uuid=payload.java_uuid,
         pkce_s256_challenge=payload.pkce_s256_challenge,

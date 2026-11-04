@@ -23,7 +23,7 @@ class ProtocolInterval(BaseModel):
         return self
 
     def supports(self, version: int) -> bool:
-        """Return whether a client protocol version overlaps this interval."""
+        """Return whether the protocol version lies within the inclusive interval."""
         return self.minimum <= version <= self.maximum
 
 
@@ -75,7 +75,7 @@ class RendererCapabilities(BaseModel):
 
 
 class SanitizationCapabilities(BaseModel):
-    """Artifact transformations whose availability is compatibility-relevant."""
+    """Supported artifact transformations advertised to clients."""
 
     model_config = ConfigDict(frozen=True)
 

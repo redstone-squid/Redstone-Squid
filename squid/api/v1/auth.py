@@ -18,14 +18,12 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 ProviderSlug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
 """One provider's URL segment. An unknown or unconfigured one is a 404 about the
-resource, not a credential failure: "this deployment has no GitHub login" is a fact."""
+resource, not a credential failure: "this deployment has no GitHub login" is a fact.
+"""
 
 
-# `/csrf` and `/logout` are declared before the templated routes on purpose. FastAPI
-# matches in declaration order, so `GET /{provider}` would otherwise swallow
-# `GET /csrf` -- and swallow it silently, since the request would still succeed, just as
-# a 404 for a provider named "csrf". `/logout` is POST and does not actually collide,
-# but is hoisted with it for symmetry. `tests/unit/api/test_auth_routes.py` pins this.
+# Declare /csrf before /{provider}: FastAPI matches routes in declaration order,
+# and would otherwise interpret "csrf" as a provider name.
 @router.get(
     "/csrf",
     response_model=CsrfTokenResponse,
@@ -123,6 +121,7 @@ async def browser_authorization_callback(
 
 
 def _validate_redirect(request: Request, redirect_to: str | None) -> None:
+    """Reject redirects outside local paths and configured CORS origins."""
     if redirect_to is None:
         return
     if redirect_to.startswith("/") and not redirect_to.startswith("//"):

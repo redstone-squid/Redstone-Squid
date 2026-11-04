@@ -1,7 +1,7 @@
-"""REST pagination parameters, the wire envelope, and the mapping between them.
+"""HTTP pagination parameters and response models.
 
-The application layer assembles pages (see `squid.core.pagination`); this module owns only what is
-HTTP about them -- the query parameters, the rejections they can earn, and the serialized shape.
+Application services assemble pages using `squid.core.pagination`. This module
+validates query parameters and converts those pages to JSON representations.
 """
 
 from collections.abc import Callable
@@ -60,9 +60,9 @@ def resolve_selector(
 ) -> PageSelector:
     """Resolve the mutually exclusive pagination parameters into one selector.
 
-    `keyset_allowed` is false when the caller asked for an ordering that identifiers do not address
-    -- a relevance ranking, or a sort on another column. Honouring an anchor there would page
-    through a different sequence than the one the anchor was taken from.
+    With no selector, start at offset zero. Supplying more than one selector raises
+    ValidationError. Set `keyset_allowed=False` for relevance ranking or another
+    ordering that cannot be paged by ID; after_id and before_id then raise too.
     """
     provided = [
         name
@@ -81,8 +81,8 @@ def resolve_selector(
 def parse_page_sort(value: str | None, *, allowed: frozenset[str], default: str) -> tuple[str, bool]:
     """Parse a `field` or `-field` sort parameter into a field and its descending flag.
 
-    Only allowlisted fields are accepted, so a sort can never name an unindexed column and turn a
-    listing into a sequential scan.
+    Use `default` when no value is supplied. Fields outside `allowed` raise
+    ValidationError; callers choose that set to match the ordering they support.
     """
     raw = default if value is None else value
     field = raw.removeprefix("-")

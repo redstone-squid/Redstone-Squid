@@ -1,4 +1,10 @@
-"""Strict streaming HTTP routes for account-owned draft media."""
+"""Upload draft images and videos, then expose their processing status.
+
+The upload route checks draft ownership before streaming bytes to a private
+temporary file. Registration retains the source for background normalization;
+the response reports the job's state, not a published media URL. These uploads
+enforce their own byte limits because they bypass the general body buffer.
+"""
 
 import logging
 import os
@@ -114,7 +120,7 @@ async def upload_draft_media(
 
 @contextmanager
 def _private_upload_directory() -> Iterator[Path]:
-    """Own one private upload tree and log best-effort teardown on every exit."""
+    """Create a private staging directory, then remove it on exit and log cleanup failures."""
     directory = Path(tempfile.mkdtemp(prefix="squid-media-upload-"))
     try:
         directory.chmod(0o700)
@@ -211,6 +217,7 @@ async def discard_draft_media(
 
 
 def _source_content_type(request: Request, kind: MediaKind) -> str:
+    """Require one ASCII media type matching the upload kind, with no parameters."""
     values = _raw_header_values(request, b"content-type")
     if len(values) != 1:
         reason = "content_type_required_once"
@@ -228,6 +235,11 @@ def _source_content_type(request: Request, kind: MediaKind) -> str:
 
 
 def _declared_content_length(request: Request, max_bytes: int) -> int:
+    """Require one positive Content-Length within the upload limit.
+
+    Transfer-Encoding is rejected, and Content-Encoding may only be identity.
+    Compare the decimal text to the limit before converting it to an integer.
+    """
     if _raw_header_values(request, b"transfer-encoding"):
         reason = "transfer_encoding_not_supported"
         raise DraftMediaRequestError(reason)
@@ -264,6 +276,12 @@ async def _stream_to_private_file(
     content_length: int,
     max_bytes: int,
 ) -> None:
+    """Create a private file and stream exactly content_length bytes into it.
+
+    Reject excess or missing bytes and enforce max_bytes independently. Wait for
+    each thread write to finish before closing the descriptor, even if cancelled.
+    The caller owns cleanup of the file, including partial writes on failure.
+    """
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(destination, flags, 0o600)
     received = 0
@@ -284,6 +302,7 @@ async def _stream_to_private_file(
 
 
 def _write_all(descriptor: int, data: bytes) -> None:
+    """Write the complete buffer, retrying partial OS writes."""
     remaining = memoryview(data)
     while remaining:
         written = os.write(descriptor, remaining)

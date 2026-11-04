@@ -1,4 +1,11 @@
-"""Distributed sliding-window abuse controls for the HTTP API."""
+"""Limit HTTP traffic by recent request counts, shared through Redis when available.
+
+A policy gives a request limit and rolling time window; each caller or IP address
+has its own history for that policy. Middleware checks the IP quota before
+authentication. A route dependency then checks caller and operation-specific
+quotas together. The IP check has already consumed capacity even if a later
+check rejects the request. Both stages contribute to the response headers.
+"""
 
 import asyncio
 import hashlib
@@ -135,6 +142,7 @@ class RateLimitState:
     policy: RateLimitPolicy
     remaining: int
     reset_after: int
+    """Seconds until the oldest request leaves the window, or a full window if empty."""
     blocked: bool = False
 
 
@@ -147,7 +155,7 @@ class RateLimitDecision:
 
     @property
     def retry_after(self) -> int:
-        """Return when every policy that blocked the request has capacity."""
+        """Return the longest wait in seconds among blocking policies, or one if none blocked."""
         return max((state.reset_after for state in self.states if state.blocked), default=1)
 
 
@@ -196,13 +204,22 @@ class ApiRateLimitPolicies:
 
 
 class RateLimiter(Protocol):
-    """Atomic multi-policy limiter boundary."""
+    """Check all policies together and consume capacity only if all allow the request.
+
+    Each policy and identity pair must appear at most once in a check. Returned
+    states follow request order. An empty sequence is allowed without consumption.
+    """
 
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision: ...
 
 
 class LocalSlidingWindowRateLimiter(RateLimiter):
-    """Bounded process-local limiter used as a Redis shadow and fallback."""
+    """Track recent requests in this process for Redis fallback enforcement.
+
+    Keep at most `max_keys` policy/identity pairs. Adding another pair evicts the
+    least recently used one and loses its history, so this is a bounded fallback
+    rather than a substitute for shared enforcement across processes.
+    """
 
     def __init__(
         self,
@@ -293,7 +310,12 @@ class RedisSlidingWindowRateLimiter(RateLimiter):
 
 
 class DistributedRateLimiter(RateLimiter):
-    """Prefer Redis while maintaining a conservative process-local shadow."""
+    """Use Redis when available and retain local request history for outages.
+
+    A Redis rejection returns immediately. A Redis acceptance must also pass the
+    local check, so local history can reject requests while Redis recovers. During
+    an outage, each process enforces its own limits until a retry succeeds.
+    """
 
     def __init__(
         self,
@@ -315,7 +337,7 @@ class DistributedRateLimiter(RateLimiter):
 
     @override
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
-        """Return a Redis decision, or the local shadow decision while degraded."""
+        """Return a rejection from either backend, or Redis state when both accept."""
         if self._redis is None:
             return self._record(await self._local.check(requests), backend="local")
 
@@ -447,7 +469,7 @@ async def enforce_route_rate_limits(
     request: Request,
     caller: Annotated[Caller, Depends(current_caller)],
 ) -> None:
-    """Apply authenticated, mutation, and vote quotas to a matched API route."""
+    """Apply caller quotas and any write, suggestion, render, or authorization quota for this route."""
     limiter, policies = _limiter_state(request)
     checks: list[RateLimitRequest] = []
     identity = caller.subject if caller.kind != "anonymous" else _client_identity(request)
@@ -467,8 +489,8 @@ async def enforce_route_rate_limits(
     if caller.kind != "anonymous" and route_path == _VOTE_WRITE_PATH:
         checks.append(RateLimitRequest(policies.vote, identity))
     if route_path == _SUGGEST_PATH:
-        # Its own bucket in both directions: one user typing must not exhaust their read quota,
-        # and a client that forgets to debounce must not exhaust everyone else's.
+        # Limit suggestion traffic separately as well as counting it against
+        # the authenticated caller's general quota.
         checks.append(RateLimitRequest(policies.suggest, identity))
     if route_path == _RENDER_PATH:
         # A read by HTTP method, but each miss occupies the native engine for seconds, so it

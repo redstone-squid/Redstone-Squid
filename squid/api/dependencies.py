@@ -114,7 +114,7 @@ def get_minecraft_player_authorization(services: Services) -> PlayerAuthorizatio
 
 
 async def get_draft_attachments(services: Services) -> DraftAttachmentService:
-    """Return the attachment boundary only when this API enables media jobs."""
+    """Return draft attachment services, or raise DraftMediaUnavailableError if media jobs are disabled."""
     attachments = draft_attachment_service(services.submission_drafts, services.media_jobs)
     if attachments is None:
         raise DraftMediaUnavailableError

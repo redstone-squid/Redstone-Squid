@@ -1,4 +1,10 @@
-"""Cross-client resolution of retained supplied-file requirements."""
+"""Track files a draft still needs before it can be finalized.
+
+Each supplied-file requirement has a source ID that remains visible while the
+file is missing, registered, or explicitly discarded. Replacing a file registers
+the new source before discarding the old requirement, so a failed upload leaves
+the outstanding work visible to every client editing the draft.
+"""
 
 import tempfile
 from pathlib import Path
@@ -67,7 +73,11 @@ async def upload_file(
     filename: Annotated[str, Query(min_length=1, max_length=255)],
     replaces: UUID | None = None,
 ) -> list[SuppliedFileResponse]:
-    """Register a supplied source, or a new replacement identity, before resolving its old requirement."""
+    """Register a supplied file, then discard the requirement it replaces if requested.
+
+    Use a new source_id when replacing a file. The previous requirement is kept
+    until the new upload has been registered successfully.
+    """
     if replaces == source_id:
         message = "A replacement requires a new source identifier."
         raise ValidationError(message)
@@ -87,6 +97,7 @@ async def upload_file(
 
 
 async def _receive(request: Request, path: Path) -> None:
+    """Stream a supplied file to disk within the size limit and a 60-second timeout."""
     size = 0
     with anyio.fail_after(60), path.open("wb") as output:
         async for chunk in request.stream():

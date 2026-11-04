@@ -1,9 +1,8 @@
-"""Deterministic postprocessing for the public OpenAPI and CLI capability contract.
+"""Publish route metadata and shared definitions in the OpenAPI document.
 
-Per-operation metadata (security, CLI classification, required scopes, response links) is
-declared on each route via `squid.api.contract.contract()`. What is left here is the
-cross-cutting, table-free residue: document-level security scheme and header definitions, and
-two document-wide passes that would be pure repetition if every route did them itself.
+Routes declare their security requirements and CLI metadata through `contract()`.
+This module adds shared security schemes and response headers, then replaces
+FastAPI's inferred security requirements with each route's explicit declaration.
 """
 
 from typing import Any, cast
@@ -17,7 +16,7 @@ _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
 
 def install_openapi_contract(app: FastAPI) -> None:
-    """Install deterministic schema generation with permanent operation metadata."""
+    """Validate route declarations and install cached OpenAPI generation with shared definitions."""
     validate_contract(app)
 
     def custom_openapi() -> dict[str, Any]:

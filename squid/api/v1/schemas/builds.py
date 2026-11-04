@@ -148,10 +148,6 @@ class Dimensions(BaseModel):
     depth: int | None
 
 
-# The internal `build_tag_assignments.provenance` column keeps its name for now:
-# renaming it reaches the tags repository, the builds mapping, the taxonomy
-# backfill, and a migration, for a word no client ever sees. `source` is the
-# replacement if the ban is meant repo-wide, and that is its own commit.
 class BuildTag(BaseModel):
     """A tag on a build, without who applied it or how."""
 
@@ -266,7 +262,7 @@ class BuildLinks(BaseModel):
 
 
 class BuildSponsor(BaseModel):
-    """Immutable public sponsor metadata captured when the build was finalized."""
+    """Public sponsor details captured when the build was finalized."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -278,11 +274,10 @@ class BuildSponsor(BaseModel):
 
 
 class DoorDetails(BaseModel):
-    """Facts owned by doors.
+    """Measurements and patterns specific to doors.
 
-    The headline ``opening_time`` and ``closing_time`` stay on the summary: the
-    card projection and the search grammar both already name them there, so
-    repeating them here would give one value two addresses in one payload.
+    BuildSummary already includes opening_time and closing_time. This section
+    adds the visible timings and opening dimensions without repeating those fields.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -341,11 +336,10 @@ def _details(build: Build) -> BuildDetails:
 
 
 class BuildDetail(BuildSummary):
-    """Stable item representation with build-specific facts.
+    """A build summary with category-specific details, restrictions, and media links.
 
-    Category-specific facts live under ``details``, a union discriminated by
-    ``category``, so a client reads a door's opening size from a door and never
-    from a nullable field on a utility.
+    Read details.category to determine which fields are available. For example,
+    a door has door_dimensions; utility builds have no category-specific fields.
     """
 
     details: BuildDetails
@@ -389,6 +383,7 @@ class BuildDetail(BuildSummary):
 
 
 def _preview(build: Build) -> BuildPreview | None:
+    """Return the first valid HTTPS render URL, falling back to image URLs."""
     sources: tuple[tuple[Literal["render", "image"], tuple[str, ...]], ...] = (
         ("render", build.render_urls),
         ("image", build.image_urls),

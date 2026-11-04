@@ -41,10 +41,10 @@ class SearchSuggestions(BaseModel):
 
 
 class RecordSearchEntry(BaseModel):
-    """Projection facts for a matched computed record.
+    """Record facts copied from the search index.
 
-    Every field here is derived by record computation rather than submitted by a user, so unlike
-    a build projection it carries no free text and can be served without hydration.
+    These values are returned without reloading the record or its holder build.
+    They reflect the last projection update and may lag behind current data.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -40,15 +40,15 @@ class AvatarDetail(BaseModel):
     provider: IdentityProvider
     url: str | None
     """Null when the provider cannot supply one yet, such as a Discord identity whose avatar
-    hash has not been observed since it was linked."""
+    hash has not been observed since it was linked.
+    """
 
 
 class IdentityDetail(BaseModel):
-    """One identity linked to the caller's own account.
+    """One identity linked to the caller's account.
 
-    Carries the internal `id` because that is the handle every write takes: an account can hold
-    two identities from one provider once it has absorbed another account in a merge, so
-    "the Discord one" is not a usable address.
+    Use id when editing an identity. An account may have several identities from
+    the same provider after a merge, so the provider alone does not identify it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -85,7 +85,8 @@ class ProfileDetail(BaseModel):
     links: list[ProfileLinkDetail]
     hidden: bool
     """Whether the public creator page is withheld. A hidden profile still serves its aliases and
-    build credits, so builds stay attributable."""
+    build credits, so builds stay attributable.
+    """
 
     avatar: AvatarDetail | None
 
@@ -111,11 +112,10 @@ class ProfileDetail(BaseModel):
 
 
 class UserMe(BaseModel):
-    """The caller's own account: who they are, how they sign in, and what they publish.
+    """The caller's account, linked sign-in identities, and profile.
 
-    The identity list supports any number of Discord, Java, or future provider identities. The
-    previous shape flattened one Discord identity and one Java identity into four top-level fields,
-    which could not describe a caller with two of either and implied Discord for callers with none.
+    Identities may include several entries from the same provider, or no entry from
+    a particular provider. Clients should not assume the account has Discord linked.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -154,9 +154,9 @@ class UserMe(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     """A partial profile edit.
 
-    Omitting a field leaves it alone; sending `null` clears it. Pydantic cannot express that
-    difference in the annotation alone, so `to_domain` reads `model_fields_set` — which is also
-    why every field defaults to `None` rather than to a sentinel clients would have to send.
+    Omitted fields remain unchanged. Null clears text and avatar fields, empties
+    links, and sets hidden to false. Conversion uses model_fields_set to distinguish
+    omission from an explicit null.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -227,10 +227,10 @@ class MinecraftIdentityRefresh(BaseModel):
 
 
 class MergeCodeDetail(BaseModel):
-    """A freshly minted, single-use merge code.
+    """A new single-use merge code and its expiry.
 
-    The plaintext appears here and nowhere else: persistence keeps only a digest, so a lost code
-    is reminted rather than recovered.
+    The account service stores only a digest. If the plaintext code is lost, create
+    a replacement rather than trying to retrieve it.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -76,9 +76,8 @@ async def get_schematic_content(
     """Download explicitly published original bytes from a confirmed build."""
     await build_queries.get_public(build_id)
     download = await schematics.public_download(build_id, schematic_id)
-    # The stem stays server-generated so no user-supplied filename reaches a response
-    # header; only the extension follows the stored container, which used to be `.schem`
-    # for all five formats.
+    # Generate the filename from IDs and the known format so user-supplied names
+    # cannot introduce characters into the response header.
     filename = f"build-{build_id}-schematic-{schematic_id}.{download.source_format.value}"
     return Response(
         content=download.content,
@@ -122,12 +121,10 @@ async def render_build_schematic(
     pitch: Annotated[float | None, Query(ge=-90, le=90)] = None,
     zoom: Annotated[float | None, Query(gt=0, le=16)] = None,
 ) -> Response:
-    """Render a confirmed build's primary schematic and answer with the PNG.
+    """Return a PNG preview of a confirmed build's primary schematic.
 
-    Every camera parameter is optional and defaults to the deployment's own framing, so a
-    caller who wants "the picture of this build" gets the same recipe the durable queue
-    renders, served from its stored artifact. Anything else is rendered on the spot, which
-    takes as long as the engine takes.
+    Omitted camera parameters use deployment defaults. Reuse a stored preview
+    when its recipe matches; otherwise render it during this request.
     """
     await build_queries.get_public(build_id)
     rendered = await schematics.render_now(

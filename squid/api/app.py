@@ -1,4 +1,4 @@
-"""Simple FastAPI server to generate verification codes for users."""
+"""HTTP API for the build catalogue, submissions, accounts, and moderation."""
 
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -86,7 +86,7 @@ async def ready(request: Request, response: Response) -> dict[str, str]:
 
 
 class User(BaseModel):
-    """A user model."""
+    """Minecraft Java UUID to associate with a verification code."""
 
     uuid: UUID
 
@@ -131,7 +131,12 @@ def create_api_app(
     config: ApiProcessConfig | None = None,
     config_factory: ConfigFactory = load_api_process_config,
 ) -> FastAPI:
-    """Create an API application with an explicitly owned runtime."""
+    """Create the API and register its routes, middleware, and lifecycle.
+
+    Configuration and services are loaded when the ASGI lifespan starts. The
+    lifespan owns the runtime, background tasks, and rate limiter, and closes
+    them on shutdown. Passing factories lets tests supply their own services.
+    """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -180,8 +185,8 @@ def create_api_app(
     assert_idempotency_completion_installed(api)
     api.add_middleware(BoundedRequestBodyMiddleware, routes=api.routes)
     api.add_middleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES)
-    # Added last of the unconditional stack so it is outermost: it stamps Request-Id onto rate-limit
-    # rejections and idempotency replays alike, and its binding is visible to every inner layer.
+    # Wrap the rate limiter and replay middleware so their responses receive a
+    # Request-Id too. Inner handlers use the same ID when recording failures.
     api.add_middleware(RequestContextMiddleware)
     api.add_middleware(LocaleContextMiddleware)
     resolved_for_middleware = config

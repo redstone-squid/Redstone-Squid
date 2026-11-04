@@ -1,10 +1,9 @@
 """Per-route declarations for the public OpenAPI and CLI capability contract.
 
-Each route declares its own security, CLI classification, required scopes, and response
-links through `contract()` and its helpers, instead of a central table keyed by path and
-method. `validate_contract` replaces the old table's build-time uniqueness checks: it walks
-the assembled application and raises when a route ships without contract metadata, or when
-that metadata is internally inconsistent.
+Each route uses `contract()` to tell clients which credentials and permission
+scopes it accepts, how it appears in the CLI, and which operations its responses
+link to. These declarations describe the API; route dependencies enforce access.
+Application construction checks the declarations before publishing OpenAPI.
 """
 
 from collections.abc import Mapping, Sequence
@@ -19,13 +18,11 @@ type SecurityRequirement = dict[str, list[str]]
 type CliClassification = Literal["command", "browser-only", "transport-only", "internal", "compatibility-alias"]
 
 SECURITY_PLACEHOLDER_KEY: Final = "x-squid-security"
-"""Deep-merged onto the operation by `openapi_extra`, then renamed to `security` by the
-generic postprocess pass in `squid/api/openapi.py`. Never published under this name.
+"""Temporary key for security requirements before OpenAPI postprocessing.
 
-`security` itself cannot be used directly: 73 operations already carry a FastAPI-generated
-`security: [{"ApiCredential": []}]` from `Security(_authorization)` in `current_caller`, and
-`openapi_extra`'s deep merge concatenates lists instead of replacing them -- writing under
-`security` here would append to, not replace, that generated alternative.
+FastAPI merges lists from `openapi_extra` with generated lists. Using `security`
+directly would append requirements to those inferred from dependencies, rather
+than replace them. The postprocessor renames this key after the merge.
 """
 
 _UNSAFE_METHODS: Final = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -58,17 +55,17 @@ def cli_command(
 
 
 def browser_only() -> dict[str, Any]:
-    """Declare a route reachable only from a signed-in browser session."""
+    """Classify a browser workflow that has no standalone CLI command."""
     return {"classification": "browser-only"}
 
 
 def transport_only() -> dict[str, Any]:
-    """Declare a route with no CLI-facing classification of its own."""
+    """Classify a supporting route that has no standalone CLI command."""
     return {"classification": "transport-only"}
 
 
 def internal(rationale: str) -> dict[str, Any]:
-    """Declare an operational route that is not part of the public contract."""
+    """Classify an operational route and explain its exclusion from CLI commands."""
     return {"classification": "internal", "rationale": rationale}
 
 

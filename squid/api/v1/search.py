@@ -28,8 +28,8 @@ from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScop
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/search", tags=["search"])
 
-# Anonymous callers see only confirmed builds. This is a transport-set SearchRequest field rather
-# than a query rewrite, so `?q=status:pending` is ANDed to the empty set instead of bypassing it.
+# Public search always restricts results to confirmed builds. This separate filter
+# also applies when the query itself asks for another status.
 PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
 
 
@@ -113,13 +113,10 @@ async def search(
 
 
 def build_hit_id(source_id: str) -> int:
-    """Parse the build identifier a build projection is keyed by.
+    """Parse the build ID stored in a search hit.
 
-    An unparsable projection key is the index lying about itself, not a bad
-    request: the caller supplied a query, and nothing they could send would fix
-    this. It used to raise `ValidationError`, so a stale index blamed the caller
-    with a 400. `hydrate_builds` already logs the milder version of the same
-    drift, where the key parses but the build is gone.
+    An invalid ID raises DataIntegrityError because it indicates a broken search
+    index, not a query the caller can correct.
     """
     try:
         return int(source_id)
@@ -129,10 +126,10 @@ def build_hit_id(source_id: str) -> int:
 
 
 async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:
-    """Load authoritative builds for build hits, logging any the projection outlived.
+    """Load current build rows for search hits and log any missing rows.
 
-    Build projections carry a description that falls back to submitter free text and drift from
-    the canonical build row, so build matches are always rendered from `BuildSummary` instead.
+    Build descriptions and other facts may have changed since indexing. Render
+    build results from these rows rather than copying the search projection.
     """
     hit_ids = [build_hit_id(hit.source_id) for hit in hits if hit.resource_kind == "build"]
     if not hit_ids:

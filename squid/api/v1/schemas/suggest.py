@@ -56,7 +56,7 @@ class SuggestionPage(BaseModel):
 
     source: str
     revision: int | None
-    """Content revision of an enumerable source, matching the response `ETag`."""
+    """Content revision of an enumerable source; the ETag contains this number in hexadecimal."""
 
     replacement: SuggestionReplacement | None
     """Present when the value completes part of the query rather than all of it."""

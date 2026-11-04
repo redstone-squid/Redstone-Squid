@@ -34,7 +34,7 @@ class VoteOptionSummary(BaseModel):
 
 
 class VoteTallies(BaseModel):
-    """Aggregate results which cannot identify individual voters."""
+    """Vote totals by option, with raw counts and weighted scores."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -70,7 +70,11 @@ class OwnVoteSelection(BaseModel):
 
 
 class VoteSessionDetail(BaseModel):
-    """A vote session with aggregate-only ballot data."""
+    """Vote status, permitted totals, and the caller's own selection if present.
+
+    Other voters' selections and identities are omitted. Tallies are null while
+    the session's visibility rules hide them.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
