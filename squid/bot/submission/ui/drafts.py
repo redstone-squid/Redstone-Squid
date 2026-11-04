@@ -25,7 +25,12 @@ from squid.topics import resource_topic
 
 
 class DraftEditorScreen(sd.Screen):
-    """A private editor that reloads persisted facts and reauthorizes each write."""
+    """Edit a saved draft using its pinned form manifest.
+
+    Each field change is persisted immediately through the draft service, which
+    checks access and revision. Submission requests finalization; the same screen
+    reloads attachment and job state to show progress or issues needing correction.
+    """
 
     audience = "personal"
     timeout = 600
@@ -219,6 +224,7 @@ class DraftEditorScreen(sd.Screen):
         if field.value_kind is ValueKind.STRING_LIST:
             current = self.draft.snapshot.answers.get(field.id, [])
             visible = {option.value for option in self.options[self.option_page * 25 : (self.option_page + 1) * 25]}
+            # A choice event replaces only this page; keep selections from the other pages.
             retained = [item for item in current if item not in visible] if isinstance(current, list) else []
             value = [*retained, *event.selected]
         elif field.value_kind is ValueKind.BOOLEAN:
@@ -232,6 +238,7 @@ class DraftEditorScreen(sd.Screen):
         if field is None:
             return
         field_id = field.id
+        # Hold the revision seen when the modal opened so a later edit cannot be overwritten silently.
         base_revision = self.draft.snapshot.revision
         value = self.draft.snapshot.answers.get(field_id, field.default)
 

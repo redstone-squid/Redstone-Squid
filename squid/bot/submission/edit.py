@@ -1,4 +1,4 @@
-"""A cog with commands to editing builds."""
+"""Open build editors from Discord messages and optional prefilled values."""
 
 from typing import TYPE_CHECKING, Self
 
@@ -39,10 +39,10 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         creators: str | None = None,
         notes: str | None = None,
     ) -> None:
-        """Edit a build. Whatever you fill in is staged; the workspace opens for the rest.
+        """Stage supplied values and open an editor; this helper is not a registered command.
 
-        Not registered as a command since `26002d83`; kept for the staging logic until the
-        slash form returns.
+        A supplied restriction list replaces every restriction category. Reject fields
+        that do not apply to the build, leaving persistence to the editor's review step.
         """
         request = await self.ui.request(interaction)
         await request.defer("private")
@@ -67,9 +67,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             if value is not None
         }
         if restrictions is not None:
-            # One option replaces all four buckets, the same way `/build submit` reads one:
-            # which bucket a restriction belongs in is a fact about the restriction, not a
-            # decision the person editing should have to make.
+            # Use taxonomy categories so the caller can supply one combined restriction list.
             buckets = await self.builds.sort_restrictions(split_values(restrictions))
             staged["wiring_placement_restrictions"] = ", ".join(buckets["wiring-placement"])
             staged["animated_restrictions"] = ", ".join(buckets["animated"])
@@ -78,8 +76,6 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
 
         inapplicable = [attribute for attribute, value in staged.items() if not screen.stage(attribute, value)]
         if inapplicable:
-            # Dropping a typed option silently is the failure mode this command was merged to
-            # end, so a door option on a build with no door is a refusal rather than a no-op.
             fields = ", ".join(sorted(inapplicable))
             await request.respond(
                 error_node(
@@ -98,8 +94,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if message.author.id != self.bot.user.id:  # type: ignore
             return text_node(tr(t"This does not look like a build."))
 
-        # Which build a card shows is a property of the post, not of the message: the
-        # same message row is just a fact about a Discord message.
+        # The post mapping identifies the build; a message record alone has no resource association.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
             return text_node(tr(t"This does not look like a build."))

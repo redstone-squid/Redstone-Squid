@@ -1,4 +1,4 @@
-"""Portable field specifications for build submission and editing."""
+"""Typed field definitions and locally staged values for the existing-build editor."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -69,7 +69,11 @@ class BuildFieldSpec[ValueT]:
 
 @dataclass(slots=True)
 class BoundBuildField[ValueT]:
-    """One screen-local value bound from a portable build field specification."""
+    """A parsed editor value and its text, held locally until the screen saves a patch.
+
+    modified records whether staging has succeeded; returning to the original value
+    does not clear it. Parsing errors keep the last accepted value and text intact.
+    """
 
     spec: BuildFieldSpec[ValueT]
     value: ValueT

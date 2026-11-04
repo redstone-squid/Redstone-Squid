@@ -25,7 +25,7 @@ def invalid_web_urls(values: Iterable[str]) -> tuple[str, ...]:
 
 
 def format_invalid_values(values: Iterable[str], *, maximum: int = 500) -> str:
-    """Render offending values deterministically inside a Discord-safe character budget."""
+    """Quote values, replace embedded backticks, and truncate to the requested character budget."""
     if maximum < 2:
         msg = "Invalid-value display budget must leave room for an ellipsis."
         raise ValueError(msg)

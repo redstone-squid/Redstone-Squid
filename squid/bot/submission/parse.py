@@ -15,20 +15,17 @@ def parse_dimensions(
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
-    """Parses a string representing dimensions.
+    """Parse integer dimensions separated by lowercase x or by *, padding with None.
 
-    For example, '5x5' or '5x5x5'. Both 'x' and '*' are valid separators. '?' is allowed as a placeholder for a dimension.
+    Accept between min_dim and max_dim entries, strip surrounding whitespace, and
+    use ? for unknown values. The returned tuple always has max_dim entries.
+    Separators cannot be mixed; positivity is left to domain validation.
 
-    Args:
-        dim_str: The string to parse
-        min_dim: The minimum number of dimensions
-        max_dim: The maximum number of dimensions
-
-    Returns:
-        A list of the dimensions, the length of the list will match `max_dim`. If there are fewer dimensions than `max_dim`, the rest will be `None`.
+    For example, "5 x ?" becomes (5, None, None) with the default bounds.
 
     Raises:
-        ValueError: If the number of dimensions is not between `min_dim` and `max_dim`, or the string is not parsable.
+        ValueError: Bounds are reversed, the entry count is outside them, or an entry
+            is neither an integer nor ?.
     """
     if min_dim > max_dim:
         msg = f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}."
@@ -56,19 +53,18 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
                 msg = f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'"
                 raise ValueError(msg) from err
 
-    # Pad with None
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))
 
 
 def format_dimensions(dims: tuple[int | None, ...]) -> str:
-    """Formats a tuple of dimensions into a string."""
+    """Join dimensions with x, displaying None as ?."""
     return " x ".join(str(i) if i is not None else "?" for i in dims)
 
 
 def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]:
-    """Parses a string representing the door's <size>, which essentially is the hallway's dimensions.
+    """Parse a door opening as width, height, and depth.
 
-    None is used to represent a dimension that is not given. The value -1 is used to represent a dimension that is not applicable.
+    None means unknown; -1 means not applicable for a width-only or height-only opening.
 
     Examples:
         "5x5x5" -> (5, 5, 5)
@@ -86,7 +82,6 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
         size, direction = match.groups()
         if direction == "wide":
             return int(size), -1, -1
-        # direction == "high"
         return -1, int(size), -1
 
     try:

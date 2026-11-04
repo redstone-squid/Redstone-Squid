@@ -1,4 +1,4 @@
-"""Handles the display of a build object."""
+"""Render build cards and route pending builds to their review channels."""
 
 import logging
 import mimetypes
@@ -104,7 +104,7 @@ def _status_colour(status: Status | None, *, build_id: int | None) -> int:
 
 
 class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
-    """A class to handle the display of a build object."""
+    """Render one build snapshot and coordinate its review posts."""
 
     def __init__(self, bot: BotT, build: Build):
         self.bot = bot
@@ -117,7 +117,11 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return f"<BuildHandler(bot={self.bot}, build={self.build})>"
 
     async def get_channels_to_post_to(self) -> list[GuildMessageable]:
-        """Gets the channels in which this build should be posted to."""
+        """Return review channels for pending builds or configured build channels for confirmed ones.
+
+        Denied builds and builds without a valid submission status raise ValueError.
+        Confirmed-build channels absent from the bot cache are omitted.
+        """
 
         target: Literal["Smallest", "Fastest", "First", "Builds"]
 
@@ -142,11 +146,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return cast(list[GuildMessageable], channels)
 
     async def post_for_voting(self, type: Literal["add", "update"] = "add") -> None:
-        """
-        Post a build for voting.
+        """Ensure review posts exist for a pending build.
 
-        Args:
-            type (Literal["add", "update"]): Whether to add or update the build.
+        Only type="add" is implemented; "update" raises NotImplementedError.
+        Other build states raise ValueError.
         """
         build = self.build
         if type == "update":
@@ -160,7 +163,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         await ensure_build_review(self.bot, build, await self.get_channels_to_post_to())
 
     async def get_original_message(self) -> discord.Message | None:
-        """Gets the message this build was submitted from, if it is still reachable."""
+        """Return a cached source message or fetch the first source with a known channel."""
         if self._build_original_message_obj:
             return self._build_original_message_obj
 
@@ -186,7 +189,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return container
 
     async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
-        """The build card as layout IR, for callers composing a whole message at once."""
+        """Return a build card that callers can compose with other layout nodes."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
         metadata = self.get_metadata_fields()
@@ -212,9 +215,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         ladders = self._field_ladders()
 
-        # A nested section per group: each field steps its own Condense ladder independently
-        # rather than a whole group stepping in lockstep — finer granularity, not a
-        # regression. Groups with no matching fields render as nothing.
+        # Give each field its own shorter alternatives so one long value does not
+        # force every field in the section to shrink.
         def group(title: str, names: set[str]) -> sl.LayoutNode | None:
             entries = tuple(
                 sl.field(
@@ -243,8 +245,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         extra_media = media[1:]
         return sl.section(
             sl.heading(format_build_display_title(build, markdown=True, current_version=current_java_version)),
-            # The body is the card's shock absorber: truncate lets it give up characters
-            # under pressure before a field group, media, or the footer loses any.
+            # Allow the description to shrink when the full card exceeds the layout budget.
             description and sl.truncate(sl.paragraph(description)),
             group("Review warnings", review_names),
             group("Size & performance", performance_names),
@@ -259,10 +260,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         )
 
     def _field_ladders(self) -> dict[str, tuple[str, ...]]:
-        """Degradation ladders for the fields whose values are unbounded user data.
+        """Offer shorter field values when the full card does not fit.
 
-        A build can carry a hundred URLs per list; showing them all is the preferred form,
-        but under budget pressure a count beats a mid-URL ellipsis.
+        URL lists fall back to the first link and then a count, preserving complete
+        links instead of truncating them in the middle. Long creator lists use a count.
         """
         build = self.build
         ladders: dict[str, tuple[str, ...]] = {}
@@ -306,14 +307,13 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                     media.append(image)
                     break
 
-        # Appended last so a generated render only becomes media[0] — the card's thumbnail —
-        # when the build has no real screenshot to show instead.
+        # Prefer submitted images or a video preview over a generated render for the thumbnail.
         media.extend(self.build.render_urls)
 
         return media[:10]
 
     async def get_description(self) -> str | None:  # type: ignore
-        """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
+        """Describe locational/directional restrictions and escaped submitter notes, or return None."""
         build = self.build
         desc = []
 
@@ -333,9 +333,11 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return "\n".join(desc) if desc else None
 
     def get_metadata_fields(self) -> dict[str, str]:  # type: ignore
-        """Returns a dictionary of metadata fields for the build.
+        """Format build facts as display labels and values.
 
-        The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped."""
+        Callers must escape values for their output format. Timing values are shown
+        in seconds; absent dimensions use question marks.
+        """
         build = self.build
         fields = {"Dimensions": f"{build.width or '?'} x {build.height or '?'} x {build.depth or '?'}"}
 

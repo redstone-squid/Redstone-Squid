@@ -1,4 +1,10 @@
-"""Discord workspace for querying and maintaining computed records."""
+"""Inspect unresolved record results and request category lookups or rebuilds.
+
+Diagnostics identify a RecordRule by its integer definition ID. That ruleset-specific
+definition is distinct from the stable RecordSeries competition UUID used by record
+subscriptions. Lookup accepts a definition ID or an exact category; the record
+service persists the requested category and recomputes its standings.
+"""
 
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Literal, Protocol, Self, override
@@ -53,7 +59,11 @@ type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
-    """A records workspace that ends when closed, replaced, or timed out."""
+    """Show record diagnostics and maintenance controls for one guild session.
+
+    Initial capabilities choose which tabs and forms are visible. Each maintenance
+    action calls authorize again before invoking the record service.
+    """
 
     timeout = 300
 

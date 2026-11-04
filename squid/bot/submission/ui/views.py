@@ -1,4 +1,9 @@
-"""Semantic submission and build-edit workspaces."""
+"""Stage and review patches to existing builds in a Discord editor.
+
+BuildEditScreen keeps field changes local until the user saves one combined patch.
+New submissions use DraftEditorScreen in drafts.py instead: its answers are saved
+as a retained submission draft after each change and later finalized into a build.
+"""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any, cast, override
@@ -237,7 +242,12 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
 
 
 class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
-    """A build editor that ends when saved, closed, replaced, or timed out."""
+    """Stage local field changes, review them, and save one combined build patch.
+
+    The build preview follows topic updates, while staged fields remain local.
+    Reloading or opening a fresh editor discards those fields. Saving checks current
+    authority and supplies the displayed build revision to the edit service.
+    """
 
     timeout = 900
     follow_topics = True
@@ -315,6 +325,10 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         return max(1, (len(self.items) + 4) // 5)
 
     def stage(self, key: str, text: str) -> bool:
+        """Stage an applicable field and return whether its key exists.
+
+        True does not imply valid input; parse failures are retained in validation_error.
+        """
         for item in self.items:
             if item.key == key:
                 item.stage(text)

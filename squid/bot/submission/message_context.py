@@ -1,4 +1,10 @@
-"""Assemble contextual, multimodal message bundles for build inference."""
+"""Collect source messages and surrounding evidence for build inference.
+
+Primary messages describe the builds being submitted. Reply ancestors and nearby
+messages supply context for interpreting them, while images and video frames add
+visual evidence. assemble_bundle converts this material into BuildInferenceInput
+without retaining Discord objects; submission file intake is handled separately.
+"""
 
 import logging
 from collections.abc import Iterable, Sequence
@@ -43,7 +49,15 @@ class MessageGroup[MessageT: GroupableMessage]:
 def group_messages[MessageT: GroupableMessage](
     messages: Iterable[MessageT], *, window_seconds: float = 300, max_messages: int = 8
 ) -> list[MessageGroup[MessageT]]:
-    """Group chronological messages into author runs without losing interleaved context."""
+    """Group messages by the first author's activity, retaining other authors as context.
+
+    Input must be chronological. A primary message starts a new group when it exceeds
+    the gap or count limit, or replies outside that group's primary messages.
+    Other authors never start a group; they remain context for the current one.
+    The gap is measured from the previous primary message, and only primary
+    messages count toward max_messages. For example, A1, B1, A2 stays one group
+    with primary=(A1, A2) and context=(B1) if A2 meets the gap and reply rules.
+    """
     if max_messages < 1:
         msg = "max_messages must be at least one"
         raise ValueError(msg)
@@ -85,7 +99,11 @@ async def resolve_reply_chain(
     max_depth: int = 4,
     cache: dict[int, discord.Message | None],
 ) -> tuple[discord.Message, ...]:
-    """Resolve a message's reply ancestry with caching and cycle protection."""
+    """Return reply ancestors from nearest to farthest, up to max_depth.
+
+    Stop at missing, inaccessible, deleted, or repeated parents. Reuse the caller's
+    cache and record failed fetches as None to avoid retrying them within a bundle.
+    """
     parents: list[discord.Message] = []
     current = message
     seen = {message.id}
@@ -130,7 +148,12 @@ def collect_lookback[MessageT: GroupableMessage](
 async def collect_images(
     messages: Sequence[discord.Message], *, max_images: int = 6, max_bytes: int = 4 * 1024 * 1024
 ) -> tuple[InlineImage, ...]:
-    """Read oldest-first images and video preview frames within aggregate caps."""
+    """Collect images and video previews in the supplied message and attachment order.
+
+    max_images and max_bytes bound retained image data. Each source attachment is
+    also size-checked, but max_bytes is not a cap on total bytes downloaded. Skip
+    unsupported attachments, oversized results, and common download/preview failures.
+    """
     images: list[InlineImage] = []
     total_bytes = 0
     for message in messages:
@@ -212,7 +235,12 @@ async def assemble_bundle(
     reply_cache: dict[int, discord.Message | None] | None = None,
     include_images: bool = True,
 ) -> BuildInferenceInput:
-    """Resolve reply context and images into one inference input holding no Discord objects."""
+    """Build inference input from primary messages, reply ancestors, and preceding context.
+
+    Primary messages must be nonempty and ordered. Reply ancestors take precedence
+    over duplicate preceding context. Images are considered in primary, reply, then
+    preceding order, so primary attachments get the first chance at the image budget.
+    """
     if not primary:
         msg = "A bundle requires at least one primary message"
         raise ValueError(msg)

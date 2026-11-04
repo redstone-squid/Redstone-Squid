@@ -1,4 +1,10 @@
-"""Discord file downloads handed to durable submission intake."""
+"""Receive Discord files for a retained submission draft.
+
+Sources are reserved as required inputs before downloading begins. These reservations
+keep failed or unfinished downloads visible to finalization. Registration hands the
+bytes to the shared media or schematic intake service; finalization checks their
+processing state before admitting the build.
+"""
 
 import logging
 import tempfile
@@ -35,7 +41,11 @@ async def receive_attachments(
 async def receive_attachment(
     services: BotServices, draft_id: UUID, actor_id: int, source_id: UUID, attachment: discord.Attachment
 ) -> None:
-    """Download one bounded source, preserving its failed state for explicit retry."""
+    """Receive an already reserved source, skipping it if it is ready.
+
+    Download and registration failures are recorded and logged instead of raised,
+    allowing the rest of an attachment bundle to continue. Cancellation propagates.
+    """
     retained = next(item for item in await services.submission_intake.list(draft_id, actor_id) if item.id == source_id)
     if retained.status is IntakeStatus.READY:
         return
@@ -65,7 +75,11 @@ async def _download_and_register(
 async def retry_uploaded_file(
     services: BotServices, draft_id: UUID, actor_id: int, original_id: UUID, source: UploadedFile
 ) -> UUID:
-    """Retain a replacement attempt and discard the old requirement only after registration."""
+    """Register a replacement under a new ID, then discard the original requirement.
+
+    Registration failures are retained on the new attempt and re-raised; the original
+    source remains required until its replacement has registered successfully.
+    """
     from uuid import uuid4
 
     new_id = uuid4()
@@ -97,7 +111,11 @@ async def _register_uploaded_file(
 
 
 async def receive_retained_file(services: BotServices, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
-    """Resolve an explicit assignment using its retained Discord source or preserve failure."""
+    """Download a retained Discord source after the user assigns it to a draft.
+
+    Ready and discarded sources need no work. Download failures are recorded and
+    re-raised so the caller can offer replacement or discard controls.
+    """
     attachment = next(item for item in await services.submission_intake.list(draft_id, actor) if item.id == source_id)
     source = attachment.source
     if source is None:

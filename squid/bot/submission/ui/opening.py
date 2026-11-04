@@ -22,7 +22,12 @@ async def prepare_build_editor(
     *,
     recovered: bool = False,
 ) -> BuildEditScreen:
-    """Inject actor-aware Discord operations into one build editor."""
+    """Construct an editor and its callbacks without presenting or authorizing it yet.
+
+    show_build_editor checks access before presentation. The callback also lets the
+    screen recheck permission, allowing a pending build's submitter or an account
+    with build-edit permission to proceed.
+    """
     client = cast("RedstoneSquid", request.client)
     actor_id = request.user.id
     prepared: BuildEditScreen | None = None

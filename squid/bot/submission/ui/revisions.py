@@ -12,7 +12,12 @@ from squid.submissions.application.revision_values import RevisionProposal
 
 
 class RevisionProposalScreen(sd.Screen):
-    """Review a persisted candidate and explicitly authorize its expected build revision."""
+    """Review inferred corrections against an existing build before applying them.
+
+    Choosing a target records the build revision shown in the diff. Approval may
+    apply only against that revision; Renew review loads a new diff if the build
+    changed, so a correction cannot silently overwrite an intervening edit.
+    """
 
     audience = "personal"
     timeout = 600

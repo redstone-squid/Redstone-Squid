@@ -27,6 +27,8 @@ def _hit_identity(hit: SearchHit) -> str:
 
 
 class _SearchSource:
+    """Adapt search pages to browser windows while retaining their warning metadata."""
+
     capabilities = sl.sources.SourceCapabilities(
         backward=True,
         offsets=True,
@@ -52,6 +54,7 @@ class _SearchSource:
             total=page.total,
         )
         fingerprint = window_fingerprint(page.hits, _hit_identity)
+        # Offset alone cannot distinguish an older visible page from a refreshed result set.
         self._metadata[(offset, fingerprint)] = page
         return sl.sources.LoadedWindow(window, fingerprint)
 
@@ -187,6 +190,7 @@ class SearchScreen(sd.UserSessionScreen, session_name="search"):
         return self._visible_window().window.has_next
 
     def _visible_window(self) -> sl.sources.LoadedWindow[SearchHit]:
+        """Keep the last loaded page visible while a fetch is pending or has failed."""
         state = self._browser.window.status
         if isinstance(state, sl.resources.Ready):
             return state.value

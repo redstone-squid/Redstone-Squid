@@ -41,7 +41,7 @@ type RefreshPosts = Callable[[int], Awaitable[None]]
 
 @dataclass(frozen=True, slots=True)
 class BuildCapabilities:
-    """The build operations visible when the workspace opens."""
+    """Initial visibility choices for build details and actions, not authorization to execute them."""
 
     view_pending: bool
     approve: bool
@@ -85,7 +85,11 @@ class _BuildSource:
 
 
 class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
-    """Live detail and capability-aware actions for one persisted build."""
+    """Show one build and refresh its card when the build topic changes.
+
+    Capabilities control which actions appear. Review, debug, timing, and lattice
+    actions recheck permission through authorize; the routed editor checks its own access.
+    """
 
     def __init__(
         self,

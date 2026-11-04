@@ -1,4 +1,10 @@
-"""A cog with commands to submit builds."""
+"""Create submission drafts from forms and consenting authors' build-log messages.
+
+The form path retains supplied answers and attachments for the draft editor. The
+message path delegates inference and candidate admission to ingestion.py. Both
+paths use the shared submission services for finalization, so Discord collects
+input and presents progress while those services decide when a build is ready.
+"""
 
 import logging
 from typing import TYPE_CHECKING, Self
@@ -32,11 +38,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Kill switch while ingestion is not live yet; flip to True to bring the sticky back.
-# Typed `bool`, not the inferred `Literal[False]`, so the guarded branches are not unreachable.
+# Disable the consent banner without disabling ingestion for consenting accounts.
+# The bool annotation keeps type checkers from treating the guarded branches as unreachable.
 CONSENT_STICKY_ENABLED: bool = False
-
-# TODO: Set up a webhook for the bot to handle google form submissions.
 
 
 class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
@@ -87,8 +91,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         fourth_attachment: discord.Attachment | None = None,
     ) -> sd.CommandResult:
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
-        # Before the uploads, not after: declining should not cost the user an attachment round
-        # trip, and the notice describes exactly what submitting a build publishes.
+        # Obtain consent before creating a draft or downloading attachments.
         uploader_account_id = await ensure_consented_account(request, self.bot.services.accounts)
         if uploader_account_id is None:
             return None
@@ -213,11 +216,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         return tuple(nodes) if nodes else text_node("No active drafts or inference runs.")
 
     def _is_build_log_message(self, message: Message) -> bool:
-        """Whether inference has anything to read this message for.
-
-        Split out of the listener so the right-click can say "not a build log message" instead
-        of reporting a recalculation that never ran.
-        """
+        """Check the shared author/channel eligibility rule for ingestion and recalculation."""
         return (
             not message.author.bot
             and isinstance(message.channel, discord.TextChannel)
@@ -226,7 +225,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
     @sd.Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
-        """Infer a build from a message."""
+        """Ingest an eligible build log message when its author has current consent."""
         if not self._is_build_log_message(message):
             return
         assert isinstance(message.channel, discord.TextChannel)
@@ -267,13 +266,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
     @sd.context_menu(name="Recalculate Build", defer="private")
     async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Re-read a build out of the message that was right-clicked.
-
-        This was `/build recalc <message>`, which in slash form meant copying a link to a
-        message and pasting it back at the bot (audit C4). Inference is a judgement about one
-        specific message, which is what a message context menu is.
-        """
-        # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
+        """Review proposed build corrections inferred from this message."""
         await enforce(request, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
             return error_node(
