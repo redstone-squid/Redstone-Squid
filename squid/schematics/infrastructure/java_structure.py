@@ -138,6 +138,12 @@ def json_nbt(value: NbtValue) -> object:
 
 
 class _NbtReader:
+    """Read big-endian NBT while enforcing nesting and total value budgets.
+
+    Lists and numeric arrays reserve their element counts before allocation. Byte arrays are
+    bounded by the input buffer rather than counted as individual NBT values.
+    """
+
     def __init__(self, data: bytes, *, max_values: int) -> None:
         self._data = memoryview(data)
         self._offset = 0
@@ -191,6 +197,7 @@ class _NbtReader:
         raise JavaStructureDecodeError(msg)
 
     def _payload_without_claim(self, kind: int, depth: int) -> NbtValue:
+        # The list already reserved this element; only its nested values need new claims.
         self._values_left += 1
         return self._payload(kind, depth)
 

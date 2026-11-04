@@ -29,7 +29,7 @@ _FINGERPRINT_COLUMNS = {
 
 
 class PostgresSchematicRepository:
-    """Persist schematic metadata and attachment changes within one transaction."""
+    """Persist schematic metadata and attachments within the caller-owned transaction."""
 
     def __init__(
         self,
@@ -64,10 +64,11 @@ class PostgresSchematicRepository:
         uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
     ) -> int:
-        """Attach an analysis to a build, replacing any earlier analysis of the same file.
+        """Insert or replace the analysis for this build and file, returning its attachment ID.
 
-        Re-analysing after an engine upgrade must overwrite rather than accumulate, so the
-        `(build_id, file_sha256)` uniqueness doubles as the upsert key.
+        Lock the build before changing its featured attachment. Selecting a primary attachment clears
+        the previous generated preview and queues a replacement. publication=None preserves existing
+        publication metadata when updating an attachment.
         """
         values = {
             "build_id": build_id,
@@ -126,6 +127,7 @@ class PostgresSchematicRepository:
         return found[0] if found else None
 
     async def get_featured(self, build_id: int) -> StoredSchematic | None:
+        """Select the primary attachment as featured, with no fallback to secondary attachments."""
         found = await self._fetch(
             self._joined().where(and_(BuildSchematic.build_id == build_id, BuildSchematic.is_primary)).limit(1)
         )
@@ -153,11 +155,9 @@ class PostgresSchematicRepository:
         exclude_build_id: int | None = None,
         limit: int = 25,
     ) -> list[StoredSchematic]:
-        """Return schematics sharing a fingerprint under one analyzer version.
+        """Return matches produced by the same analyzer version.
 
-        The `analyzer_version` filter is not optional: fingerprints are hashes whose definition
-        can change between engine releases, so comparing across versions would silently return
-        garbage rather than nothing.
+        Fingerprint definitions can change between engine releases, so comparisons exclude other versions.
         """
         column = _FINGERPRINT_COLUMNS[preset]
         statement = self._joined().where(
@@ -175,11 +175,10 @@ class PostgresSchematicRepository:
         limit: int = 25,
         exclude_build_id: int | None = None,
     ) -> list[StoredSchematic]:
-        """Shortlist schematics of comparable size for pairwise near-duplicate ranking.
+        """Shortlist candidates by block count and approximate size, closest block count first.
 
-        Deliberately coarse. This exists to hand the worker a handful of candidates, not to
-        decide anything: block count and sorted dimensions survive translation and rotation,
-        which is exactly the kind of resubmission an exact hash misses.
+        At least one stored axis must be near one requested extent; this does not compare all three
+        dimensions as a set. Pairwise analysis makes the eventual similarity decision.
         """
         blocks = metrics.block_count
         low, high = int(blocks * (1 - tolerance)), int(blocks * (1 + tolerance)) + 1
@@ -188,7 +187,7 @@ class PostgresSchematicRepository:
         statement = self._joined().where(
             and_(
                 BuildSchematic.block_count.between(low, high),
-                # Orientation-blind: compare the sorted extents rather than the named axes.
+                # Match any axis against any requested extent to keep rotated candidates eligible.
                 or_(*(_dimension_within(value, span) for value in sorted_dimensions)),
             )
         )

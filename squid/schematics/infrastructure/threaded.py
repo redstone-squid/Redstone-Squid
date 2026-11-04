@@ -1,14 +1,8 @@
-"""A thread-backed analyzer for development and tests.
+"""Run native analysis in threads for development and tests.
 
-This runs the engine **in the bot's own process**, which is exactly what
-:mod:`squid.schematics.infrastructure.worker` exists to avoid: there is no cancellation, and a
-Rust panic terminates the interpreter. It earns its place by making unit and integration tests
-readable — no subprocess, no framing, no respawn timing to reason about — and by giving a
-developer a one-line way to bypass the supervisor while debugging the adapter itself.
-
-`render` and `simulate` deliberately refuse. Those are the two operations whose failure modes
-motivated process isolation in the first place: wgpu keeps process-global state that is not
-fork-safe, and the simulator can spin unboundedly.
+Calls share the application's process and default executor. Cancelling an await does not stop
+the running thread, and a native process abort can terminate the application. Render and
+simulation operations are refused here; use the subprocess pool for them and for production.
 """
 
 import asyncio
@@ -47,7 +41,6 @@ class ThreadedSchematicAnalyzer:
         from squid.schematics.infrastructure import nucleation_adapter as engine
 
         reported = await asyncio.to_thread(engine.capabilities)
-        # Advertised honestly: the engine can render, but this analyzer will not let it.
         return AnalyzerCapabilities(
             available=reported.available,
             analyzer_version=reported.analyzer_version,
@@ -90,10 +83,9 @@ class ThreadedSchematicAnalyzer:
         preset: FingerprintPreset,
         timeout_seconds: float | None = None,
     ) -> SchematicComparison:
+        """Compare in a thread; timeout_seconds is ignored because the native call cannot be stopped."""
         from squid.schematics.infrastructure import nucleation_adapter as engine
 
-        # Threads cannot be safely cancelled. The subprocess implementation enforces the
-        # caller's deadline; this development-only fallback retains its documented limitation.
         return await asyncio.to_thread(engine.compare, left, right, preset=preset)
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:

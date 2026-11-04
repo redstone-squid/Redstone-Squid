@@ -48,12 +48,11 @@ class SchematicFile(Base):
 
 
 class BuildSchematic(Base, kw_only=True):
-    """One analyzed schematic attached to a build.
+    """One analyzed file attached to a build, with its publication policy.
 
-    Metrics and fingerprints are denormalised onto this row so duplicate shortlisting is a
-    plain indexed query. Fingerprints are only comparable within the `analyzer_version` that
-    produced them, so every identity index carries that column and every lookup filters on it;
-    an engine upgrade therefore becomes a visible backfill rather than a silent regression.
+    Measurements and fingerprints are stored here for duplicate shortlisting. Fingerprint lookups
+    include analyzer_version because an engine upgrade can change the hashes. Reanalyzing an
+    attachment updates this evidence without changing its source bytes.
     """
 
     __tablename__ = "build_schematics"
@@ -70,9 +69,7 @@ class BuildSchematic(Base, kw_only=True):
         ),
         Index("build_schematics_build_id_idx", "build_id"),
         Index("build_schematics_file_sha256_idx", "file_sha256"),
-        # Fingerprints are translation-invariant hashes: equality is the only predicate SQL
-        # can answer about them, and near-duplicate ranking happens pairwise in the worker
-        # over the shortlist these indexes produce.
+        # Hash equality provides a shortlist; the worker compares files to rank near duplicates.
         Index(
             "build_schematics_fingerprint_structural_idx",
             "fingerprint_structural",
@@ -120,12 +117,14 @@ class BuildSchematic(Base, kw_only=True):
         ForeignKey("schematic_files.sha256", name="build_schematics_file_sha256_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    """The stored bytes this analysis describes. `RESTRICT` because several builds can share
-    one file and losing it would strand every analysis that references it."""
+    """Digest of the analyzed bytes, which may be shared by several builds.
+
+    Deletion is restricted while any attachment references the file.
+    """
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    """Whether this is the schematic shown on the build card and used for duplicate checks."""
+    """Featured attachment used for generated previews, conversion, and timing measurements."""
     original_filename: Mapped[str | None] = mapped_column(Text, default=None)
-    """The name the uploader's file had, kept for display only. Never trusted for typing."""
+    """Original display filename; ingestion may also use its extension as a fallback format hint."""
 
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     """Tight content width. Machine-read, unlike the human-declared value on `builds`."""
@@ -136,8 +135,10 @@ class BuildSchematic(Base, kw_only=True):
     allocated_height: Mapped[int] = mapped_column(Integer, nullable=False)
     allocated_length: Mapped[int] = mapped_column(Integer, nullable=False)
     block_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    """Non-air block count. **Not** the Door Rules cumulative volume, which counts air pockets
-    and carries hallway, frame, and hitbox exceptions no static read can apply."""
+    """Non-air block count, separate from the Door Rules cumulative volume.
+
+    The latter includes air pockets and needs hallway, frame, and hitbox review.
+    """
     bounding_volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
     """Tight bounding box volume including air. Materialised so it can be range-scanned."""
     entity_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -152,8 +153,10 @@ class BuildSchematic(Base, kw_only=True):
     """Sign text recovered from the schematic, as `{x, y, z, text}` objects."""
 
     fingerprint_structural: Mapped[str | None] = mapped_column(Text, default=None)
-    """Coarse translation-invariant bucket. A build differing by a single block still matches,
-    so this is a pre-filter feeding pairwise ranking and never a duplicate verdict by itself."""
+    """Coarse translation-invariant hash used to shortlist files for pairwise comparison.
+
+    Matching values can include different block arrangements and do not establish duplication.
+    """
     fingerprint_shape: Mapped[str | None] = mapped_column(Text, default=None)
     """Translation- and rotation-invariant identity. This is the primary duplicate index."""
     fingerprint_exact: Mapped[str | None] = mapped_column(Text, default=None)
@@ -161,9 +164,9 @@ class BuildSchematic(Base, kw_only=True):
     signature_structural: Mapped[str | None] = mapped_column(Text, default=None)
     """The engine's structural signature document, kept for pre-filter experiments."""
     analyzer_version: Mapped[str] = mapped_column(Text, nullable=False)
-    """Which engine build produced the fingerprints on this row, e.g. `nucleation-0.9.2`."""
+    """Engine version that produced these fingerprints; comparisons must use the same version."""
     analysis_schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    """Which revision of *our* analysis produced this row, bumped when we change what we read."""
+    """Application analysis format version, independent of the engine version."""
 
     lattice: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     """The highest-coverage repeating unit cell found, if the build has one."""
@@ -200,8 +203,7 @@ class BuildSchematic(Base, kw_only=True):
         ),
         default=None,
     )
-    """Who supplied the file, beside `rights_attested_by_account_id` so the table
-    carries one attribution style rather than two."""
+    """Account that supplied the file, which can differ from the account attesting publication rights."""
     analyzed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -231,7 +233,7 @@ class SchematicPreviewObject(Base, kw_only=True):
     cleanup_claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     """When cleanup reserved this unreferenced object for deletion."""
     cleanup_claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """Fence shared by cleanup acknowledgement and publication checks."""
+    """Token required to finish cleanup; its presence prevents reuse or publication."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -256,7 +258,7 @@ class SchematicRender(Base, kw_only=True):
         nullable=False,
     )
     recipe_hash: Mapped[str] = mapped_column(Text, nullable=False)
-    """SHA-256 of the pack, camera recipe, output dimensions, and analyzer version."""
+    """Hash of the source and pack digests, framing, schematic dimensions, and analyzer version."""
     url: Mapped[str] = mapped_column(Text, nullable=False)
     object_key: Mapped[str | None] = mapped_column(
         Text,
@@ -298,17 +300,21 @@ class SchematicRenderQueueItem(Base, kw_only=True):
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
-    """When this row next becomes claimable, and the only column backoff writes."""
+    """Earliest time a worker may claim this job, including retry backoff."""
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The database-minted fencing token handed to the worker that claimed this row."""
+    """Token that must still match when the claiming worker records its outcome."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class SchematicJob(Base, kw_only=True):
-    """A durable request for the worker-owned native schematic engine."""
+    """A durable native-engine request whose result remains available until retention expires.
+
+    Claim tokens reject stale worker updates. Binary output objects are retained alongside the row
+    for cleanup; input objects can be shared by multiple jobs.
+    """
 
     __tablename__ = "schematic_jobs"
     __table_args__ = (
@@ -347,7 +353,7 @@ class SchematicJob(Base, kw_only=True):
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The database-minted fencing token handed to the worker that claimed this row."""
+    """Token that must still match when the claiming worker records its outcome."""
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

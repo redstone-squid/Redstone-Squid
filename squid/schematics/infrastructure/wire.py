@@ -1,19 +1,19 @@
-"""The frame format and value encoding shared by the worker supervisor and its children.
+"""Encode worker frames and domain values without importing the native engine.
 
-Standard library only, and deliberately free of any engine import: the parent process links
-against this module, and the whole point of the worker design is that the parent never loads
-the native extension.
+The pool and its child processes exchange a JSON header describing the operation or result,
+followed by raw binary payloads. Keeping schematic files and rendered images out of JSON avoids
+the size increase from base64 encoding those large payloads.
 
 A frame is::
 
-    | 4 bytes BE header length | 4 bytes BE body length | header JSON (utf-8) | body |
+    | 4 bytes BE header length | 4 bytes BE body length | header JSON (UTF-8) | body |
 
-Binary payloads travel in the body, appended raw. Schematic files, converted output, and
-rendered PNGs are megabyte-scale; base64-ing them into the JSON header would inflate every
-transfer by a third for no benefit. The header's `parts` field carries the length of each
-payload so a multi-payload request such as `compare` can be split back apart. Request headers
-may also carry a `trace` mapping containing W3C propagation keys such as `traceparent`;
-propagation keys never share the frame-header namespace.
+Schematic inputs and binary results are concatenated in the body. The header's parts array
+records their lengths, including both inputs of a comparison. Resource packs are an exception:
+the subprocess request carries their bytes as base64 in its parameters, while durable jobs
+can store them as a second input object.
+
+An optional trace mapping carries propagation headers separately from frame fields.
 """
 
 import asyncio
@@ -48,16 +48,11 @@ from squid.schematics.errors import AmbiguousSimulationInputError
 
 LENGTH_PREFIX_BYTES = 4
 MAX_FRAME_BYTES = 256 * 1024 * 1024
-"""Sanity bound on a single frame, so a desynchronised stream cannot ask us to allocate a
-nonsensical buffer before we notice."""
+"""Maximum combined header and body size, excluding the eight-byte length prefix."""
 
 type Operation = Literal["capabilities", "analyze", "convert", "compare", "render", "simulate", "autostack"]
 type ErrorKind = Literal["invalid", "ambiguous_simulation_input", "too_large", "unavailable", "internal"]
-"""How the child classifies a failure so the supervisor can rebuild a typed exception.
-
-Deliberately a small closed set rather than a class name: the child's free-form message is
-not shown to users, so anything a caller must actually be told has to be carried by a kind
-the supervisor knows how to reconstruct."""
+"""Error kinds the supervisor accepts when reconstructing a typed exception."""
 
 _OPERATIONS: frozenset[str] = frozenset(
     {"capabilities", "analyze", "convert", "compare", "render", "simulate", "autostack"}
@@ -119,7 +114,7 @@ class FrameStreamClosed(Exception):
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class WorkerRequest:
-    """A request header whose discriminants and payload arity are verified."""
+    """A request whose ID, operation, parameter object, and number of payloads have been checked."""
 
     request_id: int
     operation: Operation
@@ -162,7 +157,7 @@ def read_frame_sync(stream: IO[bytes]) -> Frame | None:
 
 
 def decode_worker_request(frame: Frame) -> WorkerRequest:
-    """Verify a worker request header and its operation-specific payload arity."""
+    """Check a request header and its expected payload count, raising FrameStreamClosed if invalid."""
     try:
         request_id = _integer(frame.header.get("id"), "request id", minimum=0)
         operation = _operation(frame.header.get("op"))
@@ -176,7 +171,7 @@ def decode_worker_request(frame: Frame) -> WorkerRequest:
 
 
 def validate_request_payloads(operation: object, payloads: Sequence[bytes]) -> Operation:
-    """Validate an operation discriminant and its required binary input count."""
+    """Check the operation name and its required number of binary inputs."""
     decoded = _operation(operation)
     _payload_arity(payloads, _REQUEST_PAYLOAD_ARITY[decoded], f"{decoded} request")
     return decoded
@@ -194,7 +189,7 @@ def validate_durable_request_payloads(operation: object, payloads: Sequence[byte
 
 
 def validate_worker_response(frame: Frame, *, request_id: int, operation: Operation) -> None:
-    """Verify a response discriminant, correlation id, object shape, and payload arity."""
+    """Check the response status, request ID, result or error object, and payload count."""
     try:
         response_id = _integer(frame.header.get("id"), "response id", minimum=0)
         _matching_request_id(response_id, request_id)
@@ -272,12 +267,7 @@ def _read_exactly(stream: IO[bytes], size: int) -> bytes:
 
 
 def encode_analysis(analysis: SchematicAnalysis) -> Mapping[str, Any]:
-    """Flatten an analysis into JSON-safe primitives.
-
-    `dataclasses.asdict` is enough on the way out because every field is a primitive, a
-    `StrEnum` (already a `str`), or a nested frozen dataclass. Decoding is written out by hand
-    because rebuilding typed nested dataclasses is not something `asdict` can invert.
-    """
+    """Convert an analysis and its nested values into JSON-safe primitives."""
     return cast(Mapping[str, Any], dataclasses.asdict(analysis))
 
 
@@ -511,7 +501,7 @@ def decode_base64(value: object, what: str) -> bytes:
 
 
 def encode_resource_pack(resource_pack: VerifiedResourcePack) -> Mapping[str, str]:
-    """Encode verified metadata while the pack bytes travel as a raw payload."""
+    """Encode pack metadata separately from the bytes that its digest verifies."""
     return {"sha256": resource_pack.sha256, "media_type": resource_pack.media_type}
 
 
@@ -632,7 +622,7 @@ def decode_simulation_input_error(context: Mapping[str, Any]) -> AmbiguousSimula
 
 
 def decode_error(payload: object) -> tuple[ErrorKind, str, Mapping[str, Any]]:
-    """Decode a typed worker error object without accepting unknown discriminants."""
+    """Decode a worker error object, rejecting unknown error kinds."""
     error = _mapping(payload, "worker error")
     kind_value = _string(error.get("kind"), "worker error kind")
     if kind_value not in _ERROR_KINDS:

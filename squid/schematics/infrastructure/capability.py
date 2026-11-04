@@ -1,8 +1,4 @@
-"""Detection of the optional native schematic engine.
-
-The engine is an optional dependency with no musl or linux-aarch64 wheels, so every entry
-point must tolerate its absence.
-"""
+"""Detect the optional native engine without importing it into the application process."""
 
 import importlib.util
 from functools import cache
@@ -27,12 +23,10 @@ ENGINE_MODULE = "nucleation"
 
 @cache
 def engine_installed() -> bool:
-    """Return whether the native schematic engine is importable.
+    """Return whether Python can locate the native engine module, caching the result.
 
-    Uses :func:`importlib.util.find_spec` rather than a trial import on purpose: importing a
-    native extension is expensive, and an ABI-mismatched wheel can abort the interpreter
-    outright. The real import happens only inside the worker subprocess, where a failure is
-    contained and reported back as a capability answer.
+    find_spec avoids loading the extension here. A discoverable module can still fail to import
+    or initialize; the subprocess adapter contains those failures when it checks capabilities.
     """
     try:
         return importlib.util.find_spec(ENGINE_MODULE) is not None
@@ -43,11 +37,10 @@ def engine_installed() -> bool:
 
 
 class NullSchematicAnalyzer:
-    """The analyzer used when the engine is absent or switched off.
+    """Represent an absent or disabled engine through the analyzer interface.
 
-    Every operation raises the same typed, translated error, so an instance without the
-    optional extra behaves exactly like today's bot plus one clear message, rather than
-    failing somewhere deep with an `ImportError`.
+    Capabilities report unavailable, schematic operations raise SchematicSupportUnavailableError,
+    and closing the adapter does nothing.
     """
 
     def __init__(self, reason: str | None = None) -> None:

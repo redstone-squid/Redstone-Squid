@@ -55,10 +55,12 @@ def to_row_values(analysis: SchematicAnalysis) -> dict[str, Any]:
 
 
 def to_stored_schematic(row: BuildSchematic, *, source_format: str, byte_size: int) -> StoredSchematic:
-    """Rebuild the read model, taking the two file-level facts from `schematic_files`.
+    """Rebuild an attachment using its analysis row and the file's format and byte size.
 
-    `source_format` and `byte_size` describe the bytes, not the analysis, so they live on the
-    content-addressed file row and are joined in rather than duplicated per attachment.
+    Format and byte size describe the shared source file, so the repository joins them from
+    SchematicFile instead of duplicating them on each build attachment.
+    Invalid stored values raise DataIntegrityError with the attachment ID, rather than exposing
+    the decoder's individual type or enum errors.
     """
     try:
         return _to_stored_schematic(row, source_format=source_format, byte_size=byte_size)

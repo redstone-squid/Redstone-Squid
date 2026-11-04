@@ -1,20 +1,11 @@
-"""The only module that talks to the native schematic engine.
+"""Translate native engine calls into application values.
 
-Everything here is **synchronous and process-local**. It is imported by
-:mod:`squid.schematics.infrastructure.worker_main` inside a supervised subprocess, and by
-:mod:`squid.schematics.infrastructure.threaded` for development and tests. Importing it
-imports the native extension, so nothing in the parent process may import it directly.
+Operations are synchronous and process-local. Importing this module loads the native extension,
+so production callers use worker subprocesses; the threaded adapter imports it for development.
 
-Engine handles never leave this module. In particular a :class:`Schematic` is never cached
-between calls: :meth:`simulate` attaches a live ``MchprsWorld`` to the object and advances it
-tick by tick, so a reused handle would silently carry a half-finished simulation into the next
-request. Every operation reloads from bytes instead.
-
-The generated bindings shipped in the wheel differ from the upstream documentation in several
-places (`Schematic.create` not `new`, free functions on `Fingerprint`/`Diff`/`Autostack`
-rather than methods, base64 strings rather than bytes, `dimensions()` reporting allocated
-rather than tight bounds). The translation to domain values happens here so that no caller has
-to know any of it.
+Each operation reloads the schematic from bytes. A native handle can retain simulation state,
+so sharing it between requests would let one operation affect another. Resource-pack handles
+are cached separately because they are reusable rendering inputs.
 """
 
 import base64
@@ -67,8 +58,8 @@ ANALYSIS_SCHEMA_VERSION = 1
 _UNKNOWN_DATA_VERSION = -1
 """What the engine reports for a schematic that declares no source data version."""
 
-# Formats the engine can write. Legacy MCEdit `.schematic` output is produced by the
-# `"schematic"` writer; there is no writer for vanilla structure `.nbt`.
+# The engine calls its Sponge exporter "schematic". Legacy MCEdit and binary Java
+# structure formats are accepted as inputs but have no exporter in this adapter.
 _EXPORTERS: Mapping[SchematicFormat, str] = {
     SchematicFormat.LITEMATIC: "litematic",
     SchematicFormat.SPONGE_SCHEM: "schematic",
@@ -203,12 +194,13 @@ def _render_config(request: RenderRequest) -> Any:
 
 
 def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
-    """Actuate one input and collect moderator-facing piston timing evidence.
+    """Actuate one input in a quiescent schematic and collect piston timing evidence.
 
-    The 0.10.1 tick engine is distinct from the MCHPRS circuit evaluator: it models piston
-    movement and vanilla tick ordering and is conformance-tested against captured community
-    doors. A saved schematic is loaded in ``InWorld`` mode so placement does not spuriously
-    pulse every observer before the moderator presses the input.
+    InWorld loading treats blocks as already placed, avoiding observer pulses caused by placing
+    the schematic itself. Reject a world that is already changing, actuate the selected input,
+    then run until it settles or reaches max_ticks. With watched positions, collect a sample after
+    each step. Mark evidence trustworthy only when it settles, has piston events, and reports neither
+    missing block entities nor unsupported piston/entity contacts.
     """
     schematic = _load(data)
     try:
@@ -232,6 +224,7 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
         msg = "This schematic was already active when loaded, so a timing would be unreliable."
         raise InvalidSchematicError(msg, end_user_action="Save the build while it is completely at rest.")
 
+    # Start timing from the chosen input, after confirming the saved circuit is at rest.
     snapshot = _json_array(simulation.world_snapshot_json(), "simulation snapshot")
     input_position, input_source = _resolve_simulation_input(schematic, snapshot, request.input_position)
     simulation.use_block(*input_position)
@@ -247,6 +240,7 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
     else:
         settled = bool(simulation.run_until_quiescent(request.max_ticks))
 
+    # Audit the run before presenting its piston timing as usable evidence.
     summary = _json_array(simulation.events_summary_json(), "simulation event summary")
     event_rows = tuple(_event_row(row) for row in summary)
     piston_ticks = [
@@ -361,9 +355,7 @@ def _resolve_simulation_input(
         if any(name in state.partition("[")[0] for name in _INPUT_BLOCK_NAMES):
             controls[position] = state
 
-    # A caller who named a coordinate is answering this very question, so their answer is
-    # checked first. Deferring to the annotation or the sole control instead would silently
-    # time a different circuit than the one they asked about.
+    # An explicit coordinate takes precedence over annotations so we measure the requested circuit.
     if manual is not None:
         if manual not in controls:
             raise AmbiguousSimulationInputError(candidates=controls, rejected=manual)
@@ -411,11 +403,9 @@ def _load(
     limits: SchematicLimits | None = None,
     source_format: SchematicFormat | None = None,
 ) -> nucleation.Schematic:
-    """Parse bytes into an engine handle.
+    """Create a fresh native handle, translating load failures into InvalidSchematicError.
 
-    `from_data` is a *constructor*, not an in-place loader: discarding its return value leaves
-    you holding an empty 0x0x0 schematic rather than raising, which is why this is the only
-    place allowed to call it.
+    Binary Java structures use the local decoder; other formats use the engine's from_data constructor.
     """
     resolved_format = source_format or sniff_schematic_format(data)
     if resolved_format is SchematicFormat.STRUCTURE_NBT:
@@ -427,12 +417,12 @@ def _load(
 
 
 def _load_java_structure(data: bytes, limits: SchematicLimits) -> nucleation.Schematic:
-    """Bridge vanilla Java structure NBT through Nucleation's mutation API.
+    """Decode binary Java structure NBT locally and populate a new native schematic.
 
-    Nucleation's current format guide supports textual Java structure `.snbt`, not binary
-    structure-block `.nbt`; `from_data` therefore rejects this container by design. Squid's
-    accepted-input contract is deliberately broader, so this bounded compatibility bridge is
-    application-owned rather than an upstream workaround.
+    The pinned engine accepts textual Java structure SNBT, but its from_data constructor does not
+    accept binary structure-block NBT. This decoder supplies that additional input format for Squid.
+    The decoder applies byte, nesting, value-count, and dimension limits before the mutation API
+    receives blocks and entities.
     """
     try:
         structure = decode_java_structure(data, limits)
@@ -527,11 +517,10 @@ def _optional_engine_evidence(read: Callable[[], str], what: str) -> str | None:
 
 
 def _fingerprints(schematic: nucleation.Schematic) -> SchematicFingerprints:
-    """Compute all three presets plus the coarse signature used for pre-filtering.
+    """Compute three fingerprints and the structural signature.
 
-    `structural` is a coarse bucket, not an identity - a build differing by one glass block
-    still reports as a structural duplicate - so `shape` is the preset callers should treat as
-    "the same build, possibly moved or rotated".
+    The structural preset groups candidates coarsely and may match builds with block differences.
+    Duplicate classification uses the shape preset for translation- and rotation-invariant matches.
     """
     return SchematicFingerprints(
         structural=str(nucleation.Fingerprint.compute(schematic, FingerprintPreset.STRUCTURAL.value)),
@@ -544,10 +533,10 @@ def _fingerprints(schematic: nucleation.Schematic) -> SchematicFingerprints:
 
 
 def _detect_lattice(schematic: nucleation.Schematic) -> AutostackLattice | None:
-    """Return the repeating unit cell explaining the most of the build, if any.
+    """Choose the decoded repeating unit with the highest coverage, or return None.
 
-    Failure here is never fatal: a lattice is opportunistic evidence, and a build with no
-    periodicity is the common case rather than an error.
+    Many builds have no repeating unit. A failed engine call or malformed top-level result is also
+    treated as absent optional evidence, so these failures do not reject an otherwise usable file.
     """
     raw = _optional_engine_evidence(lambda: nucleation.Autostack.detect_structures(schematic), "lattice")
     if raw is None:
@@ -603,10 +592,10 @@ def _lattice(candidate: object) -> AutostackLattice | None:
 
 
 def _signs(schematic: nucleation.Schematic) -> tuple[SchematicSign, ...]:
-    """Recover sign text, tolerating an engine payload shape we do not fully pin down.
+    """Recover display-only sign evidence, skipping entries without usable coordinates or text.
 
-    Sign text is display-only evidence, so an unexpected entry is dropped rather than failing
-    the whole analysis.
+    Both pos and position coordinate fields are accepted. Missing evidence or an invalid top-level
+    JSON result produces an empty tuple.
     """
     raw = _optional_engine_evidence(schematic.extract_signs_json, "sign")
     if raw is None:

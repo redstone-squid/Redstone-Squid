@@ -43,7 +43,18 @@ _MAX_RENDER_CONTENT_BYTES = 8 * 1024 * 1024
 
 
 class SchematicPreviewService:
-    """Prepare and publish previews, sharing the analyzer and owning the resource-pack provider."""
+    """Generate images of a build's featured schematic and publish its default preview.
+
+    A rendering recipe combines the source file, resource pack, engine version, dimensions, and
+    camera settings. Its hash identifies reusable output. prepare_render returns either fresh PNG
+    bytes, a cached preview, or a reason to skip. SchematicPreviewWorker stores fresh bytes and then
+    asks this service to publish the URL as the build's generated image. Publication checks that the
+    source attachment is still featured, since it may have changed while rendering.
+
+    render_now serves an individual request without publishing its result. Both paths share the
+    analyzer supplied by SchematicService. This service owns the resource-pack provider and releases
+    it in aclose.
+    """
 
     def __init__(
         self,
@@ -332,7 +343,7 @@ class SchematicPreviewService:
 
 
 def _render_recipe_hash(stored: StoredSchematic, request: RenderRequest, pack_sha256: str) -> str:
-    """Hash the source digest, analysis version, resource pack, and framing into a cache key."""
+    """Hash the source, engine version, resource pack, dimensions, and framing into a cache key."""
     dimensions = stored.analysis.metrics.dimensions
     recipe = {
         "file_sha256": stored.file_sha256,

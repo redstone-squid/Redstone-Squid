@@ -30,14 +30,17 @@ SCHEMATIC_JOB_SPEC = QueueSpec(
     attempts=SchematicJob.attempts,
     last_error=SchematicJob.last_error,
     dead_at=SchematicJob.dead_at,
-    # The only queue that retains acknowledged rows, so readiness has to exclude
-    # the completed ones every other queue deletes.
+    # Keep completed rows for result polling, but exclude them from new work claims.
     pending=SchematicJob.completed_at.is_(None),
 )
 
 
 class PostgresSchematicJobRepository:
-    """Claim, fence, and retain native-engine jobs in PostgreSQL."""
+    """Persist native-engine job leases, outcomes, and retained outputs.
+
+    The caller owns the transaction. Updates from workers apply only while their claim token
+    matches; completed rows remain available for client polling until retention expires.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -154,6 +157,10 @@ class PostgresSchematicJobRepository:
         return outcome.dead_lettered
 
     async def claim_cleanup(self, *, limit: int) -> tuple[SchematicCleanupClaim, ...]:
+        """Reserve expired jobs and collect their output keys for deletion outside the transaction.
+
+        Input keys are shared content-addressed objects and are not owned by an individual job.
+        """
         session = self._session()
         jobs = (
             await session.scalars(

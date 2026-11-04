@@ -1,26 +1,18 @@
-"""A supervised pool of schematic worker subprocesses.
+"""Supervise persistent subprocesses for native schematic operations.
 
-`asyncio.to_thread` is the right tool for the blocking network calls elsewhere in this
-codebase, and the wrong one here. It cannot cancel: `wait_for` returns control to the caller
-while the thread keeps running, so one pathological schematic pins a default-executor thread —
-an executor shared with the embedding client — for as long as the engine wants it. Worse, the
-engine's failures are not always exceptions: wgpu, rayon, and MCHPRS spawn their own threads,
-and a Rust panic there can take the whole interpreter down.
+The native engine can abort its interpreter, and cancelling a Python await cannot stop native
+work running in a thread. Child processes let the pool contain those failures and terminate an
+operation that exceeds its deadline. Children stay alive between requests so rendering can reuse
+parsed resource packs instead of loading them for every image.
 
-`ProcessPoolExecutor` isolates the crash but not the recovery: one dead child raises
-`BrokenProcessPool` and poisons every subsequent submission with no respawn. Automatic
-per-worker recovery is the entire reason this pool is written by hand.
+Each worker handles one request at a time. Operation deadlines cover waiting for a pool slot,
+restart backoff, and the request itself. Renders additionally wait for a shared render slot
+before that deadline starts. If a worker request times out, the supervisor kills the worker
+(its process group on POSIX) and briefly collects diagnostics.
 
-Safety properties this module is responsible for:
-
-- **One in-flight request per worker**, so a response frame can never be attributed to the
-  wrong caller.
-- **A deadline on every operation.** On expiry the child's whole process group is killed, not
-  just the child, because the engine's thread pools may have spawned helpers.
-- **No automatic retry.** A payload that just killed a worker would kill the next one too;
-  retrying it is how a crash loop starts.
-- **Restart backoff with a circuit breaker**, so a user re-uploading a poison file cannot turn
-  the supervisor into a fork bomb.
+Failed requests are not replayed, since the same input may crash its replacement too. A later
+request can start a replacement worker, subject to restart backoff and a circuit breaker that
+temporarily refuses work after repeated failures.
 """
 
 import asyncio
@@ -71,46 +63,30 @@ from squid.schematics.infrastructure.wire import Frame, FrameStreamClosed, Opera
 logger = logging.getLogger(__name__)
 
 worker_logger = logging.getLogger("squid.schematics.worker")
-"""Stands in for a child that told us nothing usable about itself.
-
-Structured child records are re-emitted under their own logger names by `_emit_child_record`;
-this one carries only the supervisor's own commentary about a worker's stderr.
-"""
+"""Logger for stderr that cannot be reconstructed as one of the child's structured records."""
 
 WORKER_MODULE = "squid.schematics.infrastructure.worker_main"
 
 current_schematic_job_id: ContextVar[int | None] = ContextVar("squid.schematic_job_id", default=None)
-"""The durable job a request belongs to, if it came from one.
+"""Optional durable job ID copied into request frames for child log correlation.
 
-Carried in the request frame so the child can stamp it on its own logs. A ContextVar rather
-than a parameter because every method of the seven-method analyzer protocol would otherwise
-have to grow one, for the benefit of a single implementation.
+A context variable carries this queue-specific detail without adding a job ID to every operation
+in the shared SchematicAnalyzer interface.
 """
 
 STDERR_LINE_LIMIT = 1024 * 1024
-"""`StreamReader` line budget for the child's stderr.
-
-A faulthandler traceback or a Rust panic dump serialised into one JSON record easily exceeds
-asyncio's 64 KiB default, and overrunning it raises `ValueError` out of `readline` — losing
-exactly the diagnostics this pipe exists to carry.
-"""
+"""Allow large structured tracebacks; StreamReader.readline drops lines over this limit."""
 
 WORKER_FAILURE_CLEANUP_SECONDS = 0.1
-"""Extra bounded reap budget after an operation deadline or worker crash.
-
-The user deadline ends engine work. Process-group kill happens synchronously, then this
-separate budget collects the exit code and buffered diagnostics without turning a timeout
-into the previous multi-second wait.
-"""
+"""Extra time to collect exit status and buffered logs after killing a timed-out or crashed worker."""
 
 
 @dataclasses.dataclass(slots=True)
 class _StderrPump:
-    """A running stderr-draining task, and the handle its worker stops it by.
+    """The cancellation scope and completion signal for a worker's stderr reader.
 
-    The pump outlives no worker: `finished` is set when it reaches end of pipe or is
-    cancelled, so a terminating worker can wait for the last diagnostics out of a dying child
-    without holding a reference to the task object itself.
+    The pool owns the task. A worker uses these handles to drain buffered diagnostics and stop
+    the reader during shutdown without holding the task object itself.
     """
 
     scope: anyio.CancelScope
@@ -128,7 +104,8 @@ type _PumpBody = Callable[[], Coroutine[Any, Any, None]]
 type _SpawnPump = Callable[[_PumpBody], None]
 """How a worker hands a pump to whoever owns its lifetime — see `SchematicWorkerPool.running`.
 
-A `Coroutine` rather than an `Awaitable` because that is what `TaskGroup.start_soon` accepts."""
+A Coroutine rather than an Awaitable because that is what TaskGroup.start_soon accepts.
+"""
 
 
 class _Worker:
@@ -147,7 +124,11 @@ class _Worker:
     async def request(
         self, operation: Operation, params: Mapping[str, Any], payloads: Sequence[bytes], timeout: float
     ) -> Frame:
-        """Send one request and await its response, respawning on timeout or death."""
+        """Send one request, starting a child if needed, and wait within the supplied timeout.
+
+        Timeouts and broken pipes terminate this child. A later request starts its replacement;
+        this request is not replayed.
+        """
         try:
             with anyio.fail_after(timeout):
                 async with self._lock:
@@ -223,7 +204,7 @@ class _Worker:
         return None
 
     def _start_pump(self, process: asyncio.subprocess.Process) -> _StderrPump:
-        """Hand one pump to whoever owns this worker, keeping the handle to stop it by."""
+        """Start the stderr reader through the pool and retain its shutdown handles."""
         pump = _StderrPump(anyio.CancelScope(), anyio.Event())
         self._stderr_pump = pump
         self._spawn(functools.partial(self._run_pump, process, pump))
@@ -272,7 +253,7 @@ class _Worker:
             logger.exception("The stderr pump for schematic worker %s died; further worker logs are lost.", process.pid)
 
     async def _terminate(self) -> int | None:
-        """Kill the child and its whole group, returning its exit code if we can learn one."""
+        """Kill the child (its process group on POSIX), drain stderr, and return any known exit code."""
         process, self._process = self._process, None
         pump, self._stderr_pump = self._stderr_pump, None
         if process is None:
@@ -290,8 +271,7 @@ class _Worker:
                         process.kill()
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(process.wait(), 5.0)
-            # Drain after the process is gone, never before: on a crash the traceback we care about
-            # is still sitting in the pipe at exactly the moment the old code cancelled the pump.
+            # Let the reader consume buffered crash diagnostics before cancelling it.
             if pump is not None:
                 await pump.drain(2.0)
         finally:
@@ -318,12 +298,9 @@ class _Worker:
 
 
 def _emit_child_record(record: logging.LogRecord) -> None:
-    """Dispatch a rebuilt child record as if the child's own logger had emitted it.
+    """Forward a child record through its original logger, honoring the parent's level setting.
 
-    `Logger.handle` skips `isEnabledFor`, so re-emitting through one fixed logger made
-    parent-side level configuration for the child's module names inert. Going through the
-    record's own logger, with the level check the parent applies to its own records, keeps
-    filtering meaningful; the handler chain is unchanged because child loggers are `squid.*`.
+    Logger.handle does not check isEnabledFor, so the check must happen before dispatch.
     """
     target = logging.getLogger(record.name)
     if target.isEnabledFor(record.levelno):
@@ -430,7 +407,11 @@ class _CircuitBreaker:
 
 
 class SchematicWorkerPool:
-    """A `SchematicAnalyzer` backed by supervised subprocesses."""
+    """An analyzer backed by supervised subprocesses.
+
+    The owner must hold running() open while serving requests so stderr readers have a task group
+    that lasts as long as their worker processes.
+    """
 
     def __init__(self, config: SchematicConfig) -> None:
         self._config = config
@@ -447,13 +428,10 @@ class SchematicWorkerPool:
 
     @asynccontextmanager
     async def running(self) -> AsyncGenerator[Self]:
-        """Own every stderr pump this pool starts, for as long as the pool serves requests.
+        """Own stderr reader tasks until the pool and its workers shut down.
 
-        A pump is spawned lazily, from whichever request happened to find its worker dead, so
-        it cannot be owned by its spawner: that task returns while the child is still alive and
-        still writing panics into the pipe. It belongs to the pool instead, and an anyio task
-        group can only be exited by the task that entered it, so the pool's owner has to hold
-        this rather than the pool creating a group on demand.
+        Readers start lazily during requests but outlive those requests. Keep this context open in
+        the task that owns the pool, and stop serving requests before leaving it.
         """
         if self._pumps is not None:
             msg = "The schematic worker pool is already running."
@@ -463,8 +441,7 @@ class SchematicWorkerPool:
             try:
                 yield self
             finally:
-                # Every pump is drained and cancelled by its own worker, so the group is left
-                # with no children and its exit cannot block on a child of a dead process.
+                # Closing workers also stops their stderr readers before the task group exits.
                 await self.aclose()
                 self._pumps = None
 
@@ -475,11 +452,10 @@ class SchematicWorkerPool:
         self._pumps.start_soon(pump)
 
     async def record_health(self) -> None:
-        """Publish how saturated the pool is, for the process that owns it to sample.
+        """Report idle workers, waiting requests, and circuit-breaker state.
 
-        Render-slot contention is deliberately absent: renders are serialised by design, and
-        `squid.schematic.operation.duration{operation=render}` already shows the queueing as
-        latency.
+        Waiting for the separate render slot is excluded from these counts and from the operation
+        duration metric, which starts after a render acquires that slot.
         """
         idle = len(self._idle)
         record_gauge("squid.schematic.pool.idle_workers", idle)
@@ -576,11 +552,10 @@ class SchematicWorkerPool:
         return _payload(frame)
 
     async def aclose(self) -> None:
-        """Shut every worker down. Safe to call more than once.
+        """Shut down every worker; repeated calls are allowed.
 
-        `gather(return_exceptions=True)` rather than a task group because every worker must be
-        given its chance to die even if an earlier one refuses to: this is the last thing that
-        runs before the process exits, and a leaked child outlives us.
+        gather(return_exceptions=True) lets all shutdown attempts finish even if one raises. Individual
+        shutdown errors are collected and suppressed.
         """
         self._closed = True
         await asyncio.gather(*(worker.aclose() for worker in self._workers), return_exceptions=True)
@@ -665,11 +640,7 @@ def _payload(frame: Frame) -> bytes:
 
 
 def _translate(error: object, operation: str) -> Exception:
-    """Rebuild a typed exception from the child's error frame.
-
-    The child cannot ship an exception object across the pipe, so it sends a discriminated
-    payload instead and the mapping lives here, in one place.
-    """
+    """Rebuild a typed exception from the child's error kind, message, and context."""
     kind, message, context = wire.decode_error(error)
 
     if kind == "too_large":

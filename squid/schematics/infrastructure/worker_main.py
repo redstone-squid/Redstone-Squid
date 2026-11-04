@@ -1,16 +1,10 @@
-"""The schematic worker child process.
+"""Serve native schematic operations in a child process.
 
-Run as ``python -m squid.schematics.infrastructure.worker_main``. Reads request frames from
-stdin, writes response frames to stdout, and logs JSON records to stderr, which the supervisor
-re-emits under each record's own logger name.
+Run with python -m squid.schematics.infrastructure.worker_main. Request and response frames
+use stdin and stdout; JSON logs use stderr so the supervisor can forward them separately.
 
-This process exists so that the native engine's failure modes stay contained. wgpu, rayon, and
-MCHPRS each spawn their own threads; a panic in one of them, or a Rust profile built with
-``panic = "abort"``, terminates the *process*. Here that costs one worker and an automatic
-respawn instead of the bot.
-
-Guardrails are installed **before** the engine is imported, so a malicious file cannot exhaust
-the host during module initialisation either.
+Process isolation contains native aborts. Before importing the engine, the child attempts to
+apply POSIX resource limits; unsupported or rejected limits do not prevent startup.
 """
 
 import faulthandler
@@ -44,11 +38,10 @@ logger = logging.getLogger(__name__)
 
 
 class _RequestContextFilter(logging.Filter):
-    """Stamp the request being served onto every record the child emits.
+    """Add the current request's identifiers to records passing through the log handler.
 
-    Attached to the handler rather than one logger so that records from the native engine's
-    own loggers are correlated too. `serve` handles one request at a time, so plain mutable
-    state is enough — there is no interleaving to protect against.
+    serve handles one request at a time, so one shared set of fields also associates native
+    background-thread logs with the active request.
     """
 
     def __init__(self) -> None:
@@ -68,21 +61,19 @@ _request_context = _RequestContextFilter()
 STATM_PATH = Path("/proc/self/statm")
 
 _RESOURCE_PACK: VerifiedResourcePack | None = None
-"""Cached across requests. Reading and parsing a vanilla resource pack is expensive, and it is
-the only reason this is a persistent worker rather than a one-shot subprocess. A `Schematic`
-is deliberately *never* cached here: `simulate` attaches a live world to one."""
+"""Reuse pack bytes across requests; native pack handles are cached separately by the adapter."""
 
 
 def apply_guardrails(limits: Mapping[str, int]) -> None:
-    """Cap this process's resources before the native engine is imported.
+    """Enable crash tracebacks and attempt resource limits before importing the engine.
 
-    POSIX only; on other platforms the per-operation deadline and the supervisor's kill are
-    the only bounds, which is acceptable because deployment is Linux.
+    On POSIX, cap address space above the startup baseline, total process CPU time, and individual
+    file size. Failed limit changes are logged; platforms without resource support rely on the
+    supervisor's deadlines.
 
-    `RLIMIT_NPROC` is deliberately **not** set. It counts processes per real UID rather than
-    per process, so any value low enough to constrain a fork bomb also stops the engine's
-    rayon and wgpu pools from creating threads on a busy host. Runaway children are handled
-    instead by `start_new_session=True` plus a process-group kill in the supervisor.
+    RLIMIT_NPROC is omitted because it counts processes and threads per real UID, which can block
+    the engine's thread pools on a busy host. The supervisor kills the worker's process group on
+    timeout to stop its helper processes too.
     """
     faulthandler.enable()
     if resource is None:  # pragma: no cover - Windows
@@ -113,7 +104,7 @@ def _current_address_space_bytes(statm_path: Path = STATM_PATH) -> int:
 
 
 def _set_limit(which: int, soft: int) -> None:
-    """Lower one resource limit, never raising it above the inherited hard limit."""
+    """Set a soft resource ceiling no higher than the inherited hard limit, logging failures."""
     assert resource is not None
     try:
         _, hard = resource.getrlimit(which)  # pyrefly: ignore[missing-attribute]
@@ -285,7 +276,7 @@ def _trace_headers(header: Mapping[str, Any]) -> Mapping[str, str]:
 
 
 def main() -> None:
-    """Install guardrails from the supervisor's environment, then serve requests."""
+    """Read limits from the command-line JSON argument, configure the child, and serve requests."""
     log_config = load_worker_log_config()
     # "INFO" matches WorkerProcessConfig.logging, so the child's floor is the supervisor's.
     configure_worker_logging(level=log_config.level, root_level=log_config.root_level or "INFO")

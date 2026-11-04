@@ -15,7 +15,12 @@ PACK_TOO_LARGE_MESSAGE = "The configured resource pack is too large."
 
 
 class ResourcePackLoader:
-    """Load a configured pack once, verifying remote content before caching it."""
+    """Lazily load and retain one resource pack, preferring a configured local path.
+
+    URL sources require an expected SHA-256 and use a verified disk cache before downloading.
+    Remote reads are size-limited; local files and cached bytes are read in full. A supplied HTTP
+    session remains caller-owned; a session created by this loader is closed by aclose.
+    """
 
     def __init__(
         self,
@@ -36,7 +41,7 @@ class ResourcePackLoader:
         self._owns_session = session is None
 
     async def load(self) -> VerifiedResourcePack:
-        """Return the verified pack, fetching a configured URL only on first use."""
+        """Return the cached pack or load and verify it; a failed load can be tried again."""
         if self._loaded is not None:
             return self._loaded
         async with self._lock:

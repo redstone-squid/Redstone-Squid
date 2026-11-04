@@ -26,13 +26,21 @@ _BUILD_TABLE = cast(Table, Build.__table__)
 
 
 class PostgresSchematicPreviewRepository:
-    """Persist preview recipes and atomically publish their generated build links."""
+    """Persist preview recipes and generated build links within the caller's transaction.
+
+    Publication locks the build before checking its featured attachment, coordinating with
+    attachment replacement. Object reservations and cleanup claims prevent publication from
+    reusing bytes while deletion is in progress.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
     async def featured_attachment_changed(self, build_id: int) -> None:
-        """Clear the old generated link and enqueue its replacement under the build lock."""
+        """Clear the old generated link and queue its replacement.
+
+        The caller must already hold the build-row lock used by publication.
+        """
         session = self._session()
         await self._clear_generated_preview_link(session, build_id)
         render_job = insert(SchematicRenderQueueItem).values(build_id=build_id)
@@ -77,7 +85,11 @@ class PostgresSchematicPreviewRepository:
         byte_size: int,
         sha256: str,
     ) -> SchematicPreviewObject:
-        """Reserve durable ownership before upload and identify reusable ready bytes."""
+        """Reserve upload metadata, rejecting objects currently claimed for cleanup.
+
+        Metadata for a referenced object is immutable. An unreferenced object can be reserved with
+        new metadata, which clears readiness and requires a new upload.
+        """
         session = self._session()
         seen_at = now()
         await session.execute(
@@ -111,7 +123,11 @@ class PostgresSchematicPreviewRepository:
         return row
 
     async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
-        """Mark a reserved object reusable after its upload metadata was verified."""
+        """Record readiness after the caller verifies the upload.
+
+        Check that the reservation still matches and no cleanup claim exists. This method does not
+        inspect object storage.
+        """
         ready_at = now()
         session = self._session()
         row = await session.scalar(
@@ -251,7 +267,11 @@ class PostgresSchematicPreviewRepository:
         *,
         previous_url: str | None = None,
     ) -> None:
-        """Atomically replace only the build link owned by registered preview artifacts."""
+        """Replace links owned by registered previews and increment the build revision if changed.
+
+        Preserve other render links. The caller must hold the build-row lock; previous_url identifies
+        a link whose recipe row has already been updated in this transaction.
+        """
         registered_urls = PostgresSchematicPreviewRepository._registered_preview_urls(build_id)
         owned_url = BuildLink.url.in_(registered_urls)
         if previous_url is not None:
@@ -322,6 +342,11 @@ class PostgresSchematicPreviewRepository:
         )
 
     async def claim_cleanup(self, *, older_than: Instant) -> PreviewCleanupClaim | None:
+        """Reserve one old unreferenced object, clearing readiness while it is being deleted.
+
+        Skip locked rows and allow reclaiming cleanup leases older than five minutes. The caller must
+        commit before deleting the object from storage.
+        """
         session = self._session()
         row = await session.scalar(
             select(SchematicPreviewObject)
@@ -348,6 +373,7 @@ class PostgresSchematicPreviewRepository:
         return PreviewCleanupClaim(row.object_key, token)
 
     async def complete_cleanup(self, claim: PreviewCleanupClaim) -> bool:
+        """Delete metadata if this cleanup token still owns the object, returning whether it applied."""
         return (
             await self._session().scalar(
                 delete(SchematicPreviewObject)

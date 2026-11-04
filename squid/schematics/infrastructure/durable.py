@@ -1,4 +1,13 @@
-"""Durable client and worker runner for native schematic operations."""
+"""Send schematic operations from application processes to the background worker.
+
+QueuedSchematicAnalyzer stores input bytes and submits a database job through SchematicJobService.
+SchematicJobRunner, running in the background worker process, loads those inputs and calls its
+native analyzer. In production that analyzer is SchematicWorkerPool, which executes each operation
+in a child process. The runner stores the result for the client to retrieve by polling.
+
+The database job survives a client disconnect. The native subprocess boundary separately contains
+engine crashes and enforces operation deadlines; the queue and the pool have different lifetimes.
+"""
 
 import asyncio
 import dataclasses
@@ -55,7 +64,12 @@ class _JobResponse:
 
 
 class QueuedSchematicAnalyzer:
-    """Submit native-engine requests to the database worker and await durable results."""
+    """Submit requests to the durable queue and poll for their results.
+
+    Each request stores its inputs before submitting a job. The wait timeout starts after submission,
+    so it excludes input uploads. Timing out or cancelling the client stops the wait but does not
+    cancel the durable job; a worker can still complete it later.
+    """
 
     def __init__(
         self,
@@ -242,11 +256,10 @@ class SchematicJobRunner:
         self._config = config
 
     async def process_batch(self, *, limit: int = 8) -> None:
+        """Claim jobs and let each finish recording its own outcome before reporting batch failures."""
         jobs = await self._jobs.claim(limit=limit)
-        # Settled rather than cancelled on the first failure: the jobs are
-        # independent, and a cancelled one never reaches the handler that fails it,
-        # so it would hold its claim and its result object until the next cleanup
-        # pass. Failures still raise once the batch is done.
+        # Jobs are independent. Let each record its outcome even if another job's handler
+        # fails; cancelling it here would leave its claim reserved until the lease expires.
         await run_all_settled([partial(self._process, job) for job in jobs])
 
     async def cleanup(self) -> None:
@@ -265,8 +278,8 @@ class SchematicJobRunner:
             inputs = await run_all([partial(self._load_input, job, key) for key in job.input_keys])
             result, output = await self._execute(job, inputs)
             if output is not None:
-                # A reclaimed job can finish before its old worker. Fence the object as well
-                # as the row so a rejected completion only deletes that worker's own output.
+                # Include the claim token so an old worker cannot overwrite or delete a newer
+                # worker's output after the job has been reclaimed.
                 result_object_key = f"schematic-jobs/results/{job.id}/{job.claim_token}"
                 if not await self._jobs.register_result_object(job, result_object_key):
                     return
@@ -363,6 +376,11 @@ class SchematicJobRunner:
 
 
 def _classify_error(error: Exception) -> tuple[SchematicJobErrorKind, Mapping[str, Any], bool]:
+    """Return the stored error kind, context, and whether retries must stop.
+
+    Known application errors are terminal, including native timeouts and crashes. Unexpected
+    exceptions remain retryable within the queue's configured attempt limit.
+    """
     context = dict(error.context) if isinstance(error, SquidError) else {}
     if isinstance(error, SchematicTooLargeError):
         return "too_large", context, True

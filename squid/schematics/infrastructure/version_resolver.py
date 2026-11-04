@@ -1,8 +1,8 @@
-"""Translation between Minecraft version labels and numeric data versions.
+"""Translate human-readable Minecraft releases into schematic data versions.
 
-`convert` needs a data version, but every version a user can name in this application is a
-label like `Java 1.20.4`. The mapping is a fixed published fact, so it lives in the `versions`
-table as one more column rather than in a service that has to be kept in sync.
+Users choose labels such as Java 1.20.4; the native converter needs the numeric data version that
+identifies Minecraft's saved-data format. The shared version catalogue stores that correspondence.
+Several releases can share a data version, so reverse lookup returns the earliest matching release.
 """
 
 from collections.abc import Callable
@@ -22,12 +22,7 @@ class PostgresSchematicVersionResolver:
         self._session = session
 
     async def data_version_for(self, version_label: str) -> int | None:
-        """Return the numeric data version for a label, or `None` if we do not know one.
-
-        A label we cannot even parse is answered with `None` rather than an exception: callers
-        are choosing a conversion target, and "we have no data version for that" is a normal
-        answer they already have to handle.
-        """
+        """Return the data version, or None for an invalid label, unknown release, or missing value."""
         try:
             edition, major, minor, patch = parse_version_string(version_label)
         except InvalidVersionError:
@@ -43,10 +38,9 @@ class PostgresSchematicVersionResolver:
         return await session.scalar(statement)
 
     async def label_for_data_version(self, data_version: int) -> str | None:
-        """Return the version label for a data version, preferring the earliest release.
+        """Return the earliest matching catalogue release, or None if no release matches.
 
-        Several patch releases can share one data version; the first is the one that
-        introduced it and the one worth naming.
+        Order matches by major, minor, and patch version because multiple releases can share a data version.
         """
         statement = (
             select(Version)

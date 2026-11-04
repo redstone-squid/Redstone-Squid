@@ -1,4 +1,4 @@
-"""PostgreSQL adapter for durable build-preview publication intents."""
+"""PostgreSQL queue for requests to update a build's generated preview."""
 
 from collections.abc import Callable
 
@@ -23,7 +23,7 @@ SCHEMATIC_RENDER_QUEUE_SPEC = QueueSpec(
 
 
 class PostgresSchematicRenderJobRepository:
-    """Claim-fenced queue adapter for render enrichment."""
+    """Persist preview jobs, accepting worker outcomes only while their claim token matches."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
