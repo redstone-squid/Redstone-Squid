@@ -5,4 +5,4 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 
 
 class BaseAsyncRepository[ModelT: ModelProtocol](SQLAlchemyAsyncRepository[ModelT]):
-    """Base repository for model-level persistence operations."""
+    """Project-wide base for Advanced Alchemy's asynchronous model repositories."""

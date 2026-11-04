@@ -213,10 +213,11 @@ def start_log_capture(
     enabled: bool = True,
     capacity: int = 256,
 ) -> None:
-    """Store every logged exception, not only the failures a transport captures itself.
+    """Start collecting logged exceptions as error reports when enabled.
 
-    This is what makes worker failures reachable at all: its queue consumers absorb a failure,
-    dead-letter the job and log it, so nothing reaches the supervisor that would have captured it.
+    Queue workers often catch failures and log them before retrying or stopping
+    a job. Log capture makes those failures available even though they never
+    reach the supervisor as exceptions.
     """
     if not enabled:
         return
@@ -228,11 +229,10 @@ def start_permission_epoch_watch(
     supervisor: BackgroundTaskSupervisor,
     watcher: PermissionEpochWatcher,
 ) -> None:
-    """Start one process's permission-cache invalidation jobs.
+    """Start polling for permission changes and listen for wake hints when configured.
 
-    Two jobs, deliberately: the poll is what makes invalidation durable, and the
-    `LISTEN` connection only shortens the window. A deployment with no listener
-    URL configured still converges, just five seconds slower.
+    Polling keeps the cache current even if PostgreSQL notifications are missed.
+    The optional listener lets the process notice changes sooner.
     """
     supervisor.start_periodic(
         watcher.refresh,
@@ -279,10 +279,10 @@ class BackgroundTaskSupervisor:
         self._error_reports: ErrorReportService | None = None
 
     def capture_failures_into(self, service: ErrorReportService | None) -> None:
-        """Store background job failures, which otherwise only ever reach a log file.
+        """Choose where periodic jobs store error reports, or disable capture with `None`.
 
-        Set after construction because the supervisor is built before the service graph in every
-        process that owns one, and a job that fails before this is called is still logged.
+        This can be set after the application services have been created. Failures
+        are still logged when no report service is configured.
         """
         self._error_reports = service
 
@@ -297,17 +297,9 @@ class BackgroundTaskSupervisor:
             try:
                 yield self
             finally:
-                # Leaves the task group with no children, so its own exit cannot
-                # block on work that close() was supposed to have stopped.
                 await self.close()
-                # close() gives up at the shutdown deadline, so re-cancel at the
-                # group level to force down anything merely slow to notice.
-                #
-                # Unlike the asyncio.wait this replaces, a task group cannot
-                # abandon a child: a job that shields itself past the deadline
-                # will still delay process exit rather than being left orphaned.
-                # That is the intended trade -- orphaned tasks are what the
-                # supervisor exists to prevent -- and nothing here shields.
+                # Cancel the group too if individual jobs missed the deadline.
+                # Exiting still waits for every child, including shielded work.
                 task_group.cancel_scope.cancel()
 
     @property
@@ -328,7 +320,11 @@ class BackgroundTaskSupervisor:
         )
 
     def start(self, coroutine: Coroutine[Any, Any, None], *, name: str) -> JobHandle:
-        """Start one owned task while this supervisor is accepting work."""
+        """Start a job and return a handle for cancellation and completion.
+
+        Raise `RuntimeError` and close the supplied coroutine if the supervisor has
+        not started or is closing. A job failure is logged without cancelling siblings.
+        """
         if self._task_group is None:
             coroutine.close()
             msg = "Cannot start background work before the supervisor is running."
@@ -350,7 +346,12 @@ class BackgroundTaskSupervisor:
         interval: float,
         run_immediately: bool = True,
     ) -> JobHandle:
-        """Run an operation repeatedly with uniform failure isolation and ownership."""
+        """Run an operation repeatedly, waiting `interval` seconds after each run.
+
+        Failures are logged and the next run is still scheduled. Successful runs
+        update the heartbeat under `name`. By default the first run starts at once;
+        set `run_immediately=False` to wait one interval first.
+        """
         if interval <= 0:
             msg = "Periodic job interval must be positive."
             raise ValueError(msg)
@@ -360,7 +361,11 @@ class BackgroundTaskSupervisor:
         )
 
     async def close(self) -> None:
-        """Stop accepting work, cancel tasks, and wait for all of them with a deadline."""
+        """Stop accepting work, cancel jobs, and wait up to the shutdown timeout.
+
+        Log jobs that miss the deadline. Leaving `running()` still waits for the task
+        group, so a job that shields cancellation can delay process exit.
+        """
         if self._closing:
             return
         self._closing = True
@@ -435,7 +440,7 @@ class BackgroundTaskSupervisor:
             await anyio.sleep(interval)
 
     async def _capture(self, error: BaseException, *, name: str, correlation: str) -> None:
-        """Store one background job failure, never letting the attempt kill the loop."""
+        """Store a periodic job failure and log any error from the reporting service."""
         if self._error_reports is None:
             return
         try:
@@ -457,9 +462,7 @@ class BackgroundTaskSupervisor:
             with handle.scope:
                 await coroutine
         except Exception:
-            # Failures stay local to the job. Letting one escape would cancel
-            # every sibling in the task group, which for the worker means one
-            # bad job taking down the other seventeen.
+            # Letting a failure escape would cancel every sibling in the task group.
             if not self._closing:
                 logger.exception("Background task %s stopped unexpectedly", handle.name)
         finally:

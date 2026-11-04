@@ -15,7 +15,13 @@ from squid.persistence.inspection import is_sane_database
 
 
 class DatabaseEngine:
-    """Owns the process-wide SQLAlchemy engines and session factories."""
+    """Own the connection pools used by one application process.
+
+    Async sessions serve application operations; synchronous sessions support
+    schema inspection and other synchronous callers. The pools connect to the same
+    database, but sessions from different factories do not share a transaction.
+    Process shutdown must call close to release both pools.
+    """
 
     def __init__(
         self,
@@ -23,11 +29,11 @@ class DatabaseEngine:
         *,
         debug: bool = False,
     ) -> None:
-        """Initializes the engines and session factories.
+        """Create async and sync connection pools for the configured database.
 
         Args:
-            config: Database connection URL and drivers.
-            debug: Whether to echo SQL statements, for debugging.
+            config: Database connection settings. The pools use asyncpg and psycopg2.
+            debug: Whether to log SQL statements.
         """
         base = make_url(config.url.get_secret_value())
         self.async_engine: AsyncEngine = create_async_engine(base.set(drivername="postgresql+asyncpg"), echo=debug)
@@ -61,7 +67,7 @@ class DatabaseEngine:
             )
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
-        """Validates that the database schema is consistent with the expected schema."""
+        """Raise `DataIntegrityError` if the schema fails the model consistency checks."""
         if not is_sane_database(base_cls, self.sync_engine):
             msg = "The database schema is not consistent with the expected schema."
             raise DataIntegrityError(msg)
@@ -72,12 +78,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def migration_heads(root: Path = PROJECT_ROOT) -> frozenset[str]:
-    """Heads of the migration scripts under `root`.
-
-    `root` is a parameter because `check_readiness` compares the deployed revision against this
-    set: a test can otherwise only assert the mismatch branch, never a passing readiness check
-    against a known head.
-    """
+    """Return the migration heads in the source tree at `root`."""
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     return frozenset(ScriptDirectory.from_config(config).get_heads())

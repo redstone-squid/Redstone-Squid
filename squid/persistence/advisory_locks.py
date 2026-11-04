@@ -1,4 +1,11 @@
-"""Namespaced PostgreSQL transaction locks for application resources."""
+"""Coordinate transactions that operate on the same application resource.
+
+An advisory lock identifies a resource by a key rather than a database row. This
+lets repositories protect operations such as checking a draft limit and creating
+the next draft, where locking an existing draft alone would not protect the count.
+The lock lasts until the transaction ends. Every competing operation must use the
+same namespace and key; PostgreSQL does not infer these locks from table writes.
+"""
 
 import hashlib
 from enum import StrEnum
@@ -9,7 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AdvisoryLockNamespace(StrEnum):
-    """Closed namespaces whose existing values are stable lock-wire contracts."""
+    """Lock namespaces shared by all application processes.
+
+    Keep existing values stable: processes running different releases must derive
+    the same lock ID for the same resource.
+    """
 
     SUBMISSION_DRAFT_LIFECYCLE = "submission-draft-lifecycle-v1"
     SUBMISSION_DRAFT_CAPACITY = "submission-draft-capacity-v1"
@@ -35,7 +46,10 @@ async def lock_key(
     *,
     namespace: AdvisoryLockNamespace,
 ) -> None:
-    """Hold a stable namespaced canonical-key lock until the transaction ends."""
+    """Wait for a resource lock and hold it until the transaction ends.
+
+    Callers must use the same key representation and namespace for the same resource.
+    """
     if namespace is AdvisoryLockNamespace.MINECRAFT_ACTIVE_CHALLENGE:
         # This namespace predates the shared helper. Preserve its SHA-256-derived
         # lock IDs so old and new processes still serialize during a rollout.

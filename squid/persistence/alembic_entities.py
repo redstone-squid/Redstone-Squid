@@ -1,4 +1,9 @@
-"""Replaceable PostgreSQL functions and triggers managed by Alembic."""
+"""Include PostgreSQL functions and triggers in Alembic's schema comparison.
+
+SQLAlchemy's table metadata does not describe these database objects. Read their
+desired definitions from postgres_entities.sql and wrap them as alembic-utils
+entities so autogenerate can detect additions, removals, and changed definitions.
+"""
 
 import re
 from functools import cache
@@ -16,14 +21,11 @@ EXPECTED_TRIGGERS = 46
 
 
 def parse_entities(sql: str) -> list[ReplaceableEntity]:
-    """Split `sql` into the functions and triggers Alembic owns.
+    """Parse the PostgreSQL functions and triggers managed by Alembic.
 
-    Takes the SQL rather than reading it so the counts below, and the statement patterns they
-    guard, can be exercised against inputs the shipped file is never allowed to contain.
-
-    The counts are asserted rather than trusted: a statement the patterns fail to match is
-    dropped silently, and a short list would let a migration believe it had replaced an entity
-    that is in fact still running its previous definition.
+    Require the expected counts so an unrecognized statement cannot silently
+    disappear from migration metadata. Update the counts when adding or removing
+    an entity. Raise `RuntimeError` when either count differs.
     """
     functions = re.findall(r"^CREATE FUNCTION .*?\$\$;", sql, flags=re.MULTILINE | re.DOTALL)
     triggers = re.findall(r"^CREATE (?:CONSTRAINT )?TRIGGER .*?;$", sql, flags=re.MULTILINE)
@@ -41,9 +43,8 @@ def parse_entities(sql: str) -> list[ReplaceableEntity]:
 
 @cache
 def alembic_util_entities() -> list[ReplaceableEntity]:
-    """The exact functions and triggers Alembic owns in the public schema.
+    """Read and cache the PostgreSQL functions and triggers managed by Alembic.
 
-    Read on first use rather than at import, so importing this module — which the migration
-    revisions do at collection time — touches no disk.
+    Read on first use so importing a migration revision does not read the SQL file.
     """
     return parse_entities(ENTITY_SQL_PATH.read_text(encoding="utf-8"))

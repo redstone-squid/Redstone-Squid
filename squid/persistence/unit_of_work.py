@@ -52,7 +52,16 @@ from squid.voting.infrastructure.repository import VoteRepository
 
 
 class SqlAlchemyUnitOfWork:
-    """Own one session and expose repositories that share its transaction."""
+    """Keep one application operation's repository writes in a single transaction.
+
+    Each exposed repository uses the same SQLAlchemy session. For example, an
+    operation can update a build and enqueue a notification, then commit both
+    together so a notification is not stored for an update that rolled back.
+
+    Enter once with `async with`, then explicitly call `commit()` to save changes.
+    Exiting without a commit rolls back. Repositories can only be used while the
+    unit of work is active; committing ends that access even if the commit fails.
+    """
 
     def __init__(
         self,
@@ -348,6 +357,7 @@ class SqlAlchemyUnitOfWork:
         return self
 
     async def commit(self) -> None:
+        """Commit the transaction and stop accepting repository operations."""
         session = self._active_session()
         try:
             await session.commit()

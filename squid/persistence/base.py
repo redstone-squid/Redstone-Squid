@@ -13,18 +13,24 @@ from squid.persistence.docs import extract_attribute_docstrings
 
 
 class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase, eq=False):
-    """Mapped entities use object identity; value objects define their own equality."""
+    """Common base for persisted entities and their SQL schema comments.
+
+    Models inherit dataclass construction and awaitable access to attributes that
+    require database I/O. Their class and attribute docstrings also become database
+    comments through __init_subclass__.
+
+    Entities compare by object identity, so changing a mapped field does not change
+    equality or hashing while an instance is held in a set or dictionary.
+    """
 
     __eq__ = object.__eq__
     __hash__ = object.__hash__
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Populate table/column comments from docstrings, so the database is self-documenting.
+        """Use model docstrings as table and column comments.
 
-        A class docstring becomes the table comment; a bare string literal
-        immediately following an attribute's annotation becomes that column's
-        comment (mirroring how attribute docstrings are written throughout
-        this module, e.g. in pydantic models).
+        A class docstring describes its table. A string immediately after an annotated
+        column describes that column. Explicit SQLAlchemy comments take precedence.
         """
         # All of this has to happen before the delegation below, because that is where
         # DeclarativeBase builds the Table: afterwards __table_args__ has already been read,
@@ -51,11 +57,10 @@ class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase, eq=F
 
 
 def _document_table(cls: type[Base], comment: str) -> None:
-    """Record *comment* as the table comment in *cls*'s own `__table_args__`.
+    """Set the table comment without changing inherited table options.
 
-    Reads from `__dict__` rather than by attribute: a joined-inheritance subclass inherits
-    its parent's `__table_args__`, and filling in a comment there would document the parent's
-    table a second time while leaving this one undocumented.
+    Read the class's own `__table_args__`: a subclass may inherit options for its
+    parent's table, which must not receive the subclass's comment.
     """
     table_args = cls.__dict__.get("__table_args__")
     if table_args is None:
@@ -70,6 +75,6 @@ def _document_table(cls: type[Base], comment: str) -> None:
 
 
 def _fill_comment(table_args: dict[str, Any], comment: str) -> None:
-    """Fill in the comment slot unless the model already spelled one out."""
+    """Use the docstring unless the model supplies an explicit comment."""
     if table_args.get("comment") is None:
         table_args["comment"] = comment

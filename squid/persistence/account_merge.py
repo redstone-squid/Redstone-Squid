@@ -1,4 +1,10 @@
-"""Shared SQL primitives for feature-owned phases of one account merge."""
+"""Move references from an absorbed account to the account kept by a merge.
+
+Each feature's merge adapter first handles conflicts such as two records that
+would become duplicates. It can then use move_account_references for the remaining
+foreign keys. These updates use the merge's existing database session so they
+commit or roll back with the rest of the merge.
+"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -9,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 @dataclass(frozen=True, slots=True)
 class AccountMergeContext:
-    """The surviving and absorbed accounts in a caller-owned transaction."""
+    """IDs of the account to keep (survivor) and the account whose references move (absorbed)."""
 
     survivor: int
     absorbed: int
@@ -21,7 +27,7 @@ class AccountMergeContext:
 
 @dataclass(frozen=True, slots=True)
 class AccountReference:
-    """An account foreign key whose merge disposition is explicitly owned."""
+    """A foreign-key column to reassign when merging accounts."""
 
     table_name: str
     column_name: str

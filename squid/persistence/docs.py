@@ -43,9 +43,10 @@ class _AttributeDocstringVisitor(ast.NodeVisitor):
 
 
 def extract_attribute_docstrings(cls: type[Any]) -> dict[str, str]:
-    """Return a mapping of attribute name to its trailing docstring, if any.
+    """Return docstrings following annotated attributes declared directly in `cls`.
 
-    Only docstrings declared directly in *cls* (not inherited ones) are returned.
+    Ignore inherited attributes and nested statements. Return an empty mapping
+    when the class source is unavailable.
     """
     try:
         source = inspect.getsource(cls)

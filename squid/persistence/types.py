@@ -13,15 +13,11 @@ __all__ = ["InstantUTC", "IntEnumSmallInt", "StrEnumText", "now"]
 
 
 def now() -> Instant:
-    """The current instant at the precision `InstantUTC` can actually store.
+    """Return the current instant rounded down to PostgreSQL timestamp precision.
 
-    `Instant.now()` is nanosecond-resolution and PostgreSQL `timestamptz` is microsecond, so a
-    row written from an unrounded instant comes back slightly earlier than the object that wrote
-    it. Nothing raises; the two simply stop comparing equal, which surfaces as an ORM instance
-    disagreeing with a re-read of the row it just created.
-
-    Minting at storage precision fixes it at the source, so every persisted default is exact
-    across a round trip. Use `Instant.now()` for anything that is only ever compared in memory.
+    Whenever instants support nanoseconds; PostgreSQL timestamps store microseconds.
+    Use this function for persisted defaults so the value still compares equal after
+    reading it back. Use `Instant.now()` when storage precision does not matter.
     """
     return Instant.now().round("microsecond", mode="floor")
 
@@ -57,12 +53,10 @@ class InstantUTC(TypeDecorator[Instant]):
 
 
 class StrEnumText[EnumT: StrEnum](TypeDecorator[EnumT]):
-    """Store a `StrEnum` as plain text while exposing the member to the ORM.
+    """Store enum values as text and return enum members when reading rows.
 
-    Deliberately not `sqlalchemy.Enum`: the shipped columns are `TEXT` guarded by
-    check constraints, and a native PostgreSQL enum type would make every added
-    member a migration. What this buys over a bare `Text` column is that a row read
-    back is a member rather than a string the caller has to remember to re-wrap.
+    This matches the existing TEXT columns and their check constraints. Both writes
+    and reads validate values through the enum constructor.
     """
 
     impl = Text
@@ -91,13 +85,12 @@ class StrEnumText[EnumT: StrEnum](TypeDecorator[EnumT]):
 
 
 class IntEnumSmallInt[EnumT: IntEnum](TypeDecorator[EnumT]):
-    """Store an `IntEnum` as a small integer while exposing the member to the ORM.
+    """Store enum values as small integers and return enum members when reading rows.
 
-    A bare `SmallInteger` column annotated `Mapped[SomeIntEnum]` reads back as a plain
-    `int`: the explicit column type wins over the annotation, and nothing coerces. With
-    an `IntEnum` that failure is close to silent, because every comparison against a
-    member still comes out right; only member-only attributes like `.name` blow up, and
-    only in whichever caller happens to want one. This type makes the annotation true.
+    A plain `SmallInteger` returns an `int` even when the mapped annotation names an
+    enum. Integer equality would still work, but callers could not use `.name` or
+    other enum attributes. Both writes and reads validate values through the enum
+    constructor.
     """
 
     impl = SmallInteger

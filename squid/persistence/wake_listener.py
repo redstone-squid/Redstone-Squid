@@ -1,8 +1,9 @@
-"""Optional PostgreSQL LISTEN wake hints for durable pollers.
+"""Let database notifications wake a worker before its next scheduled poll.
 
-A notification is a latency hint and nothing more. Every consumer of this class
-also polls, so a dropped notification, a dead connection or a process that was
-not running at commit time costs latency rather than correctness.
+Workers find pending work by querying durable database state. LISTEN notifications
+only tell them to check sooner; the notification payload is not the work itself.
+Callers must keep polling even when this listener is running, since notifications
+can be missed while a connection or process is down.
 """
 
 import asyncio
@@ -32,7 +33,12 @@ class PostgresWakeListener:
         return self._channel
 
     async def run(self, on_wake: Callable[[], Awaitable[None]]) -> None:
-        """Reconnect forever and invoke `on_wake` after each notification."""
+        """Call `on_wake` after connecting and when notifications arrive.
+
+        Notifications that arrive together may result in a single callback. Reconnect
+        after connection or callback failures, waiting `reconnect_seconds` between
+        attempts. Cancellation stops the loop.
+        """
         while True:
             connection: asyncpg.Connection | None = None
             wake = asyncio.Event()

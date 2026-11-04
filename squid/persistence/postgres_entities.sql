@@ -1,4 +1,7 @@
 -- Functions and triggers owned by Alembic. Edit this file, then autogenerate a revision.
+-- Queue triggers record background work in the same transaction as the source change.
+-- Workers later read those queues to update search documents, Discord messages, and records.
+-- Other functions enforce invariants that must hold even when writes bypass application services.
 
 CREATE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete() RETURNS trigger
     LANGUAGE plpgsql
@@ -77,6 +80,7 @@ begin
 end;
 $$;
 
+-- Replacing queued work clears its claim token so an older worker cannot acknowledge the new request.
 CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -521,6 +525,7 @@ BEGIN
 END;
 $$;
 
+-- Deferred triggers allow the parent and subtype rows to be written in either order within a transaction.
 CREATE FUNCTION public.enforce_vote_session_kind_subtype() RETURNS trigger
     LANGUAGE plpgsql
     AS $$

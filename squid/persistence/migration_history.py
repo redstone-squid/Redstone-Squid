@@ -1,22 +1,17 @@
-"""Append-only ledger of the migration steps this database has actually run.
+"""Record migration history and detect changes to applied revision files.
 
-`alembic_version` records where the schema *is*, not how it got there, and two questions
-this project genuinely asks cannot be answered from a pointer. Expand/contract rollouts
-need to know when the expand landed, so that the drain window before the contract can be
-shown to have elapsed. And because every revision here carries a working downgrade, a
-database can leave and re-enter a revision, which a pointer cannot express at all.
+Alembic's version table records the current schema revision. This history table
+also records how the database got there: each upgrade, downgrade, and stamp, with
+its time and application release. A stamp records an asserted revision without
+executing its migration script.
 
-The third question the pointer cannot answer is whether a revision's script still says what
-it said when this database ran it. The migration chain is only ever tested from a clean
-database, so editing an already-applied revision leaves that test passing while production
-silently diverges from the file that claims to describe it. `verify_script_digests` closes
-that gap by refusing to migrate a database whose recorded digests no longer match the tree.
+Each entry stores a digest of the revision file. A later migration run checks
+digests for the current revision's ancestors and refuses files that have changed.
+Tests on a fresh database cannot detect that mismatch: they run the edited file,
+while an existing database still reflects the version it previously ran.
 
-Rows are written from an `on_version_apply` callback, which fires inside the migration
-transaction. A run that fails therefore rolls its rows back along with the DDL they
-describe, so a row here always means "this statement is committed" -- there is deliberately
-no `success` column, because a failed step could never write one. Failures belong in the
-run's logs.
+The Alembic callback writes rows inside the migration transaction. Failed
+transactions roll back their history too; failures are recorded in logs.
 """
 
 import hashlib
@@ -35,10 +30,9 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from squid.config import load_build_config
 
 HISTORY_TABLE = "alembic_migration_history"
-"""Named to sort beside `alembic_version`, because it is bookkeeping and not application schema.
+"""Migration bookkeeping, maintained here rather than through model metadata.
 
-`alembic/env.py` excludes both from autogenerate comparison. Adding a column here without
-adding it to that exclusion would make `alembic check` report permanent drift.
+`alembic/env.py` excludes this table and `alembic_version` from schema comparison.
 """
 
 UNKNOWN_RELEASE = "unknown"
@@ -74,8 +68,8 @@ CREATE TABLE IF NOT EXISTS {HISTORY_TABLE} (
 # than left as the one undocumented table in the database.
 _TABLE_COMMENTS = (
     f"COMMENT ON TABLE {HISTORY_TABLE} IS "
-    "'Append-only record of migration steps applied to this database. Written inside the "
-    "migration transaction, so a row implies its DDL committed.'",
+    "'Append-only history of upgrades, downgrades, and stamps. Entries commit with the "
+    "migration transaction; stamps record revisions without executing their scripts.'",
     f"COMMENT ON COLUMN {HISTORY_TABLE}.revision IS 'The revision this step moved onto or off of.'",
     f"COMMENT ON COLUMN {HISTORY_TABLE}.down_revisions IS "
     "'Parents of `revision`; more than one only at a branch merge.'",
@@ -88,7 +82,7 @@ _TABLE_COMMENTS = (
     "'Wall time from the previous step of this run. The first row of a run also carries that "
     "run''s setup.'",
     f"COMMENT ON COLUMN {HISTORY_TABLE}.script_sha256 IS "
-    "'Digest of the revision file as it stood for this step, checked on every later run. "
+    "'Digest of the revision file for this step, checked while the revision is in the current schema ancestry. "
     "NULL when the revision resolved to no file on disk.'",
     f"COMMENT ON COLUMN {HISTORY_TABLE}.release_version IS 'SQUID_BUILD_COMMIT_HASH of the image that ran it.'",
     f"COMMENT ON COLUMN {HISTORY_TABLE}.applied_from IS "
@@ -120,12 +114,10 @@ _LATEST_DIGESTS = text(
 
 
 def create_history_table(connection: Connection) -> None:
-    """Create the ledger if this database has not got one yet.
+    """Create the history table and refresh its database comments.
 
-    Deliberately not an Alembic revision: a revision cannot record its own application,
-    because the callback that would write the row fires on a table the same run is still
-    creating. Bootstrapping it here instead means the very first upgrade of a clean database
-    is recorded like any other.
+    Run before applying revisions so the first migration of a new database can
+    be recorded too.
     """
     connection.execute(text(_CREATE_TABLE))
     for comment in _TABLE_COMMENTS:
@@ -133,11 +125,10 @@ def create_history_table(connection: Connection) -> None:
 
 
 def script_digest(script: Script) -> str:
-    """Return the SHA-256 of `script`'s file.
+    """Return the SHA-256 digest of the complete revision file.
 
-    Hashes the file verbatim rather than its parsed contents, so a reformat registers as a
-    change. That is the intended strictness: this cannot tell a whitespace edit from a
-    semantic one, and `repair_script_digests` is how a reviewed edit gets accepted.
+    Comments and formatting count as changes. After reviewing an edit, use
+    `repair_script_digests` to accept its new digest.
     """
     return hashlib.sha256(Path(script.path).read_bytes()).hexdigest()
 
@@ -150,9 +141,9 @@ def recorded_digests(connection: Connection) -> dict[str, str]:
 def _applied_scripts(connection: Connection, script_directory: ScriptDirectory) -> dict[str, Script]:
     """Return the scripts for revisions the database's current heads descend from.
 
-    Restricted to the live ancestry on purpose. A revision that was applied and later
-    downgraded no longer contributes DDL to this database, so editing it is legitimate and
-    must not block a deploy.
+    A revision that was applied and later downgraded no longer describes the current
+    schema. This check therefore excludes its file when looking for edits that would
+    make the recorded schema disagree with the scripts on disk.
     """
     heads = MigrationContext.configure(connection).get_current_heads()
     if not heads:
@@ -206,12 +197,11 @@ def verify_script_digests(connection: Connection, script_directory: ScriptDirect
 
 
 def repair_script_digests(connection: Connection, script_directory: ScriptDirectory) -> dict[str, tuple[str, str]]:
-    """Accept the current scripts for every divergent revision and report what was accepted.
+    """Accept changed scripts for applied revisions and return their old and new digests.
 
-    The Flyway `repair` equivalent, and the reason `verify_script_digests` can afford to be
-    strict. Appends a fresh row per revision rather than rewriting the old one, because the
-    point of the table is that nothing in it is ever edited: the repair itself is history, and
-    is recorded as a `stamp` because no DDL ran.
+    Append a stamp row for each change, preserving the previous history. This does
+    not apply SQL changes from the edited scripts; review those changes before
+    accepting their digests.
     """
     divergent = divergent_revisions(connection, script_directory)
     release, applied_from = release_version(), socket.gethostname()
@@ -229,18 +219,14 @@ def repair_script_digests(connection: Connection, script_directory: ScriptDirect
 
 
 def adopt_script_digests(connection: Connection, script_directory: ScriptDirectory) -> list[str]:
-    """Record the current digests for applied revisions the ledger has nothing on, and list them.
+    """Record current digests for applied revisions that have none, and return their IDs.
 
-    A database that reached its current revision before this ledger existed carries no digests
-    for the chain behind it, and nothing can ever produce them: a digest is written when a step
-    runs, and those steps have run. Without adoption the guard would only ever cover revisions
-    applied from here on, which on an established database is none of the ones already deployed.
+    Use this for databases whose migrations predate the history table. The caller
+    must first confirm that the scripts match the schema already deployed. This
+    function records that claim; it neither verifies nor changes the schema.
 
-    Adoption asserts that the scripts on disk are the ones this database ran. Only an operator
-    who has confirmed that -- the same confirmation `alembic stamp` demands -- can make that
-    claim, which is why this is a deliberate command and not something a migration run does for
-    itself. Run against the wrong tree it does not corrupt the schema; it blesses a set of files
-    as the truth about it, and the guard is worth exactly as much as that claim.
+    Existing digests are left unchanged. Each adopted revision receives a stamp
+    row with zero duration.
     """
     recorded = recorded_digests(connection)
     release, applied_from = release_version(), socket.gethostname()
@@ -284,10 +270,10 @@ class MigrationStepRecorder:
         step: MigrationInfo,
         **_rest: Any,
     ) -> None:
-        """Record `step`, which Alembic has already applied and committed to the version table.
+        """Record a step after Alembic updates its version table, before commit.
 
-        `_rest` swallows the `heads` and `run_args` Alembic also passes, and anything it adds
-        later: an unrecognised keyword here would fail the migration itself.
+        Accept unused callback keywords such as `heads` and `run_args`. Skip offline
+        SQL generation, which has no database in which to record history.
         """
         now = time.monotonic()
         duration_ms = round((now - self._mark) * 1000)

@@ -1,4 +1,9 @@
-"""Database schema inspection and consistency checks."""
+"""Check whether the database has the tables and columns required by mapped models.
+
+These checks compare SQLAlchemy's model metadata with database inspection results.
+They can explain common mismatches, but do not replace migration revision checks
+or Alembic's more complete schema comparison.
+"""
 
 import logging
 from typing import Any, cast
@@ -11,7 +16,7 @@ from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty
 logger = logging.getLogger(__name__)
 
 
-# Handle some common type variations
+# Treat these database type spellings as equivalent during the consistency check.
 type_mapping = {
     "integer": ["int", "integer", "int4"],
     "bigint": ["bigint", "int8"],
@@ -25,6 +30,13 @@ type_mapping = {
 
 
 def normalize_type(type_name: str) -> str:
+    """Return the first type family whose alias occurs in a lower-case type name.
+
+    Matching uses substrings in type_mapping order, not exact type identities.
+    For example, "varchar(100)" becomes "string", but "bigint" also becomes
+    "integer" because "int" matches first. The consistency check therefore cannot
+    distinguish every database type. Names with no matching alias are unchanged.
+    """
     for base_type, variants in type_mapping.items():
         if any(variant in type_name for variant in variants):
             return base_type
@@ -32,7 +44,7 @@ def normalize_type(type_name: str) -> str:
 
 
 class DatabaseSchema:
-    """A class to hold database schema information."""
+    """Table names and column metadata read from the database."""
 
     def __init__(self, inspector: Inspector):
         logger.info("Getting table names from database %s", inspector.engine.url)
@@ -47,19 +59,20 @@ class DatabaseSchema:
 def check_relationship_property(
     column_prop: RelationshipProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine
 ) -> bool:
-    """Check if a relationship property is valid."""
+    """Log missing relationship tables and return whether any were missing.
+
+    Skip targets and secondary expressions that are not concrete tables.
+    """
 
     errors = False
 
     if column_prop.secondary is not None:
-        # Additional checks for many-to-many relationships
         if not isinstance(column_prop.secondary, Table):
             logger.info(
                 "Skipping relationship %s in model %s because secondary is not a Table object", column_prop.key, klass
             )
             return errors
 
-        # Check secondary table exists
         if column_prop.secondary.name not in schema.tables:
             logger.error(
                 "Model %s declares many-to-many relationship %s with secondary table %s which does not exist in database %s",
@@ -91,15 +104,15 @@ def check_relationship_property(
 def check_column_property(
     column_prop: ColumnProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine
 ) -> bool:
-    """Check if a column property is valid."""
-    # TODO: unique constraints
+    """Log column mismatches and return whether any were found.
+
+    Compare column presence, normalized type names, nullability, and the existence
+    of foreign-key targets. Unique constraints are not checked.
+    """
     errors = False
 
-    # We cannot assume that all columns of the model are actual from that model itself, because it may inherit from another model.
-    # So the following line is wrong. Instead, we need to get the table from the column itself.
-    # table = klass.__tablename__
-
     for column in column_prop.columns:
+        # Inherited columns can belong to a parent table, so use each column's table.
         if column.table is None:
             logger.info(
                 "Skipping column %s in model %s because it does not have a table associated with it",
@@ -117,7 +130,8 @@ def check_column_property(
             continue
         assert isinstance(column.table, Table), "Expected column.table to be a Table instance"
         table = column.table.name
-        # Check column exists
+
+        # Check that the column exists before comparing its metadata.
         if column.key not in schema.columns[table]:
             logger.error(
                 "Model %s declares column %s which does not exist in database %s",
@@ -128,12 +142,11 @@ def check_column_property(
             errors = True
             continue
 
-        # Check column type
+        # Compare type families using the approximate spelling normalization above.
         db_column = schema.columns[table][column.key]
         model_type = column.type
         db_type = db_column["type"]
 
-        # Compare type names, handling some common type variations
         model_type_name = str(model_type).lower()
         db_type_name = str(db_type).lower()
 
@@ -147,7 +160,7 @@ def check_column_property(
             )
             errors = True
 
-        # Check foreign key constraints
+        # Check foreign-key targets, not the database's foreign-key constraints.
         if column.foreign_keys:
             for fk in column.foreign_keys:
                 target_table = fk.column.table.name
@@ -172,7 +185,7 @@ def check_column_property(
                         )
                         errors = True
 
-        # Check if the column is nullable
+        # Nullability must agree in both directions.
         if not column.nullable and db_column["nullable"]:
             logger.error(
                 "Model %s declares column %s as non-nullable but database has it as nullable",
@@ -193,22 +206,25 @@ def check_column_property(
 
 
 def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
-    """Check whether the current database matches the models declared in model base.
+    """Return whether the database passes the mapped models' schema checks.
 
-    Checks that:
-    * All tables exist with all columns
-    * Column types match between model and database
-    * All relationships exist and are properly configured
+    For each model registered on base_cls, check:
 
-    Args:
-        base_cls (type[DeclarativeBase]): The SQLAlchemy declarative base class containing the models to check.
-        engine: The SQLAlchemy engine or connection to the database.
+    - Its table and mapped columns exist.
+    - Column type names agree after normalize_type groups known spellings.
+    - Model and database columns allow NULL in the same places.
+    - Relationship target tables and many-to-many secondary tables exist.
+    - Foreign keys point to existing tables and columns.
 
-    Returns:
-        bool: True if all declared models have corresponding tables, columns, and relationships.
+    Extra database tables and columns are allowed. Type comparison is approximate,
+    and the checks do not establish that foreign-key constraints, unique constraints,
+    or indexes match the models.
+
+    Log mismatches and SQLAlchemy errors raised while checking mapper attributes.
+    Connection and initial schema inspection errors propagate to the caller.
 
     Raises:
-        TypeError: If the provided engine is an AsyncEngine instead of a synchronous Engine.
+        TypeError: If `engine` is asynchronous.
 
     References:
         https://stackoverflow.com/questions/30428639/check-database-schema-matches-sqlalchemy-models-on-application-startup
@@ -221,25 +237,12 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     inspector = inspect(engine)
     schema = DatabaseSchema(inspector)
 
-    # Run an empty query to ensure the connection is valid and all the models are defined correctly.
-    # If this doesn't work, all queries will fail later anyway, so we don't suppress errors raised here.
+    # Connection errors should reach the caller rather than become schema mismatches.
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
 
     errors = False
 
-    # Go through all SQLAlchemy models and do the following checks:
-    # - Check if the table exists in the database
-    # For each attribute in the model:
-    #     If it is a relationship:
-    #         - Check if the secondary table exists (if applicable)
-    #         - Check if the target table exists
-    #     If it is a column:
-    #         - Check if the column exists in the table
-    #         - Check if the column type matches the model type
-    #         - Check if the foreign key constraints are valid
-    #         - Check if the column is nullable
-    #
     for mapper in base_cls.registry.mappers:
         klass = mapper.class_
         logger.debug("Checking model %s (%s)", klass.__name__, klass)
@@ -262,7 +265,7 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
             errors = True
             continue
 
-        try:  # If any error occurs during inspection, it will be caught, and errors will be set to True
+        try:
             for column_prop in mapper.attrs:
                 if isinstance(column_prop, RelationshipProperty):
                     if check_relationship_property(column_prop, schema, klass, engine):

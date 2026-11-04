@@ -1,8 +1,20 @@
-"""Shared claim and acknowledgement operations for durable work queues.
+"""Reserve database work for a worker and record the outcome of its attempt.
 
-Every operation uses the caller's transaction. PostgreSQL timestamps each claim
-and generates a token per row; completion and retry require that token. Queue
-specifications supply readiness, retry, and terminal-state rules.
+Each queue repository describes its table with a QueueSpec and uses ClaimedRowQueue
+for the shared lifecycle:
+
+1. Claim ready rows, assigning each a timestamp and a new claim token.
+2. Commit those claims before processing the work outside that transaction.
+3. Use the token to complete the work or record a failure in another transaction.
+
+A claim temporarily keeps other workers from selecting the same row. After the
+visibility timeout, another worker may reclaim it with a new token. Completion
+and failure only change rows whose stored token still matches; this check is the
+claim fence. It prevents a slow worker from overwriting the newer worker's queue
+state, but does not undo side effects the slow worker already performed elsewhere.
+
+These helpers execute SQL through the supplied database session. The application
+operation that called the queue repository is responsible for committing it.
 """
 
 import logging
@@ -38,9 +50,8 @@ logger = logging.getLogger(__name__)
 VISIBILITY_TIMEOUT = timedelta(minutes=5)
 """How long a claim survives before another worker may reclaim it.
 
-This is what recovers work from a process that died mid-job, so it has to exceed the
-slowest realistic handler while staying short enough that a crash is not visible for
-long.
+Workers can recover jobs left by a process that stopped. Handlers that take longer
+than this timeout risk running at the same time as a worker that reclaims the job.
 """
 
 BASE_RETRY_DELAY = timedelta(seconds=15)
@@ -52,11 +63,9 @@ MAX_ERROR_LENGTH = 4000
 _MAX_DOUBLING = 12
 """Where the backoff stops doubling.
 
-`BASE_RETRY_DELAY * 2 ** 12` already exceeds `MAX_RETRY_DELAY`, so clamping the
-exponent cannot change the answer. It is what keeps both encodings defined at a
-runaway attempt count: unclamped, the Python one raises `OverflowError` once the
-product leaves `timedelta`'s range, and the SQL one drives `power()` to infinity.
-A queue with `max_attempts=None` can reach those counts.
+At this exponent, the delay already exceeds `MAX_RETRY_DELAY`. Larger values
+would not change the capped result, but could overflow Python's `timedelta` or
+PostgreSQL's `power()`. Queues with unlimited retries can reach such counts.
 """
 
 _ONE_SECOND = literal_column("interval '1 second'", type_=Interval())
@@ -71,10 +80,8 @@ def retry_delay(attempts: int) -> timedelta:
 def retry_delay_sql(attempts: SQLColumnExpression[int]) -> ColumnElement[timedelta]:
     """Express `retry_delay` against an attempts column.
 
-    Releasing a leased set covers rows with different attempt counts in one
-    statement, so the policy has to exist as an expression as well as a function.
-    `tests/integration/persistence/test_claimed_row_queue.py` pins the two
-    encodings equal, which is the only thing keeping them from drifting apart.
+    A batch can contain rows with different attempt counts, so calculate each
+    delay in SQL. Keep this expression consistent with `retry_delay`.
     """
     doublings = func.least(attempts - 1, _MAX_DOUBLING)
     delay = _ONE_SECOND * (BASE_RETRY_DELAY.total_seconds() * func.power(2, doublings))
@@ -98,18 +105,15 @@ class QueueHealthShape:
 
 
 class QueueSpec[ModelT]:
-    """One durable work table, described once for every caller that touches it.
+    """Describe how one queue table represents readiness, claims, and failed attempts.
 
-    Column identity travels as `InstrumentedAttribute` rather than as a name,
-    because these tables disagree on their spelling -- three call the claim column
-    `locked_at` and three call it `claimed_at` -- and a name reaches the database
-    before anything notices it is wrong. That typing is the whole point, which is
-    why this is a plain class rather than a dataclass: a dataclass field holding a
-    descriptor is read back through `__get__`, so a type checker sees `Instant`
-    where the column belongs and stops catching the mistake.
+    Queue repositories supply this description so ClaimedRowQueue can use the same
+    SQL operations for tables with different column names and completion policies.
+    Mapped column attributes keep their types available to the type checker. This
+    is a plain class because a dataclass would read those descriptors through
+    __get__, exposing the stored value's type instead of the column's type.
 
-    Instances are module-level constants and are never mutated; `__slots__` keeps
-    a typo from quietly adding a field that nothing reads.
+    Instances are shared module constants. Treat them as immutable.
     """
 
     __slots__ = (
@@ -151,15 +155,15 @@ class QueueSpec[ModelT]:
             name: The label this queue reports under in metrics and logs.
             model: The mapped class, which the claim and acknowledgement target.
             key: The primary key, used to re-identify locked rows in the claiming UPDATE.
-            available_at: The retry clock, and the only column backoff ever writes.
+            available_at: The earliest time a worker may claim the row.
             claimed_at: When the current claim was taken, for the visibility timeout.
-            claim_token: The database-minted fence every acknowledgement matches on.
-            attempts: How many times the work has been tried.
+            claim_token: A token assigned on each claim and checked by acknowledgements.
+            attempts: The recorded failure count, incremented when releasing a failed claim.
             last_error: Where a failure message is retained.
             enqueued_at: When the work was last requested, where that differs from `available_at`.
-            dead_at: Absent on a queue that must never stop retrying.
+            dead_at: When retries stopped, or no column for queues without this marker.
             claim_count: Claims including reclaims, where a queue counts those separately.
-            pending: An extra readiness condition. Only `schematic_jobs` needs one.
+            pending: An extra condition rows must meet before they can be claimed.
             health: How this queue is aggregated into the queue-health union.
         """
         if not key:
@@ -182,12 +186,11 @@ class QueueSpec[ModelT]:
 
 @dataclass(frozen=True, slots=True)
 class FenceOutcome:
-    """What an acknowledgement actually did.
+    """Whether an acknowledgement matched the worker's claim token.
 
-    `applied=False` means the claim was lost -- reclaimed after the visibility
-    timeout, or re-enqueued underneath a slow worker. That is never nothing: it
-    means the queue has begun doing this row's work twice, so callers log and count
-    it rather than discarding it.
+    When `applied` is false, no row was changed. Another worker may have reclaimed
+    the row, or newer work may have replaced the claim. Callers must not treat
+    that result as a successful acknowledgement.
     """
 
     applied: bool
@@ -195,7 +198,12 @@ class FenceOutcome:
 
 
 class ClaimedRowQueue[ModelT]:
-    """Claim and acknowledge rows in the caller's transaction."""
+    """Shared SQL operations that queue repositories use to claim work and record outcomes.
+
+    Each method uses the supplied database session without committing it. QueueSpec
+    supplies table-specific columns; the repository supplies any extra row filters
+    and values needed for completion or permanent failure.
+    """
 
     def __init__(self, spec: QueueSpec[ModelT]) -> None:
         self._spec = spec
@@ -222,11 +230,11 @@ class ClaimedRowQueue[ModelT]:
         return and_(*conditions)
 
     def held_by(self, token: uuid.UUID) -> ColumnElement[bool]:
-        """Match the row this worker still owns, and no other."""
+        """Match a stored claim token; elapsed time alone does not invalidate it."""
         return self._spec.claim_token == token
 
     def held_by_any(self, tokens: Iterable[uuid.UUID]) -> ColumnElement[bool]:
-        """Match the rows in a leased set that this worker still owns."""
+        """Match rows that still carry one of the supplied claim tokens."""
         return self._spec.claim_token.in_(tuple(tokens))
 
     async def claim(
@@ -236,10 +244,11 @@ class ClaimedRowQueue[ModelT]:
         where: Sequence[ColumnElement[bool]] = (),
         session: AsyncSession,
     ) -> tuple[ModelT, ...]:
-        """Take ownership of up to `limit` ready rows and return them.
+        """Claim up to `limit` ready rows, skipping rows locked by other transactions.
 
-        The lock and the stamp are one statement, so a row is never selected-but-
-        unstamped, and both the timestamp and the token are the database's.
+        Select by availability time and then primary key. Locking and assigning a
+        new token happen in one statement, but the caller must commit the transaction
+        to make the claims visible. PostgreSQL supplies the timestamp and tokens.
         """
         spec = self._spec
         candidates = (
@@ -267,12 +276,7 @@ class ClaimedRowQueue[ModelT]:
         return tuple((await session.scalars(statement)).all())
 
     def token_of(self, row: ModelT) -> uuid.UUID:
-        """Read the fence off a row `claim` just returned.
-
-        The column is nullable only for the deploy window in which code from the
-        previous release can still stamp a claim without one; a row this process
-        claimed always has it.
-        """
+        """Return the token assigned by `claim`, raising if the row has none."""
         token = cast(uuid.UUID | None, getattr(row, self._spec.claim_token.key))
         if token is None:
             msg = f"A row claimed from {self._spec.name} came back without the token the claim minted."
@@ -289,8 +293,10 @@ class ClaimedRowQueue[ModelT]:
     ) -> FenceOutcome:
         """Acknowledge a row this worker still owns.
 
-        Deletes it, or -- when `values` is given -- updates it with terminal state
-        and releases the claim, which is the shape `schematic_jobs` needs.
+        Delete the row unless values is supplied. With values, update the row and
+        clear its claim; the repository must include any status that prevents the
+        completed work from being claimed again. Schematic jobs use this form to
+        retain their results instead of deleting the job.
         """
         spec = self._spec
         fence = (*identity, self.held_by(token))
@@ -317,11 +323,14 @@ class ClaimedRowQueue[ModelT]:
         dead_values: Mapping[str, Any] | None = None,
         session: AsyncSession,
     ) -> FenceOutcome:
-        """Release a failed row for retry, or dead-letter it.
+        """Record a failure and release the claim for retry or mark it terminal.
 
-        `max_attempts=None` means this queue never stops retrying. That is only
-        correct where a permanently stuck row is louder than a silently dropped
-        one, since the row can then spin forever on a poisoned input.
+        `attempts` is the previous failure count; this call increments it. Passing
+        `terminal=True` or reaching `max_attempts` selects `dead_values` and sets
+        `dead_at` if the queue has that column. Otherwise use `values` and schedule
+        a retry with backoff. With `max_attempts=None`, only `terminal` stops retries.
+
+        A claim token mismatch leaves the row unchanged.
         """
         attempts += 1
         dead = terminal or (max_attempts is not None and attempts >= max_attempts)
@@ -330,8 +339,7 @@ class ClaimedRowQueue[ModelT]:
         statement = update(self._spec.model).where(*identity, self.held_by(token)).values(**released)
         applied = bool(await self._rowcount(statement, session))
         if not applied:
-            # The attempts increment and the error text are lost with the claim.
-            # Silence here is what made a queue doing its work twice look healthy.
+            # The stale worker cannot update the row, but its failure still needs a log.
             self._report_lost_fence("fail", token, error=error)
         return FenceOutcome(applied=applied, dead_lettered=dead and applied)
 
@@ -342,10 +350,11 @@ class ClaimedRowQueue[ModelT]:
         values: Mapping[str, Any] | None = None,
         session: AsyncSession,
     ) -> int:
-        """Acknowledge every row of a leased set this worker still owns.
+        """Delete or update rows whose claim tokens still match, and return the row count.
 
-        Returns how many rows the fence matched, which is below `len(tokens)`
-        exactly when part of the lease was taken away mid-run.
+        As with `complete`, supplying `values` updates rows and releases their claims.
+        The count can be lower than the number of tokens if claims have been replaced
+        or rows have already been removed. Duplicate tokens count only once.
         """
         if not tokens:
             return 0
@@ -364,11 +373,15 @@ class ClaimedRowQueue[ModelT]:
         error: str,
         session: AsyncSession,
     ) -> int:
-        """Release every row of a leased set for retry, each on its own backoff."""
+        """Schedule retries for matching claim tokens and return the number of rows changed.
+
+        Each row's failure count determines its retry delay. Rows whose tokens have
+        been replaced are left alone, as in complete_batch.
+        """
         if not tokens:
             return 0
         spec = self._spec
-        # Rows in one lease can be on different attempt counts, so the backoff has
+        # Rows claimed in one batch can have different failure counts, so the backoff has
         # to be computed per row inside the statement rather than passed in.
         released = self._failed_values(spec.attempts + 1, error=error)
         statement = update(spec.model).where(self.held_by_any(tokens)).values(**released)
@@ -394,11 +407,7 @@ class ClaimedRowQueue[ModelT]:
         return released
 
     def _report_lost_fence(self, operation: str, token: uuid.UUID, *, error: str | None = None) -> None:
-        """Make a claim lost underneath a worker visible.
-
-        A queue whose acknowledgements stop matching has begun doing some row's
-        work twice, and it looks exactly like a healthy one from the outside.
-        """
+        """Log and count an acknowledgement rejected because its claim no longer matches."""
         add_counter("squid.queue.lost_fences", attributes={"squid.queue.name": self._spec.name})
         logger.warning(
             "Discarded a %s on the %s queue because the claim was already lost",
