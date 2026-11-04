@@ -22,6 +22,8 @@ TOKEN = f"squid_cli_v1_{SESSION_ID.hex}_{'t' * 43}"
 
 
 class FakeCliAuthorization(CliAuthorizationService):
+    """Record the bearer token, then return a fixed identity or reject it without checking its secret."""
+
     def __init__(self, *, valid: bool = True) -> None:
         self.valid = valid
         self.token: str | None = None

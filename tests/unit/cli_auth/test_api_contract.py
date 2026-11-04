@@ -1,4 +1,4 @@
-"""Isolated tests for the strict CLI authorization HTTP contract."""
+"""CLI request validation and HTTP responses with authentication and application services replaced."""
 
 import base64
 from dataclasses import dataclass
@@ -173,6 +173,8 @@ class FakeCliAuthorization(CliAuthorizationService):
 
 
 class RecordingIdempotency:
+    """Record reservation inputs and treat every call as new; replay behavior is not modeled."""
+
     def __init__(self) -> None:
         self.reservations: list[dict[str, object]] = []
 
@@ -284,6 +286,7 @@ async def test_browser_previews_fingerprint_before_approval() -> None:
 
 
 async def test_device_proofs_exchange_for_one_time_session_tokens() -> None:
+    """Check proof decoding and token serialization; the fake does not enforce single-use exchange."""
     cli = FakeCliAuthorization()
     app = app_with_fake(cli)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:

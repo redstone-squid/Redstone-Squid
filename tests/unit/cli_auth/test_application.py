@@ -37,7 +37,12 @@ class FakeConsentReader:
 
 
 class FakeCliAuthorizationRepository:
-    """Small transaction-free repository for service behavior tests."""
+    """Store authorization records in dictionaries for sequential service tests.
+
+    CliScope gives each service call a working copy and publishes it on commit.
+    This repository does not enforce active-record limits, prevent repeated
+    exchanges, or model database locking.
+    """
 
     def __init__(self) -> None:
         self.enrollments: dict[UUID, CliDeviceEnrollment] = {}

@@ -28,6 +28,8 @@ INSTALLATION_SECRET = "s" * 43
 
 
 class FakeInstallations(InstallationCredentialService):
+    """Check header shapes and record the token without verifying the installation secret."""
+
     def __init__(self) -> None:
         self.token: str | None = None
 
@@ -52,6 +54,8 @@ class FakeInstallations(InstallationCredentialService):
 
 
 class FakePlayers(PlayerAuthorizationService):
+    """Record which authentication path is chosen and return a fixed player identity."""
+
     def __init__(self) -> None:
         self.fabric_token: str | None = None
         self.paper_call: tuple[str, AuthenticatedPaperInstallation] | None = None

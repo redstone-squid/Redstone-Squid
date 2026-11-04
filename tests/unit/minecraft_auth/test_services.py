@@ -1,4 +1,4 @@
-"""Security invariants for Minecraft installation and player authorization."""
+"""Minecraft authorization decisions using real secret codecs and in-memory repositories."""
 
 import base64
 import hashlib
@@ -51,6 +51,8 @@ class Clock:
 
 
 class ByteSource:
+    """Supply distinct, predictable secret bytes so fixtures do not depend on randomness."""
+
     def __init__(self) -> None:
         self.value = 0
 

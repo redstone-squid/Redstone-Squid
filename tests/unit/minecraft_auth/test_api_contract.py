@@ -1,4 +1,4 @@
-"""Isolated tests for the strict Minecraft authorization HTTP contract."""
+"""Minecraft authorization HTTP payloads and dependency arguments using scripted services."""
 
 from dataclasses import dataclass, replace
 from typing import override
@@ -93,6 +93,12 @@ def grant(*, origin: MinecraftClientOrigin, installation_id: UUID | None = None)
 
 
 class FakeInstallations(InstallationCredentialService):
+    """Record owner IDs and update one fixture installation without checking ownership.
+
+    Header authentication accepts the original fixture secret even after rotation; these
+    tests check route translation, while service tests cover credential invalidation.
+    """
+
     def __init__(self) -> None:
         self.current = installation()
         self.authenticated_token: str | None = None
@@ -172,6 +178,8 @@ class FakeInstallations(InstallationCredentialService):
 
 
 class FakePlayers(PlayerAuthorizationService):
+    """Record route arguments and return fixed challenges or grants without tracking exchanges."""
+
     def __init__(self) -> None:
         self.paper_installation: AuthenticatedPaperInstallation | None = None
         self.fabric_proof: tuple[UUID, str] | None = None
@@ -242,6 +250,8 @@ class FakePlayers(PlayerAuthorizationService):
 
 
 class RecordingIdempotency:
+    """Record reservation inputs and treat every call as new; replay behavior is not modeled."""
+
     def __init__(self) -> None:
         self.reservations: list[dict[str, object]] = []
 

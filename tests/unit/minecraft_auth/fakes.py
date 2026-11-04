@@ -19,7 +19,7 @@ from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationCh
 
 
 class FakeAccounts:
-    """Authoritative consent and Java-identity fixture."""
+    """Approve only account/Java-identity pairs explicitly seeded with current consent."""
 
     def __init__(self) -> None:
         self.consented: set[int] = set()
@@ -33,7 +33,12 @@ class FakeAccounts:
 
 
 class FakeMinecraftAuthorizationRepository:
-    """Stateful fake mirroring the repository's atomic transition rules."""
+    """Store authorization records and check transitions for sequential service tests.
+
+    The fake covers expiry, revocation, and installation binding. MinecraftScope
+    gives each service call a working copy and publishes it on commit; database
+    locks and concurrent transactions are not modeled here.
+    """
 
     def __init__(self) -> None:
         self.installations: dict[UUID, PaperInstallation] = {}
