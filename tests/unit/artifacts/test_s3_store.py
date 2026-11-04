@@ -82,6 +82,8 @@ async def test_cancellation_during_acquisition_still_closes_response(store: S3Ar
                 assert await asyncio.to_thread(started.wait, 5)
                 tasks.cancel_scope.cancel()
     finally:
+        # Cancelling the await does not stop the SDK thread. Let it return its
+        # response so we can check that the thread still closes the body.
         release.set()
 
     assert await asyncio.to_thread(closed.wait, 5), "Cancelled download leaked its response"
