@@ -1,8 +1,8 @@
-"""Suggestion providers for values scoped to one Discord guild.
+"""Suggest guild starboards, permission roles, and editable starboard settings.
 
-These require a `guild_id` in the request context. The service refuses a request that omits it
-rather than answering from the wrong guild, so a caller that forgets the context resolver gets an
-empty dropdown instead of another server's starboards.
+Starboard names and permission roles require `guild_id` in the request context.
+The transport must supply an authorized guild; the service checks that the key
+exists but does not verify guild membership.
 """
 
 from collections.abc import Sequence

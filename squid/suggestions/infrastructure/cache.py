@@ -1,10 +1,7 @@
-"""Expiring in-process caching for enumerable suggestion sources.
+"""Cache suggestion lists within one process and refresh them on demand.
 
-Taxonomy and version lists are small, read on every keystroke, and change rarely — but they do
-change, and the bot, API, and worker are separate processes. The existing `alru_cache` +
-`cache_clear()` pattern only invalidates the process that made the edit, so a restriction alias
-added over the API stays invisible to Discord autocomplete until the bot restarts. A short TTL
-converges everywhere without any invalidation protocol.
+A short TTL lets processes pick up taxonomy and version changes without sharing
+cache invalidation messages.
 """
 
 import asyncio
@@ -15,7 +12,12 @@ DEFAULT_TTL_SECONDS = 60.0
 
 
 class TtlCache[KeyT, ValueT]:
-    """Cache one loader's results per key, refreshing them after `ttl_seconds`."""
+    """Cache successful loads, with expiry measured from when each load finishes.
+
+    Loads for the same key share a lock; different keys can load concurrently.
+    A failed refresh propagates its error instead of serving the stale value.
+    Expired entries and per-key locks are not evicted; use a bounded key set.
+    """
 
     def __init__(
         self,
@@ -45,7 +47,10 @@ class TtlCache[KeyT, ValueT]:
             return value
 
     def invalidate(self, key: KeyT | None = None) -> None:
-        """Drop one key, or everything when `key` is `None`."""
+        """Drop one cached value, or all values when `key` is `None`.
+
+        In-flight loads are not cancelled and can populate the cache afterward.
+        """
         if key is None:
             self._entries.clear()
         else:

@@ -17,8 +17,8 @@ class AccountSubscriptions(Protocol):
 class SubscriptionProvider:
     """Suggest the caller's subscriptions so unfollowing does not require reading an id back.
 
-    Scoped to the viewer by construction: the account id comes from the resolved request rather
-    than from anything the caller typed, so one user cannot enumerate another's subscriptions.
+    The transport must set the viewer from the authenticated account. This provider
+    filters by that account ID and returns no candidates when it is absent.
     """
 
     def __init__(self, notifications: AccountSubscriptions) -> None:

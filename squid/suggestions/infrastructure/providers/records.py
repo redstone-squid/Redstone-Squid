@@ -54,11 +54,7 @@ class CompetitionReader(Protocol):
 
 
 class CreatorProfileProvider:
-    """Suggest creators by name while submitting the public UUID a subscription stores.
-
-    `/notifications follow-creator` currently asks for a bare UUID, which is not discoverable from
-    anywhere in Discord.
-    """
+    """Suggest creators by name while submitting the public UUID a subscription stores."""
 
     def __init__(self, reader: CreatorProfileReader) -> None:
         self._reader = reader
@@ -133,8 +129,7 @@ class CreatorProvider:
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         creators = await self._reader.creators(request.query, limit=request.limit or MAX_SUGGESTIONS)
         return tuple(
-            # Whether a name is claimed decides whether claiming it will succeed, so it is worth
-            # showing before the command is submitted rather than in the rejection afterwards.
+            # Show existing ownership before the user submits a claim request.
             candidate(name, description="claimed" if claimed else None, kind="creator")
             for name, claimed in creators
         )

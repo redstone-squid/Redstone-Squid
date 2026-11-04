@@ -1,8 +1,6 @@
-"""Cursor-aware completion inside the search query language.
+"""Complete field names and indexed values within a search query.
 
-This is the source that makes the grammar usable without reading its documentation: it completes
-field names where a field name may go, indexed values where that field's values may go, and
-returns the span each replaces so a client splices at the caret instead of replacing the box.
+Results include the character range to replace, preserving the rest of the query.
 """
 
 from collections.abc import Sequence
@@ -58,8 +56,7 @@ class SearchQueryProvider:
 
         match context.kind:
             case CompletionKind.RANGE:
-                # Inside `[low TO high]` the only thing left to type is a bound, and the indexed
-                # values of a numeric field are not a list anybody wants to scroll.
+                # Range bounds are free-form; this provider does not suggest indexed values for them.
                 return SuggestionResult(replacement=span)
             case CompletionKind.FIELD_VALUE:
                 return SuggestionResult(items=await self._values(context, limit), replacement=span)
@@ -71,8 +68,7 @@ class SearchQueryProvider:
         if not completes_values(context.field):
             return ()
         values = await self._facets.facet_values(context.field.name, context.prefix, limit=limit)
-        # Postgres already prefix-matched and ordered these, so they are returned as-is rather
-        # than run back through the matcher, which would only discard what it cannot re-derive.
+        # Preserve the database's prefix matching and ordering when quoting the values.
         return tuple(
             Suggestion(
                 value=render_value(value, quoted=context.quoted),

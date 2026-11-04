@@ -1,9 +1,4 @@
-"""Suggestion providers over the permission node catalogue.
-
-The catalogue is a frozen in-memory structure, so these need no caching and no I/O — but they do
-belong in the registry rather than in a cog, because permission patterns are also written through
-the API and will eventually be written from an admin UI.
-"""
+"""Offer permission nodes, wildcard prefixes, and tag selectors from the code catalogue."""
 
 from squid.permissions.domain.catalogue import CATALOGUE
 from squid.suggestions.application import Candidate, candidate

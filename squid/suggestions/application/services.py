@@ -1,9 +1,9 @@
-"""The suggestion application service.
+"""Fetch suggestions with visibility checks and a timeout for provider work.
 
-Every caller of this service is a keystroke, which drives two rules the rest of the application
-does not have. It never raises for a failure the user cannot act on — a broken provider shows an
-empty dropdown, not a red error under a half-typed word — and it is bounded in time, because a
-suggestion that arrives after the user has finished typing is worse than none.
+Autocomplete requests arrive as the user types, so a slow or broken provider
+should not hold up the input. Provider errors and timeouts produce an empty
+result. Unknown sources, authorization errors, and cancellation still propagate
+to the caller.
 """
 
 import hashlib
@@ -35,7 +35,14 @@ DEFAULT_TIMEOUT_SECONDS = 2.0
 
 
 class SuggestionService:
-    """Rank, bound, and gate candidate completions from registered sources."""
+    """Find completions through the named sources in a SuggestionRegistry.
+
+    Each source declares its visibility and a provider that supplies choices.
+    The service checks access and required context before fetching those choices.
+    Candidate providers return values and matching terms for the shared ranker;
+    composed providers return a finished result, including any range of the input
+    the chosen value should replace.
+    """
 
     def __init__(
         self,
@@ -59,8 +66,13 @@ class SuggestionService:
     ) -> SuggestionResult:
         """Return ranked completions for a partially typed value.
 
-        Raises `UnknownSuggestionSourceError` for an unregistered source, because that is a caller
-        bug or a bad URL rather than a transient failure. Everything else resolves to empty.
+        Unknown sources raise `UnknownSuggestionSourceError`. Denied access, missing
+        context, provider errors, and provider timeouts return an empty result.
+        Errors from the authorizer and task cancellation propagate.
+
+        Queries are truncated to `MAX_QUERY_LENGTH`. Nonzero limits are clamped
+        to 1..MAX_SUGGESTIONS; zero asks a candidate provider for its full set.
+        Composed providers apply their own ranking and limits.
         """
         source = self._registry.resolve(request.source)
         normalized = _normalize(request)
@@ -96,8 +108,9 @@ class SuggestionService:
     ) -> SuggestionResult:
         """Return an enumerable source's full candidate set with its content revision.
 
-        This is what serves form option sets and `ETag`-able reads, as opposed to `suggest`, which
-        answers one keystroke.
+        Used for form option sets and cacheable reads. No viewer or authorizer is
+        supplied, so sources that require either return an empty result. A source
+        not marked enumerable raises `ValidationError`.
         """
         source = self._registry.resolve(source_id)
         if source.kind is not SourceKind.ENUMERABLE:
@@ -149,10 +162,11 @@ class SuggestionService:
 
 
 def content_revision(items: Sequence[Suggestion]) -> int:
-    """Derive a stable, content-addressed revision for a candidate set.
+    """Hash the ordered values and labels into a nonzero 64-bit revision.
 
-    Deterministic across processes and restarts so two API replicas issue the same `ETag`, and so a
-    client can tell an unchanged option set from a re-fetched one.
+    The same sequence produces the same revision across processes, allowing API
+    replicas to issue the same ETag for unchanged options. Descriptions and kinds
+    are excluded, so changes to those fields do not invalidate it.
     """
     payload = "\n".join(f"{item.value}\0{item.label}" for item in items).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") or 1
@@ -176,7 +190,7 @@ def _normalize(request: SuggestionRequest) -> SuggestionRequest:
 
 
 def _labelled(result: SuggestionResult, source: SuggestionSource) -> SuggestionResult:
-    """Stamp the source's default kind onto candidates that did not set one."""
+    """Fill missing candidate kinds from the source definition."""
     if not source.kind_label or all(item.kind for item in result.items):
         return result
     items = tuple(

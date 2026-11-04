@@ -25,7 +25,7 @@ TRIGRAM_FLOOR = 0.1
 
 
 class PostgresSuggestionRepository:
-    """Suggestion-shaped reads over the taxonomy tables."""
+    """Read taxonomy, search projections, versions, and creators in the caller's session."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -39,9 +39,8 @@ class PostgresSuggestionRepository:
     ) -> Sequence[TaxonomyEntry]:
         """Return approved definitions of one semantic kind, with their aliases.
 
-        `build_kind` narrows to the definitions declared applicable to that kind of build, which is
-        how door types are distinguished from the full pattern list. `authority` is `None` for
-        showcase tags, which users propose and so are never `official`.
+        `build_kind` limits results to definitions declared applicable to that kind
+        of build. `authority=None` accepts every authority, as needed for showcase tags.
         """
         statement = (
             select(TagDefinition)
@@ -79,10 +78,10 @@ class PostgresSuggestionRepository:
         statuses: Collection[str] | None = None,
         limit: int,
     ) -> Sequence[DocumentEntry]:
-        """Match projected resources by title, riding the existing trigram index.
+        """Rank exact IDs before trigram matches against projected search text.
 
-        Filtering happens here rather than in the shared matcher because there are far more builds
-        than an autocomplete can hold in memory, let alone rank per keystroke.
+        Empty queries return the most recently refreshed rows. Status filtering
+        is optional; the caller must supply it when a source excludes private builds.
         """
         statement = select(
             SearchDocument.source_key,
@@ -133,11 +132,7 @@ class PostgresSuggestionRepository:
         return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
 
     async def version_ids(self) -> Sequence[tuple[int, str]]:
-        """Return each recognized version's database id with its display name.
-
-        The domain `MinecraftVersion` carries no id, but the commands that pin a record to a
-        release take one, which is the whole reason those parameters read as raw numbers today.
-        """
+        """Return version IDs and names, ordered by edition and then newest release first."""
         statement = select(
             Version.id,
             Version.edition,
@@ -155,10 +150,10 @@ class PostgresSuggestionRepository:
         return [(row.id, f"{row.edition} {row.major_version}.{row.minor_version}.{row.patch_number}") for row in rows]
 
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
-        """Return public creator UUIDs with a name to recognize them by.
+        """Return public UUIDs for accounts with claimed aliases.
 
-        A creator is an account with at least one claimed alias, which is the same population
-        `subscription_target_exists` validates a creator subscription against.
+        Each account is labelled by its alphabetically first alias. A nonempty
+        query matches the first normalized alias, not every alias on the account.
         """
         statement = (
             select(Account.public_creator_id, func.min(CreatorAlias.name).label("name"))
@@ -174,11 +169,10 @@ class PostgresSuggestionRepository:
         return [(str(row.public_creator_id), row.name) for row in rows]
 
     async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
-        """Return distinct indexed values of one projected facet, prefix-matched.
+        """Return distinct non-null facet values in database text order.
 
-        Matching is case-folded against `lower(text_value)` so it can ride the functional index
-        added for exactly this query; an `ILIKE` here would fall back to a sequential scan over
-        every facet row in the corpus.
+        Prefix matching uses `lower(text_value)` to match the expression in the
+        functional index. The query is stripped and casefolded before matching.
         """
         statement = select(SearchDocumentFacet.text_value).where(
             SearchDocumentFacet.field_name == field_name,
@@ -194,8 +188,8 @@ class PostgresSuggestionRepository:
     async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
         """Return record competition UUIDs with the newest definition's readable title.
 
-        Competitions store no title of their own, so this borrows the newest definition's; every
-        competition has at least one definition because both are only ever created together.
+        The highest definition ID supplies the title and subtitle. Competitions
+        without a definition are omitted.
         """
         latest = (
             select(RecordRule.competition_id, RecordRule.title, RecordRule.subtitle)

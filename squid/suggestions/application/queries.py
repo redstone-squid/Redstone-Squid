@@ -29,6 +29,12 @@ class DocumentEntry:
 
 
 class SuggestionRepository(Protocol):
+    """Read candidate data inside the caller's transaction.
+
+    Status and authority filters come from the registered provider. Implementations
+    do not authorize the requester; the service checks visibility before calling.
+    """
+
     async def taxonomy(
         self, semantic_kind: str, *, build_kind: str | None = None, authority: str | None = "official"
     ) -> Sequence[TaxonomyEntry]: ...
@@ -44,7 +50,7 @@ class SuggestionRepository(Protocol):
 
 
 class SuggestionQueryService:
-    """Load values for providers that can run concurrently."""
+    """Give each provider read its own unit of work so concurrent calls do not share a session."""
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[SuggestionUnitOfWork]) -> None:
         self._uow_factory = uow_factory

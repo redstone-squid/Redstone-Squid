@@ -1,8 +1,7 @@
-"""The named suggestion source registry.
+"""Register the named sources used by autocomplete and form options.
 
-Source ids extend the `option_source` namespace the submission form manifest already publishes, so
-a form field, a Discord parameter, and a Brigadier argument that mean the same thing name the same
-thing. Ids keep that namespace's shape so any source can be served as a form option set.
+Source IDs follow the submission API's `option_source` format so a form field
+and a command parameter can refer to the same source.
 """
 
 import re
@@ -39,7 +38,7 @@ class SuggestionSource:
     """The permission node checked when `visibility` is `REQUIRES_NODE`."""
 
     context_keys: frozenset[str] = frozenset()
-    """Context this source needs, such as `category` or `guild_id`."""
+    """Required context keys; the service returns no suggestions if any are absent."""
 
     value_type: ValueType = ValueType.STRING
     multi_value: str | None = None
@@ -76,7 +75,7 @@ class SuggestionRegistry:
         return cls(registered)
 
     def resolve(self, source_id: str) -> SuggestionSource:
-        """Return a registered source or raise."""
+        """Return a source or raise `UnknownSuggestionSourceError` if it is absent."""
         try:
             return self._sources[source_id]
         except KeyError as error:

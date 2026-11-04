@@ -16,7 +16,7 @@ class CanonicalMinecraftVersions(Protocol):
 
 
 class VersionProvider:
-    """Suggest canonical version strings, newest first."""
+    """Suggest cached version names, Java before Bedrock and newest first within each edition."""
 
     def __init__(self, versions: CanonicalMinecraftVersions) -> None:
         self._versions = versions

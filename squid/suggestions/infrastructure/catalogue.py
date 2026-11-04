@@ -1,9 +1,7 @@
-"""The registered suggestion sources.
+"""Build the suggestion registry shared by the bot, API, and Minecraft adapters.
 
-This module is the public vocabulary: adding a source here makes it completable from Discord, from
-`GET /v1/suggest/{source}`, and from a Minecraft command at once. Ids that already exist as
-submission form `option_source` values keep their spelling so the form manifest and the suggestion
-registry never disagree about what a name means.
+Adapters refer to sources by ID. Sources also used as submission form options
+retain the same IDs in the form manifest.
 """
 
 from typing import Protocol
@@ -58,7 +56,7 @@ from squid.suggestions.infrastructure.providers.versions import CanonicalMinecra
 from squid.tags.domain import TagSemanticKind
 
 PUBLIC_BUILD_STATUSES = ("confirmed",)
-"""Build statuses anyone may be offered, matching the public search fence."""
+"""Build statuses exposed by public suggestion sources."""
 
 PENDING_BUILD_STATUSES = ("pending",)
 
@@ -82,10 +80,9 @@ def build_registry(
 ) -> SuggestionRegistry:
     """Assemble every source this deployment can answer.
 
-    The optional dependencies are Discord-only capabilities; the API process has no starboards or
-    guild-scoped permission roles, so those sources are simply absent there rather than registered
-    against a service that does not exist. `repository` is an injection point for tests, which need
-    the real providers and revision arithmetic without a database behind them.
+    Optional services add guild starboards, permission roles, subscriptions,
+    and pending claims. Their sources are absent when the service is not supplied.
+    All providers use the supplied repository or services for their reads.
     """
     return SuggestionRegistry.of(
         (

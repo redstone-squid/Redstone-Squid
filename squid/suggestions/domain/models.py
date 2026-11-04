@@ -1,8 +1,7 @@
-"""Suggestion requests and results, answered the same way for the bot and the API.
+"""Values shared by Discord autocomplete, HTTP suggestions, and command completion.
 
-A suggestion is one candidate completion offered while a user is still typing, on any surface:
-a Discord autocomplete choice, an HTTP typeahead entry, or a Brigadier completion. Every surface
-speaks these values so ranking, limits, and visibility are decided once.
+Providers use these requests and results without depending on a transport's
+response format.
 """
 
 from collections.abc import Mapping
@@ -10,10 +9,10 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 MAX_SUGGESTIONS = 25
-"""Hard ceiling on returned candidates, set by Discord's autocomplete response limit."""
+"""Maximum for nonzero request limits, matching Discord's autocomplete response limit."""
 
 MAX_QUERY_LENGTH = 200
-"""Longest partial input a provider is asked to match, past which typing is not a prefix search."""
+"""Maximum query length in Python characters; the service truncates longer input."""
 
 
 class SourceKind(StrEnum):
@@ -50,9 +49,9 @@ class ValueType(StrEnum):
 class SuggestionViewer:
     """The identity a suggestion request is answered for.
 
-    Carries only what a provider may filter on. Permission decisions are made through a
-    `SuggestionAuthorizer` rather than by inspecting this value, because each transport resolves
-    them differently.
+    The transport must resolve these IDs from its trusted caller context.
+    Providers use them to filter results; permission-node checks use a separate
+    `SuggestionAuthorizer`.
     """
 
     account_id: int | None = None
@@ -61,11 +60,10 @@ class SuggestionViewer:
 
 @dataclass(frozen=True, slots=True)
 class ReplacementSpan:
-    """The half-open range of the input a suggestion's value replaces.
+    """The half-open character range in the query to replace with a selected value.
 
-    Sources that complete part of a larger string (a query-language token, one entry in a
-    comma-separated list) report the span so a client splices instead of clobbering the whole
-    input. `None` means the value replaces everything.
+    For example, `[5, 8)` replaces the three characters at offsets 5 through 7.
+    Offsets use Python string indices, not byte offsets.
     """
 
     start: int
@@ -91,18 +89,20 @@ class Suggestion:
 
 @dataclass(frozen=True, slots=True)
 class SuggestionRequest:
-    """A normalized request for completions of a partially typed value."""
+    """A request for completions; the service applies query and result limits."""
 
     source: str
     query: str = ""
     limit: int = MAX_SUGGESTIONS
+    """Maximum results; zero requests all values from a candidate provider."""
+
     context: Mapping[str, str] = field(default_factory=dict)
     """Source-specific scoping, such as the build category an option set belongs to."""
 
     locale: str | None = None
     viewer: SuggestionViewer = SuggestionViewer()
     cursor: int | None = None
-    """Caret offset within `query`, for sources that complete mid-string."""
+    """Python character offset in `query`; `None` places the caret at the end."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +111,7 @@ class SuggestionResult:
 
     items: tuple[Suggestion, ...] = ()
     revision: int | None = None
-    """Content revision of an enumerable source, for `ETag` and client-side caching."""
+    """Hash of the returned values and labels for an enumerable candidate source."""
 
     replacement: ReplacementSpan | None = None
+    """Range to replace; `None` means replace the whole input."""

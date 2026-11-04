@@ -1,9 +1,7 @@
-"""The one ranking implementation shared by every suggestion source and surface.
+"""Rank literal matches ahead of fuzzy matches.
 
-Ranking is tiered rather than purely fuzzy because a typed prefix is a much stronger signal of
-intent than a high edit-distance score: someone typing `sea` wants `Seamless` first, not
-`Search-based` because it happens to score well. Fuzzy matching only decides the tail, where
-nothing matched literally.
+For example, `sea` ranks `Seamless` (a prefix) ahead of `Super Seamless`
+(a word prefix). Fuzzy scores only order candidates with no literal match.
 """
 
 import re
@@ -16,7 +14,7 @@ from rapidfuzz import fuzz
 from squid.suggestions.domain import Suggestion
 
 FUZZY_SCORE_CUTOFF = 60.0
-"""Below this, a fuzzy match is noise rather than a plausible typo of the query."""
+"""Minimum WRatio score accepted when no literal match exists."""
 
 _WORD_BOUNDARY = re.compile(r"[^0-9a-z]+")
 
@@ -63,8 +61,12 @@ def candidate(
 def rank(query: str, candidates: Iterable[Candidate], *, limit: int) -> tuple[Suggestion, ...]:
     """Order candidates by how well they complete `query` and take the best `limit`.
 
-    An empty query keeps the provider's own order, which is how a source offers a useful default
-    page (newest builds, alphabetical restrictions) before the user has typed anything.
+    Match tiers, from strongest to weakest, are exact, prefix, word prefix,
+    substring, and fuzzy. Comparisons strip whitespace and ignore case. Within
+    a tier, higher scores come first, followed by labels in casefolded order.
+    Remaining ties preserve the input order.
+
+    An empty query keeps the provider's order. Nonpositive limits return no items.
     """
     if limit <= 0:
         return ()

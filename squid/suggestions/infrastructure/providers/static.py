@@ -1,9 +1,4 @@
-"""Providers for candidate sets that are fixed in code.
-
-These exist so a `Literal` that a slash command renders as native choices is still available to
-the web form and to Minecraft, where no such rendering exists — and so the vocabulary is written
-down once instead of being re-typed per surface.
-"""
+"""Share fixed candidate lists and synchronous candidate factories across transports."""
 
 from collections.abc import Callable, Iterable, Sequence
 
@@ -33,10 +28,9 @@ class StaticProvider:
 
 
 class CallableProvider:
-    """Suggest from candidates computed per request by a plain callable.
+    """Call a synchronous candidate factory for each request.
 
-    The escape hatch for surface-local sources — Discord command names, the settings keys a cog
-    parses — that have no persistence behind them and no reason to grow a class.
+    The factory runs on the event loop and must not perform blocking work.
     """
 
     def __init__(self, produce: Callable[[SuggestionRequest], Iterable[Candidate]]) -> None:
