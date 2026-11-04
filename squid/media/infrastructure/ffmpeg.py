@@ -50,7 +50,11 @@ _MAX_PROBE_OUTPUT_BYTES = 1024 * 1024
 
 @dataclass(frozen=True, slots=True)
 class MediaProcessLimits:
-    """Wall-clock and child-process guardrails for one-shot media tools."""
+    """Timeouts, thread counts, and requested OS resource limits for each media process.
+
+    Resource limits are best effort on POSIX and unavailable on Windows. Wall-clock
+    timeouts apply on both platforms.
+    """
 
     probe_timeout_seconds: float = 15.0
     image_timeout_seconds: float = 120.0
@@ -80,7 +84,11 @@ class MediaProcessLimits:
 
 
 class FfmpegMediaNormalizer:
-    """Normalize staged images and videos with isolated, one-shot subprocesses."""
+    """Normalize images to PNG and videos to H.264/AAC MP4 with a JPEG thumbnail.
+
+    Each probe or encoding step runs in a separate subprocess. Outputs are staged
+    beside their destinations and published only after size and stream checks pass.
+    """
 
     def __init__(
         self,
@@ -272,6 +280,7 @@ class FfmpegMediaNormalizer:
             output_probe = await self.probe(video_temporary)
             _validate_video_output(probe, output_probe, strip_audio=request.strip_audio)
 
+            # Derive the thumbnail from the normalized video so both show the same content.
             seek_milliseconds = min((probe.duration_milliseconds or 0) // 2, 30_000)
             await self._run(
                 self._ffmpeg,
@@ -416,7 +425,12 @@ class FfmpegMediaNormalizer:
 
 
 def parse_ffprobe_output(data: bytes) -> MediaProbe:
-    """Translate bounded ffprobe JSON into a deterministic domain value."""
+    """Read the first video and audio streams from ffprobe JSON.
+
+    Durations are rounded up to milliseconds, falling back to container duration
+    when the video stream omits it. Missing frame rates become zero. Malformed
+    required metadata raises InvalidMediaError; the caller bounds the input size.
+    """
     try:
         payload = cast(Mapping[str, Any], json.loads(data))
         streams = cast(list[Mapping[str, Any]], payload["streams"])
@@ -519,7 +533,12 @@ def _validate_combined_size(video_size: int, poster_size: int, *, limit: int) ->
 
 @contextlib.contextmanager
 def _staged_outputs(*destinations: tuple[Path, str]) -> Iterator[tuple[Path, ...]]:
-    """Own temporary outputs until validation ends, rolling back incomplete publication."""
+    """Yield temporary paths and publish them when the body exits successfully.
+
+    Destinations must not already exist. Each file is published with a hard link;
+    if a later publication fails, earlier destinations are removed. This provides
+    rollback on failure, not atomic visibility of the whole set.
+    """
     with contextlib.ExitStack() as temporary_cleanup:
         staged: list[Path] = []
         for destination, suffix in destinations:
@@ -551,6 +570,7 @@ def _commit_one(temporary: Path, destination: Path) -> None:
         raise InvalidMediaError(MediaFailureReason.OUTPUT_EXISTS)
     linked = False
     try:
+        # Link creation fails if another writer created the destination after the check.
         destination.hardlink_to(temporary)
         linked = True
         temporary.unlink()

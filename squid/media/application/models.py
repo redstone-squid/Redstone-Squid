@@ -8,7 +8,7 @@ from squid.media.domain.models import MediaNormalizationReport
 
 @dataclass(frozen=True, slots=True)
 class MediaNormalizationResult:
-    """Normalized job-local files and the deterministic report to persist."""
+    """Normalized job-local files and their report, ready for verification and storage."""
 
     output_path: Path
     poster_path: Path | None

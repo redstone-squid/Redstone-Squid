@@ -1,4 +1,4 @@
-"""Media values and resource budgets, naming neither a caller nor an encoder."""
+"""Media metadata, normalization reports, and submission resource limits."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -30,7 +30,7 @@ class MediaLimitMeasure(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class MediaViolation:
-    """One deterministic limit violation, suitable for an application error."""
+    """A measured resource value and the limit it exceeded."""
 
     measure: MediaLimitMeasure
     actual: int
@@ -54,7 +54,7 @@ class MediaBatchTotals:
 
 @dataclass(frozen=True, slots=True)
 class MediaLimits:
-    """Centrally advertised submission and decoder-work budgets."""
+    """Limits for submission totals and the work needed to decode each file."""
 
     max_images: int = 10
     max_videos: int = 3
@@ -91,7 +91,11 @@ class MediaLimits:
         return tuple(MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit)
 
     def probe_violations(self, kind: MediaKind, probe: MediaProbe) -> tuple[MediaViolation, ...]:
-        """Return every decoded-work violation without floating-point arithmetic."""
+        """Check frame size and, for videos, duration and decoded pixels per second.
+
+        Unknown durations are skipped here; the normalization service rejects them
+        before applying video limits.
+        """
         checks: list[tuple[MediaLimitMeasure, int, int]] = [
             (MediaLimitMeasure.PIXELS_PER_FRAME, probe.pixels_per_frame, self.max_pixels_per_frame)
         ]
@@ -116,7 +120,12 @@ class MediaLimits:
 
 @dataclass(frozen=True, slots=True)
 class MediaProbe:
-    """Trusted stream facts returned by a bounded media inspector."""
+    """Stream metadata reported by the media inspector.
+
+    Frame rate is a rational number of frames per second. A zero numerator means
+    no usable rate was reported. Duration and frame count are None when unknown;
+    audio_codec is None when no audio stream was found.
+    """
 
     container_names: tuple[str, ...]
     video_codec: str
@@ -191,7 +200,7 @@ class MediaArtifact:
 
 @dataclass(frozen=True, slots=True)
 class MediaNormalizationReport:
-    """Deterministic, persistence-safe facts from a successful normalization."""
+    """Input and output metadata, artifact checksums, and actions taken during normalization."""
 
     kind: MediaKind
     source_bytes: int

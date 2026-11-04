@@ -27,7 +27,7 @@ class _SourceSnapshot:
 
 
 class MediaNormalizationService:
-    """Validate attacker-controlled files around a tool-specific normalizer port."""
+    """Check source metadata and resource limits before and after normalization."""
 
     def __init__(self, normalizer: MediaNormalizer, *, limits: MediaLimits | None = None) -> None:
         self._normalizer = normalizer
@@ -44,7 +44,13 @@ class MediaNormalizationService:
             raise MediaLimitExceededError(violations)
 
     async def normalize(self, request: MediaNormalizationRequest) -> MediaNormalizationResult:
-        """Probe, validate, and normalize one staged upload."""
+        """Probe and normalize a regular file, then check the returned report.
+
+        The caller must keep the source private and unchanged for this operation.
+        Metadata snapshots detect replacement and ordinary writes but do not lock
+        the file. The adapter validates output contents; this service checks report
+        consistency and combined output size, discarding results that fail those checks.
+        """
         source = _snapshot_source(request.source_path)
         if source.byte_size > self._limits.max_source_bytes:
             raise MediaLimitExceededError(

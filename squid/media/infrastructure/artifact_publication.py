@@ -1,4 +1,11 @@
-"""Durable object publication leases and reference-fenced cleanup."""
+"""Keep normalized media objects while a worker writes or a completed job uses them.
+
+Publication here means writing bytes to object storage. Multiple normalization
+jobs can produce the same content hash and therefore share an object key. A
+publication lease protects that key before a worker starts writing; a completed
+job's artifact reference keeps it afterwards, until the job is discarded. Cleanup
+may delete the object when no publication lease or retained job still needs it.
+"""
 
 from collections.abc import Callable, Sequence
 from typing import Any, cast
@@ -30,13 +37,23 @@ from squid.persistence.queue import retry_delay
 
 
 class PostgresArtifactPublicationRepository:
-    """Own object rows, publication leases, fencing, and cleanup acknowledgments."""
+    """Coordinate object publication and deletion in the caller's transaction.
+
+    Workers register keys and commit publication leases before writing objects.
+    Cleanup reserves only objects without retained artifact references or publication
+    leases. Its claim token prevents an old deletion result from settling a newer claim.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
     async def track(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool:
-        """Register possible object keys before upload and lease them to a current claim."""
+        """Track object keys and return whether the worker still owns its job.
+
+        Only a current claim receives publication leases. Stale workers still record
+        keys so cleanup can find objects they may have written before losing ownership.
+        A current worker must defer publication while a cleanup claim exists.
+        """
         session = self._session()
         current_claim = await session.scalar(
             select(MediaNormalizationJobRecord.upload_id).where(*_claim_filter(job)).with_for_update()
@@ -112,7 +129,7 @@ class PostgresArtifactPublicationRepository:
         return current_claim is not None
 
     async def renew(self, job: ClaimedMediaJob) -> None:
-        """Renew every publication lease owned by a current job transaction."""
+        """Renew this claim's publication leases after the caller has locked and validated the job."""
         session = self._session()
         await session.execute(
             update(MediaArtifactPublicationRecord)
@@ -242,6 +259,7 @@ class PostgresArtifactPublicationRepository:
                 candidate.available_at = Instant.now().add(seconds=int(retry_delay(candidate.attempts).total_seconds()))
                 candidate.last_error = error_name
             elif cleanup_started_at is not None and candidate.last_seen_at > cleanup_started_at:
+                # A stale publisher reported this key during deletion; check it again before recording a tombstone.
                 candidate.available_at = Instant.now()
                 candidate.last_error = None
             else:

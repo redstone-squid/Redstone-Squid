@@ -50,7 +50,12 @@ from squid.submissions.models.entities import SubmissionDraft
 
 
 class PostgresMediaJobRepository(MediaJobRepository):
-    """Persist immutable uploads and fence every worker transition on a UUID token."""
+    """Persist uploads and accept worker results only for the current claim token.
+
+    Methods use the caller's session and do not commit. Draft lifecycle locks
+    serialize capacity changes; job tokens prevent an older worker from completing
+    or failing work that has since been claimed again.
+    """
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
@@ -189,7 +194,11 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
-        """Fence in-flight work and retain a terminal cleanup record."""
+        """Discard this draft's reference and return whether the upload belongs to it.
+
+        Another retained draft reference keeps the shared job alive. Otherwise,
+        discard the job and clear its claim so cleanup can remove its objects.
+        """
         session = self._session()
         await _lock_mutable_submission_draft(session, draft_id)
         row = (

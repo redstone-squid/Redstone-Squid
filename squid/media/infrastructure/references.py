@@ -10,7 +10,11 @@ from squid.submissions.domain import DraftStatus
 
 
 def media_for_draft(draft_id: UUID, *, include_discarded: bool = False) -> ColumnElement[bool]:
-    """Read references, retaining compatibility with pre-reference upload metadata."""
+    """Match uploads linked to a draft, including legacy uploads without references.
+
+    The upload's original draft_id is used only when no reference rows exist for
+    that upload. Once references exist, their discarded flags control membership.
+    """
     linked = select(MediaDraftReference.upload_id).where(
         MediaDraftReference.upload_id == MediaUploadRecord.id,
         MediaDraftReference.draft_id == draft_id,

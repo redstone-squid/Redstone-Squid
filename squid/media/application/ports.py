@@ -9,7 +9,7 @@ from squid.media.domain.models import MediaLimits, MediaProbe
 
 
 class MediaNormalizer(Protocol):
-    """A process-isolated decoder/encoder adapter used by the future durable worker."""
+    """Inspect and normalize staged files for the durable media worker."""
 
     async def probe(self, source_path: Path) -> MediaProbe:
         """Inspect stream metadata without decoding the complete input."""
@@ -23,7 +23,12 @@ class MediaNormalizer(Protocol):
         source_bytes: int,
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
-        """Create validated job-local artifacts without mutating the source."""
+        """Create validated job-local artifacts without mutating the source.
+
+        The caller supplies preflight metadata and limits. Implementations validate
+        their outputs and remove partial files if normalization fails. On success,
+        the caller owns the returned files and may discard them after further checks.
+        """
         ...
 
     async def discard(self, result: MediaNormalizationResult) -> None:

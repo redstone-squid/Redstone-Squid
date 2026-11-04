@@ -1,4 +1,14 @@
-"""Durable media upload and normalization job orchestration."""
+"""Retain uploaded images and videos until workers produce normalized files.
+
+MediaNormalizationJobService stores the original upload and queues a job.
+MediaNormalizationJobRunner retrieves those bytes, normalizes them in a private
+temporary directory, and stores the output plus a processing report. Videos also
+produce a JPEG thumbnail, called a poster by the normalizer.
+
+Uploads are identified by UUID; normalized objects are keyed by their content
+hash and can be shared. MediaStorageCleanup deletes original uploads after their
+jobs finish and removes normalized objects when no retained reference needs them.
+"""
 
 import asyncio
 import hashlib
@@ -85,7 +95,7 @@ class MediaDraftUploadAuthorization:
 
 @dataclass(frozen=True, slots=True)
 class MediaUploadSubmission:
-    """Attacker-controlled source bytes and server-owned upload identity."""
+    """Raw upload bytes, declared content type, and an optional UUID for retries."""
 
     draft_id: UUID
     kind: MediaKind
@@ -109,7 +119,7 @@ class MediaUploadSubmission:
 
 @dataclass(frozen=True, slots=True)
 class StagedMediaUploadSubmission:
-    """A private regular file staged by a streaming transport."""
+    """A transport-staged file that the caller must keep private and unchanged until submission ends."""
 
     draft_id: UUID
     kind: MediaKind
@@ -193,7 +203,11 @@ class StoredMediaArtifact:
 
 @dataclass(frozen=True, slots=True)
 class ClaimedMediaJob:
-    """One normalization request fenced by a unique worker claim token."""
+    """A normalization request owned by one worker claim.
+
+    attempts counts recorded failures before this claim, not the number of claims.
+    Every state change must match claim_token so a reclaimed job rejects old results.
+    """
 
     upload: MediaUploadMetadata
     attempts: int
@@ -208,7 +222,11 @@ class ClaimedMediaJob:
 
 @dataclass(frozen=True, slots=True)
 class MediaJobSnapshot:
-    """Current durable state and persisted outputs for one upload."""
+    """Job state and stored outputs for one upload.
+
+    A draft listing reports that draft's view: it may show DISCARDED even when
+    another draft retains the shared job, and upload.draft_id identifies the listed draft.
+    """
 
     upload: MediaUploadMetadata
     status: MediaJobStatus
@@ -330,7 +348,12 @@ class MediaJobRepository(Protocol):
 
 
 class MediaNormalizationJobService:
-    """Stage bounded raw uploads and coordinate durable queue transitions."""
+    """Stage raw uploads and commit each queue transition in its own unit of work.
+
+    Object writes happen before registration. Reusing an upload UUID is idempotent
+    only when its metadata matches. Workers receive committed claims and must check
+    their tokens before publishing objects or recording results.
+    """
 
     def __init__(
         self,
@@ -461,20 +484,21 @@ class MediaNormalizationJobService:
             return await uow.media_jobs.list_for_draft(draft_id)
 
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
-        """Withdraw one upload and schedule any remaining raw source for cleanup."""
+        """Discard a draft's upload reference, retaining the shared job if another draft needs it."""
         async with self._uow_factory() as uow:
             result = await uow.media_jobs.discard(draft_id, upload_id)
             await uow.commit()
             return result
 
     async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
-        """Share an existing normalization job under the repository's ownership fence."""
+        """Attach an upload to another draft of the same owner, enforcing its capacity limits."""
         async with self._uow_factory() as uow:
             result = await uow.media_jobs.attach(source_id, target_id, upload_id, self._limits)
             await uow.commit()
             return result
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
+        """Commit claims for ready or abandoned work before returning it to workers."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
                 maximum = MAX_MEDIA_JOB_CLAIM
@@ -498,6 +522,7 @@ class MediaNormalizationJobService:
             return result
 
     async def complete(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool:
+        """Record published artifacts, returning False if the job claim is no longer current."""
         async with self._uow_factory() as uow:
             result = await uow.media_jobs.complete(job, artifacts, self._limits)
             await uow.commit()
@@ -556,7 +581,7 @@ class MediaNormalizationJobService:
             await uow.commit()
 
     async def cleanup_artifacts(self, *, limit: int = 100) -> MediaArtifactCleanupOutcome:
-        """Delete due unreferenced artifacts through the durable repository fence."""
+        """Claim unreferenced objects for deletion, then record each storage result."""
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
             maximum = MAX_MEDIA_JOB_CLEANUP
             raise InvalidStateError(tr(t"Media artifact cleanup limit must be between 1 and {maximum}."))
@@ -581,14 +606,14 @@ class MediaNormalizationJobService:
 
 
 class MediaStorageCleanup:
-    """Always-on cleanup for raw and normalized media object storage."""
+    """Run raw and normalized object cleanup independently of the normalization worker."""
 
     def __init__(self, jobs: MediaNormalizationJobService, artifacts: ArtifactStore) -> None:
         self._jobs = jobs
         self._artifacts = artifacts
 
     async def process_batch(self, *, limit: int = 100) -> None:
-        """Retry a bounded batch of raw and reference-fenced normalized deletions."""
+        """Retry deletion of finished jobs' source files and unreferenced normalized objects."""
         await self.cleanup_terminal_sources(limit=limit)
         await self.cleanup_terminal_artifacts(limit=limit)
 
@@ -645,10 +670,9 @@ class MediaNormalizationJobRunner:
     async def process_batch(self, *, limit: int = 8) -> None:
         """Claim and process a bounded batch without coupling work to storage cleanup."""
         claimed = await self._jobs.claim(limit=limit)
-        # Settled rather than cancelled on the first failure: the jobs are
-        # independent, and a cancelled one never reaches the handler that fails it,
-        # so it would hold its claim, its heartbeat and its temporary directory
-        # until the lease expires. Failures still raise once the batch is done.
+        # Let independent jobs finish if one fails. Cancelling siblings would skip
+        # their failure transitions and leave their database claims until expiry.
+        # Unexpected failures are raised after every job has settled.
         await run_all_settled([partial(self._process, job) for job in claimed])
 
     async def _process(self, job: ClaimedMediaJob) -> None:
@@ -658,8 +682,7 @@ class MediaNormalizationJobRunner:
             try:
                 await self._process_claim(job, claim_lost)
             finally:
-                # The heartbeat runs until the work it fences is over, however
-                # that happens; the task group owns its lifetime either way.
+                # Stop renewal on every exit path, including cancellation and lost claims.
                 heartbeat.cancel_scope.cancel()
 
     async def _process_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
@@ -685,7 +708,7 @@ class MediaNormalizationJobRunner:
                 await self._jobs.fail(job, error, terminal=_is_terminal(error))
 
     async def _maintain_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
-        """Keep long normalization work owned, and self-fence on any renewal failure."""
+        """Renew the claim during normalization and block publication if renewal fails."""
         while True:
             await asyncio.sleep(self._heartbeat_interval_seconds)
             try:
@@ -782,6 +805,7 @@ class MediaNormalizationJobRunner:
                 report,
             )
         )
+        # Commit leases before writing bytes so cleanup cannot race these publications.
         artifacts = tuple(artifact for artifact, _ in prepared)
         if not await self._jobs.track_artifacts(job, artifacts):
             raise MediaJobClaimLostError
@@ -792,6 +816,8 @@ class MediaNormalizationJobRunner:
                 try:
                     await self._require_claim(job, claim_lost)
                 except MediaJobClaimLostError:
+                    # The write may have finished after cleanup deleted the same key.
+                    # Track it again so cleanup sees the newly written object.
                     await self._jobs.track_artifacts(job, artifacts)
                     raise
         except Exception:

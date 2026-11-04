@@ -1,4 +1,4 @@
-"""Persisted submission records."""
+"""Persisted media job states and artifact roles."""
 
 from enum import StrEnum
 
@@ -17,7 +17,7 @@ class MediaArtifactRole(StrEnum):
     """The purpose of a durable artifact produced by normalization."""
 
     OUTPUT = "output"
-    # Read-only compatibility for rows written before the video-thumbnail rollout.
+    # Legacy thumbnail role; the worker still writes it while older readers remain supported.
     POSTER = "poster"
     VIDEO_THUMBNAIL = "video_thumbnail"
     REPORT = "report"

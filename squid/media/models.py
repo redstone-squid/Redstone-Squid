@@ -1,4 +1,11 @@
-"""SQLAlchemy models for durable media normalization."""
+"""Upload, normalization, and object-retention records.
+
+Each upload has one normalization job and, after completion, artifact records
+for its output files and report. Draft references let several drafts share that
+job and discard their attachments independently. Artifact object records track
+the stored bytes by key, while publication records protect ongoing writes from
+cleanup before the job's artifact records exist.
+"""
 
 import uuid
 
@@ -184,7 +191,7 @@ class MediaArtifactPublicationRecord(Base, kw_only=True):
 
 
 class MediaNormalizationJobRecord(Base, kw_only=True):
-    """A retained, claim-token-fenced request to normalize one raw upload."""
+    """A normalization request retained after completion, failure, or discard for cleanup and retries."""
 
     __tablename__ = "media_normalization_jobs"
     __table_args__ = (

@@ -67,7 +67,7 @@ class MediaLimitExceededError(ValidationError):
 
 
 class MediaDraftStateConflictError(ConflictError):
-    """A media mutation lost a race with submission finalization."""
+    """The draft state does not allow this media mutation."""
 
     default_message = tr(t"Media cannot be changed while this submission draft is locked.")
     default_title = tr(t"Draft media locked")
@@ -94,7 +94,7 @@ class MediaDraftRevisionConflictError(ConflictError):
 
 
 class MediaDraftNotFoundError(NotFoundError):
-    """A media mutation cannot re-establish ownership after draft deletion."""
+    """The draft is missing or does not belong to the expected owner."""
 
     default_message = tr(t"Submission draft not found.")
     default_title = tr(t"Draft not found")
@@ -130,7 +130,7 @@ class DraftMediaNotFoundError(NotFoundError):
 
 
 class DraftMediaConflictError(ConflictError):
-    """A caller-provided retry UUID was already used for different bytes."""
+    """A caller-provided retry UUID was already used for different upload metadata."""
 
     default_message = tr(t"The attachment upload identifier is already in use.")
     default_title = tr(t"Attachment upload conflict")
@@ -151,7 +151,7 @@ class DraftMediaUnavailableError(ServiceUnavailableError):
 
 
 class InvalidMediaError(ValidationError):
-    """The file or requested transformation is not safe and well-formed."""
+    """The source file or requested transformation fails media validation."""
 
     default_message = tr(t"The media file cannot be normalized.")
     default_code = ErrorCode.INVALID_REQUEST
@@ -167,7 +167,7 @@ class InvalidMediaError(ValidationError):
 
 
 class MediaToolUnavailableError(ServiceUnavailableError):
-    """FFmpeg or ffprobe is absent from the media-worker image."""
+    """FFmpeg or ffprobe cannot be found or started."""
 
     default_message = tr(t"Media processing is temporarily unavailable.")
     default_code = ErrorCode.INFRASTRUCTURE_ERROR
@@ -240,14 +240,14 @@ class MediaJobSourceError(DataIntegrityError):
 
 
 class MediaJobArtifactError(DataIntegrityError):
-    """Object storage did not confirm a content-addressed normalized artifact."""
+    """A media artifact is unreadable, disagrees with its report, or was not confirmed by storage."""
 
     default_message = tr(t"Object storage did not confirm a normalized media artifact.")
     default_resource = "media_artifact"
 
 
 class MediaArtifactCleanupInProgressError(ConflictError):
-    """A retryable publication conflict with a token-fenced object deletion."""
+    """Publication must wait while an object is claimed for cleanup."""
 
     default_message = tr(t"A normalized media object is being cleaned up.")
     default_resource = "media_artifact"

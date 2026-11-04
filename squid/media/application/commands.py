@@ -1,4 +1,4 @@
-"""Media normalization requests, built the same way by the bot, the API, and the worker."""
+"""Requests to normalize a staged media file."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +10,12 @@ from squid.media.domain.models import MediaKind
 
 @dataclass(frozen=True, slots=True)
 class MediaNormalizationRequest:
-    """Source and job-local destinations for one normalization operation."""
+    """Source and job-local destinations for one normalization operation.
+
+    Videos require a poster destination for their JPEG thumbnail. Images accept
+    neither a poster destination nor an audio-removal option. Callers must provide
+    distinct files; validation compares paths without resolving aliases.
+    """
 
     kind: MediaKind
     source_path: Path
