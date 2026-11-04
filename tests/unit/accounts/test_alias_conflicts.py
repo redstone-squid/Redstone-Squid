@@ -1,9 +1,4 @@
-"""Conflict context on `AliasAlreadyClaimedError`.
-
-Review thread 3766207128 asked for "context about which account claimed it". A creator profile is
-public data — `GET /v1/creators/{creator_id}` serves it unauthenticated — so the public half names
-the creator, while the internal account ID stays in the log-only half.
-"""
+"""Alias conflict errors expose the public creator ID and keep the internal account ID in logs."""
 
 from uuid import UUID
 
@@ -38,7 +33,7 @@ def test_the_public_half_carries_the_creator_and_the_private_half_the_account() 
 
 
 def test_the_internal_account_id_never_reaches_a_public_surface() -> None:
-    """The whole point of the split, asserted through both renderers rather than by inspection."""
+    """Check both error renderers so a safe error model cannot hide a presentation leak."""
     error = AliasAlreadyClaimedError(
         "Notch",
         holder_public_creator_id=PUBLIC_CREATOR,

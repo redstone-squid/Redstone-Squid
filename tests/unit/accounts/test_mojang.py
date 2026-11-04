@@ -12,6 +12,8 @@ from squid.accounts.infrastructure.mojang import MojangClient
 
 
 class FakeContent:
+    """Return the full payload on each read; byte limits are not modeled by this fake."""
+
     def __init__(self, payload: bytes) -> None:
         self._payload = payload
 

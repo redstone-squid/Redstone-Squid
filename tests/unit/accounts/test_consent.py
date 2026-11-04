@@ -1,4 +1,4 @@
-"""The one Python spelling of the consent gate."""
+"""Consent refresh rules and privacy-notice content checks."""
 
 from whenever import Instant
 
@@ -9,8 +9,7 @@ from squid.core.i18n import tr
 BEFORE_CUTOFF = Instant.from_utc(2026, 8, 3)
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 SUPERSEDED = "1970-01-01"
-"""Any receipt that is not the current one; spelled as a literal so bumping the live version
-cannot quietly turn these cases into the "already current" case."""
+"""Fixed old version, independent of future changes to CURRENT_CONSENT_VERSION."""
 
 
 def test_a_current_receipt_needs_no_refresh() -> None:
@@ -26,11 +25,7 @@ def test_an_account_predating_receipts_is_grandfathered() -> None:
 
 
 def test_the_cutoff_is_not_a_permanent_opt_out() -> None:
-    """An account that has ever consented rejoins the version treadmill, cutoff or not.
-
-    The cutoff means "predates receipts existing at all". Reading it as "exempt forever" is what
-    let a pre-cutoff account skip every later notice, which is the bug this pins shut.
-    """
+    """Once an account has a receipt, it must accept later versions even if it predates the cutoff."""
     assert consent_refresh_required(BEFORE_CUTOFF, SUPERSEDED)
     assert consent_refresh_required(AFTER_CUTOFF, SUPERSEDED)
 
@@ -51,12 +46,7 @@ def test_the_account_aggregate_delegates_to_the_same_predicate() -> None:
 
 
 def test_the_notice_names_everything_it_is_consent_to() -> None:
-    """The notice fronts every gated action, so it has to describe all of them.
-
-    Pinned as substrings rather than as exact prose: the wording is meant to be edited, but a
-    category quietly dropping out of it turns the receipt into consent to something narrower
-    than what actually happens.
-    """
+    """Check the notice covers each data use while allowing its surrounding wording to change."""
     notice = tr(PRIVACY_NOTICE).casefold()
 
     assert "discord user id" in notice  # what is stored
@@ -79,7 +69,6 @@ def test_the_notice_is_plain_text_in_paragraphs() -> None:
 
 
 def test_the_version_is_an_iso_date() -> None:
-    """Receipts sort and compare as text, which only works while the format holds."""
     year, month, day = CURRENT_CONSENT_VERSION.split("-")
     assert (len(year), len(month), len(day)) == (4, 2, 2)
     assert CURRENT_CONSENT_VERSION.replace("-", "").isdigit()

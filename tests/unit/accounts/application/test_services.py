@@ -57,7 +57,12 @@ ATTEMPT = (IdentityProvider.DISCORD, "123")
 
 
 class FakeAccountRepository:
-    """Narrow stateful fake used to exercise account orchestration."""
+    """In-memory state for orchestration tests, with scripted link and merge results.
+
+    Linking and merging do not perform their real database mutations here. Ticket
+    expiry uses NOW, while verification lockouts use the wall clock. AccountScope
+    provides transaction copies around this fake.
+    """
 
     def __init__(self) -> None:
         self.accounts: dict[int, Account] = {}
@@ -144,7 +149,7 @@ class FakeAccountRepository:
         return ticket
 
     def expire_merge_tickets(self) -> None:
-        """Age every live ticket past its window, without waiting ten minutes."""
+        """Set every ticket expiry before the fake clock."""
         self.merge_tickets = {
             digest: replace(ticket, expires_at=NOW.subtract(seconds=1)) for digest, ticket in self.merge_tickets.items()
         }
@@ -238,7 +243,7 @@ class FakeAccountRepository:
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
     ) -> Account:
-        # `consent` rides on creation only; an account that already exists is returned untouched.
+        # Consent applies only when creating an account.
         return await self.get_by_identity(provider, subject) or self.seed_account(
             int(subject), provider=provider, consent=consent
         )
@@ -438,11 +443,7 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
 
 
 def _linked(account: Account, *, claimed_alias: CreatorAlias | None = None) -> VerificationLinkResult:
-    """A successful redemption, which always carries the reconciliation it performed.
-
-    `link_minecraft_account` returns that reconciliation rather than the claimed alias alone, so
-    linking can report a contested credit in the same words a refresh does.
-    """
+    """Build a scripted successful link result with its corresponding identity refresh."""
     assert account.id is not None
     return VerificationLinkResult(
         account=account,
@@ -462,13 +463,12 @@ def _preview(**overrides: object) -> LinkPreview:
 
 
 async def test_a_bad_code_fails_at_reservation_before_any_prompt() -> None:
-    """The whole point of reserving first: the code is checked before the notice is read."""
     repository = FakeAccountRepository()
 
     with pytest.raises(InvalidVerificationCodeError):
         await service(repository).reserve_minecraft_link("bad", attempted_by=ATTEMPT)
 
-    # And it costs the guesser a slot, because reserving is where guessing now happens.
+    # An invalid reservation consumes a verification attempt.
     assert repository.failures[ATTEMPT] == 1
 
 
@@ -487,7 +487,7 @@ async def test_reserving_returns_the_preview_the_prompt_needs() -> None:
 
 
 async def test_reservation_lockout_is_enforced_before_reserving() -> None:
-    """Otherwise reserving would be an uncapped oracle sitting next to a capped redemption."""
+    """Reservation reveals whether a code is valid, so it needs the same attempt limit as redemption."""
     repository = FakeAccountRepository()
     repository.reservable["good"] = _preview()
     accounts = service(repository)
@@ -516,7 +516,7 @@ async def test_committing_a_reservation_passes_the_token_through() -> None:
 
 
 async def test_a_lapsed_reservation_is_not_reported_as_a_bad_code() -> None:
-    """A correct code told "invalid" sends the user to fetch a new one for the wrong reason."""
+    """An expired reservation should ask the caller to restart confirmation, not replace a valid code."""
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
@@ -561,8 +561,7 @@ async def test_consecutive_wrong_codes_lock_the_attempting_identity() -> None:
         with pytest.raises(InvalidVerificationCodeError):
             await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
 
-    # The cap is now spent, so even a correct code is refused until the wait passes. That is the
-    # point: the guess that succeeds is the one that takes over somebody else's Minecraft account.
+    # Lockout rejects even valid codes. Checking correctness first would still let guesses succeed.
     repository.link_result = _linked(account)
     with pytest.raises(VerificationAttemptsExhaustedError) as caught:
         await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
@@ -579,7 +578,7 @@ async def test_a_lockout_is_scoped_to_one_identity() -> None:
         with pytest.raises(InvalidVerificationCodeError):
             await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
 
-    # Anyone else is unaffected, so one attacker cannot deny the whole instance.
+    # A different identity retains its own attempt budget, so one caller cannot lock everyone out.
     repository.link_result = _linked(account)
     other = (IdentityProvider.DISCORD, "456")
 
@@ -610,11 +609,7 @@ async def test_a_success_clears_the_failure_count() -> None:
 
 
 async def test_holding_a_correct_code_is_never_charged_as_a_failure() -> None:
-    """A conflict proves the caller had a valid code, so it must not spend their budget.
-
-    Otherwise anyone whose account is already linked could be locked out by replaying their own
-    successful code, turning the abuse control into the abuse.
-    """
+    """A linking conflict is not a failed code guess and must not consume the attempt budget."""
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
@@ -767,12 +762,7 @@ async def test_refresh_exact_uuid_ignores_a_more_recent_java_identity() -> None:
 
 
 async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> None:
-    """The point of the rekeying: a Bedrock-only caller is a first-class linker.
-
-    Both halves were unreachable before -- linking looked the account up by Discord
-    identity and minted one when absent, and unlinking looked it up by Discord identity
-    and gave up when there was none.
-    """
+    """A Bedrock-only account can manage its Java identity without acquiring a Discord identity."""
     repository = FakeAccountRepository()
     account = repository.seed_account(555, provider=IdentityProvider.BEDROCK, consent=CONSENT, java_uuid=JAVA_UUID)
     assert account.id is not None
@@ -932,7 +922,7 @@ class TestMergeCodes:
             await accounts.complete_merge(survivor.id, code, now=NOW)
 
     async def test_minting_replaces_the_previous_code(self) -> None:
-        """One live ticket per account is what keeps a short code safe."""
+        """Replacing a ticket must also invalidate the previously issued code."""
         repository = FakeAccountRepository()
         survivor = repository.seed_account(1, consent=CONSENT)
         absorbed = repository.seed_account(2, consent=CONSENT)
@@ -978,16 +968,12 @@ class TestMergeCodes:
             await accounts.preview_merge(account.id, code)
 
     async def test_the_ticket_window_matches_the_proof_window(self) -> None:
-        """A ticket must be redeemable for exactly as long as its proof is accepted.
-
-        Two windows that could disagree would be a bug waiting for someone to tune one of them.
-        """
+        """Keep ticket expiry aligned with the maximum age accepted for merge proof."""
         assert MERGE_TICKET_TTL_SECONDS == MERGE_PROOF_MAX_AGE_SECONDS
 
 
 async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write() -> None:
-    """The Discord gate asks, then mints. Splitting that into create-then-record leaves a
-    receipt-less account behind whenever the second call fails."""
+    """Store consent with the new account so a separate failing call cannot leave the receipt missing."""
     repository = FakeAccountRepository()
     account_service = service(repository)
     consent = AccountConsent.grant_current()
@@ -999,8 +985,7 @@ async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write()
 
 
 async def test_an_existing_account_is_not_handed_a_receipt_it_never_agreed_to() -> None:
-    """`get_or_create_identity` cannot tell whether its caller asked anybody, so it only ever
-    writes a receipt onto the row it creates itself."""
+    """Account lookup must not grant consent to an existing account as a side effect."""
     repository = FakeAccountRepository()
     account_service = service(repository)
     existing = repository.seed_account(99, provider=IdentityProvider.DISCORD)

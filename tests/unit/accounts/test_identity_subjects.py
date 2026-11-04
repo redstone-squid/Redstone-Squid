@@ -1,4 +1,4 @@
-"""Per-provider subject validation, which is the domain's job and no longer the database's."""
+"""Provider-specific subject formats are validated by the account identity factory."""
 
 from dataclasses import replace
 from uuid import UUID
@@ -60,11 +60,7 @@ def test_java_subjects_normalize_to_canonical_form(subject: str) -> None:
 
 
 def test_every_provider_has_an_arm() -> None:
-    """A new `IdentityProvider` member fails here as well as under basedpyright.
-
-    The `match` in `for_provider` is exhaustive, so a missing arm falls through and
-    returns `None` at runtime; this catches that without waiting for a type check.
-    """
+    """Require a valid sample and a factory result for every provider in the enum."""
     samples = {
         IdentityProvider.DISCORD: "1",
         IdentityProvider.JAVA: str(JAVA_UUID),

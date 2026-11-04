@@ -1,10 +1,8 @@
-"""Golden corpus pinning `fold_creator_name`.
+"""Pin Unicode examples used to match creator aliases.
 
-The fold defines creator identity: two names that fold together are one creator, and the
-`creator_aliases.normalized_name` unique index is built on the result. Nothing in the database
-can check it, because Postgres cannot reproduce `casefold`. So the outputs are pinned here
-instead, and a CPython upgrade that changes Unicode casefolding fails this file loudly rather
-than silently regrouping existing creators.
+The unique normalized_name index relies on application folding. These expected values
+catch changes to stored keys after a Python or Unicode upgrade; the database only
+checks basic whitespace and ASCII casing.
 """
 
 # ruff: noqa: RUF001  Confusable and compatibility characters are the subject
@@ -55,11 +53,7 @@ def test_names_that_are_one_creator(left: str, right: str) -> None:
 
 
 def test_dotted_capital_i_stays_distinct_from_ascii_i() -> None:
-    """Postgres `lower()` collapses these two; casefold keeps them apart.
-
-    Pinned because it is the one case where the retired SQL fold was *stricter*, so a
-    regression toward `lower()` semantics would silently merge two creators.
-    """
+    """Casefold preserves the combining dot, so these names must remain distinct."""
     assert fold_creator_name("İ") != fold_creator_name("I")
 
 
@@ -79,12 +73,6 @@ def test_fold_satisfies_the_database_check_constraint() -> None:
 
 
 def test_fold_agrees_with_the_unicode_standard_algorithm() -> None:
-    """Guard the pipeline's shape, not a Unicode version.
-
-    `requires-python` spans 3.12 and 3.13, which ship different Unicode versions, so pinning
-    `unicodedata.unidata_version` would fail on a supported interpreter. The corpus above is
-    the real tripwire for a casefold change; this pins that the fold stays composed of the
-    standard operations rather than drifting back toward `str.lower()`.
-    """
+    """Check the normalization sequence separately from the fixed examples above."""
     for name in ("ΣΣ", "Straße", "İ", "Ａlice", "ﬁx", " Bob ", "MiXeD"):
         assert fold_creator_name(name) == unicodedata.normalize("NFKC", name).strip().casefold()

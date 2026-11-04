@@ -1,8 +1,7 @@
-"""Identity context on account errors.
+"""Account errors identify the provider when a subject is supplied.
 
-These errors used to record a bare `discord_id`, which quietly assumed every caller had one.
-They now name the provider explicitly, so an error raised for a CLI device or a Minecraft player
-says which namespace the subject belongs to instead of implying Discord by omission.
+Internal account IDs and provider subjects belong in diagnostic context, not in
+public error details.
 """
 
 from uuid import UUID
@@ -38,7 +37,6 @@ def test_a_non_discord_identity_names_its_own_provider() -> None:
 
 
 def test_an_account_id_alone_carries_no_provider() -> None:
-    """Nothing should imply Discord just because no other identity was supplied."""
     error = AccountNotFoundError(42)
 
     assert error.context == {"account_id": 42}
@@ -58,7 +56,6 @@ def test_consent_errors_work_for_a_caller_known_only_by_its_account() -> None:
 
 
 def test_already_linked_names_the_conflicting_minecraft_account() -> None:
-    """Raised for any provider conflict, so it names the one it means."""
     error = AccountAlreadyLinkedError(provider=IdentityProvider.JAVA, subject=str(JAVA_UUID), minecraft_uuid=JAVA_UUID)
 
     assert error.context["minecraft_uuid"] == str(JAVA_UUID)
@@ -68,7 +65,6 @@ def test_already_linked_names_the_conflicting_minecraft_account() -> None:
 
 
 def test_already_linked_requires_keywords() -> None:
-    """No positional identity, so a provider-shaped call cannot slip through unnamed."""
     with pytest.raises(TypeError):
         AccountAlreadyLinkedError(7, JAVA_UUID)  # type: ignore[misc]
 
