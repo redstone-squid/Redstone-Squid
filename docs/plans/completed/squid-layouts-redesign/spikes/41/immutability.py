@@ -1,9 +1,7 @@
-"""Shared by both prototypes: what counts as a state value once mutation is out.
+"""Hashability checks and equality handling shared by the reactivity prototypes.
 
-Hashability is the check. It is not a perfect immutability test -- a plain mutable
-object hashes by identity -- but it is *deep*, which the annotation check plan 40
-used to carry was not: `(1, [2])` and a frozen dataclass with a `list` field both
-fail, and those are the cases that actually bite.
+Hashing catches lists nested inside tuples or generated frozen-dataclass hashes. It does
+not prove immutability: mutable objects with identity-based or custom hashes can pass.
 """
 
 
@@ -23,7 +21,7 @@ def check(label: str, value: object) -> None:
 
 
 def equal(left: object, right: object) -> bool:
-    """The conservative comparison `_Computed.refresh_for` already uses."""
+    """Treat identical objects as equal and failed equality comparisons as unequal."""
     if left is right:
         return True
     try:

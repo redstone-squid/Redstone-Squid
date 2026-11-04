@@ -1,3 +1,9 @@
+"""Check reader retention and time repeated computed reads in the three prototypes.
+
+Run from this directory. Timings report the best of seven batches, while the weak-reference
+probe reports whether a source retains a reader after garbage collection.
+"""
+
 import gc
 import sys
 import timeit

@@ -1,13 +1,9 @@
-"""Spike: can Pyrefly infer `ScopeT` from a namespace's base class?
+"""Compare ways to infer a shared namespace's scope type in Pyrefly.
 
-Evidence for [59](../../59-shared-pool.md), not a staging area -- nothing here is meant to be
-promoted into a package. See README.md for the recorded output and what it decided.
-
-Run:
-
-    uv run --locked pyrefly check docs/plans/completed/squid-layouts-redesign/spikes/59/inference.py
-
-`docs/` is outside `[tool.pyrefly] project-includes`, so this file is only ever checked by hand.
+This historical experiment uses the Shared API available when plan 59 was written.
+Some calls intentionally violate the proposed types; diagnostics are part of the result.
+See the adjacent README for the recorded checker version and output. The file is excluded
+from normal project checking and may need its original checkout to reproduce those results.
 """
 
 from collections.abc import Callable, Hashable, Mapping

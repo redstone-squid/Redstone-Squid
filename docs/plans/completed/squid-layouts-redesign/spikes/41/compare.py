@@ -1,8 +1,10 @@
-"""Run identical scenarios against both prototypes.
+"""Run the same state and dependency scenarios against all three prototypes.
 
-The scenario bodies are written once and parameterised by the module, which is itself
-a result: both candidates keep `self.count` and drop `depends=`, so the author-facing
-code is byte-identical and only the propagation differs.
+Each prototype exposes the same state and computed attributes, so the scenarios
+exercise the same author-facing API with different dependency-tracking strategies.
+
+Run from this directory with ``python compare.py``. The output compares observed values
+and counters; it prints results rather than asserting that every prototype passes.
 """
 
 import sys
@@ -56,7 +58,7 @@ def run(sl, name):
     Panel = build(sl)
     out = {}
 
-    # 1. the deep-object hole: a value that cannot be snapshotted is refused
+    # 1. Reject unhashable values, including nested lists.
     p = Panel()
     try:
         p.rows = [1, 2]
@@ -85,7 +87,7 @@ def run(sl, name):
     p.rows = Good((1,))
     out["accepts frozen-dc"] = True
 
-    # 2. automatic tracking: no depends=, and the value is never stale
+    # 2. Check that a same-component write refreshes a previously read computed value.
     p = Panel()
     p.flag = True
     first = p.either
@@ -124,7 +126,7 @@ def run(sl, name):
     p.a = 3
     out["work before read"] = sl.STATS["recomputes"]
 
-    # 7. an action handler's read must not create a dependency
+    # 7. Exercise the untracked context; this scenario does not inspect dependency edges.
     p = Panel()
     _ = p.left
     with sl.untracked():

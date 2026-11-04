@@ -1,13 +1,14 @@
-"""Prototype B -- a signal graph behind the same attribute surface.
+"""Prototype B: record source versions and push stale flags to dependent nodes.
 
-Each (instance, field) is a cell with a version. Each computed is a derived node
-holding the versions of the sources it read last time. A write bumps a version and
-marks dependents maybe-dirty; a read of a derived node checks whether any source
-version actually moved before recomputing.
+Each state field is a versioned cell. A derived node caches a computed value and
+remembers the versions of the sources it read.
 
-That version check is the whole reason to prefer a graph: a computed whose inputs
-changed but whose *value* did not stops propagating, and so do the computeds above
-it. Work is pull-driven, so a computed nobody reads is never recomputed at all.
+Writes mark dependents stale. Reading a derived node settles its sources and recomputes
+only when a source version changed. Unchanged derived values keep their versions, allowing
+readers above them to reuse cached results.
+
+Dependent lists hold strong references; probe2.py checks whether they retain a dropped
+reader. This prototype is historical design evidence.
 """
 from typing import override
 

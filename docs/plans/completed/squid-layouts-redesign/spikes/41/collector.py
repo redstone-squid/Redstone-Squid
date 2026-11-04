@@ -1,12 +1,11 @@
-"""Prototype A -- automatic read collection, eager refresh, coarse invalidation.
+"""Prototype A: collect reads and eagerly refresh computed values after writes.
 
-The smallest change that fixes both reproduced bugs. It keeps the shape the package
-already has: `_state_changed` walks computeds, recomputes, compares, and propagates
-only when a value actually changed. What it removes is `depends=`, replaced by a
-ContextVar read collector -- the mechanism `observe_resources` and 40 section 7 use.
+A ContextVar records each (instance ID, descriptor) read during computation. Dependencies
+are rebuilt on every recompute, so branches can change which fields they observe. A write
+walks computed fields on the same component, propagates changed results, and invalidates
+that component. Cross-component reads are recorded but do not notify the reader.
 
-Dependency edges are per (instance, descriptor) and rebuilt on every recompute, so a
-conditional dependency is exact rather than over-declared.
+This is historical design evidence, not the current reactivity implementation.
 """
 
 from contextvars import ContextVar

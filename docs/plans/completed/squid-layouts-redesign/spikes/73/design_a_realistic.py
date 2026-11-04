@@ -1,9 +1,11 @@
-"""Design A against the real union shape, which is where it could still fail.
+"""Repeat the target-inference probe with unions shaped like the authoring API.
 
-`design_a_inference.py` solved `ModeT` through a bare `Renderable[ModeT]` parameter. The
-real factories take `ChildLike[ModeT]` -- a union of unparameterized semantic leaves,
-parameterized containers, `Renderable[ModeT]`, and plain text. Solving a contravariant
-variable through a union member is a strictly harder job, so it is tested separately.
+ChildLike includes semantic leaves, generic containers, Renderable, text, and None.
+Unlike design_a_inference.py, this asks the checker to infer the target through a
+union of possible child types, as it must for the actual authoring API.
+
+Assertions deliberately use Bogus as the expected type so checker diagnostics reveal
+what was inferred. The final plan calls check acceptance of portable and V2-only content.
 """
 
 from typing import assert_type

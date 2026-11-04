@@ -1,14 +1,14 @@
-"""Design A: can plain inference compute a container's mode from its children?
+"""Test whether a checker infers a container's target from contravariant child types.
 
-Self-contained -- no `squid_ui` import -- so the answer is about the type system rather
-than about this codebase. Nothing here runs.
+The experiment is self-contained and has no squid_ui imports. A portable child and a
+Components V2 child should produce a ComponentsV2Target container. Mixed classic and V2
+children should be rejected. The assert_type calls and final plan calls test those
+expectations; this is a static-checker probe, not a runtime behavior test.
 
-The lattice is `DiscordTarget` with two leaves. `Renderable[ModeT]` puts `ModeT` in a
-parameter position, so it is contravariant: `Renderable[X]` satisfies `Renderable[M]`
-exactly when `M <: X`. A container holding a portable child and a V2-only child must
-therefore come out `ComponentsV2Target` -- the *meet* of its children's modes, which
-Python has no syntax for. The question is whether a solver handed two upper bounds on one
-contravariant variable computes it anyway.
+Renderable consumes its target type, making that parameter contravariant: content
+that accepts any Discord target can also be used where only V2 content is accepted.
+The container must infer a target accepted by every child. This tests whether the
+checker can find that common restriction without an explicit intersection type.
 """
 
 from typing import assert_type

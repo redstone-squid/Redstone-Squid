@@ -1,13 +1,11 @@
-"""Prototype C -- pull-only versions. No dependent lists, no staleness push.
+"""Prototype C: validate computed values by pulling source versions on reads.
 
-B needs `cell.dependents` so a write can mark derived nodes stale. That edge points
-from the source *back* at the reader, which is the direction that leaks when readers
-are short-lived -- and in this package every component is per-message.
+Sources keep no reverse references to readers, so a long-lived source does not keep
+a discarded reader alive as it can in graph.py. State writes invalidate the owning
+component directly. A computed value checks its source versions when read;
+a global epoch avoids repeated checks when nothing has changed.
 
-But nothing needs the push. Invalidation is already whole-component and `__set__`
-calls it directly, so the only job left for the graph is deciding whether a computed
-is still valid, and a version comparison answers that at read time. Every reference
-then points from reader to source, which dies with the reader.
+This prototype is historical design evidence, not the current reactivity implementation.
 """
 from typing import override
 
@@ -20,9 +18,10 @@ _CONSUMER: ContextVar[object | None] = ContextVar("consumer", default=None)
 STATS = {"recomputes": 0, "invalidations": 0, "reads": 0}
 
 _EPOCH = [0]
-"""Bumped by every write anywhere. A node settled in the current epoch cannot be stale,
-so the source walk is skipped entirely -- which is the whole of a render, where reads
-are many and writes are none."""
+"""Incremented when a cell value changes, including a derived cell's value.
+
+A node already settled in this epoch can skip walking its sources again.
+"""
 
 
 class untracked:

@@ -1,4 +1,8 @@
-"""Two things the scenario table only hints at: the glitch, and read cost."""
+"""Check intermediate diamond values and compare state-read timings.
+
+Run from this directory. The timing comparison imports the historical squid_layouts
+package and requires a checkout or environment that still provides it.
+"""
 
 import sys
 import timeit
