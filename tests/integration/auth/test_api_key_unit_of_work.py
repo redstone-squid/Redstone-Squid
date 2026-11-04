@@ -56,6 +56,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
             audit=AuditEntry(action="revoke", subject_kind="account", subject_id=account_id, pattern=node),
         )
         await uow.commit()
+    # Keep the cache stale: key issuance must read authority inside its own transaction.
     assert await permissions.allows(subject, node)
     with pytest.raises(AuthorizationError):
         await api_keys.issue(label="After revocation", scopes=[node], owner_account_id=account_id)
@@ -66,6 +67,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
     assert authenticated is not None
     assert authenticated.last_used_at is not None
     assert str(authenticated.last_used_ip) == "192.0.2.1"
+    # Repeated authentication within the write-throttle interval preserves the previous usage sample.
     again = await api_keys.authenticate(issued.token, used_ip="192.0.2.2")
     assert again is not None
     assert again.last_used_at == authenticated.last_used_at

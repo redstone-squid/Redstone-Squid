@@ -192,6 +192,7 @@ async def test_ciphertext_swapped_between_records_fails_authentication(
             select(IdempotencyRequest).where(IdempotencyRequest.id == second.request_id)
         )
         assert second_record is not None
+        # Copy the entire encrypted envelope; authentication must bind it to its original request metadata.
         await session.execute(
             update(IdempotencyRequest)
             .where(IdempotencyRequest.id == first.request_id)

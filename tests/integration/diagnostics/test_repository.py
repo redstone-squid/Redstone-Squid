@@ -137,7 +137,7 @@ async def test_list_recent_is_newest_first_and_bounded(repository: PostgresError
 
 
 async def test_a_report_with_no_error_code_round_trips(repository: PostgresErrorReportRepository) -> None:
-    """Unexpected failures are the common case and carry no application code."""
+    """Unexpected exceptions may have no application error code."""
     await repository.save(make_report(correlation_id="f" * 32, error_code=None))
 
     found = await repository.find("f" * 12, now=NOW)

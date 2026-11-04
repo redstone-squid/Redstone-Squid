@@ -1,4 +1,4 @@
-"""PostgreSQL coverage for Minecraft credential and device-flow fencing."""
+"""PostgreSQL coverage for Minecraft credential rotation, challenge quotas, and identity approval."""
 
 import base64
 import hashlib
@@ -249,6 +249,7 @@ async def test_legacy_advisory_fence_blocks_until_rollback_then_enforces_active_
         transaction = await holder.begin()
         holder_pid = await holder.scalar(select(func.pg_backend_pid()))
         assert holder_pid is not None
+        # Reproduce the old unnamespaced key so deployments using either lock scheme still serialize.
         raw_key = f"fabric:{JAVA_UUID}:-".encode()
         legacy_lock_id = int.from_bytes(hashlib.sha256(raw_key).digest()[:8], byteorder="big", signed=True)
         await holder.execute(select(func.pg_advisory_xact_lock(legacy_lock_id)))
@@ -257,6 +258,7 @@ async def test_legacy_advisory_fence_blocks_until_rollback_then_enforces_active_
             tasks.start_soon(start_challenge)
             await started.wait()
             try:
+                # Observe PostgreSQL's waiter before releasing the lock; a task-start signal alone is insufficient.
                 await wait_until_advisory_lock_is_blocked(async_session_factory, holder_pid=holder_pid)
                 assert not finished.is_set()
             finally:

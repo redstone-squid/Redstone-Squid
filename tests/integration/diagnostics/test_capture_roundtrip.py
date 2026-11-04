@@ -1,8 +1,7 @@
-"""A failure captured by a real handler must be readable through the lookup surface.
+"""Persist captured failures and resolve them by the references shown to users.
 
-The unit tests prove capture is called and prove lookup renders, each against a fake of the
-other half. This is the seam between them: the reference a caller is handed has to be the key
-the row is actually filed under, through real serialization and a real database.
+These tests connect report serialization, PostgreSQL storage, and lookup. Handler invocation
+and presentation are covered separately; reports here are recorded directly through the service.
 """
 
 import logging
@@ -43,7 +42,7 @@ async def service(
 
 
 def _fail() -> None:
-    """Raise from a named frame, so the stored traceback has one worth reading."""
+    """Raise from a real frame so the stored report includes a traceback."""
     msg = "the connection string is postgres://secret"
     raise InternalError(msg, context={"job_id": 17})
 
@@ -83,7 +82,6 @@ async def test_a_captured_failure_is_readable_by_the_reference_the_user_was_show
 
 
 async def test_the_log_buffer_supplies_the_tail_a_report_stores(service: ErrorReportService) -> None:
-    """End to end through the real handler: bound ID, buffered lines, drained into the row."""
     buffer = CorrelatedLogBuffer(max_records=10)
     buffer.setFormatter(logging.Formatter("%(message)s"))
     correlation = "b1b2c3d4e5f6" + "8" * 20
@@ -113,6 +111,6 @@ async def test_the_log_buffer_supplies_the_tail_a_report_stores(service: ErrorRe
 async def test_a_reference_outside_the_retention_window_is_indistinguishable_from_a_typo(
     service: ErrorReportService,
 ) -> None:
-    """Saying a reference *used* to exist would reveal that an error happened."""
+    """Unknown references share the not-found error used for expired reports."""
     with pytest.raises(ErrorReportNotFoundError):
         await service.lookup("ffffffffffff")

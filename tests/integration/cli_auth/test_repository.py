@@ -1,4 +1,4 @@
-"""PostgreSQL coverage for CLI device and session fencing."""
+"""PostgreSQL coverage for CLI enrollment, signed session renewal, and device revocation."""
 
 from collections.abc import AsyncGenerator
 from functools import partial

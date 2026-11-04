@@ -33,6 +33,7 @@ async def redis_clients(redis_container: RedisContainer) -> AsyncGenerator[tuple
 @pytest.mark.asyncio
 async def test_concurrent_replicas_cannot_overshoot_one_quota(redis_clients: tuple[Redis, Redis]) -> None:
     first_client, second_client = redis_clients
+    # Separate client connections model replicas sharing only Redis state.
     limiters = (RedisSlidingWindowRateLimiter(first_client), RedisSlidingWindowRateLimiter(second_client))
     policy = RateLimitPolicy("integration", 10, 30)
     request = RateLimitRequest(policy, "user:shared")
@@ -55,6 +56,7 @@ async def test_registered_script_recovers_after_cache_flush_and_window_expiry(
 
     assert (await limiter.check((request,))).allowed is True
     assert (await limiter.check((request,))).allowed is False
+    # Reuse the limiter after Redis forgets the script to exercise NOSCRIPT recovery.
     await client.script_flush()
     await asyncio.sleep(1.05)
 
