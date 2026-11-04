@@ -3438,7 +3438,7 @@ export type VoteSessionDetail = {
 /**
  * VoteSessionResult
  *
- * The decision a closed session reached.
+ * A session's outcome, or PENDING while it remains undecided.
  */
 export type VoteSessionResult = 'approved' | 'denied' | 'cancelled' | 'pending';
 

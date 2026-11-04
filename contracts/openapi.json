@@ -24909,7 +24909,7 @@
           "pending"
         ],
         "title": "VoteSessionResult",
-        "description": "The decision a closed session reached."
+        "description": "A session's outcome, or PENDING while it remains undecided."
       },
       "VoteStatus": {
         "type": "string",
