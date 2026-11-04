@@ -1,4 +1,8 @@
-"""End-to-end durable session coordination without Discord network I/O."""
+"""Durable UI sessions checkpoint their message-root trees and recover them in a later runtime.
+
+Tests share an in-memory store across runtime instances to exercise claims, replacement,
+membership, and recovery. FakeFrontend supplies message harnesses instead of Discord network I/O.
+"""
 
 import asyncio
 import gc
@@ -68,6 +72,12 @@ class HiddenDraft(sl.Component[sl.ComponentsV2Target]):
 
 @dataclass(slots=True)
 class FakeFrontend:
+    """Simulate promotion and reconnection using message harnesses.
+
+    Reconnection sends a fresh presentation to a harness with the recorded ID; it does not
+    exercise Discord message lookup or native persistent-view registration.
+    """
+
     reject_next: bool = False
     missing_ids: frozenset[str] = frozenset()
     unreachable_ids: frozenset[str] = frozenset()
@@ -185,7 +195,7 @@ async def attach_counter(
 
 @asynccontextmanager
 async def lifecycle_session(mode: str, frontend: FakeFrontend) -> AsyncIterator[tuple[Session, MemorySessionStore]]:
-    """Exercise the same lifecycle contract for local, durable, and reconstructed graphs."""
+    """Yield a local, newly durable, or recovered session for the same attachment-lifetime tests."""
     store = MemorySessionStore()
     if mode == "ordinary":
         opened = await SessionManager().open(
@@ -950,11 +960,10 @@ async def test_a_durable_quota_survives_recovery() -> None:
 
 
 async def test_attaching_a_durable_session_without_a_recipe_is_refused_not_raised() -> None:
-    """`SessionManager.session_for` hands back a plain `Session`.
+    """Callers using the base Session interface may omit the durable recipe.
 
-    Every caller that reaches a session that way -- `SessionSpec.attach` among them -- calls
-    `attach` with the base class's arguments, which for a durable session used to be a missing
-    required keyword and a `TypeError` at runtime.
+    The durable implementation must return RECIPE_REQUIRED for that call, so callers such
+    as SessionSpec.attach can handle it as an admission refusal.
     """
     store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())

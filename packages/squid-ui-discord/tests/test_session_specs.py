@@ -56,7 +56,7 @@ def test_session_spec_key_uses_its_declared_scope(
 
 
 def test_open_context_reads_an_interaction_and_a_command_context_alike() -> None:
-    """`Replyable` and `discord.Interaction` never meet, and session recipe does not care."""
+    """Both native source shapes must produce the same user and guild identity."""
     interaction = interaction_harness(user_id=7)
     interaction.guild_id = 42
     context = ContextHarness(message=message_harness(guild_id=42), user_id=7)

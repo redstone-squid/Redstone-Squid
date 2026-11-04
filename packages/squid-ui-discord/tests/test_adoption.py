@@ -1,7 +1,8 @@
-"""Adopting an unsent discord.py view: refusals, translation, and the interaction proxy.
+"""Adopting unsent discord.py views into a MessageRoot that owns message delivery.
 
-Adversarial by design. The proxy is the part that rots, so most of this file is about calls a
-legacy callback makes that would put a second writer on the mount's message.
+Legacy callbacks can still mutate their view and call edit_message(view=self). The interaction
+proxy treats that call as a request to render the adopted view, leaving the root to make the
+Discord edit. Tests also cover calls the proxy must refuse to keep that single writer.
 """
 
 from typing import Any, cast, override
@@ -710,8 +711,7 @@ async def test_without_an_override_the_error_reaches_the_mounts_hook() -> None:
     await message_root.dispatch("go", interaction_harness())
 
     assert [type(error) for error in errors] == [RuntimeError]
-    # `mutated` cannot roll an in-place write back, and the docstring says so rather than
-    # pretending the legacy object took part in the transaction.
+    # Legacy in-place mutation is outside the component transaction and cannot be rolled back.
     assert view.broke is True
 
 

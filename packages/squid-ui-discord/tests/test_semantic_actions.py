@@ -286,7 +286,7 @@ def test_a_provably_optimal_first_candidate_reports_no_fallback() -> None:
 
 
 def _texts(result) -> set[str]:
-    """Every string the scene will display, panels included."""
+    """Collect scene text nodes, descending through panels used by these fixtures."""
     found: set[str] = set()
 
     def walk(children) -> None:

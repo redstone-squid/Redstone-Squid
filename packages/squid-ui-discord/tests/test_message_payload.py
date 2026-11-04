@@ -1,8 +1,7 @@
-"""The whole outgoing Discord message as one value, and the transitions it may make.
+"""Outgoing payloads and transitions between classic and Components V2 messages.
 
-Plan 38: content and embeds used to be a private guess at a `discord.Message` that was very
-often `None`. They are part of the payload now, so the tests that matter are the ones about
-coherence at construction and about which mode transitions reach Discord at all.
+The payload carries content, embeds, components, and assets together. Delivery checks that
+combination against the message's current mode, even when no Discord message object was fetched.
 """
 
 import io
@@ -51,12 +50,10 @@ def a_classic_view() -> discord.ui.View:
 
 
 class _FlaggedView(discord.ui.View):
-    """A classic view that reports the V2 flag anyway.
+    """Exercise a classic View subclass that reports Components V2 content.
 
-    discord.py 2.7 refuses to put an `ActionRow` in a `discord.ui.View`, so the only way to
-    reach this state today is a subclass. The check still earns its place: the flag is set
-    from `has_components_v2()`, which is a view's own answer rather than a fact discord.py
-    derives, and the resulting 400 names nothing.
+    The outgoing flag follows has_components_v2(), so checking only the view class would
+    miss this incompatible payload.
     """
 
     @override
@@ -73,7 +70,7 @@ def v2(view: discord.ui.LayoutView | None = None, *, assets: tuple[Asset, ...] =
 
 
 class TestCoherence:
-    """The invalid combinations are exactly the ones Discord answers with an unhelpful 400."""
+    """Reject contradictory payload fields before delivery."""
 
     def test_components_v2_refuses_content_and_embeds(self) -> None:
         with pytest.raises(MessageModeError, match="cannot carry content"):
@@ -138,7 +135,7 @@ class TestPayload:
 
 
 class TestTransitions:
-    """`_legacy_fields` guessed; the matrix states every case, including the illegal one."""
+    """Mode changes must send the required fields or fail before making an HTTP request."""
 
     async def test_classic_to_v2_clears_the_legacy_fields(self) -> None:
         message = message_harness(components_v2=False)
@@ -315,7 +312,11 @@ class TestDestinations:
         assert isinstance(message.edit.await_args.kwargs["view"], discord.ui.LayoutView)
 
     async def test_edit_to_hands_back_a_handle_carrying_the_presentations_mode(self) -> None:
-        """The bare `handle_for` a host would reach for reads the flag, which is now stale."""
+        """The original message object still has its old flag after the edit.
+
+        The returned handle must track the mode just delivered; rebuilding one from that stale
+        message object would incorrectly permit a return to classic mode.
+        """
         message = message_harness(components_v2=False)
 
         result = await delivery.edit_to(message)(v2())

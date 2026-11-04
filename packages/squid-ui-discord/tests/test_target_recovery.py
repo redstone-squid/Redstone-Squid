@@ -1,4 +1,4 @@
-"""A recovered mount is rebuilt against the exact target its render was fitted to."""
+"""Registered component factories restore message roots against their recorded target profile."""
 
 import json
 import re
@@ -185,11 +185,11 @@ class TestRecovery:
         assert TargetRegistry(compact).resolve(compact.triple, compact.version, compact.fingerprint) is compact
 
     def test_a_registered_protocol_with_an_unregistered_adapter_is_refused_by_name(self) -> None:
-        """The collision the triple closes: an id alone would have resolved the wrong target.
+        """The target triple distinguishes adapters that draw the same scene dialect.
 
-        Both targets are classic messages at `discord.components-v1`; only the adapter
-        differs. Keyed on the protocol id, the snapshot would have silently resolved to the
-        other adapter's target and been rebuilt against budgets it was never fitted to.
+        Both targets use `discord.components-v1`, but one uses `elsewhere.py` instead of
+        `discord.py`. Looking up only the dialect ID would select the wrong adapter and
+        restore a message root with a different target profile.
         """
         elsewhere = discord_py_adapter_profile("elsewhere.py", ">=2.7,<3")
         components, snapshot = captured(classic(adapter=elsewhere))
@@ -200,7 +200,7 @@ class TestRecovery:
             components.restore(snapshot, targets=targets, access=Everyone())
 
     def test_replacing_a_built_in_still_refuses_a_snapshot_planned_against_the_old_one(self) -> None:
-        """Nothing is lost by allowing the override: the fingerprint does the real work."""
+        """Matching the target triple is insufficient: the fingerprint must also match its limits."""
         components, snapshot = captured(DISCORD_V1_DPY27)
         targets = TargetRegistry(classic(limits=ClassicLimits(embed_count=2)))
 

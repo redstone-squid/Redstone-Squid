@@ -120,7 +120,7 @@ class TestSolvePagination:
         assert solved.pager is not None
 
     def test_footer_is_budgeted_not_guessed(self):
-        # Every page, including its footer, fits the real budget: the PAGE_CHARS killer.
+        # Include the footer on every page instead of assuming a fixed content allowance.
         body = "\n".join("z" * 80 for _ in range(200))
         solved = measure([Heading("H" * 200), Code(body, overflow=Paginate())])
         assert solved.pager is not None
@@ -231,7 +231,7 @@ class TestMountPagination:
         assert any("Page 2 of" in text for text in footers)
 
     def test_the_message_root_draws_once_per_render(self, monkeypatch):
-        """The fingerprint dance used to make every flush plan twice."""
+        """One committed render must make one planner call, including cursor fingerprinting."""
         from squid_ui_discord import message_root as message_root_module
 
         calls = 0
@@ -248,7 +248,7 @@ class TestMountPagination:
         assert calls == 1
 
     async def test_a_paged_picker_follows_its_anchor_through_the_root(self):
-        """The production path, which used to launder every cursor through `page=`."""
+        """The mounted path must preserve anchor identity when preceding entries are inserted."""
         catalog = Catalog()
         message_root = MessageRoot(catalog, access=Everyone(), timeout=None)
         commit_render(message_root)
@@ -438,7 +438,11 @@ class TestSolverNav:
 
 
 class TestRepage:
-    """Turning a page is a projection: the fit that produced it does not change."""
+    """Changing pages reuses the measured layout and its component budget.
+
+    Page content and navigation state change, but a navigation factory must keep the same shape
+    on every page so the measured component count remains valid.
+    """
 
     def _paginated(self) -> list:
         return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate(key="lines"))]
@@ -552,8 +556,7 @@ def test_count_pages_hold_every_entry_exactly_once(count, per):
 
 
 def test_the_solver_counts_the_nav_it_realized():
-    # The assertion that replaced NAV_ROW_COMPONENTS: nav is counted because it is realized,
-    # so the solver's component budget matches what the built view actually contains.
+    # Count the realized navigation controls so planning and drawing charge the same components.
     async def move(interaction) -> None: ...
 
     def nav(state):

@@ -139,11 +139,10 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
 
 
 def test_a_cosmetic_note_does_not_fragment_root_pages() -> None:
-    """Cutting on any note put every later node on a page of its own.
+    """Informational notes must not force extra root-page breaks.
 
-    `Paginate(per=...)` on a node that is not `Lines` is noted and ignored — the content
-    is unchanged and nothing had to give — but the note was sticky across every probe
-    that included the node, so each following node looked like it no longer fitted.
+    Paginate(per=...) on Text is reported and ignored. Its note must not make each later
+    probe look over budget when the content still fits.
     """
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
 

@@ -1,4 +1,8 @@
-"""Resolved-plan caching is bounded, fast, and rebinds current callbacks."""
+"""Reuse planned layouts while binding controls to the current callbacks and presentation state.
+
+Tests distinguish structural cache hits, exact memo reuse, and incremental replanning when text
+grows within the available space. They also cover eviction and representative latency limits.
+"""
 
 from dataclasses import replace
 from time import perf_counter
@@ -208,7 +212,7 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
 
 
 def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> None:
-    """All three decision classes travel in the entry, so a hit never re-searches."""
+    """A cached fallback choice must retain its layout while using the new callback."""
     import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
@@ -276,7 +280,7 @@ def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
 
 
 def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
-    """The session is part of the key, so a hit must not silently skip its writes."""
+    """Reusing a layout must still initialize its pager in the current presentation state."""
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
     miss = plan(document, target=DISCORD_V2_DPY27, session=PresentationState())
 

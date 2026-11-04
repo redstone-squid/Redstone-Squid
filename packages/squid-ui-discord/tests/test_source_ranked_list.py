@@ -1,9 +1,7 @@
-"""SourceRankedList: an asynchronous source paged through a live mount.
+"""SourceRankedList loading and paging through a Discord message root.
 
-Every other machine in the library is tested without a transport, in `squid-ui-widgets`. This
-one cannot be: what it is *about* is what the reader sees between asking for the next page and
-the source answering -- a staged loading render, a followup edit, stale rows retained across a
-failure. All three are mount behaviour, and none of them exists until a message has been sent.
+These integration tests inspect loading presentations, followup edits, and retained rows
+after failure. The message root drives the resource and makes those delivery effects observable.
 """
 
 from dataclasses import dataclass

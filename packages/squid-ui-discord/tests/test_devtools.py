@@ -58,6 +58,7 @@ def make_context(*, bot: FakeBot | None = None) -> Any:
 
 
 async def run(command: Any, cog: DevTools[Any], ctx: Any, *args: Any) -> None:
+    """Invoke the command callback directly; owner and host checks are tested separately."""
     await command.callback(cog, ctx, *args)
 
 
@@ -289,7 +290,7 @@ class TestProfiles:
         # Neither was passed, so "unconfigured" anywhere means an inference did not happen.
         assert "unconfigured" not in rendered
         assert "build:devtools subscribers=1" in rendered
-        # A local bus publishes synchronously, so the press is delivered rather than queued.
+        # A local bus publishes synchronously, so the topic notification is already delivered.
         assert "delivered=1" in rendered
         assert DevToolsRuntime(scheduler=scheduler).profiler is profiler
 

@@ -1,3 +1,5 @@
+"""Render-program reuse must create fresh SDK objects without retaining authored callbacks."""
+
 import gc
 import weakref
 from typing import override

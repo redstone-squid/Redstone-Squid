@@ -118,6 +118,8 @@ async def test_wait_idle_observes_sync_topics_and_clear_profile_resets_bounded_d
 
 
 class _IdleQueue:
+    """Model a drain that can enqueue scheduler work through on_wait."""
+
     def __init__(self) -> None:
         self.queued = 0
         self.in_flight = 0
@@ -136,6 +138,8 @@ class _IdleQueue:
 
 
 class _IdleScheduler:
+    """Model a drain that can publish back to the topic bus through on_wait."""
+
     def __init__(self) -> None:
         self.profiler = MemoryProfiler()
         self.queued = 0

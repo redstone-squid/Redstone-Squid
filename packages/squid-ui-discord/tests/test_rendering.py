@@ -1,4 +1,9 @@
-"""Composable components: embedding, key namespacing, and where invalidation travels."""
+"""Render child components as one tree without mixing their controls or state.
+
+Boundary keys qualify each child's local keys: two `inc` controls become `left.inc` and
+`right.inc`. Rendering and cache tests check that changes reach the root while unaffected
+subtrees keep their committed output.
+"""
 
 from collections.abc import Callable
 from typing import Any, override
@@ -74,7 +79,7 @@ class Counter(Component[sl.ComponentsV2Target]):
 
 
 class Pair(Component[sl.ComponentsV2Target]):
-    """The shape that used to cross-wire: two instances of one child class."""
+    """Two instances with identical local control keys must receive separate namespaces."""
 
     def __init__(self) -> None:
         self.left = Counter("left")
@@ -119,7 +124,7 @@ class TestBoundaries:
         assert "right: 3" in payload_texts(commit_render(message_root))
 
     def test_embedding_does_not_mutate_the_childs_own_keys(self):
-        # render() stays pure: namespacing rewrites the returned tree, not the component.
+        # Namespacing must rewrite the returned tree without changing the child's local keys.
         pair = Pair()
         commit_render(MessageRoot(pair, access=Everyone(), timeout=None))
         row = pair.left.render()[1]
@@ -771,7 +776,7 @@ def test_component_expansion_preserves_container_metadata() -> None:
 
 
 class Nest(Component[sl.ComponentsV2Target]):
-    """A chain of embeds `depth` deep, each level keyed with a long-ish name."""
+    """A chain of child components with long boundary keys, exercising custom-ID shortening."""
 
     def __init__(self, depth: int) -> None:
         self.depth = depth

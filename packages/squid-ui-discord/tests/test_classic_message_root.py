@@ -1,8 +1,7 @@
-"""A classic mount is the same lifecycle drawing different components.
+"""Classic and Components V2 message roots share dispatch, access, and generation rules.
 
-Every contract here is one the V2 mount already keeps. They are parametrized over both
-targets rather than copied, because a target that needed its own copy of `access` or
-`stale generation` would mean the lifecycle had forked, which is the thing this must not do.
+Parameterized tests exercise those rules through each target; target-specific tests
+check the view and payload shapes.
 """
 
 from typing import Any, override
@@ -105,7 +104,7 @@ class TestPresentation:
 
 @pytest.mark.parametrize("target", TARGETS)
 class TestSharedContracts:
-    """One test body, both targets. A branch here would mean the lifecycle had forked."""
+    """Exercise the same lifecycle assertions against both Discord targets."""
 
     def test_a_render_produces_a_dispatchable_view(self, target) -> None:
         assert render_for(target, message_root_for(target)).is_dispatchable() is True

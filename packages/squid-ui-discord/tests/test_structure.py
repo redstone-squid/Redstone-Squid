@@ -40,7 +40,7 @@ from squid_ui_discord import (
 
 
 def _rendered(solved) -> str:
-    """Every string the measured document would display, panels included."""
+    """Collect measured text nodes, descending through panels used by these fixtures."""
     parts: list[str] = []
 
     def walk(children) -> None:
@@ -337,7 +337,7 @@ def test_a_bare_ladder_plans_to_its_first_rung() -> None:
 
 
 def test_a_rung_may_lower_to_several_nodes() -> None:
-    """An ControlGroup rung becomes one Row per five buttons, spliced without a wrapper."""
+    """A ControlGroup rung becomes one Row per five buttons, without a wrapper."""
     buttons = tuple(LinkButton(f"b{index}", "https://e.invalid") for index in range(8))
 
     async def choose(event) -> None: ...

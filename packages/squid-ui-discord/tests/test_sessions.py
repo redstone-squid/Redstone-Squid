@@ -1,4 +1,9 @@
-"""Session identity, structured outcomes, cardinality, and attachment lifetime."""
+"""UI sessions group a primary message root and its attached child roots under one lifetime.
+
+These tests cover opening and replacing sessions, closing the attachment tree, and admitting
+members. A session-key limit controls how many sessions share a key; capacity and quota control
+membership. Attachments here are child message roots, such as dialogs.
+"""
 
 from dataclasses import fields
 from typing import Any, cast, override
@@ -48,6 +53,7 @@ _DEFAULT_MESSAGE = object()
 
 
 def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui_discord.MessageDestination:
+    """Return a destination using a fresh harness by default; explicit None yields no edit handle."""
     delivered = message_harness() if message is _DEFAULT_MESSAGE else message
 
     async def send(
@@ -60,6 +66,8 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui_discord.MessageDesti
 
 
 def slowly() -> squid_ui_discord.MessageDestination:
+    """Yield during delivery so concurrent admissions can pass their preliminary checks."""
+
     async def send(
         payload: squid_ui_discord.message_payload.MessagePayload,
     ) -> squid_ui_discord.delivery.DeliveryResult:
@@ -584,10 +592,11 @@ class TestMembership:
         assert retried.status is MembershipStatus.JOINED
 
     async def test_concurrent_joins_admit_exactly_one_into_the_final_slot(self) -> None:
-        """A non-durable join never awaits inside the lock, so this guards a refactor.
+        """Concurrent tasks must share the capacity check and membership update.
 
-        The durable path checkpoints and therefore does await; its race test is the one
-        that exercises real contention.
+        The local implementation currently has no await inside the lock; this also protects
+        the final-slot rule if that implementation changes. The durable membership tests in
+        test_durable_runtime.py also exercise checkpointing, which does await.
         """
         manager = SessionManager()
         opened = await manager.open(a_root(), to_message(), key=KEY, actor_id=7, capacity=2)

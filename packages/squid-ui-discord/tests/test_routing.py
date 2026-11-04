@@ -1,4 +1,9 @@
-"""Stateless routed controls: ids, dispatch, and drawing without a session."""
+"""Dispatch routed Discord controls without keeping a MessageRoot for their message.
+
+A route format builds the control ID and decodes its parameters on a later interaction.
+For example, `edit:build:{build_id:int}` maps `edit:build:5` to the integer argument 5.
+Tests cover matching, handler registration, acknowledgement, and rendering these controls.
+"""
 
 from typing import Any, cast, override
 
@@ -54,9 +59,7 @@ class TestRouteFormats:
             sl.routing.Route("r:{value}:fixed", aliases=("r:fixed:{value}",))
 
     def test_a_converter_narrows_the_pattern_and_types_the_value(self) -> None:
-        # The regression this closes: `edit:build:(\d+)` became `[^:]+` when the hand-rolled
-        # DynamicItem moved onto a route, so a non-numeric id reached the handler and blew up
-        # in `int()` instead of simply not matching.
+        # Reject a non-numeric ID during matching, before an integer handler receives it.
         assert EDIT_BUILD.match("edit:build:abc") is None
         assert NAME_BUILD.match("name:build:abc") == {"slug": "abc"}
         assert isinstance(EDIT_BUILD.match("edit:build:5")["build_id"], int)  # type: ignore[index]
@@ -897,9 +900,7 @@ class TestProfiling:
         assert trace.name == POLL_CLOSE.format
         assert trace.result.status is TraceStatus.COMPLETED
         spans = {span.name: span for span in trace.spans}
-        # Bounded the way the profiler bounds it. Unbounded, this qualname is exactly 120
-        # characters when `__name__` is a bare `test_routing`, so the assertion used to pass
-        # by a single character and truncated the moment the module gained a longer name.
+        # Module qualification can exceed the profiler limit, so apply its truncation here too.
         middleware_name = f"middleware:{__name__}.TestProfiling.test_route_trace_profiles_middleware_handler_and_acknowledgement.<locals>.Continue"[
             :_MAX_NAME_LENGTH
         ]

@@ -1,4 +1,4 @@
-"""Drawing a classic message, and the audit that proves the payload before it is sent."""
+"""Classic message drawing and payload validation before delivery."""
 
 import re
 
@@ -96,7 +96,7 @@ class TestMalformedScenes:
 
 
 class TestPayloadAudit:
-    """discord.py accepts all of these locally. Discord answers them with an unhelpful 400."""
+    """Check invalid payloads the SDK can construct and valid payloads the audit must accept."""
 
     def test_the_aggregate_overrun_discordpy_accepts_is_caught(self) -> None:
         embeds = [discord.Embed(description="x" * 1500) for _ in range(5)]
@@ -118,7 +118,7 @@ class TestPayloadAudit:
         assert any("field 0 value is 2000 characters; the limit is 1024" in problem for problem in problems)
 
     def test_duplicate_embed_urls_are_refused_because_discord_hides_the_second(self) -> None:
-        """Silently invisible is worse than an error, so this is made into an error."""
+        """Reject repeated URLs before delivery so Discord does not silently hide an embed."""
         embeds = [discord.Embed(url="https://example.invalid/a", description="x") for _ in range(2)]
 
         problems = audit_classic_payload(content=None, embeds=embeds, view=None)
@@ -172,7 +172,7 @@ class TestPayloadAudit:
         assert any("appears twice" in problem for problem in problems)
 
     def test_discordpy_itself_refuses_a_sixth_row(self) -> None:
-        """One of the very few things it does check, so the audit never sees this case."""
+        """The SDK rejects this row index during construction, before Squid can audit the view."""
         with pytest.raises(ValueError, match="greater than or equal to 5"):
             discord.ui.Button(label="over", custom_id="over", row=5)
 
@@ -190,7 +190,7 @@ class TestPayloadAudit:
         assert audit_classic_payload(content="hi", embeds=[embed], view=view, attachments=1) == []
 
     def test_the_aggregate_uses_discord_pys_own_definition(self) -> None:
-        """`Embed.__len__` already computes exactly Discord's sum, so this must not re-derive it."""
+        """Use `Embed.__len__` to keep the aggregate text count consistent with the SDK."""
         embed = discord.Embed(title="tt", description="ddd")
         embed.add_field(name="nn", value="vvvv")
         embed.set_footer(text="ffff")

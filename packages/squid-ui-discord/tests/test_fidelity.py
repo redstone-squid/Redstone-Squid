@@ -14,7 +14,7 @@ TARGET = sd.target_profile("test")
 
 
 def oversized() -> Panel:
-    """A rung no target budget accepts: 40 texts plus their container is 41 components."""
+    """Exceed the default V2 budget with 40 text nodes plus their container."""
     return Panel(children=tuple(Text(f"line {index}") for index in range(LIMITS.total_components)))
 
 

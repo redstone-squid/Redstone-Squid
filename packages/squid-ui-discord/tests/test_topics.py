@@ -89,7 +89,7 @@ async def _until(predicate: Callable[[], bool]) -> None:
 
 
 async def _flush(bridge: PostgresTopicBridge) -> None:
-    """Wait until every queued notification has left this bridge."""
+    """Wait until the bridge has finished processing its queued notifications."""
     with anyio.fail_after(2):
         await bridge._queue.join()
 
@@ -201,7 +201,7 @@ async def test_publish_in_requires_a_running_bridge() -> None:
 
 
 async def test_a_cell_address_is_published_locally_only() -> None:
-    """A shared cell names a live object, so no wire form for it can exist."""
+    """The default codec cannot encode the live object identified by a shared-cell address."""
     server = FakePostgres()
     bus = LocalTopicBus()
     seen: list[Address] = []
@@ -291,7 +291,7 @@ def test_an_origin_cannot_shadow_the_payload_separator() -> None:
 
 
 def test_a_topic_is_equal_and_hashes_by_value() -> None:
-    """Two publishers agree without sharing a constructor, which is the point of the type."""
+    """Publishers can independently construct the same topic from its kind and key."""
     assert Topic("build", "123") == Topic("build", "123")
     assert hash(Topic("build", "123")) == hash(Topic("build", "123"))
     assert Topic("build", "123") != Topic("build", "124")

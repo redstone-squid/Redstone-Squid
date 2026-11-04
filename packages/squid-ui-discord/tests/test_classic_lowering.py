@@ -1,4 +1,4 @@
-"""How each semantic node reaches a classic message. One test per row of the mapping."""
+"""Semantic nodes lowered to classic message content, embeds, and controls."""
 
 from squid_ui import Tone, scene
 from squid_ui.document import Asset, InlineAsset

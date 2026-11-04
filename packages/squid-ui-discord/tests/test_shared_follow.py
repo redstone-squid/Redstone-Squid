@@ -1,4 +1,8 @@
-"""Mounts following the shared cells their renders read."""
+"""Message roots subscribe to changes in the shared cells their renders read.
+
+A staged render may need different cells from the message still on screen. These tests check
+that both sets remain observed during delivery and that successful delivery retires old reads.
+"""
 
 import asyncio
 import gc
@@ -48,7 +52,7 @@ class Panel(Component[sl.ComponentsV2Target]):
 
 
 class Writer(Component[sl.ComponentsV2Target]):
-    """A panel that writes the cell it renders, which is the case the bus alone handles badly."""
+    """Write a rendered shared cell so tests can check repainting within the same interaction."""
 
     def __init__(self, workspace: Workspace, *, busy: sl.interactions.BusySpec | None = None, run=None) -> None:
         self.workspace = workspace
@@ -83,10 +87,10 @@ class Writer(Component[sl.ComponentsV2Target]):
 
 
 class Swapper(Component[sl.ComponentsV2Target]):
-    """A panel that reads one cell or the other, never both.
+    """Read either selected or detail, so a staged render can replace its dependency entirely.
 
-    `Panel` only ever adds a read, so it cannot express the case where a staged render stops
-    depending on a cell the generation on screen still displays.
+    Panel only adds or removes the detail read while always keeping selected. This fixture checks
+    that the old read remains observed until the replacement has reached Discord.
     """
 
     other: bool = state(default=False)
@@ -115,7 +119,7 @@ class Swapper(Component[sl.ComponentsV2Target]):
 
 
 def _texts(view: discord.ui.LayoutView) -> str:
-    """This file reads the whole render as one blob; the walk itself is `sd.payload_texts`."""
+    """Join the rendered text fragments for whole-message assertions."""
     return "\n".join(sd.payload_texts(view))
 
 
@@ -336,7 +340,7 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
 
 
 async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
-    """The other half: pruning happens, just at the commit rather than at the stage."""
+    """Drop the old render's subscriptions once the replacement reaches Discord."""
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
     workspace = Workspace(bus, Member(1))
@@ -460,7 +464,7 @@ class TestSelfWrites:
         assert interaction.response.defer.await_count == 1
 
     async def test_a_feedback_action_does_not_flash_the_stale_scene(self) -> None:
-        """The bug this fixed: flush found nothing, so `restore` repainted the committed plan."""
+        """Completing a busy action must show its new state rather than restore the earlier scene."""
         release = asyncio.Event()
         workspace, _, message_root = self.panel(busy=sl.interactions.BusySpec(pending="Working…"), run=release.wait)
         message_root.pending_after = 0

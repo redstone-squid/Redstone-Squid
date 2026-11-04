@@ -1,15 +1,7 @@
-"""What the widget library and this adapter owe each other, in one table.
+"""Widget integration with Discord planning, payload limits, and mounted control keys.
 
-Every machine's own behaviour is tested without a transport, in `squid-ui-widgets`. Three facts
-are left over, and none of them can be asserted there:
-
-  1. a machine's render survives planning and draws at all;
-  2. what it draws is a legal Discord payload;
-  3. the keys the machine chose become the handlers the mount answers to -- the identity that
-     lets a widget test press `settings.privacy` and mean the same thing a click does.
-
-Nine files used to re-establish all three per widget, transitively, while testing the widget.
-This establishes them once, for every widget, and says which of the three failed.
+The widget package tests state transitions independently. This shared table checks
+representative widget renders and dispatches a usable authored key through the message root.
 """
 
 from collections.abc import Callable
@@ -93,7 +85,7 @@ def test_it_draws_a_discord_view_at_all(build: Callable[[], sl.Component[sl.Disc
 
 @widget
 def test_what_it_draws_is_a_legal_discord_payload(build: Callable[[], sl.Component[sl.DiscordTarget]]) -> None:
-    """The one claim the widgets package genuinely cannot make: it has no limits to check."""
+    """Check the native payload against Discord limits after planning and drawing."""
     message_root = MessageRoot(build(), access=Everyone(), timeout=None)
 
     assert_within_limits(commit_render(message_root))
@@ -103,13 +95,10 @@ def test_what_it_draws_is_a_legal_discord_payload(build: Callable[[], sl.Compone
 def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
     build: Callable[[], sl.Component[sl.DiscordTarget]],
 ) -> None:
-    """The identity every widget test relies on. `harness.press("settings.privacy")` in the
-    widgets package means what a click means only because this holds.
+    """Every registered handler key must come from the authored widget tree.
 
-    Asserted as handlers-subset-of-authored, not the converse. A machine may author controls
-    this render did not draw -- `MultiChoice` carries a `choices.modal` form trigger as a
-    fallback alternate for when the picker does not fit, and the mount correctly wires only the
-    branch it drew. What must never happen is the other direction: a handler nobody authored.
+    The reverse need not hold: a widget may include fallback controls that this render
+    does not draw. For example, MultiChoice can author a modal alternative to its picker.
     """
     component = build()
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
@@ -126,12 +115,11 @@ def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
 async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
     build: Callable[[], sl.Component[sl.DiscordTarget]],
 ) -> None:
-    """End to end: a custom id off the wire reaches the handler that render registered.
+    """Dispatch a usable authored key and check that the interaction is acknowledged.
 
-    Which control is available depends on the widget -- a decision opens with buttons, a wizard
-    with a form trigger, a multi-choice with only a picker and a disabled Apply. The table
-    drives whichever one this widget actually drew, because a per-widget list of ids is the
-    thing these nine files existed to maintain.
+    Choose from the controls that were registered for this render, skipping disabled
+    actions and supplying one value for a picker. This calls message-root dispatch directly;
+    it does not exercise Discord custom-ID decoding or assert a widget state change.
     """
     component = build()
     message_root = MessageRoot(component, access=Everyone(), timeout=None)

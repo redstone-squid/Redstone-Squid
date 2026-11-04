@@ -1,4 +1,8 @@
-"""Challenged admission: a guard that asks the actor, and the press its answer resumes."""
+"""Guard challenges ask the actor before admitting an action.
+
+Approval resumes the original action through its guards again, with a fresh UI transaction.
+The dialog must leave the original message root free to handle other interactions while waiting.
+"""
 
 from collections.abc import Awaitable, Callable
 from typing import Any, cast, override
@@ -58,7 +62,7 @@ class _Recorder:
 
 
 class _Immediate:
-    """A supervisor that runs the press inline — for tests that are not about contexts."""
+    """Record requested resumptions without running them."""
 
     def __init__(self) -> None:
         self.resumed: list[Callable[[], Awaitable[None]]] = []

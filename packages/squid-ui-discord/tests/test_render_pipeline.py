@@ -39,7 +39,7 @@ _content = st.text(max_size=1500)
 
 @st.composite
 def documents(draw) -> list:
-    """Small mixed documents: enough shapes to exercise every allocation path."""
+    """Generate mixed text and container shapes with different allocation policies."""
     node = st.one_of(
         st.builds(Text, _content, overflow=_policies, priority=st.integers(-10, 10)),
         st.builds(Heading, _content),

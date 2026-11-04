@@ -1,9 +1,10 @@
-"""Mounts following the named topics their renders read, through `sl.runtime.watch`.
+"""Message roots refresh when a topic used by their content changes.
 
-`test_shared_follow.py` covers the same reconciliation for `sl.runtime.SharedState` cells. The difference
-here is where the read happens: a topic is watched inside a `sl.resource` loader, under the
-resource's consumer rather than the render's, so these tests are mostly about whether that
-read still reaches the render that used the value.
+A resource loader declares its dependency with `sl.runtime.watch(topic)`. When a component
+renders that resource, the message root must also follow the topic so a publication can
+reload the value and refresh the message. These tests cover that indirect dependency as
+well as topics watched directly during render. `test_shared_follow.py` covers the same
+subscription updates for `sl.runtime.SharedState` cells.
 """
 
 import asyncio
@@ -59,7 +60,7 @@ def counting_loader(values: list[str]):
 
 
 def texts(view: discord.ui.LayoutView) -> str:
-    """This file reads the whole render as one blob; the walk itself is `sd.payload_texts`."""
+    """Join the rendered text fragments for whole-message assertions."""
     return "\n".join(sd.payload_texts(view))
 
 
@@ -76,7 +77,7 @@ async def mounted(
 
 
 async def test_a_topic_watched_only_inside_a_loader_is_followed_by_the_root() -> None:
-    """The whole phase rests on this: a loader's read has to reach the render's observations."""
+    """A loader's tracked topic read must reach the render that consumes its result."""
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
     load, _ = counting_loader(["first"])
@@ -174,11 +175,11 @@ async def test_a_message_root_with_no_reactor_still_refetches_on_its_next_render
     assert loads() == 2
 
 
-# --- The race the old API only documented ---------------------------------------------
+# --- Publication before the first subscription -----------------------------------------
 
 
 async def test_a_publish_during_the_load_is_not_lost() -> None:
-    """`follow` told hosts to subscribe before the first read. A version needs no such rule."""
+    """A publish before subscription must invalidate the first load through its topic version."""
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
     released = asyncio.Event()
@@ -263,7 +264,7 @@ async def test_no_follow_outlives_its_root() -> None:
 
 
 def test_a_topic_nobody_watches_holds_no_cell() -> None:
-    """The registry is weak, so an unwatched topic costs nothing and needs no cleanup."""
+    """The weak registry releases a topic cell once no resource or render retains it."""
     import gc
 
     from squid_reactivity.topics import _TOPIC_CELLS
@@ -277,7 +278,7 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
 
 
 def test_watching_a_topic_installs_no_commit_precondition() -> None:
-    """A watch is not an observation: nothing writes a topic, so nothing can lose an update."""
+    """Watching a topic tracks invalidation without adding an optimistic transaction precondition."""
     from squid_reactivity.internals import CURRENT_TRANSACTION, Transaction
 
     with sl.runtime.transaction():
@@ -291,7 +292,7 @@ def test_watching_a_topic_installs_no_commit_precondition() -> None:
 
 
 async def test_a_publish_moves_a_resources_sources_so_it_repends() -> None:
-    """The mechanism under the mount: a topic cell is an ordinary tracked source."""
+    """A resource tracks a topic cell just as it tracks other reactive dependencies."""
     load, loads = counting_loader(["first", "second"])
     panel = Watcher(load)
     await panel.value.reload()
