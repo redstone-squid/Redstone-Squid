@@ -17,7 +17,6 @@ def sample_build() -> DoorBuild:
     build = DoorBuild(
         id=1,
         submission_status=Status.PENDING,
-        record_category=None,
         width=5,
         height=6,
         depth=7,

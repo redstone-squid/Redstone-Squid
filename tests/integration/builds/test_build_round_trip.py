@@ -149,7 +149,6 @@ def _make_build(category: BuildCategory, account_id: int) -> Build:
     """A fully populated build whose taxonomy resolves without loss."""
     common: dict[str, Any] = {
         "submission_status": Status.PENDING,
-        "record_category": "Smallest",
         "submitter_account_id": account_id,
         "versions": ["Java 1.21.0"],
         "version_spec": "1.21+",

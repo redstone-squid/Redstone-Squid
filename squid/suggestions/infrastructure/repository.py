@@ -118,8 +118,10 @@ class PostgresSuggestionRepository:
         Only the all-time scope is offered: every current-scope category has an all-time twin, and
         `/records lookup` materializes the all-time definition regardless of which id it gets.
         """
-        statement = select(RecordRule.id, RecordRule.title, RecordRule.build_kind).where(
-            RecordRule.version_scope == VersionScope.ALL_TIME
+        statement = (
+            select(RecordRule.id, RecordRule.title, RecordSeries.build_kind)
+            .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
+            .where(RecordSeries.version_scope == VersionScope.ALL_TIME)
         )
         terms = query.strip()
         if terms:

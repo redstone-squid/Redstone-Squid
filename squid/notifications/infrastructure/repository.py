@@ -694,10 +694,12 @@ class PostgresNotificationRepository:
                     RecordRule.competition_id,
                     RecordResultHolder.build_id,
                     RecordRule.title,
-                    RecordRule.record_class,
-                    RecordRule.build_kind,
-                    RecordRule.version_scope,
+                    RecordSeries.record_class,
+                    RecordSeries.build_kind,
+                    RecordSeries.version_scope,
                 )
+                .select_from(RecordRule)
+                .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
                 .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
                 .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
                 .where(RecordStanding.run_id == run_id)
@@ -707,6 +709,8 @@ class PostgresNotificationRepository:
             (
                 await session.execute(
                     select(RecordRule.competition_id, RecordResultHolder.build_id)
+                    .select_from(RecordRule)
+                    .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
                     .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
                     .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
                     .where(RecordStanding.run_id == previous_run_id)

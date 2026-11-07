@@ -38,7 +38,6 @@ async def _build(session_factory: async_sessionmaker[AsyncSession], *, submitter
         build = OtherBuild(
             submitter_account_id=submitter_account_id,
             submission_status=Status.PENDING,
-            record_category=None,
             width=1,
             height=2,
             depth=3,

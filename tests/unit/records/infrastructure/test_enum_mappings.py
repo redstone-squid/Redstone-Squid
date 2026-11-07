@@ -20,9 +20,6 @@ from squid.records.models import (
 )
 
 _MAPPINGS = (
-    (RecordRule.__table__, "record_class", RecordClass),
-    (RecordRule.__table__, "build_kind", BuildKind),
-    (RecordRule.__table__, "version_scope", VersionScope),
     (RecordRule.__table__, "materialization_source", RecordMaterializationSource),
     (RecordSeries.__table__, "record_class", RecordClass),
     (RecordSeries.__table__, "build_kind", BuildKind),
@@ -35,9 +32,6 @@ _MAPPINGS = (
 )
 
 _CHECKS = (
-    (RecordRule.__table__, "record_definitions_record_class_check", RecordClass),
-    (RecordRule.__table__, "record_definitions_build_kind_check", BuildKind),
-    (RecordRule.__table__, "record_definitions_version_scope_check", VersionScope),
     (
         RecordRule.__table__,
         "record_definitions_materialization_source_check",

@@ -345,7 +345,6 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
 
     category: BuildCategory | None = None
     submission_status: Status | None = None
-    record_category: RecordCategoryLiteral | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
 
@@ -422,7 +421,6 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
             raise InvalidBuildError(msg, context={"category": None})
         common: dict[str, Any] = {
             "submission_status": self.submission_status,
-            "record_category": self.record_category,
             "versions": list(self.versions),
             "version_spec": self.version_spec,
             "width": self.width,

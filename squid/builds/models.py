@@ -38,7 +38,6 @@ from squid.builds.domain import (
     DoorOrientationLiteral,
     Info,
     MediaTypeLiteral,
-    RecordCategoryLiteral,
     Status,
 )
 from squid.builds.domain.models import SourceMessage, StagedMedia, StagedTaxonomy, freeze_fields, frozen_field
@@ -59,11 +58,6 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     __tablename__ = "builds"
     __table_args__ = (
         Index("builds_submitter_idx", "submitter_account_id"),
-        CheckConstraint(
-            "record_category = ANY (ARRAY['Smallest', 'Fastest', 'First', 'Smallest Fastest', "
-            "'Fastest Smallest', NULL])",
-            name="check_record_category",
-        ),
         CheckConstraint("submission_status = ANY (ARRAY[0, 1, 2])", name="check_status"),
         CheckConstraint(
             "(locked_at IS NULL AND lock_token IS NULL AND lock_expires_at IS NULL) OR "
@@ -105,11 +99,6 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
         ),
         UniqueConstraint("source_submission_draft_id", name="builds_source_submission_draft_id_key"),
         Index("idx_builds_category", "category"),
-        Index(
-            "idx_builds_record_category",
-            "record_category",
-            postgresql_where=text("record_category IS NOT NULL"),
-        ),
         Index("idx_builds_submission_time", desc("submission_time")),
         Index(
             "builds_embedding_hnsw_idx",
@@ -124,7 +113,6 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     """Optimistic version checked by explicit repository writes."""
     submission_status: Mapped[Status | None] = mapped_column(IntEnumSmallInt(Status), nullable=False, default=None)
-    record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text, default=None)
     width: Mapped[int | None] = mapped_column(Integer, default=None)
     """Declared width in blocks; None means unknown."""
     height: Mapped[int | None] = mapped_column(Integer, default=None)

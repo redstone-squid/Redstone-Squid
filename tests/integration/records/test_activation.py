@@ -7,6 +7,7 @@ from functools import partial
 import anyio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from squid.builds.domain import BuildCategory
 from squid.events.models import DomainEvent
@@ -190,7 +191,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
     async with sessions() as session:
         original = {
             (row.record_class, row.category_key): (row.id, row.competition_id)
-            for row in (await session.scalars(select(RecordRule))).all()
+            for row in (await session.scalars(select(RecordRule).options(selectinload(RecordRule.competition)))).all()
         }
     with record_queries(sessions) as repeated_queries:
         await transact(records, lambda uow: uow.records.activate(batch), commit=True)
@@ -209,7 +210,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
             tasks.start_soon(request_category)
 
     async with sessions() as session:
-        definitions = (await session.scalars(select(RecordRule))).all()
+        definitions = (await session.scalars(select(RecordRule).options(selectinload(RecordRule.competition)))).all()
         facets = (await session.scalars(select(RecordDefinitionFacet))).all()
     assert len(definitions) == 1105
     assert len(facets) == 1110
@@ -251,7 +252,11 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
     )
     async with sessions() as session:
         next_definitions = (
-            await session.scalars(select(RecordRule).where(RecordRule.ruleset_id == next_ruleset_id))
+            await session.scalars(
+                select(RecordRule)
+                .options(selectinload(RecordRule.competition))
+                .where(RecordRule.ruleset_id == next_ruleset_id)
+            )
         ).all()
     assert len(next_definitions) == 10
     for definition in next_definitions:

@@ -474,6 +474,7 @@ class SearchProjectionLoader:
         row = (
             await self._session.execute(
                 select(RecordStanding, RecordRule)
+                .options(selectinload(RecordRule.competition))
                 .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
                 .join(RecordRule, RecordRule.id == RecordStanding.definition_id)
                 .where(RecordStanding.id == result_id, RecordComputationRun.is_active.is_(True))

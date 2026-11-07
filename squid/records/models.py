@@ -32,7 +32,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
@@ -95,32 +95,11 @@ class RecordRule(Base, kw_only=True):
     __tablename__ = "record_definitions"
     __table_args__ = (
         CheckConstraint(
-            "record_class IN ('first', 'fastest', 'smallest', 'fastest_smallest', 'smallest_fastest')",
-            name="record_definitions_record_class_check",
-        ),
-        CheckConstraint(
-            "version_scope IN ('all_time', 'current')",
-            name="record_definitions_version_scope_check",
-        ),
-        CheckConstraint(
-            "build_kind IN ('door', 'entrance', 'extender', 'utility')",
-            name="record_definitions_build_kind_check",
-        ),
-        CheckConstraint(
             "materialization_source IN ('eager', 'seeded', 'public_lookup')",
             name="record_definitions_materialization_source_check",
         ),
-        UniqueConstraint(
-            "ruleset_id",
-            "record_class",
-            "build_kind",
-            "version_scope",
-            "version_id",
-            "category_key",
-            name="record_definitions_identity_key",
-            postgresql_nulls_not_distinct=True,
-        ),
-        Index("record_definitions_category_idx", "build_kind", "record_class", "category_key"),
+        UniqueConstraint("ruleset_id", "competition_id", name="record_definitions_identity_key"),
+        Index("record_definitions_competition_idx", "competition_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -135,15 +114,8 @@ class RecordRule(Base, kw_only=True):
         ForeignKey("record_rulesets.id", name="record_definitions_ruleset_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    record_class: Mapped[RecordClass] = mapped_column(StrEnumText(RecordClass), nullable=False)
-    build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
-    version_scope: Mapped[VersionScope] = mapped_column(StrEnumText(VersionScope), nullable=False)
-    version_id: Mapped[int | None] = mapped_column(
-        SmallInteger,
-        ForeignKey("versions.id", name="record_definitions_version_id_fkey", ondelete="RESTRICT"),
-        default=None,
-    )
-    category_key: Mapped[str] = mapped_column(Text, nullable=False)
+    competition: Mapped[RecordSeries] = relationship(lazy="raise_on_sql", init=False, repr=False)
+
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
     title_diagnostics: Mapped[list[dict[str, str | list[str]]]] = mapped_column(
@@ -156,12 +128,33 @@ class RecordRule(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
+    @property
+    def record_class(self) -> RecordClass:
+        return self.competition.record_class
+
+    @property
+    def build_kind(self) -> BuildKind:
+        return self.competition.build_kind
+
+    @property
+    def version_scope(self) -> VersionScope:
+        return self.competition.version_scope
+
+    @property
+    def version_id(self) -> int | None:
+        return self.competition.version_id
+
+    @property
+    def category_key(self) -> str:
+        return self.competition.category_key
+
 
 class RecordSeries(Base, kw_only=True):
     """A stable public identity for a logical record competition across rulesets."""
 
     __tablename__ = "record_competitions"
     __table_args__ = (
+        Index("record_competitions_category_idx", "build_kind", "record_class", "category_key"),
         CheckConstraint(
             "record_class IN ('first', 'fastest', 'smallest', 'fastest_smallest', 'smallest_fastest')",
             name="record_competitions_record_class_check",

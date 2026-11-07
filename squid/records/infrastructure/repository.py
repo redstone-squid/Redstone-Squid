@@ -318,6 +318,8 @@ class PostgresRecordRepository:
         session = self._session()
         statement = (
             select(RecordRule, RecordStanding)
+            .options(selectinload(RecordRule.competition))
+            .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
             .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
             .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
             .where(
@@ -326,7 +328,7 @@ class PostgresRecordRepository:
             )
         )
         if kind is not None:
-            statement = statement.where(RecordRule.build_kind == kind)
+            statement = statement.where(RecordSeries.build_kind == kind)
         rows = (await session.execute(statement)).all()
         return tuple(_gap_from_row(definition, result) for definition, result in rows)
 
@@ -335,6 +337,8 @@ class PostgresRecordRepository:
         session = self._session()
         statement = (
             select(RecordRule)
+            .options(selectinload(RecordRule.competition))
+            .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
             .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
             .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
             .where(
@@ -345,7 +349,7 @@ class PostgresRecordRepository:
             .order_by(RecordRule.id)
         )
         if kind is not None:
-            statement = statement.where(RecordRule.build_kind == kind)
+            statement = statement.where(RecordSeries.build_kind == kind)
         definitions = (await session.execute(statement)).scalars()
         return tuple(
             TitleDiagnosticGap(
@@ -408,6 +412,7 @@ class PostgresRecordRepository:
         session = self._session()
         statement = (
             select(RecordStanding, RecordRule)
+            .options(selectinload(RecordRule.competition))
             .join(RecordRule, RecordRule.id == RecordStanding.definition_id)
             .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
             .where(RecordComputationRun.is_active.is_(True))
@@ -466,9 +471,10 @@ class PostgresRecordRepository:
         session = self._session()
         keys = (
             await session.execute(
-                select(RecordRule.category_key)
+                select(RecordSeries.category_key)
+                .join(RecordRule, RecordRule.competition_id == RecordSeries.public_id)
                 .where(
-                    RecordRule.build_kind == kind,
+                    RecordSeries.build_kind == kind,
                     RecordRule.materialization_source == RecordMaterializationSource.PUBLIC_LOOKUP,
                 )
                 .distinct()
@@ -484,7 +490,11 @@ class PostgresRecordRepository:
     async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
         """Return the parsed category identity of one stored definition."""
         session = self._session()
-        key = await session.scalar(select(RecordRule.category_key).where(RecordRule.id == definition_id))
+        key = await session.scalar(
+            select(RecordSeries.category_key)
+            .join(RecordRule, RecordRule.competition_id == RecordSeries.public_id)
+            .where(RecordRule.id == definition_id)
+        )
         if key is None:
             return None
         identity = parse_category_key(key)
@@ -676,7 +686,6 @@ class PostgresRecordRepository:
             statement,
             [
                 dict(
-                    identity,
                     ruleset_id=ruleset_id,
                     competition_id=public_ids[write.key],
                     title=write.title.title,
@@ -684,11 +693,14 @@ class PostgresRecordRepository:
                     title_diagnostics=[diagnostic.as_dict() for diagnostic in write.title.diagnostics],
                     materialization_source=write.source,
                 )
-                for identity, write in zip(identities, ordered, strict=True)
+                for write in ordered
             ],
             execution_options={"render_nulls": True},
         )
-        by_key = {(row.record_class, row.category_key): row for row in definitions}
+        by_competition = {row.competition_id: row for row in definitions}
+        by_key = {
+            key: by_competition[public_id] for key, public_id in public_ids.items() if public_id in by_competition
+        }
         facets = {
             (by_key[write.key].id, facet_kind, facet_id): order
             for write in ordered

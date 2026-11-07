@@ -12,7 +12,6 @@ from squid.builds.domain import (
     DoorOrientationLiteral,
     Info,
     MediaTypeLiteral,
-    RecordCategoryLiteral,
     SourceMessage,
     Status,
 )
@@ -74,7 +73,6 @@ class BuildDraftPayload:
 
     category: BuildCategory | None = None
     submission_status: Status | None = None
-    record_category: RecordCategoryLiteral | None = None
     versions: list[str] = field(default_factory=list)
     version_spec: str | None = None
 
