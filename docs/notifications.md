@@ -29,11 +29,11 @@ The envelope contains `event_type`, `schema_version`, aggregate identity, occurr
 | `build.submitted` | 1 | Staff/owner moderation alert |
 | `build.confirmed` | 2 | Submitter outcome and first-confirmation creator subscriptions |
 | `build.denied` | 2 | Submitter outcome |
-| `record_run.activated` | 1 | Compare stable competition holders with the previous active run |
+| `record_run.activated` | 1 | Compare stable record title holders with the previous active run |
 | `vote_session.closed` | 1 | Existing vote outcome processing |
 
 The first active record run for a scope is a baseline and intentionally sends no record-gain notifications. Later
-runs group every competition newly gained by the same build into one notification per recipient.
+runs group every record title newly gained by the same build into one notification per recipient.
 
 ## Consent, preferences, and subscriptions
 
@@ -44,8 +44,8 @@ Disabling DMs cancels pending sends; enabling them later does not release a surp
 Subscriptions may target:
 
 - a public creator UUID, which intentionally groups every public alias claimed by the same account;
-- a stable record competition UUID, which survives record ruleset and computation-run changes; or
-- a structured record filter with optional build-kind, record-class, version-scope, tag-presence, and exact tag-value
+- a stable record title UUID, which survives record rules_revision and computation-run changes; or
+- a structured record filter with optional build-kind, base-title, version-scope, tag-presence, and exact tag-value
   predicates. Omitted fields are wildcards.
 
 The REST surface is under `/v1/users/me/notifications`. It exposes notification consent/preferences, subscription

@@ -22,7 +22,7 @@ nobody re-reviews them.
 | Identity on FK-only columns; `build_edit_history` | `schema-audit.md` Phase 0. |
 | `votes` does not reference its option; no status or result | Phase 2 alias FK; `vote_sessions.status` and `result` have CHECKs. |
 | Vote-session subtypes not enforced | `enforce_vote_session_kind_subtype` constraint triggers. |
-| `record_definitions` duplicates competition fields | `schema-audit.md` Phase 6. |
+| `title_definitions` duplicates record title fields | `schema-audit.md` Phase 6. |
 | Role-inclusion cycles | `check_permission_role_include_cycle` (`schema-audit.md` Phase 1). |
 | `schematic_uploads.uploaded_by_discord_id` | Replaced by `uploaded_by_account_id`, FK `ON DELETE SET NULL`. |
 | Schematic job tables use a bespoke queue | Both use `QueueColumns`, `QueueSpec` and `ClaimedRowQueue`. |
@@ -146,11 +146,11 @@ One migration. Every item is independent.
 - **`versions`.** Add `UNIQUE (edition, major_version, minor_version, patch_number)`,
   `CHECK (edition IN ('Java', 'Bedrock'))`, and `>= 0` on the three numbers. `seed.sql` has no
   duplicates.
-- **`record_definition_facets`.** `facet_id` is `Integer` with no FK, while tag ids are `bigint`, and
+- **`title_definition_facets`.** `facet_id` is `Integer` with no FK, while tag ids are `bigint`, and
   only `restriction` facets are ever written. Widen `facet_id` to `bigint`, add an FK to
   `tag_definitions.id` with `ON DELETE CASCADE`, and narrow the `facet_kind` CHECK and
   `RecordFacetKind` to `'restriction'`.
-- **`RecordDefinition.competition_id`** has `default_factory=uuid.uuid4`, which would invent an identity
+- **`RecordDefinition.title_id`** has `default_factory=uuid.uuid4`, which would invent an identity
   if a caller forgot it. Remove the default (model only, no DDL).
 - **`notifications.event_id`** has no index, but the `domain_events` prune does a `NOT EXISTS` against
   it and cascades into it. Add the index.

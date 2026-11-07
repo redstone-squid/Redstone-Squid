@@ -40,7 +40,7 @@ validates that the *parameter* exists.
 | `build_titles` | queried | string | — | — | — |
 | `builds` | queried | integer | — | — | — |
 | `builds_pending` | queried | integer | `build.submission.view_pending` | — | — |
-| `competitions` | queried | string | — | — | — |
+| `record_titles` | queried | string | — | — | — |
 | `creator_profiles` | queried | string | — | — | — |
 | `creators` | queried | string | — | — | `,` |
 | `door_types` | enumerable | string | — | — | — |
@@ -49,8 +49,8 @@ validates that the *parameter* exists.
 | `permission_nodes` | enumerable | string | — | — | — |
 | `permission_patterns` | enumerable | string | — | — | — |
 | `permission_roles` | queried | string | — | `guild_id` | — |
-| `record_definitions` | queried | string | — | — | — |
-| `record_classes` | enumerable | string | — | — | — |
+| `title_definitions` | queried | string | — | — | — |
+| `base_titles` | enumerable | string | — | — | — |
 | `records` | queried | string | — | — | — |
 | `restriction_ids` | enumerable | integer | — | — | `,` |
 | `search_fields` | enumerable | string | — | — | — |
@@ -74,7 +74,7 @@ before its autocomplete callback, so gating on the command would leave the dropd
 that exposes unreviewed data declares its own node and is refused wherever it is read.
 
 **Ids are completed by name.** Commands that persist a numeric identifier — `restriction_ids`,
-`showcase_tag_ids`, `version_ids`, `creator_profiles`, `competitions` — complete by name and submit
+`showcase_tag_ids`, `version_ids`, `creator_profiles`, `record_titles` — complete by name and submit
 the id. Nothing downstream changed; the step where a user had to look the number up elsewhere
 disappeared.
 

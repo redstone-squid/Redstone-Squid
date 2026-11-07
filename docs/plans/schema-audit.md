@@ -90,7 +90,7 @@ Phase 2 fixes this with a surrogate key on the alias row.
 
 **A composite FK containing a nullable column is vacuous.** Under `MATCH SIMPLE`, a NULL in any
 referencing column satisfies the constraint without checking it. This rules out the
-`record_definitions` → `record_competitions` composite FK (`version_id` is NULL for `all_time`
+`title_definitions` → `record_titles` composite FK (`version_id` is NULL for `all_time`
 scope, which are exactly the rows most likely to drift; `MATCH FULL` would reject them instead), and
 it equally rules out "turn the guild `0` sentinel into NULL, then add a composite FK".
 
@@ -253,13 +253,13 @@ today independently of this cleanup and is tracked in BUGS.md.
 
 Both schema and application changes are complete, including notification, search, and suggestion reads.
 
-- **`record_definitions` duplicates five columns from `record_competitions`** (`record_class`,
+- **`title_definitions` duplicates five columns from `record_titles`** (`base_title`,
   `build_kind`, `version_scope`, `version_id`, `category_key`), and nothing keeps them in sync. A
   composite FK cannot enforce it (see the corrections above). Drop the five columns and read them
-  through `competition_id`, which means reworking the reads in
+  through `title_id`, which means reworking the reads in
   `squid/records/infrastructure/repository.py` and moving the indexes that use them.
-- **`builds.record_category`** is a legacy denormalization superseded by `record_definitions` /
-  `record_results` / `record_result_holders`. The remaining references are the column, its CHECK
+- **`builds.record_category`** is a legacy denormalization superseded by `title_definitions` /
+  `title_results` / `title_holders`. The remaining references are the column, its CHECK
   and index in `squid/builds/models.py`, the field in `squid/builds/domain/models.py`, and
   `squid/submissions/infrastructure/inference_payloads.py`. The `"record_category"` strings in
   `squid/suggestions` and `squid/records/errors.py` are unrelated labels.

@@ -35,3 +35,15 @@ contracts need the field. See [Adding a build attribute](new-build-attribute.md)
 
 Architecture tests cover entity equality, explicit relationship loading, model dependencies, and transaction ownership.
 Repository integration tests check detached access, round trips, revision guards, preview isolation, and transaction behavior.
+
+Record persistence follows the rules document's vocabulary. A `BaseTitle` (first, fastest, smallest, fastest smallest,
+or smallest fastest) combines with a build kind, version scope, and record category to form a stable `RecordTitle`
+in `record_titles`. Its `title_id` survives recomputation and rules changes. `VersionScope.UP_TO_DATE` is stored as
+`up_to_date`; `all_time` includes every qualifying version.
+
+A `TitleDefinition` in `title_definitions` stores a title's wording under a `RulesRevision` in `rules_revisions`.
+The revision identifies the rules document hash and calculator/formatter versions. `DefinitionFacet` rows in
+`title_definition_facets` capture the definition's taxonomy. A `ComputationRun` in `record_computation_runs` produces
+`TitleResult` rows in `title_results`, with tied holders in `title_holders` and chronology in `title_holder_history`.
+Public queries return results from the active run, so `result_id` and `definition_id` have different lifetimes
+from the stable `title_id`.
