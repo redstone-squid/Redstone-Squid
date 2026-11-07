@@ -9,7 +9,7 @@ import type {
   FormManifestResponse,
   MediaKind,
   StoredDraftResponse,
-  SubmissionFinalizationResponse,
+  SubmissionFinalizationGetResponse,
 } from "../generated/types.gen";
 import {
   asSubmissionError,
@@ -213,7 +213,7 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi, conse
   const [optionsError, setOptionsError] = useState(false);
   const [media, setMedia] = useState<DraftMediaListResponse>();
   const [mediaError, setMediaError] = useState<string>();
-  const [finalization, setFinalization] = useState<SubmissionFinalizationResponse>();
+  const [finalization, setFinalization] = useState<SubmissionFinalizationGetResponse>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -804,7 +804,7 @@ type FieldEditorProps = {
   optionsLoading: boolean;
   pending: boolean;
   error?: string;
-  issue?: SubmissionFinalizationResponse["issues"][number];
+  issue?: SubmissionFinalizationGetResponse["issues"][number];
   disabled: boolean;
   copy: Copy;
   locale: Locale;
@@ -1107,7 +1107,7 @@ function FinalizationStatus({
   locale,
   fieldLabels,
 }: {
-  value: SubmissionFinalizationResponse;
+  value: SubmissionFinalizationGetResponse;
   copy: Copy;
   locale: Locale;
   fieldLabels: Record<string, string>;

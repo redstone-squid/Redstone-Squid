@@ -64,10 +64,10 @@ const build: BuildDetail = {
 const record: RecordDetail = {
   id: 3,
   definition_id: 2,
-  competition_id: "11111111-1111-1111-1111-111111111111",
+  title_id: "11111111-1111-1111-1111-111111111111",
   title: "Fastest door",
   subtitle: null,
-  record_class: "fastest",
+  base_title: "fastest",
   build_kind: "door",
   version_scope: "all_time",
   status: "active",

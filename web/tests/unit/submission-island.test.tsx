@@ -251,6 +251,9 @@ function fakeApi(overrides: Partial<SubmissionApi> = {}): SubmissionApi {
       Promise.resolve({
         draft_id: serverDraft.id,
         draft_revision: serverDraft.revision,
+        attempt_id: "00000000-0000-4000-8000-000000000001",
+        attempt_number: 1,
+        input_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         status: "needs_attention",
         issues: [{ field_id: "display_name", reason: "required" }],
         build_id: null,
@@ -393,6 +396,9 @@ describe("SubmissionFlow", { timeout: 15_000 }, () => {
         Promise.resolve({
           draft_id: retained.id,
           draft_revision: retained.revision,
+          attempt_id: "00000000-0000-4000-8000-000000000001",
+          attempt_number: 1,
+          input_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
           status: "dead",
           issues: [{ field_id: "submission", reason: "retry_exhausted" }],
           build_id: null,
@@ -491,6 +497,9 @@ describe("SubmissionFlow", { timeout: 15_000 }, () => {
       Promise.resolve({
         draft_id: storedDraft().id,
         draft_revision: 0,
+        attempt_id: "00000000-0000-4000-8000-000000000001",
+        attempt_number: 1,
+        input_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         status: "pending",
         issues: [],
         build_id: null,
@@ -517,6 +526,9 @@ describe("SubmissionFlow", { timeout: 15_000 }, () => {
     vi.mocked(api.submissionStatus).mockResolvedValue({
       draft_id: storedDraft().id,
       draft_revision: 0,
+      attempt_id: "00000000-0000-4000-8000-000000000001",
+      attempt_number: 1,
+      input_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
       status: "completed",
       issues: [],
       build_id: 42,

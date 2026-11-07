@@ -5,7 +5,7 @@ import type {
   DraftMediaResponse,
   FormManifestResponse,
   StoredDraftResponse,
-  SubmissionFinalizationResponse,
+  SubmissionFinalizationGetResponse,
 } from "../../src/generated/types.gen";
 import {
   asSubmissionError,
@@ -71,10 +71,13 @@ const media = {
 const finalization = {
   draft_id: draft.id,
   draft_revision: 0,
+  attempt_id: "00000000-0000-4000-8000-000000000001",
+  attempt_number: 1,
+  input_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
   status: "pending",
   issues: [],
   build_id: null,
-} satisfies SubmissionFinalizationResponse;
+} satisfies SubmissionFinalizationGetResponse;
 
 const fetchMock = vi.fn<typeof fetch>();
 

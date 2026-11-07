@@ -39,7 +39,7 @@ import type {
   PrivacyNoticeDetail,
   ProblemDetail,
   StoredDraftResponse,
-  SubmissionFinalizationResponse,
+  SubmissionFinalizationGetResponse,
 } from "../generated/types.gen";
 import { getRuntimeConfig, type RuntimeConfig } from "./config";
 import type { Locale } from "./i18n";
@@ -97,8 +97,8 @@ export type SubmissionApi = {
     stripAudio: boolean,
   ) => Promise<DraftMediaResponse>;
   discardMedia: (draftId: string, uploadId: string) => Promise<void>;
-  submitDraft: (draftId: string) => Promise<SubmissionFinalizationResponse>;
-  submissionStatus: (draftId: string) => Promise<SubmissionFinalizationResponse>;
+  submitDraft: (draftId: string) => Promise<SubmissionFinalizationGetResponse>;
+  submissionStatus: (draftId: string) => Promise<SubmissionFinalizationGetResponse>;
   signInUrl: (returnTo: string) => string;
 };
 

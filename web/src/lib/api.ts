@@ -11,7 +11,7 @@ import {
 } from "../generated/sdk.gen";
 import type {
   BuildDetail,
-  PageAnnotatedUnionBuildSearchResultRecordSearchResultMetadataSearchResultFieldInfoAnnotationNoneTypeRequiredTrueDiscriminatorResourceKind as SearchPage,
+  PageSearchResult as SearchPage,
   PageBuildSummary,
   PageRecordSummary,
   PageSchematicSummary,
@@ -207,7 +207,10 @@ export type SuggestQuery = {
 };
 
 /** Complete a value from any registered suggestion source. */
-export async function fetchSuggestionPage(locale: Locale, query: SuggestQuery): Promise<SuggestionPage> {
+export async function fetchSuggestionPage(
+  locale: Locale,
+  query: SuggestQuery,
+): Promise<SuggestionPage> {
   const result = await suggestionsGet({
     client: createCatalogueClient(locale),
     path: { source: query.source },

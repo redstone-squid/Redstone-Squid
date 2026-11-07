@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, AccountIdentityListData, AccountIdentityListErrors, AccountIdentityListResponses, AccountIdentityUnlinkData, AccountIdentityUnlinkErrors, AccountIdentityUnlinkResponses, AccountIdentityVisibilitySetData, AccountIdentityVisibilitySetErrors, AccountIdentityVisibilitySetResponses, AccountMergeCodeCreateData, AccountMergeCodeCreateErrors, AccountMergeCodeCreateResponses, AccountMergeCompleteData, AccountMergeCompleteErrors, AccountMergeCompleteResponses, AccountMergePreviewData, AccountMergePreviewErrors, AccountMergePreviewResponses, AccountMinecraftRefreshData, AccountMinecraftRefreshErrors, AccountMinecraftRefreshForData, AccountMinecraftRefreshForErrors, AccountMinecraftRefreshForResponses, AccountMinecraftRefreshResponses, AccountProfileClearData, AccountProfileClearErrors, AccountProfileClearResponses, AccountProfileUpdateData, AccountProfileUpdateErrors, AccountProfileUpdateResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicRenderGetData, BuildSchematicRenderGetErrors, BuildSchematicRenderGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsCreateData, BuildsCreateErrors, BuildsCreateResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, ConsentNoticeGetData, ConsentNoticeGetErrors, ConsentNoticeGetResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, DiagnosticsErrorGetData, DiagnosticsErrorGetErrors, DiagnosticsErrorGetResponses, DiagnosticsErrorsClearData, DiagnosticsErrorsClearErrors, DiagnosticsErrorsClearResponses, DiagnosticsErrorsListData, DiagnosticsErrorsListErrors, DiagnosticsErrorsListResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, SuggestionsGetData, SuggestionsGetErrors, SuggestionsGetResponses, SuggestionSourcesListData, SuggestionSourcesListErrors, SuggestionSourcesListResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
+import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, AccountIdentityListData, AccountIdentityListErrors, AccountIdentityListResponses, AccountIdentityUnlinkData, AccountIdentityUnlinkErrors, AccountIdentityUnlinkResponses, AccountIdentityVisibilitySetData, AccountIdentityVisibilitySetErrors, AccountIdentityVisibilitySetResponses, AccountMergeCodeCreateData, AccountMergeCodeCreateErrors, AccountMergeCodeCreateResponses, AccountMergeCompleteData, AccountMergeCompleteErrors, AccountMergeCompleteResponses, AccountMergePreviewData, AccountMergePreviewErrors, AccountMergePreviewResponses, AccountMinecraftRefreshData, AccountMinecraftRefreshErrors, AccountMinecraftRefreshForData, AccountMinecraftRefreshForErrors, AccountMinecraftRefreshForResponses, AccountMinecraftRefreshResponses, AccountProfileClearData, AccountProfileClearErrors, AccountProfileClearResponses, AccountProfileUpdateData, AccountProfileUpdateErrors, AccountProfileUpdateResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicRenderGetData, BuildSchematicRenderGetErrors, BuildSchematicRenderGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, ConsentNoticeGetData, ConsentNoticeGetErrors, ConsentNoticeGetResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, DiagnosticsErrorGetData, DiagnosticsErrorGetErrors, DiagnosticsErrorGetResponses, DiagnosticsErrorsClearData, DiagnosticsErrorsClearErrors, DiagnosticsErrorsClearResponses, DiagnosticsErrorsListData, DiagnosticsErrorsListErrors, DiagnosticsErrorsListResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationInboxMarkUnreadData, NotificationInboxMarkUnreadErrors, NotificationInboxMarkUnreadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionAttemptGetData, SubmissionAttemptGetErrors, SubmissionAttemptGetResponses, SubmissionAttemptsListData, SubmissionAttemptsListErrors, SubmissionAttemptsListResponses, SubmissionCorrectionInboxData, SubmissionCorrectionInboxErrors, SubmissionCorrectionInboxResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftManifestUpgradeData, SubmissionDraftManifestUpgradeErrors, SubmissionDraftManifestUpgradeResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaAttachData, SubmissionMediaAttachErrors, SubmissionMediaAttachResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, SubmissionRevisionApproveData, SubmissionRevisionApproveErrors, SubmissionRevisionApproveResponses, SubmissionRevisionGetData, SubmissionRevisionGetErrors, SubmissionRevisionGetResponses, SubmissionRevisionHistoryData, SubmissionRevisionHistoryErrors, SubmissionRevisionHistoryResponses, SubmissionRevisionMatchData, SubmissionRevisionMatchErrors, SubmissionRevisionMatchResponses, SubmissionSchematicAttachData, SubmissionSchematicAttachErrors, SubmissionSchematicAttachResponses, SubmissionSchematicDiscardData, SubmissionSchematicDiscardErrors, SubmissionSchematicDiscardResponses, SubmissionSchematicListData, SubmissionSchematicListErrors, SubmissionSchematicListResponses, SubmissionSchematicPrimaryData, SubmissionSchematicPrimaryErrors, SubmissionSchematicPrimaryResponses, SubmissionSchematicUploadData, SubmissionSchematicUploadErrors, SubmissionSchematicUploadResponses, SubmissionSuppliedFileDiscardData, SubmissionSuppliedFileDiscardErrors, SubmissionSuppliedFileDiscardResponses, SubmissionSuppliedFileListData, SubmissionSuppliedFileListErrors, SubmissionSuppliedFileListResponses, SubmissionSuppliedFileUploadData, SubmissionSuppliedFileUploadErrors, SubmissionSuppliedFileUploadResponses, SuggestionsGetData, SuggestionsGetErrors, SuggestionsGetResponses, SuggestionSourcesListData, SuggestionSourcesListErrors, SuggestionSourcesListResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -140,52 +140,6 @@ export const browserAuthorizationStart = <ThrowOnError extends boolean = false>(
 export const browserAuthorizationCallback = <ThrowOnError extends boolean = false>(options: Options<BrowserAuthorizationCallbackData, ThrowOnError>): RequestResult<unknown, BrowserAuthorizationCallbackErrors, ThrowOnError> => (options.client ?? client).get<unknown, BrowserAuthorizationCallbackErrors, ThrowOnError>({ url: '/v1/auth/{provider}/callback', ...options });
 
 /**
- * List Builds
- *
- * Search confirmed builds, or list builds with a selected moderation status.
- *
- * Supplying q selects indexed search and cannot be combined with status. Search
- * uses offset pagination. Without q, results come from the build repository;
- * unpublished statuses require build.submission.view_pending permission.
- */
-export const buildsList = <ThrowOnError extends boolean = false>(options?: Options<BuildsListData, ThrowOnError>): RequestResult<BuildsListResponses, BuildsListErrors, ThrowOnError> => (options?.client ?? client).get<BuildsListResponses, BuildsListErrors, ThrowOnError>({
-    security: [
-        { name: 'Authorization', type: 'apiKey' },
-        {
-            in: 'cookie',
-            name: '__Host-squid_session',
-            type: 'apiKey'
-        },
-        {
-            key: 'DeviceSession',
-            scheme: 'bearer',
-            type: 'http'
-        }
-    ],
-    url: '/v1/builds',
-    ...options
-});
-
-/**
- * Submit Build
- *
- * Submit a door build for Discord moderation.
- */
-export const buildsCreate = <ThrowOnError extends boolean = false>(options: Options<BuildsCreateData, ThrowOnError>): RequestResult<BuildsCreateResponses, BuildsCreateErrors, ThrowOnError> => (options.client ?? client).post<BuildsCreateResponses, BuildsCreateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: '__Host-squid_session',
-            type: 'apiKey'
-        }, { name: 'CSRF-Token', type: 'apiKey' }],
-    url: '/v1/builds',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
  * Get Build
  *
  * Return one confirmed public build.
@@ -212,6 +166,33 @@ export const buildsUpdate = <ThrowOnError extends boolean = false>(options: Opti
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * List Builds
+ *
+ * Search confirmed builds, or list builds with a selected moderation status.
+ *
+ * Supplying q selects indexed search and cannot be combined with status. Search
+ * uses offset pagination. Without q, results come from the build repository;
+ * unpublished statuses require build.submission.view_pending permission.
+ */
+export const buildsList = <ThrowOnError extends boolean = false>(options?: Options<BuildsListData, ThrowOnError>): RequestResult<BuildsListResponses, BuildsListErrors, ThrowOnError> => (options?.client ?? client).get<BuildsListResponses, BuildsListErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/builds',
+    ...options
 });
 
 /**
@@ -897,7 +878,7 @@ export const notificationSubscriptionsList = <ThrowOnError extends boolean = fal
 /**
  * Create Subscription
  *
- * Subscribe to a public creator, record competition, or structured filter.
+ * Subscribe to a public creator, record title, or structured filter.
  */
 export const notificationSubscriptionCreate = <ThrowOnError extends boolean = false>(options: Options<NotificationSubscriptionCreateData, ThrowOnError>): RequestResult<NotificationSubscriptionCreateResponses, NotificationSubscriptionCreateErrors, ThrowOnError> => (options.client ?? client).post<NotificationSubscriptionCreateResponses, NotificationSubscriptionCreateErrors, ThrowOnError>({
     security: [{
@@ -959,6 +940,21 @@ export const notificationInboxMarkRead = <ThrowOnError extends boolean = false>(
 });
 
 /**
+ * Mark Unread
+ *
+ * Mark one visible inbox item as unread.
+ */
+export const notificationInboxMarkUnread = <ThrowOnError extends boolean = false>(options: Options<NotificationInboxMarkUnreadData, ThrowOnError>): RequestResult<NotificationInboxMarkUnreadResponses, NotificationInboxMarkUnreadErrors, ThrowOnError> => (options.client ?? client).post<NotificationInboxMarkUnreadResponses, NotificationInboxMarkUnreadErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
+    url: '/v1/users/me/notifications/inbox/{notification_id}/unread',
+    ...options
+});
+
+/**
  * Get Record
  *
  * Return one result only while its computation run is active.
@@ -980,7 +976,7 @@ export const recordsList = <ThrowOnError extends boolean = false>(options?: Opti
 export const buildSchematicsList = <ThrowOnError extends boolean = false>(options: Options<BuildSchematicsListData, ThrowOnError>): RequestResult<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError> => (options.client ?? client).get<BuildSchematicsListResponses, BuildSchematicsListErrors, ThrowOnError>({ url: '/v1/builds/{build_id}/schematics', ...options });
 
 /**
- * Get Schematic Content
+ * Build Schematic Content
  *
  * Download explicitly published original bytes from a confirmed build.
  */
@@ -1025,6 +1021,33 @@ export const searchTermsSuggest = <ThrowOnError extends boolean = false>(options
 export const searchExecute = <ThrowOnError extends boolean = false>(options: Options<SearchExecuteData, ThrowOnError>): RequestResult<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError> => (options.client ?? client).get<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError>({ url: '/v1/search', ...options });
 
 /**
+ * List Correction Inbox
+ *
+ * List drafts needing staff correction, excluding attachment processing waits.
+ */
+export const submissionCorrectionInbox = <ThrowOnError extends boolean = false>(options?: Options<SubmissionCorrectionInboxData, ThrowOnError>): RequestResult<SubmissionCorrectionInboxResponses, SubmissionCorrectionInboxErrors, ThrowOnError> => (options?.client ?? client).get<SubmissionCorrectionInboxResponses, SubmissionCorrectionInboxErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/inbox',
+    ...options
+});
+
+/**
  * List Drafts
  *
  * Return at most ten compact active drafts owned by the signed-in account.
@@ -1054,7 +1077,7 @@ export const submissionDraftsList = <ThrowOnError extends boolean = false>(optio
 /**
  * Create Draft
  *
- * Create an empty synchronized draft owned by the signed-in account.
+ * Create an empty draft owned by the signed-in account.
  */
 export const submissionDraftCreate = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftCreateData, ThrowOnError>): RequestResult<SubmissionDraftCreateResponses, SubmissionDraftCreateErrors, ThrowOnError> => (options.client ?? client).post<SubmissionDraftCreateResponses, SubmissionDraftCreateErrors, ThrowOnError>({
     security: [
@@ -1107,7 +1130,7 @@ export const submissionFormOptionsGet = <ThrowOnError extends boolean = false>(o
 /**
  * Delete Draft
  *
- * Immediately delete one caller-owned synchronized draft.
+ * Immediately delete one caller-owned draft.
  */
 export const submissionDraftDelete = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftDeleteData, ThrowOnError>): RequestResult<SubmissionDraftDeleteResponses, SubmissionDraftDeleteErrors, ThrowOnError> => (options.client ?? client).delete<SubmissionDraftDeleteResponses, SubmissionDraftDeleteErrors, ThrowOnError>({
     security: [
@@ -1135,7 +1158,7 @@ export const submissionDraftDelete = <ThrowOnError extends boolean = false>(opti
 /**
  * Get Draft
  *
- * Return one synchronized draft after enforcing caller ownership.
+ * Return one draft after enforcing caller ownership.
  */
 export const submissionDraftGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftGetData, ThrowOnError>): RequestResult<SubmissionDraftGetResponses, SubmissionDraftGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionDraftGetResponses, SubmissionDraftGetErrors, ThrowOnError>({
     security: [
@@ -1192,11 +1215,43 @@ export const submissionDraftChange = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * Get Draft Submission
+ * Upgrade Draft Manifest
  *
- * Return retained finalization state after rechecking draft ownership.
+ * Upgrade an owned draft to the next checked-in form revision.
  */
-export const submissionFinalizationGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFinalizationGetData, ThrowOnError>): RequestResult<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError>({
+export const submissionDraftManifestUpgrade = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftManifestUpgradeData, ThrowOnError>): RequestResult<SubmissionDraftManifestUpgradeResponses, SubmissionDraftManifestUpgradeErrors, ThrowOnError> => (options.client ?? client).post<SubmissionDraftManifestUpgradeResponses, SubmissionDraftManifestUpgradeErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/manifest-upgrade',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Draft Attempts
+ *
+ * List retained attempts newest first; use the last attempt number as the next cursor.
+ */
+export const submissionAttemptsList = <ThrowOnError extends boolean = false>(options: Options<SubmissionAttemptsListData, ThrowOnError>): RequestResult<SubmissionAttemptsListResponses, SubmissionAttemptsListErrors, ThrowOnError> => (options.client ?? client).get<SubmissionAttemptsListResponses, SubmissionAttemptsListErrors, ThrowOnError>({
     security: [
         {
             in: 'cookie',
@@ -1214,7 +1269,7 @@ export const submissionFinalizationGet = <ThrowOnError extends boolean = false>(
             type: 'http'
         }
     ],
-    url: '/v1/submissions/drafts/{draft_id}/submission',
+    url: '/v1/submissions/drafts/{draft_id}/attempts',
     ...options
 });
 
@@ -1245,7 +1300,61 @@ export const submissionFinalizationStart = <ThrowOnError extends boolean = false
             type: 'http'
         }
     ],
-    url: '/v1/submissions/drafts/{draft_id}/submission',
+    url: '/v1/submissions/drafts/{draft_id}/attempts',
+    ...options
+});
+
+/**
+ * Get Draft Submission
+ *
+ * Return retained finalization state after rechecking draft ownership.
+ */
+export const submissionFinalizationGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFinalizationGetData, ThrowOnError>): RequestResult<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/status',
+    ...options
+});
+
+/**
+ * Get Draft Attempt
+ *
+ * Read one attempt without exposing execution credentials or its private payload.
+ */
+export const submissionAttemptGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionAttemptGetData, ThrowOnError>): RequestResult<SubmissionAttemptGetResponses, SubmissionAttemptGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionAttemptGetResponses, SubmissionAttemptGetErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/attempts/{attempt_id}',
     ...options
 });
 
@@ -1362,6 +1471,365 @@ export const submissionMediaGet = <ThrowOnError extends boolean = false>(options
     ],
     url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}',
     ...options
+});
+
+/**
+ * Attach Draft Media
+ *
+ * Reference a file supplied to another owned draft without duplicating its processing.
+ */
+export const submissionMediaAttach = <ThrowOnError extends boolean = false>(options: Options<SubmissionMediaAttachData, ThrowOnError>): RequestResult<SubmissionMediaAttachResponses, SubmissionMediaAttachErrors, ThrowOnError> => (options.client ?? client).post<SubmissionMediaAttachResponses, SubmissionMediaAttachErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}/attach',
+    ...options
+});
+
+/**
+ * List Schematics
+ *
+ * List retained sources, including failures and explicit discards.
+ */
+export const submissionSchematicList = <ThrowOnError extends boolean = false>(options: Options<SubmissionSchematicListData, ThrowOnError>): RequestResult<SubmissionSchematicListResponses, SubmissionSchematicListErrors, ThrowOnError> => (options.client ?? client).get<SubmissionSchematicListResponses, SubmissionSchematicListErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/schematics',
+    ...options
+});
+
+/**
+ * Discard Schematic
+ *
+ * Discard one draft reference; other candidates keep their source.
+ */
+export const submissionSchematicDiscard = <ThrowOnError extends boolean = false>(options: Options<SubmissionSchematicDiscardData, ThrowOnError>): RequestResult<SubmissionSchematicDiscardResponses, SubmissionSchematicDiscardErrors, ThrowOnError> => (options.client ?? client).delete<SubmissionSchematicDiscardResponses, SubmissionSchematicDiscardErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}',
+    ...options
+});
+
+/**
+ * Upload Schematic
+ *
+ * Upload or retry one stable source ID while keeping its bytes private.
+ */
+export const submissionSchematicUpload = <ThrowOnError extends boolean = false>(options: Options<SubmissionSchematicUploadData, ThrowOnError>): RequestResult<SubmissionSchematicUploadResponses, SubmissionSchematicUploadErrors, ThrowOnError> => (options.client ?? client).put<SubmissionSchematicUploadResponses, SubmissionSchematicUploadErrors, ThrowOnError>({
+    bodySerializer: null,
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/octet-stream',
+        ...options.headers
+    }
+});
+
+/**
+ * Select Primary
+ *
+ * Explicitly select the primary schematic for this draft.
+ */
+export const submissionSchematicPrimary = <ThrowOnError extends boolean = false>(options: Options<SubmissionSchematicPrimaryData, ThrowOnError>): RequestResult<SubmissionSchematicPrimaryResponses, SubmissionSchematicPrimaryErrors, ThrowOnError> => (options.client ?? client).post<SubmissionSchematicPrimaryResponses, SubmissionSchematicPrimaryErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}/primary',
+    ...options
+});
+
+/**
+ * Attach Schematic
+ *
+ * Assign an already supplied file to another candidate without another upload.
+ */
+export const submissionSchematicAttach = <ThrowOnError extends boolean = false>(options: Options<SubmissionSchematicAttachData, ThrowOnError>): RequestResult<SubmissionSchematicAttachResponses, SubmissionSchematicAttachErrors, ThrowOnError> => (options.client ?? client).post<SubmissionSchematicAttachResponses, SubmissionSchematicAttachErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}/attach',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * History
+ *
+ * List revision proposals for a source message after checking the caller's access.
+ */
+export const submissionRevisionHistory = <ThrowOnError extends boolean = false>(options: Options<SubmissionRevisionHistoryData, ThrowOnError>): RequestResult<SubmissionRevisionHistoryResponses, SubmissionRevisionHistoryErrors, ThrowOnError> => (options.client ?? client).get<SubmissionRevisionHistoryResponses, SubmissionRevisionHistoryErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/v1/submissions/revisions/source/{message_id}',
+    ...options
+});
+
+/**
+ * Get Proposal
+ *
+ * Return a revision proposal after checking the caller's access.
+ */
+export const submissionRevisionGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionRevisionGetData, ThrowOnError>): RequestResult<SubmissionRevisionGetResponses, SubmissionRevisionGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionRevisionGetResponses, SubmissionRevisionGetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }],
+    url: '/v1/submissions/revisions/{proposal_id}',
+    ...options
+});
+
+/**
+ * Match Proposal
+ *
+ * Match a proposal to a source-linked build and capture the diff for review.
+ *
+ * With renew set, create a new proposal and retain the previous review.
+ */
+export const submissionRevisionMatch = <ThrowOnError extends boolean = false>(options: Options<SubmissionRevisionMatchData, ThrowOnError>): RequestResult<SubmissionRevisionMatchResponses, SubmissionRevisionMatchErrors, ThrowOnError> => (options.client ?? client).post<SubmissionRevisionMatchResponses, SubmissionRevisionMatchErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/revisions/{proposal_id}/match',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Approve Proposal
+ *
+ * Apply the reviewed diff if the build still matches its expected revision.
+ *
+ * An already applied proposal returns its existing approval result.
+ */
+export const submissionRevisionApprove = <ThrowOnError extends boolean = false>(options: Options<SubmissionRevisionApproveData, ThrowOnError>): RequestResult<SubmissionRevisionApproveResponses, SubmissionRevisionApproveErrors, ThrowOnError> => (options.client ?? client).post<SubmissionRevisionApproveResponses, SubmissionRevisionApproveErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/revisions/{proposal_id}/approve',
+    ...options
+});
+
+/**
+ * List Files
+ *
+ * List unresolved, registered, and explicitly discarded supplied files.
+ */
+export const submissionSuppliedFileList = <ThrowOnError extends boolean = false>(options: Options<SubmissionSuppliedFileListData, ThrowOnError>): RequestResult<SubmissionSuppliedFileListResponses, SubmissionSuppliedFileListErrors, ThrowOnError> => (options.client ?? client).get<SubmissionSuppliedFileListResponses, SubmissionSuppliedFileListErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/supplied-files',
+    ...options
+});
+
+/**
+ * Discard File
+ *
+ * Explicitly resolve a file that does not belong to this candidate.
+ */
+export const submissionSuppliedFileDiscard = <ThrowOnError extends boolean = false>(options: Options<SubmissionSuppliedFileDiscardData, ThrowOnError>): RequestResult<SubmissionSuppliedFileDiscardResponses, SubmissionSuppliedFileDiscardErrors, ThrowOnError> => (options.client ?? client).delete<SubmissionSuppliedFileDiscardResponses, SubmissionSuppliedFileDiscardErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/supplied-files/{source_id}',
+    ...options
+});
+
+/**
+ * Upload File
+ *
+ * Register a supplied file, then discard the requirement it replaces if requested.
+ *
+ * Use a new source_id when replacing a file. The previous requirement is kept
+ * until the new upload has been registered successfully.
+ */
+export const submissionSuppliedFileUpload = <ThrowOnError extends boolean = false>(options: Options<SubmissionSuppliedFileUploadData, ThrowOnError>): RequestResult<SubmissionSuppliedFileUploadResponses, SubmissionSuppliedFileUploadErrors, ThrowOnError> => (options.client ?? client).put<SubmissionSuppliedFileUploadResponses, SubmissionSuppliedFileUploadErrors, ThrowOnError>({
+    bodySerializer: null,
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        },
+        {
+            key: 'MinecraftPlayer',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/submissions/drafts/{draft_id}/supplied-files/{source_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/octet-stream',
+        ...options.headers
+    }
 });
 
 /**

@@ -59,6 +59,18 @@ export type ApiVersionCapabilities = {
 };
 
 /**
+ * AttachSchematicRequest
+ *
+ * Reference a file already supplied to another draft owned by the same account.
+ */
+export type AttachSchematicRequest = {
+    /**
+     * Source Draft Id
+     */
+    source_draft_id: string;
+};
+
+/**
  * AvatarDetail
  *
  * The linked identity a profile's avatar is rendered from.
@@ -74,6 +86,13 @@ export type AvatarDetail = {
      */
     url: string | null;
 };
+
+/**
+ * BuildCategory
+ *
+ * The categories of the builds.
+ */
+export type BuildCategory = 'Door' | 'Extender' | 'Utility' | 'Entrance' | 'Other';
 
 /**
  * BuildDetail
@@ -426,7 +445,7 @@ export type BuildTag = {
     /**
      * Value
      */
-    value: string | string | boolean | null;
+    value: string | boolean | null;
     /**
      * Unit
      */
@@ -969,80 +988,6 @@ export type DoorPatch = {
 };
 
 /**
- * DoorSubmission
- *
- * A user-authored door build submission.
- */
-export type DoorSubmission = {
-    /**
-     * Category
-     */
-    category?: string;
-    door_size: InputDimensions;
-    /**
-     * Pattern
-     */
-    pattern?: Array<string>;
-    /**
-     * Door Type
-     */
-    door_type?: 'Door' | 'Skydoor' | 'Trapdoor';
-    build_size?: InputDimensions;
-    /**
-     * Works In
-     */
-    works_in?: string | null;
-    /**
-     * Restrictions
-     */
-    restrictions?: Array<string>;
-    /**
-     * Information About Build
-     */
-    information_about_build?: string | null;
-    /**
-     * Normal Closing Time
-     */
-    normal_closing_time?: number | null;
-    /**
-     * Normal Opening Time
-     */
-    normal_opening_time?: number | null;
-    /**
-     * Date Of Creation
-     */
-    date_of_creation?: string | null;
-    /**
-     * Creators
-     */
-    creators?: Array<string>;
-    /**
-     * Locationality
-     */
-    locationality?: 'Locational' | 'Locational with fixes' | 'Not locational' | null;
-    /**
-     * Directionality
-     */
-    directionality?: 'Directional' | 'Directional with fixes' | 'Not directional' | null;
-    /**
-     * Image Urls
-     */
-    image_urls?: Array<string>;
-    /**
-     * Video Urls
-     */
-    video_urls?: Array<string>;
-    /**
-     * World Download Urls
-     */
-    world_download_urls?: Array<string>;
-    /**
-     * Schematic Urls
-     */
-    schematic_urls?: Array<string>;
-};
-
-/**
  * DraftChangeRequest
  *
  * A group of field edits applied against an expected draft revision.
@@ -1100,6 +1045,18 @@ export type DraftCreateRequest = {
 };
 
 /**
+ * DraftInboxResponse
+ *
+ * Bounded staff correction work; the last draft ID is the next exclusive cursor.
+ */
+export type DraftInboxResponse = {
+    /**
+     * Drafts
+     */
+    drafts: Array<DraftSummaryResponse>;
+};
+
+/**
  * DraftListResponse
  *
  * Bounded active drafts owned by one authenticated account.
@@ -1109,6 +1066,35 @@ export type DraftListResponse = {
      * Drafts
      */
     drafts: Array<DraftSummaryResponse>;
+};
+
+/**
+ * DraftManifestUpgradeRequest
+ *
+ * Move a draft to the next checked-in form revision.
+ */
+export type DraftManifestUpgradeRequest = {
+    /**
+     * Base Revision
+     */
+    base_revision: number;
+    /**
+     * Target Revision
+     */
+    target_revision: number;
+};
+
+/**
+ * DraftManifestUpgradeResponse
+ *
+ * The upgraded draft and whether the requested target was already current.
+ */
+export type DraftManifestUpgradeResponse = {
+    draft: StoredDraftResponse;
+    /**
+     * Replayed
+     */
+    replayed: boolean;
 };
 
 /**
@@ -1137,7 +1123,7 @@ export type DraftMediaArtifactResponse = {
  *
  * Normalized visual outputs visible to a draft owner.
  */
-export type DraftMediaArtifactRole = 'output' | 'poster';
+export type DraftMediaArtifactRole = 'output' | 'video_thumbnail';
 
 /**
  * DraftMediaLimitsResponse
@@ -1222,6 +1208,70 @@ export type DraftMediaResponse = {
 export type DraftMediaStatus = 'processing' | 'completed' | 'dead' | 'discarded';
 
 /**
+ * DraftPreparationResponse
+ *
+ * A finalization request waiting for files or corrections before an attempt can run.
+ */
+export type DraftPreparationResponse = {
+    /**
+     * Draft Id
+     */
+    draft_id: string;
+    /**
+     * Draft Revision
+     */
+    draft_revision: number;
+    /**
+     * Status
+     */
+    status: 'waiting_for_artifacts' | 'needs_attention';
+    /**
+     * Issues
+     */
+    issues: Array<SubmissionAttentionIssueResponse>;
+};
+
+/**
+ * DraftSchematicResponse
+ *
+ * Private source metadata without an object key or download URL.
+ */
+export type DraftSchematicResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Sha256
+     */
+    sha256: string | null;
+    /**
+     * Byte Size
+     */
+    byte_size: number | null;
+    state: DraftSchematicState;
+    /**
+     * Primary
+     */
+    primary: boolean;
+    /**
+     * Discarded
+     */
+    discarded: boolean;
+};
+
+/**
+ * DraftSchematicState
+ *
+ * Source-storage state; quarantine is never evidence of successful sanitization.
+ */
+export type DraftSchematicState = 'uploading' | 'waiting_sanitizer' | 'failed' | 'deleting' | 'deleted';
+
+/**
  * DraftStatus
  *
  * Lifecycle state of a server-side submission draft.
@@ -1238,6 +1288,14 @@ export type DraftSummaryResponse = {
      * Id
      */
     id: string;
+    /**
+     * Owner Account Id
+     */
+    owner_account_id: number;
+    /**
+     * Inferred
+     */
+    inferred: boolean;
     /**
      * Schema Id
      */
@@ -1798,6 +1856,13 @@ export type InstallationResponse = {
 };
 
 /**
+ * IntakeStatus
+ *
+ * State of a supplied file before and after durable processor registration.
+ */
+export type IntakeStatus = 'pending' | 'ready' | 'failed' | 'discarded';
+
+/**
  * IssuedCliSessionResponse
  *
  * One-time CLI bearer token response from a verified device proof.
@@ -2068,7 +2133,7 @@ export type NotificationPreferencesDetail = {
 /**
  * NotificationSubscriptionCreate
  *
- * A subscription to a creator, a record competition, or a record filter.
+ * A subscription to a creator, a record title, or a record filter.
  *
  * Creator and record subscriptions require subject_id and forbid filter.
  * Record-filter subscriptions require filter and forbid subject_id.
@@ -2135,22 +2200,6 @@ export type PageAnchor = {
      * Before Id
      */
     before_id?: number | null;
-};
-
-/**
- * Page[Annotated[Union[BuildSearchResult, RecordSearchResult, MetadataSearchResult], FieldInfo(annotation=NoneType, required=True, discriminator='resource_kind')]]
- */
-export type PageAnnotatedUnionBuildSearchResultRecordSearchResultMetadataSearchResultFieldInfoAnnotationNoneTypeRequiredTrueDiscriminatorResourceKind = {
-    /**
-     * Items
-     */
-    items: Array<BuildSearchResult | RecordSearchResult | MetadataSearchResult>;
-    /**
-     * Total
-     */
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
 };
 
 /**
@@ -2234,6 +2283,22 @@ export type PageSchematicSummary = {
 };
 
 /**
+ * Page[SearchResult]
+ */
+export type PageSearchResult = {
+    /**
+     * Items
+     */
+    items: Array<SearchResult>;
+    /**
+     * Total
+     */
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[TagDetail]
  */
 export type PageTagDetail = {
@@ -2288,6 +2353,13 @@ export type PaperChallengeExchangeRequest = {
      */
     device_code: string;
 };
+
+/**
+ * PollScope
+ *
+ * How far a generic poll is published.
+ */
+export type PollScope = 'guild' | 'network';
 
 /**
  * PrivacyNoticeDetail
@@ -2493,9 +2565,9 @@ export type RecordDetail = {
      */
     definition_id: number;
     /**
-     * Competition Id
+     * Title Id
      */
-    competition_id: string;
+    title_id: string;
     /**
      * Title
      */
@@ -2505,9 +2577,9 @@ export type RecordDetail = {
      */
     subtitle: string | null;
     /**
-     * Record Class
+     * Base Title
      */
-    record_class: string;
+    base_title: string;
     /**
      * Build Kind
      */
@@ -2545,13 +2617,13 @@ export type RecordFilterInput = {
      */
     build_kinds?: Array<'door' | 'entrance' | 'extender' | 'utility'>;
     /**
-     * Record Classes
+     * Base Titles
      */
-    record_classes?: Array<'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest'>;
+    base_titles?: Array<'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest'>;
     /**
      * Version Scopes
      */
-    version_scopes?: Array<'all_time' | 'current'>;
+    version_scopes?: Array<'all_time' | 'up_to_date'>;
     /**
      * Tags
      */
@@ -2588,9 +2660,9 @@ export type RecordSearchEntry = {
      */
     build_title: string;
     /**
-     * Record Class
+     * Base Title
      */
-    record_class: string;
+    base_title: string;
     /**
      * Version Scope
      */
@@ -2639,9 +2711,9 @@ export type RecordSummary = {
      */
     definition_id: number;
     /**
-     * Competition Id
+     * Title Id
      */
-    competition_id: string;
+    title_id: string;
     /**
      * Title
      */
@@ -2651,9 +2723,9 @@ export type RecordSummary = {
      */
     subtitle: string | null;
     /**
-     * Record Class
+     * Base Title
      */
-    record_class: string;
+    base_title: string;
     /**
      * Build Kind
      */
@@ -2693,6 +2765,148 @@ export type RendererCapabilities = {
 };
 
 export type RendererControl = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
+
+/**
+ * RevisionFacts
+ *
+ * Retained inferred facts, before a reviewer chooses a target build.
+ */
+export type RevisionFacts = {
+    category?: BuildCategory | null;
+    /**
+     * Version Spec
+     */
+    version_spec?: string | null;
+    /**
+     * Width
+     */
+    width?: number | null;
+    /**
+     * Height
+     */
+    height?: number | null;
+    /**
+     * Depth
+     */
+    depth?: number | null;
+    /**
+     * Door Width
+     */
+    door_width?: number | null;
+    /**
+     * Door Height
+     */
+    door_height?: number | null;
+    /**
+     * Door Depth
+     */
+    door_depth?: number | null;
+    /**
+     * Door Orientation
+     */
+    door_orientation?: string | null;
+    /**
+     * Normal Opening Time
+     */
+    normal_opening_time?: number | null;
+    /**
+     * Normal Closing Time
+     */
+    normal_closing_time?: number | null;
+    /**
+     * Patterns
+     */
+    patterns?: Array<string>;
+    /**
+     * Creators Ign
+     */
+    creators_ign?: Array<string>;
+    /**
+     * Wiring Placement Restrictions
+     */
+    wiring_placement_restrictions?: Array<string>;
+    /**
+     * Animated Restrictions
+     */
+    animated_restrictions?: Array<string>;
+    /**
+     * Component Restrictions
+     */
+    component_restrictions?: Array<string>;
+    /**
+     * Miscellaneous Restrictions
+     */
+    miscellaneous_restrictions?: Array<string>;
+    /**
+     * Description
+     */
+    description?: string | null;
+};
+
+/**
+ * RevisionMatchRequest
+ *
+ * Choose a source-linked build; renewing review retains the old proposal.
+ */
+export type RevisionMatchRequest = {
+    /**
+     * Build Id
+     */
+    build_id: number;
+    /**
+     * Renew
+     */
+    renew?: boolean;
+};
+
+/**
+ * RevisionProposalResponse
+ *
+ * A private candidate, its retained diff, and any committed approval receipt.
+ */
+export type RevisionProposalResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Source Message Id
+     */
+    source_message_id: number;
+    facts: RevisionFacts;
+    /**
+     * Build Id
+     */
+    build_id: number | null;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number | null;
+    /**
+     * Before
+     */
+    before: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * After
+     */
+    after: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Applied Revision
+     */
+    applied_revision: number | null;
+};
 
 /**
  * SanitizationCapabilities
@@ -2824,6 +3038,14 @@ export type SearchField = {
     aliases: Array<string>;
 };
 
+export type SearchResult = ({
+    resource_kind: 'build';
+} & BuildSearchResult) | ({
+    resource_kind: 'record';
+} & RecordSearchResult) | ({
+    resource_kind: 'metadata';
+} & MetadataSearchResult);
+
 /**
  * SearchScope
  *
@@ -2885,7 +3107,7 @@ export type SourceKind = 'enumerable' | 'queried';
 /**
  * StoredDraftResponse
  *
- * The compacted current state of one caller-owned synchronized draft.
+ * The compacted current state of one caller-owned draft.
  */
 export type StoredDraftResponse = {
     /**
@@ -2932,6 +3154,51 @@ export type StoredDraftResponse = {
      * Source Installation Id
      */
     source_installation_id?: string | null;
+    /**
+     * Preparation Issues
+     */
+    preparation_issues?: Array<SubmissionAttentionIssueResponse>;
+    /**
+     * Waiting For Artifacts
+     */
+    waiting_for_artifacts?: boolean;
+};
+
+/**
+ * SubmissionAttemptResponse
+ *
+ * Owner-visible state of durable draft finalization.
+ */
+export type SubmissionAttemptResponse = {
+    /**
+     * Draft Id
+     */
+    draft_id: string;
+    /**
+     * Attempt Id
+     */
+    attempt_id: string;
+    /**
+     * Attempt Number
+     */
+    attempt_number: number;
+    /**
+     * Input Sha256
+     */
+    input_sha256: string | null;
+    /**
+     * Draft Revision
+     */
+    draft_revision: number;
+    status: FinalizationJobStatus;
+    /**
+     * Issues
+     */
+    issues: Array<SubmissionAttentionIssueResponse>;
+    /**
+     * Build Id
+     */
+    build_id: number | null;
 };
 
 /**
@@ -2952,32 +3219,7 @@ export type SubmissionAttentionIssueResponse = {
  *
  * Stable repair reasons shared by every submission transport.
  */
-export type SubmissionAttentionReason = 'unknown_field' | 'required' | 'wrong_type' | 'required_value' | 'below_minimum' | 'above_maximum' | 'too_short' | 'too_long' | 'too_few_items' | 'too_many_items' | 'unknown_option' | 'schema_unsupported' | 'schematic_required' | 'schematic_processing' | 'schematic_rejected' | 'media_processing' | 'media_rejected' | 'sponsor_unavailable' | 'target_rejected' | 'retry_exhausted';
-
-/**
- * SubmissionFinalizationResponse
- *
- * Owner-visible state of durable draft finalization.
- */
-export type SubmissionFinalizationResponse = {
-    /**
-     * Draft Id
-     */
-    draft_id: string;
-    /**
-     * Draft Revision
-     */
-    draft_revision: number;
-    status: FinalizationJobStatus;
-    /**
-     * Issues
-     */
-    issues: Array<SubmissionAttentionIssueResponse>;
-    /**
-     * Build Id
-     */
-    build_id: number | null;
-};
+export type SubmissionAttentionReason = 'unknown_field' | 'required' | 'wrong_type' | 'required_value' | 'below_minimum' | 'above_maximum' | 'too_short' | 'too_long' | 'too_few_items' | 'too_many_items' | 'unknown_option' | 'schema_unsupported' | 'schematic_required' | 'schematic_processing' | 'schematic_rejected' | 'schematic_primary_required' | 'media_processing' | 'media_rejected' | 'sponsor_unavailable' | 'target_rejected' | 'retry_exhausted' | 'permission_revoked';
 
 /**
  * SubmissionOrigin
@@ -3081,6 +3323,27 @@ export type SuggestionSourceInfo = {
      * Requires Authentication
      */
     requires_authentication: boolean;
+};
+
+/**
+ * SuppliedFileResponse
+ *
+ * Retained requirement metadata, excluding private source URLs and storage keys.
+ */
+export type SuppliedFileResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    status: IntakeStatus;
 };
 
 /**
@@ -3392,6 +3655,7 @@ export type VotePollSummary = {
      */
     question: string;
     visibility: VoteVisibility;
+    scope: PollScope;
     /**
      * Deadline
      */
@@ -3844,145 +4108,6 @@ export type BrowserAuthorizationCallbackErrors = {
 
 export type BrowserAuthorizationCallbackError = BrowserAuthorizationCallbackErrors[keyof BrowserAuthorizationCallbackErrors];
 
-export type BuildsListData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Q
-         */
-        q?: string | null;
-        /**
-         * Status
-         */
-        status?: BuildStatusFilter | null;
-        /**
-         * Sort
-         */
-        sort?: string | null;
-        /**
-         * Page Size
-         *
-         * Maximum number of items to return.
-         */
-        page_size?: number;
-        /**
-         * Offset
-         *
-         * Number of items to skip. Excludes after_id and before_id.
-         */
-        offset?: number | null;
-        /**
-         * After Id
-         *
-         * Return the items after this identifier in display order. Excludes offset.
-         */
-        after_id?: number | null;
-        /**
-         * Before Id
-         *
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
-    };
-    url: '/v1/builds';
-};
-
-export type BuildsListErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type BuildsListError = BuildsListErrors[keyof BuildsListErrors];
-
-export type BuildsListResponses = {
-    /**
-     * Successful Response
-     */
-    200: PageBuildSummary;
-};
-
-export type BuildsListResponse = BuildsListResponses[keyof BuildsListResponses];
-
-export type BuildsCreateData = {
-    body: DoorSubmission;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/builds';
-};
-
-export type BuildsCreateErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type BuildsCreateError = BuildsCreateErrors[keyof BuildsCreateErrors];
-
-export type BuildsCreateResponses = {
-    /**
-     * Successful Response
-     */
-    201: BuildDetail;
-};
-
-export type BuildsCreateResponse = BuildsCreateResponses[keyof BuildsCreateResponses];
-
 export type BuildsGetData = {
     body?: never;
     path: {
@@ -4102,6 +4227,88 @@ export type BuildsUpdateResponses = {
 };
 
 export type BuildsUpdateResponse = BuildsUpdateResponses[keyof BuildsUpdateResponses];
+
+export type BuildsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Status
+         */
+        status?: BuildStatusFilter | null;
+        /**
+         * Sort
+         */
+        sort?: string | null;
+        /**
+         * Page Size
+         *
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Offset
+         *
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * After Id
+         *
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Before Id
+         *
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
+    };
+    url: '/v1/builds';
+};
+
+export type BuildsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BuildsListError = BuildsListErrors[keyof BuildsListErrors];
+
+export type BuildsListResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageBuildSummary;
+};
+
+export type BuildsListResponse = BuildsListResponses[keyof BuildsListResponses];
 
 export type CapabilitiesGetData = {
     body?: never;
@@ -6513,6 +6720,68 @@ export type NotificationInboxMarkReadResponses = {
 
 export type NotificationInboxMarkReadResponse = NotificationInboxMarkReadResponses[keyof NotificationInboxMarkReadResponses];
 
+export type NotificationInboxMarkUnreadData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Notification Id
+         */
+        notification_id: number;
+    };
+    query?: never;
+    url: '/v1/users/me/notifications/inbox/{notification_id}/unread';
+};
+
+export type NotificationInboxMarkUnreadErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type NotificationInboxMarkUnreadError = NotificationInboxMarkUnreadErrors[keyof NotificationInboxMarkUnreadErrors];
+
+export type NotificationInboxMarkUnreadResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type NotificationInboxMarkUnreadResponse = NotificationInboxMarkUnreadResponses[keyof NotificationInboxMarkUnreadResponses];
+
 export type RecordsGetData = {
     body?: never;
     path: {
@@ -6966,10 +7235,68 @@ export type SearchExecuteResponses = {
     /**
      * Successful Response
      */
-    200: PageAnnotatedUnionBuildSearchResultRecordSearchResultMetadataSearchResultFieldInfoAnnotationNoneTypeRequiredTrueDiscriminatorResourceKind;
+    200: PageSearchResult;
 };
 
 export type SearchExecuteResponse = SearchExecuteResponses[keyof SearchExecuteResponses];
+
+export type SubmissionCorrectionInboxData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * After
+         */
+        after?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/v1/submissions/inbox';
+};
+
+export type SubmissionCorrectionInboxErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionCorrectionInboxError = SubmissionCorrectionInboxErrors[keyof SubmissionCorrectionInboxErrors];
+
+export type SubmissionCorrectionInboxResponses = {
+    /**
+     * Successful Response
+     */
+    200: DraftInboxResponse;
+};
+
+export type SubmissionCorrectionInboxResponse = SubmissionCorrectionInboxResponses[keyof SubmissionCorrectionInboxResponses];
 
 export type SubmissionDraftsListData = {
     body?: never;
@@ -7413,8 +7740,8 @@ export type SubmissionDraftChangeResponses = {
 
 export type SubmissionDraftChangeResponse = SubmissionDraftChangeResponses[keyof SubmissionDraftChangeResponses];
 
-export type SubmissionFinalizationGetData = {
-    body?: never;
+export type SubmissionDraftManifestUpgradeData = {
+    body: DraftManifestUpgradeRequest;
     headers?: {
         /**
          * Idempotency-Key
@@ -7430,10 +7757,14 @@ export type SubmissionFinalizationGetData = {
         draft_id: string;
     };
     query?: never;
-    url: '/v1/submissions/drafts/{draft_id}/submission';
+    url: '/v1/submissions/drafts/{draft_id}/manifest-upgrade';
 };
 
-export type SubmissionFinalizationGetErrors = {
+export type SubmissionDraftManifestUpgradeErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -7446,6 +7777,10 @@ export type SubmissionFinalizationGetErrors = {
      * Not Found
      */
     404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
     /**
      * Unprocessable Content
      */
@@ -7460,16 +7795,89 @@ export type SubmissionFinalizationGetErrors = {
     503: ProblemDetail;
 };
 
-export type SubmissionFinalizationGetError = SubmissionFinalizationGetErrors[keyof SubmissionFinalizationGetErrors];
+export type SubmissionDraftManifestUpgradeError = SubmissionDraftManifestUpgradeErrors[keyof SubmissionDraftManifestUpgradeErrors];
 
-export type SubmissionFinalizationGetResponses = {
+export type SubmissionDraftManifestUpgradeResponses = {
     /**
      * Successful Response
      */
-    200: SubmissionFinalizationResponse;
+    200: DraftManifestUpgradeResponse;
 };
 
-export type SubmissionFinalizationGetResponse = SubmissionFinalizationGetResponses[keyof SubmissionFinalizationGetResponses];
+export type SubmissionDraftManifestUpgradeResponse = SubmissionDraftManifestUpgradeResponses[keyof SubmissionDraftManifestUpgradeResponses];
+
+export type SubmissionAttemptsListData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: {
+        /**
+         * Before
+         */
+        before?: number | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/v1/submissions/drafts/{draft_id}/attempts';
+};
+
+export type SubmissionAttemptsListErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionAttemptsListError = SubmissionAttemptsListErrors[keyof SubmissionAttemptsListErrors];
+
+export type SubmissionAttemptsListResponses = {
+    /**
+     * Response Submission Attempts List
+     *
+     * Successful Response
+     */
+    200: Array<SubmissionAttemptResponse>;
+};
+
+export type SubmissionAttemptsListResponse = SubmissionAttemptsListResponses[keyof SubmissionAttemptsListResponses];
 
 export type SubmissionFinalizationStartData = {
     body?: never;
@@ -7488,7 +7896,7 @@ export type SubmissionFinalizationStartData = {
         draft_id: string;
     };
     query?: never;
-    url: '/v1/submissions/drafts/{draft_id}/submission';
+    url: '/v1/submissions/drafts/{draft_id}/attempts';
 };
 
 export type SubmissionFinalizationStartErrors = {
@@ -7530,12 +7938,140 @@ export type SubmissionFinalizationStartError = SubmissionFinalizationStartErrors
 
 export type SubmissionFinalizationStartResponses = {
     /**
+     * Response Submission Finalization Start
+     *
      * Successful Response
      */
-    202: SubmissionFinalizationResponse;
+    202: SubmissionAttemptResponse | DraftPreparationResponse;
 };
 
 export type SubmissionFinalizationStartResponse = SubmissionFinalizationStartResponses[keyof SubmissionFinalizationStartResponses];
+
+export type SubmissionFinalizationGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/status';
+};
+
+export type SubmissionFinalizationGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionFinalizationGetError = SubmissionFinalizationGetErrors[keyof SubmissionFinalizationGetErrors];
+
+export type SubmissionFinalizationGetResponses = {
+    /**
+     * Response Submission Finalization Get
+     *
+     * Successful Response
+     */
+    200: SubmissionAttemptResponse | DraftPreparationResponse;
+};
+
+export type SubmissionFinalizationGetResponse = SubmissionFinalizationGetResponses[keyof SubmissionFinalizationGetResponses];
+
+export type SubmissionAttemptGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Attempt Id
+         */
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/attempts/{attempt_id}';
+};
+
+export type SubmissionAttemptGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionAttemptGetError = SubmissionAttemptGetErrors[keyof SubmissionAttemptGetErrors];
+
+export type SubmissionAttemptGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubmissionAttemptResponse;
+};
+
+export type SubmissionAttemptGetResponse = SubmissionAttemptGetResponses[keyof SubmissionAttemptGetResponses];
 
 export type SubmissionMediaUploadData = {
     body: Blob | File;
@@ -7786,6 +8322,583 @@ export type SubmissionMediaGetResponses = {
 };
 
 export type SubmissionMediaGetResponse = SubmissionMediaGetResponses[keyof SubmissionMediaGetResponses];
+
+export type SubmissionMediaAttachData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Upload Id
+         */
+        upload_id: string;
+    };
+    query: {
+        /**
+         * Source Draft Id
+         */
+        source_draft_id: string;
+    };
+    url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}/attach';
+};
+
+export type SubmissionMediaAttachErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionMediaAttachError = SubmissionMediaAttachErrors[keyof SubmissionMediaAttachErrors];
+
+export type SubmissionMediaAttachResponses = {
+    /**
+     * Successful Response
+     */
+    200: DraftMediaResponse;
+};
+
+export type SubmissionMediaAttachResponse = SubmissionMediaAttachResponses[keyof SubmissionMediaAttachResponses];
+
+export type SubmissionSchematicListData = {
+    body?: never;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/schematics';
+};
+
+export type SubmissionSchematicListErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSchematicListError = SubmissionSchematicListErrors[keyof SubmissionSchematicListErrors];
+
+export type SubmissionSchematicListResponses = {
+    /**
+     * Response Submission Schematic List
+     *
+     * Successful Response
+     */
+    200: Array<DraftSchematicResponse>;
+};
+
+export type SubmissionSchematicListResponse = SubmissionSchematicListResponses[keyof SubmissionSchematicListResponses];
+
+export type SubmissionSchematicDiscardData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Upload Id
+         */
+        upload_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}';
+};
+
+export type SubmissionSchematicDiscardErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSchematicDiscardError = SubmissionSchematicDiscardErrors[keyof SubmissionSchematicDiscardErrors];
+
+export type SubmissionSchematicDiscardResponses = {
+    /**
+     * Response Submission Schematic Discard
+     *
+     * Successful Response
+     */
+    200: Array<DraftSchematicResponse>;
+};
+
+export type SubmissionSchematicDiscardResponse = SubmissionSchematicDiscardResponses[keyof SubmissionSchematicDiscardResponses];
+
+export type SubmissionSchematicUploadData = {
+    body: Blob | File;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Upload Id
+         */
+        upload_id: string;
+    };
+    query: {
+        /**
+         * Filename
+         */
+        filename: string;
+    };
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}';
+};
+
+export type SubmissionSchematicUploadErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSchematicUploadError = SubmissionSchematicUploadErrors[keyof SubmissionSchematicUploadErrors];
+
+export type SubmissionSchematicUploadResponses = {
+    /**
+     * Successful Response
+     */
+    202: DraftSchematicResponse;
+};
+
+export type SubmissionSchematicUploadResponse = SubmissionSchematicUploadResponses[keyof SubmissionSchematicUploadResponses];
+
+export type SubmissionSchematicPrimaryData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Upload Id
+         */
+        upload_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}/primary';
+};
+
+export type SubmissionSchematicPrimaryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSchematicPrimaryError = SubmissionSchematicPrimaryErrors[keyof SubmissionSchematicPrimaryErrors];
+
+export type SubmissionSchematicPrimaryResponses = {
+    /**
+     * Response Submission Schematic Primary
+     *
+     * Successful Response
+     */
+    200: Array<DraftSchematicResponse>;
+};
+
+export type SubmissionSchematicPrimaryResponse = SubmissionSchematicPrimaryResponses[keyof SubmissionSchematicPrimaryResponses];
+
+export type SubmissionSchematicAttachData = {
+    body: AttachSchematicRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Upload Id
+         */
+        upload_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/schematics/{upload_id}/attach';
+};
+
+export type SubmissionSchematicAttachErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSchematicAttachError = SubmissionSchematicAttachErrors[keyof SubmissionSchematicAttachErrors];
+
+export type SubmissionSchematicAttachResponses = {
+    /**
+     * Response Submission Schematic Attach
+     *
+     * Successful Response
+     */
+    200: Array<DraftSchematicResponse>;
+};
+
+export type SubmissionSchematicAttachResponse = SubmissionSchematicAttachResponses[keyof SubmissionSchematicAttachResponses];
+
+export type SubmissionRevisionHistoryData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Message Id
+         */
+        message_id: number;
+    };
+    query?: never;
+    url: '/v1/submissions/revisions/source/{message_id}';
+};
+
+export type SubmissionRevisionHistoryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionRevisionHistoryError = SubmissionRevisionHistoryErrors[keyof SubmissionRevisionHistoryErrors];
+
+export type SubmissionRevisionHistoryResponses = {
+    /**
+     * Response Submission Revision History
+     *
+     * Successful Response
+     */
+    200: Array<RevisionProposalResponse>;
+};
+
+export type SubmissionRevisionHistoryResponse = SubmissionRevisionHistoryResponses[keyof SubmissionRevisionHistoryResponses];
+
+export type SubmissionRevisionGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Proposal Id
+         */
+        proposal_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/revisions/{proposal_id}';
+};
+
+export type SubmissionRevisionGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionRevisionGetError = SubmissionRevisionGetErrors[keyof SubmissionRevisionGetErrors];
+
+export type SubmissionRevisionGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RevisionProposalResponse;
+};
+
+export type SubmissionRevisionGetResponse = SubmissionRevisionGetResponses[keyof SubmissionRevisionGetResponses];
+
+export type SubmissionRevisionMatchData = {
+    body: RevisionMatchRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Proposal Id
+         */
+        proposal_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/revisions/{proposal_id}/match';
+};
+
+export type SubmissionRevisionMatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionRevisionMatchError = SubmissionRevisionMatchErrors[keyof SubmissionRevisionMatchErrors];
+
+export type SubmissionRevisionMatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: RevisionProposalResponse;
+};
+
+export type SubmissionRevisionMatchResponse = SubmissionRevisionMatchResponses[keyof SubmissionRevisionMatchResponses];
+
+export type SubmissionRevisionApproveData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Proposal Id
+         */
+        proposal_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/revisions/{proposal_id}/approve';
+};
+
+export type SubmissionRevisionApproveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionRevisionApproveError = SubmissionRevisionApproveErrors[keyof SubmissionRevisionApproveErrors];
+
+export type SubmissionRevisionApproveResponses = {
+    /**
+     * Successful Response
+     */
+    200: RevisionProposalResponse;
+};
+
+export type SubmissionRevisionApproveResponse = SubmissionRevisionApproveResponses[keyof SubmissionRevisionApproveResponses];
+
+export type SubmissionSuppliedFileListData = {
+    body?: never;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/supplied-files';
+};
+
+export type SubmissionSuppliedFileListErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSuppliedFileListError = SubmissionSuppliedFileListErrors[keyof SubmissionSuppliedFileListErrors];
+
+export type SubmissionSuppliedFileListResponses = {
+    /**
+     * Response Submission Supplied File List
+     *
+     * Successful Response
+     */
+    200: Array<SuppliedFileResponse>;
+};
+
+export type SubmissionSuppliedFileListResponse = SubmissionSuppliedFileListResponses[keyof SubmissionSuppliedFileListResponses];
+
+export type SubmissionSuppliedFileDiscardData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/supplied-files/{source_id}';
+};
+
+export type SubmissionSuppliedFileDiscardErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSuppliedFileDiscardError = SubmissionSuppliedFileDiscardErrors[keyof SubmissionSuppliedFileDiscardErrors];
+
+export type SubmissionSuppliedFileDiscardResponses = {
+    /**
+     * Response Submission Supplied File Discard
+     *
+     * Successful Response
+     */
+    200: Array<SuppliedFileResponse>;
+};
+
+export type SubmissionSuppliedFileDiscardResponse = SubmissionSuppliedFileDiscardResponses[keyof SubmissionSuppliedFileDiscardResponses];
+
+export type SubmissionSuppliedFileUploadData = {
+    body: Blob | File;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query: {
+        /**
+         * Filename
+         */
+        filename: string;
+        /**
+         * Replaces
+         */
+        replaces?: string | null;
+    };
+    url: '/v1/submissions/drafts/{draft_id}/supplied-files/{source_id}';
+};
+
+export type SubmissionSuppliedFileUploadErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionSuppliedFileUploadError = SubmissionSuppliedFileUploadErrors[keyof SubmissionSuppliedFileUploadErrors];
+
+export type SubmissionSuppliedFileUploadResponses = {
+    /**
+     * Response Submission Supplied File Upload
+     *
+     * Successful Response
+     */
+    202: Array<SuppliedFileResponse>;
+};
+
+export type SubmissionSuppliedFileUploadResponse = SubmissionSuppliedFileUploadResponses[keyof SubmissionSuppliedFileUploadResponses];
 
 export type SuggestionSourcesListData = {
     body?: never;

@@ -72,13 +72,13 @@ const english = {
   "build.created": "Added {date}",
   "record.detail": "Record #{id}",
   "records.title": "Active records",
-  "records.intro": "Authoritative results from the catalogue's current record competitions.",
+  "records.intro": "Authoritative results from the catalogue's current record titles.",
   "records.empty": "No active records are available.",
   "record.holders": "Current holder builds",
-  "record.class": "Record class",
+  "record.baseTitle": "Base title",
   "record.kind": "Build kind",
   "record.versionScope": "Version scope",
-  "record.status": "Competition status",
+  "record.status": "Record title status",
   "record.computed": "Computed {date}",
   "record.holderCount": "{count} holder(s)",
   "search.title": "Search the catalogue",
@@ -126,13 +126,13 @@ const english = {
     "Times are measured in game ticks unless a supported unit is written. Status filters are intentionally unavailable in the public catalogue.",
   "about.title": "About the catalogue",
   "about.intro":
-    "Redstone Squid manages community submissions and record competitions for Minecraft redstone engineering.",
+    "Redstone Squid manages community submissions and record titles for Minecraft redstone engineering.",
   "about.readOnlyTitle": "Public catalogue, private drafting",
   "about.readOnlyBody":
     "Only confirmed builds appear publicly. Account-owned drafts can begin here or in game and are queued for Discord review.",
   "about.recordsTitle": "Computed records",
   "about.recordsBody":
-    "Record holders come from active competitions and are hydrated from confirmed builds, so a missing holder is treated as an error instead of a partial claim.",
+    "Record holders come from active record titles and are hydrated from confirmed builds, so a missing holder is treated as an error instead of a partial claim.",
   "common.loadMore": "Load more",
   "common.previous": "Previous",
   "common.viewBuild": "View build",
@@ -157,8 +157,7 @@ const english = {
     "Explore confirmed Minecraft redstone builds and active records from the Redstone Squid community.",
   "meta.buildsDescription":
     "Browse confirmed Minecraft redstone builds and technical specifications.",
-  "meta.recordsDescription":
-    "Browse active Minecraft redstone record competitions and their holders.",
+  "meta.recordsDescription": "Browse active Minecraft redstone record titles and their holders.",
   "meta.searchDescription": "Search the Redstone Squid public build and record catalogue.",
   "meta.aboutDescription": "Learn how the Redstone Squid public catalogue works.",
   "gallery.previous": "Previous media",
@@ -210,15 +209,18 @@ const english = {
   "minecraftLink.another": "Approve another code",
   "submitFlow.loading": "Loading the current submission form…",
   "submitFlow.unavailableTitle": "Submission service unavailable",
-  "submitFlow.unavailable": "The submission service is temporarily unavailable. Your browser has not discarded a saved draft.",
+  "submitFlow.unavailable":
+    "The submission service is temporarily unavailable. Your browser has not discarded a saved draft.",
   "submitFlow.incompatibleTitle": "This browser cannot render the current form",
   "submitFlow.chooseTitle": "Choose a build category",
-  "submitFlow.chooseBody": "The form is supplied by the server and will adapt to the selected category.",
+  "submitFlow.chooseBody":
+    "The form is supplied by the server and will adapt to the selected category.",
   "submitFlow.category": "Build category",
   "submitFlow.start": "Start draft",
   "submitFlow.signIn": "Sign in with Discord",
   "submitFlow.auth": "Sign in with Discord to create or continue your private draft.",
-  "submitFlow.consent": "Your account must accept the current privacy notice before it can save submissions.",
+  "submitFlow.consent":
+    "Your account must accept the current privacy notice before it can save submissions.",
   "submitFlow.retry": "Try again",
   "submitFlow.saving": "Saving…",
   "submitFlow.saved": "All changes saved",
@@ -226,10 +228,13 @@ const english = {
   "submitFlow.optional": "optional",
   "submitFlow.onePerLine": "Enter one value per line.",
   "submitFlow.chooseOption": "Choose an option",
-  "submitFlow.choicesUnavailable": "Approved choices could not be loaded. Try again before editing these fields.",
+  "submitFlow.choicesUnavailable":
+    "Approved choices could not be loaded. Try again before editing these fields.",
   "submitFlow.mediaTitle": "Images and video",
-  "submitFlow.mediaBody": "Uploads stay private while the server checks and processes them. Source resolution and frame rate are retained within the published limits. Processed uploads are not yet attached to the created build record.",
-  "submitFlow.mediaUnavailable": "Media processing is temporarily unavailable. The rest of your draft is still editable.",
+  "submitFlow.mediaBody":
+    "Uploads stay private while the server checks and processes them. Source resolution and frame rate are retained within the published limits. Processed uploads are not yet attached to the created build record.",
+  "submitFlow.mediaUnavailable":
+    "Media processing is temporarily unavailable. The rest of your draft is still editable.",
   "submitFlow.upload": "Add images or video",
   "submitFlow.uploadBusy": "Uploading…",
   "submitFlow.stripAudio": "Remove audio from uploaded videos",
@@ -237,16 +242,21 @@ const english = {
   "submitFlow.noMedia": "No media uploaded yet.",
   "submitFlow.limits": "Up to {images} images and {videos} videos; {size} per upload.",
   "submitFlow.submissionTitle": "Finalize draft",
-  "submitFlow.submissionBody": "The server validates this exact draft revision, checks that processing is complete, and creates one pending build record.",
+  "submitFlow.submissionBody":
+    "The server validates this exact draft revision, checks that processing is complete, and creates one pending build record.",
   "submitFlow.submit": "Submit draft",
   "submitFlow.submitting": "Submitting…",
   "submitFlow.pending": "Your draft is being finalized. This page will update automatically.",
   "submitFlow.attention": "Your draft needs attention before finalization can complete.",
-  "submitFlow.completed": "Build #{id} was created in pending state and queued for Discord staff review. Processed uploads are not yet attached to the build record; keep this build ID.",
-  "submitFlow.dead": "Finalization could not complete. The stable issue below explains the next action.",
+  "submitFlow.completed":
+    "Build #{id} was created in pending state and queued for Discord staff review. Processed uploads are not yet attached to the build record; keep this build ID.",
+  "submitFlow.dead":
+    "Finalization could not complete. The stable issue below explains the next action.",
   "submitFlow.deleteDraft": "Delete draft",
-  "submitFlow.deleteConfirm": "Delete this draft and discard its uploaded media? This cannot be undone.",
-  "submitFlow.schematicNote": "This browser flow does not attach or claim to sanitize schematics. If a schematic is required, continue the draft from a supported in-game client.",
+  "submitFlow.deleteConfirm":
+    "Delete this draft and discard its uploaded media? This cannot be undone.",
+  "submitFlow.schematicNote":
+    "This browser flow does not attach or claim to sanitize schematics. If a schematic is required, continue the draft from a supported in-game client.",
   "submitFlow.saveBeforeSubmit": "Fix or retry the unsaved fields before submitting.",
 } as const;
 
@@ -323,7 +333,7 @@ const chinese: Dictionary = {
   "records.intro": "目录当前纪录竞赛的权威结果。",
   "records.empty": "暂无当前纪录。",
   "record.holders": "当前纪录作品",
-  "record.class": "纪录类别",
+  "record.baseTitle": "基础称号",
   "record.kind": "作品类别",
   "record.versionScope": "版本范围",
   "record.status": "竞赛状态",
@@ -428,7 +438,8 @@ const chinese: Dictionary = {
   "cliLink.signIn": "使用 Discord 登录",
   "cliLink.device": "设备",
   "cliLink.fingerprint": "公钥指纹",
-  "cliLink.warning": "仅当标签和指纹与你启动的 CLI 完全一致时才批准。批准后，该设备可管理你的私密 Squid 草稿。",
+  "cliLink.warning":
+    "仅当标签和指纹与你启动的 CLI 完全一致时才批准。批准后，该设备可管理你的私密 Squid 草稿。",
   "cliLink.approve": "批准此 CLI 设备",
   "cliLink.approving": "正在批准…",
   "cliLink.success": "CLI 设备已获批准",
@@ -468,7 +479,8 @@ const chinese: Dictionary = {
   "submitFlow.chooseOption": "请选择",
   "submitFlow.choicesUnavailable": "无法载入已批准的选项。编辑这些字段前请重试。",
   "submitFlow.mediaTitle": "图片与视频",
-  "submitFlow.mediaBody": "服务器检查和处理期间，上传内容保持私密。在公布的限制内保留源分辨率与帧率。处理后的上传内容尚未附加到所创建的作品记录。",
+  "submitFlow.mediaBody":
+    "服务器检查和处理期间，上传内容保持私密。在公布的限制内保留源分辨率与帧率。处理后的上传内容尚未附加到所创建的作品记录。",
   "submitFlow.mediaUnavailable": "媒体处理暂时不可用。草稿的其他部分仍可编辑。",
   "submitFlow.upload": "添加图片或视频",
   "submitFlow.uploadBusy": "正在上传…",
@@ -477,16 +489,19 @@ const chinese: Dictionary = {
   "submitFlow.noMedia": "尚未上传媒体。",
   "submitFlow.limits": "最多 {images} 张图片和 {videos} 个视频；每次上传 {size}。",
   "submitFlow.submissionTitle": "完成草稿",
-  "submitFlow.submissionBody": "服务器会验证此草稿版本、确认处理已经完成，并创建一条待处理作品记录。",
+  "submitFlow.submissionBody":
+    "服务器会验证此草稿版本、确认处理已经完成，并创建一条待处理作品记录。",
   "submitFlow.submit": "提交草稿",
   "submitFlow.submitting": "正在提交…",
   "submitFlow.pending": "正在完成草稿。本页将自动更新。",
   "submitFlow.attention": "草稿需要修改后才能完成投稿。",
-  "submitFlow.completed": "作品 #{id} 已创建为待处理状态，并已排队等待发送至 Discord 供工作人员审核。处理后的上传内容尚未附加到作品记录；请保存此作品编号。",
+  "submitFlow.completed":
+    "作品 #{id} 已创建为待处理状态，并已排队等待发送至 Discord 供工作人员审核。处理后的上传内容尚未附加到作品记录；请保存此作品编号。",
   "submitFlow.dead": "无法完成投稿。下方的稳定问题代码说明了下一步。",
   "submitFlow.deleteDraft": "删除草稿",
   "submitFlow.deleteConfirm": "删除此草稿并丢弃其上传媒体？此操作无法撤销。",
-  "submitFlow.schematicNote": "此网页流程不会附加或声称已清理原理图。如需原理图，请从受支持的游戏内客户端继续草稿。",
+  "submitFlow.schematicNote":
+    "此网页流程不会附加或声称已清理原理图。如需原理图，请从受支持的游戏内客户端继续草稿。",
   "submitFlow.saveBeforeSubmit": "提交前请修复或重试未保存的字段。",
 };
 
@@ -538,7 +553,7 @@ const taxonomy: Record<Locale, Record<string, string>> = {
     fastest_smallest: "Fastest, then smallest",
     smallest_fastest: "Smallest, then fastest",
     all_time: "All time",
-    current: "Current version",
+    up_to_date: "Up-to-date",
     active: "Active",
     official_seamless: "Seamless",
     gt: "game ticks",
@@ -559,7 +574,7 @@ const taxonomy: Record<Locale, Record<string, string>> = {
     fastest_smallest: "先最快，再最小",
     smallest_fastest: "先最小，再最快",
     all_time: "所有版本",
-    current: "当前版本",
+    up_to_date: "当前版本",
     active: "进行中",
     official_seamless: "无缝",
     gt: "游戏刻",

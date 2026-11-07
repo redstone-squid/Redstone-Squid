@@ -71,8 +71,8 @@ const canonicalPath = recordId ? localizePath(`/records/${recordId}`, locale) : 
           <dl class="spec-list">
             <div>
               <>
-                <dt>{translate(locale, "record.class")}</dt>
-                <dd>{translateTaxonomy(locale, record!.record_class)}</dd>
+                <dt>{translate(locale, "record.baseTitle")}</dt>
+                <dd>{translateTaxonomy(locale, record!.base_title)}</dd>
               </>
             </div>
             <div>
