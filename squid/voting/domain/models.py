@@ -138,7 +138,7 @@ class VoteSelection:
     """
 
     account_id: int
-    guild_id: int
+    guild_id: int | None
     option_id: str
     emoji: str
     weight: float

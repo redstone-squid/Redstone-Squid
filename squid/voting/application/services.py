@@ -470,7 +470,7 @@ class VoteService:
             actor = replacing if replacing is not None and replacing.account_id == selection.account_id else None
             actor = actor or await self._actor_resolver.resolve(
                 selection.account_id,
-                owner_guild_id if owner_guild_id is not None else selection.guild_id,
+                owner_guild_id if owner_guild_id is not None else selection.guild_id or 0,
                 snapshot.kind,
             )
             if actor is None:

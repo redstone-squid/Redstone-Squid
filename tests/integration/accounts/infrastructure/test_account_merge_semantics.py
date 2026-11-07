@@ -30,8 +30,8 @@ from squid.persistence.types import now
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
-from squid.voting.domain import PollScope, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
-from squid.voting.models import GenericVoteSession, Vote, VoteSession
+from squid.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
+from squid.voting.models import GenericVoteSession, Vote, VoteSession, VoteSessionOption
 from tests.support.unit_of_work import transact
 
 
@@ -365,6 +365,20 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                 deadline=resolved_at.add(hours=1),
             )
         )
+        options = [
+            VoteSessionOption(
+                vote_session=vote_session,
+                vote_session_id=vote_session.id,
+                identifier=label,
+                emoji=label,
+                guild_id=None,
+                choice=VoteChoice.APPROVE,
+                position=position,
+            )
+            for position, label in enumerate(("yes", "no"))
+        ]
+        session.add_all(options)
+        await session.flush()
         session.add_all(
             [
                 AliasClaim(alias_id=alias.id, account_id=survivor.id),
@@ -386,8 +400,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     vote_session_id=vote_session.id,
                     account_id=survivor.id,
                     guild_id=1,
-                    option_id="yes",
-                    emoji="yes",
+                    option_alias_id=options[0].id,
                     weight=1.0,
                 ),
                 Vote(
@@ -395,8 +408,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     vote_session_id=vote_session.id,
                     account_id=absorbed.id,
                     guild_id=1,
-                    option_id="no",
-                    emoji="no",
+                    option_alias_id=options[1].id,
                     weight=1.0,
                 ),
                 NotificationSubscription(

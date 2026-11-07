@@ -16,6 +16,7 @@ from sqlalchemy import (
     CheckConstraint,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     SmallInteger,
@@ -103,8 +104,20 @@ class VoteSessionOption(Base, kw_only=True):
 
     __tablename__ = "vote_session_options"
     __table_args__ = (
+        UniqueConstraint("vote_session_id", "id", name="vote_session_options_session_id_key"),
         UniqueConstraint(
-            "vote_session_id", "guild_id", "position", name="vote_session_options_vote_session_id_position_key"
+            "vote_session_id",
+            "guild_id",
+            "emoji",
+            name="vote_session_options_alias_key",
+            postgresql_nulls_not_distinct=True,
+        ),
+        UniqueConstraint(
+            "vote_session_id",
+            "guild_id",
+            "position",
+            name="vote_session_options_vote_session_id_position_key",
+            postgresql_nulls_not_distinct=True,
         ),
         CheckConstraint(f"choice IN ({_CHOICE_VALUES})", name="vote_session_options_choice_check"),
         CheckConstraint(
@@ -115,6 +128,10 @@ class VoteSessionOption(Base, kw_only=True):
         {"comment": "Ordered reaction options and positive weight multipliers captured for each vote session."},
     )
 
+    # An alias is one emoji for a logical option in a guild (or globally when guild_id is None).
+    # For example, 👍 and ✅ can both have identifier="approve", but each has its own row ID.
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -123,12 +140,12 @@ class VoteSessionOption(Base, kw_only=True):
             ondelete="CASCADE",
             onupdate="CASCADE",
         ),
-        primary_key=True,
+        nullable=False,
     )
     identifier: Mapped[str] = mapped_column(Text, nullable=False)
-    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, server_default=text("0"))
-    """Guild using this emoji alias, or 0 for an option shared across guilds."""
-    emoji: Mapped[str] = mapped_column(Text, primary_key=True)
+    guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    """Guild using this emoji alias, or None for an option shared across guilds."""
+    emoji: Mapped[str] = mapped_column(Text, nullable=False)
     choice: Mapped[VoteChoice] = mapped_column(StrEnumText(VoteChoice), nullable=False)
     label: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
@@ -229,6 +246,12 @@ class Vote(Base):
 
     __tablename__ = "votes"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["vote_session_id", "option_alias_id"],
+            ["vote_session_options.vote_session_id", "vote_session_options.id"],
+            name="votes_option_alias_fkey",
+        ),
+        Index("votes_option_alias_idx", "vote_session_id", "option_alias_id"),
         Index("votes_account_idx", "account_id"),
         CheckConstraint(
             "weight > 0 AND weight != 'Infinity'::double precision AND weight != 'NaN'::double precision",
@@ -249,9 +272,10 @@ class Vote(Base):
         ForeignKey("accounts.id", name="votes_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
-    option_id: Mapped[str] = mapped_column(Text, nullable=False)
-    emoji: Mapped[str] = mapped_column(Text, nullable=False)
+    guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # References the exact VoteSessionOption row used, including its emoji and guild scope.
+    # Its identifier may be shared by several aliases, so that string cannot identify the FK target.
+    option_alias_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     """Cached positive magnitude; the option choice determines the sign used in threshold scoring."""
 

@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
-from sqlalchemy import Text, delete, func, insert, or_, select, update
+from sqlalchemy import Text, delete, func, insert, select, update
 from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -277,7 +277,7 @@ class VoteRepository:
                 {
                     "vote_session_id": session_id,
                     "identifier": option.identifier,
-                    "guild_id": option.guild_id or 0,
+                    "guild_id": option.guild_id,
                     "emoji": option.emoji,
                     "choice": option.choice.value,
                     "label": option.label,
@@ -345,7 +345,28 @@ class VoteRepository:
             select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
         )
         previous_weight = previous.weight if previous is not None else None
-        toggled_off = previous is not None and previous.option_id == option_id
+        aliases = {option.id: option for option in row.options}
+        alias = next(
+            (
+                option
+                for option in row.options
+                if option.identifier == option_id and option.emoji == emoji and option.guild_id == guild_id
+            ),
+            None,
+        )
+        if alias is None:
+            alias = next(
+                (
+                    option
+                    for option in row.options
+                    if option.identifier == option_id and option.emoji == emoji and option.guild_id is None
+                ),
+                None,
+            )
+        if alias is None:
+            return None
+        # Aliases of the same logical option toggle the same ballot: ✅ after 👍 still means "approve".
+        toggled_off = previous is not None and aliases[previous.option_alias_id].identifier == option_id
         if toggled_off:
             await session.delete(previous)
             current_weight = None
@@ -356,16 +377,14 @@ class VoteRepository:
                     vote_session_id=row.id,
                     account_id=account_id,
                     guild_id=guild_id,
-                    option_id=option_id,
-                    emoji=emoji,
+                    option_alias_id=alias.id,
                     weight=desired_weight,
                 )
                 .on_conflict_do_update(
                     index_elements=[Vote.vote_session_id, Vote.account_id],
                     set_={
                         "guild_id": guild_id,
-                        "option_id": option_id,
-                        "emoji": emoji,
+                        "option_alias_id": alias.id,
                         "weight": desired_weight,
                     },
                 )
@@ -445,10 +464,7 @@ class VoteRepository:
                 select(Vote.weight, VoteSessionOption.choice)
                 .join(
                     VoteSessionOption,
-                    (VoteSessionOption.vote_session_id == Vote.vote_session_id)
-                    & (VoteSessionOption.identifier == Vote.option_id)
-                    & (VoteSessionOption.emoji == Vote.emoji)
-                    & or_(VoteSessionOption.guild_id == Vote.guild_id, VoteSessionOption.guild_id == 0),
+                    VoteSessionOption.id == Vote.option_alias_id,
                 )
                 .where(Vote.vote_session_id == row.id)
             )
@@ -588,8 +604,8 @@ class VoteRepository:
     async def _to_snapshot(session: AsyncSession, row: VoteSession) -> VoteSessionSnapshot:
         """Load messages, ballots, and kind-specific data for the voting session.
 
-        Convert stored guild ID 0 to an unscoped option and derive signed score weights
-        from each selection's choice; stored ballot weights remain positive.
+        Derive signed score weights from the referenced alias choice;
+        stored ballot weights remain positive.
         """
         # DiscordPost associates a message with the vote; MessageRecord supplies the guild where it was sent.
         locations = (
@@ -608,24 +624,24 @@ class VoteRepository:
             VoteMessage(message_id, channel_id, guild_id or 0) for message_id, channel_id, guild_id in locations
         )
         vote_rows = (
-            await session.scalars(select(Vote).where(Vote.vote_session_id == row.id).order_by(Vote.account_id))
-        ).all()
-        selections = tuple(
-            VoteSelection(
-                vote.account_id,
-                vote.guild_id,
-                vote.option_id,
-                vote.emoji,
-                vote.weight,
+            (
+                await session.execute(
+                    select(Vote, VoteSessionOption)
+                    .join(VoteSessionOption, VoteSessionOption.id == Vote.option_alias_id)
+                    .where(Vote.vote_session_id == row.id)
+                    .order_by(Vote.account_id)
+                )
             )
-            for vote in vote_rows
+            .tuples()
+            .all()
         )
-        option_by_key = {(option.identifier, option.guild_id): option for option in row.options}
-        signed_votes: dict[int, float] = {}
-        for vote in vote_rows:
-            option = option_by_key.get((vote.option_id, vote.guild_id)) or option_by_key.get((vote.option_id, 0))
-            direction = -1 if option is not None and option.choice is VoteChoice.DENY else 1
-            signed_votes[vote.account_id] = vote.weight * direction
+        selections = tuple(
+            VoteSelection(vote.account_id, vote.guild_id, option.identifier, option.emoji, vote.weight)
+            for vote, option in vote_rows
+        )
+        signed_votes = {
+            vote.account_id: vote.weight * (-1 if option.choice is VoteChoice.DENY else 1) for vote, option in vote_rows
+        }
 
         target, poll = await VoteRepository._load_target(session, row)
 
@@ -645,7 +661,7 @@ class VoteRepository:
                     option.choice,
                     option.multiplier,
                     option.identifier,
-                    option.guild_id or None,
+                    option.guild_id,
                     option.label,
                     option.position,
                 )
