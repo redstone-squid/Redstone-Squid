@@ -29,6 +29,7 @@ from whenever import Instant
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.persistence.base import Base
+from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
@@ -192,7 +193,7 @@ class MediaArtifactPublicationRecord(Base, kw_only=True):
     )
 
 
-class MediaNormalizationJobRecord(Base, kw_only=True):
+class MediaNormalizationJobRecord(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """A normalization request retained after completion, failure, or discard for cleanup and retries."""
 
     __tablename__ = "media_normalization_jobs"
@@ -238,16 +239,8 @@ class MediaNormalizationJobRecord(Base, kw_only=True):
         server_default=text("'pending'"),
         default=MediaJobStatus.PENDING,
     )
-    available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
-    )
-    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     discarded_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class MediaDraftReference(Base, kw_only=True):

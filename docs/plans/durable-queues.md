@@ -189,7 +189,7 @@ Three concepts.
 **`QueueSpec`** (frozen, slots) declares one table: `name`, `model`, `key` (PK columns),
 `available_at` (the retry clock, and the only column backoff ever writes), `claimed_at`,
 `claim_token`, `attempts`, `last_error`; optional `enqueued_at` (defaults to `available_at`),
-`dead_at` (absent where a queue must never stop retrying), `claim_count`, `pending` (extra predicate;
+`dead_at` (absent where a queue must never stop retrying), `pending` (extra predicate;
 only `schematic_jobs` needs `completed_at IS NULL`), and `health`.
 
 **`QueueHealthShape`** — `label`, `source`, `group_by`, `counted`. Only `domain_events` populates it,
@@ -256,7 +256,7 @@ jumping to the back of its own queue, and it corrupts `oldest_ready_age`, becaus
 failing for an hour reports as fresh. One retry clock per table, never written by the enqueue path;
 `enqueued_at` keeps its single meaning of when the work was last requested.
 
-**Deliberate non-goal:** not renaming `locked_at` → `claimed_at` on the three tables that use it. A
+**Historical non-goal (superseded by the schema audit):** not renaming `locked_at` → `claimed_at` on the three tables that use it. A
 rename is not compatible with the rollout window below and would need its own add/dual-write/drop
 dance for a cosmetic gain. `QueueSpec.claimed_at` absorbs the difference in one line per spec.
 
@@ -318,8 +318,8 @@ Collapsed:
 
 - `squid/notifications/infrastructure/repository.py:888` `_visibility_timeout()` and :892
   `_retry_delay()` → the shared `VISIBILITY_TIMEOUT` and `retry_delay`. The divergent
-  `max(attempts - 1, 0)` clamp is **provably unreachable**: `attempts` is incremented at claim time
-  (:389), so every `fail_delivery` call passes a value ≥ 1, where both formulas agree. A unit test
+  `max(attempts - 1, 0)` clamp is unnecessary: `fail_delivery` increments the failure count
+  before computing backoff, so it passes a value ≥ 1, where both formulas agree. A unit test
   pins `retry_delay(0) == 7.5s` so the divergence stays deleted on purpose rather than by accident.
 - `squid/search/infrastructure/projection.py:85` `text("interval '5 minutes'")` → `ready()`.
 - The seven copies in `squid/worker/queue_health.py` → one `_queue_health_select`.
@@ -386,7 +386,7 @@ commit content is unchanged from the 2026-08-16 landing, re-verified against cur
 `squid/search/infrastructure/embeddings.py`.
 
 Commit 8 was the falsification test and it **passed**: `domain_event_deliveries` converted using
-only fields the other six specs already use, plus `claim_count`, for which it already had a column.
+the fields the other six specs already use. The schema audit later removed its unused claim counter.
 The abstraction is the right shape.
 
 ## Testing

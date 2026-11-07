@@ -32,15 +32,15 @@ async def test_a_failed_projection_backs_off_instead_of_rerunning_every_poll(
         assert dead_lettered is False
 
     async with migrated_session_factory() as session:
-        attempts, locked_at, token, dead_at, backed_off, error = (
+        attempts, claimed_at, token, dead_at, backed_off, error = (
             await session.execute(
                 text(
-                    "SELECT attempts, locked_at, claim_token, dead_at, available_at > now(), last_error "
+                    "SELECT attempts, claimed_at, claim_token, dead_at, available_at > now(), last_error "
                     "FROM search_projection_queue"
                 )
             )
         ).one()
-    assert (attempts, locked_at, token, dead_at, backed_off, error) == (1, None, None, None, True, "temporary")
+    assert (attempts, claimed_at, token, dead_at, backed_off, error) == (1, None, None, None, True, "temporary")
 
 
 async def test_a_projection_at_the_attempt_limit_is_retained_as_a_dead_letter(
@@ -62,12 +62,12 @@ async def test_a_projection_at_the_attempt_limit_is_retained_as_a_dead_letter(
         assert dead_lettered is True
 
     async with migrated_session_factory() as session:
-        attempts, locked_at, dead, error = (
+        attempts, claimed_at, dead, error = (
             await session.execute(
-                text("SELECT attempts, locked_at, dead_at IS NOT NULL, last_error FROM search_projection_queue")
+                text("SELECT attempts, claimed_at, dead_at IS NOT NULL, last_error FROM search_projection_queue")
             )
         ).one()
-    assert (attempts, locked_at, dead, error) == (5, None, True, "projection failed")
+    assert (attempts, claimed_at, dead, error) == (5, None, True, "projection failed")
 
 
 async def test_a_reclaimed_projection_cannot_be_completed_by_the_previous_holder(
@@ -81,7 +81,7 @@ async def test_a_reclaimed_projection_cannot_be_completed_by_the_previous_holder
         stale_token = stale_store.token_of(stale)
 
     async with migrated_session_factory.begin() as session:
-        await session.execute(text("UPDATE search_projection_queue SET locked_at = now() - interval '6 minutes'"))
+        await session.execute(text("UPDATE search_projection_queue SET claimed_at = now() - interval '6 minutes'"))
 
     async with migrated_session_factory() as session, session.begin():
         fresh_store = SearchProjectionStore(session)

@@ -96,7 +96,7 @@ BEGIN
         enqueued_at = EXCLUDED.enqueued_at,
         available_at = EXCLUDED.available_at,
         attempts = 0,
-        locked_at = NULL,
+        claimed_at = NULL,
         claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
@@ -123,7 +123,7 @@ BEGIN
             enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
             attempts = 0,
-            locked_at = NULL,
+            claimed_at = NULL,
             claim_token = NULL,
             last_error = NULL;
     END IF;
@@ -162,7 +162,7 @@ BEGIN
         enqueued_at = EXCLUDED.enqueued_at,
         available_at = EXCLUDED.available_at,
         attempts = 0,
-        locked_at = NULL,
+        claimed_at = NULL,
         claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
@@ -178,7 +178,7 @@ BEGIN
             enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
             attempts = 0,
-            locked_at = NULL,
+            claimed_at = NULL,
             claim_token = NULL,
             dead_at = NULL,
             last_error = NULL;
@@ -210,7 +210,7 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'versions' THEN
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
@@ -220,7 +220,7 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -246,7 +246,7 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
         INSERT INTO public.search_projection_queue
@@ -255,7 +255,7 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSE
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
@@ -265,7 +265,7 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;

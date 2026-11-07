@@ -46,7 +46,6 @@ async def test_a_delivery_is_claimed_with_its_event_and_acknowledged(
     )
     assert (delivery.event.id, delivery.event.event_type, delivery.consumer) == (event_id, "build.confirmed", "discord")
     assert delivery.claim_token is not None
-    assert delivery.claim_count == 1
     assert await transact(repository, lambda uow: uow.domain_events.complete(delivery), commit=True) is True
     assert await _count(migrated_session_factory, "domain_event_deliveries") == 0
     # The event itself is a log and outlives its deliveries.
@@ -118,7 +117,6 @@ async def test_a_failed_delivery_backs_off_and_a_ceiling_failure_dead_letters_it
         attempts=7,
         claimed_at=retried.claimed_at,
         claim_token=retried.claim_token,
-        claim_count=retried.claim_count,
     )
     assert (
         await transact(repository, lambda uow: uow.domain_events.fail(ceiling, "boom", max_attempts=8), commit=True)

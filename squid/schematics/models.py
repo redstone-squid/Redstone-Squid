@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.persistence.types import InstantUTC, now
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
@@ -281,7 +282,7 @@ class SchematicRender(Base, kw_only=True):
     )
 
 
-class SchematicRenderQueueItem(Base, kw_only=True):
+class SchematicRenderQueueItem(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """A durable request to render and publish one build's primary schematic."""
 
     __tablename__ = "schematic_render_queue"
@@ -301,19 +302,23 @@ class SchematicRenderQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(),
+        nullable=False,
+        server_default=func.now(),
+        default_factory=now,
+        comment="Earliest time a worker may claim this job, including retry backoff.",
     )
-    """Earliest time a worker may claim this job, including retry backoff."""
-    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """Token that must still match when the claiming worker records its outcome."""
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        default=None,
+        comment="Token that must still match when the claiming worker records its outcome.",
+    )
 
 
-class SchematicJob(Base, kw_only=True):
+class SchematicJob(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """A durable native-engine request whose result remains available until retention expires.
 
     Claim tokens reject stale worker updates. Binary output objects are retained alongside the row
@@ -351,19 +356,16 @@ class SchematicJob(Base, kw_only=True):
         server_default=text("'{}'::text[]"),
         comment="Result objects registered by worker claims, retained until job expiry.",
     )
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
-    )
-    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """Token that must still match when the claiming worker records its outcome."""
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)
     error_kind: Mapped[str | None] = mapped_column(Text, default=None)
     error_context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        default=None,
+        comment="Token that must still match when the claiming worker records its outcome.",
     )

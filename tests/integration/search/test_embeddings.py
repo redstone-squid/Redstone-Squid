@@ -105,7 +105,7 @@ async def test_source_changes_fence_a_stale_embedding_completion(
         await session.execute(
             update(SearchEmbeddingQueueItem)
             .where(SearchEmbeddingQueueItem.document_id == document_id)
-            .values(source_hash="v2", locked_at=None)
+            .values(source_hash="v2", claimed_at=None)
         )
 
     assert (

@@ -29,7 +29,7 @@ async def _enqueue(session_factory: async_sessionmaker[AsyncSession], scope_key:
                 "INSERT INTO record_recompute_queue (scope_key, build_kind, reasons) "
                 "VALUES (:scope, :kind, '[\"source_change\"]'::jsonb) "
                 "ON CONFLICT (scope_key) DO UPDATE "
-                "SET enqueued_at = now(), available_at = now(), locked_at = NULL, claim_token = NULL"
+                "SET enqueued_at = now(), available_at = now(), claimed_at = NULL, claim_token = NULL"
             ),
             {"scope": scope_key, "kind": kind},
         )
@@ -72,7 +72,7 @@ async def test_a_crashed_workers_lease_is_reclaimed(
     abandoned = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
 
     async with migrated_session_factory.begin() as session:
-        await session.execute(text("UPDATE record_recompute_queue SET locked_at = now() - interval '6 minutes'"))
+        await session.execute(text("UPDATE record_recompute_queue SET claimed_at = now() - interval '6 minutes'"))
 
     reclaimed = await transact(repository, lambda uow: uow.records.claim_recompute_kinds(limit=10), commit=True)
     assert reclaimed.kinds == (BuildKind.DOOR,)
@@ -103,7 +103,7 @@ async def _one(session_factory: async_sessionmaker[AsyncSession]) -> Row[Any]:
         return (
             await session.execute(
                 text(
-                    "SELECT attempts, locked_at, claim_token, available_at > now(), last_error "
+                    "SELECT attempts, claimed_at, claim_token, available_at > now(), last_error "
                     "FROM record_recompute_queue"
                 )
             )

@@ -390,7 +390,6 @@ class PostgresNotificationRepository:
             .values(
                 claimed_at=func.now(),
                 claim_token=func.gen_random_uuid(),
-                attempts=NotificationDeliveryRecord.attempts + 1,
             )
             .returning(NotificationDeliveryRecord, candidates.c.subject, candidates.c.kind, candidates.c.payload)
         )
@@ -414,15 +413,18 @@ class PostgresNotificationRepository:
 
     async def fail_delivery(self, delivery: PendingNotificationDelivery, error: str, *, max_attempts: int) -> bool:
         self._session()
-        dead = delivery.attempts >= max_attempts
-        values = {"dead_at": func.now()} if dead else {"available_at": func.now() + retry_delay(delivery.attempts)}
+        attempts = delivery.attempts + 1
+        dead = attempts >= max_attempts
+        values = {"dead_at": func.now()} if dead else {"available_at": func.now() + retry_delay(attempts)}
         session = self._session()
-        account_id = await self._settle_delivery(session, delivery, error=error, **values)
+        account_id = await self._settle_delivery(session, delivery, error=error, attempts=attempts, **values)
         return dead and account_id is not None
 
     async def suspend_dm(self, delivery: PendingNotificationDelivery, error: str) -> bool:
         session = self._session()
-        account_id = await self._settle_delivery(session, delivery, error=error, dead_at=func.now())
+        account_id = await self._settle_delivery(
+            session, delivery, error=error, attempts=delivery.attempts + 1, dead_at=func.now()
+        )
         if account_id is None:
             return False
         await session.execute(

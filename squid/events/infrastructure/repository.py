@@ -19,7 +19,6 @@ DOMAIN_EVENT_DELIVERY_SPEC = QueueSpec(
     attempts=DomainEventDeliveryRecord.attempts,
     last_error=DomainEventDeliveryRecord.last_error,
     dead_at=DomainEventDeliveryRecord.dead_at,
-    claim_count=DomainEventDeliveryRecord.claim_count,
     health=QueueHealthShape(
         # Deliveries are counted per registered consumer through an outer join, so a
         # consumer with no outstanding rows reports zero rather than disappearing
@@ -123,7 +122,6 @@ def _delivery(record: DomainEventDeliveryRecord, event: DomainEvent) -> DomainEv
         attempts=record.attempts,
         claimed_at=record.claimed_at,
         claim_token=record.claim_token,
-        claim_count=record.claim_count,
     )
 
 

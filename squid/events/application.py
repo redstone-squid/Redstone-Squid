@@ -23,8 +23,6 @@ class DomainEventDelivery:
     """Failures recorded before this claim; claiming alone does not increment it."""
     claimed_at: Instant
     claim_token: UUID | None = None
-    claim_count: int = 0
-    """Number of claims, including claims taken over after a lease expired."""
 
 
 class DomainEventRepository(Protocol):

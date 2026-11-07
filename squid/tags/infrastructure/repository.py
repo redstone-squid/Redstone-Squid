@@ -106,7 +106,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                 ON CONFLICT (resource_kind, source_key) DO UPDATE
                 SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
                     available_at = EXCLUDED.available_at, attempts = 0,
-                    locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL
+                    claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL
                 """
             ),
             {

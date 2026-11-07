@@ -138,7 +138,7 @@ async def test_delivery_claims_use_uuid_fencing_and_database_attempt_counts(
 
     assert len(claimed) == 1
     assert claimed[0].id == delivery_id
-    assert claimed[0].attempts == 1
+    assert claimed[0].attempts == 0
     assert claimed[0].claim_token is not None
     assert await transact(repository, lambda uow: uow.notifications.complete_delivery(claimed[0]), commit=True) is True
     assert await transact(repository, lambda uow: uow.notifications.complete_delivery(claimed[0]), commit=True) is False
@@ -199,7 +199,7 @@ async def test_delivery_retry_and_terminal_failure_release_the_claim(
         await session.execute(update(NotificationDeliveryRecord).values(available_at=func.now()))
 
     (second,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True)
-    assert second.attempts == 2
+    assert second.attempts == 1
     assert await transact(
         repository, lambda uow: uow.notifications.fail_delivery(second, "x" * 5000, max_attempts=2), commit=True
     )

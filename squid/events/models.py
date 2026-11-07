@@ -1,13 +1,12 @@
 """SQLAlchemy models for the append-only domain-event log."""
 
-import uuid
-
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Identity, Index, Integer, SmallInteger, Text, func, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Identity, Index, SmallInteger, Text, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.persistence.types import InstantUTC, now
 
 
@@ -43,12 +42,11 @@ class DomainEventConsumer(Base, kw_only=True):
     name: Mapped[str] = mapped_column(Text, primary_key=True)
 
 
-class DomainEventDeliveryRecord(Base, kw_only=True):
+class DomainEventDeliveryRecord(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """One consumer's outstanding delivery of one event."""
 
     __tablename__ = "domain_event_deliveries"
     __table_args__ = (
-        CheckConstraint("claim_count >= 0", name="domain_event_deliveries_claim_count_nonnegative"),
         CheckConstraint(
             "(claimed_at IS NULL) = (claim_token IS NULL)",
             name="domain_event_deliveries_claim_complete",
@@ -66,12 +64,3 @@ class DomainEventDeliveryRecord(Base, kw_only=True):
     consumer: Mapped[str] = mapped_column(
         Text, ForeignKey("domain_event_consumers.name", ondelete="CASCADE"), primary_key=True
     )
-    available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
-    )
-    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    claim_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)

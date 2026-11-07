@@ -2,16 +2,17 @@
 
 import uuid
 
-from sqlalchemy import BigInteger, CheckConstraint, Identity, Index, Integer, Text, UniqueConstraint, func, text
+from sqlalchemy import BigInteger, CheckConstraint, Identity, Index, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.persistence.types import InstantUTC, now
 
 
-class DiscordSyncQueueItem(Base, kw_only=True):
+class DiscordSyncQueueItem(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """A pending refresh or deletion of a resource's Discord posts.
 
     Database triggers insert one row per resource and replace its action and
@@ -53,14 +54,12 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     Retries move this time forward without changing enqueued_at, preserving queue
     order and the age reported by health metrics.
     """
-    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """Token generated for the current claim.
 
     Completion and failure updates require a matching token. Enqueuing another
     update clears it, preventing an older worker from acknowledging the new work.
     """
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     generation: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
@@ -72,5 +71,3 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     The sequence continues after a queue row is deleted, so the next request does
     not restart at a revision the post has already rendered.
     """
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)

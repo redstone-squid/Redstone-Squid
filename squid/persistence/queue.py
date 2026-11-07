@@ -119,7 +119,6 @@ class QueueSpec[ModelT]:
     __slots__ = (
         "attempts",
         "available_at",
-        "claim_count",
         "claim_token",
         "claimed_at",
         "dead_at",
@@ -145,7 +144,6 @@ class QueueSpec[ModelT]:
         last_error: InstrumentedAttribute[str | None],
         enqueued_at: InstrumentedAttribute[Instant] | None = None,
         dead_at: InstrumentedAttribute[Instant | None] | None = None,
-        claim_count: InstrumentedAttribute[int] | None = None,
         pending: ColumnElement[bool] | None = None,
         health: QueueHealthShape | None = None,
     ) -> None:
@@ -162,7 +160,6 @@ class QueueSpec[ModelT]:
             last_error: Where a failure message is retained.
             enqueued_at: When the work was last requested, where that differs from `available_at`.
             dead_at: When retries stopped, or no column for queues without this marker.
-            claim_count: Claims including reclaims, where a queue counts those separately.
             pending: An extra condition rows must meet before they can be claimed.
             health: How this queue is aggregated into the queue-health union.
         """
@@ -179,7 +176,6 @@ class QueueSpec[ModelT]:
         self.last_error = last_error
         self.enqueued_at = enqueued_at
         self.dead_at = dead_at
-        self.claim_count = claim_count
         self.pending = pending
         self.health = health
 
@@ -264,8 +260,6 @@ class ClaimedRowQueue[ModelT]:
             # per statement -- every row in a batch gets its own token for free.
             spec.claim_token.key: func.gen_random_uuid(),
         }
-        if spec.claim_count is not None:
-            values[spec.claim_count.key] = spec.claim_count + 1
         statement = (
             update(spec.model)
             .where(tuple_(*spec.key).in_(candidates))

@@ -26,6 +26,7 @@ from whenever import Instant
 
 from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
 from squid.persistence.base import Base
+from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
@@ -160,7 +161,7 @@ class InboxNotification(Base, kw_only=True):
     read_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
 
-class NotificationDeliveryRecord(Base, kw_only=True):
+class NotificationDeliveryRecord(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """A queued Discord DM retained across retries and after successful or terminal delivery."""
 
     __tablename__ = "notification_deliveries"
@@ -202,12 +203,4 @@ class NotificationDeliveryRecord(Base, kw_only=True):
     nonce: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
-    available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
-    )
-    claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     sent_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)

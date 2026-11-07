@@ -12,7 +12,6 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
-    Integer,
     Numeric,
     SmallInteger,
     Text,
@@ -26,6 +25,7 @@ from whenever import Instant
 
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
+from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.persistence.types import InstantUTC, now
 
 
@@ -148,7 +148,7 @@ class SearchDocumentFacet(Base, kw_only=True):
     boolean_value: Mapped[bool | None] = mapped_column(Boolean, default=None)
 
 
-class SearchProjectionQueueItem(Base, kw_only=True):
+class SearchProjectionQueueItem(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """A durable request to refresh or delete a projected search resource."""
 
     __tablename__ = "search_projection_queue"
@@ -161,7 +161,7 @@ class SearchProjectionQueueItem(Base, kw_only=True):
         Index(
             "search_projection_queue_ready_idx",
             "available_at",
-            postgresql_where=text("locked_at IS NULL AND dead_at IS NULL"),
+            postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
         ),
     )
 
@@ -172,19 +172,23 @@ class SearchProjectionQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(),
+        nullable=False,
+        server_default=func.now(),
+        default_factory=now,
+        comment="Earliest time a worker may claim this item; retries move it into the future.",
     )
-    """Earliest time a worker may claim this item; retries move it into the future."""
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """Token generated for the current claim; stale workers cannot acknowledge a newer claim."""
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        default=None,
+        comment="Token generated for the current claim; stale workers cannot acknowledge a newer claim.",
+    )
 
 
-class SearchEmbeddingQueueItem(Base, kw_only=True):
+class SearchEmbeddingQueueItem(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     """A durable request to embed a search document whose source hash changed."""
 
     __tablename__ = "search_embedding_queue"
@@ -192,7 +196,7 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
         Index(
             "search_embedding_queue_ready_idx",
             "available_at",
-            postgresql_where=text("locked_at IS NULL AND dead_at IS NULL"),
+            postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
         ),
     )
 
@@ -205,13 +209,17 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(),
+        nullable=False,
+        server_default=func.now(),
+        default_factory=now,
+        comment="Earliest time a worker may claim this item; retries move it into the future.",
     )
-    """Earliest time a worker may claim this item; retries move it into the future."""
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """Token generated for the current claim; stale workers cannot acknowledge a newer claim."""
-    dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        default=None,
+        comment="Token generated for the current claim; stale workers cannot acknowledge a newer claim.",
+    )

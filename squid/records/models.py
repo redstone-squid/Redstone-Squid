@@ -36,6 +36,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.queue_models import QueueColumns
 from squid.persistence.types import InstantUTC, StrEnumText, now
 from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
 
@@ -390,7 +391,7 @@ class RecordHolderHistory(Base, kw_only=True):
     metric_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
 
 
-class RecordRecomputeQueueItem(Base, kw_only=True):
+class RecordRecomputeQueueItem(QueueColumns, Base, kw_only=True):
     """A durable request to recompute an affected record scope."""
 
     __tablename__ = "record_recompute_queue"
@@ -401,7 +402,7 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
         ),
         Index("record_recompute_queue_build_idx", "build_id"),
         UniqueConstraint("scope_key", name="record_recompute_queue_scope_key_key"),
-        Index("record_recompute_queue_ready_idx", "available_at", postgresql_where=text("locked_at IS NULL")),
+        Index("record_recompute_queue_ready_idx", "available_at", postgresql_where=text("claimed_at IS NULL")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -418,19 +419,20 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
-    available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
-    )
-    """Earliest next claim time; retry backoff advances it without changing the enqueue time."""
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """Token identifying the current claim, cleared when new work replaces it.
 
-    Completion and failure updates match this token to preserve work enqueued
-    or reclaimed after the worker started.
-    """
-    last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(),
+        nullable=False,
+        server_default=func.now(),
+        default_factory=now,
+        comment="Earliest next claim time; retry backoff advances it without changing the enqueue time.",
+    )
+
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        default=None,
+        comment="Token identifying the current claim, cleared when new work replaces it.\n\nCompletion and failure updates match this token to preserve work enqueued\nor reclaimed after the worker started.",
+    )
 
 
 class DoorTimingVariant(Base, kw_only=True):

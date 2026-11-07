@@ -9,7 +9,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.sql.elements import TextClause
 
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.persistence.alembic_entities import current_entities
 
 _CREATE_SCHEMA = """
 CREATE TABLE builds (
@@ -42,7 +42,6 @@ CREATE TABLE domain_event_deliveries (
     available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     claimed_at TIMESTAMPTZ,
     claim_token UUID,
-    claim_count INTEGER NOT NULL DEFAULT 0,
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
     PRIMARY KEY (event_id, consumer)
@@ -69,12 +68,12 @@ def _managed_sql() -> list[TextClause]:
     """Return the real function and trigger definitions this test exercises."""
     functions = [
         text(entity.to_sql_statement_create().text)
-        for entity in alembic_util_entities()
+        for entity in current_entities()
         if isinstance(entity, PGFunction) and entity.signature.partition("(")[0] in _ENTITY_NAMES
     ]
     triggers = [
         text(entity.to_sql_statement_create().text)
-        for entity in alembic_util_entities()
+        for entity in current_entities()
         if isinstance(entity, PGTrigger) and entity.signature.partition("(")[0] in _ENTITY_NAMES
     ]
     assert len(functions) == 2
