@@ -4,6 +4,15 @@ The `admin records-lookup` unmatched-category report (`b03322f1d85e`) was fixed 
 systemic structured-error migration in `docs/plans/completed/structured-errors.md`; the application/domain
 architecture rule now rejects new bare builtin raises.
 
+## Extender fastest records never resolve
+
+`_extender_candidate` (`squid/records/infrastructure/repository.py`) takes its timings only from
+`extender_timing_variants`, and nothing writes that table. Every extender therefore gets an empty
+timing tuple, and no extender fastest record can be computed. Doors avoid this because
+`_door_candidate` falls back to the `doors` timing columns; extenders have no such fallback.
+The longer-term cleanup of the two timing representations is Phase 5 of
+`docs/plans/schema-audit.md`, deferred until the extender submission work in TODO.md.
+
 ## `verification_codes.id` exhausts after 32,767 codes
 
 `VerificationCode.id` is a `SmallInteger` autoincrement primary key

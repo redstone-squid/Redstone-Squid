@@ -1,9 +1,10 @@
 # Close the remaining schema-audit findings
 
 > **Status (2026-11-07).** Phase 0 is landed. Phases 1-6 are open; nothing below has started.
-> The design decisions for every open phase except Phase 5 were made on 2026-11-07 and are recorded
-> inline as **Decision**. File references were refreshed against the current tree on the same date;
-> line numbers drift, so search for the named symbol if one is off.
+> Every design decision is made and recorded inline as **Decision**; Phase 5 is deliberately
+> deferred. Nothing is left to investigate before implementing. File references were refreshed
+> against the current tree on the same date; line numbers drift, so search for the named symbol if
+> one is off.
 
 ## Context
 
@@ -25,13 +26,8 @@ below because each one was reported as an easy fix.
 
 **The correctness gate is `test_migrations_create_schema_without_drift`**
 (`tests/integration/test_alembic_migrations.py`). It runs the whole migration chain against a clean
-PostgreSQL container and then runs `alembic check`. At the last recorded baseline it was already
-failing with **13 `modify_comment` diffs**: model attribute docstrings that were extended without
-matching migration column comments, in `api_keys`, `discord_sync_queue`, `idempotency_requests`,
-`record_recompute_queue`, `schematic_jobs`, `schematic_render_queue` and the two `search_*_queue`
-tables. Re-run it to get the current baseline before starting a phase. A phase is verified when the
-diff list is unchanged from that baseline and contains nothing structural. Fixing the comment diffs
-is a separate, unclaimed task.
+PostgreSQL container and then runs `alembic check`. It **passes** as of 2026-11-07; the 13
+`modify_comment` diffs recorded earlier have since been fixed. Every phase must keep it passing.
 
 A trap when documenting models: `Base.__init_subclass__` (`squid/persistence/base.py`) turns an
 attribute docstring into a column comment, so prose on a `mapped_column` is a schema change. Use a
@@ -93,12 +89,22 @@ Independent of each other; any can go first.
 
 - **Name every constraint from one convention.** `Base.metadata` has no `naming_convention`
   (`squid/persistence/base.py`), so some constraints carry PostgreSQL-invented names while the rest
-  are named by hand. At audit time there were 22: all of `starboard_*`, `guild_vote_emojis` (×3),
-  `guild_vote_role_weights` (×2), `generic_vote_sessions` (×2), `domain_event_deliveries` (×2), and
-  the three `server_settings` uniques. Recount before starting. A convention matching PostgreSQL's
-  defaults (`%(table_name)s_%(column_0_name)s_fkey` / `_key`) reproduces the existing name of every
-  single-column FK and unique; unnamed `CheckConstraint`s need explicit names. Verify against the
-  drift test, not by reasoning. If any generated name diverges, add a rename migration.
+  are named by hand. Counted from `Base.metadata` on 2026-11-07, there are **39**: 33 foreign keys
+  (all of `starboard_*`, most `submission_*` tables, `media_draft_references`,
+  `generic_vote_sessions`, `domain_event_deliveries`, and the `guild_id` FKs on `guild_vote_emojis`
+  and `guild_vote_role_weights`), the three `server_settings` channel uniques, and three checks.
+  Every one of the FKs and uniques is single-column.
+  **Decision:** set `naming_convention = {"ix": "ix_%(column_0_label)s",
+  "fk": "%(table_name)s_%(column_0_name)s_fkey", "uq": "%(table_name)s_%(column_0_name)s_key",
+  "pk": "%(table_name)s_pkey"}`. `ix` is SQLAlchemy's existing default and the other three are
+  PostgreSQL's own defaults, so the 36 unnamed FKs and uniques keep their deployed names and no
+  migration is needed (none of the generated names exceeds 63 characters, where the two would
+  truncate differently). Leave out a `ck` key: SQLAlchemy feeds explicit names into a
+  `%(constraint_name)s` template and would prefix the table name onto every hand-named check.
+  Instead, give the three checks explicit names equal to their deployed ones:
+  `guild_vote_emojis_choice_check`, `guild_vote_emojis_kind_check`,
+  `guild_vote_role_weights_kind_check`. Checked against a copy of `Base.metadata` on 2026-11-07,
+  this convention renames no hand-named constraint. The drift test confirms it after the change.
 
 - **Constrain `builds.category`.** It is the `polymorphic_on` discriminator (`squid/builds/models.py`)
   but is nullable with no CHECK, and `Build` has no base `polymorphic_identity`, so a row with a NULL
@@ -145,9 +151,13 @@ translates it to `0` (`guild_id or 0` on insert, `guild_id == 0` in `_close_at_t
    actually enforced, and the session column stops a vote from pointing at another session's alias.
    Backfill using the existing guild-or-global join; drop votes that don't resolve. Then drop
    `votes.option_id` and `votes.emoji`, which the alias row now supplies.
-3. `votes.guild_id` stays as the guild the vote was cast in. Make it nullable instead of `0`, and add
-   an FK to `server_settings.server_id` only if every voting guild is guaranteed a settings row.
-   Check that before writing the FK.
+3. `votes.guild_id` stays, because `VoteSelection` carries it into the domain as the guild the
+   reaction was made in. Make it nullable instead of `0`. **Decision:** no FK to
+   `server_settings`. Settings rows are created only by `on_guild_join`
+   (`squid/settings/application/services.py`, `guild_joined`), so guilds the bot joined while
+   offline have none, and an FK would make casting a vote depend on that. Once votes reference the
+   alias row, scoring no longer reads `votes.guild_id`, so the column is a recorded Discord fact like
+   a channel id, not a reference that needs enforcing.
 4. Repository: write `option.guild_id` as-is, resolve the alias id when casting a vote, and replace
    the guild-or-global join in `_close_at_threshold` and the snapshot loader with a join on
    `option_alias_id`.
@@ -171,14 +181,16 @@ vocabulary and what the counters mean:
 **Decision:** `attempts` means "failures recorded" on every queue.
 
 - Rename the three `locked_at` columns (and their partial-index predicates) to `claimed_at`.
-- Make `notification_deliveries` increment `attempts` on failure instead of on claim. Its
-  `retry_delay(delivery.attempts)` backoff then counts failures, like every other queue; check that
-  the first retry delay is still what you intend.
+- Make `notification_deliveries` increment `attempts` in `fail_delivery` instead of in the claim
+  `UPDATE`. The first failure still sees `attempts = 1`, so `retry_delay` and the eight-attempt cap
+  behave exactly as today. The one change is that a worker crash (lease expiry, then reclaim) no
+  longer uses up an attempt, which matches every other queue.
 - Drop `domain_event_deliveries.claim_count`, the `claim_count` field on `DomainEventDelivery`, and
   the optional `claim_count` slot in `QueueSpec`. Update `docs/plans/durable-queues.md`, which
   describes it.
-- Decide whether `record_recompute_queue` should ever dead-letter. If not, record why next to its
-  `QueueSpec`.
+- `record_recompute_queue` keeps having no `dead_at`. **Decision:** it never dead-letters, as its
+  `QueueSpec` already explains (`RECORD_RECOMPUTE_QUEUE_SPEC`): abandoning a scope would leave
+  published records stale indefinitely. The mixin makes `dead_at` optional for this reason.
 - Extract a declarative mixin for the shared columns so the shape is stated once.
 
 Offline application makes this a single migration.
@@ -211,8 +223,8 @@ The records repository reads the variant tables and falls back to the columns (`
 **Decision:** deferred until the extender submission work in TODO.md
 (`Add piston-extender create/update submission persistence`) settles. That work decides whether
 builds need several timing variants. If they do, write the variant rows first and then drop the
-columns; if not, drop the variant tables and the fallback. Either way, the extender records bug
-above is real today and may be worth a narrow fix in the meantime.
+columns; if not, drop the variant tables and the fallback. The extender records bug above exists
+today independently of this cleanup and is tracked in BUGS.md.
 
 ## Phase 6 — Retire the record denormalizations
 
