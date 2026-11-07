@@ -1,136 +1,233 @@
 # Schema integrity hardening
 
-> **Status.** Preliminary — three defects are verified in-tree below; everything else in the
-> source review is an unverified claim that needs design work before it becomes a plan. Do not
-> implement from this document yet. Re-verified 2026-08-18 against HEAD `f4cd124b` (the branch was
-> rebased after the original spot-check against `c490a0da`, rewriting every commit hash; all three
-> defects are unchanged in content and line number). `record_recompute_queue`'s fencing bug is
-> tracked separately in [`durable-queues.md`](durable-queues.md) (already verified there, design
-> agreed) and is not duplicated here.
+> **Status (2026-11-07).** Every claim from the original review has been rechecked against HEAD
+> `27dfc1096` and every decision is made. Nothing below has started. The same operating
+> assumptions as `docs/plans/schema-audit.md` apply: migrations run offline, existing data is not
+> precious, and foreign keys are immediate unless the write order cannot be fixed. Every phase must
+> keep `test_migrations_create_schema_without_drift` passing.
 
 ## Context
 
-A review of the current schema (models under `squid/*/infrastructure/models.py`, functions under
-`schema/structure/public/functions/`, and the generated dumps `schema_dump.sql` /
-`squid/persistence/postgres_entities.sql`) surfaced a long list of claimed defects, ranging from
-"will corrupt data today" to "would be nice for a 9.5/10 schema." This document exists to separate
-those two things. Three claims were spot-checked against the actual files on
-`schematics-phase-0` (originally HEAD `c490a0da`, re-verified 2026-08-18 at HEAD `f4cd124b`) and
-are real. The rest have *not* been verified — they are recorded here as a punch list for
-follow-up review, not as accepted findings.
+An external review of the schema listed a long set of claimed defects, from "corrupts data today"
+to "nice to have". This plan keeps only the ones that are still true at HEAD and records a decision
+for each one. Several claims were already fixed, mostly by `schema-audit.md`; they are listed so
+nobody re-reviews them.
 
-## Verified defects
+## Already resolved
 
-### 1. `delete_orphaned_build_vote_sessions_after_builds_delete` deletes unrelated vote sessions
+| Claim | Resolved by |
+|---|---|
+| `check_record_category` accepts any string | The column was dropped (`schema-audit.md` Phase 6). |
+| `vote_sessions` threshold CHECK has a NULL hole | The CHECK now requires `IS NOT NULL` (`squid/voting/models.py`, `THRESHOLD_CONSTRAINT`). |
+| Identity on FK-only columns; `build_edit_history` | `schema-audit.md` Phase 0. |
+| `votes` does not reference its option; no status or result | Phase 2 alias FK; `vote_sessions.status` and `result` have CHECKs. |
+| Vote-session subtypes not enforced | `enforce_vote_session_kind_subtype` constraint triggers. |
+| `record_definitions` duplicates competition fields | `schema-audit.md` Phase 6. |
+| Role-inclusion cycles | `check_permission_role_include_cycle` (`schema-audit.md` Phase 1). |
+| `schematic_uploads.uploaded_by_discord_id` | Replaced by `uploaded_by_account_id`, FK `ON DELETE SET NULL`. |
+| Schematic job tables use a bespoke queue | Both use `QueueColumns`, `QueueSpec` and `ClaimedRowQueue`. |
+| Missing FK indexes | Phase 0 added 37. Only `notifications.event_id` remains (Phase 3). |
 
-`schema/structure/public/functions/delete_orphaned_build_vote_sessions_after_builds_delete.sql:6`:
+## Phase 1 — Bugs that produce wrong results
+
+### 1.1 Deleting any build deletes every vote session
+
+`delete_orphaned_build_vote_sessions_after_builds_delete` (`squid/persistence/postgres_entities.sql`)
+selects `vote_sessions.id` while the inner table is aliased `vs`. The unaliased name refers to the
+outer `DELETE` target, so the subquery returns the outer row's id whenever any orphan exists. Generic
+polls never have a build or delete-log row, so they always count as orphans. Reproduced against
+PostgreSQL 18 on 2026-11-07: with one generic poll present, `DELETE FROM builds WHERE id = 99`, which
+matches no rows, deleted every vote session (the trigger is per statement). No application code
+deletes builds today, so only manual and admin deletes hit it.
+
+**Decision:** drop the statement trigger on `builds` and its function. Add a row-level
+`AFTER DELETE` trigger on `build_vote_sessions` that runs
+`DELETE FROM vote_sessions WHERE id = OLD.vote_session_id AND kind = 'build'`. The subtype constraint
+trigger already guarantees that a `build` session has exactly one subtype row, so no other table
+needs checking, and the query no longer lists subtype tables by hand. When the delete comes from
+the parent (a cascade from `vote_sessions`), the statement matches nothing. One function and one
+trigger are replaced, so `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS` stay the same. Add an integration
+test: deleting a build removes only its sessions, and a no-op delete keeps generic and delete-log
+sessions.
+
+### 1.2 A guild admin can change what a global role grants
+
+`permission_role_includes` lets a global role (`guild_id IS NULL`) include a guild role.
+`PermissionAdministration.add_include` (`squid/permissions/application/administration.py`) authorizes
+against the including role only and never compares the two `guild_id`s. A guild admin who edits their
+own role then changes what the global role grants in every guild. Guild A including guild B's role is
+not reachable through the UI, but nothing forbids it either.
+
+**Decision:** an include is valid only when `included.guild_id IS NULL OR included.guild_id =
+role.guild_id`.
+
+- Reject other includes in `add_include` with a `ValidationError`.
+- Enforce the same rule in `check_permission_role_include_cycle`, so no trigger is added and the
+  counts don't change.
+- The migration deletes existing edges that break the rule.
+
+### 1.3 Display units are shown without converting the value
+
+Numeric tag values are stored in the tag's canonical unit, and `tag_units.scale_to_base` gives each
+unit's factor. All three renderers print the stored value next to the display unit's key without
+converting it:
+
+- `_render_tag_assignment` in `squid/search/infrastructure/projection.py`
+- `RecordFacet.category_name` in `squid/records/application/models.py`
+- `squid/api/v1/schemas/builds.py`
+
+Any display unit that differs from the canonical unit therefore shows a wrong number.
+
+**Decision:** keep display units and convert.
+
+- Add one helper in `squid/tags` that converts a canonical value into a display unit
+  (`value * canonical.scale_to_base / display.scale_to_base`), and use it in all three renderers.
+- Display units are written only by seeds and by build tag assignments
+  (`squid/builds/infrastructure/repository.py`, where assignments are built). On that path, drop a
+  display unit whose `dimension` differs from the canonical unit's instead of failing the
+  submission.
+- Add no database trigger: units are seed data and the one application write path is guarded.
+
+### 1.4 The starboard ignores bulk deletes
+
+`MessageFactCog` handles `on_raw_bulk_message_delete` (`squid/bot/messages.py`), but the starboard cog
+only handles `on_raw_message_delete` (`squid/bot/starboard/cog.py`). A channel purge leaves the
+starboard's origin rows looking alive. **Decision:** add the bulk handler to the starboard cog,
+reusing the single-delete logic. Phase 4 later removes the duplicated deletion state altogether.
+
+## Phase 2 — Build triggers fire on bookkeeping writes
+
+`builds_enqueue_search` and `builds_enqueue_discord_sync` fire on every `UPDATE` of `builds`. The lease
+writes in `squid/builds/infrastructure/locks.py` (acquire, release, stale cleanup) and the embedding
+write in `squid/builds/infrastructure/embeddings.py` change nothing visible, yet each one:
+
+- re-enqueues search projection (cheap, because the projection hash stops re-embedding);
+- for doors and extenders, enqueues a recompute of every record of that kind (expensive);
+- enqueues a Discord sync of the build and its vote cards. This is a real message edit, because
+  sync is generation-based.
+
+**Decision:** add a `WHEN` clause to both `builds` triggers that ignores those columns, written as an
+exclusion so new columns count as content by default:
 
 ```sql
-SELECT vote_sessions.id
-FROM vote_sessions vs
-LEFT JOIN build_vote_sessions bvs ON vs.id = bvs.vote_session_id
-LEFT JOIN delete_log_vote_sessions dvs ON vs.id = dvs.vote_session_id
-WHERE bvs.vote_session_id IS NULL AND dvs.vote_session_id IS NULL
+WHEN ((to_jsonb(OLD) - ARRAY['embedding', 'locked_at', 'lock_token', 'lock_expires_at'])
+      IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['embedding', 'locked_at', 'lock_token', 'lock_expires_at']))
 ```
 
-The inner table is aliased `vs`, so the unqualified `vote_sessions.id` in the `SELECT` list does
-not resolve to the aliased row — it resolves to the outer `DELETE FROM vote_sessions` target,
-making the subquery return every vote session's id whenever at least one orphan exists. It also
-never joins `generic_vote_sessions`, so any generic poll looks orphaned unconditionally. Confirmed
-by reading the function body; not yet reproduced with an integration test.
+`WHEN` cannot be combined with `INSERT OR DELETE` in a way that reads `OLD` on insert, so split each
+into an `AFTER INSERT OR DELETE` trigger and an `AFTER UPDATE ... WHEN` trigger that share the same
+function. That adds two triggers to `EXPECTED_TRIGGERS`. Test: acquiring and releasing a lease
+enqueues nothing.
 
-**Needs a design decision, not just a fix**: the review proposes replacing the build-level
-`AFTER DELETE` trigger with a narrower `AFTER DELETE` trigger on `build_vote_sessions` that only
-deletes `OLD.vote_session_id` when no other subtype row references it. That changes trigger
-ownership (currently attached to `builds`, would move to `build_vote_sessions`) and needs to be
-checked against how `delete_log_vote_sessions` and any future subtype tables are supposed to
-participate — worth deciding explicitly rather than patching the join in place, since the
-join-alias mistake is exactly the kind of thing that recurs if the query keeps enumerating subtype
-tables by hand.
+## Phase 3 — Missing constraints
 
-### 2. `check_record_category` accepts arbitrary strings
+One migration. Every item is independent.
 
-`squid/builds/infrastructure/models.py:50` / `schema/structure/public/tables/builds/table.sql:6`:
+- **Build subtypes.** Nothing enforces "exactly one subtype row matching `builds.category`" across
+  `doors`, `extenders`, `utilities`, `entrances` and `other_builds`. **Decision:** add
+  `enforce_build_category_subtype`, a deferred constraint trigger modeled on
+  `enforce_vote_session_kind_subtype`, on `builds` and the five subtype tables. Deferral is required
+  here, because the ORM inserts the parent before the subtype row. This adds one function and six
+  triggers.
+- **Schematic analyzer output** (`build_schematics`, `squid/schematics/models.py`):
+  - `>= 0` on every dimension, `allocated_*`, count and size column;
+  - `bounding_volume = width::bigint * height * length`;
+  - `block_count <= bounding_volume`;
+  - each tight dimension `<=` its allocated dimension.
 
-```sql
-record_category = ANY (ARRAY['Smallest', 'Fastest', 'First', 'Smallest Fastest', 'Fastest Smallest', NULL])
-```
+  The decoder already rejects negatives, so these only back it up.
+- **Schematic publication.** Add `visibility <> 'public_download' OR published_at IS NOT NULL`,
+  `withdrawn_at IS NULL OR published_at IS NOT NULL` and `withdrawn_at >= published_at`. The app
+  already treats a row as downloadable only when published and not withdrawn, so this closes no live
+  hole.
+- **Schematic queues.** `schematic_jobs` and `schematic_render_queue` lack the
+  `(claimed_at IS NULL) = (claim_token IS NULL)` and `attempts >= 0` checks the other queues have.
+  Move both checks into `QueueColumns` so every queue gets them from one place.
+- **`versions`.** Add `UNIQUE (edition, major_version, minor_version, patch_number)`,
+  `CHECK (edition IN ('Java', 'Bedrock'))`, and `>= 0` on the three numbers. `seed.sql` has no
+  duplicates.
+- **`record_definition_facets`.** `facet_id` is `Integer` with no FK, while tag ids are `bigint`, and
+  only `restriction` facets are ever written. Widen `facet_id` to `bigint`, add an FK to
+  `tag_definitions.id` with `ON DELETE CASCADE`, and narrow the `facet_kind` CHECK and
+  `RecordFacetKind` to `'restriction'`.
+- **`RecordDefinition.competition_id`** has `default_factory=uuid.uuid4`, which would invent an identity
+  if a caller forgot it. Remove the default (model only, no DDL).
+- **`notifications.event_id`** has no index, but the `domain_events` prune does a `NOT EXISTS` against
+  it and cascades into it. Add the index.
+- **`verification_codes`.**
+  - Widen `id` to `bigint`.
+  - Every lookup matches the code's HMAC alone (`squid/accounts/infrastructure/repository.py`), so
+    two valid rows with the same code would be ambiguous. Add `UNIQUE (code) WHERE valid`, and make
+    issuing a code retry with a fresh one on a unique violation.
+  - In `replace_verification_code`, delete the UUID's earlier rows instead of flipping `valid`.
+    This keeps one row per UUID, so the table stops growing.
+  - This closes both `verification_codes` entries in BUGS.md; remove them when it lands.
 
-For any value not in the list, every element comparison is `false` except the comparison against
-`NULL`, which is `unknown`; `false OR unknown` is `unknown`, and Postgres treats a `CHECK` that
-evaluates to `unknown` as satisfied. The constraint therefore accepts any string, not just the
-five listed values. Confirmed by reading the constraint text in both the model and the generated
-schema.
+## Phase 4 — One source of truth
 
-### 3. `vote_sessions` threshold `CHECK` has the same null hole
+- **Draft ownership.** Every access decision reads `submission_drafts.owner_account_id`.
+  `submission_draft_access` is written once, at creation, and during account merge, and nothing reads
+  it. No `editor` row is ever written. **Decision:** drop the table, its model and its merge code.
+  If shared editing is built later, it adds its own table for collaborators.
+- **`messages` vs `starboard_origin_messages`.** Both store the snowflake, guild, channel, author,
+  creation time and `deleted_at` for the same Discord message, and nothing links them. They already
+  diverge: the starboard upsert resets `deleted_at` to NULL, and see 1.4 for bulk deletes.
+  **Decision:**
+  - Add an FK `starboard_origin_messages.id` → `messages.id`, and keep only the starboard-specific
+    columns (`author_is_bot`, `is_nsfw`, `has_image`, `seen_at`). Deletion state is then read from
+    `messages`.
+  - The starboard reaction path gets or creates the `messages` row in the same transaction, the
+    ensure-on-write rule from `docs/plans/discord-state-reconciliation.md`.
+  - Do this after that plan's Phase 3, which reworks the same write path.
+- **`tag_relations`** has no readers or writers outside its migrations. **Decision:** drop the table.
 
-`squid/voting/infrastructure/models.py:34`:
+## Phase 5 — Float scores and the database clock
 
-```sql
-CASE WHEN kind = 'generic'
-  THEN pass_threshold IS NULL AND fail_threshold IS NULL
-  ELSE pass_threshold > 0 AND fail_threshold < 0
-END
-```
+**Float scores.** Role multipliers are typed in freely by admins (`squid/bot/settings_view.py` parses
+them with `float()`), so a weight of 0.1 is allowed. Ten such votes sum to 0.9999…, which misses a
+threshold of 1 (`net` against `pass_threshold` in `squid/voting/infrastructure/repository.py`). The
+starboard compares `last_rendered_score != score`, and a summation order that changes between runs
+can trigger a spurious re-render. **Decision:** round weighted sums to 6 decimal places wherever they
+are computed: the vote threshold query, the starboard score, and the threshold checks in
+`squid/starboard/domain/models.py`. Keep the float columns.
 
-For a non-generic session with both thresholds `NULL`, the `ELSE` branch evaluates to `unknown`,
-which satisfies the constraint — so a build/delete-log vote session can be created with no
-thresholds at all, defeating the apparent intent. Confirmed by reading the column definitions
-(`pass_threshold`/`fail_threshold` are nullable `SmallInteger`) alongside the constraint text.
+**Database clock.**
 
-Both (2) and (3) are the same class of bug: a `CHECK` built from a comparison against a nullable
-column, without an explicit `IS NOT NULL`, silently degrades to "accept anything." That suggests
-an audit pass — grep every `CHECK`/`CheckConstraint` touching a nullable column — rather than
-fixing these two in isolation. Not yet done.
+`squid/persistence/queue.py` uses `func.now()` throughout, but a few paths mix in Python's
+`Instant.now()` and compare it with database time:
 
-## Unverified — needs scoping before it becomes a plan
+- the media normalization claim and heartbeat (`squid/media/infrastructure/repository.py`);
+- the schematic cleanup claims (`squid/schematics/infrastructure/jobs.py`);
+- artifact cleanup and `_publication_expiry()` (`artifact_publication.py`), where `last_seen_at`
+  (database time) is compared with `cleanup_started_at` (host time).
 
-The source review also raised the following, none of which have been checked against the current
-code in this pass. Each needs an owner to (a) confirm the claim is still true against HEAD, and
-(b) make a design call, since several are genuine trade-offs rather than obvious bugs:
+Leases are minutes long, so normal clock skew is harmless, but the comparisons are not meaningful
+across hosts. **Decision:** switch these to `func.now()`.
 
-- **Identity columns on FK-only columns** (`build_edit_history.build_id`,
-  `build_vote_sessions.vote_session_id`, `delete_log_vote_sessions.vote_session_id`,
-  `votes.vote_session_id`) — plus whether `build_edit_history` (PK on `build_id` with a redundant
-  `UNIQUE(build_id, version)`, and a `smallint` version next to `builds.revision bigint`) is meant
-  to be true history or should be dropped as dead.
-- **`verification_codes.id` as `smallint`** and whether the table's constraints match its access
-  pattern (unique code, uniqueness of the "one valid Java identity" invariant in
-  `account_identities`).
-- **`votes` not FK-referencing `vote_session_options`** — whether option identity should become a
-  real surrogate key with FK-backed votes, and what a `status`/`result` state machine + deadline
-  ordering constraint should look like.
-- **Joined-table inheritance not enforced by Postgres** for `builds`/subtype tables and
-  `vote_sessions`/subtype tables — whether deferrable constraint triggers are worth the complexity
-  versus relying on the ORM/application layer.
-- **`record_definitions` duplicating identity fields from `record_competitions`**, plus
-  `RecordDefinition.competition_id`'s random default and `record_definition_facets.facet_id` vs.
-  bigint tag ids.
-- **Permission model cross-row invariants** (role-inclusion cycles, cross-guild role inclusion,
-  audit-log append-only enforcement, the epoch-trigger fail-open behavior on a missing singleton
-  row) — this one in particular is a security-relevant design decision, not a mechanical fix.
-- **Schematics analyzer-output constraints** (dimension/bounding-volume checks, publication state
-  machine coherence, `uploaded_by_discord_id` vs. an account FK, job/queue status design parity
-  with the (soon to be redesigned, per `durable-queues.md`) queue pattern).
-- **Tag/unit model** (alias uniqueness scope, canonical-name/alias collisions across tables,
-  unit-dimension compatibility, tag-relation symmetry) — likely the largest single redesign in the
-  list if pursued.
-- **Draft ownership duplicated** between `submission_drafts.owner_account_id` and
-  `submission_draft_access` — pick one source of truth.
-- **`messages` vs. `starboard_origin_messages`** storing overlapping facts about the same Discord
-  message.
-- **Performance/maintainability items**: stale `schema_dump.sql` (91 models vs. 64 dumped tables —
-  worth confirming the count, then deciding whether to regenerate automatically or delete the
-  dumps), over-broad `AFTER UPDATE` triggers on `builds` re-enqueueing work on unrelated column
-  changes, host-clock-based queue claim timestamps vs. DB-time claim tokens, missing indexes on
-  FK columns used for reverse lookups, float vs. fixed-precision for voting/starboard scores,
-  and a uniqueness/check pass on `versions`.
+## Phase 6 — One schema dump
 
-## Next step
+`schema_dump.sql` is regenerated by `.github/workflows/schema-artifacts.yml`, which fails PRs when it
+is out of date. It is stale on this branch: it still has `is_locked`. `schema/structure/` is old
+pgstrap output from June 2025 that nothing checks, and `just generate-schema` dumps the production
+database, which gives a second, conflicting source.
 
-Before turning any of the unverified items into a plan: re-confirm each claim against current
-HEAD (several may already be stale, the way the review itself notes some earlier findings were
-doc bugs that got fixed upstream), then bring the security-relevant ones (permission model,
-schematics publication state) to a design discussion rather than treating them as mechanical
-fixes. The three verified defects above are safe to fix independently and don't need to wait on
-that scoping work.
+**Decision:**
+
+- Delete `schema/structure/`, `pgstrap.config.js` and `package.json`.
+- Delete the `generate-schema` and `generate-schema-alt` recipes.
+- Regenerate `schema_dump.sql` the way CI does.
+
+The CI-generated dump becomes the only one.
+
+## Not changing
+
+- **Audit log append-only.** The app role owns the table, so revoking privileges does nothing, and
+  account merge legitimately rewrites `actor_account_id`. The docstring stays the contract.
+- **Missing permission epoch row.** The trigger skips the bump when the row is missing, but the cache
+  TTL caps staleness at 30 seconds, and the row is seeded by the migration and can only go missing
+  through a manual delete.
+- **One Java identity per account.** This is checked at link time under a row lock. It is deliberately
+  not a database invariant, because a merge can leave two Java identities on one account.
+- **Tag name and alias collisions.** Lookups resolve a name only when exactly one tag matches, so a
+  collision makes the name unresolvable rather than wrong.
+- **`starboard_sources.channel_id = 0`.** See `schema-audit.md` Phase 2.
