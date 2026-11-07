@@ -133,7 +133,7 @@ class VoteFake(VoteService):
         self.session = session
 
     @override
-    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         return self.session if vote_session_id == self.session.id else None
 
 

@@ -21,7 +21,7 @@ _NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
 class VoteOutcomeReader(Protocol):
     """Read the authoritative state of a closed vote session."""
 
-    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None: ...
+    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None: ...
 
 
 class BuildStatusWriter(Protocol):
@@ -46,7 +46,7 @@ class ApplyBuildVoteOutcomeHandler:
         self._builds = builds
 
     async def handle(self, event: DomainEvent) -> None:
-        snapshot = await self._votes.get_session_by_id(event.aggregate_id)
+        snapshot = await self._votes.get_session(event.aggregate_id)
         if snapshot is None or snapshot.is_open or not isinstance(snapshot.target, BuildVoteTarget):
             return
         if snapshot.result is VoteSessionResult.APPROVED:

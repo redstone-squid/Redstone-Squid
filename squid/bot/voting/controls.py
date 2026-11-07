@@ -42,10 +42,9 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
     authorized = await _authorize(request)
     if authorized is None:
         return
-    _snapshot, actor = authorized
+    snapshot, actor = authorized
     bot = interaction.client
-    assert interaction.message is not None
-    result = await bot.services.votes.close(interaction.message.id, actor)
+    result = await bot.services.votes.close(snapshot.id, actor)
     if result.rejection is not None or result.session is None:
         await _refuse(request, result.rejection or VoteRejection.NOT_FOUND)
         return
@@ -60,10 +59,9 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
     authorized = await _authorize(request)
     if authorized is None:
         return
-    _snapshot, _actor = authorized
+    snapshot, _actor = authorized
     bot = interaction.client
-    assert interaction.message is not None
-    result = await bot.services.votes.refresh(interaction.message.id)
+    result = await bot.services.votes.refresh(snapshot.id)
     if result.session is not None:
         await bot.refresh_posts("vote_session", str(result.session.id))
     text = tr(tr(t"Poll weights refreshed."))
@@ -90,7 +88,7 @@ async def _authorize(
         await _refuse(request, VoteRejection.WRONG_GUILD)
         return None
 
-    snapshot = await bot.services.votes.get_session(message.id)
+    snapshot = await bot.services.votes.get_session_for_message(message.id)
     if snapshot is None:
         await _refuse(request, VoteRejection.NOT_FOUND)
         return None

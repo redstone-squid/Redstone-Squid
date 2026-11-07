@@ -43,7 +43,7 @@ VOTING_GUILD_ID = 999
 
 @dataclass(frozen=True)
 class CastVoteCall:
-    message_id: int
+    vote_session_id: int
     account_id: int
     guild_id: int
     option_id: str
@@ -168,7 +168,7 @@ class FakeVoteRepository:
 
     async def cast_vote(
         self,
-        message_id: int,
+        vote_session_id: int,
         account_id: int,
         guild_id: int,
         option_id: str,
@@ -178,7 +178,7 @@ class FakeVoteRepository:
     ) -> StoredVoteMutation | None:
         self.cast_calls.append(
             CastVoteCall(
-                message_id=message_id,
+                vote_session_id=vote_session_id,
                 account_id=account_id,
                 guild_id=guild_id,
                 option_id=option_id,
@@ -189,10 +189,7 @@ class FakeVoteRepository:
         )
         return self.mutation
 
-    async def close(self, message_id: int) -> StoredVoteMutation | None:
-        return self.mutation
-
-    async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None:
+    async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
         return self.mutation
 
     async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
@@ -309,7 +306,7 @@ async def test_refresh_log_carries_session_id_without_user_attributes(caplog: py
     )
 
     with caplog.at_level(logging.WARNING, logger="squid.voting.application.services"):
-        await service.refresh(100)
+        await service.refresh(12)
 
     record_fields = vars(caplog.records[-1])
     assert record_fields["squid.vote.session_id"] == 12
@@ -339,23 +336,24 @@ async def test_cast_vote_applies_choice_and_staff_weight(
         just_closed=False,
     )
     service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
+    option_id = "approve" if emoji == "👍" else "deny"
 
     result = await service.cast_vote(
-        100,
+        12,
         VoteActor(
             account_id=7,
             discord_id=70,
             guild_id=OWNER_GUILD_ID,
             capabilities=STAFF if has_staff_weight else frozenset(),
         ),
-        emoji,
+        option_id,
+        emoji=emoji,
     )
 
     assert result.accepted
-    option_id = "approve" if emoji == "👍" else "deny"
     assert repository.cast_calls == [
         CastVoteCall(
-            message_id=100,
+            vote_session_id=12,
             account_id=7,
             guild_id=10,
             option_id=option_id,
@@ -367,14 +365,10 @@ async def test_cast_vote_applies_choice_and_staff_weight(
 
 
 @pytest.mark.parametrize(
-    ("guild_id", "message_id", "emoji"),
-    [(OWNER_GUILD_ID, 100, "<:yes:1>"), (VOTING_GUILD_ID, 101, "✅")],
+    ("guild_id", "emoji"),
+    [(OWNER_GUILD_ID, "<:yes:1>"), (VOTING_GUILD_ID, "✅")],
 )
-async def test_cast_vote_by_session_resolves_a_stable_option_to_each_guild_alias(
-    guild_id: int,
-    message_id: int,
-    emoji: str,
-) -> None:
+async def test_cast_vote_resolves_a_stable_option_to_each_guild_alias(guild_id: int, emoji: str) -> None:
     options = (
         VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=OWNER_GUILD_ID),
         VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=OWNER_GUILD_ID),
@@ -391,12 +385,12 @@ async def test_cast_vote_by_session_resolves_a_stable_option_to_each_guild_alias
     )
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=guild_id), "approve")
+    result = await service.cast_vote(12, VoteActor(7, 70, guild_id=guild_id), "approve")
 
     assert result.accepted
     assert repository.cast_calls == [
         CastVoteCall(
-            message_id=message_id,
+            vote_session_id=12,
             account_id=7,
             guild_id=guild_id,
             option_id="approve",
@@ -407,30 +401,30 @@ async def test_cast_vote_by_session_resolves_a_stable_option_to_each_guild_alias
     ]
 
 
-async def test_cast_vote_by_session_rejects_missing_session() -> None:
+async def test_cast_vote_rejects_missing_session() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
 
-    result = await service.cast_vote_by_session(404, VoteActor(7, 70, guild_id=10), "approve")
+    result = await service.cast_vote(404, VoteActor(7, 70, guild_id=10), "approve")
 
     assert result.rejection is VoteRejection.NOT_FOUND
     assert result.session is None
 
 
-async def test_cast_vote_by_session_rejects_guild_without_message() -> None:
+async def test_cast_vote_rejects_a_guild_the_session_is_not_published_in() -> None:
     repository = FakeVoteRepository(snapshot())
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=999), "approve")
+    result = await service.cast_vote(12, VoteActor(7, 70, guild_id=999), "approve")
 
     assert result.rejection is VoteRejection.WRONG_GUILD
     assert repository.cast_calls == []
 
 
-async def test_cast_vote_by_session_rejects_unknown_option_identifier() -> None:
+async def test_cast_vote_rejects_unknown_option_identifier() -> None:
     repository = FakeVoteRepository(snapshot())
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=10), "missing")
+    result = await service.cast_vote(12, VoteActor(7, 70, guild_id=10), "missing")
 
     assert result.rejection is VoteRejection.INVALID_OPTION
     assert repository.cast_calls == []
@@ -441,9 +435,10 @@ async def test_delete_log_vote_requires_the_delete_log_capability() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
-        100,
-        VoteActor(account_id=7, discord_id=70),
-        "👍",
+        12,
+        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        "approve",
+        emoji="👍",
     )
 
     assert result.rejection is VoteRejection.NOT_ELIGIBLE
@@ -462,15 +457,16 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
-        100,
+        12,
         VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF | DELETE_LOG),
-        "👍",
+        "approve",
+        emoji="👍",
     )
 
     assert result.accepted
     assert repository.cast_calls == [
         CastVoteCall(
-            message_id=100,
+            vote_session_id=12,
             account_id=7,
             guild_id=10,
             option_id="approve",
@@ -486,9 +482,10 @@ async def test_closed_vote_is_rejected_before_mutation() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
-        100,
-        VoteActor(account_id=7, discord_id=70, capabilities=DELETE_LOG),
-        "👍",
+        12,
+        VoteActor(account_id=7, discord_id=70, capabilities=DELETE_LOG, guild_id=OWNER_GUILD_ID),
+        "approve",
+        emoji="👍",
     )
 
     assert result.rejection is VoteRejection.CLOSED
@@ -508,9 +505,10 @@ async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
-        100,
-        VoteActor(account_id=7, discord_id=70),
-        "👍",
+        12,
+        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        "approve",
+        emoji="👍",
     )
 
     assert result.just_closed
@@ -527,16 +525,17 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
     repository.session = initial
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    async def get_after_mutation(message_id: int) -> VoteSessionSnapshot:
+    async def get_after_mutation(vote_session_id: int) -> VoteSessionSnapshot:
         if repository.cast_calls:
             return replace(initial, status=VoteStatus.CLOSED, result=VoteSessionResult.DENIED)
         return initial
 
-    repository.get_by_message = get_after_mutation  # type: ignore[method-assign]
+    repository.get_by_id = get_after_mutation  # type: ignore[method-assign]
     result = await service.cast_vote(
-        100,
-        VoteActor(account_id=7, discord_id=70),
-        "👎",
+        12,
+        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        "deny",
+        emoji="👎",
     )
 
     assert result.rejection is VoteRejection.CLOSED
@@ -559,15 +558,16 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
     service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
-        100,
+        12,
         VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
-        "<:strong_yes:123>",
+        "approve",
+        emoji="<:strong_yes:123>",
     )
 
     assert result.accepted
     assert repository.cast_calls == [
         CastVoteCall(
-            message_id=100,
+            vote_session_id=12,
             account_id=7,
             guild_id=10,
             option_id="approve",
@@ -583,9 +583,10 @@ async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
-        100,
-        VoteActor(account_id=7, discord_id=70),
-        "🤷",
+        12,
+        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        "approve",
+        emoji="🤷",
     )
 
     assert result.rejection is VoteRejection.INVALID_OPTION
@@ -692,8 +693,8 @@ async def test_closing_a_poll_requires_the_creator_or_the_close_any_capability()
     )
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    stranger = await service.close(100, VoteActor(8, 80, guild_id=10))
-    creator = await service.close(100, VoteActor(7, 70, guild_id=10))
+    stranger = await service.close(12, VoteActor(8, 80, guild_id=10))
+    creator = await service.close(12, VoteActor(7, 70, guild_id=10))
 
     assert stranger.rejection is VoteRejection.NOT_AUTHORIZED
     assert creator.accepted
@@ -717,9 +718,10 @@ async def test_build_vote_weighs_by_the_owner_guild_not_the_voting_guild() -> No
     )
 
     result = await service.cast_vote(
-        101,
+        12,
         VoteActor(account_id=7, discord_id=70, guild_id=VOTING_GUILD_ID, role_ids=frozenset({77})),
-        "👍",
+        "approve",
+        emoji="👍",
     )
 
     assert result.accepted
@@ -742,7 +744,7 @@ async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> Non
     )
 
     result = await service.cast_vote(
-        101,
+        12,
         VoteActor(
             account_id=7,
             discord_id=70,
@@ -750,7 +752,8 @@ async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> Non
             role_ids=frozenset({77}),
             capabilities=STAFF,
         ),
-        "👍",
+        "approve",
+        emoji="👍",
     )
 
     assert result.accepted
@@ -768,9 +771,10 @@ async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight
     )
 
     result = await service.cast_vote(
-        101,
+        12,
         VoteActor(account_id=7, discord_id=70, guild_id=VOTING_GUILD_ID, capabilities=STAFF),
-        "👍",
+        "approve",
+        emoji="👍",
     )
 
     assert result.accepted
@@ -784,9 +788,10 @@ async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() ->
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
-        100,
+        12,
         VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
-        "👍",
+        "approve",
+        emoji="👍",
     )
 
     assert result.accepted

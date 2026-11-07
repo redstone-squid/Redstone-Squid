@@ -38,7 +38,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         self.bot = bot
 
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
-        snapshot = await self.bot.services.votes.get_session_by_id(int(resource_key))
+        snapshot = await self.bot.services.votes.get_session(int(resource_key))
         if snapshot is None:
             return None
         if snapshot.kind == "build":
@@ -49,7 +49,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
 
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
         """Seed the reactions the session is voted on with."""
-        snapshot = await self.bot.services.votes.get_session_by_id(int(resource_key))
+        snapshot = await self.bot.services.votes.get_session(int(resource_key))
         if snapshot is None or snapshot.status == "closed":
             return
         guild_id = message.guild.id if message.guild is not None else 0

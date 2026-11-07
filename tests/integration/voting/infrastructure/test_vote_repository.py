@@ -282,7 +282,7 @@ async def test_get_by_message_maps_votes_messages_and_delete_target(
     assert snapshot is not None
     assert snapshot.id == vote_session_id
     assert snapshot.votes == {7: 1.0, 8: -1.0}
-    assert snapshot.message_ids == (message_id,)
+    assert [message.id for message in snapshot.messages] == [message_id]
     assert snapshot.options == DEFAULT_VOTE_OPTIONS
     assert snapshot.target == DeleteLogVoteTarget(TARGET_MESSAGE_ID, CHANNEL_ID, GUILD_ID)
 
@@ -320,16 +320,16 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
 
     inserted = await transact(
-        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
     )
     replaced = await transact(
-        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
+        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
     )
     removed = await transact(
-        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
+        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
     )
 
     assert inserted is not None
@@ -357,10 +357,10 @@ async def test_threshold_closure_freezes_the_deciding_ballot(
     expected_result: VoteSessionResult,
     refreshed_weight: float,
 ) -> None:
-    session_id, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
 
     mutation = await transact(
-        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, option_id, emoji, 1.0), commit=True
+        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, option_id, emoji, 1.0), commit=True
     )
 
     assert mutation is not None
@@ -382,11 +382,11 @@ async def test_refresh_can_remove_and_reweigh_ballots_until_the_threshold_is_rea
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    session_id, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=3, fail_threshold=-3)
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=3, fail_threshold=-3)
     await transact(
-        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
     )
-    await transact(repository, lambda uow: uow.votes.cast_vote(message_id, 8, GUILD_ID, "deny", "👎", 1.0), commit=True)
+    await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 8, GUILD_ID, "deny", "👎", 1.0), commit=True)
 
     refreshed = await transact(
         repository, lambda uow: uow.votes.refresh_weights(session_id, {7: 3.0, 8: 0.0}), commit=True
@@ -403,14 +403,14 @@ async def test_concurrent_votes_report_exactly_one_closure(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Both transactions target one row; only the vote that closes it may be recorded."""
-    _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-10)
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-10)
 
     results = await asyncio.gather(
         transact(
-            repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+            repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
         ),
         transact(
-            repository, lambda uow: uow.votes.cast_vote(message_id, 8, GUILD_ID, "approve", "👍", 1.0), commit=True
+            repository, lambda uow: uow.votes.cast_vote(session_id, 8, GUILD_ID, "approve", "👍", 1.0), commit=True
         ),
     )
 
@@ -419,7 +419,7 @@ async def test_concurrent_votes_report_exactly_one_closure(
     assert mutations[0].just_closed
     assert sum(result is None for result in results) == 1
 
-    snapshot = await transact(repository, lambda uow: uow.votes.get_by_message(message_id))
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
     assert snapshot is not None
     assert snapshot.status is VoteStatus.CLOSED
     assert len(snapshot.votes) == 1
@@ -429,7 +429,7 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    session_id, message_id = await seed_generic_poll(
+    session_id, _ = await seed_generic_poll(
         async_session_factory,
         repository,
         question="Choose one",
@@ -441,11 +441,10 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
             VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=GUILD_ID, label="Two"),
         ),
     )
-    assert message_id is not None
 
-    await transact(repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "one", "1️⃣", 3), commit=True)
-    await transact(repository, lambda uow: uow.votes.cast_vote(message_id, 8, GUILD_ID, "two", "2️⃣", 1), commit=True)
-    snapshot = await transact(repository, lambda uow: uow.votes.get_by_message(message_id))
+    await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "one", "1️⃣", 3), commit=True)
+    await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 8, GUILD_ID, "two", "2️⃣", 1), commit=True)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
 
     assert snapshot is not None
     assert snapshot.poll is not None
@@ -456,7 +455,7 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
         session_id
     ]
 
-    closed = await transact(repository, lambda uow: uow.votes.close_by_id(session_id), commit=True)
+    closed = await transact(repository, lambda uow: uow.votes.close(session_id), commit=True)
     assert closed is not None
     assert closed.just_closed
     assert closed.session.status is VoteStatus.CLOSED
@@ -554,7 +553,7 @@ async def test_a_guild_less_poll_becomes_addressable_once_a_card_is_attached(
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_message(7_001))
     assert snapshot is not None
     assert snapshot.id == session_id
-    assert snapshot.message_ids == (7_001,)
+    assert [message.id for message in snapshot.messages] == [7_001]
 
 
 async def test_a_message_cannot_be_attached_to_two_vote_sessions(
@@ -618,7 +617,7 @@ async def test_a_poll_shown_in_two_places_tracks_both_locations(
 
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
     assert snapshot is not None
-    assert sorted(snapshot.message_ids) == sorted((message_id, 8_002))
+    assert sorted(message.id for message in snapshot.messages) == sorted((message_id, 8_002))
 
 
 @pytest.mark.parametrize(
@@ -797,9 +796,9 @@ async def test_ballot_references_one_alias_when_global_and_guild_aliases_overlap
         VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=None, position=0),
         VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=GUILD_ID, position=1),
     )
-    _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=2, options=options)
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=2, options=options)
     mutation = await transact(
-        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
     )
     assert mutation is not None
     assert not mutation.just_closed

@@ -109,8 +109,8 @@ applied. This is what the per-resource counter got wrong.
   `BuildVoteTarget | DeleteLogVoteTarget | None`; see
   `docs/plans/completed/pr-183-review/09-voting-redesign.md`.
 - The voting service used to be addressed by Discord `message_id`, so even the REST API's
-  session-based vote went through a Discord message. That is a voting concern rather than a
-  message-tracking one, and is being refactored separately.
+  session-based vote went through a Discord message. It is now addressed by session id; the bot
+  turns a message into its session with `VoteService.get_session_for_message`.
 - `Base.__init_subclass__` meant to turn attribute docstrings into column comments, but read the
   column after SQLAlchemy had already replaced it, so it silently did nothing. It now reads the
   column first (`squid/persistence/base.py`).

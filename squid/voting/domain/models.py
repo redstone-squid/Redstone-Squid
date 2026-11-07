@@ -296,10 +296,6 @@ class VoteSessionSnapshot:
         validate_session_payload(self.kind, self.target, self.poll, self.options)
 
     @property
-    def message_ids(self) -> tuple[int, ...]:
-        return tuple(message.id for message in self.messages)
-
-    @property
     def is_open(self) -> bool:
         return self.status is VoteStatus.OPEN
 
@@ -356,8 +352,16 @@ class VoteSessionSnapshot:
     def option_by_emoji(self, emoji: str, guild_id: int) -> VoteOption | None:
         return next((option for option in self.options_for_guild(guild_id) if option.emoji == emoji), None)
 
-    def option_by_id(self, option_id: str, guild_id: int) -> VoteOption | None:
-        return next((option for option in self.options_for_guild(guild_id) if option.id == option_id), None)
+    def option_by_id(self, option_id: str, guild_id: int, *, emoji: str | None = None) -> VoteOption | None:
+        """Return the guild's alias for an option: the one using `emoji` if given, otherwise the first."""
+        return next(
+            (
+                option
+                for option in self.options_for_guild(guild_id)
+                if option.id == option_id and (emoji is None or option.emoji == emoji)
+            ),
+            None,
+        )
 
     def selection_for(self, account_id: int) -> VoteSelection | None:
         return next((selection for selection in self.selections if selection.account_id == account_id), None)

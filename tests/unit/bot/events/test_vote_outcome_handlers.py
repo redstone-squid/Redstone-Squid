@@ -48,7 +48,7 @@ def _event() -> DomainEvent:
 
 def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
     bot = AsyncMock()
-    bot.services.votes.get_session_by_id = AsyncMock(return_value=snapshot)
+    bot.services.votes.get_session = AsyncMock(return_value=snapshot)
     return bot
 
 

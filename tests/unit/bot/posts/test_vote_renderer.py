@@ -36,7 +36,7 @@ class VoteRecorder(VoteService):
         self.snapshot = snapshot
 
     @override
-    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         assert vote_session_id == self.snapshot.id
         return self.snapshot
 

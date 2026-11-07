@@ -291,7 +291,17 @@ class VoteRepository:
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
         session = self._session()
-        row = await self._get_session_row(session, message_id)
+        statement = (
+            select(VoteSession)
+            .options(selectinload(VoteSession.options))
+            .join(DiscordPost, DiscordPost.resource_key == cast_sql(VoteSession.id, Text))
+            .where(
+                DiscordPost.message_id == message_id,
+                DiscordPost.resource_kind == "vote_session",
+                DiscordPost.suppressed_at.is_(None),
+            )
+        )
+        row = await session.scalar(statement)
         return None if row is None else await self._to_snapshot(session, row)
 
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
@@ -322,7 +332,7 @@ class VoteRepository:
 
     async def cast_vote(
         self,
-        message_id: int,
+        vote_session_id: int,
         account_id: int,
         guild_id: int,
         option_id: str,
@@ -337,7 +347,7 @@ class VoteRepository:
         magnitudes; threshold scoring supplies the option's sign.
         """
         session = self._session()
-        row = await self._get_session_row(session, message_id, for_update=True)
+        row = await self._lock_session_row(session, vote_session_id)
         if row is None or row.status is not VoteStatus.OPEN:
             return None
         await self._apply_refresh(session, row, refreshed_weights or {})
@@ -395,43 +405,23 @@ class VoteRepository:
 
     async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
         session = self._session()
-        row = await session.scalar(
-            select(VoteSession)
-            .options(selectinload(VoteSession.options))
-            .where(VoteSession.id == vote_session_id)
-            .with_for_update()
-        )
+        row = await self._lock_session_row(session, vote_session_id)
         if row is None:
             return None
         await self._apply_refresh(session, row, weights)
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), None, None, just_closed)
 
-    async def close(self, message_id: int) -> StoredVoteMutation | None:
-        session = self._session()
-        row = await self._get_session_row(session, message_id, for_update=True)
-        return await self._close_row(session, row)
-
-    async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None:
-        """Close a voting session by its own ID, without requiring an attached Discord message."""
-        session = self._session()
-        row = await session.scalar(
-            select(VoteSession)
-            .options(selectinload(VoteSession.options))
-            .where(VoteSession.id == vote_session_id)
-            .with_for_update()
-        )
-        return await self._close_row(session, row)
-
-    @staticmethod
-    async def _close_row(session: AsyncSession, row: VoteSession | None) -> StoredVoteMutation | None:
+    async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
         """Close an open session with the CANCELLED result; return None if missing or already closed."""
+        session = self._session()
+        row = await self._lock_session_row(session, vote_session_id)
         if row is None or row.status is not VoteStatus.OPEN:
             return None
         row.status = VoteStatus.CLOSED
         row.result = VoteSessionResult.CANCELLED
         return StoredVoteMutation(
-            session=await VoteRepository._to_snapshot(session, row),
+            session=await self._to_snapshot(session, row),
             previous_weight=None,
             current_weight=None,
             just_closed=True,
@@ -578,25 +568,14 @@ class VoteRepository:
         await session.execute(weights)
 
     @staticmethod
-    async def _get_session_row(
-        session: AsyncSession, message_id: int, *, for_update: bool = False
-    ) -> VoteSession | None:
-        statement = (
+    async def _lock_session_row(session: AsyncSession, vote_session_id: int) -> VoteSession | None:
+        """Load a session with its options and lock it until the transaction ends."""
+        return await session.scalar(
             select(VoteSession)
             .options(selectinload(VoteSession.options))
-            .join(DiscordPost, DiscordPost.resource_key == cast_sql(VoteSession.id, Text))
-            .where(
-                DiscordPost.message_id == message_id,
-                DiscordPost.resource_kind == "vote_session",
-                DiscordPost.suppressed_at.is_(None),
-            )
+            .where(VoteSession.id == vote_session_id)
+            .with_for_update(of=VoteSession)
         )
-        if for_update:
-            statement = statement.with_for_update(of=VoteSession)
-        # advanced-alchemy 1.12 still annotates Select with SQLAlchemy 2.0's tuple-wrapped row type.
-        return await _VoteSessionModelRepository(
-            session=session, load=[selectinload(VoteSession.options)]
-        ).get_one_or_none(statement=statement)  # type: ignore[arg-type]
 
     @staticmethod
     async def _to_snapshot(session: AsyncSession, row: VoteSession) -> VoteSessionSnapshot:

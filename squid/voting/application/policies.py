@@ -35,7 +35,7 @@ class RoleVoteWeightPolicy(VoteWeightPolicy):
         )
 
     @override
-    async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot, emoji: str) -> float | None:
+    async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot) -> float | None:
         reaction_actor = ReactionActor(
             user_id=actor.discord_id,
             guild_id=actor.guild_id,

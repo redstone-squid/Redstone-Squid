@@ -50,9 +50,9 @@ async def test_role_policy_uses_highest_matching_multiplier_and_staff_fallback()
     policy = RoleVoteWeightPolicy(weights)
     snapshot = poll_snapshot()
 
-    assert await policy.calculate(VoteActor(1, 100, 10, frozenset({20, 30})), snapshot, "1️⃣") == 2.5
-    assert await policy.calculate(VoteActor(1, 100, 10, capabilities=STAFF), snapshot, "1️⃣") == 3
-    assert await policy.calculate(VoteActor(1, 100, 10), snapshot, "1️⃣") == 1
+    assert await policy.calculate(VoteActor(1, 100, 10, frozenset({20, 30})), snapshot) == 2.5
+    assert await policy.calculate(VoteActor(1, 100, 10, capabilities=STAFF), snapshot) == 3
+    assert await policy.calculate(VoteActor(1, 100, 10), snapshot) == 1
 
 
 async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> None:
@@ -65,8 +65,8 @@ async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> N
         options=(VoteOption("👍", VoteChoice.APPROVE), VoteOption("👎", VoteChoice.DENY)),
     )
 
-    assert await policy.calculate(VoteActor(1, 100, 10), snapshot, "👍") is None
-    assert await policy.calculate(VoteActor(1, 100, 10, capabilities=DELETE_LOG), snapshot, "👍") == 1
+    assert await policy.calculate(VoteActor(1, 100, 10), snapshot) is None
+    assert await policy.calculate(VoteActor(1, 100, 10, capabilities=DELETE_LOG), snapshot) == 1
 
 
 def test_generic_tallies_keep_raw_counts_separate_from_weights() -> None:

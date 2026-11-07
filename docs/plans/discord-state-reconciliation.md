@@ -106,8 +106,8 @@ posts.
 `squid/bot/voting/reactions.py`). Ballots are recounted from Discord only when someone asks or when
 the session is about to close.
 
-- **On demand:** add a `recount` command for a vote card. It calls the existing, currently unused
-  `reconcile_message_reactions`. As in Phase 3, allow one recount per session at a time (replacing
+- **On demand:** add a `recount` command for a vote card. It calls the existing
+  `reconcile_session_reactions`, which the periodic job also uses today. As in Phase 3, allow one recount per session at a time (replacing
   the handler's single global `_lock` with a per-session lock) and add a per-guild cooldown.
 - **At the end:** recount immediately before the session is finalized, so the result reflects the
   reactions actually on the cards:

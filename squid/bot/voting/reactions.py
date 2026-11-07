@@ -38,7 +38,6 @@ would otherwise put a bot message in the channel for every stray reaction.
 
 @dataclass(frozen=True, slots=True)
 class _ObservedReaction:
-    message_id: int
     message: discord.Message
     member: discord.Member
     emoji: str
@@ -107,7 +106,7 @@ class VoteReactionHandler:
         payload = event.payload
         if payload.guild_id is None or (self.bot.user is not None and payload.user_id == self.bot.user.id):
             return
-        snapshot = await self.vote_service.get_session(payload.message_id)
+        snapshot = await self.vote_service.get_session_for_message(payload.message_id)
         if snapshot is None or not snapshot.is_open:
             return
         emoji = str(payload.emoji)
@@ -127,7 +126,7 @@ class VoteReactionHandler:
         previous = snapshot.selection_for(actor.account_id)
         if not recovering and not snapshot.is_anonymous and previous is not None and previous.option_id != option.id:
             await self._remove_reaction(message, previous.emoji, member)
-        result, changed = await self._set_reaction_selection(snapshot, payload.message_id, actor, emoji, selected=True)
+        result, changed = await self._set_reaction_selection(snapshot, actor, emoji, selected=True)
         if result.rejection is not None:
             if snapshot.should_remove_reaction_on_cast():
                 await self._remove_reaction(message, payload.emoji, member)
@@ -163,7 +162,7 @@ class VoteReactionHandler:
     async def _remove(self, event: ReactionEvent, *, recovering: bool) -> None:
         async with self._lock:
             payload = event.payload
-            snapshot = await self.vote_service.get_session(payload.message_id)
+            snapshot = await self.vote_service.get_session_for_message(payload.message_id)
             if snapshot is None or not snapshot.is_open or snapshot.is_anonymous:
                 return
             if recovering and payload.guild_id is None:
@@ -176,9 +175,7 @@ class VoteReactionHandler:
             if member is None or member.bot:
                 return
             actor = await resolve_actor(self.bot, member, account_id=account_id)
-            result, changed = await self._set_reaction_selection(
-                snapshot, payload.message_id, actor, str(payload.emoji), selected=False
-            )
+            result, changed = await self._set_reaction_selection(snapshot, actor, str(payload.emoji), selected=False)
             session = snapshot if recovering else result.session
             if result.accepted and changed and session is not None:
                 await self.bot.refresh_posts("vote_session", str(session.id))
@@ -197,7 +194,6 @@ class VoteReactionHandler:
         """
         await self.bot.wait_until_ready()
         errors: list[Exception] = []
-        visited: set[int] = set()
         for kind in VoteKind:
             try:
                 sessions = await self.vote_service.list_open(kind)
@@ -205,51 +201,38 @@ class VoteReactionHandler:
                 errors.append(error)
                 continue
             for session in sessions:
-                if session.id in visited:
-                    continue
-                visited.add(session.id)
                 try:
-                    async with self._lock:
-                        location = session.messages[0] if session.messages else None
-                        current = None if location is None else await self.vote_service.get_session(location.id)
-                        if current is not None and current.is_open:
-                            await self._reconcile_session_reactions(current)
+                    await self.reconcile_session_reactions(session.id)
                 except Exception as error:
                     errors.append(error)
         if errors:
             message = "Vote reaction reconciliation failed"
             raise ExceptionGroup(message, errors)
 
-    async def reconcile_message_reactions(self, message_id: int) -> None:
-        """Scan every card of the open session containing this message for recoverable votes."""
+    async def reconcile_session_reactions(self, vote_session_id: int) -> None:
+        """Recover votes from the reactions on every card of one open session."""
         async with self._lock:
-            snapshot = await self.vote_service.get_session(message_id)
-            if snapshot is None or not snapshot.is_open:
-                return
-            if message_id not in snapshot.message_ids:
-                return
-            await self._reconcile_session_reactions(snapshot)
+            # Read under the lock: a live reaction may have changed the session meanwhile.
+            snapshot = await self.vote_service.get_session(vote_session_id)
+            if snapshot is not None and snapshot.is_open:
+                await self._reconcile_session_reactions(snapshot)
 
     async def _set_reaction_selection(
-        self,
-        snapshot: VoteSessionSnapshot,
-        message_id: int,
-        actor: VoteActor,
-        emoji: str,
-        *,
-        selected: bool,
+        self, snapshot: VoteSessionSnapshot, actor: VoteActor, emoji: str, *, selected: bool
     ) -> tuple[CastVoteResult, bool]:
-        """Apply one reaction's desired state without replaying repository toggle semantics."""
-        message = next((item for item in snapshot.messages if item.id == message_id), None)
-        guild_id = actor.guild_id if message is None else message.guild_id
-        option = snapshot.option_by_emoji(emoji, guild_id)
+        """Make the stored ballot match whether this reaction is present.
+
+        Casting toggles, so it is only called when the stored selection differs. The
+        actor is a member of the guild the reaction was made in, which decides the alias.
+        """
+        option = snapshot.option_by_emoji(emoji, actor.guild_id)
         if option is None:
             return CastVoteResult(snapshot, VoteRejection.INVALID_OPTION), False
         current = snapshot.selection_for(actor.account_id)
         already_selected = current is not None and current.option_id == option.id
         if selected is already_selected:
             return CastVoteResult(snapshot), False
-        return await self.vote_service.cast_vote(message_id, actor, emoji), True
+        return await self.vote_service.cast_vote(snapshot.id, actor, option.id, emoji=emoji), True
 
     async def _reconcile_session_reactions(self, snapshot: VoteSessionSnapshot) -> None:
         """Recover votes across all reachable cards without alternating between aliases.
@@ -285,7 +268,7 @@ class VoteReactionHandler:
                         await self._remove_reaction(message, option.emoji, member)
                         continue
                     observed.setdefault(account_id, []).append(
-                        _ObservedReaction(location.id, message, member, option.emoji, option.id)
+                        _ObservedReaction(message, member, option.emoji, option.id)
                     )
 
         changed = False
@@ -303,13 +286,7 @@ class VoteReactionHandler:
                 result, mutation = CastVoteResult(snapshot), False
             else:
                 actor = await resolve_actor(self.bot, desired.member, account_id=account_id)
-                result, mutation = await self._set_reaction_selection(
-                    snapshot,
-                    desired.message_id,
-                    actor,
-                    desired.emoji,
-                    selected=True,
-                )
+                result, mutation = await self._set_reaction_selection(snapshot, actor, desired.emoji, selected=True)
             accepted = result.accepted
             changed = changed or (accepted and mutation)
             keep_option = desired.option_id if accepted else (None if selection is None else selection.option_id)
@@ -345,7 +322,7 @@ class VoteReactionHandler:
         A clear removes the voting controls from Discord, not the database's
         selections. Anonymous ballots cannot be reconstructed from reaction lists.
         """
-        snapshot = await self.vote_service.get_session(message_id)
+        snapshot = await self.vote_service.get_session_for_message(message_id)
         if snapshot is None or not snapshot.is_open:
             return
         location = next((item for item in snapshot.messages if item.id == message_id), None)

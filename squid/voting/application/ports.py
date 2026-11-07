@@ -26,7 +26,7 @@ class VoteWeightPolicy(Protocol):
     VoteService applies the selected option's multiplier to this weight.
     """
 
-    async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot, emoji: str) -> float | None: ...
+    async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot) -> float | None: ...
 
 
 class VoteActorResolver(Protocol):
@@ -116,7 +116,9 @@ class VoteRepository(Protocol):
         """Attach an already recorded presentation message, tolerating an exact replay."""
         ...
 
-    async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None: ...
+    async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
+        """Return the session a live Discord card displays."""
+        ...
 
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None: ...
 
@@ -124,7 +126,7 @@ class VoteRepository(Protocol):
 
     async def cast_vote(
         self,
-        message_id: int,
+        vote_session_id: int,
         account_id: int,
         guild_id: int,
         option_id: str,
@@ -139,9 +141,9 @@ class VoteRepository(Protocol):
         """
         ...
 
-    async def close(self, message_id: int) -> StoredVoteMutation | None: ...
-
-    async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None: ...
+    async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
+        """Close an open session as cancelled; return None if it is missing or already closed."""
+        ...
 
     async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
         """Update weights and check thresholds in the same transaction.

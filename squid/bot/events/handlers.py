@@ -57,7 +57,7 @@ class DeleteVotedMessageHandler:
         self.bot = bot
 
     async def handle(self, event: DomainEvent) -> None:
-        snapshot = await self.bot.services.votes.get_session_by_id(event.aggregate_id)
+        snapshot = await self.bot.services.votes.get_session(event.aggregate_id)
         if snapshot is None or snapshot.is_open or snapshot.result is not VoteSessionResult.APPROVED:
             return
         target = snapshot.target

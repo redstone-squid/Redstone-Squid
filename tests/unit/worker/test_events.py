@@ -27,7 +27,7 @@ class VoteRecorder(StubVoteService):
         self.requested_ids: list[int] = []
 
     @override
-    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot:
+    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot:
         self.requested_ids.append(vote_session_id)
         return self.snapshot
 

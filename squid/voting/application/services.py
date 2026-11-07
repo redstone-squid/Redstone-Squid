@@ -222,7 +222,12 @@ class VoteService:
             await uow.commit()
             return result
 
-    async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+        async with self._uow_factory() as uow:
+            return await uow.votes.get_by_id(vote_session_id)
+
+    async def get_session_for_message(self, message_id: int) -> VoteSessionSnapshot | None:
+        """Return the session a Discord card displays, so the bot can turn a message into a session."""
         async with self._uow_factory() as uow:
             return await uow.votes.get_by_message(message_id)
 
@@ -232,54 +237,37 @@ class VoteService:
             await uow.votes.attach_message(vote_session_id, message_id)
             await uow.commit()
 
-    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
-        async with self._uow_factory() as uow:
-            return await uow.votes.get_by_id(vote_session_id)
-
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
         async with self._uow_factory() as uow:
             return await uow.votes.list_open(kind)
 
-    async def cast_vote_by_session(
-        self,
-        vote_session_id: int,
-        actor: VoteActor,
-        option_id: str,
+    async def cast_vote(
+        self, vote_session_id: int, actor: VoteActor, option_id: str, *, emoji: str | None = None
     ) -> CastVoteResult:
-        """Cast by session and option ID using an attached message in the actor's guild."""
-        snapshot = await self.get_session_by_id(vote_session_id)
-        if snapshot is None:
-            return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
-        message = next((item for item in snapshot.messages if item.guild_id == actor.guild_id), None)
-        if message is None:
-            return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
-        option = snapshot.option_by_id(option_id, message.guild_id)
-        if option is None:
-            return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
-        return await self.cast_vote(message.id, actor, option.emoji)
-
-    async def cast_vote(self, message_id: int, actor: VoteActor, emoji: str) -> CastVoteResult:
         """Validate eligibility, refresh weights, and toggle or replace the actor's ballot.
 
-        Selecting the same stable option again removes the ballot, even with another
-        emoji alias. The repository serializes the mutation and any threshold closure.
-        An unresolved owner-guild lookup uses base weight 1 for the new ballot, before
-        the option multiplier. Unresolved existing ballots retain their cached weights.
+        The ballot is cast in `actor.guild_id`, which must be a guild the session is
+        published in; that guild's aliases decide which emoji the option goes by.
+        `emoji` picks one alias when the caller knows it, as a reaction does;
+        otherwise the guild's first alias for the option is used.
+
+        Selecting the same option again removes the ballot, even with another alias.
+        The repository serializes the mutation and any threshold closure. An unresolved
+        owner-guild lookup uses base weight 1 for the new ballot, before the option
+        multiplier. Unresolved existing ballots retain their cached weights.
         """
-        snapshot = await self.get_session(message_id)
+        snapshot = await self.get_session(vote_session_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
         if not snapshot.is_open:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
-        message = next((item for item in snapshot.messages if item.id == message_id), None)
-        message_guild_id = message.guild_id if message is not None else actor.guild_id
-        if actor.guild_id and message_guild_id and actor.guild_id != message_guild_id:
+        if actor.guild_id not in {message.guild_id for message in snapshot.messages}:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
-
-        # Resolve the alias where the ballot was cast, then use the owner guild's role weights.
-        option = snapshot.option_by_emoji(emoji, message_guild_id)
+        option = snapshot.option_by_id(option_id, actor.guild_id, emoji=emoji)
         if option is None:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
+
+        # The option's alias comes from where the ballot was cast; role weights come from the owner guild.
         owner_guild_id = self._owner_guild_id(snapshot)
         weight_actor = await self._weight_actor(actor, snapshot, owner_guild_id)
         if weight_actor is None:
@@ -295,7 +283,7 @@ class VoteService:
             )
             weight = 1.0
         else:
-            calculated = await self._policy.calculate(weight_actor, snapshot, emoji)
+            calculated = await self._policy.calculate(weight_actor, snapshot)
             if calculated is None:
                 return CastVoteResult(session=snapshot, rejection=VoteRejection.NOT_ELIGIBLE)
             # Without a designated authority no guild's role table may speak for the
@@ -317,17 +305,12 @@ class VoteService:
             )
         async with self._uow_factory() as uow:
             mutation = await uow.votes.cast_vote(
-                message_id,
-                actor.account_id,
-                actor.guild_id or message_guild_id,
-                option.id,
-                emoji,
-                weight,
-                refreshed,
+                vote_session_id, actor.account_id, actor.guild_id, option.id, option.emoji, weight, refreshed
             )
             await uow.commit()
         if mutation is None:
-            latest = await self.get_session(message_id)
+            # The session closed or vanished after it was read above.
+            latest = await self.get_session(vote_session_id)
             rejection = VoteRejection.CLOSED if latest is not None else VoteRejection.NOT_FOUND
             return CastVoteResult(session=latest, rejection=rejection)
         return CastVoteResult(
@@ -337,15 +320,14 @@ class VoteService:
             just_closed=mutation.just_closed,
         )
 
-    async def refresh(self, message_id: int) -> VoteRefreshResult:
+    async def refresh(self, vote_session_id: int) -> VoteRefreshResult:
         """Recalculate resolvable ballot weights and check the session's existing thresholds."""
-        snapshot = await self.get_session(message_id)
+        snapshot = await self.get_session(vote_session_id)
         if snapshot is None:
             return VoteRefreshResult(None)
         return await self._refresh_snapshot(snapshot)
 
     async def _refresh_snapshot(self, snapshot: VoteSessionSnapshot) -> VoteRefreshResult:
-        """Refresh a loaded session, whether or not it has an attached Discord message."""
         weights, unresolved = await self._calculate_refresh(snapshot)
         async with self._uow_factory() as uow:
             mutation = await uow.votes.refresh_weights(snapshot.id, weights)
@@ -363,17 +345,21 @@ class VoteService:
             mutation.just_closed if mutation is not None else False,
         )
 
-    async def close(self, message_id: int, actor: VoteActor) -> CastVoteResult:
+    async def close(self, vote_session_id: int, actor: VoteActor) -> CastVoteResult:
         """Refresh and close a generic poll if its author or an authorized actor requests it."""
-        snapshot = await self.get_session(message_id)
+        snapshot = await self.get_session(vote_session_id)
         if snapshot is None:
             return CastVoteResult(None, VoteRejection.NOT_FOUND)
         rejection = snapshot.can_close(actor)
         if rejection is not None:
             return CastVoteResult(snapshot, rejection)
-        await self.refresh(message_id)
+        return await self._close(snapshot)
+
+    async def _close(self, snapshot: VoteSessionSnapshot) -> CastVoteResult:
+        """Refresh weights so the final tally is current, then close as cancelled."""
+        await self._refresh_snapshot(snapshot)
         async with self._uow_factory() as uow:
-            mutation = await uow.votes.close(message_id)
+            mutation = await uow.votes.close(snapshot.id)
             await uow.commit()
         if mutation is None:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
@@ -385,12 +371,9 @@ class VoteService:
         async with self._uow_factory() as uow:
             due = await uow.votes.list_due(now or Instant.now())
         for snapshot in due:
-            await self._refresh_snapshot(snapshot)
-            async with self._uow_factory() as uow:
-                mutation = await uow.votes.close_by_id(snapshot.id)
-                await uow.commit()
-            if mutation is not None and mutation.just_closed:
-                closed.append(mutation.session)
+            result = await self._close(snapshot)
+            if result.just_closed and result.session is not None:
+                closed.append(result.session)
         return closed
 
     async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
@@ -476,7 +459,7 @@ class VoteService:
             if actor is None:
                 unresolved.append(selection.account_id)
                 continue
-            weight = await self._policy.calculate(actor, snapshot, selection.emoji)
+            weight = await self._policy.calculate(actor, snapshot)
             if weight is None:
                 weights[selection.account_id] = 0
             elif isfinite(weight) and weight > 0:

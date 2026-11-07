@@ -59,12 +59,15 @@ class VoteRecorder(VoteService):
         self.cast_calls: list[CastCall] = []
 
     @override
-    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         assert vote_session_id == 12
         return self.session
 
     @override
-    async def cast_vote_by_session(self, vote_session_id: int, actor: VoteActor, option_id: str) -> CastVoteResult:
+    async def cast_vote(
+        self, vote_session_id: int, actor: VoteActor, option_id: str, *, emoji: str | None = None
+    ) -> CastVoteResult:
+        assert emoji is None
         self.cast_calls.append(CastCall(vote_session_id, actor, option_id))
         return CastVoteResult(self.session, rejection=self.rejection)
 
