@@ -6,44 +6,44 @@ from sqlalchemy import CheckConstraint, Table
 from sqlalchemy.engine import default
 
 from squid.persistence.types import StrEnumText
-from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
+from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.records.models import (
-    RecordComputationRun,
-    RecordComputationStatus,
-    RecordDefinitionFacet,
-    RecordFacetKind,
-    RecordMaterializationSource,
+    ComputationRun,
+    ComputationStatus,
+    DefinitionFacet,
+    FacetKind,
+    MaterializationSource,
     RecordRecomputeQueueItem,
-    RecordRule,
-    RecordSeries,
-    RecordStanding,
+    RecordTitle,
+    TitleDefinition,
+    TitleResult,
 )
 
 _MAPPINGS = (
-    (RecordRule.__table__, "materialization_source", RecordMaterializationSource),
-    (RecordSeries.__table__, "record_class", RecordClass),
-    (RecordSeries.__table__, "build_kind", BuildKind),
-    (RecordSeries.__table__, "version_scope", VersionScope),
-    (RecordDefinitionFacet.__table__, "facet_kind", RecordFacetKind),
-    (RecordComputationRun.__table__, "build_kind", BuildKind),
-    (RecordComputationRun.__table__, "status", RecordComputationStatus),
-    (RecordStanding.__table__, "status", ResolutionStatus),
+    (TitleDefinition.__table__, "materialization_source", MaterializationSource),
+    (RecordTitle.__table__, "record_class", BaseTitle),
+    (RecordTitle.__table__, "build_kind", BuildKind),
+    (RecordTitle.__table__, "version_scope", VersionScope),
+    (DefinitionFacet.__table__, "facet_kind", FacetKind),
+    (ComputationRun.__table__, "build_kind", BuildKind),
+    (ComputationRun.__table__, "status", ComputationStatus),
+    (TitleResult.__table__, "status", ResolutionStatus),
     (RecordRecomputeQueueItem.__table__, "build_kind", BuildKind),
 )
 
 _CHECKS = (
     (
-        RecordRule.__table__,
+        TitleDefinition.__table__,
         "record_definitions_materialization_source_check",
-        RecordMaterializationSource,
+        MaterializationSource,
     ),
-    (RecordSeries.__table__, "record_competitions_record_class_check", RecordClass),
-    (RecordSeries.__table__, "record_competitions_build_kind_check", BuildKind),
-    (RecordSeries.__table__, "record_competitions_version_scope_check", VersionScope),
-    (RecordDefinitionFacet.__table__, "record_definition_facets_kind_check", RecordFacetKind),
-    (RecordComputationRun.__table__, "record_computation_runs_build_kind_check", BuildKind),
-    (RecordComputationRun.__table__, "record_computation_runs_status_check", RecordComputationStatus),
-    (RecordStanding.__table__, "record_results_status_check", ResolutionStatus),
+    (RecordTitle.__table__, "record_competitions_record_class_check", BaseTitle),
+    (RecordTitle.__table__, "record_competitions_build_kind_check", BuildKind),
+    (RecordTitle.__table__, "record_competitions_version_scope_check", VersionScope),
+    (DefinitionFacet.__table__, "record_definition_facets_kind_check", FacetKind),
+    (ComputationRun.__table__, "record_computation_runs_build_kind_check", BuildKind),
+    (ComputationRun.__table__, "record_computation_runs_status_check", ComputationStatus),
+    (TitleResult.__table__, "record_results_status_check", ResolutionStatus),
     (RecordRecomputeQueueItem.__table__, "record_recompute_queue_build_kind_check", BuildKind),
 )
 

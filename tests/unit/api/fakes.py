@@ -68,7 +68,7 @@ from squid.permissions.application.epoch import PermissionEpochWatcher, WakeList
 from squid.permissions.domain import Pattern
 from squid.permissions.domain.resolution import Subject
 from squid.records.application import PublicRecordQueryService, RecordService
-from squid.records.application.models import PublicRecordDetail, PublishedRecord
+from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
@@ -484,7 +484,7 @@ class MockRecords(RecordService):
         """Publish no records."""
 
     @override
-    async def get(self, result_id: int) -> PublishedRecord | None:
+    async def get(self, result_id: int) -> PublishedTitle | None:
         return None
 
     @override
@@ -494,8 +494,8 @@ class MockRecords(RecordService):
         selector: PageSelector = FIRST_PAGE,
         descending: bool = True,
         page_size: int = 20,
-    ) -> Page[PublishedRecord]:
-        return cast(Page[PublishedRecord], _EMPTY_PAGE)
+    ) -> Page[PublishedTitle]:
+        return cast(Page[PublishedTitle], _EMPTY_PAGE)
 
 
 class MockPublicRecords(PublicRecordQueryService):

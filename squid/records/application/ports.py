@@ -7,14 +7,14 @@ from typing import Protocol
 
 from squid.builds.application.queries import PublicBuildSummary
 from squid.records.application.models import (
+    CandidateBuild,
     CategoryIdentity,
     ComputationBatch,
-    PublishedRecord,
+    PublishedTitle,
     RecordGap,
-    RecordSourceCandidate,
     TitleDiagnosticGap,
 )
-from squid.records.domain import BuildKind, FormattedTitle, RecordClass
+from squid.records.domain import BaseTitle, BuildKind, FormattedTitle
 from squid.unit_of_work import UnitOfWork
 
 
@@ -37,7 +37,7 @@ class RecomputeLease:
 class RecordCandidateRepository(Protocol):
     """Load confirmed builds eligible to become computation candidates."""
 
-    async def list_confirmed(self, kind: BuildKind) -> Sequence[RecordSourceCandidate]: ...
+    async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]: ...
 
 
 class PublicBuildSummaryReader(Protocol):
@@ -59,7 +59,7 @@ class RecordRunRepository(Protocol):
 
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]: ...
 
-    async def get_published_record(self, result_id: int) -> PublishedRecord | None: ...
+    async def get_published_record(self, result_id: int) -> PublishedTitle | None: ...
 
     async def list_published_records(
         self,
@@ -69,7 +69,7 @@ class RecordRunRepository(Protocol):
         before_id: int | None,
         descending: bool,
         limit: int,
-    ) -> Sequence[PublishedRecord]: ...
+    ) -> Sequence[PublishedTitle]: ...
 
     async def count_published_records(self) -> int: ...
 
@@ -81,7 +81,7 @@ class RecordRunRepository(Protocol):
         self,
         ruleset_id: int,
         category: CategoryIdentity,
-        titles: Mapping[RecordClass, FormattedTitle],
+        titles: Mapping[BaseTitle, FormattedTitle],
     ) -> None: ...
 
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None: ...

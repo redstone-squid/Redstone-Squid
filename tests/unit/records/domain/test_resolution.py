@@ -5,8 +5,8 @@ import pytest
 from squid.records.domain.models import (
     DOOR_TIMING_METHODS,
     EXTENDER_TIMING_METHODS,
+    Candidate,
     CandidateGap,
-    RecordCandidate,
     ResolutionStatus,
     TimingVariant,
 )
@@ -26,9 +26,9 @@ LATE = datetime(2021, 1, 1, tzinfo=UTC)
 def test_smallest_ignores_missing_completion_when_volume_is_decisive() -> None:
     result = resolve_smallest(
         (
-            RecordCandidate(build_id=1, fixed_volume=20),
-            RecordCandidate(build_id=2, fixed_volume=21, completion_at=EARLY),
-            RecordCandidate(build_id=3),
+            Candidate(build_id=1, fixed_volume=20),
+            Candidate(build_id=2, fixed_volume=21, completion_at=EARLY),
+            Candidate(build_id=3),
         )
     )
 
@@ -39,8 +39,8 @@ def test_smallest_ignores_missing_completion_when_volume_is_decisive() -> None:
 def test_smallest_uses_earliest_completion_for_volume_tie() -> None:
     result = resolve_smallest(
         (
-            RecordCandidate(build_id=1, fixed_volume=20, completion_at=LATE),
-            RecordCandidate(build_id=2, fixed_volume=20, completion_at=EARLY),
+            Candidate(build_id=1, fixed_volume=20, completion_at=LATE),
+            Candidate(build_id=2, fixed_volume=20, completion_at=EARLY),
         )
     )
 
@@ -50,8 +50,8 @@ def test_smallest_uses_earliest_completion_for_volume_tie() -> None:
 def test_smallest_preserves_exact_co_holders() -> None:
     result = resolve_smallest(
         (
-            RecordCandidate(build_id=2, fixed_volume=20, completion_at=EARLY),
-            RecordCandidate(build_id=1, fixed_volume=20, completion_at=EARLY),
+            Candidate(build_id=2, fixed_volume=20, completion_at=EARLY),
+            Candidate(build_id=1, fixed_volume=20, completion_at=EARLY),
         )
     )
 
@@ -62,8 +62,8 @@ def test_smallest_preserves_exact_co_holders() -> None:
 def test_smallest_is_unresolved_when_tied_build_lacks_completion() -> None:
     result = resolve_smallest(
         (
-            RecordCandidate(build_id=1, fixed_volume=20),
-            RecordCandidate(build_id=2, fixed_volume=20, completion_at=EARLY),
+            Candidate(build_id=1, fixed_volume=20),
+            Candidate(build_id=2, fixed_volume=20, completion_at=EARLY),
         )
     )
 
@@ -74,7 +74,7 @@ def test_smallest_is_unresolved_when_tied_build_lacks_completion() -> None:
 
 
 def test_smallest_has_no_candidate_without_fixed_volume() -> None:
-    result = resolve_smallest((RecordCandidate(build_id=1),))
+    result = resolve_smallest((Candidate(build_id=1),))
 
     assert result.status is ResolutionStatus.NO_CANDIDATE
 
@@ -82,9 +82,9 @@ def test_smallest_has_no_candidate_without_fixed_volume() -> None:
 def test_first_selects_the_earliest_known_completion() -> None:
     result = resolve_first(
         (
-            RecordCandidate(build_id=1, completion_at=LATE),
-            RecordCandidate(build_id=2),
-            RecordCandidate(build_id=3, completion_at=EARLY),
+            Candidate(build_id=1, completion_at=LATE),
+            Candidate(build_id=2),
+            Candidate(build_id=3, completion_at=EARLY),
         )
     )
 
@@ -95,8 +95,8 @@ def test_first_selects_the_earliest_known_completion() -> None:
 def test_first_preserves_exact_co_holders() -> None:
     result = resolve_first(
         (
-            RecordCandidate(build_id=2, completion_at=EARLY),
-            RecordCandidate(build_id=1, completion_at=EARLY),
+            Candidate(build_id=2, completion_at=EARLY),
+            Candidate(build_id=1, completion_at=EARLY),
         )
     )
 
@@ -104,7 +104,7 @@ def test_first_preserves_exact_co_holders() -> None:
 
 
 def test_first_has_no_candidate_without_completion_evidence() -> None:
-    result = resolve_first((RecordCandidate(build_id=1),))
+    result = resolve_first((Candidate(build_id=1),))
 
     assert result.status is ResolutionStatus.NO_CANDIDATE
 
@@ -112,8 +112,8 @@ def test_first_has_no_candidate_without_completion_evidence() -> None:
 def test_fastest_stops_before_missing_lower_priority_data_when_decisive() -> None:
     result = resolve_fastest(
         (
-            RecordCandidate(build_id=1, timing_variants=(TimingVariant((4, None)),)),
-            RecordCandidate(build_id=2, timing_variants=(TimingVariant((5, 1)),)),
+            Candidate(build_id=1, timing_variants=(TimingVariant((4, None)),)),
+            Candidate(build_id=2, timing_variants=(TimingVariant((5, 1)),)),
         ),
         DOOR_TIMING_METHODS,
     )
@@ -125,8 +125,8 @@ def test_fastest_stops_before_missing_lower_priority_data_when_decisive() -> Non
 def test_fastest_reports_only_decisive_missing_method() -> None:
     result = resolve_fastest(
         (
-            RecordCandidate(build_id=1, timing_variants=(TimingVariant((4, None)),)),
-            RecordCandidate(build_id=2, timing_variants=(TimingVariant((4, 2)),)),
+            Candidate(build_id=1, timing_variants=(TimingVariant((4, None)),)),
+            Candidate(build_id=2, timing_variants=(TimingVariant((4, 2)),)),
         ),
         DOOR_TIMING_METHODS,
     )
@@ -138,8 +138,8 @@ def test_fastest_reports_only_decisive_missing_method() -> None:
 def test_fastest_supports_negative_reset_times() -> None:
     result = resolve_fastest(
         (
-            RecordCandidate(build_id=1, timing_variants=(TimingVariant((4, 3, 5, 3, -1, 0)),)),
-            RecordCandidate(build_id=2, timing_variants=(TimingVariant((4, 3, 5, 3, 0, -2)),)),
+            Candidate(build_id=1, timing_variants=(TimingVariant((4, 3, 5, 3, -1, 0)),)),
+            Candidate(build_id=2, timing_variants=(TimingVariant((4, 3, 5, 3, 0, -2)),)),
         ),
         DOOR_TIMING_METHODS,
     )
@@ -150,8 +150,8 @@ def test_fastest_supports_negative_reset_times() -> None:
 def test_fastest_uses_extender_method_order() -> None:
     result = resolve_fastest(
         (
-            RecordCandidate(build_id=1, timing_variants=(TimingVariant((4, 5, 0, 0)),)),
-            RecordCandidate(build_id=2, timing_variants=(TimingVariant((5, 1, 0, 0)),)),
+            Candidate(build_id=1, timing_variants=(TimingVariant((4, 5, 0, 0)),)),
+            Candidate(build_id=2, timing_variants=(TimingVariant((5, 1, 0, 0)),)),
         ),
         EXTENDER_TIMING_METHODS,
     )
@@ -163,9 +163,9 @@ def test_fastest_uses_completion_and_co_holders_after_all_methods_tie() -> None:
     timing = TimingVariant((4, 3, 5, 4, 0, 0))
     result = resolve_fastest(
         (
-            RecordCandidate(build_id=3, completion_at=LATE, timing_variants=(timing,)),
-            RecordCandidate(build_id=2, completion_at=EARLY, timing_variants=(timing,)),
-            RecordCandidate(build_id=1, completion_at=EARLY, timing_variants=(timing,)),
+            Candidate(build_id=3, completion_at=LATE, timing_variants=(timing,)),
+            Candidate(build_id=2, completion_at=EARLY, timing_variants=(timing,)),
+            Candidate(build_id=1, completion_at=EARLY, timing_variants=(timing,)),
         ),
         DOOR_TIMING_METHODS,
     )
@@ -177,9 +177,9 @@ def test_fastest_uses_completion_and_co_holders_after_all_methods_tie() -> None:
 def test_fastest_smallest_uses_speed_within_the_minimum_volume_pool() -> None:
     result = resolve_fastest_smallest(
         (
-            RecordCandidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((5,)),)),
-            RecordCandidate(build_id=2, fixed_volume=10, timing_variants=(TimingVariant((4,)),)),
-            RecordCandidate(build_id=3, fixed_volume=11, timing_variants=(TimingVariant((3,)),)),
+            Candidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((5,)),)),
+            Candidate(build_id=2, fixed_volume=10, timing_variants=(TimingVariant((4,)),)),
+            Candidate(build_id=3, fixed_volume=11, timing_variants=(TimingVariant((3,)),)),
         ),
         ("opening",),
     )
@@ -190,9 +190,9 @@ def test_fastest_smallest_uses_speed_within_the_minimum_volume_pool() -> None:
 def test_smallest_fastest_uses_volume_within_the_fastest_timing_pool() -> None:
     result = resolve_smallest_fastest(
         (
-            RecordCandidate(build_id=1, fixed_volume=11, timing_variants=(TimingVariant((4,)),)),
-            RecordCandidate(build_id=2, fixed_volume=10, timing_variants=(TimingVariant((4,)),)),
-            RecordCandidate(build_id=3, fixed_volume=9, timing_variants=(TimingVariant((5,)),)),
+            Candidate(build_id=1, fixed_volume=11, timing_variants=(TimingVariant((4,)),)),
+            Candidate(build_id=2, fixed_volume=10, timing_variants=(TimingVariant((4,)),)),
+            Candidate(build_id=3, fixed_volume=9, timing_variants=(TimingVariant((5,)),)),
         ),
         ("opening",),
     )
@@ -203,8 +203,8 @@ def test_smallest_fastest_uses_volume_within_the_fastest_timing_pool() -> None:
 def test_smallest_fastest_reports_a_gap_before_the_fastest_pool_is_known() -> None:
     result = resolve_smallest_fastest(
         (
-            RecordCandidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((4, None)),)),
-            RecordCandidate(build_id=2, fixed_volume=11, timing_variants=(TimingVariant((4, 2)),)),
+            Candidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((4, None)),)),
+            Candidate(build_id=2, fixed_volume=11, timing_variants=(TimingVariant((4, 2)),)),
         ),
         ("opening", "opening_visible"),
     )
@@ -235,4 +235,4 @@ def test_reduce_timing_variants_reports_missing_tied_secondary_method() -> None:
 
 def test_record_candidate_rejects_non_positive_volume() -> None:
     with pytest.raises(ValueError, match="positive"):
-        RecordCandidate(build_id=1, fixed_volume=0)
+        Candidate(build_id=1, fixed_volume=0)

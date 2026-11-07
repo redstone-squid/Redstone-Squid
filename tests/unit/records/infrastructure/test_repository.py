@@ -4,8 +4,8 @@ from sqlalchemy import CheckConstraint, Index, Table
 
 from squid.records.application.models import CategoryIdentity
 from squid.records.domain import (
+    BaseTitle,
     BuildKind,
-    RecordClass,
     ResolutionStatus,
     VersionScope,
 )
@@ -16,11 +16,11 @@ from squid.records.infrastructure.repository import (
     parse_category_key,
 )
 from squid.records.models import (
-    RecordComputationRun,
-    RecordMaterializationSource,
-    RecordRule,
-    RecordSeries,
-    RecordStanding,
+    ComputationRun,
+    MaterializationSource,
+    RecordTitle,
+    TitleDefinition,
+    TitleResult,
 )
 
 
@@ -39,20 +39,20 @@ def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
 
 
 def test_gap_rows_carry_the_definition_title() -> None:
-    definition = RecordRule(
+    definition = TitleDefinition(
         ruleset_id=1,
         title="Fastest 2x2 Door",
         subtitle="All-time",
-        materialization_source=RecordMaterializationSource.EAGER,
+        materialization_source=MaterializationSource.EAGER,
     )
-    definition.competition = RecordSeries(
-        record_class=RecordClass.FASTEST,
+    definition.competition = RecordTitle(
+        record_class=BaseTitle.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         category_key="door:door|2x2|t[20]|Door:r[]:p[]",
     )
     definition.id = 5
-    result = RecordStanding(
+    result = TitleResult(
         run_id=1,
         definition_id=5,
         status=ResolutionStatus.UNRESOLVED,
@@ -69,24 +69,24 @@ def test_gap_rows_carry_the_definition_title() -> None:
 
 
 def test_record_definitions_persist_canonical_title_metadata() -> None:
-    assert {"title", "subtitle", "title_diagnostics"} <= set(RecordRule.__table__.columns.keys())
+    assert {"title", "subtitle", "title_diagnostics"} <= set(TitleDefinition.__table__.columns.keys())
 
 
 def test_record_definitions_allow_every_record_class() -> None:
-    table = cast(Table, RecordSeries.__table__)
+    table = cast(Table, RecordTitle.__table__)
     constraint = next(
         constraint
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint) and constraint.name == "record_competitions_record_class_check"
     )
 
-    assert all(record_class.value in str(constraint.sqltext) for record_class in RecordClass)
+    assert all(record_class.value in str(constraint.sqltext) for record_class in BaseTitle)
 
 
 def test_active_run_identity_is_global_across_rulesets() -> None:
     active_index = next(
         index
-        for index in RecordComputationRun.__table_args__
+        for index in ComputationRun.__table_args__
         if isinstance(index, Index) and index.name == "record_computation_runs_one_active_idx"
     )
 

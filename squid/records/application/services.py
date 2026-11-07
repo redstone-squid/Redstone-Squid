@@ -11,33 +11,33 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationE
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.models import (
+    CandidateBuild,
     CandidateFacet,
-    CategoryCompetition,
+    CategoryCandidates,
     CategoryIdentity,
     ComputationBatch,
     ComputedRecord,
     HolderHistoryEntry,
     PublicRecordDetail,
-    PublishedRecord,
+    PublishedTitle,
     QueueProcessSummary,
     RebuildSummary,
     RecordGap,
     RecordLookupRequest,
-    RecordSourceCandidate,
     TitleDiagnosticGap,
 )
 from squid.records.application.ports import PublicBuildSummaryReader, RecordQueryUnitOfWork, RecordUnitOfWork
 from squid.records.domain import (
+    BaseTitle,
     BuildKind,
+    Candidate,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
-    RecordCandidate,
-    RecordClass,
-    RecordResolution,
     ResolutionStatus,
     RulesTitleFormatter,
     TitleFormatter,
+    TitleResolution,
     VersionScope,
     resolve_fastest,
     resolve_fastest_smallest,
@@ -140,7 +140,7 @@ class RecordComputationService:
         self,
         ruleset_id: int,
         kind: BuildKind,
-        source: Sequence[RecordSourceCandidate],
+        source: Sequence[CandidateBuild],
         *,
         version_id: int | None,
         pinned_current_version_id: int | None,
@@ -219,15 +219,15 @@ class RecordComputationService:
     def _eager_competitions(
         self,
         kind: BuildKind,
-        candidates: Sequence[RecordSourceCandidate],
-    ) -> dict[str, CategoryCompetition]:
+        candidates: Sequence[CandidateBuild],
+    ) -> dict[str, CategoryCandidates]:
         """Generate categories from observed restrictions, bounded by category_limit.
 
         A build can compete in several categories, including the unrestricted one.
         The limit bounds combinations generated here; explicitly requested exact
         categories are added separately so the limit does not hide those results.
         """
-        grouped: dict[str, list[tuple[RecordSourceCandidate, tuple[CandidateFacet, ...]]]] = defaultdict(list)
+        grouped: dict[str, list[tuple[CandidateBuild, tuple[CandidateFacet, ...]]]] = defaultdict(list)
         thresholds = _observed_thresholds(candidates)
         for source in candidates:
             choices = _restriction_choice_groups(source, thresholds)
@@ -239,10 +239,10 @@ class RecordComputationService:
     def requested_competition(
         self,
         identity: CategoryIdentity,
-        candidates: Sequence[RecordSourceCandidate],
-    ) -> CategoryCompetition | None:
+        candidates: Sequence[CandidateBuild],
+    ) -> CategoryCandidates | None:
         """Build the competition for one requested exact category, or None if no candidate qualifies."""
-        items: list[tuple[RecordSourceCandidate, tuple[CandidateFacet, ...]]] = []
+        items: list[tuple[CandidateBuild, tuple[CandidateFacet, ...]]] = []
         requested_ids = frozenset(identity.restriction_ids)
         requested_values = {tag_id: (operator, value) for tag_id, operator, value in identity.restriction_values}
         for source in candidates:
@@ -268,10 +268,10 @@ class RecordComputationService:
 
     def _make_competition(
         self,
-        items: Sequence[tuple[RecordSourceCandidate, tuple[CandidateFacet, ...]]],
+        items: Sequence[tuple[CandidateBuild, tuple[CandidateFacet, ...]]],
         *,
         source: str,
-    ) -> CategoryCompetition:
+    ) -> CategoryCandidates:
         first, restrictions = items[0]
         category = _category_with_restrictions(first, restrictions)
         category_text = (
@@ -281,7 +281,7 @@ class RecordComputationService:
         )
         identity = _category_identity(first.kind, _base_key(first), restrictions)
         facets = tuple(sorted((*first.types, *restrictions), key=lambda facet: (facet.kind, facet.id)))
-        return CategoryCompetition(
+        return CategoryCandidates(
             identity=identity,
             facets=facets,
             category_text=category_text,
@@ -290,7 +290,7 @@ class RecordComputationService:
             source="public_lookup" if source == "public_lookup" else "eager",
         )
 
-    def format_record_titles(self, competition: CategoryCompetition) -> dict[RecordClass, FormattedTitle]:
+    def format_record_titles(self, competition: CategoryCandidates) -> dict[BaseTitle, FormattedTitle]:
         """Render the per-class titles a definition stores for this competition."""
         return {
             record_class: self._formatter.format_record(record_class, competition.category_text)
@@ -326,7 +326,7 @@ class RecordService:
         async with self._uow_factory() as uow:
             return await uow.records.list_title_gaps(kind=kind)
 
-    async def get(self, result_id: int) -> PublishedRecord | None:
+    async def get(self, result_id: int) -> PublishedTitle | None:
         """Return one published computed record result."""
         async with self._uow_factory() as uow:
             return await uow.records.get_published_record(result_id)
@@ -337,7 +337,7 @@ class RecordService:
         selector: PageSelector = FIRST_PAGE,
         descending: bool = True,
         page_size: int = 20,
-    ) -> Page[PublishedRecord]:
+    ) -> Page[PublishedTitle]:
         """Return one page of published record results in display order."""
         async with self._uow_factory() as uow:
             rows = await uow.records.list_published_records(
@@ -461,7 +461,7 @@ class PublicRecordQueryService:
 
 
 def _observed_thresholds(
-    candidates: Sequence[RecordSourceCandidate],
+    candidates: Sequence[CandidateBuild],
 ) -> dict[int, tuple[Decimal | str | bool, ...]]:
     values: dict[int, set[Decimal | str | bool]] = defaultdict(set)
     for source in candidates:
@@ -475,7 +475,7 @@ def _observed_thresholds(
 
 
 def _restriction_choice_groups(
-    source: RecordSourceCandidate,
+    source: CandidateBuild,
     thresholds: dict[int, tuple[Decimal | str | bool, ...]],
 ) -> tuple[tuple[CandidateFacet, ...], ...]:
     groups: list[tuple[CandidateFacet, ...]] = []
@@ -562,7 +562,7 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
     return value
 
 
-def _base_key(source: RecordSourceCandidate) -> str:
+def _base_key(source: CandidateBuild) -> str:
     type_key = ",".join(str(facet.id) for facet in sorted(source.types, key=lambda facet: facet.id))
     if source.door is not None:
         door = source.door
@@ -582,7 +582,7 @@ def _base_key(source: RecordSourceCandidate) -> str:
 
 
 def _category_with_restrictions(
-    source: RecordSourceCandidate,
+    source: CandidateBuild,
     restrictions: Sequence[CandidateFacet],
 ) -> DoorCategory | ExtenderCategory:
     wiring = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "wiring-placement")
@@ -617,15 +617,15 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
     raise InvalidStateError(tr(t"Fastest records are not supported for {kind_name}."))
 
 
-def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
+def _record_classes(kind: BuildKind) -> tuple[BaseTitle, ...]:
     shared = (
-        RecordClass.FASTEST,
-        RecordClass.SMALLEST,
-        RecordClass.FASTEST_SMALLEST,
-        RecordClass.SMALLEST_FASTEST,
+        BaseTitle.FASTEST,
+        BaseTitle.SMALLEST,
+        BaseTitle.FASTEST_SMALLEST,
+        BaseTitle.SMALLEST_FASTEST,
     )
     if kind is BuildKind.DOOR:
-        return (RecordClass.FIRST, *shared)
+        return (BaseTitle.FIRST, *shared)
     if kind is BuildKind.EXTENDER:
         return shared
     kind_name = kind.value
@@ -633,17 +633,17 @@ def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
 
 
 def _resolve_record(
-    record_class: RecordClass,
+    record_class: BaseTitle,
     kind: BuildKind,
-    candidates: Iterable[RecordCandidate],
-) -> RecordResolution:
-    if record_class is RecordClass.FIRST:
+    candidates: Iterable[Candidate],
+) -> TitleResolution:
+    if record_class is BaseTitle.FIRST:
         return resolve_first(candidates)
-    if record_class is RecordClass.FASTEST:
+    if record_class is BaseTitle.FASTEST:
         return resolve_fastest(candidates, _timing_methods(kind))
-    if record_class is RecordClass.SMALLEST:
+    if record_class is BaseTitle.SMALLEST:
         return resolve_smallest(candidates)
-    if record_class is RecordClass.FASTEST_SMALLEST:
+    if record_class is BaseTitle.FASTEST_SMALLEST:
         return resolve_fastest_smallest(candidates, _timing_methods(kind))
     return resolve_smallest_fastest(candidates, _timing_methods(kind))
 
@@ -662,9 +662,9 @@ def _broken_holders(
 
 
 def _reconstruct_history(
-    record_class: RecordClass,
+    record_class: BaseTitle,
     kind: BuildKind,
-    candidates: Sequence[RecordCandidate],
+    candidates: Sequence[Candidate],
 ) -> tuple[HolderHistoryEntry, ...]:
     """Reconstruct holder changes from today's facts and known completion dates.
 
@@ -677,7 +677,7 @@ def _reconstruct_history(
         (candidate for candidate in candidates if candidate.completion_at is not None),
         key=_known_completion,
     )
-    active: list[RecordCandidate] = []
+    active: list[Candidate] = []
     periods: list[HolderHistoryEntry] = []
     for completion_at, group in groupby(dated, key=_known_completion):
         active.extend(group)
@@ -699,6 +699,6 @@ def _reconstruct_history(
     return tuple(periods)
 
 
-def _known_completion(candidate: RecordCandidate) -> datetime:
+def _known_completion(candidate: Candidate) -> datetime:
     assert candidate.completion_at is not None
     return candidate.completion_at

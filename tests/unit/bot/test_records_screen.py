@@ -15,7 +15,7 @@ from squid.records.application import (
     RecordService,
     TitleDiagnosticGap,
 )
-from squid.records.domain import BuildKind, RecordClass
+from squid.records.domain import BaseTitle, BuildKind
 from squid_ui.testing import RecordingResponder, labels, press, submit, submit_event
 
 
@@ -27,7 +27,7 @@ class RecordRecorder(RecordService):
     @override
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         self.gap_reads += 1
-        return (RecordGap(1, "Smallest door", None, RecordClass.SMALLEST, (7,), ("volume",)),)
+        return (RecordGap(1, "Smallest door", None, BaseTitle.SMALLEST, (7,), ("volume",)),)
 
     @override
     async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:

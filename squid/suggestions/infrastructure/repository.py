@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.models import Account, CreatorAlias
 from squid.records.domain import VersionScope
-from squid.records.models import RecordRule, RecordSeries
+from squid.records.models import RecordTitle, TitleDefinition
 from squid.search.models import SearchDocument, SearchDocumentFacet
 from squid.suggestions.application.queries import DocumentEntry, TaxonomyEntry
 from squid.tags.models import TagApplicability, TagDefinition
@@ -119,17 +119,17 @@ class PostgresSuggestionRepository:
         `/records lookup` materializes the all-time definition regardless of which id it gets.
         """
         statement = (
-            select(RecordRule.id, RecordRule.title, RecordSeries.build_kind)
-            .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
-            .where(RecordSeries.version_scope == VersionScope.ALL_TIME)
+            select(TitleDefinition.id, TitleDefinition.title, RecordTitle.build_kind)
+            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+            .where(RecordTitle.version_scope == VersionScope.ALL_TIME)
         )
         terms = query.strip()
         if terms:
-            condition = RecordRule.title.ilike(f"%{terms}%")
+            condition = TitleDefinition.title.ilike(f"%{terms}%")
             if terms.isdigit():
-                condition = or_(condition, RecordRule.id == int(terms))
+                condition = or_(condition, TitleDefinition.id == int(terms))
             statement = statement.where(condition)
-        statement = statement.order_by(RecordRule.title, RecordRule.id).limit(limit)
+        statement = statement.order_by(TitleDefinition.title, TitleDefinition.id).limit(limit)
         session = self._session()
         return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
 
@@ -194,18 +194,18 @@ class PostgresSuggestionRepository:
         without a definition are omitted.
         """
         latest = (
-            select(RecordRule.competition_id, RecordRule.title, RecordRule.subtitle)
-            .distinct(RecordRule.competition_id)
-            .order_by(RecordRule.competition_id, RecordRule.id.desc())
+            select(TitleDefinition.competition_id, TitleDefinition.title, TitleDefinition.subtitle)
+            .distinct(TitleDefinition.competition_id)
+            .order_by(TitleDefinition.competition_id, TitleDefinition.id.desc())
             .subquery()
         )
-        statement = select(RecordSeries.public_id, latest.c.title, latest.c.subtitle).join(
-            latest, latest.c.competition_id == RecordSeries.public_id
+        statement = select(RecordTitle.public_id, latest.c.title, latest.c.subtitle).join(
+            latest, latest.c.competition_id == RecordTitle.public_id
         )
         terms = query.strip()
         if terms:
             statement = statement.where(or_(latest.c.title.ilike(f"%{terms}%"), latest.c.subtitle.ilike(f"%{terms}%")))
-        statement = statement.order_by(latest.c.title, RecordSeries.public_id).limit(limit)
+        statement = statement.order_by(latest.c.title, RecordTitle.public_id).limit(limit)
         session = self._session()
         rows = (await session.execute(statement)).all()
         return [(str(row.public_id), row.title, row.subtitle) for row in rows]

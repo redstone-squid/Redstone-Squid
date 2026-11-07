@@ -12,7 +12,7 @@ from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
     TAG_PROPOSAL_LIST,
 )
-from squid.records.domain import BuildKind, RecordClass, VersionScope
+from squid.records.domain import BaseTitle, BuildKind, VersionScope
 from squid.search.application.fields import FieldRegistry
 from squid.suggestions.application import SuggestionRegistry, SuggestionSource
 from squid.suggestions.application.queries import SuggestionRepository
@@ -322,7 +322,7 @@ def _static_sources() -> tuple[SuggestionSource, ...]:
         ),
         SuggestionSource(
             id="record_classes",
-            provider=StaticProvider.of([item.value for item in RecordClass], kind="record_class"),
+            provider=StaticProvider.of([item.value for item in BaseTitle], kind="record_class"),
             kind=SourceKind.ENUMERABLE,
             kind_label="record_class",
         ),

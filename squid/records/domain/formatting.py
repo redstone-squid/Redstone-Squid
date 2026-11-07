@@ -3,7 +3,7 @@
 from typing import Protocol
 
 from squid.catalogue.domain.titles import DoorCategory, ExtenderCategory, FormattedTitle, RulesTitleFormatter
-from squid.records.domain.models import RecordClass
+from squid.records.domain.models import BaseTitle
 
 __all__ = ["DoorCategory", "ExtenderCategory", "FormattedTitle", "RulesTitleFormatter", "TitleFormatter"]
 
@@ -19,6 +19,6 @@ class TitleFormatter(Protocol):
         """Format a piston-extender category."""
         ...
 
-    def format_record(self, record_class: RecordClass, category: FormattedTitle) -> FormattedTitle:
+    def format_record(self, record_class: BaseTitle, category: FormattedTitle) -> FormattedTitle:
         """Prefix a category with its record class."""
         ...

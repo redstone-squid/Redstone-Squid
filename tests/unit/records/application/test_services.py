@@ -9,23 +9,23 @@ import pytest
 from squid.builds.application.queries import PublicBuildSummary
 from squid.core.errors import DataIntegrityError, ValidationError
 from squid.records.application.models import (
+    CandidateBuild,
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
-    PublishedRecord,
+    PublishedTitle,
     RecordGap,
     RecordLookupRequest,
-    RecordSourceCandidate,
     TitleDiagnosticGap,
 )
 from squid.records.application.ports import RecomputeLease
 from squid.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.records.domain import (
+    BaseTitle,
     BuildKind,
+    Candidate,
     DoorCategory,
     FormattedTitle,
-    RecordCandidate,
-    RecordClass,
     ResolutionStatus,
     TimingVariant,
     VersionScope,
@@ -35,10 +35,10 @@ from tests.support.record_uow import RecordQueryScope, RecordScope
 
 
 class FakeCandidates:
-    def __init__(self, candidates: Sequence[RecordSourceCandidate]) -> None:
+    def __init__(self, candidates: Sequence[CandidateBuild]) -> None:
         self.candidates = tuple(candidates)
 
-    async def list_confirmed(self, kind: BuildKind) -> Sequence[RecordSourceCandidate]:
+    async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]:
         return tuple(candidate for candidate in self.candidates if candidate.kind is kind)
 
 
@@ -52,7 +52,7 @@ class FakeRuns:
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
-        self.requested_titles: dict[str, dict[RecordClass, FormattedTitle]] = {}
+        self.requested_titles: dict[str, dict[BaseTitle, FormattedTitle]] = {}
         self.definition_identities: dict[int, CategoryIdentity] = {}
         self.gap_rows: tuple[RecordGap, ...] = ()
         self.title_gap_rows: tuple[TitleDiagnosticGap, ...] = ()
@@ -60,7 +60,7 @@ class FakeRuns:
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
         self.current_version_id: int | None = None
-        self.published_records: dict[int, PublishedRecord] = {}
+        self.published_records: dict[int, PublishedTitle] = {}
 
     async def active_ruleset_id(self) -> int:
         return 7
@@ -78,7 +78,7 @@ class FakeRuns:
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         return self.title_gap_rows
 
-    async def get_published_record(self, result_id: int) -> PublishedRecord | None:
+    async def get_published_record(self, result_id: int) -> PublishedTitle | None:
         return self.published_records.get(result_id)
 
     async def list_published_records(
@@ -89,7 +89,7 @@ class FakeRuns:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
-    ) -> Sequence[PublishedRecord]:
+    ) -> Sequence[PublishedTitle]:
         ordered = sorted(self.published_records, reverse=descending)
         if before_id is not None:
             kept = [rid for rid in ordered if (rid > before_id if descending else rid < before_id)]
@@ -111,7 +111,7 @@ class FakeRuns:
         self,
         ruleset_id: int,
         category: CategoryIdentity,
-        titles: Mapping[RecordClass, FormattedTitle],
+        titles: Mapping[BaseTitle, FormattedTitle],
     ) -> None:
         assert ruleset_id == 7
         self.requested.setdefault(category.kind, []).append(category)
@@ -162,14 +162,14 @@ def _public_build(build_id: int) -> PublicBuildSummary:
     )
 
 
-def _published_record(*holder_build_ids: int) -> PublishedRecord:
-    return PublishedRecord(
+def _published_record(*holder_build_ids: int) -> PublishedTitle:
+    return PublishedTitle(
         id=7,
         definition_id=3,
         competition_id=uuid.UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle=None,
-        record_class=RecordClass.FASTEST,
+        record_class=BaseTitle.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         status=ResolutionStatus.RESOLVED,
@@ -185,10 +185,10 @@ def _door(
     opening: int,
     restrictions: tuple[CandidateFacet, ...],
     version_ids: frozenset[int] = frozenset({3}),
-) -> RecordSourceCandidate:
-    return RecordSourceCandidate(
+) -> CandidateBuild:
+    return CandidateBuild(
         kind=BuildKind.DOOR,
-        candidate=RecordCandidate(
+        candidate=Candidate(
             build_id=build_id,
             completion_at=datetime(2020, 1, build_id, tzinfo=UTC),
             fixed_volume=volume,
@@ -227,11 +227,11 @@ async def test_rebuild_computes_eager_subsets_and_all_door_record_classes() -> N
     assert summary.resolved == 20
     batch = runs.batches[0]
     shared = [record for record in batch.records if record.competition.identity.restriction_ids == (1,)]
-    first = next(record for record in shared if record.record_class is RecordClass.FIRST)
-    smallest = next(record for record in shared if record.record_class is RecordClass.SMALLEST)
-    fastest = next(record for record in shared if record.record_class is RecordClass.FASTEST)
-    fastest_smallest = next(record for record in shared if record.record_class is RecordClass.FASTEST_SMALLEST)
-    smallest_fastest = next(record for record in shared if record.record_class is RecordClass.SMALLEST_FASTEST)
+    first = next(record for record in shared if record.record_class is BaseTitle.FIRST)
+    smallest = next(record for record in shared if record.record_class is BaseTitle.SMALLEST)
+    fastest = next(record for record in shared if record.record_class is BaseTitle.FASTEST)
+    fastest_smallest = next(record for record in shared if record.record_class is BaseTitle.FASTEST_SMALLEST)
+    smallest_fastest = next(record for record in shared if record.record_class is BaseTitle.SMALLEST_FASTEST)
     assert first.resolution.holder_ids == (1,)
     assert smallest.resolution.holder_ids == (1,)
     assert fastest.resolution.holder_ids == (2,)
@@ -284,11 +284,11 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
     ]
     assert {record.resolution.holder_ids for record in threshold_three} == {(1,)}
     assert {record.record_class: record.resolution.holder_ids for record in threshold_four} == {
-        RecordClass.FIRST: (1,),
-        RecordClass.FASTEST: (2,),
-        RecordClass.SMALLEST: (2,),
-        RecordClass.FASTEST_SMALLEST: (2,),
-        RecordClass.SMALLEST_FASTEST: (2,),
+        BaseTitle.FIRST: (1,),
+        BaseTitle.FASTEST: (2,),
+        BaseTitle.SMALLEST: (2,),
+        BaseTitle.FASTEST_SMALLEST: (2,),
+        BaseTitle.SMALLEST_FASTEST: (2,),
     }
     assert {record.title.title for record in threshold_four} == {
         "First 2x2 Door",
@@ -393,11 +393,11 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     identity = runs.requested[BuildKind.DOOR][0]
     assert identity.restriction_ids == tuple(range(1, 10))
     titles = runs.requested_titles[identity.key]
-    assert set(titles) == set(RecordClass)
+    assert set(titles) == set(BaseTitle)
     assert all("2x2" in text.title for text in titles.values())
     assert all(identity.base_key not in text.title for text in titles.values())
     exact = [record for record in runs.batches[0].records if len(record.competition.identity.restriction_ids) == 9]
-    assert {record.record_class for record in exact} == set(RecordClass)
+    assert {record.record_class for record in exact} == set(BaseTitle)
     assert all(record.competition.source == "public_lookup" for record in exact)
 
 
@@ -472,7 +472,7 @@ async def test_gaps_delegates_active_result_query() -> None:
         definition_id=1,
         title="Fastest 2x2 Door",
         subtitle=None,
-        record_class=RecordClass.FASTEST,
+        record_class=BaseTitle.FASTEST,
         build_ids=(4,),
         fields=("closing",),
     )
@@ -540,7 +540,7 @@ async def test_public_record_query_accepts_empty_nonresolved_standing() -> None:
         replace(_published_record(41), status=ResolutionStatus.UNRESOLVED),
     ],
 )
-async def test_public_record_query_rejects_status_holder_corruption(standing: PublishedRecord) -> None:
+async def test_public_record_query_rejects_status_holder_corruption(standing: PublishedTitle) -> None:
     runs = FakeRuns()
     runs.published_records[7] = standing
     service = PublicRecordQueryService(

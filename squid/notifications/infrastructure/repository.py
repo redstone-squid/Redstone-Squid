@@ -37,10 +37,10 @@ from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.models import PermissionRole, PermissionRoleAssignment
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.records.models import (
-    RecordResultHolder,
-    RecordRule,
-    RecordSeries,
-    RecordStanding,
+    RecordTitle,
+    TitleDefinition,
+    TitleHolder,
+    TitleResult,
 )
 from squid.tags.models import TagAssignment
 
@@ -174,7 +174,7 @@ class PostgresNotificationRepository:
                 )
             )
         else:
-            statement = select(exists().where(RecordSeries.public_id == subject_id))
+            statement = select(exists().where(RecordTitle.public_id == subject_id))
         return bool(await session.scalar(statement))
 
     async def add_subscription(
@@ -691,28 +691,28 @@ class PostgresNotificationRepository:
         new_rows = (
             await session.execute(
                 select(
-                    RecordRule.competition_id,
-                    RecordResultHolder.build_id,
-                    RecordRule.title,
-                    RecordSeries.record_class,
-                    RecordSeries.build_kind,
-                    RecordSeries.version_scope,
+                    TitleDefinition.competition_id,
+                    TitleHolder.build_id,
+                    TitleDefinition.title,
+                    RecordTitle.record_class,
+                    RecordTitle.build_kind,
+                    RecordTitle.version_scope,
                 )
-                .select_from(RecordRule)
-                .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
-                .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
-                .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
-                .where(RecordStanding.run_id == run_id)
+                .select_from(TitleDefinition)
+                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+                .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
+                .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
+                .where(TitleResult.run_id == run_id)
             )
         ).all()
         old_holders = set(
             await session.execute(
-                select(RecordRule.competition_id, RecordResultHolder.build_id)
-                .select_from(RecordRule)
-                .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
-                .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
-                .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
-                .where(RecordStanding.run_id == previous_run_id)
+                select(TitleDefinition.competition_id, TitleHolder.build_id)
+                .select_from(TitleDefinition)
+                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+                .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
+                .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
+                .where(TitleResult.run_id == previous_run_id)
             )
         )
         grouped: dict[int, list[_RecordGain]] = defaultdict(list)

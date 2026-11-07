@@ -38,10 +38,10 @@ from whenever import Instant
 from squid.persistence.base import Base
 from squid.persistence.queue_models import QueueColumns
 from squid.persistence.types import InstantUTC, StrEnumText, now
-from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
+from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 
 
-class RecordMaterializationSource(StrEnum):
+class MaterializationSource(StrEnum):
     """How a persisted record rule entered the active catalogue."""
 
     EAGER = "eager"
@@ -49,7 +49,7 @@ class RecordMaterializationSource(StrEnum):
     PUBLIC_LOOKUP = "public_lookup"
 
 
-class RecordFacetKind(StrEnum):
+class FacetKind(StrEnum):
     """The taxonomy role of a facet persisted for one record rule."""
 
     RESTRICTION = "restriction"
@@ -58,7 +58,7 @@ class RecordFacetKind(StrEnum):
     CATEGORY = "category"
 
 
-class RecordComputationStatus(StrEnum):
+class ComputationStatus(StrEnum):
     """The durable lifecycle state of a record computation run."""
 
     RUNNING = "running"
@@ -66,7 +66,7 @@ class RecordComputationStatus(StrEnum):
     FAILED = "failed"
 
 
-class RecordRuleset(Base, kw_only=True):
+class RulesRevision(Base, kw_only=True):
     """Calculator and formatter versions with a mutable activation timestamp."""
 
     __tablename__ = "record_rulesets"
@@ -89,7 +89,7 @@ class RecordRuleset(Base, kw_only=True):
     )
 
 
-class RecordRule(Base, kw_only=True):
+class TitleDefinition(Base, kw_only=True):
     """A ruleset-specific definition of one stable record competition."""
 
     __tablename__ = "record_definitions"
@@ -114,22 +114,22 @@ class RecordRule(Base, kw_only=True):
         ForeignKey("record_rulesets.id", name="record_definitions_ruleset_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    competition: Mapped[RecordSeries] = relationship(lazy="raise_on_sql", init=False, repr=False)
+    competition: Mapped[RecordTitle] = relationship(lazy="raise_on_sql", init=False, repr=False)
 
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
     title_diagnostics: Mapped[list[dict[str, str | list[str]]]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
     )
-    materialization_source: Mapped[RecordMaterializationSource] = mapped_column(
-        StrEnumText(RecordMaterializationSource), nullable=False, server_default=text("'eager'")
+    materialization_source: Mapped[MaterializationSource] = mapped_column(
+        StrEnumText(MaterializationSource), nullable=False, server_default=text("'eager'")
     )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
     @property
-    def record_class(self) -> RecordClass:
+    def record_class(self) -> BaseTitle:
         return self.competition.record_class
 
     @property
@@ -149,7 +149,7 @@ class RecordRule(Base, kw_only=True):
         return self.competition.category_key
 
 
-class RecordSeries(Base, kw_only=True):
+class RecordTitle(Base, kw_only=True):
     """A stable public identity for a logical record competition across rulesets."""
 
     __tablename__ = "record_competitions"
@@ -181,7 +181,7 @@ class RecordSeries(Base, kw_only=True):
     public_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
-    record_class: Mapped[RecordClass] = mapped_column(StrEnumText(RecordClass), nullable=False)
+    record_class: Mapped[BaseTitle] = mapped_column(StrEnumText(BaseTitle), nullable=False)
     build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
     version_scope: Mapped[VersionScope] = mapped_column(StrEnumText(VersionScope), nullable=False)
     version_id: Mapped[int | None] = mapped_column(
@@ -195,7 +195,7 @@ class RecordSeries(Base, kw_only=True):
     )
 
 
-class RecordDefinitionFacet(Base, kw_only=True):
+class DefinitionFacet(Base, kw_only=True):
     """A canonical taxonomy facet belonging to a record definition."""
 
     __tablename__ = "record_definition_facets"
@@ -216,12 +216,12 @@ class RecordDefinitionFacet(Base, kw_only=True):
         ),
         primary_key=True,
     )
-    facet_kind: Mapped[RecordFacetKind] = mapped_column(StrEnumText(RecordFacetKind), primary_key=True)
+    facet_kind: Mapped[FacetKind] = mapped_column(StrEnumText(FacetKind), primary_key=True)
     facet_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
 
 
-class RecordComputationRun(Base, kw_only=True):
+class ComputationRun(Base, kw_only=True):
     """A computation attempt for one build kind and version, including its publication state."""
 
     __tablename__ = "record_computation_runs"
@@ -257,8 +257,8 @@ class RecordComputationRun(Base, kw_only=True):
         ForeignKey("versions.id", name="record_computation_runs_version_id_fkey", ondelete="RESTRICT"),
         default=None,
     )
-    status: Mapped[RecordComputationStatus] = mapped_column(
-        StrEnumText(RecordComputationStatus), nullable=False, server_default=text("'running'")
+    status: Mapped[ComputationStatus] = mapped_column(
+        StrEnumText(ComputationStatus), nullable=False, server_default=text("'running'")
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     started_at: Mapped[Instant] = mapped_column(
@@ -268,7 +268,7 @@ class RecordComputationRun(Base, kw_only=True):
     error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
-class RecordStanding(Base, kw_only=True):
+class TitleResult(Base, kw_only=True):
     """The outcome for one definition in a computation run."""
 
     __tablename__ = "record_results"
@@ -308,7 +308,7 @@ class RecordStanding(Base, kw_only=True):
     )
 
 
-class RecordResultHolder(Base, kw_only=True):
+class TitleHolder(Base, kw_only=True):
     """A co-holder of a resolved computed record."""
 
     __tablename__ = "record_result_holders"
@@ -334,7 +334,7 @@ class RecordResultHolder(Base, kw_only=True):
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
 
-class RecordHolderHistory(Base, kw_only=True):
+class TitleHolderHistory(Base, kw_only=True):
     """A reconstructed interval in a definition's beaten-record chronology."""
 
     __tablename__ = "record_holder_history"

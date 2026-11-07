@@ -8,7 +8,7 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 
 
-class RecordClass(StrEnum):
+class BaseTitle(StrEnum):
     """A metric by which records are classified."""
 
     FIRST = "first"
@@ -99,7 +99,7 @@ class CandidateGap:
 
 
 @dataclass(frozen=True, slots=True)
-class RecordCandidate:
+class Candidate:
     """The fixed-volume and timing facts for one competing build."""
 
     build_id: int
@@ -126,7 +126,7 @@ class TimingReduction:
 
 
 @dataclass(frozen=True, slots=True)
-class RecordResolution:
+class TitleResolution:
     """The official holders or the decisive gaps for a competition."""
 
     status: ResolutionStatus

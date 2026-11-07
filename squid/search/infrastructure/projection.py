@@ -37,10 +37,10 @@ from squid.core.errors import DataIntegrityError
 from squid.diagnostics.log_capture import work_lost
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.models import (
-    RecordComputationRun,
-    RecordResultHolder,
-    RecordRule,
-    RecordStanding,
+    ComputationRun,
+    TitleDefinition,
+    TitleHolder,
+    TitleResult,
 )
 from squid.search.models import (
     SearchDocument,
@@ -473,11 +473,11 @@ class SearchProjectionLoader:
     async def _computed_record(self, result_id: int) -> SearchProjection | None:
         row = (
             await self._session.execute(
-                select(RecordStanding, RecordRule)
-                .options(selectinload(RecordRule.competition))
-                .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
-                .join(RecordRule, RecordRule.id == RecordStanding.definition_id)
-                .where(RecordStanding.id == result_id, RecordComputationRun.is_active.is_(True))
+                select(TitleResult, TitleDefinition)
+                .options(selectinload(TitleDefinition.competition))
+                .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
+                .join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
+                .where(TitleResult.id == result_id, ComputationRun.is_active.is_(True))
             )
         ).one_or_none()
         if row is None:
@@ -486,9 +486,9 @@ class SearchProjectionLoader:
         holders = tuple(
             (
                 await self._session.scalars(
-                    select(RecordResultHolder)
-                    .where(RecordResultHolder.result_id == result_id)
-                    .order_by(RecordResultHolder.rank, RecordResultHolder.build_id)
+                    select(TitleHolder)
+                    .where(TitleHolder.result_id == result_id)
+                    .order_by(TitleHolder.rank, TitleHolder.build_id)
                 )
             ).all()
         )

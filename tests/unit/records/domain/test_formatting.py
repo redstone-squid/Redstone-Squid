@@ -8,7 +8,7 @@ from squid.catalogue.domain import (
     TitleSection,
     TrapdoorPlacement,
 )
-from squid.records.domain.models import RecordClass
+from squid.records.domain.models import BaseTitle
 
 
 def test_formats_door_title_in_rules_order() -> None:
@@ -68,7 +68,7 @@ def test_formats_record_class_before_category() -> None:
         )
     )
 
-    record = formatter.format_record(RecordClass.SMALLEST, category)
+    record = formatter.format_record(BaseTitle.SMALLEST, category)
 
     assert record.title == "Smallest 2x2 door"
     assert record.subtitle is None

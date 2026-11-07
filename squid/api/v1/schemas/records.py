@@ -8,10 +8,10 @@ from pydantic import ConfigDict
 
 from squid.api.v1.schemas import FromDomain
 from squid.api.v1.schemas.builds import BuildSummary
-from squid.records.application.models import PublishedRecord
+from squid.records.application.models import PublishedTitle
 
 
-class RecordSummary(FromDomain[PublishedRecord]):
+class RecordSummary(FromDomain[PublishedTitle]):
     """One published computed record result."""
 
     model_config = ConfigDict(extra="forbid")
@@ -30,7 +30,7 @@ class RecordSummary(FromDomain[PublishedRecord]):
 
     @classmethod
     @override
-    def from_domain(cls, record: PublishedRecord, /) -> Self:
+    def from_domain(cls, record: PublishedTitle, /) -> Self:
         return cls(
             id=record.id,
             definition_id=record.definition_id,

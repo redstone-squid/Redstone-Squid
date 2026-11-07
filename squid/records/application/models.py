@@ -10,14 +10,14 @@ from uuid import UUID
 
 from squid.builds.application.queries import PublicBuildSummary
 from squid.records.domain import (
+    BaseTitle,
     BuildKind,
+    Candidate,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
-    RecordCandidate,
-    RecordClass,
-    RecordResolution,
     ResolutionStatus,
+    TitleResolution,
     VersionScope,
 )
 
@@ -58,11 +58,11 @@ class CandidateFacet:
 
 
 @dataclass(frozen=True, slots=True)
-class RecordSourceCandidate:
+class CandidateBuild:
     """A confirmed build plus the facts needed to derive its categories."""
 
     kind: BuildKind
-    candidate: RecordCandidate
+    candidate: Candidate
     version_ids: frozenset[int]
     restrictions: tuple[CandidateFacet, ...]
     types: tuple[CandidateFacet, ...]
@@ -90,13 +90,13 @@ class CategoryIdentity:
 
 
 @dataclass(frozen=True, slots=True)
-class CategoryCompetition:
+class CategoryCandidates:
     """Candidates and presentation facts for one category."""
 
     identity: CategoryIdentity
     facets: tuple[CandidateFacet, ...]
     category_text: FormattedTitle
-    candidates: tuple[RecordCandidate, ...]
+    candidates: tuple[Candidate, ...]
     candidate_version_ids: tuple[tuple[int, frozenset[int]], ...]
     source: MaterializationSource = "eager"
 
@@ -105,12 +105,12 @@ class CategoryCompetition:
 class ComputedRecord:
     """One record definition and its calculated outcome."""
 
-    record_class: RecordClass
+    record_class: BaseTitle
     scope: VersionScope
     version_id: int | None
-    competition: CategoryCompetition
+    competition: CategoryCandidates
     title: FormattedTitle
-    resolution: RecordResolution
+    resolution: TitleResolution
     broken_holder_ids: tuple[int, ...] = ()
     history: tuple[HolderHistoryEntry, ...] = ()
     history_complete: bool = True
@@ -142,7 +142,7 @@ class RecordGap:
     definition_id: int
     title: str
     subtitle: str | None
-    record_class: RecordClass
+    record_class: BaseTitle
     build_ids: tuple[int, ...]
     fields: tuple[str, ...]
 
@@ -157,7 +157,7 @@ class TitleDiagnosticGap:
 
 
 @dataclass(frozen=True, slots=True)
-class PublishedRecord:
+class PublishedTitle:
     """One result belonging to the active computation run for its kind and version.
 
     `id` identifies this run's result. `definition_id` identifies a rule within
@@ -169,7 +169,7 @@ class PublishedRecord:
     competition_id: UUID
     title: str
     subtitle: str | None
-    record_class: RecordClass
+    record_class: BaseTitle
     build_kind: BuildKind
     version_scope: VersionScope
     status: ResolutionStatus
@@ -181,7 +181,7 @@ class PublishedRecord:
 class PublicRecordDetail:
     """One published standing with its complete ordered public holders."""
 
-    standing: PublishedRecord
+    standing: PublishedTitle
     holder_builds: tuple[PublicBuildSummary, ...]
 
 

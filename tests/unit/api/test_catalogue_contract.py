@@ -11,9 +11,9 @@ from squid.api.v1.schemas.builds import BuildDetail, BuildSummary, DoorDetails, 
 from squid.builds.application import PublicBuildSummary
 from squid.builds.domain import MediaTypeLiteral, Status
 from squid.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
-from squid.records.application.models import PublicRecordDetail, PublishedRecord
+from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.records.application.services import PublicRecordQueryService
-from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
+from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
@@ -49,14 +49,14 @@ def catalogue_build(build_id: int, **changes: Any) -> Build:
     return build
 
 
-def published_record(*holder_build_ids: int) -> PublishedRecord:
-    return PublishedRecord(
+def published_record(*holder_build_ids: int) -> PublishedTitle:
+    return PublishedTitle(
         id=7,
         definition_id=3,
         competition_id=UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle="All versions",
-        record_class=RecordClass.FASTEST,
+        record_class=BaseTitle.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         status=ResolutionStatus.RESOLVED,
@@ -66,7 +66,7 @@ def published_record(*holder_build_ids: int) -> PublishedRecord:
 
 
 class PublicRecordFake(PublicRecordQueryService):
-    def __init__(self, record: PublishedRecord, builds: list[Build]) -> None:
+    def __init__(self, record: PublishedTitle, builds: list[Build]) -> None:
         self.record = record
         self.builds = tuple(PublicBuildSummary.from_build(build) for build in builds)
         self.requests: list[int] = []
