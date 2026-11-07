@@ -1,6 +1,6 @@
 # Reconcile Discord-derived state
 
-> **Status (2026-11-07).** Draft. Nothing below has started. Split out of
+> **Status (2026-11-07).** Decisions made; nothing below has started. Split out of
 > `docs/plans/schema-audit.md` Phase 2, where a foreign key on `votes.guild_id` turned out to depend
 > on `server_settings` rows that the bot may never have created.
 
@@ -12,14 +12,16 @@ offline, a reconnect may fall outside Discord's resume window, or a worker may c
 When an event is missed, the stored state is wrong and, for most kinds of state, nothing ever
 repairs it.
 
-Some parts of the codebase already handle this well, and they are the model to copy:
+Two parts of the codebase already repair themselves:
 
 - **Outbound posts** are reconciled. `discord_sync_queue` and `PostReconciler`
   (`squid/bot/posts/reconciler.py`) converge Discord to the database and treat `NotFound` as
-  "the post is gone" (see `docs/plans/discord-message-tracking.md`).
+  "the post is gone" (see `docs/plans/discord-message-tracking.md`). This is the model to copy.
 - **Vote reactions** are reconciled. `VoteReactionHandler.reconcile_open_reactions`
   (`squid/bot/voting/reactions.py`) runs every 60 seconds and rebuilds ballots from the reactions
-  actually on each open card.
+  actually on each open card. It does so by fetching every open card and paging through each
+  reaction's users, which breaks the request rule below. It is the one existing exception and is
+  out of scope here: unlike starboard counts, ballots decide outcomes.
 
 Inbound state elsewhere has only the event path:
 
@@ -36,18 +38,28 @@ Inbound state elsewhere has only the event path:
 Every piece of stored state derived from Discord has two paths:
 
 1. **The event path** applies changes quickly while the bot is connected.
-2. **A reconciler** reads Discord's current state and makes the database match it. It must be
-   idempotent and safe to run at any time. It runs on every `on_ready` (which fires after a fresh
-   session, not after a resume) and, where cheap enough, periodically.
+2. **A reconciler** makes the database match Discord's current state. It must be idempotent and
+   safe to run at any time.
 
 Code that writes a row depending on Discord-derived state makes sure that state exists, for example
 with get-or-create, instead of assuming the event that would have created it arrived.
 
+**Reconcilers never fan out Discord requests.** An automatic reconciler reads only what discord.py
+already caches from the gateway: `bot.guilds` and each guild's channels arrive with `READY` and
+`GUILD_CREATE` and cost no requests. Anything that needs an HTTP request per object (a message, its
+reactions) is never swept. It is checked when something uses that object, or when a user asks
+for it explicitly. A restart therefore never sets off a burst of fetches, and the reconcilers need
+no shared rate-limit budget.
+
+Not every miscount needs repairing. Where a missed event only makes a number slightly wrong
+(starboard counts), an explicit, user-triggered repair is enough.
+
 ## Phase 1 — Guild presence
 
-- Add a guild-presence reconciler that runs on `on_ready`. It compares `bot.guilds` with
-  `server_settings`, creates missing rows, and sets `in_server` to match reality in both
-  directions. It reuses `SettingsService.guild_joined` / `guild_removed`.
+- Add a guild-presence reconciler that runs on `on_ready` (a fresh session, not a resume). It
+  compares the cached `bot.guilds` with `server_settings`, creates missing rows, and sets
+  `in_server` to match reality in both directions. It reuses `SettingsService.guild_joined` /
+  `guild_removed`.
 - Make casting a vote ensure the guild's settings row exists, using `get_or_create_for_update`'s
   insert-on-conflict (`squid/settings/infrastructure/repository.py`), in the same transaction as
   the vote.
@@ -62,28 +74,29 @@ with get-or-create, instead of assuming the event that would have created it arr
 ## Phase 2 — Channels that no longer exist
 
 - Extend the presence reconciler to check channel ids stored in `server_settings` and starboard
-  configuration against each guild's current channels. Clear or disable the ones that are gone,
+  configuration against each guild's cached channels. Clear or disable the ones that are gone,
   using the same logic as `on_guild_channel_delete`.
 - Handle `on_guild_channel_delete` for the `server_settings` channel ids too, not only for
   starboard.
 
-## Phase 3 — Starboard catch-up
+## Phase 3 — Starboard recount on request
 
-Starboard entries currently depend on seeing every reaction event. Give starboard a reconciler
-modeled on `reconcile_open_reactions`: re-read the reactions on recently active origin messages and
-update the entries.
+**Decision:** no automatic starboard reconciliation. A reaction missed while the bot was offline
+leaves a count slightly low, which is not worth a sweep. Follow
+[Starboard-4](https://github.com/CircuitSacul/Starboard-4) (`src/core/starboard/recount.rs`,
+`src/interactions/commands/chat/utils/recount.rs`):
 
-## Phase 4 — Source message facts
+- Add a `recount <message link>` command that re-reads the reactions on one origin message,
+  rebuilds its starboard votes, and refreshes its entries.
+- Allow one recount per message at a time (a per-message lock), and add a per-guild cooldown so
+  the command cannot become a request burst.
+- The reaction event path gets or creates the origin message row, as Starboard-4's
+  `get_or_create_original` does, instead of assuming an earlier event recorded it.
 
-`messages` rows for messages the bot did not post (build source messages) are refreshed only by
-edit and delete events. Re-check a source message against Discord whenever something uses it
-(for example rendering a build that cites it), and mark it deleted on `NotFound`, the same way
-`PostReconciler` does for posts.
+## Phase 4 — Source messages, checked on use
 
-## Decisions to make before starting
-
-- **Phase 3 window:** how far back starboard catch-up looks (for example origin messages from the
-  last 7 days) and how often it runs. Re-reading every reaction on every message is too expensive.
-- **Phase 4 trigger:** check on use only, or also run a periodic sweep over recently cited messages.
-- **Rate limits:** whether all reconcilers share one budget for Discord requests at startup, so a
-  restart in many guilds does not set off a burst of fetches.
+**Decision:** check only when used, never in a sweep. `messages` rows for messages the bot did not
+post (build source messages) are otherwise refreshed only by edit and delete events. Whenever
+something uses a source message (for example rendering a build that cites it), fetch it, update
+the stored content, and mark it deleted on `NotFound`, the same way `PostReconciler` does for
+posts.
