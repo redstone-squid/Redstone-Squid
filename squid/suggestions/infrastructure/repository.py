@@ -112,7 +112,7 @@ class PostgresSuggestionRepository:
             for row in rows
         ]
 
-    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]:
+    async def title_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]:
         """Return definition ids with the title an admin recognizes them by.
 
         Only the all-time scope is offered: every current-scope category has an all-time twin, and
@@ -120,7 +120,7 @@ class PostgresSuggestionRepository:
         """
         statement = (
             select(TitleDefinition.id, TitleDefinition.title, RecordTitle.build_kind)
-            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
             .where(RecordTitle.version_scope == VersionScope.ALL_TIME)
         )
         terms = query.strip()
@@ -187,20 +187,20 @@ class PostgresSuggestionRepository:
         session = self._session()
         return [value for value in (await session.scalars(statement)).all() if value is not None]
 
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
-        """Return record competition UUIDs with the newest definition's readable title.
+    async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
+        """Return record title UUIDs with the newest definition's readable title.
 
-        The highest definition ID supplies the title and subtitle. Competitions
+        The highest definition ID supplies the title and subtitle. Record titles
         without a definition are omitted.
         """
         latest = (
-            select(TitleDefinition.competition_id, TitleDefinition.title, TitleDefinition.subtitle)
-            .distinct(TitleDefinition.competition_id)
-            .order_by(TitleDefinition.competition_id, TitleDefinition.id.desc())
+            select(TitleDefinition.title_id, TitleDefinition.title, TitleDefinition.subtitle)
+            .distinct(TitleDefinition.title_id)
+            .order_by(TitleDefinition.title_id, TitleDefinition.id.desc())
             .subquery()
         )
         statement = select(RecordTitle.public_id, latest.c.title, latest.c.subtitle).join(
-            latest, latest.c.competition_id == RecordTitle.public_id
+            latest, latest.c.title_id == RecordTitle.public_id
         )
         terms = query.strip()
         if terms:

@@ -56,7 +56,7 @@ def test_formats_extender_title_in_rules_order() -> None:
     assert category.subtitle == "slimeless"
 
 
-def test_formats_record_class_before_category() -> None:
+def test_formats_base_title_before_category() -> None:
     formatter = RulesTitleFormatter()
     category = formatter.format_door(
         DoorCategory(

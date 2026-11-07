@@ -202,8 +202,8 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
                         tr(t"Follow a record"),
                         (
                             sl.forms.TextField(
-                                key="competition",
-                                label=tr(t"Record competition ID"),
+                                key="record_title",
+                                label=tr(t"Record title ID"),
                                 maximum=36,
                             ),
                         ),
@@ -309,30 +309,30 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
         await self._followed(event, tr(t"Following that creator."))
 
     async def _follow_record(self, event: sd.SubmitEvent) -> None:
-        """Follow the stable competition UUID, so the subscription survives record rebuilds."""
-        competition = self._uuid(event.values["competition"])
-        if competition is None:
-            await event.notice(tr(t"Enter a record competition ID in UUID form."))
+        """Follow the stable record title UUID, so the subscription survives record rebuilds."""
+        record_title = self._uuid(event.values["record_title"])
+        if record_title is None:
+            await event.notice(tr(t"Enter a record title ID in UUID form."))
             return
         await self._notifications.subscribe(
             self._account_id,
             kind=SubscriptionKind.RECORD,
-            subject_id=competition,
+            subject_id=record_title,
         )
         await self._followed(event, tr(t"Following that record."))
 
     async def _follow_filter(self, event: sd.SubmitEvent) -> None:
         build_kind = self._optional_text(event.values.get("build_kind"))
-        record_class = self._optional_text(event.values.get("record_class"))
+        base_title = self._optional_text(event.values.get("base_title"))
         version_scope = self._optional_text(event.values.get("version_scope"))
         tag = event.values.get("tag")
         tag_value = self._optional_text(event.values.get("tag_value"))
-        if not any((build_kind, record_class, version_scope, tag is not None)):
+        if not any((build_kind, base_title, version_scope, tag is not None)):
             await event.notice(tr(t"Choose at least one record filter."))
             return
         record_filter = RecordSubscriptionFilter(
             build_kinds=frozenset({build_kind}) if build_kind else frozenset(),
-            record_classes=frozenset({record_class}) if record_class else frozenset(),
+            base_titles=frozenset({base_title}) if base_title else frozenset(),
             version_scopes=frozenset({version_scope}) if version_scope else frozenset(),
             tags=()
             if tag is None
@@ -372,7 +372,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
             tr(t"Follow matching records"),
             (
                 sl.forms.TextField(key="build_kind", label=tr(t"Build kind"), required=False, maximum=100),
-                sl.forms.TextField(key="record_class", label=tr(t"Record class"), required=False, maximum=100),
+                sl.forms.TextField(key="base_title", label=tr(t"Base title"), required=False, maximum=100),
                 sl.forms.TextField(key="version_scope", label=tr(t"Version scope"), required=False, maximum=100),
                 sl.forms.IntField(key="tag", label=tr(t"Showcase tag ID"), required=False, minimum=1),
                 sl.forms.TextField(key="tag_value", label=tr(t"Exact tag value"), required=False, maximum=100),
@@ -435,7 +435,7 @@ def _filter_text(record_filter: RecordSubscriptionFilter) -> str:
     """Format a structured subscription filter as readable predicate values."""
     parts = [
         ", ".join(sorted(values))
-        for values in (record_filter.build_kinds, record_filter.record_classes, record_filter.version_scopes)
+        for values in (record_filter.build_kinds, record_filter.base_titles, record_filter.version_scopes)
         if values
     ]
     parts.extend(

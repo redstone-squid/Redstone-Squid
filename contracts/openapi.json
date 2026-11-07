@@ -9120,7 +9120,7 @@
           "notifications"
         ],
         "summary": "Create Subscription",
-        "description": "Subscribe to a public creator, record competition, or structured filter.",
+        "description": "Subscribe to a public creator, record title, or structured filter.",
         "operationId": "notification_subscription_create",
         "security": [
           {
@@ -22055,7 +22055,7 @@
           "kind"
         ],
         "title": "NotificationSubscriptionCreate",
-        "description": "A subscription to a creator, a record competition, or a record filter.\n\nCreator and record subscriptions require subject_id and forbid filter.\nRecord-filter subscriptions require filter and forbid subject_id."
+        "description": "A subscription to a creator, a record title, or a record filter.\n\nCreator and record subscriptions require subject_id and forbid filter.\nRecord-filter subscriptions require filter and forbid subject_id."
       },
       "NotificationSubscriptionDetail": {
         "properties": {
@@ -22907,10 +22907,10 @@
             "type": "integer",
             "title": "Definition Id"
           },
-          "competition_id": {
+          "title_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Competition Id"
+            "title": "Title Id"
           },
           "title": {
             "type": "string",
@@ -22927,9 +22927,9 @@
             ],
             "title": "Subtitle"
           },
-          "record_class": {
+          "base_title": {
             "type": "string",
-            "title": "Record Class"
+            "title": "Base Title"
           },
           "build_kind": {
             "type": "string",
@@ -22968,10 +22968,10 @@
         "required": [
           "id",
           "definition_id",
-          "competition_id",
+          "title_id",
           "title",
           "subtitle",
-          "record_class",
+          "base_title",
           "build_kind",
           "version_scope",
           "status",
@@ -22998,7 +22998,7 @@
             "uniqueItems": true,
             "title": "Build Kinds"
           },
-          "record_classes": {
+          "base_titles": {
             "items": {
               "type": "string",
               "enum": [
@@ -23011,14 +23011,14 @@
             },
             "type": "array",
             "uniqueItems": true,
-            "title": "Record Classes"
+            "title": "Base Titles"
           },
           "version_scopes": {
             "items": {
               "type": "string",
               "enum": [
                 "all_time",
-                "current"
+                "up_to_date"
               ]
             },
             "type": "array",
@@ -23068,9 +23068,9 @@
             "type": "string",
             "title": "Build Title"
           },
-          "record_class": {
+          "base_title": {
             "type": "string",
-            "title": "Record Class"
+            "title": "Base Title"
           },
           "version_scope": {
             "type": "string",
@@ -23112,7 +23112,7 @@
           "subtitle",
           "build_id",
           "build_title",
-          "record_class",
+          "base_title",
           "version_scope",
           "tags",
           "metrics"
@@ -23162,10 +23162,10 @@
             "type": "integer",
             "title": "Definition Id"
           },
-          "competition_id": {
+          "title_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Competition Id"
+            "title": "Title Id"
           },
           "title": {
             "type": "string",
@@ -23182,9 +23182,9 @@
             ],
             "title": "Subtitle"
           },
-          "record_class": {
+          "base_title": {
             "type": "string",
-            "title": "Record Class"
+            "title": "Base Title"
           },
           "build_kind": {
             "type": "string",
@@ -23216,10 +23216,10 @@
         "required": [
           "id",
           "definition_id",
-          "competition_id",
+          "title_id",
           "title",
           "subtitle",
-          "record_class",
+          "base_title",
           "build_kind",
           "version_scope",
           "status",

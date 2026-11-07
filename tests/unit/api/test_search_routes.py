@@ -91,7 +91,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
                 subtitle="all-time",
                 build_id=42,
                 build_title="A door",
-                record_class="smallest",
+                base_title="smallest",
                 version_scope="all-time",
                 score=1.0,
                 metrics={"volume": 30},

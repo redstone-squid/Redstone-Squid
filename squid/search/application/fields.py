@@ -121,7 +121,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("version", FieldType.TEXT),
         FieldDefinition("status", FieldType.TEXT),
         FieldDefinition("kind", FieldType.TEXT),
-        FieldDefinition("record_class", FieldType.TEXT),
+        FieldDefinition("base_title", FieldType.TEXT),
         FieldDefinition("version_scope", FieldType.TEXT),
         FieldDefinition("record_state", FieldType.TEXT),
         FieldDefinition("volume", FieldType.NUMBER, supports_range=True),

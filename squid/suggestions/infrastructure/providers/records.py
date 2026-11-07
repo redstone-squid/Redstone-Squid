@@ -12,7 +12,7 @@ from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 class RecordDefinitionReader(Protocol):
     """Read record definitions by the title an admin recognizes them by."""
 
-    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
+    async def title_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
 
 
 class CreatorReader(Protocol):
@@ -28,7 +28,7 @@ class RecordDefinitionProvider:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        rows = await self._reader.record_definitions(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        rows = await self._reader.title_definitions(request.query, limit=request.limit or MAX_SUGGESTIONS)
         return tuple(
             candidate(
                 str(definition_id),
@@ -47,10 +47,10 @@ class CreatorProfileReader(Protocol):
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
 
 
-class CompetitionReader(Protocol):
-    """Read record competition identifiers."""
+class RecordTitleReader(Protocol):
+    """Read record title identifiers."""
 
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
+    async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
 
 
 class CreatorProfileProvider:
@@ -64,23 +64,23 @@ class CreatorProfileProvider:
         return tuple(candidate(creator_id, label=name, kind="creator", terms=(name,)) for creator_id, name in profiles)
 
 
-class CompetitionProvider:
-    """Suggest record competitions by their record title, submitting the public UUID."""
+class RecordTitleProvider:
+    """Suggest record titles by their record title, submitting the public UUID."""
 
-    def __init__(self, reader: CompetitionReader) -> None:
+    def __init__(self, reader: RecordTitleReader) -> None:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        competitions = await self._reader.competitions(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        record_titles = await self._reader.record_titles(request.query, limit=request.limit or MAX_SUGGESTIONS)
         return tuple(
             candidate(
                 public_id,
                 label=title,
                 description=subtitle,
-                kind="competition",
+                kind="record_title",
                 terms=(title, subtitle) if subtitle else (title,),
             )
-            for public_id, title, subtitle in competitions
+            for public_id, title, subtitle in record_titles
         )
 
 

@@ -29,6 +29,7 @@ from squid.records.domain import (
     TitleResolution,
     VersionScope,
 )
+from squid.records.domain.models import FacetKind
 from squid.records.models import (
     ComputationRun,
     DefinitionFacet,
@@ -43,7 +44,7 @@ from tests.support.submission_targets import seed_account_and_version, submissio
 from tests.support.unit_of_work import transact
 
 
-def _batch(ruleset_id: int, build_ids: list[int]) -> ComputationBatch:
+def _batch(rules_revision_id: int, build_ids: list[int]) -> ComputationBatch:
     started_at = datetime(2020, 1, 1, tzinfo=UTC)
     candidates = tuple(
         Candidate(
@@ -53,7 +54,7 @@ def _batch(ruleset_id: int, build_ids: list[int]) -> ComputationBatch:
         )
         for index, build_id in enumerate(build_ids)
     )
-    competition = CategoryCandidates(
+    record_title = CategoryCandidates(
         identity=CategoryIdentity(BuildKind.DOOR, "door|2x3|t[20]|Door", ()),
         facets=(),
         category_text=FormattedTitle("2x3 Door"),
@@ -61,10 +62,10 @@ def _batch(ruleset_id: int, build_ids: list[int]) -> ComputationBatch:
         candidate_version_ids=tuple((candidate.build_id, frozenset()) for candidate in candidates),
     )
     computed = ComputedRecord(
-        record_class=BaseTitle.SMALLEST,
+        base_title=BaseTitle.SMALLEST,
         scope=VersionScope.ALL_TIME,
         version_id=None,
-        competition=competition,
+        category=record_title,
         title=FormattedTitle("Smallest 2x3 Door"),
         resolution=TitleResolution(ResolutionStatus.RESOLVED, holder_ids=(build_ids[-1],)),
         history=tuple(
@@ -77,7 +78,9 @@ def _batch(ruleset_id: int, build_ids: list[int]) -> ComputationBatch:
             if candidate.completion_at is not None
         ),
     )
-    return ComputationBatch(ruleset_id=ruleset_id, kind=BuildKind.DOOR, version_id=None, records=(computed,))
+    return ComputationBatch(
+        rules_revision_id=rules_revision_id, kind=BuildKind.DOOR, version_id=None, records=(computed,)
+    )
 
 
 async def test_activation_batches_history_and_replaces_the_previous_run(
@@ -93,14 +96,14 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
         assert build.id is not None
         build_ids.append(build.id)
     records = partial(SqlAlchemyUnitOfWork, sessions)
-    batch = _batch(await transact(records, lambda uow: uow.records.active_ruleset_id(), commit=True), build_ids)
+    batch = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), build_ids)
 
     first_run = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
     with record_queries(sessions) as statements:
         current_run = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
 
     history_inserts = [
-        statement for statement in statements if statement.startswith("INSERT INTO record_holder_history")
+        statement for statement in statements if statement.startswith("INSERT INTO title_holder_history")
     ]
     assert len(history_inserts) == 1, "History must be inserted together, not flushed once per predecessor."
     async with sessions() as session:
@@ -147,7 +150,7 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
     assert published[0].computed_at.utcoffset() == timedelta(0)
 
 
-async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
+async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory
@@ -156,43 +159,43 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
     await transact(partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.builds.save(build), commit=True)
     assert build.id is not None
     records = partial(SqlAlchemyUnitOfWork, sessions)
-    seed = _batch(await transact(records, lambda uow: uow.records.active_ruleset_id(), commit=True), [build.id])
+    seed = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), [build.id])
     template = seed.records[0]
-    # Cross the SQLAlchemy bulk page boundary; every category expands into five record classes.
+    # Cross the SQLAlchemy bulk page boundary; every category expands into five base titlees.
     batch = replace(
         seed,
         records=tuple(
             replace(
                 template,
-                record_class=record_class,
+                base_title=base_title,
                 title=FormattedTitle(
-                    record_class.value, subtitle="First completion" if record_class is BaseTitle.FIRST else None
+                    base_title.value, subtitle="First completion" if base_title is BaseTitle.FIRST else None
                 ),
-                competition=replace(
-                    template.competition,
+                category=replace(
+                    template.category,
                     identity=CategoryIdentity(BuildKind.DOOR, f"door|{size}x3|t[20]|Door", (1,)),
-                    facets=(CandidateFacet(id=1, kind="restriction", name="Flush"),),
+                    facets=(CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush"),),
                 ),
                 history=(),
             )
             for size in range(1, 221)
-            for record_class in BaseTitle
+            for base_title in BaseTitle
         ),
     )
     with record_queries(sessions) as first_queries:
         await transact(records, lambda uow: uow.records.activate(batch), commit=True)
-    identity = batch.records[0].competition.identity
-    titles = {record_class: FormattedTitle(f"Requested {record_class.value}") for record_class in BaseTitle}
+    identity = batch.records[0].category.identity
+    titles = {base_title: FormattedTitle(f"Requested {base_title.value}") for base_title in BaseTitle}
     await transact(
-        records, lambda uow: uow.records.save_requested_category(batch.ruleset_id, identity, titles), commit=True
+        records, lambda uow: uow.records.save_requested_category(batch.rules_revision_id, identity, titles), commit=True
     )
     assert identity in await transact(records, lambda uow: uow.records.list_requested_categories(BuildKind.DOOR))
 
     async with sessions() as session:
         original = {
-            (row.record_class, row.category_key): (row.id, row.competition_id)
+            (row.base_title, row.category_key): (row.id, row.title_id)
             for row in (
-                await session.scalars(select(TitleDefinition).options(selectinload(TitleDefinition.competition)))
+                await session.scalars(select(TitleDefinition).options(selectinload(TitleDefinition.record_title)))
             ).all()
         }
     with record_queries(sessions) as repeated_queries:
@@ -203,7 +206,9 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
 
     async def request_category() -> None:
         await transact(
-            records, lambda uow: uow.records.save_requested_category(batch.ruleset_id, requested, titles), commit=True
+            records,
+            lambda uow: uow.records.save_requested_category(batch.rules_revision_id, requested, titles),
+            commit=True,
         )
 
     with anyio.fail_after(10):
@@ -213,33 +218,33 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
 
     async with sessions() as session:
         definitions = (
-            await session.scalars(select(TitleDefinition).options(selectinload(TitleDefinition.competition)))
+            await session.scalars(select(TitleDefinition).options(selectinload(TitleDefinition.record_title)))
         ).all()
         facets = (await session.scalars(select(DefinitionFacet))).all()
     assert len(definitions) == 1105
     assert len(facets) == 1110
     for definition in definitions:
-        key = (definition.record_class, definition.category_key)
+        key = (definition.base_title, definition.category_key)
         if key in original:
-            assert (definition.id, definition.competition_id) == original[key]
+            assert (definition.id, definition.title_id) == original[key]
         if definition.category_key in {identity.key, requested.key}:
             assert definition.materialization_source is MaterializationSource.PUBLIC_LOOKUP
     for queries in (first_queries, repeated_queries):
-        competition_writes = [query for query in queries if query.startswith("INSERT INTO record_competitions")]
-        definition_writes = [query for query in queries if query.startswith("INSERT INTO record_definitions")]
-        assert len(competition_writes) <= 2
+        record_title_writes = [query for query in queries if query.startswith("INSERT INTO record_titles")]
+        definition_writes = [query for query in queries if query.startswith("INSERT INTO title_definitions")]
+        assert len(record_title_writes) <= 2
         assert len(definition_writes) <= 2
 
     async with sessions.begin() as session:
-        next_ruleset = RulesRevision(
-            document_hash="next-test-ruleset", calculator_version="next", formatter_version="same"
+        next_rules_revision = RulesRevision(
+            document_hash="next-test-rules_revision", calculator_version="next", formatter_version="same"
         )
-        session.add(next_ruleset)
+        session.add(next_rules_revision)
         await session.flush()
-        next_ruleset_id = next_ruleset.id
+        next_rules_revision_id = next_rules_revision.id
         version_id = await session.scalar(select(Version.id).where(Version.data_version == 3953))
     assert version_id is not None
-    next_batch = replace(batch, ruleset_id=next_ruleset_id, records=batch.records[:5])
+    next_batch = replace(batch, rules_revision_id=next_rules_revision_id, records=batch.records[:5])
     await transact(records, lambda uow: uow.records.activate(next_batch), commit=True)
     await transact(
         records,
@@ -248,7 +253,8 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
                 next_batch,
                 version_id=version_id,
                 records=tuple(
-                    replace(record, scope=VersionScope.CURRENT, version_id=version_id) for record in next_batch.records
+                    replace(record, scope=VersionScope.UP_TO_DATE, version_id=version_id)
+                    for record in next_batch.records
                 ),
             )
         ),
@@ -258,15 +264,15 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
         next_definitions = (
             await session.scalars(
                 select(TitleDefinition)
-                .options(selectinload(TitleDefinition.competition))
-                .where(TitleDefinition.ruleset_id == next_ruleset_id)
+                .options(selectinload(TitleDefinition.record_title))
+                .where(TitleDefinition.rules_revision_id == next_rules_revision_id)
             )
         ).all()
     assert len(next_definitions) == 10
     for definition in next_definitions:
-        previous_id, previous_public_id = original[(definition.record_class, definition.category_key)]
+        previous_id, previous_public_id = original[(definition.base_title, definition.category_key)]
         assert definition.id != previous_id
         if definition.version_scope is VersionScope.ALL_TIME:
-            assert definition.competition_id == previous_public_id
+            assert definition.title_id == previous_public_id
         else:
-            assert definition.competition_id != previous_public_id
+            assert definition.title_id != previous_public_id

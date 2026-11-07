@@ -40,13 +40,13 @@ def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
 
 def test_gap_rows_carry_the_definition_title() -> None:
     definition = TitleDefinition(
-        ruleset_id=1,
+        rules_revision_id=1,
         title="Fastest 2x2 Door",
         subtitle="All-time",
         materialization_source=MaterializationSource.EAGER,
     )
-    definition.competition = RecordTitle(
-        record_class=BaseTitle.FASTEST,
+    definition.record_title = RecordTitle(
+        base_title=BaseTitle.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         category_key="door:door|2x2|t[20]|Door:r[]:p[]",
@@ -68,22 +68,22 @@ def test_gap_rows_carry_the_definition_title() -> None:
     assert gap.fields == ("closing",)
 
 
-def test_record_definitions_persist_canonical_title_metadata() -> None:
+def test_title_definitions_persist_canonical_title_metadata() -> None:
     assert {"title", "subtitle", "title_diagnostics"} <= set(TitleDefinition.__table__.columns.keys())
 
 
-def test_record_definitions_allow_every_record_class() -> None:
+def test_title_definitions_allow_every_base_title() -> None:
     table = cast(Table, RecordTitle.__table__)
     constraint = next(
         constraint
         for constraint in table.constraints
-        if isinstance(constraint, CheckConstraint) and constraint.name == "record_competitions_record_class_check"
+        if isinstance(constraint, CheckConstraint) and constraint.name == "record_titles_base_title_check"
     )
 
-    assert all(record_class.value in str(constraint.sqltext) for record_class in BaseTitle)
+    assert all(base_title.value in str(constraint.sqltext) for base_title in BaseTitle)
 
 
-def test_active_run_identity_is_global_across_rulesets() -> None:
+def test_active_run_identity_is_global_across_rules_revisions() -> None:
     active_index = next(
         index
         for index in ComputationRun.__table_args__

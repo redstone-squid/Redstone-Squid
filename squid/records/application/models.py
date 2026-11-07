@@ -1,11 +1,8 @@
 """Application data transferred between record computation and persistence."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
 from uuid import UUID
 
 from squid.builds.application.queries import PublicBuildSummary
@@ -20,9 +17,7 @@ from squid.records.domain import (
     TitleResolution,
     VersionScope,
 )
-
-FacetKind = Literal["restriction", "type", "pattern", "category"]
-MaterializationSource = Literal["eager", "seeded", "public_lookup"]
+from squid.records.domain.models import FacetKind, MaterializationSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +67,7 @@ class CandidateBuild:
 
 @dataclass(frozen=True, slots=True)
 class CategoryIdentity:
-    """A stable competition category shared by qualifying builds.
+    """A stable category category shared by qualifying builds.
 
     Callers provide sorted restriction IDs and values; `key` preserves their order.
     """
@@ -98,17 +93,17 @@ class CategoryCandidates:
     category_text: FormattedTitle
     candidates: tuple[Candidate, ...]
     candidate_version_ids: tuple[tuple[int, frozenset[int]], ...]
-    source: MaterializationSource = "eager"
+    source: MaterializationSource = MaterializationSource.EAGER
 
 
 @dataclass(frozen=True, slots=True)
 class ComputedRecord:
     """One record definition and its calculated outcome."""
 
-    record_class: BaseTitle
+    base_title: BaseTitle
     scope: VersionScope
     version_id: int | None
-    competition: CategoryCandidates
+    category: CategoryCandidates
     title: FormattedTitle
     resolution: TitleResolution
     broken_holder_ids: tuple[int, ...] = ()
@@ -129,7 +124,7 @@ class HolderHistoryEntry:
 class ComputationBatch:
     """A replacement run for one build kind; a null version includes all versions."""
 
-    ruleset_id: int
+    rules_revision_id: int
     kind: BuildKind
     version_id: int | None
     records: tuple[ComputedRecord, ...]
@@ -142,7 +137,7 @@ class RecordGap:
     definition_id: int
     title: str
     subtitle: str | None
-    record_class: BaseTitle
+    base_title: BaseTitle
     build_ids: tuple[int, ...]
     fields: tuple[str, ...]
 
@@ -160,16 +155,16 @@ class TitleDiagnosticGap:
 class PublishedTitle:
     """One result belonging to the active computation run for its kind and version.
 
-    `id` identifies this run's result. `definition_id` identifies a rule within
-    its ruleset, while `competition_id` stays stable across rulesets and runs.
+    `id` identifies this run's result. `definition_id` identifies a definition within
+    its rules revision, while `title_id` stays stable across rules revisions and runs.
     """
 
     id: int
     definition_id: int
-    competition_id: UUID
+    title_id: UUID
     title: str
     subtitle: str | None
-    record_class: BaseTitle
+    base_title: BaseTitle
     build_kind: BuildKind
     version_scope: VersionScope
     status: ResolutionStatus
@@ -179,9 +174,9 @@ class PublishedTitle:
 
 @dataclass(frozen=True, slots=True)
 class PublicRecordDetail:
-    """One published standing with its complete ordered public holders."""
+    """One published result with its complete ordered public holders."""
 
-    standing: PublishedTitle
+    result: PublishedTitle
     holder_builds: tuple[PublicBuildSummary, ...]
 
 

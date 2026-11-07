@@ -85,10 +85,10 @@ def _most_recent_discord_identity_id(account_column):
 
 @dataclass(frozen=True, slots=True)
 class _RecordGain:
-    competition_id: UUID
+    title_id: UUID
     build_id: int
     title: str
-    record_class: str
+    base_title: str
     build_kind: str
     version_scope: str
 
@@ -556,9 +556,9 @@ class PostgresNotificationRepository:
                 "build_id": build_id,
                 "records": [
                     {
-                        "competition_id": str(gain.competition_id),
+                        "title_id": str(gain.title_id),
                         "title": gain.title,
-                        "record_class": gain.record_class,
+                        "base_title": gain.base_title,
                         "build_kind": gain.build_kind,
                         "version_scope": gain.version_scope,
                     }
@@ -691,15 +691,15 @@ class PostgresNotificationRepository:
         new_rows = (
             await session.execute(
                 select(
-                    TitleDefinition.competition_id,
+                    TitleDefinition.title_id,
                     TitleHolder.build_id,
                     TitleDefinition.title,
-                    RecordTitle.record_class,
+                    RecordTitle.base_title,
                     RecordTitle.build_kind,
                     RecordTitle.version_scope,
                 )
                 .select_from(TitleDefinition)
-                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
                 .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
                 .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
                 .where(TitleResult.run_id == run_id)
@@ -707,21 +707,19 @@ class PostgresNotificationRepository:
         ).all()
         old_holders = set(
             await session.execute(
-                select(TitleDefinition.competition_id, TitleHolder.build_id)
+                select(TitleDefinition.title_id, TitleHolder.build_id)
                 .select_from(TitleDefinition)
-                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+                .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
                 .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
                 .join(TitleHolder, TitleHolder.result_id == TitleResult.id)
                 .where(TitleResult.run_id == previous_run_id)
             )
         )
         grouped: dict[int, list[_RecordGain]] = defaultdict(list)
-        for competition_id, build_id, title, record_class, build_kind, version_scope in new_rows:
-            if (competition_id, build_id) in old_holders:
+        for title_id, build_id, title, base_title, build_kind, version_scope in new_rows:
+            if (title_id, build_id) in old_holders:
                 continue
-            grouped[build_id].append(
-                _RecordGain(competition_id, build_id, title, record_class, build_kind, version_scope)
-            )
+            grouped[build_id].append(_RecordGain(title_id, build_id, title, base_title, build_kind, version_scope))
         return {build_id: tuple(values) for build_id, values in grouped.items()}
 
     @staticmethod
@@ -752,7 +750,7 @@ class PostgresNotificationRepository:
             creator_ids[build_id].add(public_creator_id)
 
         relevant_subjects: set[UUID] = set().union(*creator_ids.values())
-        relevant_subjects.update(gain.competition_id for build_gains in gains.values() for gain in build_gains)
+        relevant_subjects.update(gain.title_id for build_gains in gains.values() for gain in build_gains)
         exact_subscriptions = (
             await session.execute(
                 select(
@@ -771,7 +769,7 @@ class PostgresNotificationRepository:
                 subjects = (
                     creator_ids[build_id]
                     if kind is SubscriptionKind.CREATOR
-                    else {gain.competition_id for gain in build_gains}
+                    else {gain.title_id for gain in build_gains}
                 )
                 if subject_id in subjects:
                     recipients[build_id].add(account_id)
@@ -852,7 +850,7 @@ def _filter_matches(
 ) -> bool:
     if record_filter.build_kinds and gain.build_kind not in record_filter.build_kinds:
         return False
-    if record_filter.record_classes and gain.record_class not in record_filter.record_classes:
+    if record_filter.base_titles and gain.base_title not in record_filter.base_titles:
         return False
     if record_filter.version_scopes and gain.version_scope not in record_filter.version_scopes:
         return False

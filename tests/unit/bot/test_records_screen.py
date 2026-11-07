@@ -111,7 +111,7 @@ async def test_records_use_tabs_and_browsers_for_diagnostics() -> None:
 
 
 async def test_lookup_materializes_and_refreshes_diagnostics() -> None:
-    """A numeric lookup selects a RecordRule definition, then refreshes its evidence diagnostics."""
+    """A numeric lookup selects a TitleDefinition definition, then refreshes its evidence diagnostics."""
     harness = make_screen()
     screen = harness.screen
     await screen.on_load()

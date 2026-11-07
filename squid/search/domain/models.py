@@ -88,7 +88,7 @@ class RecordSearchHit:
     subtitle: str | None
     build_id: int
     build_title: str
-    record_class: str
+    base_title: str
     version_scope: str
     score: float | None = None
     tags: tuple[str, ...] = ()

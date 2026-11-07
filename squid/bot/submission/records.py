@@ -1,7 +1,7 @@
 """Inspect unresolved record results and request category lookups or rebuilds.
 
-Diagnostics identify a RecordRule by its integer definition ID. That ruleset-specific
-definition is distinct from the stable RecordSeries competition UUID used by record
+Diagnostics identify a TitleDefinition by its integer definition ID. That rules_revision-specific
+definition is distinct from the stable RecordTitle record_title UUID used by record
 subscriptions. Lookup accepts a definition ID or an exact category; the record
 service persists the requested category and recomputes its standings.
 """

@@ -53,10 +53,10 @@ def published_record(*holder_build_ids: int) -> PublishedTitle:
     return PublishedTitle(
         id=7,
         definition_id=3,
-        competition_id=UUID("22222222-2222-2222-2222-222222222222"),
+        title_id=UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle="All versions",
-        record_class=BaseTitle.FASTEST,
+        base_title=BaseTitle.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         status=ResolutionStatus.RESOLVED,
@@ -72,11 +72,11 @@ class PublicRecordFake(PublicRecordQueryService):
         self.requests: list[int] = []
 
     @override
-    async def get(self, standing_id: int) -> PublicRecordDetail | None:
-        self.requests.append(standing_id)
-        if standing_id != self.record.id:
+    async def get(self, result_id: int) -> PublicRecordDetail | None:
+        self.requests.append(result_id)
+        if result_id != self.record.id:
             return None
-        return PublicRecordDetail(standing=self.record, holder_builds=self.builds)
+        return PublicRecordDetail(result=self.record, holder_builds=self.builds)
 
 
 def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> None:

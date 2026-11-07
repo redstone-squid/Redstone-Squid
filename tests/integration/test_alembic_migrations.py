@@ -1540,3 +1540,99 @@ def test_schema_audit_backfills_legacy_rows(
         command.check(config)
     finally:
         engine.dispose()
+
+
+def test_record_terminology_preserves_identities_and_json(
+    migration_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rename populated titles and filters in both directions without losing identity or unrelated JSON."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "b9d3e6f1c4a7")
+    engine = create_engine(migration_database_url)
+    original_filter = {
+        "record_classes": ["fastest"],
+        "version_scopes": ["current", "all_time"],
+        "build_kinds": ["door"],
+    }
+    original_document = {"record_class": "fastest", "version_scope": "current", "build_kind": "door"}
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO notification_subscriptions (account_id, kind, filter) "
+                    "VALUES (:account_id, 'record_filter', CAST(:filter AS jsonb))"
+                ),
+                {"account_id": account_id, "filter": json.dumps(original_filter)},
+            )
+            title_id = connection.execute(
+                text("""
+                INSERT INTO record_competitions (record_class, build_kind, version_scope, category_key)
+                VALUES ('fastest', 'door', 'current', 'migration-test') RETURNING public_id
+            """)
+            ).scalar_one()
+            document_id = connection.execute(
+                text("""
+                    INSERT INTO search_documents
+                        (resource_kind, source_key, title, normalized_title, fuzzy_text, source_hash, document_data, tags)
+                    VALUES ('record', 'result:1', 'Fastest Door', 'fastest door', 'fastest door', 'old-hash',
+                        CAST(:document AS jsonb), ARRAY['fastest', 'current']) RETURNING id
+                """),
+                {"document": json.dumps(original_document)},
+            ).scalar_one()
+            connection.execute(
+                text("""
+                    INSERT INTO search_document_facets (document_id, field_name, ordinal, text_value)
+                    VALUES (:id, 'record_class', 0, 'fastest'), (:id, 'version_scope', 0, 'current')
+                """),
+                {"id": document_id},
+            )
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT public_id FROM record_titles")).scalar_one() == title_id
+            assert connection.execute(text("SELECT version_scope FROM record_titles")).scalar_one() == "up_to_date"
+            assert connection.execute(text("SELECT filter FROM notification_subscriptions")).scalar_one() == {
+                "base_titles": ["fastest"],
+                "version_scopes": ["up_to_date", "all_time"],
+                "build_kinds": ["door"],
+            }
+            assert connection.execute(text("SELECT document_data FROM search_documents")).scalar_one() == {
+                "base_title": "fastest",
+                "version_scope": "up_to_date",
+                "build_kind": "door",
+            }
+            assert dict(
+                connection.execute(text("SELECT field_name, text_value FROM search_document_facets")).all()
+            ) == {
+                "base_title": "fastest",
+                "version_scope": "up_to_date",
+            }
+            assert connection.execute(text("SELECT tags FROM search_documents")).scalar_one() == [
+                "fastest",
+                "up_to_date",
+            ]
+
+        command.downgrade(config, "-1")
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT public_id FROM record_competitions")).scalar_one() == title_id
+            assert connection.execute(text("SELECT version_scope FROM record_competitions")).scalar_one() == "current"
+            assert (
+                connection.execute(text("SELECT filter FROM notification_subscriptions")).scalar_one()
+                == original_filter
+            )
+            assert (
+                connection.execute(text("SELECT document_data FROM search_documents")).scalar_one() == original_document
+            )
+            assert dict(
+                connection.execute(text("SELECT field_name, text_value FROM search_document_facets")).all()
+            ) == {
+                "record_class": "fastest",
+                "version_scope": "current",
+            }
+            assert connection.execute(text("SELECT tags FROM search_documents")).scalar_one() == ["fastest", "current"]
+        command.upgrade(config, "head")
+        command.check(config)
+    finally:
+        engine.dispose()

@@ -21,7 +21,7 @@ from squid.records.models import (
 
 _MAPPINGS = (
     (TitleDefinition.__table__, "materialization_source", MaterializationSource),
-    (RecordTitle.__table__, "record_class", BaseTitle),
+    (RecordTitle.__table__, "base_title", BaseTitle),
     (RecordTitle.__table__, "build_kind", BuildKind),
     (RecordTitle.__table__, "version_scope", VersionScope),
     (DefinitionFacet.__table__, "facet_kind", FacetKind),
@@ -34,16 +34,16 @@ _MAPPINGS = (
 _CHECKS = (
     (
         TitleDefinition.__table__,
-        "record_definitions_materialization_source_check",
+        "title_definitions_materialization_source_check",
         MaterializationSource,
     ),
-    (RecordTitle.__table__, "record_competitions_record_class_check", BaseTitle),
-    (RecordTitle.__table__, "record_competitions_build_kind_check", BuildKind),
-    (RecordTitle.__table__, "record_competitions_version_scope_check", VersionScope),
-    (DefinitionFacet.__table__, "record_definition_facets_kind_check", FacetKind),
+    (RecordTitle.__table__, "record_titles_base_title_check", BaseTitle),
+    (RecordTitle.__table__, "record_titles_build_kind_check", BuildKind),
+    (RecordTitle.__table__, "record_titles_version_scope_check", VersionScope),
+    (DefinitionFacet.__table__, "title_definition_facets_kind_check", FacetKind),
     (ComputationRun.__table__, "record_computation_runs_build_kind_check", BuildKind),
     (ComputationRun.__table__, "record_computation_runs_status_check", ComputationStatus),
-    (TitleResult.__table__, "record_results_status_check", ResolutionStatus),
+    (TitleResult.__table__, "title_results_status_check", ResolutionStatus),
     (RecordRecomputeQueueItem.__table__, "record_recompute_queue_build_kind_check", BuildKind),
 )
 

@@ -9,7 +9,7 @@ __all__ = ["DoorCategory", "ExtenderCategory", "FormattedTitle", "RulesTitleForm
 
 
 class TitleFormatter(Protocol):
-    """A ruleset-specific formatter used when snapshotting record results."""
+    """A rules revision-specific formatter used when snapshotting record results."""
 
     def format_door(self, category: DoorCategory) -> FormattedTitle:
         """Format a piston-door category."""
@@ -19,6 +19,6 @@ class TitleFormatter(Protocol):
         """Format a piston-extender category."""
         ...
 
-    def format_record(self, record_class: BaseTitle, category: FormattedTitle) -> FormattedTitle:
-        """Prefix a category with its record class."""
+    def format_record(self, base_title: BaseTitle, category: FormattedTitle) -> FormattedTitle:
+        """Prefix a category with its base title."""
         ...

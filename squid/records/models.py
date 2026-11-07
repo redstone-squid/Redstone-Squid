@@ -1,16 +1,15 @@
-"""Store record definitions and the results of comparing eligible builds.
+"""Persist record titles and their results under revisions of the rules.
 
-A record competition combines a category, a record class such as fastest, and a
-Minecraft version scope. RecordSeries gives that competition a stable public ID.
-RecordRule is its definition under one RecordRuleset, which identifies the rules
-document and calculator/formatter versions used. The database names these tables
-record_competitions and record_definitions respectively.
+A BaseTitle is first, fastest, smallest, fastest smallest, or smallest fastest.
+RecordTitle combines a base title, build kind, version scope, and record category
+into a stable public identity. TitleDefinition stores its wording under one
+RulesRevision, identified by the rules document hash and calculator/formatter
+versions. DefinitionFacet stores a definition's taxonomy facets.
 
-A RecordComputationRun groups results for one build kind and version scope. Each
-RecordStanding is one definition's result in that run, with RecordResultHolder rows
-for tied winners. Public queries use the active run; replacing it keeps the old
-results for reference. A standing's result ID therefore changes across rebuilds,
-while the competition ID remains stable.
+ComputationRun groups outcomes for one build kind and version. TitleResult is a
+definition's outcome in that run; TitleHolder stores each tied record title holder.
+TitleHolderHistory records previous holders. Public queries use the active run,
+so result IDs change on recomputation while title IDs remain stable.
 """
 
 import uuid
@@ -39,23 +38,7 @@ from squid.persistence.base import Base
 from squid.persistence.queue_models import QueueColumns
 from squid.persistence.types import InstantUTC, StrEnumText, now
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
-
-
-class MaterializationSource(StrEnum):
-    """How a persisted record rule entered the active catalogue."""
-
-    EAGER = "eager"
-    SEEDED = "seeded"
-    PUBLIC_LOOKUP = "public_lookup"
-
-
-class FacetKind(StrEnum):
-    """The taxonomy role of a facet persisted for one record rule."""
-
-    RESTRICTION = "restriction"
-    TYPE = "type"
-    PATTERN = "pattern"
-    CATEGORY = "category"
+from squid.records.domain.models import FacetKind, MaterializationSource
 
 
 class ComputationStatus(StrEnum):
@@ -69,13 +52,13 @@ class ComputationStatus(StrEnum):
 class RulesRevision(Base, kw_only=True):
     """Calculator and formatter versions with a mutable activation timestamp."""
 
-    __tablename__ = "record_rulesets"
+    __tablename__ = "rules_revisions"
     __table_args__ = (
         UniqueConstraint(
             "document_hash",
             "calculator_version",
             "formatter_version",
-            name="record_rulesets_content_key",
+            name="rules_revisions_content_key",
         ),
     )
 
@@ -90,31 +73,31 @@ class RulesRevision(Base, kw_only=True):
 
 
 class TitleDefinition(Base, kw_only=True):
-    """A ruleset-specific definition of one stable record competition."""
+    """The wording of one stable record title under a rules revision."""
 
-    __tablename__ = "record_definitions"
+    __tablename__ = "title_definitions"
     __table_args__ = (
         CheckConstraint(
             "materialization_source IN ('eager', 'seeded', 'public_lookup')",
-            name="record_definitions_materialization_source_check",
+            name="title_definitions_materialization_source_check",
         ),
-        UniqueConstraint("ruleset_id", "competition_id", name="record_definitions_identity_key"),
-        Index("record_definitions_competition_idx", "competition_id"),
+        UniqueConstraint("rules_revision_id", "title_id", name="title_definitions_identity_key"),
+        Index("title_definitions_title_idx", "title_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    competition_id: Mapped[uuid.UUID] = mapped_column(
+    title_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("record_competitions.public_id", name="record_definitions_competition_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("record_titles.public_id", name="title_definitions_title_id_fkey", ondelete="RESTRICT"),
         nullable=False,
         default_factory=uuid.uuid4,
     )
-    ruleset_id: Mapped[int] = mapped_column(
+    rules_revision_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("record_rulesets.id", name="record_definitions_ruleset_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("rules_revisions.id", name="title_definitions_rules_revision_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    competition: Mapped[RecordTitle] = relationship(lazy="raise_on_sql", init=False, repr=False)
+    record_title: Mapped[RecordTitle] = relationship(lazy="raise_on_sql", init=False, repr=False)
 
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
@@ -129,51 +112,51 @@ class TitleDefinition(Base, kw_only=True):
     )
 
     @property
-    def record_class(self) -> BaseTitle:
-        return self.competition.record_class
+    def base_title(self) -> BaseTitle:
+        return self.record_title.base_title
 
     @property
     def build_kind(self) -> BuildKind:
-        return self.competition.build_kind
+        return self.record_title.build_kind
 
     @property
     def version_scope(self) -> VersionScope:
-        return self.competition.version_scope
+        return self.record_title.version_scope
 
     @property
     def version_id(self) -> int | None:
-        return self.competition.version_id
+        return self.record_title.version_id
 
     @property
     def category_key(self) -> str:
-        return self.competition.category_key
+        return self.record_title.category_key
 
 
 class RecordTitle(Base, kw_only=True):
-    """A stable public identity for a logical record competition across rulesets."""
+    """A stable public identity for a record title across rules revisions."""
 
-    __tablename__ = "record_competitions"
+    __tablename__ = "record_titles"
     __table_args__ = (
-        Index("record_competitions_category_idx", "build_kind", "record_class", "category_key"),
+        Index("record_titles_category_idx", "build_kind", "base_title", "category_key"),
         CheckConstraint(
-            "record_class IN ('first', 'fastest', 'smallest', 'fastest_smallest', 'smallest_fastest')",
-            name="record_competitions_record_class_check",
+            "base_title IN ('first', 'fastest', 'smallest', 'fastest_smallest', 'smallest_fastest')",
+            name="record_titles_base_title_check",
         ),
         CheckConstraint(
-            "version_scope IN ('all_time', 'current')",
-            name="record_competitions_version_scope_check",
+            "version_scope IN ('all_time', 'up_to_date')",
+            name="record_titles_version_scope_check",
         ),
         CheckConstraint(
             "build_kind IN ('door', 'entrance', 'extender', 'utility')",
-            name="record_competitions_build_kind_check",
+            name="record_titles_build_kind_check",
         ),
         UniqueConstraint(
-            "record_class",
+            "base_title",
             "build_kind",
             "version_scope",
             "version_id",
             "category_key",
-            name="record_competitions_identity_key",
+            name="record_titles_identity_key",
             postgresql_nulls_not_distinct=True,
         ),
     )
@@ -181,12 +164,12 @@ class RecordTitle(Base, kw_only=True):
     public_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
-    record_class: Mapped[BaseTitle] = mapped_column(StrEnumText(BaseTitle), nullable=False)
+    base_title: Mapped[BaseTitle] = mapped_column(StrEnumText(BaseTitle), nullable=False)
     build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
     version_scope: Mapped[VersionScope] = mapped_column(StrEnumText(VersionScope), nullable=False)
     version_id: Mapped[int | None] = mapped_column(
         SmallInteger,
-        ForeignKey("versions.id", name="record_competitions_version_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("versions.id", name="record_titles_version_id_fkey", ondelete="RESTRICT"),
         default=None,
     )
     category_key: Mapped[str] = mapped_column(Text, nullable=False)
@@ -198,20 +181,20 @@ class RecordTitle(Base, kw_only=True):
 class DefinitionFacet(Base, kw_only=True):
     """A canonical taxonomy facet belonging to a record definition."""
 
-    __tablename__ = "record_definition_facets"
+    __tablename__ = "title_definition_facets"
     __table_args__ = (
         CheckConstraint(
             "facet_kind IN ('restriction', 'type', 'pattern', 'category')",
-            name="record_definition_facets_kind_check",
+            name="title_definition_facets_kind_check",
         ),
-        Index("record_definition_facets_lookup_idx", "facet_kind", "facet_id"),
+        Index("title_definition_facets_lookup_idx", "facet_kind", "facet_id"),
     )
 
     definition_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
-            "record_definitions.id",
-            name="record_definition_facets_definition_id_fkey",
+            "title_definitions.id",
+            name="title_definition_facets_definition_id_fkey",
             ondelete="CASCADE",
         ),
         primary_key=True,
@@ -246,9 +229,9 @@ class ComputationRun(Base, kw_only=True):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    ruleset_id: Mapped[int] = mapped_column(
+    rules_revision_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("record_rulesets.id", name="record_computation_runs_ruleset_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("rules_revisions.id", name="record_computation_runs_rules_revision_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
     build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
@@ -271,26 +254,26 @@ class ComputationRun(Base, kw_only=True):
 class TitleResult(Base, kw_only=True):
     """The outcome for one definition in a computation run."""
 
-    __tablename__ = "record_results"
+    __tablename__ = "title_results"
     __table_args__ = (
-        Index("record_results_provisional_build_idx", "provisional_build_id"),
+        Index("title_results_provisional_build_idx", "provisional_build_id"),
         CheckConstraint(
             "status IN ('resolved', 'unresolved', 'no_candidate')",
-            name="record_results_status_check",
+            name="title_results_status_check",
         ),
-        UniqueConstraint("run_id", "definition_id", name="record_results_run_definition_key"),
-        Index("record_results_definition_idx", "definition_id"),
+        UniqueConstraint("run_id", "definition_id", name="title_results_run_definition_key"),
+        Index("title_results_definition_idx", "definition_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     run_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("record_computation_runs.id", name="record_results_run_id_fkey", ondelete="CASCADE"),
+        ForeignKey("record_computation_runs.id", name="title_results_run_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     definition_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("record_definitions.id", name="record_results_definition_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("title_definitions.id", name="title_results_definition_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
     status: Mapped[ResolutionStatus] = mapped_column(StrEnumText(ResolutionStatus), nullable=False)
@@ -299,7 +282,7 @@ class TitleResult(Base, kw_only=True):
     )
     provisional_build_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey("builds.id", name="record_results_provisional_build_id_fkey", ondelete="SET NULL"),
+        ForeignKey("builds.id", name="title_results_provisional_build_id_fkey", ondelete="SET NULL"),
         default=None,
     )
     history_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
@@ -311,20 +294,20 @@ class TitleResult(Base, kw_only=True):
 class TitleHolder(Base, kw_only=True):
     """A co-holder of a resolved computed record."""
 
-    __tablename__ = "record_result_holders"
+    __tablename__ = "title_holders"
     __table_args__ = (
-        CheckConstraint("rank > 0", name="record_result_holders_rank_check"),
-        Index("record_result_holders_build_idx", "build_id"),
+        CheckConstraint("rank > 0", name="title_holders_rank_check"),
+        Index("title_holders_build_idx", "build_id"),
     )
 
     result_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("record_results.id", name="record_result_holders_result_id_fkey", ondelete="CASCADE"),
+        ForeignKey("title_results.id", name="title_holders_result_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
     build_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("builds.id", name="record_result_holders_build_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("builds.id", name="title_holders_build_id_fkey", ondelete="RESTRICT"),
         primary_key=True,
     )
     rank: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"))
@@ -337,44 +320,44 @@ class TitleHolder(Base, kw_only=True):
 class TitleHolderHistory(Base, kw_only=True):
     """A reconstructed interval in a definition's beaten-record chronology."""
 
-    __tablename__ = "record_holder_history"
+    __tablename__ = "title_holder_history"
     __table_args__ = (
-        Index("record_holder_history_build_idx", "build_id"),
+        Index("title_holder_history_build_idx", "build_id"),
         CheckConstraint(
             "held_until IS NULL OR held_until >= held_from",
-            name="record_holder_history_interval_check",
+            name="title_holder_history_interval_check",
         ),
         UniqueConstraint(
             "run_id",
             "definition_id",
             "build_id",
             "held_from",
-            name="record_holder_history_identity_key",
+            name="title_holder_history_identity_key",
         ),
-        Index("record_holder_history_definition_idx", "definition_id", "held_from"),
+        Index("title_holder_history_definition_idx", "definition_id", "held_from"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     run_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("record_computation_runs.id", name="record_holder_history_run_id_fkey", ondelete="CASCADE"),
+        ForeignKey("record_computation_runs.id", name="title_holder_history_run_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     definition_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("record_definitions.id", name="record_holder_history_definition_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("title_definitions.id", name="title_holder_history_definition_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
     build_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("builds.id", name="record_holder_history_build_id_fkey", ondelete="RESTRICT"),
+        ForeignKey("builds.id", name="title_holder_history_build_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
     predecessor_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey(
-            "record_holder_history.id",
-            name="record_holder_history_predecessor_id_fkey",
+            "title_holder_history.id",
+            name="title_holder_history_predecessor_id_fkey",
             ondelete="SET NULL",
         ),
         default=None,

@@ -41,11 +41,11 @@ class SuggestionRepository(Protocol):
     async def documents(
         self, resource_kind: str, query: str, *, statuses: Collection[str] | None = None, limit: int
     ) -> Sequence[DocumentEntry]: ...
-    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
+    async def title_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
     async def version_ids(self) -> Sequence[tuple[int, str]]: ...
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
     async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
+    async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]: ...
 
 
@@ -67,9 +67,9 @@ class SuggestionQueryService:
         async with self._uow_factory() as uow:
             return await uow.suggestions.documents(resource_kind, query, statuses=statuses, limit=limit)
 
-    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]:
+    async def title_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]:
         async with self._uow_factory() as uow:
-            return await uow.suggestions.record_definitions(query, limit=limit)
+            return await uow.suggestions.title_definitions(query, limit=limit)
 
     async def version_ids(self) -> Sequence[tuple[int, str]]:
         async with self._uow_factory() as uow:
@@ -83,9 +83,9 @@ class SuggestionQueryService:
         async with self._uow_factory() as uow:
             return await uow.suggestions.facet_values(field_name, prefix, limit=limit)
 
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
+    async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
         async with self._uow_factory() as uow:
-            return await uow.suggestions.competitions(query, limit=limit)
+            return await uow.suggestions.record_titles(query, limit=limit)
 
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
         async with self._uow_factory() as uow:

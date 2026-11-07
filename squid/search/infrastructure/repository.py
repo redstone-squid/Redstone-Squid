@@ -417,7 +417,7 @@ def _to_hit(document: SearchDocument, score: float | None) -> SearchHit:
             subtitle=document.subtitle,
             build_id=_integer(data, "build_id"),
             build_title=_string(data, "build_title", document.title),
-            record_class=_string(data, "record_class", "unknown"),
+            base_title=_string(data, "base_title", "unknown"),
             version_scope=_string(data, "version_scope", "all-time"),
             score=score,
             tags=tags,

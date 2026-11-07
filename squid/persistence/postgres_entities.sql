@@ -232,7 +232,7 @@ CREATE FUNCTION public.enqueue_computed_record_search_projection() RETURNS trigg
 DECLARE
     target_result_id bigint;
 BEGIN
-    IF TG_TABLE_NAME = 'record_results' THEN
+    IF TG_TABLE_NAME = 'title_results' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
@@ -247,7 +247,7 @@ BEGIN
         SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
             attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
-    ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
+    ELSIF TG_TABLE_NAME = 'title_holders' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
@@ -260,7 +260,7 @@ BEGIN
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
         SELECT 'record', 'result:' || rr.id::text, 'upsert', now(), now()
-        FROM public.record_results rr
+        FROM public.title_results rr
         WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
@@ -611,9 +611,9 @@ CREATE TRIGGER creator_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE O
 
 CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
-CREATE TRIGGER record_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+CREATE TRIGGER title_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
 
-CREATE TRIGGER record_result_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_result_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+CREATE TRIGGER title_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
 
 CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR UPDATE OF is_active ON public.record_computation_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
 

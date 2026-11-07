@@ -60,7 +60,7 @@ from squid.records.models import (
 )
 from squid.tags.models import TagAssignment, TagDefinition
 
-RULESET_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
+RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "3"
 FORMATTER_VERSION = "2"
 
@@ -81,9 +81,9 @@ RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
 
 @dataclass(frozen=True, slots=True)
 class _DefinitionWrite:
-    """A record rule's mutable presentation and canonical taxonomy membership."""
+    """A title definition's mutable presentation and canonical taxonomy membership."""
 
-    record_class: BaseTitle
+    base_title: BaseTitle
     category_key: str
     title: FormattedTitle
     source: MaterializationSource
@@ -91,7 +91,7 @@ class _DefinitionWrite:
 
     @property
     def key(self) -> tuple[BaseTitle, str]:
-        return self.record_class, self.category_key
+        return self.base_title, self.category_key
 
 
 class PostgresRecordRepository:
@@ -110,10 +110,10 @@ class PostgresRecordRepository:
             return await self._list_extenders(session)
         return ()
 
-    async def active_ruleset_id(self) -> int:
-        """Return the running ruleset, activating and queuing it when needed."""
+    async def active_rules_revision_id(self) -> int:
+        """Return the active rules revision, activating and queuing it when needed."""
         session = self._session()
-        await _advisory_lock(session, "record-ruleset-activation")
+        await _advisory_lock(session, "record-rules-revision-activation")
         active_id = (
             await session.execute(
                 select(RulesRevision.id)
@@ -122,33 +122,33 @@ class PostgresRecordRepository:
                 .limit(1)
             )
         ).scalar_one_or_none()
-        ruleset = (
+        rules_revision = (
             await session.execute(
                 select(RulesRevision).where(
-                    RulesRevision.document_hash == RULESET_DOCUMENT_HASH,
+                    RulesRevision.document_hash == RULES_REVISION_DOCUMENT_HASH,
                     RulesRevision.calculator_version == CALCULATOR_VERSION,
                     RulesRevision.formatter_version == FORMATTER_VERSION,
                 )
             )
         ).scalar_one_or_none()
-        if ruleset is not None and ruleset.id == active_id:
-            return ruleset.id
+        if rules_revision is not None and rules_revision.id == active_id:
+            return rules_revision.id
 
         now = Instant.now()
-        if ruleset is None:
-            ruleset = RulesRevision(
-                document_hash=RULESET_DOCUMENT_HASH,
+        if rules_revision is None:
+            rules_revision = RulesRevision(
+                document_hash=RULES_REVISION_DOCUMENT_HASH,
                 calculator_version=CALCULATOR_VERSION,
                 formatter_version=FORMATTER_VERSION,
                 activated_at=now,
             )
-            session.add(ruleset)
+            session.add(rules_revision)
             await session.flush()
         else:
-            ruleset.activated_at = now
+            rules_revision.activated_at = now
         await session.execute(
             update(RulesRevision)
-            .where(RulesRevision.id != ruleset.id, RulesRevision.activated_at.is_not(None))
+            .where(RulesRevision.id != rules_revision.id, RulesRevision.activated_at.is_not(None))
             .values(activated_at=None)
         )
         for kind in (BuildKind.DOOR, BuildKind.EXTENDER):
@@ -157,12 +157,12 @@ class PostgresRecordRepository:
                 .values(
                     scope_key=kind.value,
                     build_kind=kind,
-                    reasons=["ruleset_activation"],
+                    reasons=["rules_revision_activation"],
                 )
                 .on_conflict_do_update(
                     index_elements=[RecordRecomputeQueueItem.scope_key],
                     set_={
-                        "reasons": ["ruleset_activation"],
+                        "reasons": ["rules_revision_activation"],
                         "enqueued_at": func.now(),
                         "available_at": func.now(),
                         "attempts": 0,
@@ -172,7 +172,7 @@ class PostgresRecordRepository:
                     },
                 )
             )
-        return ruleset.id
+        return rules_revision.id
 
     async def active_current_version_id(self) -> int | None:
         """Return the version pinned by the newest active current-scope run."""
@@ -213,7 +213,7 @@ class PostgresRecordRepository:
             )
         )
         run = ComputationRun(
-            ruleset_id=batch.ruleset_id,
+            rules_revision_id=batch.rules_revision_id,
             build_kind=batch.kind,
             version_id=batch.version_id,
             status=ComputationStatus.RUNNING,
@@ -238,7 +238,7 @@ class PostgresRecordRepository:
         await session.flush()
         history_chains: list[list[TitleHolderHistory]] = []
         for computed, definition, result in results:
-            candidates_by_id = {candidate.build_id: candidate for candidate in computed.competition.candidates}
+            candidates_by_id = {candidate.build_id: candidate for candidate in computed.category.candidates}
             for build_id in computed.resolution.holder_ids:
                 candidate = candidates_by_id[build_id]
                 session.add(
@@ -318,8 +318,8 @@ class PostgresRecordRepository:
         session = self._session()
         statement = (
             select(TitleDefinition, TitleResult)
-            .options(selectinload(TitleDefinition.competition))
-            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+            .options(selectinload(TitleDefinition.record_title))
+            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
             .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
             .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
             .where(
@@ -337,8 +337,8 @@ class PostgresRecordRepository:
         session = self._session()
         statement = (
             select(TitleDefinition)
-            .options(selectinload(TitleDefinition.competition))
-            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.competition_id)
+            .options(selectinload(TitleDefinition.record_title))
+            .join(RecordTitle, RecordTitle.public_id == TitleDefinition.title_id)
             .join(TitleResult, TitleResult.definition_id == TitleDefinition.id)
             .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
             .where(
@@ -412,7 +412,7 @@ class PostgresRecordRepository:
         session = self._session()
         statement = (
             select(TitleResult, TitleDefinition)
-            .options(selectinload(TitleDefinition.competition))
+            .options(selectinload(TitleDefinition.record_title))
             .join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
             .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
             .where(ComputationRun.is_active.is_(True))
@@ -451,10 +451,10 @@ class PostgresRecordRepository:
             PublishedTitle(
                 id=result.id,
                 definition_id=definition.id,
-                competition_id=definition.competition_id,
+                title_id=definition.title_id,
                 title=definition.title,
                 subtitle=definition.subtitle,
-                record_class=definition.record_class,
+                base_title=definition.base_title,
                 build_kind=definition.build_kind,
                 version_scope=definition.version_scope,
                 status=result.status,
@@ -470,7 +470,7 @@ class PostgresRecordRepository:
         keys = (
             await session.execute(
                 select(RecordTitle.category_key)
-                .join(TitleDefinition, TitleDefinition.competition_id == RecordTitle.public_id)
+                .join(TitleDefinition, TitleDefinition.title_id == RecordTitle.public_id)
                 .where(
                     RecordTitle.build_kind == kind,
                     TitleDefinition.materialization_source == MaterializationSource.PUBLIC_LOOKUP,
@@ -490,7 +490,7 @@ class PostgresRecordRepository:
         session = self._session()
         key = await session.scalar(
             select(RecordTitle.category_key)
-            .join(TitleDefinition, TitleDefinition.competition_id == RecordTitle.public_id)
+            .join(TitleDefinition, TitleDefinition.title_id == RecordTitle.public_id)
             .where(TitleDefinition.id == definition_id)
         )
         if key is None:
@@ -504,7 +504,7 @@ class PostgresRecordRepository:
 
     async def save_requested_category(
         self,
-        ruleset_id: int,
+        rules_revision_id: int,
         category: CategoryIdentity,
         titles: Mapping[BaseTitle, FormattedTitle],
     ) -> None:
@@ -512,19 +512,19 @@ class PostgresRecordRepository:
         session = self._session()
         await self._write_definitions(
             session,
-            ruleset_id=ruleset_id,
+            rules_revision_id=rules_revision_id,
             kind=category.kind,
             scope=VersionScope.ALL_TIME,
             version_id=None,
             writes=tuple(
                 _DefinitionWrite(
-                    record_class,
+                    base_title,
                     category.key,
                     title,
                     MaterializationSource.PUBLIC_LOOKUP,
                     tuple((FacetKind.RESTRICTION, facet_id) for facet_id in category.restriction_ids),
                 )
-                for record_class, title in titles.items()
+                for base_title, title in titles.items()
             ),
         )
 
@@ -611,17 +611,17 @@ class PostgresRecordRepository:
     async def _ensure_definitions(self, session: AsyncSession, batch: ComputationBatch) -> tuple[TitleDefinition, ...]:
         return await self._write_definitions(
             session,
-            ruleset_id=batch.ruleset_id,
+            rules_revision_id=batch.rules_revision_id,
             kind=batch.kind,
-            scope=VersionScope.ALL_TIME if batch.version_id is None else VersionScope.CURRENT,
+            scope=VersionScope.ALL_TIME if batch.version_id is None else VersionScope.UP_TO_DATE,
             version_id=batch.version_id,
             writes=tuple(
                 _DefinitionWrite(
-                    computed.record_class,
-                    computed.competition.identity.key,
+                    computed.base_title,
+                    computed.category.identity.key,
                     computed.title,
-                    MaterializationSource(computed.competition.source),
-                    tuple((FacetKind(facet.kind), facet.id) for facet in computed.competition.facets),
+                    MaterializationSource(computed.category.source),
+                    tuple((FacetKind(facet.kind), facet.id) for facet in computed.category.facets),
                 )
                 for computed in batch.records
             ),
@@ -631,7 +631,7 @@ class PostgresRecordRepository:
         self,
         session: AsyncSession,
         *,
-        ruleset_id: int,
+        rules_revision_id: int,
         kind: BuildKind,
         scope: VersionScope,
         version_id: int | None,
@@ -644,29 +644,29 @@ class PostgresRecordRepository:
         ordered = sorted({write.key: write for write in writes}.values(), key=lambda write: write.key)
         scope_values: dict[str, object] = {"build_kind": kind, "version_scope": scope, "version_id": version_id}
         identities = [
-            dict(scope_values, record_class=write.record_class, category_key=write.category_key) for write in ordered
+            dict(scope_values, base_title=write.base_title, category_key=write.category_key) for write in ordered
         ]
         # RETURNING enables SQLAlchemy's paged insertmanyvalues path instead of one statement
-        # per rule. Passing parameter rows separately keeps large catalogues below bind limits.
+        # per definition. Passing parameter rows separately keeps large catalogues below bind limits.
         await session.execute(
             insert(RecordTitle)
-            .on_conflict_do_nothing(constraint="record_competitions_identity_key")
+            .on_conflict_do_nothing(constraint="record_titles_identity_key")
             .returning(RecordTitle.public_id),
             identities,
         )
-        competitions = await session.scalars(
+        categories = await session.scalars(
             select(RecordTitle).where(
                 RecordTitle.build_kind == kind,
                 RecordTitle.version_scope == scope,
                 RecordTitle.version_id.is_not_distinct_from(version_id),
-                RecordTitle.record_class.in_({write.record_class for write in ordered}),
+                RecordTitle.base_title.in_({write.base_title for write in ordered}),
                 RecordTitle.category_key.in_({write.category_key for write in ordered}),
             )
         )
-        public_ids = {(row.record_class, row.category_key): row.public_id for row in competitions}
+        public_ids = {(row.base_title, row.category_key): row.public_id for row in categories}
         statement = insert(TitleDefinition)
         statement = statement.on_conflict_do_update(
-            constraint="record_definitions_identity_key",
+            constraint="title_definitions_identity_key",
             set_={
                 "title": statement.excluded.title,
                 "subtitle": statement.excluded.subtitle,
@@ -684,8 +684,8 @@ class PostgresRecordRepository:
             statement,
             [
                 dict(
-                    ruleset_id=ruleset_id,
-                    competition_id=public_ids[write.key],
+                    rules_revision_id=rules_revision_id,
+                    title_id=public_ids[write.key],
                     title=write.title.title,
                     subtitle=write.title.subtitle,
                     title_diagnostics=[diagnostic.as_dict() for diagnostic in write.title.diagnostics],
@@ -695,10 +695,8 @@ class PostgresRecordRepository:
             ],
             execution_options={"render_nulls": True},
         )
-        by_competition = {row.competition_id: row for row in definitions}
-        by_key = {
-            key: by_competition[public_id] for key, public_id in public_ids.items() if public_id in by_competition
-        }
+        by_category = {row.title_id: row for row in definitions}
+        by_key = {key: by_category[public_id] for key, public_id in public_ids.items() if public_id in by_category}
         facets = {
             (by_key[write.key].id, facet_kind, facet_id): order
             for write in ordered
@@ -845,7 +843,7 @@ def _restriction_facets(assignments: Sequence[TagAssignment]) -> tuple[Candidate
     return tuple(
         CandidateFacet(
             id=assignment.tag_id,
-            kind="restriction",
+            kind=FacetKind.RESTRICTION,
             name=assignment.definition.display_name,
             restriction_type=assignment.definition.restriction_type,
             stable_key=assignment.definition.stable_key,
@@ -864,7 +862,7 @@ def _pattern_facets(assignments: Sequence[TagAssignment]) -> tuple[CandidateFace
     return tuple(
         CandidateFacet(
             id=assignment.tag_id,
-            kind="pattern",
+            kind=FacetKind.PATTERN,
             name=assignment.definition.display_name,
             stable_key=assignment.definition.stable_key,
             value_type=assignment.value_type,
@@ -916,13 +914,13 @@ def _provisional_build_id(computed: ComputedRecord) -> int | None:
 
 def _metric_snapshot(computed: ComputedRecord, candidate: Candidate) -> dict[str, object]:
     snapshot: dict[str, object] = {}
-    if computed.record_class in (
+    if computed.base_title in (
         BaseTitle.FASTEST_SMALLEST,
         BaseTitle.SMALLEST,
         BaseTitle.SMALLEST_FASTEST,
     ):
         snapshot["volume"] = candidate.fixed_volume
-    if computed.record_class is BaseTitle.FIRST:
+    if computed.base_title is BaseTitle.FIRST:
         snapshot["completion_at"] = candidate.completion_at.isoformat() if candidate.completion_at is not None else None
         return snapshot
     reduction = reduce_timing_variants(candidate.timing_variants)
@@ -948,7 +946,7 @@ def _gap_from_row(definition: TitleDefinition, result: TitleResult) -> RecordGap
         definition_id=definition.id,
         title=definition.title,
         subtitle=definition.subtitle,
-        record_class=definition.record_class,
+        base_title=definition.base_title,
         build_ids=tuple(build_ids),
         fields=tuple(fields),
     )
@@ -958,7 +956,7 @@ def parse_category_key(key: str) -> CategoryIdentity | None:
     """Parse a stored category key, returning `None` for unrecognized syntax.
 
     This checks the serialized structure, not whether the referenced tags exist
-    or their operators and values form a valid competition.
+    or their operators and values form a valid category.
     """
     try:
         kind_value, remainder = key.split(":", maxsplit=1)

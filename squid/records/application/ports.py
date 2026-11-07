@@ -49,7 +49,7 @@ class PublicBuildSummaryReader(Protocol):
 class RecordRunRepository(Protocol):
     """Persist and inspect versioned record computation runs."""
 
-    async def active_ruleset_id(self) -> int: ...
+    async def active_rules_revision_id(self) -> int: ...
 
     async def active_current_version_id(self) -> int | None: ...
 
@@ -79,7 +79,7 @@ class RecordRunRepository(Protocol):
 
     async def save_requested_category(
         self,
-        ruleset_id: int,
+        rules_revision_id: int,
         category: CategoryIdentity,
         titles: Mapping[BaseTitle, FormattedTitle],
     ) -> None: ...

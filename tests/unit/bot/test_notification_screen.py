@@ -169,8 +169,8 @@ async def test_following_a_record_filter_uses_typed_tag_input() -> None:
         "follow-filter",
         {
             "build_kind": "door",
-            "record_class": None,
-            "version_scope": "current",
+            "base_title": None,
+            "version_scope": "up_to_date",
             "tag": 4,
             "tag_value": "compact",
         },
@@ -182,7 +182,7 @@ async def test_following_a_record_filter_uses_typed_tag_input() -> None:
     assert call.record_filter is not None
     record_filter = call.record_filter
     assert record_filter.build_kinds == frozenset({"door"})
-    assert record_filter.version_scopes == frozenset({"current"})
+    assert record_filter.version_scopes == frozenset({"up_to_date"})
     assert record_filter.tags[0].tag_id == 4
     assert record_filter.tags[0].value == "compact"
 
@@ -198,7 +198,7 @@ async def test_empty_record_filter_does_not_call_the_service() -> None:
         "follow-filter",
         {
             "build_kind": None,
-            "record_class": None,
+            "base_title": None,
             "version_scope": None,
             "tag": None,
             "tag_value": None,

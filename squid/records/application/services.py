@@ -45,7 +45,7 @@ from squid.records.domain import (
     resolve_smallest,
     resolve_smallest_fastest,
 )
-from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS
+from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS, MaterializationSource
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from squid.unit_of_work import UnitOfWorkFactory
 
@@ -54,7 +54,7 @@ class RecordComputationService:
     """Compare confirmed builds and publish replacement record results.
 
     Categories group builds by features such as door size and restrictions.
-    Within each category, the record class selects the comparison: first,
+    Within each category, the base title selects the comparison: first,
     fastest, smallest, or a combination. An all-time scope considers every
     confirmed candidate; a current scope considers those supporting the pinned
     Minecraft version. Resolution can retain tied holders or report missing
@@ -100,14 +100,14 @@ class RecordComputationService:
         Every kind gets an all-time run. A supplied current version also gets a
         filtered run and marks incompatible all-time holders as broken.
         """
-        ruleset_id = await uow.records.active_ruleset_id()
+        rules_revision_id = await uow.records.active_rules_revision_id()
         run_ids: list[int] = []
         records: list[ComputedRecord] = []
         for kind in kinds:
             source = tuple(await uow.record_candidates.list_confirmed(kind))
             requested = tuple(await uow.records.list_requested_categories(kind))
             all_time = self._compute_scope(
-                ruleset_id,
+                rules_revision_id,
                 kind,
                 source,
                 version_id=None,
@@ -119,7 +119,7 @@ class RecordComputationService:
 
             if current_version_id is not None:
                 current = self._compute_scope(
-                    ruleset_id,
+                    rules_revision_id,
                     kind,
                     source,
                     version_id=current_version_id,
@@ -138,7 +138,7 @@ class RecordComputationService:
 
     def _compute_scope(
         self,
-        ruleset_id: int,
+        rules_revision_id: int,
         kind: BuildKind,
         source: Sequence[CandidateBuild],
         *,
@@ -147,38 +147,36 @@ class RecordComputationService:
         requested: Sequence[CategoryIdentity],
     ) -> ComputationBatch:
         scoped = tuple(candidate for candidate in source if version_id is None or version_id in candidate.version_ids)
-        competitions = self._eager_competitions(kind, scoped)
+        categories = self._eager_categories(kind, scoped)
         for identity in requested:
-            competition = self.requested_competition(identity, scoped)
-            if competition is not None:
-                competitions[identity.key] = competition
+            category = self.requested_category(identity, scoped)
+            if category is not None:
+                categories[identity.key] = category
 
-        scope = VersionScope.ALL_TIME if version_id is None else VersionScope.CURRENT
+        scope = VersionScope.ALL_TIME if version_id is None else VersionScope.UP_TO_DATE
         records: list[ComputedRecord] = []
-        for competition in competitions.values():
-            for record_class in _record_classes(kind):
-                resolution = _resolve_record(record_class, kind, competition.candidates)
+        for category in categories.values():
+            for base_title in _base_titles(kind):
+                resolution = _resolve_record(base_title, kind, category.candidates)
                 records.append(
                     ComputedRecord(
-                        record_class=record_class,
+                        base_title=base_title,
                         scope=scope,
                         version_id=version_id,
-                        competition=competition,
-                        title=self._formatter.format_record(record_class, competition.category_text),
+                        category=category,
+                        title=self._formatter.format_record(base_title, category.category_text),
                         resolution=resolution,
                         broken_holder_ids=_broken_holders(
                             resolution.holder_ids,
-                            competition.candidate_version_ids,
+                            category.candidate_version_ids,
                             pinned_current_version_id,
                         ),
-                        history=_reconstruct_history(record_class, kind, competition.candidates),
-                        history_complete=all(
-                            candidate.completion_at is not None for candidate in competition.candidates
-                        ),
+                        history=_reconstruct_history(base_title, kind, category.candidates),
+                        history_complete=all(candidate.completion_at is not None for candidate in category.candidates),
                     )
                 )
         return ComputationBatch(
-            ruleset_id=ruleset_id,
+            rules_revision_id=rules_revision_id,
             kind=kind,
             version_id=version_id,
             records=tuple(records),
@@ -216,7 +214,7 @@ class RecordComputationService:
             await uow.commit()
         return QueueProcessSummary(kinds=lease.kinds, rebuild=summary)
 
-    def _eager_competitions(
+    def _eager_categories(
         self,
         kind: BuildKind,
         candidates: Sequence[CandidateBuild],
@@ -234,14 +232,14 @@ class RecordComputationService:
             for selected in _restriction_combinations(choices, max_size=self._category_limit):
                 identity = _category_identity(kind, _base_key(source), selected)
                 grouped[identity.key].append((source, selected))
-        return {key: self._make_competition(items, source="eager") for key, items in grouped.items()}
+        return {key: self._make_category(items, source=MaterializationSource.EAGER) for key, items in grouped.items()}
 
-    def requested_competition(
+    def requested_category(
         self,
         identity: CategoryIdentity,
         candidates: Sequence[CandidateBuild],
     ) -> CategoryCandidates | None:
-        """Build the competition for one requested exact category, or None if no candidate qualifies."""
+        """Build the category for one requested exact category, or None if no candidate qualifies."""
         items: list[tuple[CandidateBuild, tuple[CandidateFacet, ...]]] = []
         requested_ids = frozenset(identity.restriction_ids)
         requested_values = {tag_id: (operator, value) for tag_id, operator, value in identity.restriction_values}
@@ -264,9 +262,9 @@ class RecordComputationService:
                     selected.append(replace(facet, category_value=threshold))
                 else:
                     items.append((source, tuple(selected)))
-        return self._make_competition(items, source="public_lookup") if items else None
+        return self._make_category(items, source=MaterializationSource.PUBLIC_LOOKUP) if items else None
 
-    def _make_competition(
+    def _make_category(
         self,
         items: Sequence[tuple[CandidateBuild, tuple[CandidateFacet, ...]]],
         *,
@@ -287,14 +285,14 @@ class RecordComputationService:
             category_text=category_text,
             candidates=tuple(item[0].candidate for item in items),
             candidate_version_ids=tuple((item[0].candidate.build_id, item[0].version_ids) for item in items),
-            source="public_lookup" if source == "public_lookup" else "eager",
+            source=MaterializationSource.PUBLIC_LOOKUP if source == "public_lookup" else MaterializationSource.EAGER,
         )
 
-    def format_record_titles(self, competition: CategoryCandidates) -> dict[BaseTitle, FormattedTitle]:
-        """Render the per-class titles a definition stores for this competition."""
+    def format_record_titles(self, category: CategoryCandidates) -> dict[BaseTitle, FormattedTitle]:
+        """Render the base titles a definition stores for this category."""
         return {
-            record_class: self._formatter.format_record(record_class, competition.category_text)
-            for record_class in _record_classes(competition.identity.kind)
+            base_title: self._formatter.format_record(base_title, category.category_text)
+            for base_title in _base_titles(category.identity.kind)
         }
 
 
@@ -398,13 +396,13 @@ class RecordService:
                 tuple(sorted(request.restriction_ids)),
                 tuple(sorted(request.restriction_values)),
             )
-            competition = self._computation.requested_competition(identity, scoped)
-            if competition is None:
+            category = self._computation.requested_category(identity, scoped)
+            if category is None:
                 raise NoMatchingRecordCategoryError(kind=request.kind.value, base_key=request.base_key)
 
-            ruleset_id = await uow.records.active_ruleset_id()
+            rules_revision_id = await uow.records.active_rules_revision_id()
             await uow.records.save_requested_category(
-                ruleset_id, identity, self._computation.format_record_titles(competition)
+                rules_revision_id, identity, self._computation.format_record_titles(category)
             )
             result = await self._computation.rebuild_in(
                 uow,
@@ -416,7 +414,7 @@ class RecordService:
 
 
 class PublicRecordQueryService:
-    """Combine published standings with all their holders' public build summaries."""
+    """Combine published results with all their holders' public build summaries."""
 
     def __init__(
         self, builds: PublicBuildSummaryReader, *, uow_factory: UnitOfWorkFactory[RecordQueryUnitOfWork]
@@ -424,39 +422,39 @@ class PublicRecordQueryService:
         self._uow_factory = uow_factory
         self._builds = builds
 
-    async def get(self, standing_id: int) -> PublicRecordDetail | None:
-        """Return an active result with holders in standing order, or `None` if absent.
+    async def get(self, result_id: int) -> PublicRecordDetail | None:
+        """Return an active result with holders in result order, or `None` if absent.
 
         Raise `DataIntegrityError` when holder rows contradict the result status
         or any referenced build is unavailable in the public catalogue.
         """
         async with self._uow_factory() as uow:
-            standing = await uow.records.get_published_record(standing_id)
-        if standing is None:
+            result = await uow.records.get_published_record(result_id)
+        if result is None:
             return None
-        holders_match_status = bool(standing.holder_build_ids) is (standing.status is ResolutionStatus.RESOLVED)
+        holders_match_status = bool(result.holder_build_ids) is (result.status is ResolutionStatus.RESOLVED)
         if not holders_match_status:
-            msg = "A published record's standing status contradicts its holder rows."
+            msg = "A published record's result status contradicts its holder rows."
             raise DataIntegrityError(
                 msg,
                 context={
-                    "record_id": standing.id,
-                    "status": standing.status.value,
-                    "holder_build_ids": list(standing.holder_build_ids),
+                    "record_id": result.id,
+                    "status": result.status.value,
+                    "holder_build_ids": list(result.holder_build_ids),
                 },
             )
-        found = await self._builds.get_public_summaries(standing.holder_build_ids)
+        found = await self._builds.get_public_summaries(result.holder_build_ids)
         by_id = {build.id: build for build in found}
-        unavailable_ids = [build_id for build_id in standing.holder_build_ids if build_id not in by_id]
+        unavailable_ids = [build_id for build_id in result.holder_build_ids if build_id not in by_id]
         if unavailable_ids:
             msg = "A published record references holder builds that are unavailable to the public catalogue."
             raise DataIntegrityError(
                 msg,
-                context={"record_id": standing.id, "unavailable_holder_build_ids": unavailable_ids},
+                context={"record_id": result.id, "unavailable_holder_build_ids": unavailable_ids},
             )
         return PublicRecordDetail(
-            standing=standing,
-            holder_builds=tuple(by_id[build_id] for build_id in standing.holder_build_ids),
+            result=result,
+            holder_builds=tuple(by_id[build_id] for build_id in result.holder_build_ids),
         )
 
 
@@ -617,7 +615,7 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
     raise InvalidStateError(tr(t"Fastest records are not supported for {kind_name}."))
 
 
-def _record_classes(kind: BuildKind) -> tuple[BaseTitle, ...]:
+def _base_titles(kind: BuildKind) -> tuple[BaseTitle, ...]:
     shared = (
         BaseTitle.FASTEST,
         BaseTitle.SMALLEST,
@@ -633,17 +631,17 @@ def _record_classes(kind: BuildKind) -> tuple[BaseTitle, ...]:
 
 
 def _resolve_record(
-    record_class: BaseTitle,
+    base_title: BaseTitle,
     kind: BuildKind,
     candidates: Iterable[Candidate],
 ) -> TitleResolution:
-    if record_class is BaseTitle.FIRST:
+    if base_title is BaseTitle.FIRST:
         return resolve_first(candidates)
-    if record_class is BaseTitle.FASTEST:
+    if base_title is BaseTitle.FASTEST:
         return resolve_fastest(candidates, _timing_methods(kind))
-    if record_class is BaseTitle.SMALLEST:
+    if base_title is BaseTitle.SMALLEST:
         return resolve_smallest(candidates)
-    if record_class is BaseTitle.FASTEST_SMALLEST:
+    if base_title is BaseTitle.FASTEST_SMALLEST:
         return resolve_fastest_smallest(candidates, _timing_methods(kind))
     return resolve_smallest_fastest(candidates, _timing_methods(kind))
 
@@ -662,7 +660,7 @@ def _broken_holders(
 
 
 def _reconstruct_history(
-    record_class: BaseTitle,
+    base_title: BaseTitle,
     kind: BuildKind,
     candidates: Sequence[Candidate],
 ) -> tuple[HolderHistoryEntry, ...]:
@@ -681,7 +679,7 @@ def _reconstruct_history(
     periods: list[HolderHistoryEntry] = []
     for completion_at, group in groupby(dated, key=_known_completion):
         active.extend(group)
-        resolution = _resolve_record(record_class, kind, active)
+        resolution = _resolve_record(base_title, kind, active)
         if resolution.status is not ResolutionStatus.RESOLVED:
             continue
         if periods and periods[-1].build_ids == resolution.holder_ids:

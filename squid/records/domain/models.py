@@ -31,11 +31,11 @@ class VersionScope(StrEnum):
     """The version population in which builds compete."""
 
     ALL_TIME = "all_time"
-    CURRENT = "current"
+    UP_TO_DATE = "up_to_date"
 
 
 class ResolutionStatus(StrEnum):
-    """Whether a competition produced an official result."""
+    """Whether a category produced an official result."""
 
     RESOLVED = "resolved"
     UNRESOLVED = "unresolved"
@@ -127,7 +127,7 @@ class TimingReduction:
 
 @dataclass(frozen=True, slots=True)
 class TitleResolution:
-    """The official holders or the decisive gaps for a competition."""
+    """The official holders or the decisive gaps for a category."""
 
     status: ResolutionStatus
     holder_ids: tuple[int, ...] = ()
@@ -136,8 +136,25 @@ class TitleResolution:
 
     def __post_init__(self) -> None:
         if self.status is ResolutionStatus.RESOLVED and not self.holder_ids:
-            msg = tr(t"A resolved competition must have at least one holder.")
+            msg = tr(t"A resolved record title must have at least one holder.")
             raise ValidationError(msg)
         if self.status is not ResolutionStatus.RESOLVED and self.holder_ids:
-            msg = tr(t"Only a resolved competition can have official holders.")
+            msg = tr(t"Only a resolved record title can have official holders.")
             raise ValidationError(msg)
+
+
+class MaterializationSource(StrEnum):
+    """How a persisted title definition entered the active catalogue."""
+
+    EAGER = "eager"
+    SEEDED = "seeded"
+    PUBLIC_LOOKUP = "public_lookup"
+
+
+class FacetKind(StrEnum):
+    """The taxonomy role of a facet persisted for one title definition."""
+
+    RESTRICTION = "restriction"
+    TYPE = "type"
+    PATTERN = "pattern"
+    CATEGORY = "category"

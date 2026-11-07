@@ -18,10 +18,10 @@ class RecordSummary(FromDomain[PublishedTitle]):
 
     id: int
     definition_id: int
-    competition_id: UUID
+    title_id: UUID
     title: str
     subtitle: str | None
-    record_class: str
+    base_title: str
     build_kind: str
     version_scope: str
     status: str
@@ -34,10 +34,10 @@ class RecordSummary(FromDomain[PublishedTitle]):
         return cls(
             id=record.id,
             definition_id=record.definition_id,
-            competition_id=record.competition_id,
+            title_id=record.title_id,
             title=record.title,
             subtitle=record.subtitle,
-            record_class=record.record_class,
+            base_title=record.base_title,
             build_kind=record.build_kind,
             version_scope=record.version_scope,
             status=record.status,

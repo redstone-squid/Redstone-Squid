@@ -107,7 +107,7 @@ async def create_subscription(
     notifications: Notifications,
     caller: UserCaller,
 ) -> NotificationSubscriptionDetail:
-    """Subscribe to a public creator, record competition, or structured filter."""
+    """Subscribe to a public creator, record title, or structured filter."""
     subscription = await notifications.subscribe(
         _account_id(caller),
         kind=request.kind,

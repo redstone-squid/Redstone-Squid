@@ -265,9 +265,9 @@ def _metadata_label(kind: str) -> sl.TextLike:
 
 def _result_description(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
-        record_class = hit.record_class
+        base_title = hit.base_title
         build_title = hit.build_title
-        return tr(t"Record · {record_class} · {build_title}")
+        return tr(t"Record · {base_title} · {build_title}")
     if isinstance(hit, BuildSearchHit):
         status = hit.status
         return tr(t"Build · {status}")
@@ -279,9 +279,9 @@ def _detail_text(hit: SearchHit) -> sl.TextLike:
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
         build_title = hit.build_title
         build_id = hit.build_id
-        record_class = hit.record_class
+        base_title = hit.base_title
         version_scope = hit.version_scope
-        fields = tr(t"**Build**\n{build_title} ({build_id})\n**Class**\n{record_class} · {version_scope}")
+        fields = tr(t"**Build**\n{build_title} ({build_id})\n**Base title**\n{base_title} · {version_scope}")
         if hit.metrics:
             metrics = ", ".join(
                 f"{escape_markdown(key)}: {escape_markdown(str(value))}" for key, value in hit.metrics.items()

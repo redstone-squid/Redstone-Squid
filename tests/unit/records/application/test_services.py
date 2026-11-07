@@ -30,6 +30,7 @@ from squid.records.domain import (
     TimingVariant,
     VersionScope,
 )
+from squid.records.domain.models import FacetKind
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from tests.support.record_uow import RecordQueryScope, RecordScope
 
@@ -62,7 +63,7 @@ class FakeRuns:
         self.current_version_id: int | None = None
         self.published_records: dict[int, PublishedTitle] = {}
 
-    async def active_ruleset_id(self) -> int:
+    async def active_rules_revision_id(self) -> int:
         return 7
 
     async def active_current_version_id(self) -> int | None:
@@ -109,11 +110,11 @@ class FakeRuns:
 
     async def save_requested_category(
         self,
-        ruleset_id: int,
+        rules_revision_id: int,
         category: CategoryIdentity,
         titles: Mapping[BaseTitle, FormattedTitle],
     ) -> None:
-        assert ruleset_id == 7
+        assert rules_revision_id == 7
         self.requested.setdefault(category.kind, []).append(category)
         self.requested_titles[category.key] = dict(titles)
 
@@ -166,10 +167,10 @@ def _published_record(*holder_build_ids: int) -> PublishedTitle:
     return PublishedTitle(
         id=7,
         definition_id=3,
-        competition_id=uuid.UUID("22222222-2222-2222-2222-222222222222"),
+        title_id=uuid.UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle=None,
-        record_class=BaseTitle.FASTEST,
+        base_title=BaseTitle.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
         status=ResolutionStatus.RESOLVED,
@@ -196,7 +197,7 @@ def _door(
         ),
         version_ids=version_ids,
         restrictions=restrictions,
-        types=(CandidateFacet(id=20, kind="type", name="Regular"),),
+        types=(CandidateFacet(id=20, kind=FacetKind.TYPE, name="Regular"),),
         door=DoorCategory(
             wiring_restrictions=(),
             animated_restrictions=(),
@@ -208,9 +209,9 @@ def _door(
 
 
 @pytest.mark.asyncio
-async def test_rebuild_computes_eager_subsets_and_all_door_record_classes() -> None:
-    flush = CandidateFacet(id=1, kind="restriction", name="Flush", restriction_type="wiring-placement")
-    observerless = CandidateFacet(id=2, kind="restriction", name="Observerless", restriction_type="component")
+async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None:
+    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    observerless = CandidateFacet(id=2, kind=FacetKind.RESTRICTION, name="Observerless", restriction_type="component")
     candidates = FakeCandidates(
         (
             _door(1, volume=10, opening=5, restrictions=(flush, observerless)),
@@ -226,12 +227,12 @@ async def test_rebuild_computes_eager_subsets_and_all_door_record_classes() -> N
     assert summary.definitions == 20
     assert summary.resolved == 20
     batch = runs.batches[0]
-    shared = [record for record in batch.records if record.competition.identity.restriction_ids == (1,)]
-    first = next(record for record in shared if record.record_class is BaseTitle.FIRST)
-    smallest = next(record for record in shared if record.record_class is BaseTitle.SMALLEST)
-    fastest = next(record for record in shared if record.record_class is BaseTitle.FASTEST)
-    fastest_smallest = next(record for record in shared if record.record_class is BaseTitle.FASTEST_SMALLEST)
-    smallest_fastest = next(record for record in shared if record.record_class is BaseTitle.SMALLEST_FASTEST)
+    shared = [record for record in batch.records if record.category.identity.restriction_ids == (1,)]
+    first = next(record for record in shared if record.base_title is BaseTitle.FIRST)
+    smallest = next(record for record in shared if record.base_title is BaseTitle.SMALLEST)
+    fastest = next(record for record in shared if record.base_title is BaseTitle.FASTEST)
+    fastest_smallest = next(record for record in shared if record.base_title is BaseTitle.FASTEST_SMALLEST)
+    smallest_fastest = next(record for record in shared if record.base_title is BaseTitle.SMALLEST_FASTEST)
     assert first.resolution.holder_ids == (1,)
     assert smallest.resolution.holder_ids == (1,)
     assert fastest.resolution.holder_ids == (2,)
@@ -247,7 +248,7 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
     def m_wide(value: int) -> CandidateFacet:
         return CandidateFacet(
             id=7,
-            kind="restriction",
+            kind=FacetKind.RESTRICTION,
             name="M Wide",
             restriction_type="miscellaneous",
             stable_key="m_wide",
@@ -275,15 +276,15 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
     threshold_three = [
         record
         for record in runs.batches[0].records
-        if record.competition.identity.restriction_values == ((7, "at_most", "3"),)
+        if record.category.identity.restriction_values == ((7, "at_most", "3"),)
     ]
     threshold_four = [
         record
         for record in runs.batches[0].records
-        if record.competition.identity.restriction_values == ((7, "at_most", "4"),)
+        if record.category.identity.restriction_values == ((7, "at_most", "4"),)
     ]
     assert {record.resolution.holder_ids for record in threshold_three} == {(1,)}
-    assert {record.record_class: record.resolution.holder_ids for record in threshold_four} == {
+    assert {record.base_title: record.resolution.holder_ids for record in threshold_four} == {
         BaseTitle.FIRST: (1,),
         BaseTitle.FASTEST: (2,),
         BaseTitle.SMALLEST: (2,),
@@ -345,7 +346,7 @@ async def test_eager_categories_never_exceed_eight_restrictions() -> None:
     restrictions = tuple(
         CandidateFacet(
             id=index,
-            kind="restriction",
+            kind=FacetKind.RESTRICTION,
             name=f"Restriction {index}",
             restriction_type="component",
         )
@@ -360,8 +361,8 @@ async def test_eager_categories_never_exceed_eight_restrictions() -> None:
 
     await service.rebuild(kinds=(BuildKind.DOOR,))
 
-    assert max(len(record.competition.identity.restriction_ids) for record in runs.batches[0].records) == 8
-    assert all(len(record.competition.identity.restriction_ids) <= 8 for record in runs.batches[0].records)
+    assert max(len(record.category.identity.restriction_ids) for record in runs.batches[0].records) == 8
+    assert all(len(record.category.identity.restriction_ids) <= 8 for record in runs.batches[0].records)
 
 
 @pytest.mark.asyncio
@@ -369,7 +370,7 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     restrictions = tuple(
         CandidateFacet(
             id=index,
-            kind="restriction",
+            kind=FacetKind.RESTRICTION,
             name=f"Restriction {index}",
             restriction_type="component",
         )
@@ -396,14 +397,14 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     assert set(titles) == set(BaseTitle)
     assert all("2x2" in text.title for text in titles.values())
     assert all(identity.base_key not in text.title for text in titles.values())
-    exact = [record for record in runs.batches[0].records if len(record.competition.identity.restriction_ids) == 9]
-    assert {record.record_class for record in exact} == set(BaseTitle)
-    assert all(record.competition.source == "public_lookup" for record in exact)
+    exact = [record for record in runs.batches[0].records if len(record.category.identity.restriction_ids) == 9]
+    assert {record.base_title for record in exact} == set(BaseTitle)
+    assert all(record.category.source == "public_lookup" for record in exact)
 
 
 @pytest.mark.asyncio
 async def test_materialize_definition_round_trips_the_stored_identity() -> None:
-    flush = CandidateFacet(id=1, kind="restriction", name="Flush", restriction_type="wiring-placement")
+    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
     candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=(flush,)),))
     runs = FakeRuns()
     identity = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", (1,))
@@ -472,7 +473,7 @@ async def test_gaps_delegates_active_result_query() -> None:
         definition_id=1,
         title="Fastest 2x2 Door",
         subtitle=None,
-        record_class=BaseTitle.FASTEST,
+        base_title=BaseTitle.FASTEST,
         build_ids=(4,),
         fields=("closing",),
     )
@@ -515,7 +516,7 @@ async def test_public_record_query_rejects_unavailable_holder() -> None:
 
 
 @pytest.mark.asyncio
-async def test_public_record_query_accepts_empty_nonresolved_standing() -> None:
+async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
     runs = FakeRuns()
     runs.published_records[7] = replace(
         _published_record(41),
@@ -534,15 +535,15 @@ async def test_public_record_query_accepts_empty_nonresolved_standing() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "standing",
+    "result",
     [
         _published_record(),
         replace(_published_record(41), status=ResolutionStatus.UNRESOLVED),
     ],
 )
-async def test_public_record_query_rejects_status_holder_corruption(standing: PublishedTitle) -> None:
+async def test_public_record_query_rejects_status_holder_corruption(result: PublishedTitle) -> None:
     runs = FakeRuns()
-    runs.published_records[7] = standing
+    runs.published_records[7] = result
     service = PublicRecordQueryService(
         FakePublicBuilds((_public_build(41),)), uow_factory=lambda: RecordQueryScope(runs)
     )
@@ -552,13 +553,13 @@ async def test_public_record_query_rejects_status_holder_corruption(standing: Pu
 
     assert exc_info.value.context == {
         "record_id": 7,
-        "status": standing.status.value,
-        "holder_build_ids": list(standing.holder_build_ids),
+        "status": result.status.value,
+        "holder_build_ids": list(result.holder_build_ids),
     }
 
 
 @pytest.mark.asyncio
-async def test_public_record_query_returns_none_for_unknown_standing() -> None:
+async def test_public_record_query_returns_none_for_unknown_result() -> None:
     service = PublicRecordQueryService(FakePublicBuilds(()), uow_factory=lambda: RecordQueryScope(FakeRuns()))
 
     assert await service.get(999) is None

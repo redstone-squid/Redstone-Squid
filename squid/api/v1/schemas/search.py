@@ -54,7 +54,7 @@ class RecordSearchEntry(BaseModel):
     subtitle: str | None
     build_id: int
     build_title: str
-    record_class: str
+    base_title: str
     version_scope: str
     tags: list[str]
     metrics: dict[str, str | int | float | bool]
@@ -67,7 +67,7 @@ class RecordSearchEntry(BaseModel):
             subtitle=hit.subtitle,
             build_id=hit.build_id,
             build_title=hit.build_title,
-            record_class=hit.record_class,
+            base_title=hit.base_title,
             version_scope=hit.version_scope,
             tags=list(hit.tags),
             metrics=dict(hit.metrics),

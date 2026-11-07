@@ -45,11 +45,11 @@ from squid.suggestions.infrastructure.providers.permissions import (
 )
 from squid.suggestions.infrastructure.providers.records import (
     AliasClaimProvider,
-    CompetitionProvider,
     CreatorProfileProvider,
     CreatorProvider,
     PendingAliasClaims,
     RecordDefinitionProvider,
+    RecordTitleProvider,
 )
 from squid.suggestions.infrastructure.providers.taxonomy import PendingTagDefinitions
 from squid.suggestions.infrastructure.providers.versions import CanonicalMinecraftVersions
@@ -116,7 +116,7 @@ def build_registry(
                 kind_label="version",
             ),
             SuggestionSource(
-                id="record_definitions",
+                id="title_definitions",
                 provider=RecordDefinitionProvider(repository),
                 kind_label="record_category",
             ),
@@ -132,9 +132,9 @@ def build_registry(
                 kind_label="creator",
             ),
             SuggestionSource(
-                id="competitions",
-                provider=CompetitionProvider(repository),
-                kind_label="competition",
+                id="record_titles",
+                provider=RecordTitleProvider(repository),
+                kind_label="record_title",
             ),
         )
     )
@@ -321,10 +321,10 @@ def _static_sources() -> tuple[SuggestionSource, ...]:
             kind_label="build_kind",
         ),
         SuggestionSource(
-            id="record_classes",
-            provider=StaticProvider.of([item.value for item in BaseTitle], kind="record_class"),
+            id="base_titles",
+            provider=StaticProvider.of([item.value for item in BaseTitle], kind="base_title"),
             kind=SourceKind.ENUMERABLE,
-            kind_label="record_class",
+            kind_label="base_title",
         ),
         SuggestionSource(
             id="version_scopes",

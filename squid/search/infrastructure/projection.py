@@ -102,7 +102,7 @@ class RecordProjectionSource:
     status: str
     history_complete: bool
     gap_reasons: dict[str, object]
-    record_class: str
+    base_title: str
     build_kind: str
     version_scope: str
     category_key: str
@@ -474,7 +474,7 @@ class SearchProjectionLoader:
         row = (
             await self._session.execute(
                 select(TitleResult, TitleDefinition)
-                .options(selectinload(TitleDefinition.competition))
+                .options(selectinload(TitleDefinition.record_title))
                 .join(ComputationRun, ComputationRun.id == TitleResult.run_id)
                 .join(TitleDefinition, TitleDefinition.id == TitleResult.definition_id)
                 .where(TitleResult.id == result_id, ComputationRun.is_active.is_(True))
@@ -499,7 +499,7 @@ class SearchProjectionLoader:
                 status=result.status,
                 history_complete=result.history_complete,
                 gap_reasons=result.gap_reasons,
-                record_class=definition.record_class,
+                base_title=definition.base_title,
                 build_kind=definition.build_kind,
                 version_scope=definition.version_scope,
                 category_key=definition.category_key,
@@ -659,7 +659,7 @@ def build_record_projection(
     """
     first_holder = holders[0] if holders else None
     holder_ids = tuple(holder.build_id for holder in holders)
-    tags = (source.record_class, source.build_kind, source.version_scope)
+    tags = (source.base_title, source.build_kind, source.version_scope)
     return SearchProjection(
         resource_kind="record",
         source_key=f"result:{source.result_id}",
@@ -670,7 +670,7 @@ def build_record_projection(
         document_data={
             "result_id": source.result_id,
             "definition_id": source.definition_id,
-            "record_class": source.record_class,
+            "base_title": source.base_title,
             "build_kind": source.build_kind,
             "version_scope": source.version_scope,
             "category_key": source.category_key,
@@ -680,7 +680,7 @@ def build_record_projection(
             "gap_reasons": source.gap_reasons,
         },
         facets=(
-            ProjectionFacet("record_class", source.record_class),
+            ProjectionFacet("base_title", source.base_title),
             ProjectionFacet("record_state", "current"),
             ProjectionFacet("kind", source.build_kind),
             ProjectionFacet("version_scope", source.version_scope),

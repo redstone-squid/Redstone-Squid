@@ -38,7 +38,7 @@ async def get_record(record_id: int, records: PublicRecords) -> RecordDetail:
     detail = await records.get(record_id)
     if detail is None:
         raise RecordNotFoundError(record_id)
-    summary = RecordSummary.from_domain(detail.standing)
+    summary = RecordSummary.from_domain(detail.result)
     return RecordDetail(
         **summary.model_dump(),
         holder_builds=[BuildSummary.from_public_summary(build) for build in detail.holder_builds],

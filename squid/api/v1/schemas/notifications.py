@@ -70,23 +70,23 @@ class RecordFilterInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     build_kinds: set[Literal["door", "entrance", "extender", "utility"]] = Field(default_factory=set)
-    record_classes: set[Literal["first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"]] = Field(
+    base_titles: set[Literal["first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"]] = Field(
         default_factory=set
     )
-    version_scopes: set[Literal["all_time", "current"]] = Field(default_factory=set)
+    version_scopes: set[Literal["all_time", "up_to_date"]] = Field(default_factory=set)
     tags: list[TagPredicateInput] = Field(default_factory=list, max_length=8)
 
     def to_domain(self) -> RecordSubscriptionFilter:
         return RecordSubscriptionFilter(
             build_kinds=frozenset(self.build_kinds),
-            record_classes=frozenset(self.record_classes),
+            base_titles=frozenset(self.base_titles),
             version_scopes=frozenset(self.version_scopes),
             tags=tuple(tag.to_domain() for tag in self.tags),
         )
 
 
 class NotificationSubscriptionCreate(BaseModel):
-    """A subscription to a creator, a record competition, or a record filter.
+    """A subscription to a creator, a record title, or a record filter.
 
     Creator and record subscriptions require subject_id and forbid filter.
     Record-filter subscriptions require filter and forbid subject_id.
