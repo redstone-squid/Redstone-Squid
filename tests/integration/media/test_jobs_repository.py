@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import Table, func, select, update
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -566,15 +567,18 @@ async def test_stale_put_observed_during_delete_keeps_the_object_due_for_cleanup
     assert (await cleanup_artifacts(repository, lambda _key: asyncio.sleep(0), limit=10)).deleted == 2
 
 
-async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
+async def test_reconciliation_refreshes_tombstones_older_than_artifacts(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     await transact(repository, lambda uow: uow.media_jobs.enqueue(upload(), LIMITS), commit=True)
     (_claim,) = await transact(repository, lambda uow: uow.media_jobs.claim(limit=1), commit=True)
     artifacts = completed_artifacts()
-    # Bypass normal publication tracking to simulate artifact rows written by an older worker.
+    assert await transact(repository, lambda uow: uow.media_jobs.track_artifacts(_claim, artifacts), commit=True)
+    # A lifecycle row must exist; reconciliation can still revive an older tombstone.
     async with async_session_factory.begin() as session:
+        await session.execute(sql_delete(MediaArtifactPublicationRecord))
+        await session.execute(update(MediaArtifactObjectRecord).values(deleted_at=Instant.now().subtract(hours=1)))
         await session.execute(
             update(MediaNormalizationJobRecord)
             .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)

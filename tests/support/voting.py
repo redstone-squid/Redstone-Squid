@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from copy import copy
 from typing import cast
 
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -212,7 +212,7 @@ async def seed_delete_log_vote(
                 {
                     "vote_session_id": vote_session_id,
                     "identifier": option.identifier,
-                    "guild_id": option.guild_id or 0,
+                    "guild_id": option.guild_id,
                     "emoji": option.emoji,
                     "choice": option.choice.value,
                     "multiplier": option.multiplier,
@@ -231,6 +231,17 @@ async def seed_delete_log_vote(
         )
         await attach_vote_message(session, message_id=message_id, vote_session_id=vote_session_id, content="Vote now")
         if votes:
+            aliases = dict(
+                (
+                    await session.execute(
+                        select(VoteSessionOption.emoji, VoteSessionOption.id).where(
+                            VoteSessionOption.vote_session_id == vote_session_id
+                        )
+                    )
+                )
+                .tuples()
+                .all()
+            )
             await session.execute(
                 insert(Vote),
                 [
@@ -239,8 +250,7 @@ async def seed_delete_log_vote(
                         "account_id": account_id,
                         "discord_id": account_id * 10,
                         "guild_id": GUILD_ID,
-                        "option_id": "deny" if weight < 0 else "approve",
-                        "emoji": "👎" if weight < 0 else "👍",
+                        "option_alias_id": aliases["👎" if weight < 0 else "👍"],
                         "weight": abs(weight),
                     }
                     for account_id, weight in votes.items()

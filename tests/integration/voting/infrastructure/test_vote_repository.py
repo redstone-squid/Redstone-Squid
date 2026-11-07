@@ -16,7 +16,7 @@ from squid.builds.domain import Status
 from squid.builds.models import Build
 from squid.core.errors import DataIntegrityError
 from squid.messages.models import MessageRecord
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.persistence.alembic_entities import current_entities
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.posts.models import DiscordPost
@@ -78,7 +78,7 @@ _KIND_SUBTYPE_ENTITIES = {
 def _kind_subtype_sql() -> list[str]:
     statements = [
         entity.to_sql_statement_create().text
-        for entity in alembic_util_entities()
+        for entity in current_entities()
         if isinstance(entity, PGFunction | PGTrigger) and entity.signature.partition("(")[0] in _KIND_SUBTYPE_ENTITIES
     ]
     assert len(statements) == len(_KIND_SUBTYPE_ENTITIES)
@@ -122,6 +122,7 @@ async def referenced_rows(vote_schema: None, async_session_factory: async_sessio
         await session.execute(
             insert(cast(Table, Build.__table__)).values(
                 id=BUILD_ID,
+                category="Other",
                 submission_status=Status.PENDING,
                 submitter_account_id=AUTHOR_ACCOUNT_IDS[0],
             )
@@ -790,3 +791,42 @@ async def test_changing_only_the_kind_cannot_strand_the_existing_subtype(
     unchanged = await transact(repository, lambda uow: uow.votes.get_by_id(vote_session_id))
     assert unchanged is not None
     assert unchanged.kind is VoteKind.BUILD
+
+
+async def test_ballot_references_one_alias_when_global_and_guild_aliases_overlap(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    options = (
+        VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=None, position=0),
+        VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=GUILD_ID, position=1),
+    )
+    _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=2, options=options)
+    mutation = await transact(
+        repository, lambda uow: uow.votes.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
+    )
+    assert mutation is not None
+    assert not mutation.just_closed
+    assert mutation.session.votes == {7: 1.0}
+    async with async_session_factory() as session:
+        alias_guild = await session.scalar(
+            text("SELECT o.guild_id FROM votes v JOIN vote_session_options o ON o.id = v.option_alias_id")
+        )
+    assert alias_guild == GUILD_ID
+
+
+async def test_ballot_cannot_reference_another_sessions_alias(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    first, _ = await seed_delete_log_vote(async_session_factory)
+    second, _ = await seed_delete_log_vote(async_session_factory)
+    with pytest.raises(IntegrityError):
+        async with async_session_factory.begin() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO votes (vote_session_id, account_id, guild_id, option_alias_id, weight) "
+                    "SELECT :first, 7, :guild, id, 1 FROM vote_session_options "
+                    "WHERE vote_session_id = :second LIMIT 1"
+                ),
+                {"first": first, "second": second, "guild": GUILD_ID},
+            )

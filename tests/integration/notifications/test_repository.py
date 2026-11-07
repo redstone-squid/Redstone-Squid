@@ -838,3 +838,31 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
 
     assert notified == {accounts["both"], accounts["web_only"]}
     assert delivered == {accounts["both"]}
+
+
+async def test_expired_claim_does_not_consume_a_failure_attempt(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    delivery_id = await _seed_delivery(async_session_factory)
+    (first,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True)
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(NotificationDeliveryRecord)
+            .where(NotificationDeliveryRecord.id == delivery_id)
+            .values(claimed_at=Instant.now().subtract(minutes=6))
+        )
+    (second,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=1), commit=True)
+    assert second.claim_token != first.claim_token
+    assert second.attempts == first.attempts == 0
+    assert not await transact(
+        repository, lambda uow: uow.notifications.fail_delivery(first, "stale", max_attempts=1), commit=True
+    )
+    assert await transact(
+        repository, lambda uow: uow.notifications.fail_delivery(second, "failed", max_attempts=1), commit=True
+    )
+    async with async_session_factory() as session:
+        row = await session.get(NotificationDeliveryRecord, delivery_id)
+        assert row is not None
+        assert row.attempts == 1
+        assert row.dead_at is not None

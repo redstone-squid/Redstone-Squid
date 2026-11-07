@@ -509,7 +509,7 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
     assert merged_deliveries[0].sent_at == seeded_at
     assert merged_deliveries[0].claimed_at is None
     assert merged_deliveries[0].claim_token is None
-    assert merged_deliveries[0].attempts == 1
+    assert merged_deliveries[0].attempts == 0
 
 
 async def test_account_merge_transfers_submission_and_minecraft_authorization_ownership(
@@ -560,7 +560,7 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
                     sha256="merge-test-sha",
                     byte_size=1,
                     source_format="schem",
-                    object_key="merge-test-object-key",
+                    object_key="schematics/me/merge-test-sha",
                 ),
             ]
         )

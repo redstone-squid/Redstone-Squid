@@ -53,7 +53,7 @@ async def _credit_builds(
         build_ids = (
             await session.scalars(
                 insert(Base.metadata.tables["builds"])
-                .values([{"submission_status": 1, "submitter_account_id": submitter_id}] * count)
+                .values([{"submission_status": 1, "submitter_account_id": submitter_id, "category": "Other"}] * count)
                 .returning(Base.metadata.tables["builds"].c.id)
             )
         ).all()
