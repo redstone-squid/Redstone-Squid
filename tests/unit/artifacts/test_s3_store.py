@@ -10,6 +10,7 @@ import pytest
 
 from squid.artifacts.infrastructure import ArtifactTooLargeError, S3ArtifactStore
 from squid.config import ObjectStorageConfig
+from squid.core.errors import InvalidStateError
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ def store(client: Mock) -> S3ArtifactStore:
 
 @pytest.mark.parametrize("max_bytes", [0, -1, -2])
 async def test_invalid_budget_never_opens_a_response(store: S3ArtifactStore, client: Mock, max_bytes: int) -> None:
-    with pytest.raises(ValueError, match="positive"):
+    with pytest.raises(InvalidStateError, match="positive"):
         await store.get("object", max_bytes=max_bytes)
 
     client.get_object.assert_not_called()

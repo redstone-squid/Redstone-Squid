@@ -1,16 +1,10 @@
 # Make `SquidError` the only error vocabulary in application and domain code
 
-> **Status.** Phases 1 and 2 are complete and re-verified in-tree 2026-08-18:
-> `BARE_RAISE_ALLOWLIST` in `tests/architecture/test_boundaries.py:303` is now `{}`, and an
-> independent re-run of the same AST walk over `squid/*/application/**` + `squid/*/domain/**` +
-> the flattened `application.py`/`domain.py`/`services.py` modules finds zero bare builtin raises
-> — the original 230-raise/42-file baseline is fully migrated. Phase 3 is nearly done: the
-> `cli_auth`/`minecraft_auth` rebase and every other item on the "Others" list landed, but
-> `squid/artifacts/infrastructure.py` — named in that same list — still has six raw
-> `raise ValueError(msg)` sites (lines 101, 134, 239, 337, 342, 421) that were never converted;
-> `infrastructure.py` sits outside the AST-enforced application/domain boundary so the ratchet
-> does not catch it. That one file is the only thing left in this document's scope. The
-> `b03322f1d85e` `BUGS.md` entry has already been replaced with a pointer here, per Follow-up.
+> **Status.** Implemented on 2026-11-07. `BARE_RAISE_ALLOWLIST` is empty, application and domain code
+> raise only `SquidError` subclasses, and the off-hierarchy `cli_auth`/`minecraft_auth` and other classes
+> were rebased onto it. The last stragglers, six `raise ValueError` sites in
+> `squid/artifacts/infrastructure.py`, now raise `ValidationError` (bad keys, non-regular sources) or
+> `InvalidStateError` (bad configuration, non-positive budgets). `BUGS.md` points here.
 
 ## Context
 
@@ -62,7 +56,7 @@ does not change what the user sees, but it *does* put the failure inside the `Sq
 so the rule stays total and AST-checkable. No judgement about "is this reachable" is needed.
 
 Per the translation decision, **every** converted site gets an `_()` msgid plus `message_params`
-rather than an f-string, including internal ones, so `just extract` picks them all up consistently.
+rather than an f-string, including internal ones, so `just i18n-extract` picks them all up consistently.
 
 ## Phase 1 — Enforcement — **DONE**
 
@@ -101,7 +95,7 @@ Ordered by user-visible payoff. Highest-value first:
 Each package already has, or gets, a `squid/<package>/errors.py` — that convention exists in 17
 packages already.
 
-## Phase 3 — Fold the off-hierarchy classes in — **mostly done, one file open**
+## Phase 3 — Fold the off-hierarchy classes in — **DONE**
 
 `squid/core/errors.py` is transport-neutral (stdlib + `squid.core.i18n` only, enforced by
 `test_exception_model_imports_no_transport`), so rebasing these introduces no coupling.
@@ -121,12 +115,7 @@ helpers (`squid/api/v1/cli_auth.py:361-386`, `squid/api/v1/minecraft_auth.py:463
 **Others**, changing base class only: the 5 `RuntimeError`s in `squid/media/application/jobs.py:254-286`
 (move to the existing `squid/media/errors.py`), `squid/artifacts/infrastructure.py:20,24`,
 `squid/events/application.py:48`, `squid/idempotency/infrastructure/crypto.py:16,20`,
-`squid/submissions/application/finalization.py:117`, `squid/bot/utils/uploads.py:14`. Done, except
-`squid/artifacts/infrastructure.py`: `ArtifactTooLargeError`/`ArtifactSourceChangedError` exist
-(lines 21/25) and are used at their call sites, but six other `raise ValueError(msg)` sites in the
-same file — config/path-contract violations at lines 101, 134, 239, 337, 342, 421 — were never
-touched. Convert those to `InvalidStateError` (or a new `squid/artifacts/errors.py` class) to close
-this phase; nothing else blocks it.
+`squid/submissions/application/finalization.py:117`, `squid/bot/utils/uploads.py:14`.
 
 **Deliberately excluded** — pure control-flow signals with their own handlers, not failures:
 `IdempotencyReplay` (`squid/api/idempotency.py:30`, registered at `squid/api/errors.py:301`) and
@@ -141,7 +130,7 @@ this phase; nothing else blocks it.
   `uv run pytest tests/unit/cli_auth/test_api_contract.py tests/unit/minecraft_auth/test_api_contract.py --no-cov`.
 - `uv run pytest tests/unit/api/ --no-cov` for the problem-details handlers, and the bot error
   presenter tests, since Phase 3 changes which branch several errors take.
-- `just extract` after each package, to confirm new `_()` msgids reach `locales/squid.pot` and that
+- `just i18n-extract` after each package, to confirm new `_()` msgids reach `locales/squid.pot` and that
   the diff contains no stray f-string messages.
 - `just typecheck` once after the final edit, compared against a pre-change baseline (the tree is not
   at zero errors — see the known-failing-checks note).

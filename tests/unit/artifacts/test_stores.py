@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from squid.artifacts.infrastructure import ArtifactTooLargeError, LocalArtifactStore
+from squid.core.errors import InvalidStateError
 
 pytestmark = pytest.mark.asyncio
 
@@ -85,5 +86,5 @@ async def test_invalid_download_budget_is_rejected(tmp_path: Path, max_bytes: in
     store = LocalArtifactStore(tmp_path)
     await store.put("object", b"payload", content_type="application/octet-stream")
 
-    with pytest.raises(ValueError, match="positive"):
+    with pytest.raises(InvalidStateError, match="positive"):
         await store.get("object", max_bytes=max_bytes)

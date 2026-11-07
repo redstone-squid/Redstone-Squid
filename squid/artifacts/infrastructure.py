@@ -15,7 +15,8 @@ from botocore.exceptions import ClientError
 
 from squid.artifacts.application import ArtifactMetadata
 from squid.config import ObjectStorageConfig
-from squid.core.errors import DataIntegrityError, ValidationError
+from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
+from squid.core.i18n import tr
 
 
 class ArtifactTooLargeError(ValidationError):
@@ -102,8 +103,7 @@ class LocalArtifactStore:
             or not normalized.parts
             or any(part in {"", ".", ".."} for part in normalized.parts)
         ):
-            msg = "Artifact keys must be non-empty relative paths without traversal."
-            raise ValueError(msg)
+            raise ValidationError(tr(t"Artifact keys must be non-empty relative paths without traversal."))
         return self._directory.joinpath(self._prefix, *normalized.parts)
 
     @staticmethod
@@ -135,8 +135,7 @@ class S3ArtifactStore:
 
     def __init__(self, config: ObjectStorageConfig) -> None:
         if config.backend != "s3" or config.bucket is None:
-            msg = "S3ArtifactStore requires an S3 object-storage configuration."
-            raise ValueError(msg)
+            raise InvalidStateError(tr(t"S3ArtifactStore requires an S3 object-storage configuration."))
         session = boto3.session.Session(
             aws_access_key_id=config.access_key.get_secret_value() if config.access_key is not None else None,
             aws_secret_access_key=(config.secret_key.get_secret_value() if config.secret_key is not None else None),
@@ -245,8 +244,7 @@ class S3ArtifactStore:
             or not normalized.parts
             or any(part in {"", ".", ".."} for part in normalized.parts)
         ):
-            msg = "Artifact keys must be non-empty relative paths without traversal."
-            raise ValueError(msg)
+            raise ValidationError(tr(t"Artifact keys must be non-empty relative paths without traversal."))
         relative = normalized.as_posix()
         return f"{self._prefix}/{relative}" if self._prefix else relative
 
@@ -350,13 +348,11 @@ class _RegularSource:
         except OSError as error:
             if error.errno != errno.ELOOP:
                 raise
-            msg = "Artifact sources must be regular files."
-            raise ValueError(msg) from error
+            raise ValidationError(tr(t"Artifact sources must be regular files.")) from error
         try:
             initial = os.fstat(descriptor)
             if not stat.S_ISREG(initial.st_mode):
-                msg = "Artifact sources must be regular files."
-                raise ValueError(msg)
+                raise ValidationError(tr(t"Artifact sources must be regular files."))
             if initial.st_size > self._max_bytes:
                 msg = f"Artifact exceeds the {self._max_bytes}-byte transfer budget."
                 raise ArtifactTooLargeError(msg)
@@ -439,5 +435,4 @@ def _write_body_atomic(body: Any, destination: Path, max_bytes: int, *, expected
 
 def _require_positive_budget(max_bytes: int) -> None:
     if max_bytes < 1:
-        msg = "Artifact transfer budgets must be positive."
-        raise ValueError(msg)
+        raise InvalidStateError(tr(t"Artifact transfer budgets must be positive."))
