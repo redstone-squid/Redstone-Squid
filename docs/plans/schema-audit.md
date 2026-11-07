@@ -1,9 +1,32 @@
 # Close the remaining schema-audit findings
 
-> **Status (2026-11-07).** Phase 0 and Phase 4 are complete. Phase 1 naming conventions
-> are implemented; its remaining items and Phases 2, 3, and 6 are open. Phase 5 remains
-> deliberately deferred. The migration drift gate passes with Docker access, including
-> downgrade and re-upgrade through the migration chain.
+> **Status (2026-11-07).** Phases 0–4 and 6 are complete. Phase 5 remains deliberately
+> deferred until extender submission persistence settles. The decisions below record the
+> implemented design.
+
+| Phase | Implementation |
+|---|---|
+| 1 | Naming convention and explicit check names; `e6a0b3c8f1d4` adds category, object-key, and role-cycle integrity. |
+| 2 | `f7b1c4d9a2e5` gives aliases identity keys and ballots a session-scoped alias FK. |
+| 3 | `a8c2d5e0b3f6` unifies claim timestamps, drops the event claim counter, and counts notification failures. Queue mixins share the fields. |
+| 4 | `d5f9a2b7e0c3` removes the boolean build lock and conflicting trigger. |
+| 6 | `b9d3e6f1c4a7` removes duplicated record identity fields and the legacy build record category. |
+
+Historical migrations now use a frozen SQL snapshot through `alembic_util_entities()`;
+autogeneration and current-schema tests use `current_entities()`. This prevents older revisions
+from installing triggers that reference queue columns before their rename.
+
+Role inclusion checks serialize through a transaction advisory lock. They require READ COMMITTED,
+the application's isolation level, so a check sees edges committed while it waited. The migration
+removes only edges in existing cycles and preserves acyclic edges. Legacy media artifacts receive
+lifecycle rows before the new FK is added.
+
+Validation on 2026-11-07: the default suite passed 5,813 tests (one PostgreSQL-only skip);
+the affected integration suite passed 276 tests (four ffmpeg/ffprobe skips). All 22 migration
+tests passed, including drift, downgrade/re-upgrade, and populated legacy backfills. Dedicated
+regressions also cover concurrent role-cycle rejection, cross-session ballot FKs, overlapping
+global/guild aliases, and notification lease expiry without consuming failure attempts.
+Whole-project Pyrefly, commit hooks, `git diff --check`, and the single Alembic head check passed.
 
 ## Context
 
@@ -81,11 +104,11 @@ commits the `media_artifact_objects` rows *before* uploading bytes
 the artifact rows later, and cleanup only soft-deletes object rows (`deleted_at`), so an immediate FK
 holds.
 
-## Phase 1 — Mechanical schema corrections
+## Phase 1 — Mechanical schema corrections — **DONE**
 
-Independent of each other; any can go first.
+These independent corrections are implemented.
 
-- **Name every constraint from one convention — implemented.** `Base.metadata` has no `naming_convention`
+- **Name every constraint from one convention — implemented.** Previously, `Base.metadata` had no `naming_convention`
   (`squid/persistence/base.py`), so some constraints carry PostgreSQL-invented names while the rest
   are named by hand. Counted from `Base.metadata` on 2026-11-07, there are **39**: 33 foreign keys
   (all of `starboard_*`, most `submission_*` tables, `media_draft_references`,
@@ -130,7 +153,7 @@ Independent of each other; any can go first.
     `sha256` then makes the key unique as well, and the check also rejects a key that doesn't match
     its digest.
 
-## Phase 2 — Surrogate key for vote options
+## Phase 2 — Surrogate key for vote options — **DONE**
 
 Unblocks the `votes` → option foreign key.
 
@@ -163,7 +186,7 @@ translates it to `0` (`guild_id or 0` on insert, `guild_id == 0` in `_close_at_t
 not a table, so a NULL buys no foreign key. Retiring the sentinel would need the same surrogate-key
 change for consistency alone. Revisit only if the starboard tables are reworked for another reason.
 
-## Phase 3 — One vocabulary for the queue tables
+## Phase 3 — One vocabulary for the queue tables — **DONE**
 
 `squid/persistence/queue.py` already shares the claim protocol. What is not shared is the column
 vocabulary and what the counters mean:
@@ -208,9 +231,8 @@ The original finding was that three concurrency controls sat on one table:
 The trigger and the lease conflict: the lease writes `locked_at` as the time the lease was taken, and
 the trigger overwrites it from `is_locked` on the next update. Keep the lease, drop `is_locked` and
 the trigger (update `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS`), and leave `version_id_col` alone,
-because it serves a different purpose and also drives `discord_posts.applied_revision`. `is_locked`
-is still read in `squid/builds/application/locks.py`, `squid/builds/infrastructure/locks.py` and
-`squid/builds/infrastructure/repository.py`.
+because it serves a different purpose and also drives `discord_posts.applied_revision`. The
+application and repository references to `is_locked` have been removed.
 
 ## Phase 5 — One representation of door and extender timings — **deferred**
 
@@ -227,9 +249,9 @@ builds need several timing variants. If they do, write the variant rows first an
 columns; if not, drop the variant tables and the fallback. The extender records bug above exists
 today independently of this cleanup and is tracked in BUGS.md.
 
-## Phase 6 — Retire the record denormalizations
+## Phase 6 — Retire the record denormalizations — **DONE**
 
-Both are application changes.
+Both schema and application changes are complete, including notification, search, and suggestion reads.
 
 - **`record_definitions` duplicates five columns from `record_competitions`** (`record_class`,
   `build_kind`, `version_scope`, `version_id`, `category_key`), and nothing keeps them in sync. A
