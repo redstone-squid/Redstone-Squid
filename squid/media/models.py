@@ -104,7 +104,9 @@ class MediaArtifactRecord(Base, kw_only=True):
         nullable=False,
     )
     role: Mapped[MediaArtifactRole] = mapped_column(StrEnumText(MediaArtifactRole), nullable=False)
-    object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    object_key: Mapped[str] = mapped_column(
+        Text, ForeignKey("media_artifact_objects.object_key", name="media_artifacts_object_key_fkey"), nullable=False
+    )
     content_type: Mapped[str] = mapped_column(Text, nullable=False)
     byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sha256: Mapped[str] = mapped_column(Text, nullable=False)

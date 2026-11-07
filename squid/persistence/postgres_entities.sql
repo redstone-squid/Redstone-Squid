@@ -752,3 +752,32 @@ END;
 $$;
 
 CREATE TRIGGER submission_finalization_inputs_immutable BEFORE UPDATE ON public.submission_finalization_inputs FOR EACH ROW EXECUTE FUNCTION public.reject_submission_finalization_input_update();
+
+CREATE FUNCTION public.check_permission_role_include_cycle() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Serialize graph checks; the next query gets a fresh READ COMMITTED snapshot.
+    -- Repeatable-read snapshots cannot see an edge committed while waiting.
+    IF current_setting('transaction_isolation') <> 'read committed' THEN
+        RAISE EXCEPTION 'role inclusion writes require READ COMMITTED isolation'
+            USING ERRCODE = '0A000';
+    END IF;
+    PERFORM pg_advisory_xact_lock(1936812391, 1);
+    IF EXISTS (
+        WITH RECURSIVE reachable(id) AS (
+            SELECT NEW.included_role_id
+            UNION
+            SELECT edge.included_role_id
+            FROM permission_role_includes edge JOIN reachable ON edge.role_id = reachable.id
+        )
+        SELECT 1 FROM reachable WHERE id = NEW.role_id
+    ) THEN
+        RAISE EXCEPTION 'permission role inclusion cycle'
+            USING ERRCODE = '23514', CONSTRAINT = 'permission_role_includes_acyclic';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER permission_role_includes_acyclic AFTER INSERT OR UPDATE ON public.permission_role_includes FOR EACH ROW EXECUTE FUNCTION public.check_permission_role_include_cycle();

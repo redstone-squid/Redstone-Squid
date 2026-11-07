@@ -30,6 +30,10 @@ class SchematicFile(Base):
     __tablename__ = "schematic_files"
     __table_args__ = (
         CheckConstraint(
+            "object_key = 'schematics/' || left(sha256, 2) || '/' || sha256",
+            name="schematic_files_object_key_check",
+        ),
+        CheckConstraint(
             f"byte_size > 0 AND byte_size <= {SCHEMATIC_FILE_SCHEMA_MAX_BYTES}",
             name="schematic_files_size_bounded",
         ),

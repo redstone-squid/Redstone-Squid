@@ -70,6 +70,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
             "(locked_at IS NOT NULL AND lock_token IS NOT NULL AND lock_expires_at IS NOT NULL)",
             name="builds_lock_lease_complete",
         ),
+        CheckConstraint("category IN ('Door','Extender','Utility','Entrance','Other')", name="builds_category_check"),
         CheckConstraint("revision > 0", name="builds_revision_positive"),
         CheckConstraint("depth > 0", name="submissions_build_depth_check"),
         CheckConstraint("height > 0", name="submissions_build_height_check"),
@@ -103,7 +104,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
             name="builds_sponsor_website_valid",
         ),
         UniqueConstraint("source_submission_draft_id", name="builds_source_submission_draft_id_key"),
-        Index("idx_builds_category", "category", postgresql_where=text("category IS NOT NULL")),
+        Index("idx_builds_category", "category"),
         Index(
             "idx_builds_record_category",
             "record_category",
@@ -143,7 +144,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     sponsor_description: Mapped[str | None] = mapped_column(Text, default=None, compare=False)
     sponsor_website_url: Mapped[str | None] = mapped_column(Text, default=None, compare=False)
     category: Mapped[BuildCategory] = mapped_column(
-        StrEnumText(BuildCategory), nullable=True, init=False, compare=False
+        StrEnumText(BuildCategory), nullable=False, init=False, compare=False
     )
     submitter_account_id: Mapped[int | None] = mapped_column(
         Integer,
