@@ -1,206 +1,235 @@
 # Close the remaining schema-audit findings
 
-> **Status.** Phase 0 (ten findings) is landed and content-verified in-tree 2026-08-18 — see the
-> updated commit table below; the branch was rebased after the original landing, which rewrote
-> every commit hash in this document without changing any of the underlying fixes. The nine
-> findings in Phases 1-6 are still fully open: none of the described schema or application changes
-> have started. The "correctness gate" baseline (13 `modify_comment` diffs) and the "Not planned"
-> items are unchanged. Re-verified item-by-item against current code, not assumed from the original
-> audit.
+> **Status (2026-11-07).** Phase 0 is landed. Phases 1-6 are open; nothing below has started.
+> The design decisions for every open phase except Phase 5 were made on 2026-11-07 and are recorded
+> inline as **Decision**. File references were refreshed against the current tree on the same date;
+> line numbers drift, so search for the named symbol if one is off.
 
 ## Context
 
-A full audit of the 101 application tables and their SQLAlchemy models — reading the metadata
-rendered to DDL and cross-checking it against `schema_dump.sql` and the model sources — turned up
-nineteen findings, ranging from foreign keys minted from sequences to four architectural
-duplications that need application changes to unwind.
+An audit of the application tables and their SQLAlchemy models turned up nineteen findings. Ten
+landed directly (Phase 0). The rest need a design decision, an application change, or both. Four
+of the original findings turned out to be wrong once looked at closely; those corrections are kept
+below because each one was reported as an easy fix.
 
-Ten landed directly (see Phase 0). The rest are recorded here because each needs either a decision,
-an application-layer change, or both, and because two of the original findings turned out to be
-wrong once implementation started — that correction is worth keeping.
-
-**Operating assumptions for everything below**, confirmed with the maintainer:
+**Operating assumptions**, confirmed with the maintainer:
 
 - **Migrations are applied offline.** Workers are stopped, so no expand/contract sequencing is
-  required and a plain `CREATE INDEX`/`ALTER TABLE` is preferable to the `CONCURRENTLY` variants.
-- **Existing data is not precious.** Backfills may be lossy and constraints may be applied directly
-  rather than `NOT VALID` then validated.
+  needed. Use plain `CREATE INDEX`/`ALTER TABLE`, not the `CONCURRENTLY` variants.
+- **Existing data is not precious.** Backfills may be lossy, and constraints may be added directly
+  instead of `NOT VALID` followed by validation.
+- **Foreign keys are immediate.** Make an FK `DEFERRABLE` only when the write order genuinely cannot
+  be fixed (a cycle, or a subtype check like the vote-session triggers in
+  `squid/persistence/postgres_entities.sql`). A deferred FK reports its violation at commit, far
+  from the statement that caused it, so it hides ordering bugs instead of fixing them.
 
 **The correctness gate is `test_migrations_create_schema_without_drift`**
-(`tests/integration/test_alembic_migrations.py`). It runs the whole chain against a clean
-PostgreSQL container and then `alembic check`. It is *already failing* at baseline with **13
-`modify_comment` diffs** — model attribute docstrings that were extended without matching migration
-column comments, in `api_keys`, `discord_sync_queue`, `idempotency_requests`,
+(`tests/integration/test_alembic_migrations.py`). It runs the whole migration chain against a clean
+PostgreSQL container and then runs `alembic check`. At the last recorded baseline it was already
+failing with **13 `modify_comment` diffs**: model attribute docstrings that were extended without
+matching migration column comments, in `api_keys`, `discord_sync_queue`, `idempotency_requests`,
 `record_recompute_queue`, `schematic_jobs`, `schematic_render_queue` and the two `search_*_queue`
-tables. Any phase below is verified by confirming the diff list still contains exactly those 13 and
-nothing structural. Fixing the 13 is its own small task, unclaimed.
+tables. Re-run it to get the current baseline before starting a phase. A phase is verified when the
+diff list is unchanged from that baseline and contains nothing structural. Fixing the comment diffs
+is a separate, unclaimed task.
 
-Watch for a trap when adding model documentation: `Base.__init_subclass__`
-(`squid/persistence/base.py:16-44`) turns an attribute docstring into a column comment, so prose
-added to a `mapped_column` is a schema change. Use a `#` comment for notes about the mapping.
+A trap when documenting models: `Base.__init_subclass__` (`squid/persistence/base.py`) turns an
+attribute docstring into a column comment, so prose on a `mapped_column` is a schema change. Use a
+`#` comment for notes about the mapping.
 
 ## Phase 0 — Landed — **DONE**
 
-Commit hashes below are current as of 2026-08-18; the branch was rebased after these landed,
-which invalidated the hashes originally recorded here (`424e644a`, `cc072ba2`, `eb8206bb`,
-`70aebd41`, `daec045c`, `e00bf658`, `bcac687a` — none resolve any more). Content re-verified
-unchanged.
+Hashes as of 2026-08-18. The branch has been rebased since the fixes first landed, so older hashes
+no longer resolve; the content was re-verified unchanged.
 
 | Commit | Finding |
 |---|---|
 | `5061234e` | `Identity()` on three foreign-key columns in `votes`, `build_vote_sessions`, `delete_log_vote_sessions` |
-| `e8dbbada` | `build_edit_history` — dropped outright rather than fixed in place (single-row-per-build primary key, redundant unique, identity on the FK, no writer; nothing ever wrote to it) |
+| `e8dbbada` | `build_edit_history` dropped outright (single-row-per-build primary key, redundant unique, identity on the FK, and nothing ever wrote to it) |
 | `9c12b7b4` | `tag_definitions_numeric_metadata_check` admitted every row |
-| `4eaaa220` | `messages.id` and `server_settings.server_id` declared `SERIAL` for externally assigned snowflakes (model-only fix, `autoincrement=False`; no migration needed since the deployed baseline never had the sequence) |
-| `ac4f91a2` | 37 foreign-key indexes, chiefly the 22-constraint `accounts` erasure fan-out, plus `passive_deletes=True` on the four `Build` collections (both original findings landed together) |
+| `4eaaa220` | `messages.id` and `server_settings.server_id` declared `SERIAL` for externally assigned snowflakes (model-only fix) |
+| `ac4f91a2` | 37 foreign-key indexes, chiefly the `accounts` erasure fan-out, plus `passive_deletes=True` on the four `Build` collections |
 | `53877d09` | `api_keys.created_by_account_id` ON DELETE; `starboards.colour` width; three nullable `created_at` columns |
 
-Migration chain (unaffected by the rebase — Alembic revision ids are independent of git commit
-hashes): `c4e8f2a1b6d3` → `d5f9a2c7b481` → `e6a0b3d8c592` → `f7b1c4e9d6a3` → `a8c2d5f0e7b4` →
+Migration chain: `c4e8f2a1b6d3` → `d5f9a2c7b481` → `e6a0b3d8c592` → `f7b1c4e9d6a3` → `a8c2d5f0e7b4` →
 `b9d3e6a1f8c5`.
 
-One stray leftover from the `build_edit_history` drop: `schema/structure/public/tables/build_edit_history/`
-(`table.sql`, `policies.sql`) is still tracked in git even though the table no longer exists in any
-model or migration — a stale dump, not a schema defect. Worth a cleanup commit but out of scope
-here; see `schema-integrity-hardening.md`'s note on `schema_dump.sql` staleness.
+Leftover: `schema/structure/public/tables/build_edit_history/` is still tracked in git although the
+table is gone. It is a stale dump, not a schema defect; delete it in a cleanup commit.
 
-## Two corrections to the original audit
+## Corrections to the original audit
 
-Recorded because both were reported as easy fixes and neither is.
+**`votes.option_id` cannot take a foreign key on its own.** A vote resolves to an *emoji alias row*,
+not to an option identifier: `_close_at_threshold` (`squid/voting/infrastructure/repository.py`)
+joins on `(vote_session_id, identifier, emoji)` plus "same guild or the global row". Two things
+block a direct FK:
 
-**`votes.option_id` cannot take a foreign key on its own.** The audit called it a dangling
-reference and proposed a unique constraint on `vote_session_options.identifier` plus an FK. That
-does not work. `_close_at_threshold` (`squid/voting/infrastructure/repository.py:329-341`) joins
-options with `or_(VoteSessionOption.guild_id == Vote.guild_id, VoteSessionOption.guild_id == 0)`,
-`_load` repeats the fallback at line 505, and `VoteSessionSnapshot.options_for_guild`
-(`squid/voting/domain/models.py:279-283`) encodes the same rule. A vote cast in guild *G*
-legitimately resolves to an option row stored under guild `0`. So:
+- `identifier` is not unique even within one guild, because several aliases share it (👍 and ✅
+  both select `approve`).
+- A vote cast in guild *G* legitimately matches an alias stored as global, so a key that includes
+  the vote's guild rejects valid votes.
 
-- `(vote_session_id, guild_id, option_id)` → rejects valid votes.
-- `(vote_session_id, option_id)` → cannot be unique, because the fallback requires the guild-`G`
-  and guild-`0` rows to coexist with the same identifier.
+Phase 2 fixes this with a surrogate key on the alias row.
 
-The dangling reference and the `0` sentinel are the same defect. Phase 2 fixes both or neither.
+**A composite FK containing a nullable column is vacuous.** Under `MATCH SIMPLE`, a NULL in any
+referencing column satisfies the constraint without checking it. This rules out the
+`record_definitions` → `record_competitions` composite FK (`version_id` is NULL for `all_time`
+scope, which are exactly the rows most likely to drift; `MATCH FULL` would reject them instead), and
+it equally rules out "turn the guild `0` sentinel into NULL, then add a composite FK".
 
-**The `record_definitions` → `record_competitions` composite foreign key is half-vacuous.**
-`record_definitions.version_id` is NULL for `all_time` scope, and under `MATCH SIMPLE` a NULL in any
-referencing column satisfies the constraint trivially — so it would enforce nothing for exactly the
-rows most likely to drift. `MATCH FULL` is worse: it would reject them outright. See Phase 6 for
-the fix that actually holds.
+**`domain_event_deliveries` does not carry a duplicate counter.** `attempts` counts failures and
+`claim_count` counts claims, so they measure different things. The real inconsistency is elsewhere;
+see Phase 3.
+
+**`media_artifacts.object_key` has no ordering problem.** The worker calls `track_artifacts()` and
+commits the `media_artifact_objects` rows *before* uploading bytes
+(`squid/media/application/jobs.py`, "Commit leases before writing bytes…"). `complete()` inserts
+the artifact rows later, and cleanup only soft-deletes object rows (`deleted_at`), so an immediate FK
+holds.
 
 ## Phase 1 — Mechanical schema corrections
 
 Independent of each other; any can go first.
 
 - **Name every constraint from one convention.** `Base.metadata` has no `naming_convention`
-  (`squid/persistence/base.py`), so 22 constraints are unnamed and carry PostgreSQL-invented names
-  while everything else is named by hand: all of `starboard_*`, `guild_vote_emojis` (×3),
+  (`squid/persistence/base.py`), so some constraints carry PostgreSQL-invented names while the rest
+  are named by hand. At audit time there were 22: all of `starboard_*`, `guild_vote_emojis` (×3),
   `guild_vote_role_weights` (×2), `generic_vote_sessions` (×2), `domain_event_deliveries` (×2), and
-  the three `server_settings` uniques. A convention matching PostgreSQL's own defaults
-  (`%(table_name)s_%(column_0_name)s_fkey` / `_key`) reproduces the existing names for every
-  single-column FK and unique, so those need no rename; the three unnamed `CheckConstraint`s do need
-  explicit names. Verify empirically against the drift test rather than by reasoning — if the
-  generated names diverge, a rename migration is needed.
+  the three `server_settings` uniques. Recount before starting. A convention matching PostgreSQL's
+  defaults (`%(table_name)s_%(column_0_name)s_fkey` / `_key`) reproduces the existing name of every
+  single-column FK and unique; unnamed `CheckConstraint`s need explicit names. Verify against the
+  drift test, not by reasoning. If any generated name diverges, add a rename migration.
 
-- **Constrain `builds.category`.** It is the `polymorphic_on` discriminator
-  (`squid/builds/infrastructure/models.py`), yet it is nullable, has no CHECK, and `Build` declares
-  no base `polymorphic_identity`. A row with `category IS NULL` or an unrecognised value cannot be
-  loaded at all. Add `CHECK (category IN ('Door','Extender','Utility','Entrance','Other'))` per
-  `BuildCategory` (`squid/builds/domain/models.py:102-109`) and `NOT NULL`. Backfill decision
-  needed: NULL rows map to `'Other'`, which also wants a matching `other_builds` row to keep the
-  joined-table inheritance consistent.
+- **Constrain `builds.category`.** It is the `polymorphic_on` discriminator (`squid/builds/models.py`)
+  but is nullable with no CHECK, and `Build` has no base `polymorphic_identity`, so a row with a NULL
+  or unknown category cannot be loaded. Add `NOT NULL` and
+  `CHECK (category IN ('Door','Extender','Utility','Entrance','Other'))`, matching `BuildCategory`
+  (`squid/builds/domain/models.py`). Also drop the `category IS NOT NULL` predicate from
+  `idx_builds_category`.
+  **Decision:** backfill NULL rows to `'Other'` and insert the matching `other_builds` row so
+  joined-table inheritance stays consistent.
 
 - **Guard `permission_role_includes` against cycles in the database.** `_would_cycle`
-  (`squid/permissions/application/administration.py:516-527`, called from `:497`) is a
-  read-then-write with no lock, so two concurrent `add_include` calls that are each individually
-  acyclic can commit a cycle. The DB only has `role_id <> included_role_id`. Still true as of
-  2026-08-18 — no trigger added. A `CONSTRAINT TRIGGER` running a recursive CTE belongs in
-  `squid/persistence/postgres_entities.sql` — note the arity assertion at
-  `squid/persistence/alembic_entities.py:15-16` (`EXPECTED_FUNCTIONS = 12`, `EXPECTED_TRIGGERS = 38`)
-  counts functions and triggers and must be updated.
+  (`squid/permissions/application/administration.py`) is a read-then-write with no lock, so two
+  concurrent `add_include` calls that are each acyclic can together commit a cycle. The database
+  only checks `role_id <> included_role_id`. Add a `CONSTRAINT TRIGGER` that runs a recursive CTE to
+  `squid/persistence/postgres_entities.sql`, and update the counts in
+  `squid/persistence/alembic_entities.py` (`EXPECTED_FUNCTIONS`, `EXPECTED_TRIGGERS`; currently 15 and
+  46).
 
-- **Object-key integrity in media and schematics.** `schematic_files.object_key` is not unique, and
-  `media_artifacts.object_key` has an index but no FK to `media_artifact_objects.object_key`.
-  **Open question before writing either:** whether an artifact row is ever written before its object
-  row, and whether objects are tracked only for published artifacts. If the write ordering is
-  artifact-then-object, the FK cannot be added without reordering the media normalization worker.
+- **Object-key integrity in media and schematics.**
+  - **Decision:** add an immediate FK `media_artifacts.object_key` →
+    `media_artifact_objects.object_key`. No worker change is needed (see the corrections above).
+  - **Decision:** `schematic_files.object_key` is always `schematics/{sha256[:2]}/{sha256}`
+    (`squid/schematics/application/storage.py`). Instead of a UNIQUE, add
+    `CHECK (object_key = 'schematics/' || left(sha256, 2) || '/' || sha256)`. The primary key on
+    `sha256` then makes the key unique as well, and the check also rejects a key that doesn't match
+    its digest.
 
-## Phase 2 — Retire the `0` sentinel in guild scoping
+## Phase 2 — Surrogate key for vote options
 
-Unblocks the `votes.option_id` foreign key, so it pays for itself twice.
+Unblocks the `votes` → option foreign key.
 
-`votes.guild_id`, `vote_session_options.guild_id` and `starboard_sources.channel_id` all default to
-`0` standing in for "no guild" / "whole guild", and none carries a foreign key. The schema already
-uses `UNIQUE NULLS NOT DISTINCT` in six places, so real NULLs work and would let the missing foreign
-keys be added.
+`vote_session_options` has primary key `(vote_session_id, guild_id, emoji)`, with `guild_id = 0`
+meaning "global alias". The domain already models this as `None` (`VoteOption.guild_id`,
+`VoteSessionSnapshot.options_for_guild` in `squid/voting/domain/models.py`). Only the repository
+translates it to `0` (`guild_id or 0` on insert, `guild_id == 0` in `_close_at_threshold`).
 
-Work: change the three columns to nullable with no default; migrate `0` → NULL; rewrite the
-guild-`0` fallbacks in `squid/voting/infrastructure/repository.py` (lines 335 and 505) and
-`VoteSessionSnapshot.options_for_guild` to use `IS NULL`; then add the unique constraint on
-`(vote_session_id, guild_id, identifier)` and the `votes.option_id` foreign key that follows from it.
+**Decision:** give the alias row a surrogate key and point votes at it.
+
+1. `vote_session_options`: add `id` (identity) as the primary key. Make `guild_id` nullable with no
+   default, migrate `0` → NULL, and add `UNIQUE NULLS NOT DISTINCT (vote_session_id, guild_id, emoji)`
+   to keep the old uniqueness. Add `UNIQUE (vote_session_id, id)` as the FK target.
+2. `votes`: add `option_alias_id` with a composite FK `(vote_session_id, option_alias_id)` →
+   `vote_session_options (vote_session_id, id)`. Every referencing column is non-null, so the FK is
+   actually enforced, and the session column stops a vote from pointing at another session's alias.
+   Backfill using the existing guild-or-global join; drop votes that don't resolve. Then drop
+   `votes.option_id` and `votes.emoji`, which the alias row now supplies.
+3. `votes.guild_id` stays as the guild the vote was cast in. Make it nullable instead of `0`, and add
+   an FK to `server_settings.server_id` only if every voting guild is guaranteed a settings row.
+   Check that before writing the FK.
+4. Repository: write `option.guild_id` as-is, resolve the alias id when casting a vote, and replace
+   the guild-or-global join in `_close_at_threshold` and the snapshot loader with a join on
+   `option_alias_id`.
+
+**Not changing:** `starboard_sources.channel_id = 0` ("every channel in the guild"). Channels are
+not a table, so a NULL buys no foreign key. Retiring the sentinel would need the same surrogate-key
+change for consistency alone. Revisit only if the starboard tables are reworked for another reason.
 
 ## Phase 3 — One vocabulary for the queue tables
 
-`squid/persistence/queue.py` already shares the claim protocol well — the docstring explains why
-acknowledgement is deliberately left to vary. What is not shared is the column vocabulary:
+`squid/persistence/queue.py` already shares the claim protocol. What is not shared is the column
+vocabulary and what the counters mean:
 
-| Column | Tables |
+| Inconsistency | Tables |
 |---|---|
-| `claimed_at` | `discord_sync_queue`, `schematic_jobs`, `schematic_render_queue`, `media_normalization_jobs`, `notification_deliveries`, `domain_event_deliveries`, `submission_finalization_jobs` |
-| `locked_at` | `record_recompute_queue`, `search_projection_queue`, `search_embedding_queue` |
+| `locked_at` instead of `claimed_at` | `record_recompute_queue`, `search_projection_queue`, `search_embedding_queue` |
+| `attempts` incremented on **claim**, not on failure | `notification_deliveries` (`squid/notifications/infrastructure/repository.py`, the claim `UPDATE`) |
+| Extra `claim_count`, written but never read | `domain_event_deliveries` |
+| No `dead_at` | `record_recompute_queue` |
 
-`domain_event_deliveries` additionally carries both `claim_count` and `attempts`, and
-`record_recompute_queue` is the only queue with no `dead_at`.
+**Decision:** `attempts` means "failures recorded" on every queue.
 
-Work: rename the three `locked_at` columns to `claimed_at`, reconcile the duplicate counter, and
-extract a declarative mixin so the shape is stated once. The rename touches `queue.py` and every
-adapter; offline application makes it a single migration.
+- Rename the three `locked_at` columns (and their partial-index predicates) to `claimed_at`.
+- Make `notification_deliveries` increment `attempts` on failure instead of on claim. Its
+  `retry_delay(delivery.attempts)` backoff then counts failures, like every other queue; check that
+  the first retry delay is still what you intend.
+- Drop `domain_event_deliveries.claim_count`, the `claim_count` field on `DomainEventDelivery`, and
+  the optional `claim_count` slot in `QueueSpec`. Update `docs/plans/durable-queues.md`, which
+  describes it.
+- Decide whether `record_recompute_queue` should ever dead-letter. If not, record why next to its
+  `QueueSpec`.
+- Extract a declarative mixin for the shared columns so the shape is stated once.
+
+Offline application makes this a single migration.
 
 ## Phase 4 — One locking mechanism on `builds`
 
 Three concurrency controls currently sit on one table:
 
 - `is_locked` (boolean), maintained by the `set_locked_at` trigger
-  (`squid/persistence/postgres_entities.sql:67-78`), which derives `locked_at` from it and
-  overwrites whatever the lease logic wrote.
+  (`squid/persistence/postgres_entities.sql`), which derives `locked_at` from it.
 - `locked_at` / `lock_token` / `lock_expires_at`, a fencing lease added by `a1b2c3d4e5f6`.
 - `__mapper_args__["version_id_col"] = revision`, SQLAlchemy optimistic locking.
 
-The trigger and the lease actively fight: the lease writes `locked_at` as the moment the lease was
-taken, and the trigger rewrites it from `is_locked` on the next update. Keep the lease, drop
-`is_locked` and the trigger, and leave `version_id_col` alone — it serves a different purpose and
-also drives `discord_posts.applied_revision`.
+The trigger and the lease conflict: the lease writes `locked_at` as the time the lease was taken, and
+the trigger overwrites it from `is_locked` on the next update. Keep the lease, drop `is_locked` and
+the trigger (update `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS`), and leave `version_id_col` alone,
+because it serves a different purpose and also drives `discord_posts.applied_revision`. `is_locked`
+is still read in `squid/builds/application/locks.py`, `squid/builds/infrastructure/locks.py` and
+`squid/builds/infrastructure/repository.py`.
 
-## Phase 5 — One representation of door and extender timings
+## Phase 5 — One representation of door and extender timings — **deferred**
 
 `doors.normal_opening_time` / `visible_*` duplicate `door_timing_variants(build_id, label)`, which
 carries the same fields plus reset times; `extenders` and `extender_timing_variants` mirror this.
-The records repository reads the variants table and falls back to the columns
-(`squid/records/infrastructure/repository.py:775-798`), but **nothing writes a variant row**, so the
-fallback is always taken for doors and `_extender_candidate` receives an empty tuple — meaning
-extender fastest records can never resolve.
+The records repository reads the variant tables and falls back to the columns (`_door_timings`,
+`_extender_timings`, `_extender_candidate` in `squid/records/infrastructure/repository.py`), but
+**nothing writes a variant row**. The door fallback is therefore always taken, and
+`_extender_candidate` receives an empty tuple, so extender fastest records can never resolve.
 
-Still true as of 2026-08-18: no code writes a `DoorTimingVariant`/`ExtenderTimingVariant` row
-anywhere. **The "TODO.md already tracks this" claim is now stale** — TODO.md's current extender
-entry (`- [ ] Add piston-extender create/update submission persistence`, line 19) is about
-submission persistence for extenders generally, not the timing-variant writer specifically; it may
-or may not cover this when done. Sequence the variant writer first regardless; collapsing to one
-representation only makes sense once something populates it.
+**Decision:** deferred until the extender submission work in TODO.md
+(`Add piston-extender create/update submission persistence`) settles. That work decides whether
+builds need several timing variants. If they do, write the variant rows first and then drop the
+columns; if not, drop the variant tables and the fallback. Either way, the extender records bug
+above is real today and may be worth a narrow fix in the meantime.
 
 ## Phase 6 — Retire the record denormalizations
 
-Two related pieces, both application changes:
+Both are application changes.
 
 - **`record_definitions` duplicates five columns from `record_competitions`** (`record_class`,
-  `build_kind`, `version_scope`, `version_id`, `category_key`) with nothing keeping them in sync,
-  and per the correction above a composite FK cannot enforce it. The fix that holds is dropping the
-  five columns and reading them through `competition_id`, which means reworking the reads in
-  `squid/records/infrastructure/repository.py`.
-- **`builds.record_category`** is a legacy denormalization superseded by the whole
-  `record_definitions` / `record_results` / `record_result_holders` subsystem. 14 call sites remain.
+  `build_kind`, `version_scope`, `version_id`, `category_key`), and nothing keeps them in sync. A
+  composite FK cannot enforce it (see the corrections above). Drop the five columns and read them
+  through `competition_id`, which means reworking the reads in
+  `squid/records/infrastructure/repository.py` and moving the indexes that use them.
+- **`builds.record_category`** is a legacy denormalization superseded by `record_definitions` /
+  `record_results` / `record_result_holders`. The remaining references are the column, its CHECK
+  and index in `squid/builds/models.py`, the field in `squid/builds/domain/models.py`, and
+  `squid/submissions/infrastructure/inference_payloads.py`. The `"record_category"` strings in
+  `squid/suggestions` and `squid/records/errors.py` are unrelated labels.
 
 ## Not planned
 
-`verification_codes.id` exhausting at 32,767 is recorded in BUGS.md with the correct diagnosis. The
-UUIDv7 primary-key migration and the legacy smallest-door cleanup are in TODO.md. None is duplicated
-here.
+`verification_codes.id` running out at 32,767 is tracked in BUGS.md. The UUIDv7 primary-key
+migration and the legacy smallest-door cleanup are tracked in TODO.md.
