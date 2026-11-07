@@ -12,7 +12,7 @@ from sqlalchemy.schema import SchemaItem
 import squid.persistence.model_registry  # noqa: F401
 from alembic import context
 from squid.config import load_database_config
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.persistence.alembic_entities import current_entities
 from squid.persistence.base import Base
 from squid.persistence.migration_history import (
     HISTORY_TABLE,
@@ -27,8 +27,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
-MANAGED_ENTITY_NAMES = {f"{entity.schema}.{entity.signature}" for entity in alembic_util_entities()}
-MANAGED_ENTITY_TYPES = {type(entity) for entity in alembic_util_entities()}
+MANAGED_ENTITY_NAMES = {f"{entity.schema}.{entity.signature}" for entity in current_entities()}
+MANAGED_ENTITY_TYPES = {type(entity) for entity in current_entities()}
 BOOKKEEPING_TABLES = frozenset({"alembic_version", HISTORY_TABLE})
 """Migration bookkeeping excluded from ORM schema comparisons."""
 
@@ -42,7 +42,7 @@ ALEMBIC_UTIL_ENTITY_TYPE_NAMES = {
     "view",
 }
 
-register_entities(alembic_util_entities(), entity_types=MANAGED_ENTITY_TYPES)
+register_entities(current_entities(), entity_types=MANAGED_ENTITY_TYPES)
 
 
 def database_url() -> URL:

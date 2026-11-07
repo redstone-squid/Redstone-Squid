@@ -6,7 +6,7 @@ from squid.persistence.alembic_entities import (
     ENTITY_SQL_PATH,
     EXPECTED_FUNCTIONS,
     EXPECTED_TRIGGERS,
-    alembic_util_entities,
+    current_entities,
     parse_entities,
 )
 
@@ -71,7 +71,7 @@ def test_an_unterminated_function_body_is_not_silently_dropped() -> None:
 
 
 def test_the_shipped_definition_matches_the_expected_counts() -> None:
-    entities = alembic_util_entities()
+    entities = current_entities()
 
     assert ENTITY_SQL_PATH.is_file()
     assert len(entities) == EXPECTED_FUNCTIONS + EXPECTED_TRIGGERS

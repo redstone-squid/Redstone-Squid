@@ -19,6 +19,15 @@ def upgrade() -> None:
     )
     op.drop_index("idx_builds_category", table_name="builds")
     op.create_index("idx_builds_category", "builds", ["category"])
+    # Retain artifacts written before lifecycle tracking was introduced.
+    op.execute("""
+        INSERT INTO media_artifact_objects
+            (object_key, sha256, byte_size, first_upload_id, last_upload_id, available_at, first_seen_at, last_seen_at)
+        SELECT DISTINCT ON (object_key)
+            object_key, sha256, byte_size, upload_id, upload_id, now() + interval '48 hours', created_at, created_at
+        FROM media_artifacts ORDER BY object_key, created_at DESC, id DESC
+        ON CONFLICT (object_key) DO NOTHING
+    """)
     op.create_foreign_key(
         "media_artifacts_object_key_fkey", "media_artifacts", "media_artifact_objects", ["object_key"], ["object_key"]
     )
@@ -28,7 +37,16 @@ def upgrade() -> None:
         "object_key = 'schematics/' || left(sha256, 2) || '/' || sha256",
     )
     # Existing cycles have no valid interpretation; offline deployment permits dropping these edges.
-    op.execute("DELETE FROM permission_role_includes")
+    op.execute("""
+        WITH RECURSIVE paths(origin, target) AS (
+            SELECT role_id, included_role_id FROM permission_role_includes
+            UNION
+            SELECT paths.origin, edge.included_role_id
+            FROM paths JOIN permission_role_includes edge ON edge.role_id = paths.target
+        )
+        DELETE FROM permission_role_includes edge
+        WHERE EXISTS (SELECT 1 FROM paths WHERE origin = edge.included_role_id AND target = edge.role_id)
+    """)
     op.execute(
         "CREATE FUNCTION public.check_permission_role_include_cycle() RETURNS trigger\n    LANGUAGE plpgsql\n    AS $$\nBEGIN\n    -- Serialize graph checks; the next query gets a fresh READ COMMITTED snapshot.\n    -- Repeatable-read snapshots cannot see an edge committed while waiting.\n    IF current_setting('transaction_isolation') <> 'read committed' THEN\n        RAISE EXCEPTION 'role inclusion writes require READ COMMITTED isolation'\n            USING ERRCODE = '0A000';\n    END IF;\n    PERFORM pg_advisory_xact_lock(1936812391, 1);\n    IF EXISTS (\n        WITH RECURSIVE reachable(id) AS (\n            SELECT NEW.included_role_id\n            UNION\n            SELECT edge.included_role_id\n            FROM permission_role_includes edge JOIN reachable ON edge.role_id = reachable.id\n        )\n        SELECT 1 FROM reachable WHERE id = NEW.role_id\n    ) THEN\n        RAISE EXCEPTION 'permission role inclusion cycle'\n            USING ERRCODE = '23514', CONSTRAINT = 'permission_role_includes_acyclic';\n    END IF;\n    RETURN NEW;\nEND;\n$$;"
     )

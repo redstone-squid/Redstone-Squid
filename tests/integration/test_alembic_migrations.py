@@ -14,7 +14,7 @@ from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
-from squid.persistence.alembic_entities import alembic_util_entities
+from squid.persistence.alembic_entities import current_entities
 from squid.persistence.migration_history import (
     HISTORY_TABLE,
     adopt_script_digests,
@@ -233,11 +233,9 @@ def test_migrations_create_schema_without_drift(
         engine.dispose()
 
     expected_functions = {
-        entity.signature.partition("(")[0]
-        for entity in alembic_util_entities()
-        if type(entity).__name__ == "PGFunction"
+        entity.signature.partition("(")[0] for entity in current_entities() if type(entity).__name__ == "PGFunction"
     }
-    expected_triggers = {entity.signature for entity in alembic_util_entities() if type(entity).__name__ == "PGTrigger"}
+    expected_triggers = {entity.signature for entity in current_entities() if type(entity).__name__ == "PGTrigger"}
     assert expected_functions <= function_names
     assert outdated_messages_function is None
     assert trigger_names == expected_triggers
@@ -1415,5 +1413,130 @@ def test_migration_history_records_the_chain_and_guards_edited_scripts(
         with engine.connect() as connection:
             assert divergent_revisions(connection, script_directory) == {}
         command.upgrade(config, "head")
+    finally:
+        engine.dispose()
+
+
+def test_schema_audit_constraints(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject invalid categories, aliases, and object keys at the database boundary."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            for category in (None, "Unknown"):
+                with pytest.raises(DBAPIError), connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
+                            "VALUES (0, :category, :account, false)"
+                        ),
+                        {"category": category, "account": account},
+                    )
+            with pytest.raises(DBAPIError), connection.begin_nested():
+                connection.execute(
+                    text(
+                        "INSERT INTO schematic_files (sha256, byte_size, source_format, object_key) "
+                        "VALUES (:sha, 1, 'schem', 'wrong/key')"
+                    ),
+                    {"sha": "a" * 64},
+                )
+            roles = list(
+                connection.execute(
+                    text(
+                        "INSERT INTO permission_roles (slug, name) VALUES ('audit-aa', 'A'), ('audit-bb', 'B'), "
+                        "('audit-cc', 'C') RETURNING id"
+                    )
+                ).scalars()
+            )
+            connection.execute(
+                text("INSERT INTO permission_role_includes (role_id, included_role_id) VALUES (:a, :b), (:b, :c)"),
+                dict(zip(("a", "b", "c"), roles, strict=True)),
+            )
+            with pytest.raises(DBAPIError, match="inclusion cycle"), connection.begin_nested():
+                connection.execute(
+                    text("INSERT INTO permission_role_includes (role_id, included_role_id) VALUES (:c, :a)"),
+                    {"a": roles[0], "c": roles[2]},
+                )
+    finally:
+        engine.dispose()
+
+
+def test_schema_audit_backfills_legacy_rows(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Preserve loadable builds and exact aliases while dropping unresolvable legacy votes."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "d5f9a2b7e0c3")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            accounts = [
+                connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+                for _ in range(3)
+            ]
+            build = connection.execute(
+                text(
+                    "INSERT INTO builds (submission_status, submitter_account_id, ai_generated) "
+                    "VALUES (0, :account, false) RETURNING id"
+                ),
+                {"account": accounts[0]},
+            ).scalar_one()
+            vote_session = connection.execute(
+                text(
+                    "INSERT INTO vote_sessions (status, result, author_account_id, kind, pass_threshold, fail_threshold) "
+                    "VALUES ('open', 'pending', :account, 'delete_log', 3, -3) RETURNING id"
+                ),
+                {"account": accounts[0]},
+            ).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO delete_log_vote_sessions "
+                    "(vote_session_id, target_message_id, target_channel_id, target_server_id) VALUES (:session, 1, 2, 3)"
+                ),
+                {"session": vote_session},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO vote_session_options (vote_session_id, guild_id, emoji, identifier, choice, position) "
+                    "VALUES (:session, 0, 'yes', 'approve', 'approve', 0), "
+                    "(:session, 42, 'yes', 'approve', 'approve', 0)"
+                ),
+                {"session": vote_session},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO votes (vote_session_id, account_id, guild_id, option_id, emoji, weight) "
+                    "VALUES (:session, :local, 42, 'approve', 'yes', 1), "
+                    "(:session, :global, 0, 'approve', 'yes', 1), "
+                    "(:session, :missing, 42, 'missing', '?', 1)"
+                ),
+                {"session": vote_session, "local": accounts[0], "global": accounts[1], "missing": accounts[2]},
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text(
+                        "SELECT category FROM builds JOIN other_builds ON builds.id = other_builds.build_id WHERE id = :id"
+                    ),
+                    {"id": build},
+                ).scalar_one()
+                == "Other"
+            )
+            ballots = connection.execute(
+                text(
+                    "SELECT v.account_id, v.guild_id, o.guild_id FROM votes v "
+                    "JOIN vote_session_options o ON o.id = v.option_alias_id ORDER BY v.account_id"
+                )
+            ).all()
+            assert ballots == [(accounts[0], 42, 42), (accounts[1], None, None)]
+        command.check(config)
     finally:
         engine.dispose()
