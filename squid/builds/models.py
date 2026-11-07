@@ -65,6 +65,11 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
             name="check_record_category",
         ),
         CheckConstraint("submission_status = ANY (ARRAY[0, 1, 2])", name="check_status"),
+        CheckConstraint(
+            "(locked_at IS NULL AND lock_token IS NULL AND lock_expires_at IS NULL) OR "
+            "(locked_at IS NOT NULL AND lock_token IS NOT NULL AND lock_expires_at IS NOT NULL)",
+            name="builds_lock_lease_complete",
+        ),
         CheckConstraint("revision > 0", name="builds_revision_positive"),
         CheckConstraint("depth > 0", name="submissions_build_depth_check"),
         CheckConstraint("height > 0", name="submissions_build_height_check"),
@@ -161,9 +166,6 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     )
     edited_time: Mapped[Instant | None] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default=None
-    )
-    is_locked: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false"), default=False, compare=False
     )
 
     # PostgreSQL deletes related rows through ON DELETE CASCADE. passive_deletes

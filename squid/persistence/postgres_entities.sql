@@ -67,18 +67,6 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.set_locked_at() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-begin
-  if new.is_locked then
-    new.locked_at := now();
-  else
-    new.locked_at := null;
-  end if;
-  return new;
-end;
-$$;
 
 -- Replacing queued work clears its claim token so an older worker cannot acknowledge the new request.
 CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
@@ -598,7 +586,6 @@ $$;
 
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
 
-CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
 
 CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 

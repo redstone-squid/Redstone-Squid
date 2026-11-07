@@ -541,7 +541,7 @@ class BuildRepository:
         build.ai_generated = build.ai_generated or False
         build.edited_time = build.edited_time or now()
         # A detached edit cannot change the repository lease or the creation timestamp.
-        for name in ("is_locked", "locked_at", "lock_token", "lock_expires_at", "submission_time"):
+        for name in ("locked_at", "lock_token", "lock_expires_at", "submission_time"):
             setattr(build, name, getattr(sql_build, name))
         for name, value in zip(
             (

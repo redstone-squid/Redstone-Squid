@@ -20,8 +20,8 @@ class PostgresBuildLockRepository:
         session = self._session()
         acquired = await session.scalar(
             update(Build)
-            .where(Build.id == build_id, or_(Build.is_locked.is_(False), Build.lock_expires_at < func.now()))
-            .values(is_locked=True, lock_token=token, lock_expires_at=func.now() + text("interval '5 minutes'"))
+            .where(Build.id == build_id, or_(Build.lock_token.is_(None), Build.lock_expires_at < func.now()))
+            .values(locked_at=func.now(), lock_token=token, lock_expires_at=func.now() + text("interval '5 minutes'"))
             .returning(Build.id)
         )
         return acquired is not None
@@ -32,7 +32,7 @@ class PostgresBuildLockRepository:
         await session.execute(
             update(Build)
             .where(Build.id == build_id, Build.lock_token == token)
-            .values(is_locked=False, lock_token=None, lock_expires_at=None)
+            .values(locked_at=None, lock_token=None, lock_expires_at=None)
         )
 
     async def clean_stale(self) -> Collection[int]:
@@ -41,7 +41,7 @@ class PostgresBuildLockRepository:
         reclaimed = await session.scalars(
             update(Build)
             .where(Build.lock_expires_at < func.now())
-            .values(is_locked=False, lock_token=None, lock_expires_at=None)
+            .values(locked_at=None, lock_token=None, lock_expires_at=None)
             .returning(Build.id)
         )
         return tuple(reclaimed)

@@ -1,12 +1,9 @@
 # Close the remaining schema-audit findings
 
-> **Status (2026-11-07).** Phase 0 is landed. Phase 1 naming conventions are implemented; the remaining
-> Phase 1 items and Phases 2–4 and 6 are open. The migration drift gate still needs
-> a Docker-enabled environment (the local run failed during container setup).
-> Every design decision is made and recorded inline as **Decision**; Phase 5 is deliberately
-> deferred. Nothing is left to investigate before implementing. File references were refreshed
-> against the current tree on the same date; line numbers drift, so search for the named symbol if
-> one is off.
+> **Status (2026-11-07).** Phase 0 and Phase 4 are complete. Phase 1 naming conventions
+> are implemented; its remaining items and Phases 2, 3, and 6 are open. Phase 5 remains
+> deliberately deferred. The migration drift gate passes with Docker access, including
+> downgrade and re-upgrade through the migration chain.
 
 ## Context
 
@@ -195,9 +192,13 @@ vocabulary and what the counters mean:
 
 Offline application makes this a single migration.
 
-## Phase 4 — One locking mechanism on `builds`
+## Phase 4 — One locking mechanism on `builds` — **DONE**
 
-Three concurrency controls currently sit on one table:
+Migration `d5f9a2b7e0c3` removes the legacy boolean and trigger, clears outstanding
+leases during offline deployment, and requires all three lease fields to be present or absent
+together. Acquisition, release, and stale cleanup now maintain `locked_at` directly.
+
+The original finding was that three concurrency controls sat on one table:
 
 - `is_locked` (boolean), maintained by the `set_locked_at` trigger
   (`squid/persistence/postgres_entities.sql`), which derives `locked_at` from it.

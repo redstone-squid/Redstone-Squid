@@ -1072,7 +1072,7 @@ def test_alembic_detects_managed_function_and_trigger_drift(
             connection.execute(
                 text(
                     """
-                    CREATE OR REPLACE FUNCTION public.set_locked_at()
+                    CREATE OR REPLACE FUNCTION public.enqueue_build_search_projection()
                     RETURNS trigger
                     LANGUAGE plpgsql
                     AS $$
