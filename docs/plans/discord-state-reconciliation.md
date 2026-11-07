@@ -20,8 +20,7 @@ Two parts of the codebase already repair themselves:
 - **Vote reactions** are reconciled. `VoteReactionHandler.reconcile_open_reactions`
   (`squid/bot/voting/reactions.py`) runs every 60 seconds and rebuilds ballots from the reactions
   actually on each open card. It does so by fetching every open card and paging through each
-  reaction's users, which breaks the request rule below. It is the one existing exception and is
-  out of scope here: unlike starboard counts, ballots decide outcomes.
+  reaction's users, which breaks the request rule below. Phase 5 replaces it.
 
 Inbound state elsewhere has only the event path:
 
@@ -100,3 +99,28 @@ post (build source messages) are otherwise refreshed only by edit and delete eve
 something uses a source message (for example rendering a build that cites it), fetch it, update
 the stored content, and mark it deleted on `NotFound`, the same way `PostReconciler` does for
 posts.
+
+## Phase 5 — Ballots recount on demand and at the end
+
+**Decision:** remove the periodic `vote-reaction-reconciliation` job (`VoteReactionHandler.start`,
+`squid/bot/voting/reactions.py`). Ballots are recounted from Discord only when someone asks or when
+the session is about to close.
+
+- **On demand:** add a `recount` command for a vote card. It calls the existing, currently unused
+  `reconcile_message_reactions`. As in Phase 3, allow one recount per session at a time (replacing
+  the handler's single global `_lock` with a per-session lock) and add a per-guild cooldown.
+- **At the end:** recount immediately before the session is finalized, so the result reflects the
+  reactions actually on the cards:
+  - *Manual close* (`squid/bot/voting/controls.py`): recount, then close.
+  - *Deadline close* runs in the worker (`squid/worker/app.py`, `_close_due_votes`), which has no
+    gateway connection. Move the recount logic out of the bot cog into the voting application
+    layer, behind a port for reading a card's reactions. The bot implements it from discord.py and
+    the worker implements it with the existing REST adapter (`squid/voting/infrastructure/discord_rest.py`).
+    The worker then recounts each due session before closing it.
+  - *Threshold close* (`_close_at_threshold`) happens inside the cast that crosses the threshold
+    and does not recount. That cast is a live event, and recounting there would put Discord
+    requests on the vote path. Anyone who suspects missed votes can recount before the threshold
+    is reached.
+
+A final recount is a bounded number of requests per session, made once per session, so it fits the
+request rule above.
