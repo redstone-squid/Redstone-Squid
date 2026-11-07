@@ -1,6 +1,8 @@
 # Close the remaining schema-audit findings
 
-> **Status (2026-11-07).** Phase 0 is landed. Phases 1-6 are open; nothing below has started.
+> **Status (2026-11-07).** Phase 0 is landed. Phase 1 naming conventions are implemented; the remaining
+> Phase 1 items and Phases 2–4 and 6 are open. The migration drift gate still needs
+> a Docker-enabled environment (the local run failed during container setup).
 > Every design decision is made and recorded inline as **Decision**; Phase 5 is deliberately
 > deferred. Nothing is left to investigate before implementing. File references were refreshed
 > against the current tree on the same date; line numbers drift, so search for the named symbol if
@@ -50,8 +52,7 @@ no longer resolve; the content was re-verified unchanged.
 Migration chain: `c4e8f2a1b6d3` → `d5f9a2c7b481` → `e6a0b3d8c592` → `f7b1c4e9d6a3` → `a8c2d5f0e7b4` →
 `b9d3e6a1f8c5`.
 
-Leftover: `schema/structure/public/tables/build_edit_history/` is still tracked in git although the
-table is gone. It is a stale dump, not a schema defect; delete it in a cleanup commit.
+The stale `schema/structure/public/tables/build_edit_history/` dump has been removed.
 
 ## Corrections to the original audit
 
@@ -87,7 +88,7 @@ holds.
 
 Independent of each other; any can go first.
 
-- **Name every constraint from one convention.** `Base.metadata` has no `naming_convention`
+- **Name every constraint from one convention — implemented.** `Base.metadata` has no `naming_convention`
   (`squid/persistence/base.py`), so some constraints carry PostgreSQL-invented names while the rest
   are named by hand. Counted from `Base.metadata` on 2026-11-07, there are **39**: 33 foreign keys
   (all of `starboard_*`, most `submission_*` tables, `media_draft_references`,

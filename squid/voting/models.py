@@ -264,8 +264,8 @@ class GuildVoteEmoji(Base, kw_only=True):
     __tablename__ = "guild_vote_emojis"
     __table_args__ = (
         UniqueConstraint("guild_id", "kind", "position", name="guild_vote_emojis_position_key"),
-        CheckConstraint(f"kind IN ({_KIND_VALUES})"),
-        CheckConstraint(f"choice IN ({_CHOICE_VALUES})"),
+        CheckConstraint(f"kind IN ({_KIND_VALUES})", name="guild_vote_emojis_kind_check"),
+        CheckConstraint(f"choice IN ({_CHOICE_VALUES})", name="guild_vote_emojis_choice_check"),
     )
     guild_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), primary_key=True
@@ -283,7 +283,7 @@ class GuildVoteRoleWeight(Base, kw_only=True):
 
     __tablename__ = "guild_vote_role_weights"
     __table_args__ = (
-        CheckConstraint(f"kind IN ({_KIND_VALUES})"),
+        CheckConstraint(f"kind IN ({_KIND_VALUES})", name="guild_vote_role_weights_kind_check"),
         CheckConstraint(
             "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
             name="guild_vote_role_weights_multiplier_check",

@@ -1,10 +1,10 @@
 """Shared SQLAlchemy declarative base."""
 
 import inspect
-from typing import Any
+from typing import Any, ClassVar
 
 from advanced_alchemy.base import BasicAttributes
-from sqlalchemy import Column
+from sqlalchemy import Column, MetaData
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
 from sqlalchemy.orm.properties import MappedColumn
@@ -22,6 +22,15 @@ class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase, eq=F
     Entities compare by object identity, so changing a mapped field does not change
     equality or hashing while an instance is held in a set or dictionary.
     """
+
+    metadata: ClassVar[MetaData] = MetaData(
+        naming_convention={
+            "ix": "ix_%(column_0_label)s",
+            "fk": "%(table_name)s_%(column_0_name)s_fkey",
+            "uq": "%(table_name)s_%(column_0_name)s_key",
+            "pk": "%(table_name)s_pkey",
+        }
+    )
 
     __eq__ = object.__eq__
     __hash__ = object.__hash__
