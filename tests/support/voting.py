@@ -238,9 +238,7 @@ async def seed_delete_log_vote(
                             VoteSessionOption.vote_session_id == vote_session_id
                         )
                     )
-                )
-                .tuples()
-                .all()
+                ).all()
             )
             await session.execute(
                 insert(Vote),

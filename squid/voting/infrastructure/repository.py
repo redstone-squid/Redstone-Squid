@@ -204,7 +204,7 @@ class VoteRepository:
                 DiscordPost.surface,
             ).where(DiscordPost.message_id == message_id)
         )
-        existing_values = existing.tuples().one_or_none()
+        existing_values = existing.one_or_none()
         if existing_values is not None:
             if existing_values == expected:
                 return
@@ -241,7 +241,7 @@ class VoteRepository:
                 DiscordPost.surface,
             ).where(DiscordPost.message_id == message_id)
         )
-        if raced.tuples().one_or_none() != expected:
+        if raced.one_or_none() != expected:
             msg = "Discord message was concurrently attached to a different resource."
             raise DataIntegrityError(
                 msg,
@@ -459,16 +459,14 @@ class VoteRepository:
         """Finalize a locked open session once its current tally reaches a threshold."""
         if row.status is not VoteStatus.OPEN or row.pass_threshold is None or row.fail_threshold is None:
             return False
-        selections = (
-            await session.execute(
-                select(Vote.weight, VoteSessionOption.choice)
-                .join(
-                    VoteSessionOption,
-                    VoteSessionOption.id == Vote.option_alias_id,
-                )
-                .where(Vote.vote_session_id == row.id)
+        selections = await session.execute(
+            select(Vote.weight, VoteSessionOption.choice)
+            .join(
+                VoteSessionOption,
+                VoteSessionOption.id == Vote.option_alias_id,
             )
-        ).tuples()
+            .where(Vote.vote_session_id == row.id)
+        )
         net = sum(weight if choice is VoteChoice.APPROVE else -weight for weight, choice in selections)
         if net >= row.pass_threshold:
             result = VoteSessionResult.APPROVED
@@ -624,17 +622,13 @@ class VoteRepository:
             VoteMessage(message_id, channel_id, guild_id or 0) for message_id, channel_id, guild_id in locations
         )
         vote_rows = (
-            (
-                await session.execute(
-                    select(Vote, VoteSessionOption)
-                    .join(VoteSessionOption, VoteSessionOption.id == Vote.option_alias_id)
-                    .where(Vote.vote_session_id == row.id)
-                    .order_by(Vote.account_id)
-                )
+            await session.execute(
+                select(Vote, VoteSessionOption)
+                .join(VoteSessionOption, VoteSessionOption.id == Vote.option_alias_id)
+                .where(Vote.vote_session_id == row.id)
+                .order_by(Vote.account_id)
             )
-            .tuples()
-            .all()
-        )
+        ).all()
         selections = tuple(
             VoteSelection(vote.account_id, vote.guild_id, option.identifier, option.emoji, vote.weight)
             for vote, option in vote_rows
@@ -683,18 +677,14 @@ class VoteRepository:
                 return (None if build_id is None else BuildVoteTarget(build_id)), None
             case VoteKind.DELETE_LOG:
                 target_row = (
-                    (
-                        await session.execute(
-                            select(
-                                DeleteLogVoteSession.target_message_id,
-                                DeleteLogVoteSession.target_channel_id,
-                                DeleteLogVoteSession.target_server_id,
-                            ).where(DeleteLogVoteSession.vote_session_id == row.id)
-                        )
+                    await session.execute(
+                        select(
+                            DeleteLogVoteSession.target_message_id,
+                            DeleteLogVoteSession.target_channel_id,
+                            DeleteLogVoteSession.target_server_id,
+                        ).where(DeleteLogVoteSession.vote_session_id == row.id)
                     )
-                    .tuples()
-                    .one_or_none()
-                )
+                ).one_or_none()
                 return (None if target_row is None else DeleteLogVoteTarget(*target_row)), None
             case VoteKind.GENERIC:
                 generic = await session.scalar(

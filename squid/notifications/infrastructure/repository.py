@@ -706,16 +706,14 @@ class PostgresNotificationRepository:
             )
         ).all()
         old_holders = set(
-            (
-                await session.execute(
-                    select(RecordRule.competition_id, RecordResultHolder.build_id)
-                    .select_from(RecordRule)
-                    .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
-                    .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
-                    .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
-                    .where(RecordStanding.run_id == previous_run_id)
-                )
-            ).tuples()
+            await session.execute(
+                select(RecordRule.competition_id, RecordResultHolder.build_id)
+                .select_from(RecordRule)
+                .join(RecordSeries, RecordSeries.public_id == RecordRule.competition_id)
+                .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
+                .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
+                .where(RecordStanding.run_id == previous_run_id)
+            )
         )
         grouped: dict[int, list[_RecordGain]] = defaultdict(list)
         for competition_id, build_id, title, record_class, build_kind, version_scope in new_rows:

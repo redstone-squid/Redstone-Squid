@@ -491,15 +491,11 @@ async def test_generic_polls_store_null_thresholds_rather_than_sentinels(
 
     async with async_session_factory() as session:
         thresholds = (
-            (
-                await session.execute(
-                    text("SELECT pass_threshold, fail_threshold FROM vote_sessions WHERE id = :id"),
-                    {"id": session_id},
-                )
+            await session.execute(
+                text("SELECT pass_threshold, fail_threshold FROM vote_sessions WHERE id = :id"),
+                {"id": session_id},
             )
-            .tuples()
-            .one()
-        )
+        ).one()
 
     assert thresholds == (None, None)
 
