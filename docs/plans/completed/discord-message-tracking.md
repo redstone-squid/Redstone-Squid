@@ -1,11 +1,9 @@
 # Discord message tracking
 
-> **Status.** Design implemented and verified in-tree on 2026-08-18: the `messages` fact table,
-> `discord_posts`/`build_source_messages` links, `discord_sync_queue`/`discord_sync_generation_seq`,
-> and the `PostRenderer`/`PostReconciler` split all exist as described (`squid/messages/`,
-> `squid/posts/`, `squid/sync/`, `squid/bot/posts/reconciler.py`). One item under
-> [Still open](#still-open) has since landed; the `VoteTarget`/`get_by_message` item remains open
-> and is tracked separately under `docs/plans/completed/pr-183-review/09-voting-redesign.md`.
+> **Status: complete** (2026-11-07). The `messages` fact table, `discord_posts`/`build_source_messages`
+> links, `discord_sync_queue`/`discord_sync_generation_seq`, and the `PostRenderer`/`PostReconciler`
+> split all exist as described (`squid/messages/`, `squid/posts/`, `squid/sync/`,
+> `squid/bot/posts/reconciler.py`). See [Follow-ups](#follow-ups) for the items that were left open.
 
 ## The problem this replaced
 
@@ -43,7 +41,7 @@ no owner, no projection state. Deletion tombstones rather than erases; a message
 is a retained fact.
 
 `content` is deliberately never exposed through the API — see
-`docs/plans/rest-api.md`, enforced by `tests/architecture/test_message_content_privacy.py`.
+`docs/plans/completed/rest-api.md`, enforced by `tests/architecture/test_message_content_privacy.py`.
 It is retained for offline build inference, the edit context menu, and rendering a
 delete-log card without refetching.
 
@@ -101,20 +99,18 @@ applied. This is what the per-resource counter got wrong.
   `EntryDebouncer` both run the same diff loop the background job drains. The write
   that prompted them already enqueued durable work, so a dropped nudge costs seconds
   rather than a missing post.
-- **Triggers enqueue; application code does not.** Per `docs/plans/rest-api.md`, the
+- **Triggers enqueue; application code does not.** Per `docs/plans/completed/rest-api.md`, the
   API needs zero knowledge that Discord exists. A build change also enqueues its vote
   sessions, because a review card embeds the build it is voting on.
 
-## Still open
+## Follow-ups
 
-- `VoteTarget` conflates a build target and a message target, and the voting service is
-  still addressed by `message_id` rather than session id. `get_by_message` was
-  repointed at `discord_posts` rather than rewriting the addressing model; see
+- `VoteTarget` used to mix build fields and message fields. It is now
+  `BuildVoteTarget | DeleteLogVoteTarget | None`; see
   `docs/plans/completed/pr-183-review/09-voting-redesign.md`.
-
-Resolved since this section was written: `Base.__init_subclass__` used to extract attribute
-docstrings intending to become column comments, but looked the column up after SQLAlchemy had
-already replaced `MappedColumn` with `InstrumentedAttribute`, so the pass silently did nothing
-(three columns, all with explicit `comment=`, were documented out of 823). Fixed by reading the
-column before delegating to `DeclarativeBase.__init_subclass__`
-(`squid/persistence/base.py`).
+- The voting service used to be addressed by Discord `message_id`, so even the REST API's
+  session-based vote went through a Discord message. That is a voting concern rather than a
+  message-tracking one, and is being refactored separately.
+- `Base.__init_subclass__` meant to turn attribute docstrings into column comments, but read the
+  column after SQLAlchemy had already replaced it, so it silently did nothing. It now reads the
+  column first (`squid/persistence/base.py`).

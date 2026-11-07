@@ -11,7 +11,7 @@
 >
 > **Landed since the 2026-08-06 status.** The delete side of Discord reconciliation, called out
 > below as a known gap, was resolved by the `discord_posts` diff-loop rework (2026-08-15,
-> `docs/plans/discord-message-tracking.md`): a vanished resource now simply renders as "wants no
+> `docs/plans/completed/discord-message-tracking.md`): a vanished resource now simply renders as "wants no
 > posts," so deletion needs no branch of its own — see the "(resolved)" correction under "Decision:
 > reconciliation uses an outbox table". The search-projection-freeze gap noted under that same
 > decision is also gone: the 2026-08-09 API/bot/worker process split (`squid/worker/app.py`) moved

@@ -16,7 +16,7 @@ Two parts of the codebase already repair themselves:
 
 - **Outbound posts** are reconciled. `discord_sync_queue` and `PostReconciler`
   (`squid/bot/posts/reconciler.py`) converge Discord to the database and treat `NotFound` as
-  "the post is gone" (see `docs/plans/discord-message-tracking.md`). This is the model to copy.
+  "the post is gone" (see `docs/plans/completed/discord-message-tracking.md`). This is the model to copy.
 - **Vote reactions** are reconciled. `VoteReactionHandler.reconcile_open_reactions`
   (`squid/bot/voting/reactions.py`) runs every 60 seconds and rebuilds ballots from the reactions
   actually on each open card. It does so by fetching every open card and paging through each
