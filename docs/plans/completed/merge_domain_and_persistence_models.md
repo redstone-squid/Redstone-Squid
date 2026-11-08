@@ -4,7 +4,7 @@
 
 Both phases are implemented. Persisted entities are unified, and application operations now own business transactions
 through units of work. Database listeners and queue-health monitoring remain infrastructure connection owners.
-See [Entities and persistence](../models.md) for the current model boundary.
+See [Entities and persistence](../../models.md) for the current model boundary.
 
 ## Goal and boundaries
 
