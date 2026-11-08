@@ -1,9 +1,19 @@
-"""Starboard refresh coalescing and owned task lifetimes."""
+"""Starboard refresh coalescing, owned task lifetimes, and recounts."""
+
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import MagicMock
 
 import anyio
+import discord
 
+from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
+from squid.reactions.domain import ReactionActor
 from squid.runtime import BackgroundTaskSupervisor
+from squid.starboard.models import OriginMessage
 
 
 async def test_debouncer_coalesces_each_key_and_preserves_force() -> None:
@@ -110,3 +120,69 @@ async def test_failed_refresh_does_not_block_other_keys_or_later_attempts() -> N
             await debouncer.drain()
 
     assert sorted(calls) == [((1, 2), False), ((1, 2), True), ((1, 3), False)]
+
+
+async def test_recount_reads_relevant_reactions_from_humans_with_their_roles() -> None:
+    """Only starboard emojis count, bots are skipped, and uncached members are fetched or dropped."""
+
+    class Reaction:
+        def __init__(self, emoji: str, users: list[SimpleNamespace]) -> None:
+            self.emoji = emoji
+            self._users = users
+
+        async def users(self, *, limit: None) -> AsyncIterator[SimpleNamespace]:
+            for user in self._users:
+                yield user
+
+    cached = SimpleNamespace(id=1, roles=[SimpleNamespace(id=50)])
+    fetched = SimpleNamespace(id=2, roles=[])
+    response = MagicMock(status=404, reason="")
+
+    async def fetch_member(user_id: int) -> SimpleNamespace:
+        if user_id == fetched.id:
+            return fetched
+        raise discord.NotFound(response, "left")
+
+    guild = SimpleNamespace(id=10, get_member={1: cached}.get, fetch_member=fetch_member)
+    message = SimpleNamespace(
+        id=100,
+        guild=guild,
+        channel=SimpleNamespace(id=30),
+        author=SimpleNamespace(id=40, bot=False),
+        created_at=datetime.now(UTC),
+        attachments=[],
+        embeds=[],
+        reactions=[
+            Reaction("⭐", [SimpleNamespace(id=1, bot=False), SimpleNamespace(id=9, bot=True)]),
+            Reaction("⭐", [SimpleNamespace(id=2, bot=False), SimpleNamespace(id=3, bot=False)]),
+            Reaction("👍", [SimpleNamespace(id=1, bot=False)]),
+        ],
+    )
+    recounts: list[tuple[int, tuple[tuple[ReactionActor, str], ...]]] = []
+    scheduled: list[tuple[EntryKey, bool]] = []
+
+    async def is_relevant_emoji(guild_id: int, emoji: str) -> bool:
+        return emoji == "⭐"
+
+    async def recount(origin: OriginMessage, reactions: tuple[tuple[ReactionActor, str], ...]) -> tuple[EntryKey]:
+        recounts.append((origin.id, reactions))
+        return ((7, origin.id),)
+
+    cog = cast(Any, StarboardCog).__new__(StarboardCog)
+    cog.service = SimpleNamespace(is_relevant_emoji=is_relevant_emoji, recount=recount)
+    cog._debouncer = SimpleNamespace(schedule=lambda key, force: scheduled.append((key, force)))
+
+    assert await cog.recount(message) == ((7, 100),)
+
+    assert recounts == [
+        (100, ((ReactionActor(1, 10, frozenset({50})), "⭐"), (ReactionActor(2, 10, frozenset()), "⭐")))
+    ]
+    assert scheduled == [((7, 100), True)]
+
+
+async def test_recount_of_a_message_outside_a_guild_counts_nothing() -> None:
+    cog = cast(Any, StarboardCog).__new__(StarboardCog)
+    # A direct message has no starboards, so neither the service nor Discord should be asked.
+    cog.service = None
+
+    assert await cog.recount(SimpleNamespace(guild=None)) == ()

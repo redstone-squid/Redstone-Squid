@@ -191,6 +191,7 @@ async def test_production_chat_input_taxonomy(production_bot: commands.Bot) -> N
         "help",
         "notifications",
         "poll",
+        "recount",
         "records",
         "redstoner",
         "search",

@@ -79,6 +79,7 @@ EXTENSIONS = (
     "squid.bot.help",
     "squid.bot.voting.vote",
     "squid.bot.starboard.cog",
+    "squid.bot.recount",
     "squid.bot.sync",
     "squid.bot.events",
     "squid.bot.notifications",

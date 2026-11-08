@@ -73,7 +73,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         member = await event.member(humans_only=True)
         if message is None or member is None:
             return
-        origin = self._origin(message)
+        origin = self._origin(message, member.guild)
         result = await self.service.record_vote(
             origin,
             ReactionActor(member.id, member.guild.id, frozenset(role.id for role in member.roles)),
@@ -116,21 +116,61 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         for message_id in payload.message_ids:
             self._schedule(await self.service.mark_origin_deleted(message_id), force=True)
 
+    async def recount(self, message: discord.Message) -> tuple[EntryKey, ...]:
+        """Replace one source message's starboard votes with the reactions it has now.
+
+        Use this to repair votes lost while the bot was offline. It reads every user of
+        every starboard emoji on the message, and may fetch members missing from the cache,
+        so callers must limit how often it runs.
+
+        Returns:
+            The entries whose score was recomputed; their posts are refreshed. A message
+            outside a guild has no starboards, so it returns an empty tuple.
+        """
+        guild = message.guild
+        if guild is None:
+            return ()
+        reactions: list[tuple[ReactionActor, str]] = []
+        for reaction in message.reactions:
+            emoji = str(reaction.emoji)
+            if not await self.service.is_relevant_emoji(guild.id, emoji):
+                continue
+            async for user in reaction.users(limit=None):
+                if user.bot:
+                    continue
+                member = user if isinstance(user, discord.Member) else await self._member(guild, user.id)
+                if member is not None:
+                    actor = ReactionActor(member.id, guild.id, frozenset(role.id for role in member.roles))
+                    reactions.append((actor, emoji))
+        keys = await self.service.recount(self._origin(message, guild), tuple(reactions))
+        self._schedule(keys, force=True)
+        return keys
+
+    @staticmethod
+    async def _member(guild: discord.Guild, user_id: int) -> discord.Member | None:
+        """Return a cached or fetched member, or None if they have left the guild."""
+        member = guild.get_member(user_id)
+        if member is not None:
+            return member
+        try:
+            return await guild.fetch_member(user_id)
+        except discord.NotFound:
+            return None
+
     def _schedule(self, keys: Iterable[EntryKey], *, force: bool = False) -> None:
         for key in keys:
             self._debouncer.schedule(key, force=force)
 
     @staticmethod
-    def _origin(message: discord.Message) -> OriginMessage:
+    def _origin(message: discord.Message, guild: discord.Guild) -> OriginMessage:
         """Read the source-message facts starboard policy is decided from."""
-        assert message.guild is not None
         channel_nsfw = bool(getattr(message.channel, "is_nsfw", lambda: False)())
         has_image = any((item.content_type or "").startswith("image/") for item in message.attachments) or any(
             embed.image.url or embed.thumbnail.url for embed in message.embeds
         )
         return OriginMessage(
             id=message.id,
-            guild_id=message.guild.id,
+            guild_id=guild.id,
             channel_id=message.channel.id,
             author_id=message.author.id,
             author_is_bot=message.author.bot,
