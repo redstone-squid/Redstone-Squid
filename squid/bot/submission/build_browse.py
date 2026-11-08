@@ -266,11 +266,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         stored = await self._primary(event)
         if stored is None:
             return
-        self._schematic_result = _describe(
-            stored,
-            locale=event.locale,
-            render_skip=await self._schematics.explain_render_skip(stored),
-        )
+        self._schematic_result = _describe(stored, render_skip=await self._schematics.explain_render_skip(stored))
 
     async def _schematic_download(self, event: sl.PressEvent) -> None:
         if await self._primary(event) is None:
@@ -323,9 +319,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         try:
             result = await self._schematics.measure_timing(self._build_id, input_position=position)
         except AmbiguousSimulationInputError as error:
-            self._schematic_result = _describe_input_refusal(error, locale=event.locale)
+            self._schematic_result = _describe_input_refusal(error)
             return
-        self._schematic_result = _describe_timing(result, locale=event.locale)
+        self._schematic_result = _describe_timing(result)
 
     async def _detect_lattice(self, event: sl.PressEvent) -> None:
         if not await self._may(event, BUILD_SCHEMATIC_DETECT_LATTICE) or await self._primary(event) is None:
@@ -334,7 +330,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._schematic_result = (
             tr(t"No repeating lattice was detected in this schematic.")
             if lattice is None
-            else _describe_lattice(lattice, locale=event.locale)
+            else _describe_lattice(lattice)
         )
 
     def _schematic_asset(self, data: bytes, extension: str) -> sl.document.Asset:
