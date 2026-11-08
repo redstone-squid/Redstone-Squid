@@ -3,19 +3,15 @@
 -- Workers later read those queues to update search documents, Discord messages, and records.
 -- Other functions enforce invariants that must hold even when writes bypass application services.
 
-CREATE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete() RETURNS trigger
+CREATE FUNCTION public.delete_vote_session_after_build_vote_session_delete() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    DELETE FROM vote_sessions
-    WHERE id IN (
-        SELECT vote_sessions.id
-        FROM vote_sessions vs
-        LEFT JOIN build_vote_sessions bvs ON vs.id = bvs.vote_session_id
-        LEFT JOIN delete_log_vote_sessions dvs ON vs.id = dvs.vote_session_id
-        WHERE bvs.vote_session_id IS NULL AND dvs.vote_session_id IS NULL
-    );
-    RETURN NULL; -- Statement-level triggers do not use OLD or NEW
+    -- A build session has exactly one subtype row (vote_sessions_kind_subtype_check), so losing
+    -- it, usually through the cascade from a deleted build, leaves a session nothing can show.
+    -- When the delete cascaded from vote_sessions itself, the parent is already gone.
+    DELETE FROM public.vote_sessions WHERE id = OLD.vote_session_id AND kind = 'build';
+    RETURN NULL;
 END;
 $$;
 
@@ -584,7 +580,7 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
+CREATE TRIGGER build_vote_sessions_delete_vote_session AFTER DELETE ON public.build_vote_sessions FOR EACH ROW EXECUTE FUNCTION public.delete_vote_session_after_build_vote_session_delete();
 
 
 CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
@@ -762,6 +758,17 @@ BEGIN
     IF current_setting('transaction_isolation') <> 'read committed' THEN
         RAISE EXCEPTION 'role inclusion writes require READ COMMITTED isolation'
             USING ERRCODE = '0A000';
+    END IF;
+    -- A guild role must not change what a global role grants, and one guild's role must not
+    -- change another guild's. Global roles may be included anywhere.
+    IF EXISTS (
+        SELECT 1
+        FROM permission_roles role, permission_roles included
+        WHERE role.id = NEW.role_id AND included.id = NEW.included_role_id
+          AND included.guild_id IS NOT NULL AND included.guild_id IS DISTINCT FROM role.guild_id
+    ) THEN
+        RAISE EXCEPTION 'permission role may only include global roles or roles of its own guild'
+            USING ERRCODE = '23514', CONSTRAINT = 'permission_role_includes_scope';
     END IF;
     PERFORM pg_advisory_xact_lock(1936812391, 1);
     IF EXISTS (

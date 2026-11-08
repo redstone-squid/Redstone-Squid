@@ -523,12 +523,20 @@ class PermissionAdministrationService:
             return result
 
     async def add_include(self, actor: Actor, role: PermissionRole, included: PermissionRole) -> None:
-        """Compose one role into another, refusing cycles at write time."""
+        """Compose one role into another.
+
+        Refuse cycles, and refuse a guild role unless `role` belongs to the same guild.
+        """
         async with self._uow_factory() as uow:
             self._require_role_management(actor, role)
             if role.id == included.id:
                 msg = "A role cannot include itself."
                 raise ValidationError(msg)
+            # A guild role inside a global role would let one guild's admins change what the
+            # global role grants in every guild.
+            if included.guild_id is not None and included.guild_id != role.guild_id:
+                msg = f"{role.slug} can only include global roles or roles from its own guild."
+                raise ValidationError(msg, public_context={"role": role.slug, "included": included.slug})
             roles = await uow.permission_admin.list_roles()
             if self._would_cycle(role.id, included.id, roles):
                 msg = f"Including {included.slug} in {role.slug} would create a cycle."

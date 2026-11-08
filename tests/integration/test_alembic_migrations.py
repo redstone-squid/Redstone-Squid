@@ -9,7 +9,7 @@ import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
-from sqlalchemy import create_engine, text
+from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
@@ -1634,5 +1634,107 @@ def test_record_terminology_preserves_identities_and_json(
             assert connection.execute(text("SELECT tags FROM search_documents")).scalar_one() == ["fastest", "current"]
         command.upgrade(config, "head")
         command.check(config)
+    finally:
+        engine.dispose()
+
+
+def _insert_build(connection: Connection, account_id: int) -> int:
+    build_id = connection.execute(
+        text(
+            "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
+            "VALUES (0, 'Other', :account, false) RETURNING id"
+        ),
+        {"account": account_id},
+    ).scalar_one()
+    connection.execute(text("INSERT INTO other_builds (build_id) VALUES (:id)"), {"id": build_id})
+    return build_id
+
+
+def _insert_vote_session(connection: Connection, account_id: int, kind: str) -> int:
+    # Generic polls close at their deadline, so they carry no thresholds.
+    threshold = None if kind == "generic" else 1
+    return connection.execute(
+        text(
+            "INSERT INTO vote_sessions (status, result, author_account_id, kind, pass_threshold, fail_threshold) "
+            "VALUES ('open', 'pending', :author, :kind, :threshold, -CAST(:threshold AS real)) RETURNING id"
+        ),
+        {"author": account_id, "kind": kind, "threshold": threshold},
+    ).scalar_one()
+
+
+def test_deleting_a_build_removes_only_its_vote_sessions(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A build delete must not take generic polls or delete-log votes with it."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            doomed_build, kept_build = _insert_build(connection, account), _insert_build(connection, account)
+            sessions = {}
+            for name, build_id in (("doomed", doomed_build), ("kept_build", kept_build)):
+                sessions[name] = _insert_vote_session(connection, account, "build")
+                connection.execute(
+                    text("INSERT INTO build_vote_sessions (vote_session_id, build_id, changes) VALUES (:s, :b, '[]')"),
+                    {"s": sessions[name], "b": build_id},
+                )
+            sessions["generic"] = _insert_vote_session(connection, account, "generic")
+            connection.execute(
+                text(
+                    "INSERT INTO generic_vote_sessions (vote_session_id, question, visibility, deadline) "
+                    "VALUES (:s, 'Q?', 'visible_live', now() + interval '1 day')"
+                ),
+                {"s": sessions["generic"]},
+            )
+            sessions["delete_log"] = _insert_vote_session(connection, account, "delete_log")
+            connection.execute(
+                text(
+                    "INSERT INTO delete_log_vote_sessions "
+                    "(vote_session_id, target_message_id, target_channel_id, target_server_id) VALUES (:s, 1, 2, 3)"
+                ),
+                {"s": sessions["delete_log"]},
+            )
+
+        with engine.begin() as connection:
+            # The old statement trigger deleted every orphan-looking session even when no build matched.
+            connection.execute(text("DELETE FROM builds WHERE id = -1"))
+            connection.execute(text("DELETE FROM builds WHERE id = :id"), {"id": doomed_build})
+
+        with engine.connect() as connection:
+            remaining = set(connection.execute(text("SELECT id FROM vote_sessions")).scalars())
+        assert remaining == {sessions["kept_build"], sessions["generic"], sessions["delete_log"]}
+    finally:
+        engine.dispose()
+
+
+def test_role_includes_stay_within_one_guild(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A role may include global roles and roles of its own guild, but no other guild's roles."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            ids = dict(
+                connection.execute(
+                    text(
+                        "INSERT INTO permission_roles (slug, name, guild_id) VALUES "
+                        "('global-a', 'A', NULL), ('global-b', 'B', NULL), "
+                        "('guild-one', 'One', 1), ('guild-one-b', 'One B', 1), ('guild-two', 'Two', 2) "
+                        "RETURNING slug, id"
+                    )
+                ).all()
+            )
+            include = text("INSERT INTO permission_role_includes (role_id, included_role_id) VALUES (:role, :inc)")
+            for role, included in (("global-a", "global-b"), ("guild-one", "global-a"), ("guild-one", "guild-one-b")):
+                connection.execute(include, {"role": ids[role], "inc": ids[included]})
+            for role, included in (("global-b", "guild-one"), ("guild-one", "guild-two")):
+                with pytest.raises(DBAPIError, match="own guild"), connection.begin_nested():
+                    connection.execute(include, {"role": ids[role], "inc": ids[included]})
     finally:
         engine.dispose()

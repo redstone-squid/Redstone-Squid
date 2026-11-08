@@ -393,6 +393,24 @@ class TestRoles:
         with pytest.raises(ConflictError, match="cycle"):
             await service.add_include(actor, await service.role("b"), await service.role("a"))
 
+    @pytest.mark.parametrize(("role_guild", "included_guild"), [(None, GUILD), (GUILD, GUILD + 1)])
+    async def test_a_role_cannot_include_another_guilds_role(self, role_guild: int | None, included_guild: int) -> None:
+        """A guild role inside a global role would let one guild change what that role grants everywhere."""
+        store = stored(
+            roles=(
+                PermissionRole(id=50, slug="outer", guild_id=role_guild, builtin_key=None, rank=10, protected=False),
+                PermissionRole(
+                    id=51, slug="inner", guild_id=included_guild, builtin_key=None, rank=10, protected=False
+                ),
+            ),
+            rules=granted("**", "role.definition.manage"),
+        )
+        service = admin(store)
+        actor = await service.actor(Subject(account_id=1, is_bot_owner=True))
+
+        with pytest.raises(ValidationError, match="own guild"):
+            await service.add_include(actor, await service.role("outer"), await service.role("inner"))
+
     async def test_an_exclusion_needs_no_authority_over_what_it_removes(self) -> None:
         """An exclusion narrows a role, so the editor need not hold the removed capability."""
         store = stored(
