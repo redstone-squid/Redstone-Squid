@@ -144,10 +144,12 @@ class ReactionEvent:
 class ReactionFilter:
     """Choose which reaction add and remove events reach a subscriber.
 
-    A subscriber declares its filter as a `reaction_filter` class attribute.
-    The router checks it against the gateway payload before queuing the
-    subscriber's handlers, including recovery, so a rejected event costs no
-    Discord lookups. Clear events are not filtered.
+    A subscriber declares one for all its handlers as a `reaction_filter`
+    class attribute, and a handler can add its own with
+    `@reaction_handler(filter=...)`; an event must pass both. The router checks
+    filters against the gateway payload before queuing handlers, including
+    recovery, so a rejected event costs no Discord lookups. Clear events are
+    not filtered.
 
     The default filter accepts every reaction except this bot's own.
     """
@@ -193,11 +195,12 @@ _ACTION_KINDS: frozenset[str] = frozenset({"add", "remove"})
 class _HandlerSpec:
     kinds: tuple[ReactionKind, ...]
     recover: bool
+    reaction_filter: ReactionFilter | None
 
 
 @overload
 def reaction_handler[F: Callable[[Any, ReactionEvent], Awaitable[None]]](
-    *kinds: ReactionActionKind, recover: bool = False
+    *kinds: ReactionActionKind, filter: ReactionFilter | None = None, recover: bool = False
 ) -> Callable[[F], F]: ...
 
 
@@ -208,7 +211,7 @@ def reaction_handler[F: Callable[[Any, ReactionClearEvent], Awaitable[None]]](
 
 
 def reaction_handler[F: Callable[..., Awaitable[None]]](
-    *kinds: ReactionKind, recover: bool = False
+    *kinds: ReactionKind, filter: ReactionFilter | None = None, recover: bool = False
 ) -> Callable[[F], F]:
     """Mark a method to receive the given kinds of reaction event.
 
@@ -220,6 +223,11 @@ def reaction_handler[F: Callable[..., Awaitable[None]]](
 
     Args:
         kinds: The events this method handles.
+        filter: Further restrict which add and remove events reach this
+            handler. An event must pass both this filter and the subscriber's
+            `reaction_filter`, so this cannot accept anything the subscriber's
+            filter rejects. Clear events are not filtered, so clear handlers
+            take no filter.
         recover: Also call this method for events that shutdown interrupted
             or never queued. The event's `recovering` flag is then True. A
             recovering handler must tolerate partial earlier processing.
@@ -232,7 +240,7 @@ def reaction_handler[F: Callable[..., Awaitable[None]]](
         raise TypeError(msg)
 
     def decorate(method: F) -> F:
-        setattr(method, _HANDLER_ATTRIBUTE, _HandlerSpec(kinds, recover))
+        setattr(method, _HANDLER_ATTRIBUTE, _HandlerSpec(kinds, recover, filter))
         return method
 
     return decorate
@@ -263,8 +271,12 @@ class _BoundHandler:
     """The method's qualified name, e.g. "Admin.delete_archived_message", used in logs and metrics."""
     kinds: frozenset[ReactionKind]
     recover: bool
-    reaction_filter: ReactionFilter
+    filters: tuple[ReactionFilter, ...]
+    """The subscriber's filter, then the handler's own if it has one. An event must pass all of them."""
     callback: Callable[[Any], Awaitable[None]]
+
+    def accepts(self, event: ReactionEvent) -> bool:
+        return all(reaction_filter.accepts(event) for reaction_filter in self.filters)
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,7 +357,8 @@ class ReactionRouter:
 
         The bot calls this for cogs; other subscribers call it when they start.
         The subscriber's `reaction_filter` class attribute, if any, selects which
-        add and remove events reach its handlers.
+        add and remove events reach its handlers; a handler's own `filter`
+        restricts them further.
 
         Dispatch captures registrations before enqueueing, so detaching does not
         retract that snapshot. Recovery can run for events that never entered a queue
@@ -365,7 +378,7 @@ class ReactionRouter:
                 f"{cls_name}.{name}",
                 frozenset(spec.kinds),
                 spec.recover,
-                reaction_filter,
+                (reaction_filter,) if spec.reaction_filter is None else (reaction_filter, spec.reaction_filter),
                 getattr(subscriber, name),
             )
             for name, spec in _handler_specs(subscriber)
@@ -485,7 +498,7 @@ class ReactionRouter:
         return tuple(
             _ReactionCallback(handler.consumer, handler.callback)
             for handler in self._handlers(kind, recovery=recovery)
-            if handler.reaction_filter.accepts(event)
+            if handler.accepts(event)
         )
 
     def _clear_callbacks(

@@ -665,3 +665,44 @@ async def test_subscribe_rejects_a_subscriber_without_handlers() -> None:
 def test_reaction_handler_rejects_mixed_event_types() -> None:
     with pytest.raises(TypeError, match="cannot mix"):
         reaction_handler("add", "clear")  # type: ignore[call-overload]
+
+
+class FilteredHandlers:
+    reaction_filter = ReactionFilter(guild_only=True)
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    @reaction_handler("add", filter=ReactionFilter(emojis=frozenset({"❌"})))
+    async def cross(self, event: ReactionEvent) -> None:
+        self.calls.append("cross")
+
+    @reaction_handler("add", filter=ReactionFilter(emojis=frozenset({"⭐"})))
+    async def star(self, event: ReactionEvent) -> None:
+        self.calls.append("star")
+
+    @reaction_handler("add")
+    async def any_emoji(self, event: ReactionEvent) -> None:
+        self.calls.append("any")
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (make_reaction_payload(emoji="❌"), ["any", "cross"]),
+        (make_reaction_payload(emoji="⭐"), ["any", "star"]),
+        (make_reaction_payload(emoji="🔥"), ["any"]),
+        # The handler filters accept ❌, but the subscriber's guild-only filter still applies.
+        (make_reaction_payload(emoji="❌", guild_id=None), []),
+    ],
+)
+async def test_handler_filter_combines_with_the_subscriber_filter(
+    payload: discord.RawReactionActionEvent, expected: list[str]
+) -> None:
+    subscriber = FilteredHandlers()
+    async with running_router() as router:
+        router.subscribe(subscriber)
+        await router.dispatch_add(payload)
+        await router.close()
+
+    assert sorted(subscriber.calls) == expected

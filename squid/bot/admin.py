@@ -1,7 +1,7 @@
 """Various admin commands for the bot."""
 
 import re
-from typing import TYPE_CHECKING, ClassVar, Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 
 import discord
 from discord import app_commands
@@ -32,8 +32,6 @@ if TYPE_CHECKING:
 
 class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Cog for admin commands."""
-
-    reaction_filter: ClassVar[ReactionFilter] = ReactionFilter(emojis=frozenset({"❌"}))
 
     def __init__(self, bot: BotT):
         super().__init__(bot)
@@ -117,7 +115,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await sent_message.add_reaction("❌")
         await message.delete()
 
-    @reaction_handler("add", recover=True)
+    @reaction_handler("add", filter=ReactionFilter(emojis=frozenset({"❌"})), recover=True)
     async def delete_archived_message(self, event: ReactionEvent) -> None:
         """Delete an archived copy when the original message's author reacts with ❌."""
         payload = event.payload
