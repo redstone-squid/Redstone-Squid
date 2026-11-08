@@ -34,6 +34,7 @@ from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftStateConflictError
 from squid.submissions.models.entities import (
     SubmissionDraft,
+    SubmissionDraftAccess,
     SubmissionDraftChange,
 )
 from squid.submissions.models.finalization import SubmissionFinalizationJob
@@ -44,6 +45,7 @@ NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
 _TABLES = (
     cast(Table, Account.__table__),
     cast(Table, SubmissionDraft.__table__),
+    cast(Table, SubmissionDraftAccess.__table__),
     cast(Table, SubmissionDraftChange.__table__),
     cast(Table, SubmissionFinalizationJob.__table__),
     cast(Table, MediaUploadRecord.__table__),
@@ -149,7 +151,9 @@ async def test_create_adds_owner_grant_and_replays_change(
     assert replayed.replayed is True
     assert replayed.draft.snapshot.revision == 1
     async with async_session_factory() as session:
+        grants = await session.scalar(select(func.count()).select_from(SubmissionDraftAccess))
         changes = await session.scalar(select(func.count()).select_from(SubmissionDraftChange))
+    assert grants == 1
     assert changes == 1
 
 

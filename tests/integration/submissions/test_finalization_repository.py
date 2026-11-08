@@ -47,6 +47,7 @@ from squid.submissions.infrastructure.finalization_repository import (
 )
 from squid.submissions.models.entities import (
     SubmissionDraft,
+    SubmissionDraftAccess,
     SubmissionDraftChange,
 )
 from squid.submissions.models.finalization import (
@@ -63,6 +64,7 @@ NOW = Instant.parse_iso("2026-08-11T18:00:00Z")
 _TABLES: tuple[Table, ...] = (
     cast(Table, Account.__table__),
     cast(Table, SubmissionDraft.__table__),
+    cast(Table, SubmissionDraftAccess.__table__),
     cast(Table, SubmissionDraftChange.__table__),
     cast(Table, MediaUploadRecord.__table__),
     cast(Table, MediaNormalizationJobRecord.__table__),
