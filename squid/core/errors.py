@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import ClassVar, Self, override
 
-from squid.core.i18n import tr
+from squid.core.i18n import tr, tr_now
 from squid_ui.text import Message
 
 type JSONValue = bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
@@ -145,9 +145,9 @@ class SquidError(Exception):
 
     def public_detail(self) -> str:
         """Render the message and end-user action using the current locale."""
-        message = tr(self.message)
+        message = tr_now(self.message)
         if self.end_user_action:
-            return f"{message} {tr(self.end_user_action)}"
+            return f"{message} {tr_now(self.end_user_action)}"
         return message
 
     def with_context(

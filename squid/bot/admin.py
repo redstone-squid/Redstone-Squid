@@ -149,9 +149,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             else:
                 synced = await tree.sync()
 
-            scope = tr(tr(t"globally")) if spec is None else tr(tr(t"to the current guild"))
+            scope = tr(t"globally") if spec is None else tr(t"to the current guild")
             count = len(synced)
-            return text_node(tr(tr(t"Synced {count} commands {scope}.")))
+            return text_node(tr(t"Synced {count} commands {scope}."))
 
         ret = 0
         for guild in guilds:
@@ -164,16 +164,16 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
         synced = ret
         total = len(guilds)
-        return text_node(tr(tr(t"Synced the tree to {synced}/{total}.")))
+        return text_node(tr(t"Synced the tree to {synced}/{total}."))
 
     @sd.prefix_command(name="gdb", hidden=True)
     @commands.is_owner()
     async def get_sheets_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the google sheets link"""
         return link_node(
-            tr(tr(t"Build spreadsheet")),
+            tr(t"Build spreadsheet"),
             "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
-            label=tr(tr(t"Open spreadsheet")),
+            label=tr(t"Open spreadsheet"),
         )
 
     @sd.prefix_command(name="db", hidden=True)
@@ -181,9 +181,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def get_database_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the database link"""
         return link_node(
-            tr(tr(t"Database")),
+            tr(t"Database"),
             "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
-            label=tr(tr(t"Open database")),
+            label=tr(t"Open database"),
         )
 
     # Not `error`: that name now belongs to the stored-error lookup group, which is the command

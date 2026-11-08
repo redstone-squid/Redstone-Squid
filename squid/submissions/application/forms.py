@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.core.errors import InvalidStateError
-from squid.core.i18n import localization_for, tr
+from squid.core.i18n import localization_for, tr, tr_now
 from squid.submissions.domain import (
     CategoryForm,
     ChoiceOption,
@@ -135,7 +135,7 @@ def build_submission_manifest(
 
 
 def _build_submission_manifest(revision: int) -> FormManifest:
-    localize = tr
+    localize = tr_now
     context_section_id = "provenance" if revision == 2 else "submission_context"
     context_title = tr(t"Provenance") if revision == 2 else tr(t"About this submission")
     sponsor_label = (

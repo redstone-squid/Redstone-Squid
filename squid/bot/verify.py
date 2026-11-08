@@ -18,7 +18,7 @@ from squid.bot.profile_render import (
 )
 from squid.bot.ui import card_node, text_node
 from squid.bot.utils.permissions import allows
-from squid.core.i18n import tr
+from squid.core.i18n import tr, tr_now
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -107,11 +107,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
-            return text_node(tr(tr(t"That creator page could not be found.")))
+            return text_node(tr(t"That creator page could not be found."))
         if public.hidden:
             return card_node(
-                tr(tr(t"Hidden creator page")),
-                tr(tr(t"This creator has hidden their page. Their build credit is still listed.")),
+                tr(t"Hidden creator page"),
+                tr(t"This creator has hidden their page. Their build credit is still listed."),
                 fields=public_profile_fields(public),
             )
         return card_node(
@@ -136,7 +136,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
 
 
 def _missing_creator_page(user: str) -> str:
-    return tr(tr(t"{user} doesn't have a creator page."))
+    return tr_now(t"{user} doesn't have a creator page.")
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

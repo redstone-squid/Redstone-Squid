@@ -6,6 +6,7 @@ from uuid import UUID
 from squid.accounts.domain import CreditedAlias, IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity
 from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.bot.profile_render import own_profile_avatar, own_profile_fields, public_profile_fields
+from squid_ui.text import NEUTRAL, resolve_text
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 DISCORD = replace(AccountIdentity.discord(7), id=1, avatar_key="abc")
@@ -13,7 +14,8 @@ JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2)
 
 
 def _fields_named(fields: list, name: str) -> str | None:
-    return next((field.value for field in fields if field.name == name), None)
+    # Field names are deferred messages; compare them in the source language.
+    return next((field.value for field in fields if resolve_text(field.name, NEUTRAL).content == name), None)
 
 
 class TestOwnProfile:

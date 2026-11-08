@@ -8,7 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
-from squid.core.i18n import tr
+from squid.core.i18n import tr_now
 from squid.schematics.application import (
     CachedRender,
     ConvertRequest,
@@ -761,7 +761,7 @@ async def test_rendering_now_refuses_with_the_reason_rather_than_a_blank_image()
     assert refusal.value.reason == RenderSkipReason.OVER_BLOCK_BUDGET.value
     assert refusal.value.public_context == {"reason": "over_block_budget"}
     # The sentence a user is shown is the skip reason's own, not a generic conflict message.
-    assert refusal.value.public_detail() == tr(RenderSkipReason.OVER_BLOCK_BUDGET.description)
+    assert refusal.value.public_detail() == tr_now(RenderSkipReason.OVER_BLOCK_BUDGET.description)
     assert analyzer.render_calls == []
 
 

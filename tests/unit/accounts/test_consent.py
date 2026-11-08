@@ -4,7 +4,7 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, AccountConsent, consent_refresh_required
 from squid.accounts.models import Account
-from squid.core.i18n import tr
+from squid.core.i18n import tr_now
 
 BEFORE_CUTOFF = Instant.from_utc(2026, 8, 3)
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
@@ -47,7 +47,7 @@ def test_the_account_aggregate_delegates_to_the_same_predicate() -> None:
 
 def test_the_notice_names_everything_it_is_consent_to() -> None:
     """Check the notice covers each data use while allowing its surrounding wording to change."""
-    notice = tr(PRIVACY_NOTICE).casefold()
+    notice = tr_now(PRIVACY_NOTICE).casefold()
 
     assert "discord user id" in notice  # what is stored
     assert "minecraft uuid" in notice
@@ -63,7 +63,7 @@ def test_the_notice_names_everything_it_is_consent_to() -> None:
 
 def test_the_notice_is_plain_text_in_paragraphs() -> None:
     """It is rendered into a Discord card, an HTML page and a terminal alike."""
-    notice = tr(PRIVACY_NOTICE)
+    notice = tr_now(PRIVACY_NOTICE)
     assert "\n\n" in notice
     assert "<" not in notice
 

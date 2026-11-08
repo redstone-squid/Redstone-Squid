@@ -26,7 +26,7 @@ from squid.accounts.domain import (
 )
 from squid.accounts.models import Account, AccountIdentity
 from squid.bot.consent import NOT_ASKED, _consent_prompt, ensure_consented_account, prompt_for_consent, request_consent
-from squid.core.i18n import tr
+from squid.core.i18n import tr_now
 from squid_ui.testing import RecordingResponder, press
 from squid_ui.text import NEUTRAL, resolve_text
 from squid_ui_discord import Everyone, SessionKey, SessionManager
@@ -173,7 +173,7 @@ async def test_cancel_and_privacy_never_record_consent() -> None:
     assert not privacy_prompt.closed
     assert answers == [None]
     assert privacy_responder.notices == [
-        (resolve_text(tr(PRIVACY_NOTICE), NEUTRAL).content, sl.interactions.Visibility.PRIVATE)
+        (resolve_text(tr_now(PRIVACY_NOTICE), NEUTRAL).content, sl.interactions.Visibility.PRIVATE)
     ]
 
 

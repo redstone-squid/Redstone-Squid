@@ -227,7 +227,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             reason = sl.raw_md(decision.reason)
             url = sl.raw_md(message.jump_url)
             with localization_scope(localization_for(locale)):
-                payload = render_payload([text_node(tr(tr(t"{reason} in {url}")))])
+                payload = render_payload([text_node(tr(t"{reason} in {url}"))])
             await send_to(message.channel)(payload)
             return
 
@@ -238,7 +238,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
             with localization_scope(localization_for(locale)):
-                payload = render_payload([text_node(tr(tr(t"Could not find the redstoner role.")))])
+                payload = render_payload([text_node(tr(t"Could not find the redstoner role."))])
             await send_to(message.channel)(payload)
             return
         await member.add_roles(redstoner_role)
@@ -262,24 +262,24 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 def _removed_role_notice(owner: str, member: str) -> str:
     owner = sl.raw_md(owner)
     member = sl.raw_md(member)
-    return tr(tr(t"{owner}, {member} has removed their own redstoner role."))
+    return tr(t"{owner}, {member} has removed their own redstoner role.")
 
 
 def _restored_role_notice(member: str) -> str:
     member = sl.raw_md(member)
-    return tr(tr(t"{member} — just kidding, here is your role back."))
+    return tr(t"{member} — just kidding, here is your role back.")
 
 
 def _role_granted_notice(member: str) -> str:
     member = sl.raw_md(member)
-    return tr(tr(t"Gave {member} the redstoner role."))
+    return tr(t"Gave {member} the redstoner role.")
 
 
 def _role_award_notice(member: str, role: str, url: str) -> str:
     member = sl.raw_md(member)
     role = sl.raw_md(role)
     url = sl.raw_md(url)
-    return tr(tr(t"Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."))
+    return tr(t"Hi {member}, you received the {role} role after reaching 15 upvotes in {url}.")
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

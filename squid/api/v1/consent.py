@@ -11,7 +11,7 @@ from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.v1.schemas.consent import PrivacyNoticeDetail
-from squid.core.i18n import localization_for, tr
+from squid.core.i18n import localization_for, tr_now
 from squid_ui.text import localization_scope
 
 router = APIRouter(prefix="/consent", tags=["users"])
@@ -39,6 +39,6 @@ async def get_notice(request: Request, response: Response) -> PrivacyNoticeDetai
         return PrivacyNoticeDetail(
             version=CURRENT_CONSENT_VERSION,
             locale=locale,
-            title=tr(PRIVACY_NOTICE_TITLE),
-            body=tr(PRIVACY_NOTICE),
+            title=tr_now(PRIVACY_NOTICE_TITLE),
+            body=tr_now(PRIVACY_NOTICE),
         )

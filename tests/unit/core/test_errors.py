@@ -5,7 +5,7 @@ from uuid import UUID
 from squid.accounts.errors import AccountAlreadyLinkedError
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
-from squid.core.i18n import localization_for, tr
+from squid.core.i18n import localization_for, tr, tr_now
 from squid_ui.text import localization_scope
 
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -94,7 +94,7 @@ def test_ambient_title_and_public_detail_fall_back_to_english() -> None:
     error = _BuildNotFoundError(42)
 
     with localization_scope(localization_for("en")):
-        assert tr(error.title) == "Resource not found"
+        assert tr_now(error.title) == "Resource not found"
         assert error.public_detail() == "Build not found. Check the build ID and try again."
     # Unsupported locales bind the English catalog rather than erroring.
     with localization_scope(localization_for("fr")):

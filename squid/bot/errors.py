@@ -21,7 +21,7 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError
-from squid.core.i18n import localization_for, tr
+from squid.core.i18n import localization_for, tr_now
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
 from squid.observability import (
@@ -145,20 +145,22 @@ def _present_missing_nodes(error: PermissionNodeRequired) -> ErrorNotice:
     descriptions are translated, so a refusal reads as "you need this capability"
     rather than as a tier the user has no way to look up.
     """
-    described = "\n".join(f"`{name}` — {tr(CATALOGUE[name].description)}" for name in error.nodes if name in CATALOGUE)
+    described = "\n".join(
+        f"`{name}` — {tr_now(CATALOGUE[name].description)}" for name in error.nodes if name in CATALOGUE
+    )
     if error.forbidden:
         return ErrorNotice(
-            tr(tr(t"Permission withheld")),
-            tr(tr(t"An administrator has explicitly withheld this from you. Ask them if you think that is a mistake."))
+            tr_now(t"Permission withheld"),
+            tr_now(t"An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.")
             + f"\n\n{described}",
         )
     lead = (
-        tr(tr(t"You need any one of these permissions to use this command:"))
+        tr_now(t"You need any one of these permissions to use this command:")
         if error.mode == "any"
-        else tr(tr(t"You need these permissions to use this command:"))
+        else tr_now(t"You need these permissions to use this command:")
     )
     return ErrorNotice(
-        tr(tr(t"Missing permission")),
+        tr_now(t"Missing permission"),
         f"{lead}\n{described}",
     )
 
@@ -174,67 +176,67 @@ def _build_error_notice(error: BaseException) -> ErrorNotice:
     if isinstance(error, ConsentRequiredError):
         # Give Discord users an in-bot recovery path when an operation requires consent.
         return ErrorNotice(
-            tr(tr(t"Consent required")),
-            tr(tr(t"Run `/account consent` to read the privacy notice and accept it.")),
+            tr_now(t"Consent required"),
+            tr_now(t"Run `/account consent` to read the privacy notice and accept it."),
         )
     if isinstance(error, (DomainError, ServiceUnavailableError)):
-        detail = tr(error.message)
+        detail = tr_now(error.message)
         if error.end_user_action:
-            detail = f"{detail} {tr(error.end_user_action)}"
-        return ErrorNotice(tr(error.title), detail)
+            detail = f"{detail} {tr_now(error.end_user_action)}"
+        return ErrorNotice(tr_now(error.title), detail)
     if isinstance(error, commands.NoPrivateMessage):
         return ErrorNotice(
-            tr(tr(t"Server only")),
-            tr(tr(t"This command cannot be used in a private message.")),
+            tr_now(t"Server only"),
+            tr_now(t"This command cannot be used in a private message."),
         )
     if isinstance(error, (commands.MissingRole, commands.MissingAnyRole, commands.MissingPermissions)):
         return ErrorNotice(
-            tr(tr(t"Missing permission")),
-            tr(tr(t"You do not have permission to use this command.")),
+            tr_now(t"Missing permission"),
+            tr_now(t"You do not have permission to use this command."),
         )
     if isinstance(error, commands.NotOwner):
         return ErrorNotice(
-            tr(tr(t"Owner only")),
-            tr(tr(t"Only the bot owner can use this command.")),
+            tr_now(t"Owner only"),
+            tr_now(t"Only the bot owner can use this command."),
         )
     if isinstance(error, PermissionNodeRequired):
         return _present_missing_nodes(error)
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
         seconds = error.retry_after
         return ErrorNotice(
-            tr(tr(t"Command on cooldown")),
-            tr(tr(t"Try again in {seconds:.1f} seconds.")),
+            tr_now(t"Command on cooldown"),
+            tr_now(t"Try again in {seconds:.1f} seconds."),
         )
     if isinstance(error, commands.MaxConcurrencyReached):
         return ErrorNotice(
-            tr(tr(t"Command already running")),
-            tr(tr(t"Wait for the current operation to finish and try again.")),
+            tr_now(t"Command already running"),
+            tr_now(t"Wait for the current operation to finish and try again."),
         )
     if isinstance(error, commands.CheckFailure):
         return ErrorNotice(
-            tr(tr(t"Command unavailable")),
-            str(error) or tr(tr(t"You cannot use this command here.")),
+            tr_now(t"Command unavailable"),
+            str(error) or tr_now(t"You cannot use this command here."),
         )
     if isinstance(error, commands.UserInputError):
         return ErrorNotice(
-            tr(tr(t"Invalid command input")),
-            str(error) or tr(tr(t"Check the command arguments and try again.")),
+            tr_now(t"Invalid command input"),
+            str(error) or tr_now(t"Check the command arguments and try again."),
         )
     if isinstance(error, app_commands.TransformerError):
         return ErrorNotice(
-            tr(tr(t"Invalid command input")),
-            tr(tr(t"One of the command options is invalid.")),
+            tr_now(t"Invalid command input"),
+            tr_now(t"One of the command options is invalid."),
         )
     if isinstance(error, app_commands.CheckFailure):
         return ErrorNotice(
-            tr(tr(t"Command unavailable")),
-            tr(tr(t"You cannot use this command here.")),
+            tr_now(t"Command unavailable"),
+            tr_now(t"You cannot use this command here."),
         )
 
     error_id = correlation_id()
     reference = correlation_reference(error_id)
     return ErrorNotice(
-        tr(tr(t"Something went wrong")),
+        tr_now(t"Something went wrong"),
         _unexpected_error_detail(reference),
         error_id,
         reference,
@@ -242,7 +244,7 @@ def _build_error_notice(error: BaseException) -> ErrorNotice:
 
 
 def _unexpected_error_detail(error_id: str) -> str:
-    return tr(tr(t"An unexpected error occurred. Reference: `{error_id}`"))
+    return tr_now(t"An unexpected error occurred. Reference: `{error_id}`")
 
 
 async def _capture(

@@ -48,19 +48,16 @@ def tr(message: Template, /, *, plural: Template | None = None) -> Message: ...
 
 
 @overload
-def tr(message: Message, /) -> str: ...
-
-
-@overload
 def tr(message: str, /, **params: object) -> str: ...
 
 
-def tr(message: str | Template | Message, /, **params: object) -> str | Message:
-    """Defer a template string, or translate an existing message in the current locale.
+def tr(message: str | Template, /, **params: object) -> str | Message:
+    """Defer a template string until render time, when the reader's locale is known.
 
-    For example, `tr(t"Hello {name}")` returns a Message that can be rendered later;
-    `tr(message)` renders that Message now. A plain string is translated immediately
-    and formatted with any keyword arguments.
+    `tr(t"Hello {name}")` returns a Message that renderers translate later. Prefer it
+    to `tr_now` wherever the text ends up in a component, so it follows the render's
+    locale. A plain string is a legacy form, translated immediately and formatted
+    with any keyword arguments.
 
     Template placeholders must be simple identifiers. Plural templates must use the
     same placeholders as the singular form and include an integer `count`.
@@ -85,13 +82,26 @@ def tr(message: str | Template | Message, /, **params: object) -> str | Message:
             detail = "plural templates require an integer 'count' interpolation"
             raise TypeError(detail)
         return Message(singular_message.template, singular_message.params, plural=plural_message.template)
-    if isinstance(message, Message):
-        if params:
-            detail = "deferred messages already contain their interpolation values"
-            raise TypeError(detail)
-        return resolve_text(message, current_localization()).content
     text = current_localization().gettext(message)
     return text.format(**params) if params else text
+
+
+def tr_now(message: Template | Message | str, /, *, plural: Template | None = None) -> str:
+    """Translate into the current localization immediately and return Discord Markdown.
+
+    Use this only where text has to be a string now: composed into a larger string,
+    or translated inside an explicit `localization_scope` chosen for a reason the
+    render does not know about. Interpolated values are escaped as with `tr`. A plain
+    string is looked up as a catalogue key, as `tr` does.
+    """
+    if isinstance(message, Template):
+        message = tr(message, plural=plural)
+    elif plural is not None:
+        detail = "plural forms belong to the template, not to an existing message"
+        raise TypeError(detail)
+    if isinstance(message, str):
+        return tr(message)
+    return resolve_text(message, current_localization()).content
 
 
 def locales_dir() -> Path:

@@ -6,7 +6,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import localization_for
 from squid.bot.ui import render_payload
-from squid.core.i18n import tr
+from squid.core.i18n import tr, tr_now
 from squid.starboard.application import EntryState
 
 
@@ -23,7 +23,7 @@ def starboard_layout(
         heading = f"{message.author.mention} · {heading}"
     children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
         sd.v2.section(
-            sd.v2.text(f"{heading}\n{message.content or tr(tr(t'-# (no text content)'))}"),
+            sd.v2.text(f"{heading}\n{message.content or tr_now(t'-# (no text content)')}"),
             accessory=sd.v2.thumbnail(avatar_url),
         )
     ]
@@ -43,7 +43,7 @@ def starboard_layout(
     score = f"{config.display_emoji} {entry.score:g}"
     if entry.raw_count != entry.score:
         count = entry.raw_count
-        score += tr(tr(t" ({count} reactions)"))
+        score += tr_now(t" ({count} reactions)")
     children.append(sd.v2.footer(f"{score} · <#{message.channel.id}>"))
     return render_payload(
         [sd.v2.panel(*(children), accent=config.colour)],

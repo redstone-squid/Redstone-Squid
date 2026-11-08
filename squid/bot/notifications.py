@@ -10,7 +10,7 @@ import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.notifications_view import NotificationScreen
 from squid.bot.utils.permissions import allows
-from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
+from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr, tr_now
 from squid.notifications import (
     InboxVisibility,
     PendingNotificationDelivery,
@@ -132,7 +132,7 @@ def render_delivery(
     a site link, even when `site_url` is configured.
     """
     with localization_scope(localization_for(locale)):
-        rendered = tr(delivery_message(delivery))
+        rendered = tr_now(delivery_message(delivery))
     build_id = delivery.payload.get("build_id")
     if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
         return rendered

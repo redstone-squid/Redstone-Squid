@@ -15,6 +15,7 @@ from squid.core.i18n import (
     negotiate_locale,
     negotiate_locale_candidates,
     tr,
+    tr_now,
 )
 from squid_ui.text import Message, current_localization, localization_scope
 
@@ -33,6 +34,13 @@ def test_deferred_msgid_preserves_static_format_specifications() -> None:
     assert deferred_msgid(call) == "Took {seconds:.1f}s"
 
 
+def test_deferred_msgid_extracts_immediate_translations_too() -> None:
+    tree = ast.parse('tr_now(t"Took {seconds}s")')
+    call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
+
+    assert deferred_msgid(call) == "Took {seconds}s"
+
+
 def test_locale_str_msgid_extracts_discord_command_text() -> None:
     tree = ast.parse('app_commands.locale_str("Which build to open.")')
     call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
@@ -47,14 +55,14 @@ def test_tr_template_defers_interpolation_until_resolution() -> None:
 
     assert isinstance(message, Message)
     assert message.template == "Build {title}"
-    assert tr(message) == "Build \\[unsafe\\]\\(link\\) @\u200beveryone"
+    assert tr_now(message) == "Build \\[unsafe\\]\\(link\\) @\u200beveryone"
 
 
 def test_tr_preserves_conversion_and_format_specification() -> None:
     seconds = 2.54
     value = "hello"
 
-    assert tr(tr(t"Try again in {seconds:.1f} seconds: {value!r}")) == "Try again in 2\\.5 seconds: 'hello'"
+    assert tr_now(t"Try again in {seconds:.1f} seconds: {value!r}") == "Try again in 2\\.5 seconds: 'hello'"
 
 
 def test_tr_plural_template_defers_a_paired_message() -> None:
@@ -64,7 +72,7 @@ def test_tr_plural_template_defers_a_paired_message() -> None:
 
     assert isinstance(message, Message)
     assert message.plural == "{count} builds"
-    assert tr(message) == "2 builds"
+    assert tr_now(message) == "2 builds"
 
 
 def test_tr_plural_template_requires_matching_placeholders() -> None:

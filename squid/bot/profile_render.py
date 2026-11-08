@@ -6,7 +6,7 @@ rendering can include the caller's hidden identities and avatar.
 
 from squid.accounts.domain import IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity, avatar_url_for
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
-from squid.bot.ui import CardField, tr
+from squid.bot.ui import CardField, tr, tr_now
 from squid_ui.text import raw_md
 
 _PROVIDER_LABELS = {
@@ -18,7 +18,7 @@ _PROVIDER_LABELS = {
 
 def provider_label(provider: IdentityProvider) -> str:
     """Name a provider the way a player would."""
-    return tr(_PROVIDER_LABELS[provider])
+    return tr_now(_PROVIDER_LABELS[provider])
 
 
 def identity_label(identity: AccountIdentity) -> str:
@@ -30,9 +30,9 @@ def identity_label(identity: AccountIdentity) -> str:
     provider = raw_md(provider_label(identity.provider))
     if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
         subject = identity.discord_id
-        return tr(tr(t"{provider} — <@{subject}>"))
+        return tr_now(t"{provider} — <@{subject}>")
     name = identity.display_name or identity.subject
-    return tr(tr(t"{provider} — {name}"))
+    return tr_now(t"{provider} — {name}")
 
 
 def render_links(links: tuple[ProfileLink, ...]) -> str:
@@ -44,9 +44,9 @@ def own_profile_fields(profile: AccountProfile) -> list[CardField]:
     """Render pronouns and links; the account panel renders identity visibility separately."""
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr(tr(t"Pronouns")), profile.pronouns))
+        fields.append(CardField(tr(t"Pronouns"), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr(tr(t"Links")), render_links(profile.links)))
+        fields.append(CardField(tr(t"Links"), render_links(profile.links)))
     return fields
 
 
@@ -71,20 +71,20 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
     """
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr(tr(t"Pronouns")), profile.pronouns))
+        fields.append(CardField(tr(t"Pronouns"), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr(tr(t"Links")), render_links(profile.links)))
+        fields.append(CardField(tr(t"Links"), render_links(profile.links)))
     if profile.identities:
         fields.append(
             CardField(
-                tr(tr(t"Linked accounts")),
+                tr(t"Linked accounts"),
                 "\n".join(_public_identity_label(identity) for identity in profile.identities),
             )
         )
     if profile.aliases:
         fields.append(
             CardField(
-                tr(tr(t"Creator credit")),
+                tr(t"Creator credit"),
                 "\n".join(_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases),
             )
         )
@@ -94,11 +94,11 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
 def _public_identity_label(identity: PublicIdentity) -> str:
     provider = raw_md(provider_label(identity.provider))
     name = identity.display_name or identity.subject
-    return tr(tr(t"{provider} — {name}"))
+    return tr_now(t"{provider} — {name}")
 
 
 def _alias_credit_label(name: str, count: int) -> str:
-    return tr(tr(t"**{name}** — {count} build(s)"))
+    return tr_now(t"**{name}** — {count} build(s)")
 
 
 def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
@@ -118,11 +118,11 @@ def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
             return java.display_name
         if claimant.public_creator_id is not None:
             creator_id = raw_md(claimant.public_creator_id)
-            return tr(tr(t"creator `{creator_id}`"))
+            return tr_now(t"creator `{creator_id}`")
         if discord is not None and discord.discord_id is not None:
             # Reached only without a mention: the snowflake is the last handle left, and it is a
             # diagnostic here rather than a name.
             discord_id = raw_md(discord.discord_id)
-            return tr(tr(t"Discord user `{discord_id}`"))
+            return tr_now(t"Discord user `{discord_id}`")
     account_id = raw_md(claim.account_id)
-    return tr(tr(t"unidentified account (internal ID `{account_id}`)"))
+    return tr_now(t"unidentified account (internal ID `{account_id}`)")

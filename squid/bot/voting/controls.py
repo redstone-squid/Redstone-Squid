@@ -14,7 +14,7 @@ import squid_ui_discord as sd
 from squid.bot.routes._root import _feature_group
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.core.i18n import tr
+from squid.core.i18n import tr, tr_now
 from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
 
 if TYPE_CHECKING:
@@ -64,11 +64,11 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
     result = await bot.services.votes.refresh(snapshot.id)
     if result.session is not None:
         await bot.refresh_posts("vote_session", str(result.session.id))
-    text = tr(tr(t"Poll weights refreshed."))
+    text = tr_now(t"Poll weights refreshed.")
     if not result.complete:
         # Report unresolved voters as a count without exposing their account IDs.
         count = len(result.unresolved_account_ids)
-        text += " " + tr(tr(t"{count} voter(s) could not be resolved, so their cached weight was kept."))
+        text += " " + tr_now(t"{count} voter(s) could not be resolved, so their cached weight was kept.")
     await request.respond(text_node(text), audience="personal")
 
 

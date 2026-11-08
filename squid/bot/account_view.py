@@ -30,7 +30,7 @@ from squid.accounts.domain import (
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.bot.profile_render import own_profile_avatar
-from squid.bot.ui import CardField, tr
+from squid.bot.ui import CardField, tr, tr_now
 from squid.core.errors import ValidationError
 
 SESSION_SECONDS = 300
@@ -79,10 +79,10 @@ def _identity_label(identity: AccountIdentity) -> sl.TextLike:
 
 
 def _error_detail(error: ValidationError) -> sl.TextLike:
-    message = tr(error.message)
+    message = tr_now(error.message)
     if error.end_user_action is None:
         return message
-    action = tr(error.end_user_action)
+    action = tr_now(error.end_user_action)
     return tr(t"{message} {action}")
 
 
