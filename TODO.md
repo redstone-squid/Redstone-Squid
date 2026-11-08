@@ -4,6 +4,7 @@
 
 - [ ] Populate restriction implications and incompatibilities.
   - Examples include extender `SEAMLESS -> FLUSH`, restriction tiers, and skydoor incompatibilities.
+  - Store them in `tag_relations` (`implies` / `incompatible`), which exists but is not yet read or written.
   - Apply the semantic closure when qualifying builds and generating category subsets.
 - [ ] Store authoritative cumulative-volume measurements instead of deriving every volume from bounding dimensions.
   - Support hallway, frame, entity-hitbox, contained-volume, and other Door Rules exceptions.
@@ -85,6 +86,15 @@
     and `accounts.public_creator_id` exists to be shown.
   - Blocks the useful half of `docs/plans/completed/pr-183-review/01-consent-verification-ux.md` §5 — naming the creator who
     holds a contested alias only helps if the reader has somewhere to look the name up.
+
+## Submissions
+
+- [ ] Let a draft owner share a submission draft with editors.
+  - `submission_draft_access` already models this (`owner` / `editor` roles; account merge keeps it consistent),
+    but only the owner row is written, at creation, and nothing reads it.
+  - Make draft authorization read the table instead of `submission_drafts.owner_account_id` alone.
+  - Add inviting and removing editors in the bot and the API, and decide which actions stay owner-only,
+    such as finalizing, discarding, and managing editors.
 
 ## Migration and cleanup
 
