@@ -1,9 +1,8 @@
 # Structural debt in squid and its tests
 
-Status: submission convergence and transactional account-merge ownership are implemented.
-Section 3's API service graph and merge test boundaries are done; bot/worker test graphs remain.
-Section 4 needs reassessment against the current metadata producers and consumers.
-Reviewed: 2026-10-29.
+Status: sections 1-3 are implemented. Section 4 is deferred until new metadata producers or
+consumers justify a concrete boundary (see its reassessment).
+Reviewed: 2026-11-08.
 
 The approved submission design and implementation record are in
 [`submission-convergence.md`](submission-convergence.md). Its decisions supersede section 1
@@ -175,7 +174,31 @@ format and whitespace checks pass. Six architecture failures in these runs repro
 tree and are unrelated.
 
 The merge source-shape assertions were replaced by schema disposition and dependency checks in
-October 2026. Still open: the bot and worker service graphs, which retain their own unchecked doubles.
+October 2026.
+
+### Completion: bot and worker service graphs, 2026-11-08
+
+Bot tests had no shared graph: about twenty files each built a partial `services` bag from
+`SimpleNamespace`, local classes, `MagicMock`, or `cast(BotServices, ...)`. The worker fake built a
+real `WorkerServices` but filled eight fields with `cast(Any, object())`.
+
+`tests/support/services.py` now builds both graphs. `bot_services(...)` and `worker_services(...)`
+construct the real containers. They reject a double that is not an instance of its declared
+service, and a subclass double that defines a public method the service lacks. Every omitted
+service is an unconfigured stand-in: it passes `isinstance`, but reading any attribute fails with
+the service's name. `make_layout_bot` refuses any `services` that is not a `BotServices`, so new
+tests cannot reintroduce a loose bag. `tests/unit/test_service_graphs.py` covers these checks.
+
+Migrating the tests surfaced drift the bags had hidden. The draft-intake double's `reserve`
+returned `None` and used different names for every parameter. The draft `apply_change` doubles
+returned `None` and lacked `now`. The error-report double did not match production's keyword-only
+`record`. The build-edit post double returned an ad-hoc object instead of a `PostReference`. The
+poll publisher's `create_generic_poll` lacked `now`. The form, schematic, vote, post, and message
+doubles were not checked against their services at all. Extension loading previously used a bare
+`MagicMock` and now uses autospecs of every service.
+
+Validation: 739 bot, worker, voting, and runtime tests and 298 architecture tests pass; project-wide
+Pyrefly reports zero errors.
 
 ## 4. Give build metadata explicit types and ownership
 
