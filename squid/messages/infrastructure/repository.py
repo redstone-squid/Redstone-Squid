@@ -61,6 +61,23 @@ class MessageRepository:
         result = cast(CursorResult[Any], await session.execute(statement))
         return bool(result.rowcount)
 
+    async def refresh_content(self, message_id: int, content: str | None, edited_at: Instant | None) -> bool:
+        """Store content read from Discord if it differs, reporting whether a row changed.
+
+        A None `edited_at` keeps the stored edit time, since Discord reports no edit.
+        """
+        statement = (
+            update(MessageRecord)
+            .where(MessageRecord.id == message_id, MessageRecord.content.is_distinct_from(content))
+            .values(
+                content=content,
+                edited_at=MessageRecord.edited_at if edited_at is None else edited_at,
+            )
+        )
+        session = self._session()
+        result = cast(CursorResult[Any], await session.execute(statement))
+        return bool(result.rowcount)
+
     async def mark_deleted(self, message_id: int, deleted_at: Instant) -> bool:
         """Set the deletion time only if the message has not already been marked deleted.
 

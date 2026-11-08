@@ -4,12 +4,14 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, Self, override
 
 import anyio
 import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
+from whenever import Instant
 
 import squid_ui_discord as sd
 from squid.bootstrap import create_bot_runtime
@@ -95,6 +97,15 @@ EXTENSIONS = (
 
 DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.layout_showcase")
 """Additional extensions loaded only in development mode."""
+
+
+@dataclass(frozen=True, slots=True)
+class MessageLookup:
+    """The result of fetching a message from Discord."""
+
+    message: discord.Message | None
+    gone: bool = False
+    """True when Discord says the message or its channel no longer exists."""
 
 
 class RedstoneSquid(Bot):
@@ -351,6 +362,50 @@ class RedstoneSquid(Bot):
         except discord.Forbidden:
             pass
         return None
+
+    async def lookup_message(self, channel_id: int, message_id: int) -> MessageLookup:
+        """Fetch a message and report whether Discord says it is gone.
+
+        A 404 for the message or for its channel means the message is deleted. Missing
+        access means nothing is known. Other HTTP failures propagate.
+        """
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await self.fetch_channel(channel_id)
+            except discord.NotFound:
+                return MessageLookup(None, gone=True)
+            except discord.Forbidden:
+                return MessageLookup(None)
+        if not isinstance(channel, MessageableChannel):
+            return MessageLookup(None)
+        try:
+            return MessageLookup(await channel.fetch_message(message_id))
+        except discord.NotFound:
+            return MessageLookup(None, gone=True)
+        except discord.Forbidden:
+            return MessageLookup(None)
+
+    async def fetch_stored_message(self, channel_id: int, message_id: int) -> discord.Message | None:
+        """Fetch a message the bot did not post and bring its stored copy up to date.
+
+        Edits and deletions of such messages normally arrive as events, which are lost
+        while the bot is offline. Whoever uses the message checks it through this method
+        instead of sweeping every stored message. The stored content is refreshed when the
+        message is found and the row is marked deleted when Discord says it is gone;
+        messages the database does not store are left alone.
+
+        Returns:
+            The message, or None if it is gone or cannot be read.
+        """
+        lookup = await self.lookup_message(channel_id, message_id)
+        if lookup.message is not None:
+            message = lookup.message
+            edited_at = None if message.edited_at is None else Instant(message.edited_at)
+            await self.services.messages.refresh_content(message.id, message.content, edited_at)
+        elif lookup.gone:
+            await self.services.messages.mark_deleted(message_id)
+        return lookup.message
 
     def for_build(self, build: Build) -> BuildHandler[Self]:
         """Bind the bot's services and Discord helpers to a build."""

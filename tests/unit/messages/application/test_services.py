@@ -31,6 +31,14 @@ class FakeMessageRepository:
         self.edited_at[message_id] = edited_at
         return True
 
+    async def refresh_content(self, message_id: int, content: str | None, edited_at: Instant | None) -> bool:
+        if message_id not in self.facts or self.facts[message_id].content == content:
+            return False
+        self.facts[message_id] = replace(self.facts[message_id], content=content)
+        if edited_at is not None:
+            self.edited_at[message_id] = edited_at
+        return True
+
     async def get_by_id(self, message_id: int) -> MessageRecord | None:
         fact = self.facts.get(message_id)
         if fact is None:

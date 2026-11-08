@@ -48,7 +48,12 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
             return ()
 
         message_destination = await self._channel(state.config.channel_id)
-        origin = await self.bot.get_or_fetch_message(state.origin.channel_id, state.origin.id)
+        lookup = await self.bot.lookup_message(state.origin.channel_id, state.origin.id)
+        if lookup.gone:
+            # Deleted while the bot was offline. Recording it lets each board's entry apply its
+            # link_deletes setting; the database queues those entries for another render.
+            await self.bot.services.starboards.mark_origin_deleted(state.origin.id)
+        origin = lookup.message
         if message_destination is None or origin is None or _unsafe_nsfw(origin.channel, message_destination):
             return ()
 

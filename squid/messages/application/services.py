@@ -39,6 +39,17 @@ class MessageService:
             await uow.commit()
             return changed
 
+    async def refresh_content(self, message_id: int, content: str | None, edited_at: Instant | None) -> bool:
+        """Store a message's content as just fetched from Discord, if it changed.
+
+        This catches up on edits made while the bot was offline. Unknown messages are
+        ignored. Returns whether the stored content changed.
+        """
+        async with self._uow_factory() as uow:
+            changed = await uow.messages.refresh_content(message_id, content, edited_at)
+            await uow.commit()
+            return changed
+
     async def mark_deleted(self, message_id: int) -> bool:
         """Record a message's deletion without removing its stored details.
 

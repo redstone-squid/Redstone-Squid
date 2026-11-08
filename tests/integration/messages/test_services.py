@@ -41,6 +41,24 @@ async def test_message_service_commits_updates_and_preserves_timestamps(
     assert again.deleted_at == deleted.deleted_at
 
 
+async def test_refreshing_fetched_content_changes_only_differing_known_messages(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    service = MessageService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    # A guild the bot has no settings for yet: observing the message creates them.
+    await service.observe(MessageFact(id=100, channel_id=20, author_id=30, guild_id=40, content="first"))
+    edited_at = Instant.from_utc(2026, 11, 8, 12)
+
+    assert not await service.refresh_content(100, "first", edited_at)
+    assert not await service.refresh_content(999, "unknown", edited_at)
+    assert await service.refresh_content(100, "edited offline", edited_at)
+    assert await service.refresh_content(100, "edited again", None)
+
+    stored = await service.get(100)
+    assert stored is not None
+    assert (stored.content, stored.edited_at) == ("edited again", edited_at)
+
+
 async def test_message_repository_rolls_back_all_changes_and_rejects_reuse(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

@@ -2,11 +2,16 @@
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Any, cast, override
+
+import pytest
 
 from squid.accounts.application import AccountService
 from squid.accounts.models import Account
+from squid.bot.posts import vote_renderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
+from squid.messages.models import MessageRecord
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
 from squid.posts.models import DiscordPost
@@ -14,9 +19,9 @@ from squid.runtime import BotServices
 from squid.settings.application import SettingsService
 from squid.settings.domain import Setting
 from squid.voting.application import VoteService
-from squid.voting.domain import PollScope, VoteMessage, VoteSessionSnapshot, VoteStatus
+from squid.voting.domain import PollScope, VoteKind, VoteMessage, VoteSessionSnapshot, VoteStatus
 from tests.support.services import bot_services
-from tests.support.voting import poll_snapshot
+from tests.support.voting import DEFAULT_DELETE_LOG_TARGET, build_snapshot, poll_snapshot
 
 OWNER_GUILD_ID = 10
 OTHER_GUILD_ID = 999
@@ -149,3 +154,36 @@ async def test_a_closed_network_poll_gains_no_new_cards() -> None:
 
     assert posts is not None
     assert [post.channel_id for post in posts] == [200]
+
+
+async def test_a_deleted_vote_target_is_shown_from_its_stored_copy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Voters still see the message they are judging after it disappears from Discord."""
+    snapshot = build_snapshot(kind=VoteKind.DELETE_LOG)
+    rendered: list[str] = []
+    fetched: list[tuple[int, int]] = []
+
+    async def fetch_stored_message(channel_id: int, message_id: int) -> None:
+        fetched.append((channel_id, message_id))
+
+    async def get(message_id: int) -> MessageRecord:
+        return MessageRecord(id=message_id, channel_id=1, author_id=2, content="the stored text")
+
+    def render(snapshot: VoteSessionSnapshot, content: str) -> object:
+        rendered.append(content)
+        return object()
+
+    bot = SimpleNamespace(
+        fetch_stored_message=fetch_stored_message, services=SimpleNamespace(messages=SimpleNamespace(get=get))
+    )
+    renderer = VoteSessionRenderer(cast(Any, bot))
+
+    async def no_channels(snapshot: VoteSessionSnapshot) -> dict[int, int]:
+        return {}
+
+    monkeypatch.setattr(renderer, "_published_channels", no_channels)
+    monkeypatch.setattr(vote_renderer, "render_delete_log", render)
+
+    await renderer._delete_log(snapshot)
+
+    assert fetched == [(DEFAULT_DELETE_LOG_TARGET.channel_id, DEFAULT_DELETE_LOG_TARGET.message_id)]
+    assert rendered == ["the stored text"]

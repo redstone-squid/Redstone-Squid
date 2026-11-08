@@ -99,8 +99,13 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         target = snapshot.target
         content = ""
         if isinstance(target, DeleteLogVoteTarget):
-            message = await self.bot.get_or_fetch_message(target.channel_id, target.message_id)
-            content = "" if message is None else message.content
+            message = await self.bot.fetch_stored_message(target.channel_id, target.message_id)
+            if message is not None:
+                content = message.content
+            else:
+                # Deleted or unreadable: show what was stored, so voters still see what they judge.
+                stored = await self.bot.services.messages.get(target.message_id)
+                content = (stored.content if stored is not None else None) or ""
         layout = render_delete_log(snapshot, content)
         return [
             DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", payload=layout)
