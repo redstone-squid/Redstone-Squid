@@ -528,32 +528,6 @@ class PostgresRecordRepository:
             ),
         )
 
-    async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None:
-        """Enqueue a durable full-kind rebuild hint."""
-        scope_key = f"{kind.value}:{build_id if build_id is not None else '*'}"
-        session = self._session()
-        statement = (
-            insert(RecordRecomputeQueueItem)
-            .values(
-                scope_key=scope_key,
-                build_kind=kind,
-                build_id=build_id,
-                reasons=[reason],
-            )
-            .on_conflict_do_update(
-                index_elements=[RecordRecomputeQueueItem.scope_key],
-                set_={
-                    "reasons": [reason],
-                    "enqueued_at": func.now(),
-                    "available_at": func.now(),
-                    "claimed_at": None,
-                    "claim_token": None,
-                    "last_error": None,
-                },
-            )
-        )
-        await session.execute(statement)
-
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
         """Lease queued scopes and return their distinct build kinds.
 

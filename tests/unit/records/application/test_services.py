@@ -118,9 +118,6 @@ class FakeRuns:
         self.requested.setdefault(category.kind, []).append(category)
         self.requested_titles[category.key] = dict(titles)
 
-    async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None:
-        self.queued = (*self.queued, kind)
-
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
         kinds = self.queued[:limit]
         return RecomputeLease(kinds=kinds, claim_tokens=tuple(uuid.uuid4() for _ in kinds))
