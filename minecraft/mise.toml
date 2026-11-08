@@ -1,0 +1,4 @@
+[tools]
+# Keep in step with `jvmToolchain(25)` in build.gradle.kts and the JDK step in .github/workflows/ci.yml.
+# Mise's default vendor for a bare version is Eclipse Adoptium (Temurin), which is what CI installs.
+java = "25"

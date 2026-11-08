@@ -5,6 +5,11 @@ adapters. It deliberately does not use Stick or bundle Nucleation: commands are
 native Brigadier trees, capture produces a small typed snapshot, and the backend
 validates and stores uploaded schematics without filtering their contents.
 
+## Building
+
+The build needs JDK 25. With [mise](https://mise.jdx.dev/), run `mise install` in this directory, then
+`./gradlew build`. Without mise, install any JDK 25 and Gradle will find it; it does not download one.
+
 ## Modules
 
 - `protocol`: bounded JSON parsing and versioned form, draft, and device-auth
