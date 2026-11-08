@@ -79,6 +79,7 @@ def _to_stored_schematic(row: BuildSchematic, *, source_format: str, byte_size: 
         file_sha256=row.file_sha256,
         is_primary=row.is_primary,
         original_filename=row.original_filename,
+        uploaded_by_account_id=row.uploaded_by_account_id,
         publication=SchematicPublication(
             visibility=SchematicVisibility(row.visibility),
             license=SchematicLicense(row.license_code) if row.license_code is not None else None,

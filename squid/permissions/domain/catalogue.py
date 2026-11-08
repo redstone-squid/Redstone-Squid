@@ -182,6 +182,17 @@ BUILD_SUBMISSION_DEBUG = _b.node(
     tr("Inspect a build's raw stored representation."),
     tags=(Tag.DIAGNOSTIC,),
 )
+BUILD_SCHEMATIC_DOWNLOAD_PRIVATE = _b.node(
+    "build.schematic.download_private",
+    NodeScope.GLOBAL,
+    tr("Download or convert schematics that are not publicly downloadable, on builds you did not upload them to."),
+)
+BUILD_SCHEMATIC_VIEW_PRIVATE = _b.node(
+    "build.schematic.view_private",
+    NodeScope.GLOBAL,
+    tr("Inspect and render schematics that are not publicly downloadable, without receiving the file."),
+    tags=(Tag.READONLY,),
+)
 BUILD_SCHEMATIC_MEASURE_TIMING = _b.node(
     "build.schematic.measure_timing",
     NodeScope.GLOBAL,

@@ -23,7 +23,9 @@ from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DETECT_LATTICE,
+    BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
     BUILD_SCHEMATIC_MEASURE_TIMING,
+    BUILD_SCHEMATIC_VIEW_PRIVATE,
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_DEBUG,
     BUILD_SUBMISSION_REJECT,
@@ -254,20 +256,30 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             sl.document.InlineAsset(data),
         )
 
-    async def _primary(self, event: sl.ActionEvent):
+    async def _primary(self, event: sl.ActionEvent, private_access: PermissionNode):
+        """Return the featured schematic if the actor may use it, otherwise tell them why not.
+
+        A publicly downloadable schematic is open to everyone. Otherwise the uploader may use it, as
+        may anyone holding `private_access`; the download and view actions pass different nodes.
+        """
         stored = await self._schematics.featured_for_build(self._build_id)
         if stored is None:
             await event.notice(tr("This build has no schematic attached."))
+            return None
+        is_uploader = self._actor_account_id is not None and stored.uploaded_by_account_id == self._actor_account_id
+        if not (stored.publication.is_public_downloadable or is_uploader or await self._authorize(private_access)):
+            await event.notice(tr("This schematic is not publicly available."))
+            return None
         return stored
 
     async def _schematic_info(self, event: sl.PressEvent) -> None:
-        stored = await self._primary(event)
+        stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
         if stored is None:
             return
         self._schematic_result = _describe(stored, render_skip=await self._schematics.explain_render_skip(stored))
 
     async def _schematic_download(self, event: sl.PressEvent) -> None:
-        if await self._primary(event) is None:
+        if await self._primary(event, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE) is None:
             return
         data, _ = await self._schematics.convert(
             self._build_id, ConvertRequest(target_format=SchematicFormat.LITEMATIC)
@@ -275,7 +287,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._asset = self._schematic_asset(data, "litematic")
 
     async def _schematic_render(self, event: sl.PressEvent) -> None:
-        if await self._primary(event) is None:
+        if await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE) is None:
             return
         try:
             rendered = await self._schematics.render_now(self._build_id, request=self._schematics.render_recipe())
@@ -290,7 +302,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
     async def _convert(self, event: sl.SubmitEvent) -> None:
-        if await self._primary(event) is None:
+        if await self._primary(event, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE) is None:
             return
         form = _ConvertForm.from_submission(event)
         file_format = form.format
@@ -306,7 +318,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._schematic_result = tr(t"Conversion report: {loss_summary}")
 
     async def _timing(self, event: sl.SubmitEvent) -> None:
-        if not await self._may(event, BUILD_SCHEMATIC_MEASURE_TIMING) or await self._primary(event) is None:
+        if (
+            not await self._may(event, BUILD_SCHEMATIC_MEASURE_TIMING)
+            or await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE) is None
+        ):
             return
         form = _TimingForm.from_submission(event)
         raw = form.input or None
@@ -322,7 +337,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._schematic_result = _describe_timing(result)
 
     async def _detect_lattice(self, event: sl.PressEvent) -> None:
-        if not await self._may(event, BUILD_SCHEMATIC_DETECT_LATTICE) or await self._primary(event) is None:
+        if (
+            not await self._may(event, BUILD_SCHEMATIC_DETECT_LATTICE)
+            or await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE) is None
+        ):
             return
         lattice = await self._schematics.detect_lattice(self._build_id)
         self._schematic_result = (

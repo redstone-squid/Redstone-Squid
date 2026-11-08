@@ -20,10 +20,13 @@ format conversion, piston simulation, and worker recovery passed integration tes
 
 ## Remaining rollout work
 
-- Implement the synchronized-draft schematic upload endpoint and backend reader. Until then, the wired
-  `EmptyDraftSchematicReader` accurately reports no uploaded artifact; Paper/Fabric finalization still requires one.
+- Verify the deployed synchronized-draft upload flow end to end. The upload endpoint and backend reader exist and are
+  wired into finalization; Paper/Fabric finalization still depends on the world-extraction adapters below.
 - Complete and verify the Minecraft platform world-extraction adapters, which currently report capture unavailable.
-- Apply the same visibility and withdrawal checks to Discord download/convert commands as the REST download path.
+- Grant the new Discord schematic permissions. The build browser now lets anyone use a publicly downloadable schematic.
+  For any other schematic, download and convert require `build.schematic.download_private`; info, render, timing,
+  and lattice detection require `build.schematic.view_private`. The uploader is always allowed. The global-admin
+  role includes both nodes; no other built-in role does, so grant them to moderators who need them.
 - Verify actual resource-pack rendering and the deployed upload-to-publication flow.
 
 ## Deployment and stored data

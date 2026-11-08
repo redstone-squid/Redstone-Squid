@@ -61,6 +61,8 @@ class StoredSchematic:
     analysis: SchematicAnalysis
     publication: SchematicPublication = SchematicPublication()
     simulation_evidence: SimulationResult | None = None
+    uploaded_by_account_id: int | None = None
+    """Account that supplied the file, or None for legacy rows and deleted accounts."""
 
 
 @dataclass(frozen=True, slots=True)
