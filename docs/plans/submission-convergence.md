@@ -1,11 +1,15 @@
 # Converge submission orchestration
 
-Status: implemented around the sanitizer boundary. Sanitized schematic production remains blocked
-on the upstream gate. Approved 2026-09-07.
+Status: complete. Approved 2026-09-07; closed 2026-11-08.
 
-Execution clarification: the sanitizer is an unavailable attachment processor, not a reason to
-defer orchestration or Discord integration. Supplied schematics remain private and pending;
-continue the rest of this plan around that boundary.
+The plan originally left one item open: producing sanitized schematics once Nucleation passed a
+determinism release gate. On 2026-10-31 the project dropped schematic sanitization and now
+publishes the original uploads (`0ca64e3d9`, `0b6287ce9`, `f262a9fee`), so that item no longer
+applies. Remaining schematic upload and publication work is tracked in
+[schematic-release-readiness.md](schematic-release-readiness.md).
+
+The commit hashes in the execution record below predate a history rewrite and no longer resolve.
+Search by commit subject instead.
 
 ## Accepted design
 
@@ -72,15 +76,13 @@ the full suite unless central changes leave unresolved risks.
 
 ### Sanitizer gate: blocked, 2026-09-07
 
-`scripts/check_sanitizer_gate.py` reproduces Schem-at/Nucleation#39 against both pinned 0.10.14
-and released 0.10.23 installed in isolation. Blocks-only output is stable and idempotent; entity
+The since-removed `scripts/check_sanitizer_gate.py` reproduced Schem-at/Nucleation#39 against both
+pinned 0.10.14 and released 0.10.23 installed in isolation. Blocks-only output is stable and idempotent; entity
 and block-entity cases each produce eight distinct outputs from eight identical inputs and fail
 sanitize-twice byte equality. Both runs exit 1. The current upstream docs still promise determinism.
 Reported the latest-release measurements in [issue #39](https://github.com/Schem-at/Nucleation/issues/39#issuecomment-5565152080).
 
-Do not upgrade the production pin or enable schematic cutover on this evidence. A passing release
-must also satisfy the cross-format and content-policy checks in `nucleation-sanitization.md`.
-Independent milestones remain authorized while this gate is closed.
+This gate was retired on 2026-10-31 together with schematic sanitization; see the status above.
 
 ### Completed foundations, 2026-09-07
 
@@ -121,7 +123,7 @@ Additional checks exposed failures outside these changes:
 At this point the commits were foundations rather than completion of the approved workflow. The
 later entries below implement the listed attempt APIs, issue storage, immutable inputs and receipts,
 transactional commit, actor policy, durable attachments, Discord recovery, inference intake, and
-revision proposals. The sanitizer gate still blocks sanitized artifact production only.
+revision proposals. At that point the sanitizer gate blocked only sanitized artifact production.
 
 ### Orchestration implementation continued, 2026-09-07
 
@@ -226,9 +228,9 @@ reports zero errors. `e140bb5b` contains the independently tested transaction/po
 
 The active migration head is `d9f3b6c1e4a7`. The deprecated direct endpoint and old submission
 writer are gone; all supported API, manual Discord, inferred-message, and recalculation paths now
-converge on retained drafts, attempts, receipts, and reconciliation. Supplied schematics stay private
-and block preparation until the Nucleation gate passes. Enabling sanitized artifact production is
-the only remaining item in this plan.
+converge on retained drafts, attempts, receipts, and reconciliation. At the time, supplied schematics stayed
+private and blocked preparation until the Nucleation gate passed; that restriction was removed when
+sanitization was dropped.
 
 Final validation passed 171 submission unit tests, 87 broad PostgreSQL submission/media/build tests,
 8 focused inference/revision PostgreSQL tests, 20 idempotency tests, 14 generated OpenAPI contract
