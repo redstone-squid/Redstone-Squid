@@ -1,16 +1,23 @@
 # Durable work queues
 
-> **Status.** PR 1 implemented 2026-08-16 (commits `80657335`..`eb041c00`; re-verified in-tree
-> 2026-08-18 after a rebase changed these hashes, content unchanged). PR 2 —
-> `enforce_queue_claim_tokens` — is still outstanding: `alembic/versions/2026_08_16_1200-c3d4e5f6a7b2_add_queue_claim_tokens.py`
-> is revision 1 (nullable `claim_token`, `available_at`, no CHECK constraints), the migration
-> chain past it (through head `b9d3e6a1f8c5`) contains no `enforce_queue_claim_tokens` revision
-> and no new `*_claim_complete` CHECK constraint, and `squid/persistence/queue.py:302-313`
-> (`token_of`) still treats a null token as a valid deploy-window state. PR 2 must not merge until
-> PR 1 is deployed everywhere. The findings below were verified in-tree, not hypothetical: defects
-> 1-5 and 7 were live, and both bugs in the `record_recompute_queue` audit were active
-> data-correctness faults. **Defect 6 was fixed in flight by revision `c2d3e4f5a6b1`** and is
-> retained below as the worked example of the hazard, not as outstanding work.
+> **Status: completed 2026-11-08.** PR 1 landed 2026-08-16 (commits `80657335`..`eb041c00`;
+> hashes are from after the 2026-08-18 rebase).
+>
+> PR 2 did not ship as a separate `enforce_queue_claim_tokens` revision. Its goal landed in
+> `9deb94239` (`persistence: add missing build, schematic, queue and code constraints`):
+> `QueueColumns` (`squid/persistence/queue_models.py`) now attaches `<table>_claim_complete` to
+> every queue table, revision `f3c6b9e4a1d7` adds the constraints that were missing, and
+> `ClaimedRowQueue.token_of` raises when a token is missing. One planned step was skipped: that
+> revision does not give a token to rows claimed without one before it adds the checks, so
+> `alembic upgrade` fails on any database that still has such a row.
+>
+> The findings below were checked against the code at the time: defects 1-5 and 7 were real, and
+> both `record_recompute_queue` bugs from the audit corrupted data. **Revision `c2d3e4f5a6b1`
+> fixed defect 6 during the work.** It stays below as the worked example of the hazard.
+>
+> Open question 3 (dead-lettering `record_recompute_queue`) is being reconsidered more broadly.
+> The queue acts as a per-kind "needs rebuilding" flag rather than a work queue, and each rebuild
+> runs in one long transaction. That redesign is separate follow-up work.
 >
 > **What building it proved wrong** — see [Corrections](#corrections-from-implementation) for
 > detail:
