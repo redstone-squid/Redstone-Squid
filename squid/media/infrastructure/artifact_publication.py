@@ -11,7 +11,7 @@ from collections.abc import Callable, Sequence
 from typing import Any, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, case, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, and_, case, exists, func, or_, select, update
 from sqlalchemy import delete as sql_delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
@@ -34,6 +34,7 @@ from squid.media.models import (
     MediaNormalizationJobRecord,
 )
 from squid.persistence.queue import retry_delay
+from squid.persistence.types import database_now
 
 
 class PostgresArtifactPublicationRepository:
@@ -215,7 +216,7 @@ class PostgresArtifactPublicationRepository:
             ).all()
         )
         for candidate in candidates:
-            candidate.cleanup_claimed_at = Instant.now()
+            candidate.cleanup_claimed_at = database_now()
             candidate.cleanup_claim_token = uuid4()
         return tuple(
             ArtifactCleanupClaim(candidate.object_key, cast(UUID, candidate.cleanup_claim_token))
@@ -256,14 +257,14 @@ class PostgresArtifactPublicationRepository:
             candidate.cleanup_claim_token = None
             if error_name is not None:
                 candidate.attempts += 1
-                candidate.available_at = Instant.now().add(seconds=int(retry_delay(candidate.attempts).total_seconds()))
+                candidate.available_at = database_now(after=retry_delay(candidate.attempts))
                 candidate.last_error = error_name
             elif cleanup_started_at is not None and candidate.last_seen_at > cleanup_started_at:
                 # A stale publisher reported this key during deletion; check it again before recording a tombstone.
-                candidate.available_at = Instant.now()
+                candidate.available_at = database_now()
                 candidate.last_error = None
             else:
-                candidate.deleted_at = Instant.now()
+                candidate.deleted_at = database_now()
                 candidate.last_error = None
 
     async def _reconcile_objects(self, session: AsyncSession) -> None:
@@ -378,7 +379,7 @@ class PostgresArtifactPublicationRepository:
                 continue
             if job is not None and job.status is MediaJobStatus.CLAIMED and job.claim_token == claim_token:
                 job.status = MediaJobStatus.PENDING
-                job.available_at = Instant.now()
+                job.available_at = database_now()
                 job.claimed_at = None
                 job.claim_token = None
                 job.completed_at = None
@@ -393,8 +394,9 @@ class PostgresArtifactPublicationRepository:
             )
 
 
-def _publication_expiry() -> Instant:
-    return Instant.now().add(seconds=int(MEDIA_ARTIFACT_PUBLICATION_LEASE.total_seconds()))
+def _publication_expiry() -> ColumnElement[Instant]:
+    # Database time, matching the `expires_at <= now()` checks.
+    return database_now(after=MEDIA_ARTIFACT_PUBLICATION_LEASE)
 
 
 def _claim_filter(job: ClaimedMediaJob) -> tuple[Any, ...]:

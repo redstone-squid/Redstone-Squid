@@ -8,9 +8,9 @@ from uuid import uuid4
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from whenever import Instant
 
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
+from squid.persistence.types import database_now
 from squid.schematics.application.jobs import (
     ClaimedSchematicJob,
     SchematicCleanupClaim,
@@ -175,7 +175,7 @@ class PostgresSchematicJobRepository:
         for job in jobs:
             token = uuid4()
             job.claim_token = token
-            job.claimed_at = Instant.now()
+            job.claimed_at = database_now()
             keys = tuple(
                 dict.fromkeys(key for key in (*job.result_object_keys, job.result_object_key) if key is not None)
             )

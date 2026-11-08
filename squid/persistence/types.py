@@ -1,10 +1,10 @@
 """SQLAlchemy types for application persistence."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import IntEnum, StrEnum
 from typing import override
 
-from sqlalchemy import DateTime, SmallInteger, Text
+from sqlalchemy import ColumnElement, DateTime, SmallInteger, Text, func, type_coerce
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 from whenever import Instant
@@ -116,3 +116,13 @@ class IntEnumSmallInt[EnumT: IntEnum](TypeDecorator[EnumT]):
         if value is None:
             return None
         return self._enum_type(value)
+
+
+def database_now(after: timedelta | None = None) -> ColumnElement[Instant]:
+    """Return the database's transaction time, plus `after`, as an `Instant` SQL expression.
+
+    Use it for lease and retry timestamps that are compared with `now()` in queries, so every
+    comparison uses one clock however far the workers' host clocks drift.
+    """
+    moment = func.now() if after is None else func.now() + after
+    return type_coerce(moment, InstantUTC())

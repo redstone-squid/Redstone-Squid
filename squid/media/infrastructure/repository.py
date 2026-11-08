@@ -45,6 +45,7 @@ from squid.persistence.advisory_locks import (
     lock_uuid,
 )
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
+from squid.persistence.types import database_now
 from squid.submissions.domain import DraftStatus
 from squid.submissions.models.entities import SubmissionDraft
 
@@ -233,7 +234,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         job.claim_token = None
         job.completed_at = None
         job.dead_at = None
-        job.discarded_at = Instant.now()
+        job.discarded_at = database_now()
         job.last_error = None
         return True
 
@@ -311,8 +312,10 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 MediaNormalizationJobRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
             ),
         )
-        claimed_at = Instant.now()
         session = self._session()
+        # Database time, matching the visibility timeout check above.
+        claimed_at = await session.scalar(select(database_now()))
+        assert claimed_at is not None
         rows = tuple(
             (
                 await session.execute(
@@ -349,7 +352,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         current = await session.scalar(select(MediaNormalizationJobRecord).where(*_claim_filter(job)).with_for_update())
         if current is None:
             return False
-        current.claimed_at = Instant.now()
+        current.claimed_at = database_now()
         await self._publications.renew(job)
         return True
 
