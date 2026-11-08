@@ -1,7 +1,7 @@
 # Schema integrity hardening
 
 > **Status (2026-11-08).** Phases 1–5 are implemented except three items, marked below:
-> 1.3 (display units) waits on a decision, the `messages` item of Phase 4 waits on
+> 1.3 (display units) waits on a decision, Phase 4 (`messages`) waits on
 > `discord-state-reconciliation.md` Phase 3, and Phase 6 is on hold because the maintainer
 > disagrees with it. The same operating assumptions as `docs/plans/completed/schema-audit.md`
 > apply: migrations run offline, existing data is not precious, and foreign keys are immediate
@@ -14,7 +14,6 @@
 > | 1.4 | Starboard cog bulk-delete handler |
 > | 2 | `e2b5a8d3f0c6` |
 > | 3 | `f3c6b9e4a1d7`; queue checks come from `QueueColumns` |
-> | 4 | `a4d7c0f5b2e8` drops `submission_draft_access` and `tag_relations` |
 > | 5 | `squid/core/scores.py` (`round_score`) and `squid/persistence/types.py` (`database_now`) |
 
 ## Context
@@ -181,10 +180,6 @@ One migration. Every item is independent.
 
 ## Phase 4 — One source of truth
 
-- **Draft ownership.** Every access decision reads `submission_drafts.owner_account_id`.
-  `submission_draft_access` is written once, at creation, and during account merge, and nothing reads
-  it. No `editor` row is ever written. **Decision:** drop the table, its model and its merge code.
-  If shared editing is built later, it adds its own table for collaborators.
 - **`messages` vs `starboard_origin_messages`** — **not started; blocked on reconciliation Phase 3.** Both store the snowflake, guild, channel, author,
   creation time and `deleted_at` for the same Discord message, and nothing links them. They already
   diverge: the starboard upsert resets `deleted_at` to NULL, and see 1.4 for bulk deletes.
@@ -195,7 +190,6 @@ One migration. Every item is independent.
   - The starboard reaction path gets or creates the `messages` row in the same transaction, the
     ensure-on-write rule from `docs/plans/discord-state-reconciliation.md`.
   - Do this after that plan's Phase 3, which reworks the same write path.
-- **`tag_relations`** has no readers or writers outside its migrations. **Decision:** drop the table.
 
 ## Phase 5 — Float scores and the database clock
 
@@ -239,6 +233,9 @@ database, which gives a second, conflicting source.
 The CI-generated dump becomes the only one.
 
 ## Not changing
+
+- **`submission_draft_access` and `tag_relations`.** Neither has readers yet because shared
+  draft editing and tag relations are not implemented, not because the tables are dead.
 
 - **Audit log append-only.** The app role owns the table, so revoking privileges does nothing, and
   account merge legitimately rewrites `actor_account_id`. The docstring stays the contract.
