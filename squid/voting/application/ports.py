@@ -132,12 +132,15 @@ class VoteRepository(Protocol):
         option: VoteOption,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
+        *,
+        toggle: bool = True,
     ) -> StoredVoteMutation | None:
         """Toggle the same option off or replace the ballot, then check thresholds.
 
         `option` is the exact alias the ballot uses, as resolved from the session's
         options for `guild_id`. Return None if the session is missing or closed. Supplied refresh weights apply
-        before the ballot change; nonpositive refresh values remove existing ballots.
+        before the ballot change; nonpositive refresh values remove existing ballots. With `toggle` false,
+        selecting the stored option again keeps the ballot instead of removing it.
         """
         ...
 

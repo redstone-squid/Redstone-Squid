@@ -353,6 +353,29 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
     assert removed.session.votes == {}
 
 
+async def test_selecting_the_stored_option_again_keeps_the_ballot(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A recount selects rather than toggles, so repeating it cannot withdraw a ballot."""
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
+    await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
+    assert snapshot is not None
+    option = snapshot.option_by_id("approve", GUILD_ID, emoji="👍")
+    assert option is not None
+
+    kept = await transact(
+        repository,
+        lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, option, 2.0, toggle=False),
+        commit=True,
+    )
+
+    assert kept is not None
+    assert (kept.previous_weight, kept.current_weight) == (1.0, 2.0)
+    assert set(kept.session.votes) == {7}
+
+
 @pytest.mark.parametrize(
     ("option_id", "emoji", "expected_result"),
     [

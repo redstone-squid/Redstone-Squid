@@ -65,9 +65,16 @@ class VoteRecorder(VoteService):
 
     @override
     async def cast_vote(
-        self, vote_session_id: int, actor: VoteActor, option_id: str, *, emoji: str | None = None
+        self,
+        vote_session_id: int,
+        actor: VoteActor,
+        option_id: str,
+        *,
+        emoji: str | None = None,
+        toggle: bool = True,
     ) -> CastVoteResult:
         assert emoji is None
+        assert toggle
         self.cast_calls.append(CastCall(vote_session_id, actor, option_id))
         return CastVoteResult(self.session, rejection=self.rejection)
 

@@ -1,18 +1,21 @@
-"""Discord REST adapter for resolving current guild-member vote facts."""
+"""Discord REST adapters for vote member facts and vote card reactions, for processes without a gateway."""
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from time import monotonic
 from typing import Any, Protocol, override
 
 import aiohttp
 from discord.errors import DiscordException, Forbidden, NotFound
 from discord.http import HTTPClient, Route
+from discord.partial_emoji import PartialEmoji
 
 from squid.permissions.application.ports import ActorCapabilityResolver
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
-from squid.voting.domain import VoteActor, VoteKind
+from squid.voting.application.recount import CardReactions
+from squid.voting.domain import VoteActor, VoteKind, VoteMessage
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -257,3 +260,122 @@ class DiscordRestActorResolver:
             msg,
             context={"guild_id": guild_id, "error_type": type(error).__name__},
         )
+
+
+class VoteCardClient(Protocol):
+    """The Discord HTTP operations `DiscordRestVoteCards` uses, as discord.py's `HTTPClient` names them."""
+
+    def get_message(self, channel_id: int, message_id: int) -> Awaitable[Any]: ...
+
+    def get_reaction_users(
+        self, channel_id: int, message_id: int, emoji: str, limit: int, after: int | None = None
+    ) -> Awaitable[Any]: ...
+
+    def add_reaction(self, channel_id: int, message_id: int, emoji: str) -> Awaitable[Any]: ...
+
+    def remove_reaction(self, channel_id: int, message_id: int, emoji: str, member_id: int) -> Awaitable[Any]: ...
+
+    async def close(self) -> None: ...
+
+
+_REACTION_PAGE_SIZE = 100
+"""The most users Discord returns for one reaction per request."""
+
+
+def _route_emoji(emoji: str) -> str:
+    """Write a stored emoji the way reaction URLs need it: Unicode as is, custom as `name:id`."""
+    parsed = PartialEmoji.from_str(emoji)
+    return parsed.name if parsed.id is None else f"{parsed.name}:{parsed.id}"
+
+
+class DiscordRestVoteCards:
+    """Read and change the reactions on vote cards through Discord's REST API.
+
+    This implements `VoteCardReactions` for the worker, which has no gateway connection and
+    so no message cache: every read fetches the card and pages through each option's users.
+    An internally created client logs in on first use and is closed by `aclose`; an injected
+    client remains the caller's responsibility.
+
+    A card that is deleted or hidden reads as None. Other Discord failures, such as a rate
+    limit longer than `MAX_RATE_LIMIT_WAIT_SECONDS` or an outage, propagate.
+    """
+
+    def __init__(
+        self,
+        bot_token: str,
+        *,
+        http: VoteCardClient | None = None,
+        api_url: str = DEFAULT_DISCORD_API_URL,
+    ) -> None:
+        self._token = bot_token
+        self._api_url = api_url
+        self._http = http
+        self._owns_http = http is None
+        self._closed = False
+        self._login_lock = asyncio.Lock()
+
+    async def read(self, card: VoteMessage, emojis: Sequence[str]) -> CardReactions | None:
+        http = await self._client()
+        try:
+            message = await http.get_message(card.channel_id, card.id)
+        except NotFound, Forbidden:
+            return None
+        # The message lists each reaction once with whether this bot made it; only the
+        # emojis someone reacted with need their users paged through.
+        mine = {
+            str(PartialEmoji.from_dict(reaction["emoji"])): bool(reaction.get("me"))
+            for reaction in message.get("reactions", ())
+        }
+        voters: dict[str, list[int]] = {}
+        for emoji in emojis:
+            if emoji in mine:
+                voters[emoji] = await self._human_users(http, card, emoji)
+        return CardReactions(voters, frozenset(emoji for emoji in emojis if mine.get(emoji)))
+
+    async def remove(self, card: VoteMessage, emoji: str, user_id: int) -> None:
+        http = await self._client()
+        with contextlib.suppress(NotFound, Forbidden):
+            await http.remove_reaction(card.channel_id, card.id, _route_emoji(emoji), user_id)
+
+    async def add_own(self, card: VoteMessage, emoji: str) -> None:
+        http = await self._client()
+        with contextlib.suppress(NotFound, Forbidden):
+            await http.add_reaction(card.channel_id, card.id, _route_emoji(emoji))
+
+    async def aclose(self) -> None:
+        """Close the internally owned HTTP client, once."""
+        self._closed = True
+        if self._owns_http and self._http is not None:
+            http, self._http = self._http, None
+            await http.close()
+
+    async def _human_users(self, http: VoteCardClient, card: VoteMessage, emoji: str) -> list[int]:
+        """Page through everyone reacting with `emoji`, leaving out bots."""
+        user_ids: list[int] = []
+        after: int | None = None
+        while True:
+            page = await http.get_reaction_users(
+                card.channel_id, card.id, _route_emoji(emoji), _REACTION_PAGE_SIZE, after=after
+            )
+            user_ids.extend(int(user["id"]) for user in page if not user.get("bot"))
+            if len(page) < _REACTION_PAGE_SIZE:
+                return user_ids
+            after = int(page[-1]["id"])
+
+    async def _client(self) -> VoteCardClient:
+        """Return the logged-in client, opening the session on first use."""
+        if self._http is not None:
+            return self._http
+        if self._closed:
+            msg = "The Discord vote card client is shut down."
+            raise RuntimeError(msg)
+        async with self._login_lock:
+            if self._http is None:
+                http = _RebasedHTTPClient(
+                    asyncio.get_running_loop(),
+                    base=self._api_url,
+                    max_ratelimit_timeout=MAX_RATE_LIMIT_WAIT_SECONDS,
+                )
+                await http.static_login(self._token)
+                self._http = http
+            return self._http

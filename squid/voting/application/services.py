@@ -1,7 +1,7 @@
 """Voting application services."""
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from math import isfinite
 
 from whenever import Instant
@@ -242,7 +242,13 @@ class VoteService:
             return await uow.votes.list_open(kind)
 
     async def cast_vote(
-        self, vote_session_id: int, actor: VoteActor, option_id: str, *, emoji: str | None = None
+        self,
+        vote_session_id: int,
+        actor: VoteActor,
+        option_id: str,
+        *,
+        emoji: str | None = None,
+        toggle: bool = True,
     ) -> CastVoteResult:
         """Validate eligibility, refresh weights, and toggle or replace the actor's ballot.
 
@@ -252,6 +258,8 @@ class VoteService:
         otherwise the guild's first alias for the option is used.
 
         Selecting the same option again removes the ballot, even with another alias.
+        Pass `toggle=False` to select instead: the ballot then stays on that option, which
+        makes repeating the call safe when the caller only knows the desired selection.
         The repository serializes the mutation and any threshold closure. An unresolved
         owner-guild lookup uses base weight 1 for the new ballot, before the option
         multiplier. Unresolved existing ballots retain their cached weights.
@@ -305,7 +313,7 @@ class VoteService:
             )
         async with self._uow_factory() as uow:
             mutation = await uow.votes.cast_vote(
-                vote_session_id, actor.account_id, actor.guild_id, option, weight, refreshed
+                vote_session_id, actor.account_id, actor.guild_id, option, weight, refreshed, toggle=toggle
             )
             await uow.commit()
         if mutation is None:
@@ -365,12 +373,38 @@ class VoteService:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
         return CastVoteResult(mutation.session, just_closed=mutation.just_closed)
 
-    async def close_due(self, now: Instant | None = None) -> Sequence[VoteSessionSnapshot]:
-        """Close all expired generic polls; safe to call repeatedly after restarts."""
+    async def close_due(
+        self,
+        now: Instant | None = None,
+        *,
+        recount: Callable[[int], Awaitable[object]] | None = None,
+    ) -> Sequence[VoteSessionSnapshot]:
+        """Close all expired generic polls; safe to call repeatedly after restarts.
+
+        Args:
+            now: The time deadlines are compared with; defaults to the current time.
+            recount: Called with each due session's ID before it closes, to bring its ballots
+                up to date with its cards (see `BallotRecounter`). A failed recount is logged
+                and the poll closes anyway, so a Discord outage cannot keep it open.
+        """
         closed: list[VoteSessionSnapshot] = []
         async with self._uow_factory() as uow:
             due = await uow.votes.list_due(now or Instant.now())
         for snapshot in due:
+            if recount is not None:
+                try:
+                    await recount(snapshot.id)
+                except Exception:
+                    logger.warning(
+                        "Closing vote session %s without a final recount",
+                        snapshot.id,
+                        exc_info=True,
+                        extra={"squid.vote.session_id": snapshot.id},
+                    )
+                latest = await self.get_session(snapshot.id)
+                if latest is None or not latest.is_open:
+                    continue
+                snapshot = latest
             result = await self._close(snapshot)
             if result.just_closed and result.session is not None:
                 closed.append(result.session)

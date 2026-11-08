@@ -23,6 +23,7 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "builds",
         "artifacts",
         "votes",
+        "ballot_recounter",
         "records",
         "events",
         "event_wake_listener",

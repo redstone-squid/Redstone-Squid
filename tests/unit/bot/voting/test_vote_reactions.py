@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import anyio
@@ -121,6 +122,10 @@ class Accounts(AccountService):
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         return self.account if self.account.identity_for(provider, subject) else None
 
+    @override
+    async def get_account_by_id(self, account_id: int) -> Account | None:
+        return self.account if self.account.id == account_id else None
+
 
 @dataclass
 class Permissions(PermissionService):
@@ -165,7 +170,13 @@ class Votes(VoteService):
 
     @override
     async def cast_vote(
-        self, vote_session_id: int, actor: VoteActor, option_id: str, *, emoji: str | None = None
+        self,
+        vote_session_id: int,
+        actor: VoteActor,
+        option_id: str,
+        *,
+        emoji: str | None = None,
+        toggle: bool = True,
     ) -> CastVoteResult:
         assert vote_session_id == self.snapshot.id
         if self.failure is not None:
@@ -205,6 +216,7 @@ class ReactionHarness:
             background_tasks=self.supervisor,
             get_guild=self.guilds.get,
             get_or_fetch_message=self.fetch_message,
+            get_partial_messageable=self.partial_messageable,
             refresh_posts=self.refresh_posts,
             is_owner=self.is_owner,
             wait_until_ready=self.wait_until_ready,
@@ -215,7 +227,6 @@ class ReactionHarness:
     @asynccontextmanager
     async def running(self) -> AsyncIterator[None]:
         async with self.supervisor.running():
-            # Subscribe without VoteReactionHandler.start(), whose periodic reconciliation would race these tests.
             subscription = self.bot.reactions.subscribe(self.cog.reactions)
             try:
                 yield
@@ -226,6 +237,10 @@ class ReactionHarness:
 
     async def fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         return cast(discord.Message | None, self.messages.get(message_id))
+
+    def partial_messageable(self, channel_id: int) -> Any:
+        """Partial messages resolve to the same fake messages, so removals are recorded on them."""
+        return SimpleNamespace(get_partial_message=lambda message_id: self.messages[message_id])
 
     async def refresh_posts(self, kind: str, key: str) -> None:
         self.refreshes.append((kind, key))
@@ -269,18 +284,14 @@ def reactions() -> ReactionHarness:
     return ReactionHarness()
 
 
-async def test_reconciliation_job_is_supervised_and_stops_on_unload(reactions: ReactionHarness) -> None:
+async def test_loading_subscribes_without_starting_a_periodic_recount(reactions: ReactionHarness) -> None:
+    """Recounts fan out Discord requests, so nothing runs them on a timer."""
     async with reactions.running():
         await reactions.cog.ui_load()
-        with anyio.fail_after(1):
-            while "vote-reaction-reconciliation" not in reactions.supervisor.last_success:
-                await anyio.lowlevel.checkpoint()
-        (job,) = reactions.cog.reactions._background_tasks
         assert reactions.votes.resolver is reactions.cog
-        assert reactions.messages[100].added == ["1️⃣", "2️⃣"]
-        assert not job.finished.is_set()
+        assert reactions.cog.reactions._background_tasks == set()
+        assert reactions.messages[100].added == []
         await reactions.cog.ui_unload()
-        assert job.finished.is_set()
 
 
 async def test_routed_public_reactions_add_and_remove_a_ballot(reactions: ReactionHarness) -> None:
@@ -317,24 +328,24 @@ async def test_anonymous_reaction_is_removed_only_after_commit(reactions: Reacti
     assert reactions.trace == ["committed", "removed", "removed"]
 
 
-async def test_reconciliation_changes_public_selection_but_keeps_it_when_discord_is_unavailable(
+async def test_recount_changes_public_selection_but_keeps_it_when_discord_is_unavailable(
     reactions: ReactionHarness,
 ) -> None:
     reactions.selected()
     message = reactions.messages.pop(100)
     async with reactions.running():
-        await reactions.cog.reactions.reconcile_session_reactions(1)
+        await reactions.cog.reactions.recount(1)
         assert reactions.votes.casts == []
         assert reactions.refreshes == []
         reactions.messages[100] = message
         message.reactions = [Reaction("1️⃣"), Reaction("2️⃣", (Member(reactions.guilds[10]),))]
-        await reactions.cog.reactions.reconcile_session_reactions(1)
+        await reactions.cog.reactions.recount(1)
 
     assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "two", "2️⃣")]
     assert reactions.refreshes == [("vote_session", "1")]
 
 
-async def test_anonymous_recovery_cleans_committed_and_unconsented_reactions_without_replaying(
+async def test_anonymous_recount_cleans_committed_and_unconsented_reactions_without_replaying(
     reactions: ReactionHarness,
 ) -> None:
     reactions.anonymous()
@@ -342,10 +353,10 @@ async def test_anonymous_recovery_cleans_committed_and_unconsented_reactions_wit
     message = reactions.messages[100]
     message.reactions = [Reaction("1️⃣", (Member(reactions.guilds[10]),)), Reaction("2️⃣")]
     async with reactions.running():
-        await reactions.cog.reactions.reconcile_session_reactions(1)
+        await reactions.cog.reactions.recount(1)
         reactions.accounts.account = replace(reactions.accounts.account, consent=None)
         reactions.votes.snapshot = replace(reactions.votes.snapshot, selections=())
-        await reactions.cog.reactions.reconcile_session_reactions(1)
+        await reactions.cog.reactions.recount(1)
 
     assert reactions.votes.casts == []
     assert message.removed == [("1️⃣", 70)] * 2
@@ -372,7 +383,7 @@ async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_s
     second = reactions.messages[101]
     second.reactions = [Reaction("🔴", (Member(reactions.guilds[11]),)), Reaction("🔵")]
     async with reactions.running():
-        await reactions.cog.reactions.reconcile_session_reactions(1)
+        await reactions.cog.reactions.recount(1)
         await reactions.cog.reactions.on_reaction_add(reactions.event(message_id=101, recovering=True))
         assert reactions.votes.casts == []
         assert reactions.refreshes == []

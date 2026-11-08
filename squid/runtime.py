@@ -70,6 +70,7 @@ from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.application.ports import InteractiveVoteActorResolver
+from squid.voting.application.recount import BallotRecounter
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,8 @@ class WorkerServices:
     error_reports: ErrorReportService
     artifacts: ArtifactStore
     votes: VoteService
+    ballot_recounter: BallotRecounter | None
+    """Recounts a poll from its cards before the deadline closes it; None without a Discord token."""
     records: RecordComputationService
     events: DomainEventService
     event_wake_listener: DomainEventWakeListener | None

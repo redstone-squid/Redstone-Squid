@@ -341,6 +341,8 @@ class VoteRepository:
         option: VoteOption,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
+        *,
+        toggle: bool = True,
     ) -> StoredVoteMutation | None:
         """Toggle or replace a ballot in an open session, returning None if missing or closed.
 
@@ -376,7 +378,7 @@ class VoteRepository:
                 msg, context={"vote_session_id": vote_session_id, "option_id": option.id, "emoji": option.emoji}
             )
         # Aliases of the same logical option toggle the same ballot: ✅ after 👍 still means "approve".
-        toggled_off = previous is not None and aliases[previous.option_alias_id].identifier == option.id
+        toggled_off = toggle and previous is not None and aliases[previous.option_alias_id].identifier == option.id
         if toggled_off:
             await session.delete(previous)
             current_weight = None

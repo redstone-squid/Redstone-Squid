@@ -113,8 +113,9 @@ from squid.tags.application import TagService
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
-from squid.voting.infrastructure.accounts import AccountVoterDiscordIdLookup
-from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
+from squid.voting.application.recount import BallotRecounter
+from squid.voting.infrastructure.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
+from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver, DiscordRestVoteCards
 from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)
@@ -560,6 +561,19 @@ class _ServiceGraph:
         return resolver
 
     @cached_property
+    def rest_ballot_recounter(self) -> BallotRecounter | None:
+        """Recount ballots through Discord's REST API, for processes without a gateway."""
+        resolver = self.vote_members
+        if resolver is None or self.config.discord_bot_token is None:
+            return None
+        cards = DiscordRestVoteCards(
+            self.config.discord_bot_token.get_secret_value(),
+            api_url=str(self.config.upstream_http.discord_api_url),
+        )
+        self.resources.push_async_callback(cards.aclose)
+        return BallotRecounter(self.votes, cards, AccountConsentedVoterLookup(self.accounts), resolver)
+
+    @cached_property
     def accounts(self) -> AccountService:
         mojang = MojangClient(profile_url=str(self.config.upstream_http.mojang_profile_url))
         self.resources.push_async_callback(mojang.aclose)
@@ -748,6 +762,7 @@ def create_worker_services(
         error_reports=graph.error_reports,
         artifacts=graph.artifacts,
         votes=graph.votes,
+        ballot_recounter=graph.rest_ballot_recounter,
         records=graph.record_computation,
         events=DomainEventService(uow_factory=graph.uow_factory),
         event_wake_listener=(

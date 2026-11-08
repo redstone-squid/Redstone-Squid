@@ -5,7 +5,7 @@ the session's close authorization and read an existing account without creating
 one. Shared card labels are fixed; personal replies use the caller's locale.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import discord
 
@@ -19,6 +19,7 @@ from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot.app
+    from squid.bot.voting.vote import VoteCog
 
 
 polls, _polls_created = _feature_group("polls")
@@ -37,13 +38,19 @@ def poll_controls() -> sl.semantic.ActionControls:
 
 @polls.route(poll_close)
 async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
-    """End a poll early, tallying it where it stands."""
+    """End a poll early, recounting its cards first and then tallying it where it stands."""
     request = await sd.request(interaction)
     authorized = await _authorize(request)
     if authorized is None:
         return
     snapshot, actor = authorized
     bot = interaction.client
+    # Count reactions added while the bot was offline before the result is fixed. Reading
+    # every voter can outlast Discord's three-second reply window, hence the deferral.
+    vote_cog = cast("VoteCog | None", bot.get_cog("VoteCog"))
+    if vote_cog is not None:
+        await request.defer()
+        await vote_cog.reactions.recount(snapshot.id)
     result = await bot.services.votes.close(snapshot.id, actor)
     if result.rejection is not None or result.session is None:
         await _refuse(request, result.rejection or VoteRejection.NOT_FOUND)

@@ -174,6 +174,8 @@ class FakeVoteRepository:
         option: VoteOption,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
+        *,
+        toggle: bool = True,
     ) -> StoredVoteMutation | None:
         self.cast_calls.append(
             CastVoteCall(
@@ -955,3 +957,27 @@ async def test_a_network_poll_records_its_scope() -> None:
     )
 
     assert repository.generic_scopes == [PollScope.NETWORK]
+
+
+@pytest.mark.parametrize("recount_fails", [False, True])
+async def test_a_due_poll_is_recounted_before_it_closes_even_if_the_recount_fails(recount_fails: bool) -> None:
+    selections = (VoteSelection(account_id=7, guild_id=77, option_id="one", emoji="1️⃣", weight=9.0),)
+    poll = replace(poll_snapshot(guild_id=77), selections=selections)
+    repository = FakeVoteRepository(poll)
+    repository.due = [poll]
+    # Closing refreshes weights through the resolver, so its calls show whether the close ran.
+    resolver = RecordingActorResolver()
+    service = VoteService(actor_resolver=resolver, uow_factory=lambda: VoteUnitOfWork(repository))
+    recounted: list[int] = []
+
+    async def recount(vote_session_id: int) -> bool:
+        assert resolver.calls == []
+        recounted.append(vote_session_id)
+        if recount_fails:
+            raise RuntimeError("Discord is down")
+        return True
+
+    await service.close_due(recount=recount)
+
+    assert recounted == [poll.id]
+    assert resolver.calls == [(7, 77)]

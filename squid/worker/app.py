@@ -282,7 +282,10 @@ class DatabaseWorker:
     async def _close_due_votes(self) -> None:
         with trace_span("squid.worker.close_due_votes", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             now = Instant.now()
-            snapshots = await self._services.votes.close_due(now)
+            recounter = self._services.ballot_recounter
+            snapshots = await self._services.votes.close_due(
+                now, recount=None if recounter is None else recounter.recount
+            )
         for snapshot in snapshots:
             if snapshot.poll is not None:
                 record_histogram(
