@@ -39,7 +39,6 @@ from squid.submissions.errors import (
 from squid.submissions.infrastructure.issues import decode_issues, encode_issues
 from squid.submissions.models.entities import (
     SubmissionDraft,
-    SubmissionDraftAccess,
     SubmissionDraftChange,
 )
 from squid.submissions.models.finalization import SubmissionFinalizationJob
@@ -156,13 +155,6 @@ class PostgresDraftRepository(DraftRepository):
         if (await session.scalar(count_query) or 0) >= capacity:
             raise DraftCapacityExceededError(capacity)
         session.add(model)
-        session.add(
-            SubmissionDraftAccess(
-                draft_id=model.id,
-                account_id=model.owner_account_id,
-                role="owner",
-            )
-        )
         return _to_stored(model)
 
     @override

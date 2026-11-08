@@ -354,28 +354,6 @@ class TagAssignment(Base, kw_only=True, init=False):
                 raise ValueError(msg)
 
 
-class TagRelation(Base, kw_only=True):
-    """A semantic relationship between official restrictions."""
-
-    __tablename__ = "tag_relations"
-    __table_args__ = (
-        Index("tag_relations_target_idx", "target_tag_id"),
-        PrimaryKeyConstraint("source_tag_id", "relation_kind", "target_tag_id"),
-        CheckConstraint("relation_kind IN ('implies', 'incompatible')", name="tag_relations_kind_check"),
-        CheckConstraint("source_tag_id <> target_tag_id", name="tag_relations_distinct_check"),
-    )
-
-    source_tag_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("tag_definitions.id", name="tag_relations_source_fkey", ondelete="CASCADE"),
-    )
-    relation_kind: Mapped[str] = mapped_column(Text, nullable=False)
-    target_tag_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("tag_definitions.id", name="tag_relations_target_fkey", ondelete="CASCADE"),
-    )
-
-
 class TagRecordThreshold(Base, kw_only=True):
     """A staff-seeded eager threshold for a parameterized restriction."""
 
