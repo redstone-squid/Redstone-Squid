@@ -111,6 +111,12 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         self._schedule(await self.service.mark_origin_deleted(payload.message_id), force=True)
 
     @sd.Cog.listener()
+    async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent) -> None:
+        # A channel purge arrives only as this event, never as individual deletes.
+        for message_id in payload.message_ids:
+            self._schedule(await self.service.mark_origin_deleted(message_id), force=True)
+
+    @sd.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
         await self.service.disable_channel(channel.id)
 
