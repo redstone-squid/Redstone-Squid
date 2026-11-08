@@ -55,8 +55,10 @@ build:
 docker-run: build
     docker run --env-file .env --rm -p 8000:8000 rssquid
 
-generate-schema:
-    pg_dump -h aws-0-us-west-1.pooler.supabase.com -U postgres.jnushtruzgnnmmxabsxi -d postgres -f schema_dump.sql --encoding=UTF8 --schema-only --no-owner --no-privileges
+# Rebuild schema_dump.sql and schema/structure/ from the migrations, the same way CI does. Needs docker.
+[unix]
+schema-docs:
+    scripts/export_schema.sh
 
 # Export a CycloneDX SBOM from the locked dependency graph.
 dependency-report output="dependency-report.json":
@@ -75,12 +77,6 @@ gha-analysis:
 
 visualize-dependencies output="docs/dependencies.svg":
     uv tool run pipdeptree --python {{python}} --graph-output svg > "{{output}}"
-
-# Using https://github.com/seveibar/pgstrap, which dumps the schema per table for better readability, but this requires npm
-# Does not work on Windows: https://github.com/seveibar/pgstrap/issues/8
-[unix]
-generate-schema-alt:
-    npm run db:generate
 
 db-upgrade:
     uv run alembic upgrade head

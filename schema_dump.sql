@@ -94,22 +94,61 @@ $$;
 
 
 --
--- Name: delete_orphaned_build_vote_sessions_after_builds_delete(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: check_permission_role_include_cycle(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete() RETURNS trigger
+CREATE FUNCTION public.check_permission_role_include_cycle() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    DELETE FROM vote_sessions
-    WHERE id IN (
-        SELECT vote_sessions.id
-        FROM vote_sessions vs
-        LEFT JOIN build_vote_sessions bvs ON vs.id = bvs.vote_session_id
-        LEFT JOIN delete_log_vote_sessions dvs ON vs.id = dvs.vote_session_id
-        WHERE bvs.vote_session_id IS NULL AND dvs.vote_session_id IS NULL
-    );
-    RETURN NULL; -- Statement-level triggers do not use OLD or NEW
+    -- Serialize graph checks; the next query gets a fresh READ COMMITTED snapshot.
+    -- Repeatable-read snapshots cannot see an edge committed while waiting.
+    IF current_setting('transaction_isolation') <> 'read committed' THEN
+        RAISE EXCEPTION 'role inclusion writes require READ COMMITTED isolation'
+            USING ERRCODE = '0A000';
+    END IF;
+    -- A guild role must not change what a global role grants, and one guild's role must not
+    -- change another guild's. Global roles may be included anywhere.
+    IF EXISTS (
+        SELECT 1
+        FROM permission_roles role, permission_roles included
+        WHERE role.id = NEW.role_id AND included.id = NEW.included_role_id
+          AND included.guild_id IS NOT NULL AND included.guild_id IS DISTINCT FROM role.guild_id
+    ) THEN
+        RAISE EXCEPTION 'permission role may only include global roles or roles of its own guild'
+            USING ERRCODE = '23514', CONSTRAINT = 'permission_role_includes_scope';
+    END IF;
+    PERFORM pg_advisory_xact_lock(1936812391, 1);
+    IF EXISTS (
+        WITH RECURSIVE reachable(id) AS (
+            SELECT NEW.included_role_id
+            UNION
+            SELECT edge.included_role_id
+            FROM permission_role_includes edge JOIN reachable ON edge.role_id = reachable.id
+        )
+        SELECT 1 FROM reachable WHERE id = NEW.role_id
+    ) THEN
+        RAISE EXCEPTION 'permission role inclusion cycle'
+            USING ERRCODE = '23514', CONSTRAINT = 'permission_role_includes_acyclic';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: delete_vote_session_after_build_vote_session_delete(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.delete_vote_session_after_build_vote_session_delete() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- A build session has exactly one subtype row (vote_sessions_kind_subtype_check), so losing
+    -- it, usually through the cascade from a deleted build, leaves a session nothing can show.
+    -- When the delete cascaded from vote_sessions itself, the parent is already gone.
+    DELETE FROM public.vote_sessions WHERE id = OLD.vote_session_id AND kind = 'build';
+    RETURN NULL;
 END;
 $$;
 
@@ -185,6 +224,91 @@ CREATE FUNCTION public.emit_domain_event() RETURNS trigger
             RETURN NULL;
         END;
         $$;
+
+
+--
+-- Name: enforce_build_category_subtype(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enforce_build_category_subtype() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_ids bigint[];
+    target_id bigint;
+    build_category text;
+    expected_table text;
+    door_count integer;
+    extender_count integer;
+    utility_count integer;
+    entrance_count integer;
+    other_count integer;
+BEGIN
+    -- Each build has exactly one row in the subtype table named by its category, which is what
+    -- SQLAlchemy's joined-table inheritance needs to load it. Deferred, because the ORM inserts
+    -- the builds row before the subtype row.
+    IF TG_TABLE_NAME = 'builds' THEN
+        target_ids := ARRAY[CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END];
+        IF TG_OP = 'UPDATE' AND OLD.id IS DISTINCT FROM NEW.id THEN
+            target_ids := array_append(target_ids, OLD.id);
+        END IF;
+    ELSE
+        target_ids := ARRAY[CASE WHEN TG_OP = 'DELETE' THEN OLD.build_id ELSE NEW.build_id END];
+        IF TG_OP = 'UPDATE' AND OLD.build_id IS DISTINCT FROM NEW.build_id THEN
+            target_ids := array_append(target_ids, OLD.build_id);
+        END IF;
+    END IF;
+
+    FOREACH target_id IN ARRAY target_ids LOOP
+        -- See enforce_vote_session_kind_subtype for why NO KEY UPDATE.
+        SELECT category INTO build_category FROM public.builds WHERE id = target_id FOR NO KEY UPDATE;
+        IF NOT FOUND THEN
+            CONTINUE;
+        END IF;
+
+        SELECT
+            (SELECT count(*) FROM public.doors WHERE build_id = target_id),
+            (SELECT count(*) FROM public.extenders WHERE build_id = target_id),
+            (SELECT count(*) FROM public.utilities WHERE build_id = target_id),
+            (SELECT count(*) FROM public.entrances WHERE build_id = target_id),
+            (SELECT count(*) FROM public.other_builds WHERE build_id = target_id)
+        INTO door_count, extender_count, utility_count, entrance_count, other_count;
+
+        expected_table := CASE build_category
+            WHEN 'Door' THEN 'doors'
+            WHEN 'Extender' THEN 'extenders'
+            WHEN 'Utility' THEN 'utilities'
+            WHEN 'Entrance' THEN 'entrances'
+            WHEN 'Other' THEN 'other_builds'
+        END;
+
+        IF NOT (
+            door_count + extender_count + utility_count + entrance_count + other_count = 1
+            AND CASE expected_table
+                WHEN 'doors' THEN door_count
+                WHEN 'extenders' THEN extender_count
+                WHEN 'utilities' THEN utility_count
+                WHEN 'entrances' THEN entrance_count
+                WHEN 'other_builds' THEN other_count
+            END = 1
+        ) THEN
+            RAISE EXCEPTION USING
+                ERRCODE = 'check_violation',
+                MESSAGE = format(
+                    'build %s category %s has subtype counts doors=%s, extenders=%s, utilities=%s, '
+                    'entrances=%s, other_builds=%s',
+                    target_id, build_category, door_count, extender_count, utility_count, entrance_count,
+                    other_count
+                ),
+                SCHEMA = 'public',
+                TABLE = 'builds',
+                CONSTRAINT = 'builds_category_subtype_check';
+        END IF;
+    END LOOP;
+
+    RETURN NULL;
+END;
+$$;
 
 
 --
@@ -293,7 +417,7 @@ BEGIN
         enqueued_at = EXCLUDED.enqueued_at,
         available_at = EXCLUDED.available_at,
         attempts = 0,
-        locked_at = NULL,
+        claimed_at = NULL,
         claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
@@ -320,7 +444,7 @@ BEGIN
             enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
             attempts = 0,
-            locked_at = NULL,
+            claimed_at = NULL,
             claim_token = NULL,
             last_error = NULL;
     END IF;
@@ -339,7 +463,7 @@ CREATE FUNCTION public.enqueue_computed_record_search_projection() RETURNS trigg
 DECLARE
     target_result_id bigint;
 BEGIN
-    IF TG_TABLE_NAME = 'record_results' THEN
+    IF TG_TABLE_NAME = 'title_results' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
@@ -353,8 +477,8 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
-    ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+    ELSIF TG_TABLE_NAME = 'title_holders' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
@@ -362,17 +486,17 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSE
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
         SELECT 'record', 'result:' || rr.id::text, 'upsert', now(), now()
-        FROM public.record_results rr
+        FROM public.title_results rr
         WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -493,7 +617,7 @@ BEGIN
         enqueued_at = EXCLUDED.enqueued_at,
         available_at = EXCLUDED.available_at,
         attempts = 0,
-        locked_at = NULL,
+        claimed_at = NULL,
         claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
@@ -509,7 +633,7 @@ BEGIN
             enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
             attempts = 0,
-            locked_at = NULL,
+            claimed_at = NULL,
             claim_token = NULL,
             dead_at = NULL,
             last_error = NULL;
@@ -541,7 +665,7 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'versions' THEN
         INSERT INTO public.search_projection_queue
             (resource_kind, source_key, action, enqueued_at, available_at)
@@ -551,7 +675,7 @@ BEGIN
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
             available_at = EXCLUDED.available_at,
-            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
+            attempts = 0, claimed_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -624,6 +748,50 @@ $$;
 
 
 --
+-- Name: enqueue_submission_status(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_submission_status() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    run_key uuid;
+    draft_key uuid;
+    target_kind text;
+    target_key text;
+BEGIN
+    IF TG_TABLE_NAME = 'submission_inference_runs' THEN
+        IF (CASE WHEN TG_OP = 'DELETE' THEN OLD.inputs ELSE NEW.inputs END)->>'purpose' != 'submission' THEN
+            RETURN NULL;
+        END IF;
+        run_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+    ELSIF TG_TABLE_NAME = 'submission_drafts' THEN
+        draft_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
+        run_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.inference_run_id ELSE NEW.inference_run_id END;
+    ELSE
+        draft_key := CASE WHEN TG_OP = 'DELETE' THEN OLD.draft_id ELSE NEW.draft_id END;
+        SELECT inference_run_id INTO run_key FROM public.submission_drafts WHERE id = draft_key;
+    END IF;
+    FOR target_kind, target_key IN
+        SELECT 'submission_draft', draft_key::text WHERE draft_key IS NOT NULL
+        UNION ALL SELECT 'inference_run', run_key::text WHERE run_key IS NOT NULL
+    LOOP
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
+        VALUES (target_kind, target_key, 'refresh', nextval('public.discord_sync_generation_seq'),
+                now(), now(), NULL, NULL, NULL, 0, NULL)
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET action = EXCLUDED.action, generation = EXCLUDED.generation,
+            enqueued_at = EXCLUDED.enqueued_at, available_at = EXCLUDED.available_at,
+            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+    END LOOP;
+    RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: get_quantified_version_names(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -640,27 +808,6 @@ BEGIN
         v.patch_number AS quantified_name
     FROM
         versions v;
-END;
-$$;
-
-
---
--- Name: idempotency_requests_mirror_caller(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.idempotency_requests_mirror_caller() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF NEW.caller IS NULL THEN
-        NEW.caller := NEW.principal;
-    ELSIF NEW.principal IS NULL THEN
-        NEW.principal := NEW.caller;
-    ELSIF NEW.caller <> NEW.principal THEN
-        RAISE EXCEPTION 'idempotency caller vocabulary columns disagree'
-            USING ERRCODE = 'check_violation';
-    END IF;
-    RETURN NEW;
 END;
 $$;
 
@@ -742,20 +889,19 @@ $$;
 
 
 --
--- Name: set_locked_at(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: reject_submission_finalization_input_update(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.set_locked_at() RETURNS trigger
+CREATE FUNCTION public.reject_submission_finalization_input_update() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-begin
-  if new.is_locked then
-    new.locked_at := now();
-  else
-    new.locked_at := null;
-  end if;
-  return new;
-end;
+BEGIN
+    RAISE EXCEPTION USING
+        ERRCODE = 'check_violation',
+        MESSAGE = 'submission finalization inputs are immutable',
+        SCHEMA = 'public',
+        TABLE = 'submission_finalization_inputs';
+END;
 $$;
 
 
@@ -800,10 +946,7 @@ COMMENT ON COLUMN public.account_identities.is_public IS 'Whether this identity 
 -- Name: COLUMN account_identities.avatar_key; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.account_identities.avatar_key IS 'Provider rendering key, where the subject alone is not enough to build an avatar URL.
-
-Discord avatar URLs need the hash, which only the gateway supplies. Java heads derive from
-the UUID, so this stays NULL there.';
+COMMENT ON COLUMN public.account_identities.avatar_key IS 'Provider avatar key, such as a Discord avatar hash. Java avatars use the subject UUID.';
 
 
 --
@@ -837,31 +980,21 @@ CREATE TABLE public.account_merge_tickets (
 -- Name: TABLE account_merge_tickets; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.account_merge_tickets IS 'A live, single-use claim that one account consents to being absorbed by another.
-
-A merge needs recent proof of *both* accounts, and no one session can hold both. The ticket is
-that second proof, carried through the only channel the two sides share: a person who can sign
-into each. Minting one is the absorbed side authenticating; redeeming it is the surviving side
-doing so, inside the ticket''s lifetime.
-
-Keyed on the account rather than on the digest, so minting replaces. One account can only ever
-have one live ticket, which is most of why an eight-character code is enough.';
+COMMENT ON TABLE public.account_merge_tickets IS 'A single-use proof that an account consents to being merged into another account.';
 
 
 --
 -- Name: COLUMN account_merge_tickets.code_digest; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.account_merge_tickets.code_digest IS 'Digest, never the code. The plaintext is shown once at mint time and never stored, exactly
-as a verification code is.';
+COMMENT ON COLUMN public.account_merge_tickets.code_digest IS 'Digest of the code shown once when the ticket is minted.';
 
 
 --
 -- Name: COLUMN account_merge_tickets.expires_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.account_merge_tickets.expires_at IS 'Doubles as the proof timestamp: a ticket is redeemable for exactly as long as
-`RecentAccountProof` accepts the authentication that minted it.';
+COMMENT ON COLUMN public.account_merge_tickets.expires_at IS 'End of the authentication proof window in which the ticket can be redeemed.';
 
 
 --
@@ -890,51 +1023,35 @@ CREATE TABLE public.account_profiles (
 -- Name: TABLE account_profiles; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.account_profiles IS 'What an account chooses to publish about itself on its creator page.
-
-A child of `accounts` rather than more columns on it. The account row is an identity anchor
-that thirty-odd foreign keys point at and that link and merge paths lock `FOR UPDATE`;
-profile text is user-edited prose with an entirely different write cadence, and widening the
-anchor to carry it would make every identity read pay for a bio.';
+COMMENT ON TABLE public.account_profiles IS 'Public profile content and visibility choices for an account.';
 
 
 --
 -- Name: COLUMN account_profiles.display_name; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.account_profiles.display_name IS 'Presentation only, deliberately not a `creator_aliases` name: renaming yourself here moves
-no build credit and needs no staff review.';
+COMMENT ON COLUMN public.account_profiles.display_name IS 'Public display name, independent of the creator aliases used for build credits.';
 
 
 --
 -- Name: COLUMN account_profiles.links; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.account_profiles.links IS 'External links as `[{"label": ..., "url": ...}]`.
-
-JSONB rather than a child table: nothing queries links, and every write replaces the whole
-list from one owner, so a table would buy referential integrity to nothing and cost a join on
-the hottest public read.';
+COMMENT ON COLUMN public.account_profiles.links IS 'Published links, stored as a JSON array. Replace the tuple when editing links.';
 
 
 --
 -- Name: COLUMN account_profiles.hidden; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.account_profiles.hidden IS 'Whether to withhold the profile. A hidden profile still serves its aliases and build
-credits, because a creator page that vanished would strand every build crediting it.';
+COMMENT ON COLUMN public.account_profiles.hidden IS 'Whether to hide profile content. Aliases and build credits remain public.';
 
 
 --
 -- Name: COLUMN account_profiles.avatar_identity_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.account_profiles.avatar_identity_id IS 'The linked identity this profile''s avatar is rendered from.
-
-`SET NULL` so unlinking that identity clears the avatar rather than leaving a render pointing
-at a subject we no longer hold. Ownership — that the identity belongs to this same account —
-is checked in the repository, since the composite foreign key that would enforce it here
-cannot coexist with `ON DELETE SET NULL`.';
+COMMENT ON COLUMN public.account_profiles.avatar_identity_id IS 'Linked identity used for the avatar. Unlinking it clears this choice; writes check account ownership.';
 
 
 --
@@ -959,6 +1076,13 @@ COMMENT ON TABLE public.accounts IS 'An internal caller independent of every ext
 
 
 --
+-- Name: COLUMN accounts.id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.accounts.id IS 'Internal account identifier; assigned when the account is first saved.';
+
+
+--
 -- Name: accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -976,6 +1100,101 @@ CREATE SEQUENCE public.accounts_id_seq
 --
 
 ALTER SEQUENCE public.accounts_id_seq OWNED BY public.accounts.id;
+
+
+--
+-- Name: alembic_migration_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alembic_migration_history (
+    id bigint NOT NULL,
+    revision character varying(64) NOT NULL,
+    down_revisions character varying(64)[] NOT NULL,
+    direction text NOT NULL,
+    applied_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    duration_ms integer NOT NULL,
+    script_sha256 character(64),
+    release_version text NOT NULL,
+    applied_from text NOT NULL,
+    CONSTRAINT alembic_migration_history_direction_check CHECK ((direction = ANY (ARRAY['upgrade'::text, 'downgrade'::text, 'stamp'::text])))
+);
+
+
+--
+-- Name: TABLE alembic_migration_history; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.alembic_migration_history IS 'Append-only history of upgrades, downgrades, and stamps. Entries commit with the migration transaction; stamps record revisions without executing their scripts.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.revision; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.revision IS 'The revision this step moved onto or off of.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.down_revisions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.down_revisions IS 'Parents of `revision`; more than one only at a branch merge.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.direction; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.direction IS 'upgrade and downgrade ran the script; stamp asserted the revision without running it.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.applied_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.applied_at IS 'clock_timestamp(), not now(): a whole `upgrade head` shares one transaction, so transaction time would stamp every step of a release identically.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.duration_ms; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.duration_ms IS 'Wall time from the previous step of this run. The first row of a run also carries that run''s setup.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.script_sha256; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.script_sha256 IS 'Digest of the revision file for this step, checked while the revision is in the current schema ancestry. NULL when the revision resolved to no file on disk.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.release_version; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.release_version IS 'SQUID_BUILD_COMMIT_HASH of the image that ran it.';
+
+
+--
+-- Name: COLUMN alembic_migration_history.applied_from; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.alembic_migration_history.applied_from IS 'Hostname of the process that ran it, which is the container id under Compose.';
+
+
+--
+-- Name: alembic_migration_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.alembic_migration_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.alembic_migration_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 
 --
@@ -1138,7 +1357,7 @@ CREATE TABLE public.build_links (
 -- Name: TABLE build_links; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.build_links IS 'A link associated with a build (image, video, world download).';
+COMMENT ON TABLE public.build_links IS 'A URL associated with a build, such as an image, schematic, or world download.';
 
 
 --
@@ -1182,9 +1401,15 @@ CREATE TABLE public.build_schematics (
     published_at timestamp with time zone,
     withdrawn_at timestamp with time zone,
     uploaded_by_account_id integer,
+    CONSTRAINT build_schematics_block_count_check CHECK ((block_count <= bounding_volume)),
+    CONSTRAINT build_schematics_bounding_volume_check CHECK ((bounding_volume = (((width)::bigint * height) * length))),
     CONSTRAINT build_schematics_license_check CHECK (((license_code IS NULL) OR (license_code = ANY (ARRAY['cc0_1_0'::text, 'cc_by_4_0'::text, 'cc_by_sa_4_0'::text, 'cc_by_nd_4_0'::text, 'cc_by_nc_4_0'::text, 'cc_by_nc_sa_4_0'::text, 'cc_by_nc_nd_4_0'::text])))),
+    CONSTRAINT build_schematics_measurements_nonnegative CHECK (((width >= 0) AND (height >= 0) AND (length >= 0) AND (allocated_width >= 0) AND (allocated_height >= 0) AND (allocated_length >= 0) AND (block_count >= 0) AND (entity_count >= 0) AND (palette_size >= 0))),
+    CONSTRAINT build_schematics_public_is_published CHECK (((visibility <> 'public_download'::text) OR (published_at IS NOT NULL))),
     CONSTRAINT build_schematics_publication_complete CHECK (((visibility <> 'public_download'::text) OR ((license_code IS NOT NULL) AND (rights_attested_at IS NOT NULL) AND (rights_attested_by_account_id IS NOT NULL)))),
-    CONSTRAINT build_schematics_visibility_check CHECK ((visibility = ANY (ARRAY['legacy_unverified'::text, 'reviewer_only'::text, 'public_download'::text])))
+    CONSTRAINT build_schematics_tight_within_allocated CHECK (((width <= allocated_width) AND (height <= allocated_height) AND (length <= allocated_length))),
+    CONSTRAINT build_schematics_visibility_check CHECK ((visibility = ANY (ARRAY['legacy_unverified'::text, 'reviewer_only'::text, 'public_download'::text]))),
+    CONSTRAINT build_schematics_withdrawn_after_published CHECK (((withdrawn_at IS NULL) OR ((published_at IS NOT NULL) AND (withdrawn_at >= published_at))))
 );
 
 
@@ -1192,34 +1417,34 @@ CREATE TABLE public.build_schematics (
 -- Name: TABLE build_schematics; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.build_schematics IS 'One analyzed schematic attached to a build.
+COMMENT ON TABLE public.build_schematics IS 'One analyzed file attached to a build, with its publication policy.
 
-Metrics and fingerprints are denormalised onto this row so duplicate shortlisting is a
-plain indexed query. Fingerprints are only comparable within the `analyzer_version` that
-produced them, so every identity index carries that column and every lookup filters on it;
-an engine upgrade therefore becomes a visible backfill rather than a silent regression.';
+Measurements and fingerprints are stored here for duplicate shortlisting. Fingerprint lookups
+include analyzer_version because an engine upgrade can change the hashes. Reanalyzing an
+attachment updates this evidence without changing its source bytes.';
 
 
 --
 -- Name: COLUMN build_schematics.file_sha256; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.file_sha256 IS 'The stored bytes this analysis describes. `RESTRICT` because several builds can share
-one file and losing it would strand every analysis that references it.';
+COMMENT ON COLUMN public.build_schematics.file_sha256 IS 'Digest of the analyzed bytes, which may be shared by several builds.
+
+Deletion is restricted while any attachment references the file.';
 
 
 --
 -- Name: COLUMN build_schematics.is_primary; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.is_primary IS 'Whether this is the schematic shown on the build card and used for duplicate checks.';
+COMMENT ON COLUMN public.build_schematics.is_primary IS 'Featured attachment used for generated previews, conversion, and timing measurements.';
 
 
 --
 -- Name: COLUMN build_schematics.original_filename; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.original_filename IS 'The name the uploader''s file had, kept for display only. Never trusted for typing.';
+COMMENT ON COLUMN public.build_schematics.original_filename IS 'Original display filename; ingestion may also use its extension as a fallback format hint.';
 
 
 --
@@ -1240,8 +1465,9 @@ COMMENT ON COLUMN public.build_schematics.allocated_width IS 'Width of the regio
 -- Name: COLUMN build_schematics.block_count; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.block_count IS 'Non-air block count. **Not** the Door Rules cumulative volume, which counts air pockets
-and carries hallway, frame, and hitbox exceptions no static read can apply.';
+COMMENT ON COLUMN public.build_schematics.block_count IS 'Non-air block count, separate from the Door Rules cumulative volume.
+
+The latter includes air pockets and needs hallway, frame, and hitbox review.';
 
 
 --
@@ -1276,8 +1502,9 @@ COMMENT ON COLUMN public.build_schematics.signs IS 'Sign text recovered from the
 -- Name: COLUMN build_schematics.fingerprint_structural; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.fingerprint_structural IS 'Coarse translation-invariant bucket. A build differing by a single block still matches,
-so this is a pre-filter feeding pairwise ranking and never a duplicate verdict by itself.';
+COMMENT ON COLUMN public.build_schematics.fingerprint_structural IS 'Coarse translation-invariant hash used to shortlist files for pairwise comparison.
+
+Matching values can include different block arrangements and do not establish duplication.';
 
 
 --
@@ -1305,14 +1532,14 @@ COMMENT ON COLUMN public.build_schematics.signature_structural IS 'The engine''s
 -- Name: COLUMN build_schematics.analyzer_version; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.analyzer_version IS 'Which engine build produced the fingerprints on this row, e.g. `nucleation-0.9.2`.';
+COMMENT ON COLUMN public.build_schematics.analyzer_version IS 'Engine version that produced these fingerprints; comparisons must use the same version.';
 
 
 --
 -- Name: COLUMN build_schematics.analysis_schema_version; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.analysis_schema_version IS 'Which revision of *our* analysis produced this row, bumped when we change what we read.';
+COMMENT ON COLUMN public.build_schematics.analysis_schema_version IS 'Application analysis format version, independent of the engine version.';
 
 
 --
@@ -1340,8 +1567,7 @@ COMMENT ON COLUMN public.build_schematics.visibility IS 'Explicit download choic
 -- Name: COLUMN build_schematics.uploaded_by_account_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.build_schematics.uploaded_by_account_id IS 'Who supplied the file, beside `rights_attested_by_account_id` so the table
-carries one attribution style rather than two.';
+COMMENT ON COLUMN public.build_schematics.uploaded_by_account_id IS 'Account that supplied the file, which can differ from the account attesting publication rights.';
 
 
 --
@@ -1426,6 +1652,13 @@ COMMENT ON TABLE public.build_tag_assignments IS 'A typed tag value attached to 
 
 
 --
+-- Name: COLUMN build_tag_assignments.display_unit_key; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_tag_assignments.display_unit_key IS 'Unit used for presentation; the stored numeric value uses the definition''s canonical unit.';
+
+
+--
 -- Name: build_versions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1454,6 +1687,13 @@ CREATE TABLE public.build_vote_sessions (
 
 
 --
+-- Name: TABLE build_vote_sessions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_vote_sessions IS 'Link a build review to its target and recorded changes.';
+
+
+--
 -- Name: builds; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1461,18 +1701,16 @@ CREATE TABLE public.builds (
     id bigint NOT NULL,
     submission_status smallint NOT NULL,
     edited_time timestamp with time zone DEFAULT now() NOT NULL,
-    record_category text,
     extra_info jsonb DEFAULT '{}'::jsonb NOT NULL,
     width integer,
     height integer,
     depth integer,
     completion_time text,
     submission_time timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    category text,
+    category text NOT NULL,
     ai_generated boolean NOT NULL,
     version_spec text,
     embedding public.vector(1536),
-    is_locked boolean DEFAULT false NOT NULL,
     locked_at timestamp with time zone,
     completion_at timestamp with time zone,
     completion_evidence text,
@@ -1488,15 +1726,15 @@ CREATE TABLE public.builds (
     sponsor_address text,
     sponsor_description text,
     sponsor_website_url text,
+    CONSTRAINT builds_category_check CHECK ((category = ANY (ARRAY['Door'::text, 'Extender'::text, 'Utility'::text, 'Entrance'::text, 'Other'::text]))),
     CONSTRAINT builds_display_name_valid CHECK (((display_name IS NULL) OR ((display_name = btrim(display_name)) AND (display_name <> ''::text) AND (char_length(display_name) <= 120)))),
-    CONSTRAINT builds_lock_lease_complete CHECK (((is_locked AND (lock_token IS NOT NULL) AND (lock_expires_at IS NOT NULL)) OR ((NOT is_locked) AND (lock_token IS NULL) AND (lock_expires_at IS NULL)))),
+    CONSTRAINT builds_lock_lease_complete CHECK ((((locked_at IS NULL) AND (lock_token IS NULL) AND (lock_expires_at IS NULL)) OR ((locked_at IS NOT NULL) AND (lock_token IS NOT NULL) AND (lock_expires_at IS NOT NULL)))),
     CONSTRAINT builds_revision_positive CHECK ((revision > 0)),
     CONSTRAINT builds_sponsor_address_length CHECK (((sponsor_address IS NULL) OR ((char_length(sponsor_address) >= 1) AND (char_length(sponsor_address) <= 255)))),
     CONSTRAINT builds_sponsor_description_length CHECK (((sponsor_description IS NULL) OR ((char_length(sponsor_description) >= 1) AND (char_length(sponsor_description) <= 500)))),
     CONSTRAINT builds_sponsor_display_name_length CHECK (((sponsor_display_name IS NULL) OR ((char_length(sponsor_display_name) >= 1) AND (char_length(sponsor_display_name) <= 80)))),
     CONSTRAINT builds_sponsor_projection_complete CHECK (((sponsor_installation_id IS NOT NULL) OR ((sponsor_display_name IS NULL) AND (sponsor_address IS NULL) AND (sponsor_description IS NULL) AND (sponsor_website_url IS NULL)))),
     CONSTRAINT builds_sponsor_website_valid CHECK (((sponsor_website_url IS NULL) OR (((char_length(sponsor_website_url) >= 1) AND (char_length(sponsor_website_url) <= 2048)) AND (sponsor_website_url ~ '^https?://'::text)))),
-    CONSTRAINT check_record_category CHECK ((record_category = ANY (ARRAY['Smallest'::text, 'Fastest'::text, 'First'::text, 'Smallest Fastest'::text, 'Fastest Smallest'::text, NULL::text]))),
     CONSTRAINT check_status CHECK ((submission_status = ANY (ARRAY[0, 1, 2]))),
     CONSTRAINT submissions_build_depth_check CHECK ((depth > 0)),
     CONSTRAINT submissions_build_height_check CHECK ((height > 0)),
@@ -1512,10 +1750,31 @@ COMMENT ON TABLE public.builds IS 'A build submitted by a user.';
 
 
 --
+-- Name: COLUMN builds.width; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.width IS 'Declared width in blocks; None means unknown.';
+
+
+--
+-- Name: COLUMN builds.completion_time; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.completion_time IS 'Completion date as supplied by the submitter, including partial dates.';
+
+
+--
 -- Name: COLUMN builds.embedding; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.builds.embedding IS 'Application-owned semantic vector stored in the authoritative build row.';
+
+
+--
+-- Name: COLUMN builds.revision; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.revision IS 'Optimistic version checked by explicit repository writes.';
 
 
 --
@@ -1744,6 +2003,13 @@ CREATE TABLE public.delete_log_vote_sessions (
 
 
 --
+-- Name: TABLE delete_log_vote_sessions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.delete_log_vote_sessions IS 'Store the Discord message targeted by a deletion vote.';
+
+
+--
 -- Name: discord_posts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1758,8 +2024,8 @@ CREATE TABLE public.discord_posts (
     rendered_at timestamp with time zone,
     suppressed_at timestamp with time zone,
     CONSTRAINT discord_posts_applied_revision_check CHECK ((applied_revision >= 0)),
-    CONSTRAINT discord_posts_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text, 'starboard_entry'::text]))),
-    CONSTRAINT discord_posts_surface_check CHECK ((surface = ANY (ARRAY['build_card'::text, 'build_review'::text, 'vote_card'::text, 'starboard_entry'::text])))
+    CONSTRAINT discord_posts_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text, 'starboard_entry'::text, 'inference_run'::text, 'submission_draft'::text]))),
+    CONSTRAINT discord_posts_surface_check CHECK ((surface = ANY (ARRAY['build_card'::text, 'build_review'::text, 'vote_card'::text, 'starboard_entry'::text, 'submission_status'::text])))
 );
 
 
@@ -1767,32 +2033,56 @@ CREATE TABLE public.discord_posts (
 -- Name: TABLE discord_posts; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.discord_posts IS 'A Discord message the bot owns and keeps rendered for some resource.
-
-Holds only applied state. What the post *should* look like lives in the matching
-`discord_sync_queue` row, so staleness is `applied_revision < queue.generation`
-rather than a desired revision copied onto every post by a trigger.';
+COMMENT ON TABLE public.discord_posts IS 'A bot-owned Discord message displaying a build, vote, or other resource.';
 
 
 --
 -- Name: COLUMN discord_posts.channel_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.discord_posts.channel_id IS 'Denormalised from `messages.channel_id`: a unique index cannot span a join.';
+COMMENT ON COLUMN public.discord_posts.channel_id IS 'Copied from the message so the unique index can limit live posts per channel.';
+
+
+--
+-- Name: COLUMN discord_posts.resource_kind; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_posts.resource_kind IS 'The type of resource displayed by this message, used to select its renderer.';
+
+
+--
+-- Name: COLUMN discord_posts.resource_key; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_posts.resource_key IS 'The resource''s identifier, such as a build ID or a starboard/message ID pair.';
+
+
+--
+-- Name: COLUMN discord_posts.surface; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_posts.surface IS 'The presentation to use, such as a build card or a vote card.';
 
 
 --
 -- Name: COLUMN discord_posts.applied_revision; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.discord_posts.applied_revision IS 'The queue generation this post was last rendered at.';
+COMMENT ON COLUMN public.discord_posts.applied_revision IS 'The last rendered queue generation; a larger queued generation means an update is pending.';
+
+
+--
+-- Name: COLUMN discord_posts.rendered_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_posts.rendered_at IS 'When a rendered update was last recorded; None until the first update.';
 
 
 --
 -- Name: COLUMN discord_posts.suppressed_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.discord_posts.suppressed_at IS 'Set when the post was deleted outside the bot. Renderers choose whether to repost.';
+COMMENT ON COLUMN public.discord_posts.suppressed_at IS 'When an external deletion was recorded. Each renderer decides whether to publish a replacement.';
 
 
 --
@@ -1825,7 +2115,9 @@ CREATE TABLE public.discord_sync_queue (
     available_at timestamp with time zone DEFAULT now() NOT NULL,
     claim_token uuid,
     CONSTRAINT discord_sync_queue_action_check CHECK ((action = ANY (ARRAY['refresh'::text, 'delete'::text]))),
-    CONSTRAINT discord_sync_queue_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text, 'starboard_entry'::text])))
+    CONSTRAINT discord_sync_queue_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT discord_sync_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL))),
+    CONSTRAINT discord_sync_queue_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text, 'starboard_entry'::text, 'inference_run'::text, 'submission_draft'::text])))
 );
 
 
@@ -1833,53 +2125,45 @@ CREATE TABLE public.discord_sync_queue (
 -- Name: TABLE discord_sync_queue; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.discord_sync_queue IS 'A coalesced request to refresh one Discord-rendered resource.
+COMMENT ON TABLE public.discord_sync_queue IS 'A pending refresh or deletion of a resource''s Discord posts.
 
-Not an event queue, despite the shape. Rows are coalesced on
-`(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO
-UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is where
-the coalescing actually happens — deleted on acknowledgement, and carry a
-`generation` compared against a post''s applied revision as a staleness token
-rather than read as an ordering. An event log would be append-only and
-replayable; this table is neither. A row means "this resource''s Discord posts
-are stale", and re-reading it tells you what the resource should look like
-now, not what happened to it.
+Database triggers insert one row per resource and replace its action and
+generation when another change arrives. They also clear any existing claim,
+so a worker handling the older generation cannot acknowledge the new request.
+Workers read the resource''s current state and delete the row on completion.
 
-Discord-specific on purpose: every row exists to repair a Discord post, and
-the only consumer renders them (`squid/bot/sync/reconciler.py`). The
-application layer speaks of *reconciliation* rather than *sync* because a
-sync names a transfer, and nothing here transfers anything.';
+The generation is compared with each post''s applied revision. Several changes
+can share one pending row; this table does not retain their history.';
 
 
 --
 -- Name: COLUMN discord_sync_queue.generation; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.discord_sync_queue.generation IS 'A globally monotonic staleness token, not a per-row counter.
+COMMENT ON COLUMN public.discord_sync_queue.generation IS 'Sequence number used to compare requested work with a post''s applied revision.
 
-Acknowledging a job deletes its queue row, so a counter restarted at 1 on the next
-enqueue and could name a revision below one a post had already applied. Sequence
-values survive that because they are never rolled back or reused.';
+The sequence continues after a queue row is deleted, so the next request does
+not restart at a revision the post has already rendered.';
 
 
 --
 -- Name: COLUMN discord_sync_queue.available_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.discord_sync_queue.available_at IS 'When this row next becomes claimable, and the only column backoff writes.
+COMMENT ON COLUMN public.discord_sync_queue.available_at IS 'Earliest time a worker may claim this row.
 
-Kept separate from `enqueued_at` so a repeatedly failing row keeps its place in
-FIFO order and still reports its true age to the queue-health gauges.';
+Retries move this time forward without changing enqueued_at, preserving queue
+order and the age reported by health metrics.';
 
 
 --
 -- Name: COLUMN discord_sync_queue.claim_token; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.discord_sync_queue.claim_token IS 'The database-minted fencing token handed to the worker that claimed this row.
+COMMENT ON COLUMN public.discord_sync_queue.claim_token IS 'Token generated for the current claim.
 
-Nullable for now so code from the previous release, which stamps only
-`claimed_at`, can keep draining the queue across a deploy window.';
+Completion and failure updates require a matching token. Enqueuing another
+update clears it, preventing an older worker from acknowledging the new work.';
 
 
 --
@@ -1925,9 +2209,8 @@ CREATE TABLE public.domain_event_deliveries (
     last_error text,
     dead_at timestamp with time zone,
     claim_token uuid,
-    claim_count integer DEFAULT 0 NOT NULL,
-    CONSTRAINT domain_event_deliveries_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL))),
-    CONSTRAINT domain_event_deliveries_claim_count_nonnegative CHECK ((claim_count >= 0))
+    CONSTRAINT domain_event_deliveries_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT domain_event_deliveries_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL)))
 );
 
 
@@ -2093,11 +2376,10 @@ COMMENT ON COLUMN public.error_reports.correlation_id IS 'The full correlation I
 -- Name: COLUMN error_reports.reference; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.error_reports.reference IS 'The shortened form shown to the user, indexed because it is what they quote back.
+COMMENT ON COLUMN public.error_reports.reference IS 'Short reference shown to the user, usually the first 12 correlation-ID characters.
 
-Not unique: it is a 48-bit prefix of the correlation ID, so a collision is possible even
-though it is vanishingly unlikely, and a unique constraint would turn that into a failure to
-record the second error rather than an ambiguous lookup.';
+References are not unique. Multiple failures can share a correlation ID, and
+different IDs can share a prefix; lookup also returns a match count.';
 
 
 --
@@ -2111,7 +2393,7 @@ COMMENT ON COLUMN public.error_reports.occurred_at IS 'When the failure was capt
 -- Name: COLUMN error_reports.expires_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.error_reports.expires_at IS 'When retention drops this report.';
+COMMENT ON COLUMN public.error_reports.expires_at IS 'When the report stops appearing in lookups and becomes eligible for deletion.';
 
 
 --
@@ -2139,7 +2421,7 @@ COMMENT ON COLUMN public.error_reports.exception_type IS 'Qualified name of the 
 -- Name: COLUMN error_reports.message; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.error_reports.message IS 'The exception''s own string form, which is never shown to the user who triggered it.';
+COMMENT ON COLUMN public.error_reports.message IS 'The exception''s string form, available to callers authorized to read diagnostic details.';
 
 
 --
@@ -2160,7 +2442,7 @@ COMMENT ON COLUMN public.error_reports.traceback IS 'Rendered traceback, truncat
 -- Name: COLUMN error_reports.context; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.error_reports.context IS 'Redacted diagnostic context. Never contains stable Discord account identifiers.';
+COMMENT ON COLUMN public.error_reports.context IS 'Diagnostic context supplied by the caller; the storage service does not redact it.';
 
 
 --
@@ -2260,17 +2542,17 @@ COMMENT ON TABLE public.generic_vote_sessions IS 'Metadata for a user-created ge
 -- Name: COLUMN generic_vote_sessions.guild_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.generic_vote_sessions.guild_id IS 'The guild whose emoji palette the poll was drafted against.
+COMMENT ON COLUMN public.generic_vote_sessions.guild_id IS 'Owning guild used for emoji configuration and ballot role weights.
 
-Nullable so a poll can be created by a transport that has no guild -- the REST API
-or a standalone draft -- and have its presentation messages attached afterwards.';
+Guild polls may be created without one; network polls require an owner.
+Presentation messages are attached separately.';
 
 
 --
 -- Name: COLUMN generic_vote_sessions.scope; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.generic_vote_sessions.scope IS 'Whether the poll is carded only in its own guild or in every vote channel.';
+COMMENT ON COLUMN public.generic_vote_sessions.scope IS 'Whether publication is limited to the owning guild or spans configured vote channels.';
 
 
 --
@@ -2356,14 +2638,7 @@ COMMENT ON TABLE public.idempotency_requests IS 'One caller-scoped mutation rese
 -- Name: COLUMN idempotency_requests.principal; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.idempotency_requests.principal IS 'The caller namespace a key is reserved in.
-
-The application layer calls this the *caller*; the column keeps the older
-word because renaming it needs a migration, a rewrite of the unique index it
-anchors, and a redeploy window, for a name no client ever sees. The same
-trade applies to the `principal` partition in `RateLimit-Policy` and to
-`SQUID_API_RATE_LIMIT_PRINCIPAL_REQUESTS`, both of which deployments and
-clients can observe. If the ban is meant repo-wide, that is its own commit.';
+COMMENT ON COLUMN public.idempotency_requests.principal IS 'Legacy copy of caller, still written by the repository for the retained database column.';
 
 
 --
@@ -2453,7 +2728,7 @@ CREATE TABLE public.media_artifacts (
 -- Name: TABLE media_artifacts; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.media_artifacts IS 'Content-addressed normalized output, poster, or disclosure report metadata.';
+COMMENT ON TABLE public.media_artifacts IS 'Content-addressed normalized output, video thumbnail, or report metadata.';
 
 
 --
@@ -2468,6 +2743,24 @@ ALTER TABLE public.media_artifacts ALTER COLUMN id ADD GENERATED BY DEFAULT AS I
     NO MAXVALUE
     CACHE 1
 );
+
+
+--
+-- Name: media_draft_references; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.media_draft_references (
+    draft_id uuid NOT NULL,
+    upload_id uuid NOT NULL,
+    discarded boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: TABLE media_draft_references; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.media_draft_references IS 'One independently discardable draft reference to a shared normalization job.';
 
 
 --
@@ -2486,6 +2779,7 @@ CREATE TABLE public.media_normalization_jobs (
     discarded_at timestamp with time zone,
     last_error text,
     CONSTRAINT media_normalization_jobs_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT media_normalization_jobs_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL))),
     CONSTRAINT media_normalization_jobs_state_shape CHECK ((((status = 'pending'::text) AND (claimed_at IS NULL) AND (claim_token IS NULL) AND (completed_at IS NULL) AND (dead_at IS NULL) AND (discarded_at IS NULL)) OR ((status = 'claimed'::text) AND (claimed_at IS NOT NULL) AND (claim_token IS NOT NULL) AND (completed_at IS NULL) AND (dead_at IS NULL) AND (discarded_at IS NULL)) OR ((status = 'completed'::text) AND (claimed_at IS NULL) AND (claim_token IS NULL) AND (completed_at IS NOT NULL) AND (dead_at IS NULL) AND (discarded_at IS NULL)) OR ((status = 'dead'::text) AND (claimed_at IS NULL) AND (claim_token IS NULL) AND (completed_at IS NULL) AND (dead_at IS NOT NULL) AND (discarded_at IS NULL)) OR ((status = 'discarded'::text) AND (claimed_at IS NULL) AND (claim_token IS NULL) AND (completed_at IS NULL) AND (dead_at IS NULL) AND (discarded_at IS NOT NULL)))),
     CONSTRAINT media_normalization_jobs_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'claimed'::text, 'completed'::text, 'dead'::text, 'discarded'::text])))
 );
@@ -2495,7 +2789,7 @@ CREATE TABLE public.media_normalization_jobs (
 -- Name: TABLE media_normalization_jobs; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.media_normalization_jobs IS 'A retained, claim-token-fenced request to normalize one raw upload.';
+COMMENT ON TABLE public.media_normalization_jobs IS 'A normalization request retained after completion, failure, or discard for cleanup and retries.';
 
 
 --
@@ -2603,7 +2897,7 @@ COMMENT ON COLUMN public.messages.edited_at IS 'When `content` was last refreshe
 -- Name: COLUMN messages.deleted_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.messages.deleted_at IS 'Set when Discord reports the message gone. The row is a retained fact, never erased.';
+COMMENT ON COLUMN public.messages.deleted_at IS 'When Discord reported deletion. The deletion handler retains this row and its content.';
 
 
 --
@@ -2737,7 +3031,7 @@ CREATE TABLE public.notification_deliveries (
 -- Name: TABLE notification_deliveries; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.notification_deliveries IS 'A durable at-least-once Discord DM delivery attempt.';
+COMMENT ON TABLE public.notification_deliveries IS 'A queued Discord DM retained across retries and after successful or terminal delivery.';
 
 
 --
@@ -2772,10 +3066,7 @@ CREATE TABLE public.notification_profiles (
 -- Name: TABLE notification_profiles; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.notification_profiles IS 'Independent notification channel preferences.
-
-Carries no consent receipt: notifications are covered by the one privacy notice, whose
-receipt lives on `accounts`. A row here means "these switches", not "this person agreed".';
+COMMENT ON TABLE public.notification_profiles IS 'Channel preferences for an account. Consent is recorded on the account itself.';
 
 
 --
@@ -2839,7 +3130,7 @@ CREATE TABLE public.notifications (
 -- Name: TABLE notifications; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.notifications IS 'An idempotently materialized user notification.';
+COMMENT ON TABLE public.notifications IS 'An event-derived message for one recipient, shared by the web inbox and DM delivery.';
 
 
 --
@@ -2936,15 +3227,14 @@ exposes no update or delete path for this table.';
 -- Name: COLUMN permission_audit_log.action; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.permission_audit_log.action IS 'What happened: `grant`, `revoke`, `role_create`, `role_pattern_add`, and so on.';
+COMMENT ON COLUMN public.permission_audit_log.action IS 'Mutation name, such as `grant`, `revoke`, `role_create`, or `role_include`.';
 
 
 --
 -- Name: COLUMN permission_audit_log.reason; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.permission_audit_log.reason IS 'Mandatory for `forbid`, enforced by the service rather than the schema so
-the column stays usable for the actions that do not need it.';
+COMMENT ON COLUMN public.permission_audit_log.reason IS 'Reason for the change; the service requires one for a forbid grant.';
 
 
 --
@@ -2977,12 +3267,11 @@ CREATE TABLE public.permission_epoch (
 -- Name: TABLE permission_epoch; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.permission_epoch IS 'A single counter bumped by any permission write.
+COMMENT ON TABLE public.permission_epoch IS 'A shared counter used to invalidate permission caches.
 
-Three processes each hold their own rule-set cache, so a grant issued in the
-API has to become visible in the bot. A trigger bumps this row and sends
-`NOTIFY squid_permissions`; watchers treat the notification as a latency hint
-and poll this counter as the durable signal.';
+Database triggers increment the counter and send `NOTIFY squid_permissions`
+after permission changes. Watchers poll the counter and use notifications
+to refresh sooner.';
 
 
 --
@@ -3019,9 +3308,7 @@ COMMENT ON TABLE public.permission_grants IS 'A direct allow, deny or forbid att
 -- Name: COLUMN permission_grants.granted_by_account_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.permission_grants.granted_by_account_id IS 'Who issued this, or NULL when the system did: a migration backfill or the
-owner recovery CLI has no human grantor, and inventing one would put a
-fictional account into the audit trail.';
+COMMENT ON COLUMN public.permission_grants.granted_by_account_id IS 'Account that issued the grant, or None for a system operation.';
 
 
 --
@@ -3042,9 +3329,7 @@ COMMENT ON COLUMN public.permission_grants.subject_guild_id IS 'The guild the su
 -- Name: COLUMN permission_grants.scope_guild_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.permission_grants.scope_guild_id IS 'Where the rule applies, or NULL for everywhere. A guild-scoped rule can
-never satisfy a global node; the resolver checks that against the node''s
-declared scope, so nodes added later are safe under old grants.';
+COMMENT ON COLUMN public.permission_grants.scope_guild_id IS 'Guild where the grant applies, or None for all guilds. Guild-scoped grants cannot satisfy global nodes.';
 
 
 --
@@ -3093,7 +3378,7 @@ COMMENT ON TABLE public.permission_role_assignments IS 'A role held by an accoun
 -- Name: COLUMN permission_role_assignments.granted_by_account_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.permission_role_assignments.granted_by_account_id IS 'Who issued this, or NULL when the system did. See `PermissionGrant`.';
+COMMENT ON COLUMN public.permission_role_assignments.granted_by_account_id IS 'Account that issued the assignment, or None for a system operation.';
 
 
 --
@@ -3148,12 +3433,10 @@ CREATE TABLE public.permission_role_patterns (
 -- Name: TABLE permission_role_patterns; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.permission_role_patterns IS 'One pattern a role includes or subtracts.
+COMMENT ON TABLE public.permission_role_patterns IS 'One included or excluded pattern in a role.
 
-Subtraction is not a deny: it withholds the pattern from *this* role''s
-contribution, and any other role including it still confers it. That is
-Azure''s `NotActions` semantics, and it is why a role can be written as "this
-namespace, minus its destructive members" without poisoning other grants.';
+Exclusions remove matching nodes from this role''s contribution without denying
+those nodes when another role or direct rule grants them.';
 
 
 --
@@ -3167,8 +3450,7 @@ COMMENT ON COLUMN public.permission_role_patterns.pattern IS 'A node name, a `*`
 -- Name: COLUMN permission_role_patterns.mode; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.permission_role_patterns.mode IS '1 to include, -1 to subtract. One mode per pattern, so a role cannot
-contradict itself.';
+COMMENT ON COLUMN public.permission_role_patterns.mode IS '1 to include or -1 to exclude; a role stores one mode for each pattern.';
 
 
 --
@@ -3195,11 +3477,10 @@ CREATE TABLE public.permission_roles (
 -- Name: TABLE permission_roles; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.permission_roles IS 'A named bundle of permission patterns.
+COMMENT ON TABLE public.permission_roles IS 'A named bundle of permission patterns and management settings.
 
-Built-in roles keep their pattern lists in code, so this row exists only to
-give assignments a foreign key; any `permission_role_patterns` rows attached
-to a built-in are additive overrides on top of the code-defined list.';
+Built-in pattern lists live in code. Stored patterns supplement those lists,
+while this row supplies the assignment target, rank, and display metadata.';
 
 
 --
@@ -3234,9 +3515,7 @@ COMMENT ON COLUMN public.permission_roles.builtin_key IS 'Identifies a role whos
 -- Name: COLUMN permission_roles.rank; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.permission_roles.rank IS 'Management hierarchy only: who may edit whom. Deliberately absent from
-permission resolution, so reordering roles can never change an authorization
-outcome. Enforced by property P10.';
+COMMENT ON COLUMN public.permission_roles.rank IS 'Management rank used to decide who may edit the role. It does not affect permission resolution.';
 
 
 --
@@ -3279,37 +3558,12 @@ COMMENT ON TABLE public.public_creator_redirects IS 'Permanent redirect from a m
 
 
 --
--- Name: record_competitions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.record_competitions (
-    public_id uuid DEFAULT gen_random_uuid() NOT NULL,
-    record_class text NOT NULL,
-    build_kind text NOT NULL,
-    version_scope text NOT NULL,
-    version_id smallint,
-    category_key text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT record_competitions_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
-    CONSTRAINT record_competitions_record_class_check CHECK ((record_class = ANY (ARRAY['first'::text, 'fastest'::text, 'smallest'::text, 'fastest_smallest'::text, 'smallest_fastest'::text]))),
-    CONSTRAINT record_competitions_version_scope_check CHECK ((version_scope = ANY (ARRAY['all_time'::text, 'current'::text])))
-);
-
-
---
--- Name: TABLE record_competitions; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.record_competitions IS 'A stable public identity for a logical record competition across rulesets.';
-
-
---
 -- Name: record_computation_runs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.record_computation_runs (
     id bigint NOT NULL,
-    ruleset_id bigint NOT NULL,
+    rules_revision_id bigint NOT NULL,
     build_kind text NOT NULL,
     version_id smallint,
     status text DEFAULT 'running'::text NOT NULL,
@@ -3326,7 +3580,7 @@ CREATE TABLE public.record_computation_runs (
 -- Name: TABLE record_computation_runs; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.record_computation_runs IS 'An immutable attempt to calculate records for one build and version scope.';
+COMMENT ON TABLE public.record_computation_runs IS 'A computation attempt for one build kind and version, including its publication state.';
 
 
 --
@@ -3335,110 +3589,6 @@ COMMENT ON TABLE public.record_computation_runs IS 'An immutable attempt to calc
 
 ALTER TABLE public.record_computation_runs ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
     SEQUENCE NAME public.record_computation_runs_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
--- Name: record_definition_facets; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.record_definition_facets (
-    definition_id bigint NOT NULL,
-    facet_kind text NOT NULL,
-    facet_id integer NOT NULL,
-    display_order smallint DEFAULT 0 NOT NULL,
-    CONSTRAINT record_definition_facets_kind_check CHECK ((facet_kind = ANY (ARRAY['restriction'::text, 'type'::text, 'pattern'::text, 'category'::text])))
-);
-
-
---
--- Name: TABLE record_definition_facets; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.record_definition_facets IS 'A canonical taxonomy facet belonging to a record definition.';
-
-
---
--- Name: record_definitions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.record_definitions (
-    id bigint NOT NULL,
-    ruleset_id bigint NOT NULL,
-    record_class text NOT NULL,
-    build_kind text NOT NULL,
-    version_scope text NOT NULL,
-    version_id smallint,
-    category_key text NOT NULL,
-    materialization_source text DEFAULT 'eager'::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    title text NOT NULL,
-    subtitle text,
-    title_diagnostics jsonb DEFAULT '[]'::jsonb NOT NULL,
-    competition_id uuid NOT NULL,
-    CONSTRAINT record_definitions_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
-    CONSTRAINT record_definitions_materialization_source_check CHECK ((materialization_source = ANY (ARRAY['eager'::text, 'seeded'::text, 'public_lookup'::text]))),
-    CONSTRAINT record_definitions_record_class_check CHECK ((record_class = ANY (ARRAY['first'::text, 'fastest'::text, 'smallest'::text, 'fastest_smallest'::text, 'smallest_fastest'::text]))),
-    CONSTRAINT record_definitions_version_scope_check CHECK ((version_scope = ANY (ARRAY['all_time'::text, 'current'::text])))
-);
-
-
---
--- Name: TABLE record_definitions; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.record_definitions IS 'A ruleset-specific definition of one stable record competition.';
-
-
---
--- Name: record_definitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.record_definitions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME public.record_definitions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
--- Name: record_holder_history; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.record_holder_history (
-    id bigint NOT NULL,
-    run_id bigint NOT NULL,
-    definition_id bigint NOT NULL,
-    build_id bigint NOT NULL,
-    predecessor_id bigint,
-    held_from timestamp with time zone NOT NULL,
-    held_until timestamp with time zone,
-    metric_snapshot jsonb NOT NULL,
-    CONSTRAINT record_holder_history_interval_check CHECK (((held_until IS NULL) OR (held_until >= held_from)))
-);
-
-
---
--- Name: TABLE record_holder_history; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.record_holder_history IS 'A reconstructed interval in a definition''s beaten-record chronology.';
-
-
---
--- Name: record_holder_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.record_holder_history ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME public.record_holder_history_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -3459,11 +3609,13 @@ CREATE TABLE public.record_recompute_queue (
     reasons jsonb DEFAULT '[]'::jsonb NOT NULL,
     enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
-    locked_at timestamp with time zone,
+    claimed_at timestamp with time zone,
     last_error text,
     available_at timestamp with time zone DEFAULT now() NOT NULL,
     claim_token uuid,
-    CONSTRAINT record_recompute_queue_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text])))
+    CONSTRAINT record_recompute_queue_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT record_recompute_queue_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
+    CONSTRAINT record_recompute_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL)))
 );
 
 
@@ -3478,17 +3630,17 @@ COMMENT ON TABLE public.record_recompute_queue IS 'A durable request to recomput
 -- Name: COLUMN record_recompute_queue.available_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.record_recompute_queue.available_at IS 'When this row next becomes claimable, and the only column backoff writes.';
+COMMENT ON COLUMN public.record_recompute_queue.available_at IS 'Earliest next claim time; retry backoff advances it without changing the enqueue time.';
 
 
 --
 -- Name: COLUMN record_recompute_queue.claim_token; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.record_recompute_queue.claim_token IS 'The database-minted fencing token handed to the worker that leased this scope.
+COMMENT ON COLUMN public.record_recompute_queue.claim_token IS 'Token identifying the current claim, cleared when new work replaces it.
 
-Scopes are leased in batches and acknowledged as a set, so the token is what
-tells a finishing worker''s acknowledgement from work enqueued during its run.';
+Completion and failure updates match this token to preserve work enqueued
+or reclaimed after the worker started.';
 
 
 --
@@ -3506,71 +3658,35 @@ ALTER TABLE public.record_recompute_queue ALTER COLUMN id ADD GENERATED BY DEFAU
 
 
 --
--- Name: record_result_holders; Type: TABLE; Schema: public; Owner: -
+-- Name: record_titles; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.record_result_holders (
-    result_id bigint NOT NULL,
-    build_id bigint NOT NULL,
-    rank smallint DEFAULT 1 NOT NULL,
-    metric_snapshot jsonb NOT NULL,
-    title text NOT NULL,
-    subtitle text,
-    completion_at timestamp with time zone,
-    CONSTRAINT record_result_holders_rank_check CHECK ((rank > 0))
+CREATE TABLE public.record_titles (
+    public_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    base_title text NOT NULL,
+    build_kind text NOT NULL,
+    version_scope text NOT NULL,
+    version_id smallint,
+    category_key text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT record_titles_base_title_check CHECK ((base_title = ANY (ARRAY['first'::text, 'fastest'::text, 'smallest'::text, 'fastest_smallest'::text, 'smallest_fastest'::text]))),
+    CONSTRAINT record_titles_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
+    CONSTRAINT record_titles_version_scope_check CHECK ((version_scope = ANY (ARRAY['all_time'::text, 'up_to_date'::text])))
 );
 
 
 --
--- Name: TABLE record_result_holders; Type: COMMENT; Schema: public; Owner: -
+-- Name: TABLE record_titles; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.record_result_holders IS 'A co-holder of a resolved computed record.';
-
-
---
--- Name: record_results; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.record_results (
-    id bigint NOT NULL,
-    run_id bigint NOT NULL,
-    definition_id bigint NOT NULL,
-    status text NOT NULL,
-    gap_reasons jsonb DEFAULT '{}'::jsonb NOT NULL,
-    provisional_build_id bigint,
-    history_complete boolean DEFAULT true NOT NULL,
-    computed_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT record_results_status_check CHECK ((status = ANY (ARRAY['resolved'::text, 'unresolved'::text, 'no_candidate'::text])))
-);
+COMMENT ON TABLE public.record_titles IS 'A stable public identity for a record title across rules revisions.';
 
 
 --
--- Name: TABLE record_results; Type: COMMENT; Schema: public; Owner: -
+-- Name: rules_revisions; Type: TABLE; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.record_results IS 'The outcome for one definition in a computation run.';
-
-
---
--- Name: record_results_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.record_results ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME public.record_results_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
--- Name: record_rulesets; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.record_rulesets (
+CREATE TABLE public.rules_revisions (
     id bigint NOT NULL,
     document_hash text NOT NULL,
     calculator_version text NOT NULL,
@@ -3581,18 +3697,18 @@ CREATE TABLE public.record_rulesets (
 
 
 --
--- Name: TABLE record_rulesets; Type: COMMENT; Schema: public; Owner: -
+-- Name: TABLE rules_revisions; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.record_rulesets IS 'An immutable version of the record calculators and title formatters.';
+COMMENT ON TABLE public.rules_revisions IS 'Calculator and formatter versions with a mutable activation timestamp.';
 
 
 --
--- Name: record_rulesets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: rules_revisions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-ALTER TABLE public.record_rulesets ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME public.record_rulesets_id_seq
+ALTER TABLE public.rules_revisions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.rules_revisions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -3611,6 +3727,7 @@ CREATE TABLE public.schematic_files (
     source_format text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     object_key text NOT NULL,
+    CONSTRAINT schematic_files_object_key_check CHECK ((object_key = ((('schematics/'::text || "left"(sha256, 2)) || '/'::text) || sha256))),
     CONSTRAINT schematic_files_size_bounded CHECK (((byte_size > 0) AND (byte_size <= 16777216)))
 );
 
@@ -3665,6 +3782,9 @@ CREATE TABLE public.schematic_jobs (
     error_context jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     claim_token uuid,
+    result_object_keys text[] DEFAULT '{}'::text[] NOT NULL,
+    CONSTRAINT schematic_jobs_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT schematic_jobs_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL))),
     CONSTRAINT schematic_jobs_operation_check CHECK ((operation = ANY (ARRAY['capabilities'::text, 'analyze'::text, 'convert'::text, 'compare'::text, 'render'::text, 'simulate'::text, 'autostack'::text]))),
     CONSTRAINT schematic_jobs_single_terminal_state CHECK (((completed_at IS NULL) OR (dead_at IS NULL)))
 );
@@ -3674,14 +3794,24 @@ CREATE TABLE public.schematic_jobs (
 -- Name: TABLE schematic_jobs; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.schematic_jobs IS 'A durable request for the worker-owned native schematic engine.';
+COMMENT ON TABLE public.schematic_jobs IS 'A durable native-engine request whose result remains available until retention expires.
+
+Claim tokens reject stale worker updates. Binary output objects are retained alongside the row
+for cleanup; input objects can be shared by multiple jobs.';
 
 
 --
 -- Name: COLUMN schematic_jobs.claim_token; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.schematic_jobs.claim_token IS 'The database-minted fencing token handed to the worker that claimed this row.';
+COMMENT ON COLUMN public.schematic_jobs.claim_token IS 'Token that must still match when the claiming worker records its outcome.';
+
+
+--
+-- Name: COLUMN schematic_jobs.result_object_keys; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.schematic_jobs.result_object_keys IS 'Result objects registered by worker claims, retained until job expiry.';
 
 
 --
@@ -3714,9 +3844,33 @@ CREATE TABLE public.schematic_preview_objects (
     ready_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    cleanup_claimed_at timestamp with time zone,
+    cleanup_claim_token uuid,
+    CONSTRAINT schematic_preview_objects_cleanup_claim_pair CHECK (((cleanup_claimed_at IS NULL) = (cleanup_claim_token IS NULL))),
     CONSTRAINT schematic_preview_objects_sha256_check CHECK (((sha256 IS NULL) OR (sha256 ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT schematic_preview_objects_size_positive CHECK ((byte_size > 0))
 );
+
+
+--
+-- Name: TABLE schematic_preview_objects; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.schematic_preview_objects IS 'Durable upload and cleanup state for one generated preview object.';
+
+
+--
+-- Name: COLUMN schematic_preview_objects.cleanup_claimed_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.schematic_preview_objects.cleanup_claimed_at IS 'When cleanup reserved this unreferenced object for deletion.';
+
+
+--
+-- Name: COLUMN schematic_preview_objects.cleanup_claim_token; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.schematic_preview_objects.cleanup_claim_token IS 'Token required to finish cleanup; its presence prevents reuse or publication.';
 
 
 --
@@ -3731,7 +3885,9 @@ CREATE TABLE public.schematic_render_queue (
     attempts integer DEFAULT 0 NOT NULL,
     last_error text,
     available_at timestamp with time zone DEFAULT now() NOT NULL,
-    claim_token uuid
+    claim_token uuid,
+    CONSTRAINT schematic_render_queue_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT schematic_render_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL)))
 );
 
 
@@ -3746,14 +3902,14 @@ COMMENT ON TABLE public.schematic_render_queue IS 'A durable request to render a
 -- Name: COLUMN schematic_render_queue.available_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.schematic_render_queue.available_at IS 'When this row next becomes claimable, and the only column backoff writes.';
+COMMENT ON COLUMN public.schematic_render_queue.available_at IS 'Earliest time a worker may claim this job, including retry backoff.';
 
 
 --
 -- Name: COLUMN schematic_render_queue.claim_token; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.schematic_render_queue.claim_token IS 'The database-minted fencing token handed to the worker that claimed this row.';
+COMMENT ON COLUMN public.schematic_render_queue.claim_token IS 'Token that must still match when the claiming worker records its outcome.';
 
 
 --
@@ -3785,7 +3941,7 @@ COMMENT ON TABLE public.schematic_renders IS 'A replaceable preview artifact key
 -- Name: COLUMN schematic_renders.recipe_hash; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.schematic_renders.recipe_hash IS 'SHA-256 of the pack, camera recipe, output dimensions, and analyzer version.';
+COMMENT ON COLUMN public.schematic_renders.recipe_hash IS 'Hash of the source and pack digests, framing, schematic dimensions, and analyzer version.';
 
 
 --
@@ -3901,11 +4057,13 @@ CREATE TABLE public.search_embedding_queue (
     source_hash text NOT NULL,
     enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
-    locked_at timestamp with time zone,
+    claimed_at timestamp with time zone,
     last_error text,
     dead_at timestamp with time zone,
     available_at timestamp with time zone DEFAULT now() NOT NULL,
-    claim_token uuid
+    claim_token uuid,
+    CONSTRAINT search_embedding_queue_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT search_embedding_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL)))
 );
 
 
@@ -3920,14 +4078,14 @@ COMMENT ON TABLE public.search_embedding_queue IS 'A durable request to embed a 
 -- Name: COLUMN search_embedding_queue.available_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.search_embedding_queue.available_at IS 'When this row next becomes claimable, and the only column backoff writes.';
+COMMENT ON COLUMN public.search_embedding_queue.available_at IS 'Earliest time a worker may claim this item; retries move it into the future.';
 
 
 --
 -- Name: COLUMN search_embedding_queue.claim_token; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.search_embedding_queue.claim_token IS 'The database-minted fencing token handed to the worker that claimed this row.';
+COMMENT ON COLUMN public.search_embedding_queue.claim_token IS 'Token generated for the current claim; stale workers cannot acknowledge a newer claim.';
 
 
 --
@@ -3941,12 +4099,14 @@ CREATE TABLE public.search_projection_queue (
     action text DEFAULT 'upsert'::text NOT NULL,
     enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
-    locked_at timestamp with time zone,
+    claimed_at timestamp with time zone,
     last_error text,
     dead_at timestamp with time zone,
     available_at timestamp with time zone DEFAULT now() NOT NULL,
     claim_token uuid,
-    CONSTRAINT search_projection_queue_action_check CHECK ((action = ANY (ARRAY['upsert'::text, 'delete'::text])))
+    CONSTRAINT search_projection_queue_action_check CHECK ((action = ANY (ARRAY['upsert'::text, 'delete'::text]))),
+    CONSTRAINT search_projection_queue_attempts_nonnegative CHECK ((attempts >= 0)),
+    CONSTRAINT search_projection_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL)))
 );
 
 
@@ -3961,14 +4121,14 @@ COMMENT ON TABLE public.search_projection_queue IS 'A durable request to refresh
 -- Name: COLUMN search_projection_queue.available_at; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.search_projection_queue.available_at IS 'When this row next becomes claimable, and the only column backoff writes.';
+COMMENT ON COLUMN public.search_projection_queue.available_at IS 'Earliest time a worker may claim this item; retries move it into the future.';
 
 
 --
 -- Name: COLUMN search_projection_queue.claim_token; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.search_projection_queue.claim_token IS 'The database-minted fencing token handed to the worker that claimed this row.';
+COMMENT ON COLUMN public.search_projection_queue.claim_token IS 'Token generated for the current claim; stale workers cannot acknowledge a newer claim.';
 
 
 --
@@ -4058,7 +4218,7 @@ CREATE TABLE public.starboard_entries (
 -- Name: TABLE starboard_entries; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.starboard_entries IS 'The materialized-post state for one source message on one starboard.';
+COMMENT ON TABLE public.starboard_entries IS 'Current vote totals and rendering bookkeeping for one source message on one starboard.';
 
 
 --
@@ -4123,6 +4283,13 @@ CREATE TABLE public.starboard_sources (
 --
 
 COMMENT ON TABLE public.starboard_sources IS 'A guild or channel whose messages feed a starboard.';
+
+
+--
+-- Name: COLUMN starboard_sources.channel_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.starboard_sources.channel_id IS 'Source channel ID, or zero to include every channel in the source guild.';
 
 
 --
@@ -4194,6 +4361,34 @@ COMMENT ON TABLE public.starboards IS 'A named weighted-message board owned by o
 
 
 --
+-- Name: COLUMN starboards.required; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.starboards.required IS 'Score at or above which an unposted entry qualifies for publication.';
+
+
+--
+-- Name: COLUMN starboards.required_remove; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.starboards.required_remove IS 'Score at or below which an existing entry no longer qualifies for publication.';
+
+
+--
+-- Name: COLUMN starboards.allow_bots; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.starboards.allow_bots IS 'Whether messages authored by bots may qualify; this does not authorize bot voters.';
+
+
+--
+-- Name: COLUMN starboards.max_age_seconds; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.starboards.max_age_seconds IS 'Maximum source-message age in seconds; zero disables the upper age limit.';
+
+
+--
 -- Name: starboards_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -4225,7 +4420,7 @@ CREATE TABLE public.submission_draft_access (
 -- Name: TABLE submission_draft_access; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.submission_draft_access IS 'An account''s role on a draft; v1 creates exactly one owner grant.';
+COMMENT ON TABLE public.submission_draft_access IS 'An account''s role on a draft; creation grants one account the owner role.';
 
 
 --
@@ -4284,6 +4479,26 @@ ALTER TABLE public.submission_draft_changes ALTER COLUMN id ADD GENERATED BY DEF
 
 
 --
+-- Name: submission_draft_schematics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submission_draft_schematics (
+    draft_id uuid NOT NULL,
+    source_id uuid NOT NULL,
+    is_primary boolean DEFAULT false NOT NULL,
+    discarded boolean DEFAULT false NOT NULL,
+    CONSTRAINT submission_draft_schematics_discarded_primary_check CHECK (((NOT discarded) OR (NOT is_primary)))
+);
+
+
+--
+-- Name: TABLE submission_draft_schematics; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.submission_draft_schematics IS 'One draft''s retained schematic reference and explicit primary selection.';
+
+
+--
 -- Name: submission_drafts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4301,9 +4516,19 @@ CREATE TABLE public.submission_drafts (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     expires_at timestamp with time zone NOT NULL,
     source_installation_id uuid,
+    preparation_issues jsonb DEFAULT '[]'::jsonb NOT NULL,
+    preparation_retry_at timestamp with time zone,
+    inferred boolean DEFAULT false NOT NULL,
+    submission_actor_account_id integer,
+    source_issues jsonb DEFAULT '[]'::jsonb NOT NULL,
+    source_files jsonb DEFAULT '[]'::jsonb NOT NULL,
+    source_messages jsonb DEFAULT '[]'::jsonb NOT NULL,
+    inference_run_id uuid,
     CONSTRAINT submission_drafts_expiry_after_creation CHECK ((expires_at > created_at)),
+    CONSTRAINT submission_drafts_inference_origin_check CHECK (((NOT inferred) OR (origin = 'discord'::text))),
     CONSTRAINT submission_drafts_installation_requires_paper CHECK (((source_installation_id IS NULL) OR (origin = 'paper'::text))),
     CONSTRAINT submission_drafts_origin_check CHECK ((origin = ANY (ARRAY['discord'::text, 'web'::text, 'cli'::text, 'paper'::text, 'fabric'::text]))),
+    CONSTRAINT submission_drafts_preparation_issues_array CHECK ((jsonb_typeof(preparation_issues) = 'array'::text)),
     CONSTRAINT submission_drafts_revision_nonnegative CHECK ((revision >= 0)),
     CONSTRAINT submission_drafts_schema_revision_positive CHECK ((schema_revision > 0)),
     CONSTRAINT submission_drafts_status_check CHECK ((status = ANY (ARRAY['editing'::text, 'processing'::text, 'needs_attention'::text, 'submitted'::text, 'expired'::text])))
@@ -4322,6 +4547,27 @@ COMMENT ON TABLE public.submission_drafts IS 'The compact current state of an ac
 --
 
 COMMENT ON COLUMN public.submission_drafts.source_installation_id IS 'Server-derived Paper installation retained independently of credential generations.';
+
+
+--
+-- Name: submission_finalization_inputs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submission_finalization_inputs (
+    job_id uuid NOT NULL,
+    payload jsonb NOT NULL,
+    payload_sha256 text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT submission_finalization_inputs_payload_object_check CHECK ((jsonb_typeof(payload) = 'object'::text)),
+    CONSTRAINT submission_finalization_inputs_payload_sha256_check CHECK ((payload_sha256 ~ '^[0-9a-f]{64}$'::text))
+);
+
+
+--
+-- Name: TABLE submission_finalization_inputs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.submission_finalization_inputs IS 'Original normalized input retained independently of mutable execution state.';
 
 
 --
@@ -4347,6 +4593,9 @@ CREATE TABLE public.submission_finalization_jobs (
     attention_issues jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    attempt_number integer DEFAULT 1 NOT NULL,
+    requested_by_account_id integer,
+    CONSTRAINT submission_finalization_jobs_attempt_number_positive CHECK ((attempt_number > 0)),
     CONSTRAINT submission_finalization_jobs_attempts_nonnegative CHECK ((attempts >= 0)),
     CONSTRAINT submission_finalization_jobs_legacy_sponsor_forbidden CHECK (((payload IS NULL) OR (NOT (((payload ->> 'payload_schema'::text) = '2'::text) AND ((payload ->> 'sponsor_attribution'::text) = 'true'::text))))),
     CONSTRAINT submission_finalization_jobs_payload_sha256_check CHECK (((payload_sha256 IS NULL) OR (payload_sha256 ~ '^[0-9a-f]{64}$'::text))),
@@ -4360,7 +4609,7 @@ CREATE TABLE public.submission_finalization_jobs (
 -- Name: TABLE submission_finalization_jobs; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.submission_finalization_jobs IS 'A retained source-draft job with UUID-fenced worker claims.';
+COMMENT ON TABLE public.submission_finalization_jobs IS 'A finalization attempt retained with its current worker claim and retry count.';
 
 
 --
@@ -4382,7 +4631,131 @@ CREATE TABLE public.submission_finalization_results (
 -- Name: TABLE submission_finalization_results; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.submission_finalization_results IS 'Immutable build identity and target provenance retained after success.';
+COMMENT ON TABLE public.submission_finalization_results IS 'Immutable build identity retained after successful finalization.';
+
+
+--
+-- Name: submission_inference_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submission_inference_runs (
+    id uuid NOT NULL,
+    owner_account_id integer NOT NULL,
+    inputs jsonb NOT NULL,
+    state text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    claim_token uuid,
+    claim_expires_at timestamp with time zone,
+    candidates jsonb NOT NULL,
+    CONSTRAINT submission_inference_runs_state_check CHECK ((state = ANY (ARRAY['processing'::text, 'failed'::text, 'completed'::text])))
+);
+
+
+--
+-- Name: TABLE submission_inference_runs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.submission_inference_runs IS 'Private inference inputs, candidate results, and the current expiring worker claim.';
+
+
+--
+-- Name: submission_receipt_media; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submission_receipt_media (
+    job_id uuid NOT NULL,
+    upload_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE submission_receipt_media; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.submission_receipt_media IS 'Normalized uploads retained by a committed submission receipt.';
+
+
+--
+-- Name: submission_revision_proposals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submission_revision_proposals (
+    id uuid NOT NULL,
+    run_id uuid NOT NULL,
+    owner_account_id integer NOT NULL,
+    requested_by_account_id integer NOT NULL,
+    source_message_id bigint NOT NULL,
+    facts jsonb NOT NULL,
+    build_id integer,
+    expected_revision integer,
+    before jsonb NOT NULL,
+    after jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    approved_by_account_id integer,
+    applied_revision integer,
+    CONSTRAINT submission_revision_proposals_receipt_check CHECK (((approved_by_account_id IS NULL) = (applied_revision IS NULL))),
+    CONSTRAINT submission_revision_proposals_revision_check CHECK (((expected_revision IS NULL) OR (expected_revision >= 0))),
+    CONSTRAINT submission_revision_proposals_target_check CHECK (((build_id IS NULL) = (expected_revision IS NULL)))
+);
+
+
+--
+-- Name: TABLE submission_revision_proposals; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.submission_revision_proposals IS 'A retained inference candidate, review snapshot, and atomic build revision receipt.';
+
+
+--
+-- Name: submission_schematic_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submission_schematic_sources (
+    id uuid NOT NULL,
+    owner_account_id integer NOT NULL,
+    uploaded_by_account_id integer NOT NULL,
+    filename text NOT NULL,
+    sha256 text,
+    byte_size bigint,
+    state text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT submission_schematic_sources_sha_check CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT submission_schematic_sources_size_check CHECK (((byte_size IS NULL) OR ((byte_size > 0) AND (byte_size <= 16777216)))),
+    CONSTRAINT submission_schematic_sources_state_check CHECK ((state = ANY (ARRAY['uploading'::text, 'waiting_sanitizer'::text, 'failed'::text, 'deleting'::text, 'deleted'::text]))),
+    CONSTRAINT submission_schematic_sources_uploaded_check CHECK (((state <> 'waiting_sanitizer'::text) OR ((sha256 IS NOT NULL) AND (byte_size IS NOT NULL))))
+);
+
+
+--
+-- Name: TABLE submission_schematic_sources; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.submission_schematic_sources IS 'Private source bytes tracked before upload and retained until reference-safe deletion.';
+
+
+--
+-- Name: submission_supplied_attachments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.submission_supplied_attachments (
+    draft_id uuid NOT NULL,
+    source_id uuid NOT NULL,
+    filename text NOT NULL,
+    kind text NOT NULL,
+    status text NOT NULL,
+    CONSTRAINT submission_supplied_attachments_kind_check CHECK ((kind = ANY (ARRAY['schematic'::text, 'image'::text, 'video'::text, 'unknown'::text]))),
+    CONSTRAINT submission_supplied_attachments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'discarded'::text])))
+);
+
+
+--
+-- Name: TABLE submission_supplied_attachments; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.submission_supplied_attachments IS 'A supplied file retained before download and resolved only by registration or explicit discard.';
 
 
 --
@@ -4563,6 +4936,163 @@ COMMENT ON TABLE public.tag_units IS 'A unit accepted by numeric tag inputs.';
 
 
 --
+-- Name: title_definition_facets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.title_definition_facets (
+    definition_id bigint NOT NULL,
+    facet_kind text NOT NULL,
+    facet_id bigint NOT NULL,
+    display_order smallint DEFAULT 0 NOT NULL,
+    CONSTRAINT title_definition_facets_kind_check CHECK ((facet_kind = 'restriction'::text))
+);
+
+
+--
+-- Name: TABLE title_definition_facets; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.title_definition_facets IS 'A canonical taxonomy facet belonging to a record definition.';
+
+
+--
+-- Name: title_definitions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.title_definitions (
+    id bigint NOT NULL,
+    rules_revision_id bigint NOT NULL,
+    materialization_source text DEFAULT 'eager'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    title text NOT NULL,
+    subtitle text,
+    title_diagnostics jsonb DEFAULT '[]'::jsonb NOT NULL,
+    title_id uuid NOT NULL,
+    CONSTRAINT title_definitions_materialization_source_check CHECK ((materialization_source = ANY (ARRAY['eager'::text, 'seeded'::text, 'public_lookup'::text])))
+);
+
+
+--
+-- Name: TABLE title_definitions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.title_definitions IS 'The wording of one stable record title under a rules revision.';
+
+
+--
+-- Name: title_definitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.title_definitions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.title_definitions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: title_holder_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.title_holder_history (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    definition_id bigint NOT NULL,
+    build_id bigint NOT NULL,
+    predecessor_id bigint,
+    held_from timestamp with time zone NOT NULL,
+    held_until timestamp with time zone,
+    metric_snapshot jsonb NOT NULL,
+    CONSTRAINT title_holder_history_interval_check CHECK (((held_until IS NULL) OR (held_until >= held_from)))
+);
+
+
+--
+-- Name: TABLE title_holder_history; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.title_holder_history IS 'A reconstructed interval in a definition''s beaten-record chronology.';
+
+
+--
+-- Name: title_holder_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.title_holder_history ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.title_holder_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: title_holders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.title_holders (
+    result_id bigint NOT NULL,
+    build_id bigint NOT NULL,
+    rank smallint DEFAULT 1 NOT NULL,
+    metric_snapshot jsonb NOT NULL,
+    title text NOT NULL,
+    subtitle text,
+    completion_at timestamp with time zone,
+    CONSTRAINT title_holders_rank_check CHECK ((rank > 0))
+);
+
+
+--
+-- Name: TABLE title_holders; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.title_holders IS 'A co-holder of a resolved computed record.';
+
+
+--
+-- Name: title_results; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.title_results (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    definition_id bigint NOT NULL,
+    status text NOT NULL,
+    gap_reasons jsonb DEFAULT '{}'::jsonb NOT NULL,
+    provisional_build_id bigint,
+    history_complete boolean DEFAULT true NOT NULL,
+    computed_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT title_results_status_check CHECK ((status = ANY (ARRAY['resolved'::text, 'unresolved'::text, 'no_candidate'::text])))
+);
+
+
+--
+-- Name: TABLE title_results; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.title_results IS 'The outcome for one definition in a computation run.';
+
+
+--
+-- Name: title_results_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.title_results ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.title_results_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: utilities; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4597,14 +5127,7 @@ CREATE TABLE public.verification_attempts (
 -- Name: TABLE verification_attempts; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.verification_attempts IS 'Consecutive failed code redemptions for one external identity.
-
-Keyed on `(provider, subject)` rather than on an account, because the guesser may not have an
-account yet: a redemption is the first thing many callers ever do, and creating a row for
-someone in order to rate-limit them would defeat the point. No foreign key for the same reason.
-
-The counter is *consecutive*: a success clears it, so an honest user who mistypes twice and then
-gets it right is never closer to a lockout than someone who never failed.';
+COMMENT ON TABLE public.verification_attempts IS 'Consecutive failed code redemptions for an external identity. A successful redemption resets the count.';
 
 
 --
@@ -4612,7 +5135,7 @@ gets it right is never closer to a lockout than someone who never failed.';
 --
 
 CREATE TABLE public.verification_codes (
-    id smallint NOT NULL,
+    id bigint NOT NULL,
     minecraft_uuid uuid NOT NULL,
     code text NOT NULL,
     created timestamp with time zone DEFAULT now() NOT NULL,
@@ -4636,21 +5159,14 @@ COMMENT ON TABLE public.verification_codes IS 'A verification code for linking J
 -- Name: COLUMN verification_codes.reserved_token; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.verification_codes.reserved_token IS 'Digest of the token held by whoever is currently being shown this code''s consent prompt.
-
-A digest rather than the token, for the same reason `code` is one. Deliberately says nothing
-about *who* reserved it: the prompt runs before an account exists, and the notice promises that
-cancelling stores no account information, so a reservation identifies nobody.';
+COMMENT ON COLUMN public.verification_codes.reserved_token IS 'Digest of the token holding this code while its consent prompt is open.';
 
 
 --
 -- Name: COLUMN verification_codes.reserved_until; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.verification_codes.reserved_until IS 'When the hold lapses, freeing the code without anything having to reap it.
-
-A crashed process therefore costs one prompt''s worth of delay rather than a stuck code, and the
-legitimate owner can always mint a fresh one from the game.';
+COMMENT ON COLUMN public.verification_codes.reserved_until IS 'When the reservation expires and the code becomes available again.';
 
 
 --
@@ -4658,7 +5174,6 @@ legitimate owner can always mint a fresh one from the game.';
 --
 
 CREATE SEQUENCE public.verification_codes_id_seq
-    AS smallint
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -4683,7 +5198,9 @@ CREATE TABLE public.versions (
     major_version smallint NOT NULL,
     minor_version smallint NOT NULL,
     patch_number smallint NOT NULL,
-    data_version integer
+    data_version integer,
+    CONSTRAINT versions_edition_check CHECK ((edition = ANY (ARRAY['Java'::text, 'Bedrock'::text]))),
+    CONSTRAINT versions_number_check CHECK (((major_version >= 0) AND (minor_version >= 0) AND (patch_number >= 0)))
 );
 
 
@@ -4698,9 +5215,10 @@ COMMENT ON TABLE public.versions IS 'A version of Minecraft that a build is comp
 -- Name: COLUMN versions.data_version; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.versions.data_version IS 'Minecraft''s own numeric world-format version, needed to retarget a schematic at this
-release. Nullable because Bedrock has no equivalent and Java releases predating the field
-have none either.';
+COMMENT ON COLUMN public.versions.data_version IS 'Minecraft''s world-format number, used when retargeting schematics.
+
+None means no data version is recorded. Bedrock and early Java releases do not
+have one.';
 
 
 --
@@ -4734,8 +5252,9 @@ CREATE TABLE public.vote_session_options (
     multiplier double precision DEFAULT 1.0 NOT NULL,
     "position" smallint NOT NULL,
     identifier text NOT NULL,
-    guild_id bigint DEFAULT 0 NOT NULL,
+    guild_id bigint,
     label text,
+    id bigint NOT NULL,
     CONSTRAINT vote_session_options_choice_check CHECK ((choice = ANY (ARRAY['approve'::text, 'deny'::text, 'generic'::text]))),
     CONSTRAINT vote_session_options_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision))),
     CONSTRAINT vote_session_options_position_check CHECK (("position" >= 0))
@@ -4747,6 +5266,27 @@ CREATE TABLE public.vote_session_options (
 --
 
 COMMENT ON TABLE public.vote_session_options IS 'Ordered reaction options and positive weight multipliers captured for each vote session.';
+
+
+--
+-- Name: COLUMN vote_session_options.guild_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vote_session_options.guild_id IS 'Guild using this emoji alias, or None for an option shared across guilds.';
+
+
+--
+-- Name: vote_session_options_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.vote_session_options ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.vote_session_options_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 
 --
@@ -4781,10 +5321,24 @@ COMMENT ON TABLE public.vote_sessions IS 'A voting session for builds, log delet
 
 
 --
+-- Name: COLUMN vote_sessions.fail_threshold; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vote_sessions.fail_threshold IS 'Negative net score required for denial, or None for a generic poll.';
+
+
+--
+-- Name: COLUMN vote_sessions.pass_threshold; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vote_sessions.pass_threshold IS 'Positive net score required for approval, or None for a generic poll.';
+
+
+--
 -- Name: COLUMN vote_sessions.result; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.vote_sessions.result IS 'The result of the vote session.';
+COMMENT ON COLUMN public.vote_sessions.result IS 'Pending until closure; threshold outcomes are approved or denied, and other closures are cancelled.';
 
 
 --
@@ -4808,10 +5362,9 @@ ALTER TABLE public.vote_sessions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDE
 CREATE TABLE public.votes (
     vote_session_id bigint NOT NULL,
     weight double precision NOT NULL,
-    guild_id bigint DEFAULT 0 NOT NULL,
-    option_id text NOT NULL,
-    emoji text NOT NULL,
+    guild_id bigint,
     account_id integer NOT NULL,
+    option_alias_id bigint NOT NULL,
     CONSTRAINT votes_weight_check CHECK (((weight > (0)::double precision) AND (weight <> 'Infinity'::double precision) AND (weight <> 'NaN'::double precision)))
 );
 
@@ -4820,7 +5373,14 @@ CREATE TABLE public.votes (
 -- Name: TABLE votes; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.votes IS 'A vote cast in a vote session.';
+COMMENT ON TABLE public.votes IS 'One account''s selected option and cached positive weight in a session.';
+
+
+--
+-- Name: COLUMN votes.weight; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.votes.weight IS 'Cached positive magnitude; the option choice determines the sign used in threshold scoring.';
 
 
 --
@@ -4955,6 +5515,14 @@ ALTER TABLE ONLY public.accounts
 
 ALTER TABLE ONLY public.accounts
     ADD CONSTRAINT accounts_public_creator_id_key UNIQUE (public_creator_id);
+
+
+--
+-- Name: alembic_migration_history alembic_migration_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alembic_migration_history
+    ADD CONSTRAINT alembic_migration_history_pkey PRIMARY KEY (id);
 
 
 --
@@ -5342,6 +5910,14 @@ ALTER TABLE ONLY public.media_artifacts
 
 
 --
+-- Name: media_draft_references media_draft_references_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.media_draft_references
+    ADD CONSTRAINT media_draft_references_pkey PRIMARY KEY (draft_id, upload_id);
+
+
+--
 -- Name: media_normalization_jobs media_normalization_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5582,67 +6158,11 @@ ALTER TABLE ONLY public.public_creator_redirects
 
 
 --
--- Name: record_competitions record_competitions_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_competitions
-    ADD CONSTRAINT record_competitions_identity_key UNIQUE NULLS NOT DISTINCT (record_class, build_kind, version_scope, version_id, category_key);
-
-
---
--- Name: record_competitions record_competitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_competitions
-    ADD CONSTRAINT record_competitions_pkey PRIMARY KEY (public_id);
-
-
---
 -- Name: record_computation_runs record_computation_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.record_computation_runs
     ADD CONSTRAINT record_computation_runs_pkey PRIMARY KEY (id);
-
-
---
--- Name: record_definition_facets record_definition_facets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_definition_facets
-    ADD CONSTRAINT record_definition_facets_pkey PRIMARY KEY (definition_id, facet_kind, facet_id);
-
-
---
--- Name: record_definitions record_definitions_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_definitions
-    ADD CONSTRAINT record_definitions_identity_key UNIQUE NULLS NOT DISTINCT (ruleset_id, record_class, build_kind, version_scope, version_id, category_key);
-
-
---
--- Name: record_definitions record_definitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_definitions
-    ADD CONSTRAINT record_definitions_pkey PRIMARY KEY (id);
-
-
---
--- Name: record_holder_history record_holder_history_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_holder_history
-    ADD CONSTRAINT record_holder_history_identity_key UNIQUE (run_id, definition_id, build_id, held_from);
-
-
---
--- Name: record_holder_history record_holder_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_holder_history
-    ADD CONSTRAINT record_holder_history_pkey PRIMARY KEY (id);
 
 
 --
@@ -5662,43 +6182,35 @@ ALTER TABLE ONLY public.record_recompute_queue
 
 
 --
--- Name: record_result_holders record_result_holders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: record_titles record_titles_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.record_result_holders
-    ADD CONSTRAINT record_result_holders_pkey PRIMARY KEY (result_id, build_id);
-
-
---
--- Name: record_results record_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_results
-    ADD CONSTRAINT record_results_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.record_titles
+    ADD CONSTRAINT record_titles_identity_key UNIQUE NULLS NOT DISTINCT (base_title, build_kind, version_scope, version_id, category_key);
 
 
 --
--- Name: record_results record_results_run_definition_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: record_titles record_titles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.record_results
-    ADD CONSTRAINT record_results_run_definition_key UNIQUE (run_id, definition_id);
-
-
---
--- Name: record_rulesets record_rulesets_content_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_rulesets
-    ADD CONSTRAINT record_rulesets_content_key UNIQUE (document_hash, calculator_version, formatter_version);
+ALTER TABLE ONLY public.record_titles
+    ADD CONSTRAINT record_titles_pkey PRIMARY KEY (public_id);
 
 
 --
--- Name: record_rulesets record_rulesets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: rules_revisions rules_revisions_content_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.record_rulesets
-    ADD CONSTRAINT record_rulesets_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.rules_revisions
+    ADD CONSTRAINT rules_revisions_content_key UNIQUE (document_hash, calculator_version, formatter_version);
+
+
+--
+-- Name: rules_revisions rules_revisions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rules_revisions
+    ADD CONSTRAINT rules_revisions_pkey PRIMARY KEY (id);
 
 
 --
@@ -5934,6 +6446,14 @@ ALTER TABLE ONLY public.submission_draft_changes
 
 
 --
+-- Name: submission_draft_schematics submission_draft_schematics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_draft_schematics
+    ADD CONSTRAINT submission_draft_schematics_pkey PRIMARY KEY (draft_id, source_id);
+
+
+--
 -- Name: submission_drafts submission_drafts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5942,11 +6462,19 @@ ALTER TABLE ONLY public.submission_drafts
 
 
 --
--- Name: submission_finalization_jobs submission_finalization_jobs_draft_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: submission_finalization_inputs submission_finalization_inputs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_finalization_inputs
+    ADD CONSTRAINT submission_finalization_inputs_pkey PRIMARY KEY (job_id);
+
+
+--
+-- Name: submission_finalization_jobs submission_finalization_jobs_draft_attempt_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.submission_finalization_jobs
-    ADD CONSTRAINT submission_finalization_jobs_draft_id_key UNIQUE (draft_id);
+    ADD CONSTRAINT submission_finalization_jobs_draft_attempt_key UNIQUE (draft_id, attempt_number);
 
 
 --
@@ -5963,6 +6491,46 @@ ALTER TABLE ONLY public.submission_finalization_jobs
 
 ALTER TABLE ONLY public.submission_finalization_results
     ADD CONSTRAINT submission_finalization_results_pkey PRIMARY KEY (job_id);
+
+
+--
+-- Name: submission_inference_runs submission_inference_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_inference_runs
+    ADD CONSTRAINT submission_inference_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: submission_receipt_media submission_receipt_media_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_receipt_media
+    ADD CONSTRAINT submission_receipt_media_pkey PRIMARY KEY (job_id, upload_id);
+
+
+--
+-- Name: submission_revision_proposals submission_revision_proposals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_revision_proposals
+    ADD CONSTRAINT submission_revision_proposals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: submission_schematic_sources submission_schematic_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_schematic_sources
+    ADD CONSTRAINT submission_schematic_sources_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: submission_supplied_attachments submission_supplied_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_supplied_attachments
+    ADD CONSTRAINT submission_supplied_attachments_pkey PRIMARY KEY (draft_id, source_id);
 
 
 --
@@ -6046,6 +6614,70 @@ ALTER TABLE ONLY public.tag_units
 
 
 --
+-- Name: title_definition_facets title_definition_facets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_definition_facets
+    ADD CONSTRAINT title_definition_facets_pkey PRIMARY KEY (definition_id, facet_kind, facet_id);
+
+
+--
+-- Name: title_definitions title_definitions_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_definitions
+    ADD CONSTRAINT title_definitions_identity_key UNIQUE (rules_revision_id, title_id);
+
+
+--
+-- Name: title_definitions title_definitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_definitions
+    ADD CONSTRAINT title_definitions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: title_holder_history title_holder_history_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holder_history
+    ADD CONSTRAINT title_holder_history_identity_key UNIQUE (run_id, definition_id, build_id, held_from);
+
+
+--
+-- Name: title_holder_history title_holder_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holder_history
+    ADD CONSTRAINT title_holder_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: title_holders title_holders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holders
+    ADD CONSTRAINT title_holders_pkey PRIMARY KEY (result_id, build_id);
+
+
+--
+-- Name: title_results title_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_results
+    ADD CONSTRAINT title_results_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: title_results title_results_run_definition_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_results
+    ADD CONSTRAINT title_results_run_definition_key UNIQUE (run_id, definition_id);
+
+
+--
 -- Name: utilities utilities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6070,6 +6702,14 @@ ALTER TABLE ONLY public.verification_codes
 
 
 --
+-- Name: versions versions_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.versions
+    ADD CONSTRAINT versions_number_key UNIQUE (edition, major_version, minor_version, patch_number);
+
+
+--
 -- Name: versions versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6078,11 +6718,27 @@ ALTER TABLE ONLY public.versions
 
 
 --
+-- Name: vote_session_options vote_session_options_alias_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vote_session_options
+    ADD CONSTRAINT vote_session_options_alias_key UNIQUE NULLS NOT DISTINCT (vote_session_id, guild_id, emoji);
+
+
+--
 -- Name: vote_session_options vote_session_options_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.vote_session_options
-    ADD CONSTRAINT vote_session_options_pkey PRIMARY KEY (vote_session_id, guild_id, emoji);
+    ADD CONSTRAINT vote_session_options_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vote_session_options vote_session_options_session_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vote_session_options
+    ADD CONSTRAINT vote_session_options_session_id_key UNIQUE (vote_session_id, id);
 
 
 --
@@ -6090,7 +6746,7 @@ ALTER TABLE ONLY public.vote_session_options
 --
 
 ALTER TABLE ONLY public.vote_session_options
-    ADD CONSTRAINT vote_session_options_vote_session_id_position_key UNIQUE (vote_session_id, guild_id, "position");
+    ADD CONSTRAINT vote_session_options_vote_session_id_position_key UNIQUE NULLS NOT DISTINCT (vote_session_id, guild_id, "position");
 
 
 --
@@ -6479,14 +7135,7 @@ CREATE INDEX idempotency_requests_expires_at_idx ON public.idempotency_requests 
 -- Name: idx_builds_category; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_builds_category ON public.builds USING btree (category) WHERE (category IS NOT NULL);
-
-
---
--- Name: idx_builds_record_category; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_builds_record_category ON public.builds USING btree (record_category) WHERE (record_category IS NOT NULL);
+CREATE INDEX idx_builds_category ON public.builds USING btree (category);
 
 
 --
@@ -6494,6 +7143,27 @@ CREATE INDEX idx_builds_record_category ON public.builds USING btree (record_cat
 --
 
 CREATE INDEX idx_builds_submission_time ON public.builds USING btree (submission_time DESC);
+
+
+--
+-- Name: ix_submission_drafts_inference_run_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_submission_drafts_inference_run_id ON public.submission_drafts USING btree (inference_run_id);
+
+
+--
+-- Name: ix_submission_inference_runs_expires_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_submission_inference_runs_expires_at ON public.submission_inference_runs USING btree (expires_at);
+
+
+--
+-- Name: ix_submission_inference_runs_owner_account_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_submission_inference_runs_owner_account_id ON public.submission_inference_runs USING btree (owner_account_id);
 
 
 --
@@ -6522,6 +7192,13 @@ CREATE INDEX media_artifacts_object_key_idx ON public.media_artifacts USING btre
 --
 
 CREATE INDEX media_artifacts_sha256_idx ON public.media_artifacts USING btree (sha256);
+
+
+--
+-- Name: media_draft_references_upload_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX media_draft_references_upload_idx ON public.media_draft_references USING btree (upload_id);
 
 
 --
@@ -6655,6 +7332,13 @@ CREATE INDEX notifications_account_inbox_idx ON public.notifications USING btree
 --
 
 CREATE INDEX notifications_created_idx ON public.notifications USING btree (created_at);
+
+
+--
+-- Name: notifications_event_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX notifications_event_idx ON public.notifications USING btree (event_id);
 
 
 --
@@ -6805,34 +7489,6 @@ CREATE INDEX record_computation_runs_started_idx ON public.record_computation_ru
 
 
 --
--- Name: record_definition_facets_lookup_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX record_definition_facets_lookup_idx ON public.record_definition_facets USING btree (facet_kind, facet_id);
-
-
---
--- Name: record_definitions_category_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX record_definitions_category_idx ON public.record_definitions USING btree (build_kind, record_class, category_key);
-
-
---
--- Name: record_holder_history_build_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX record_holder_history_build_idx ON public.record_holder_history USING btree (build_id);
-
-
---
--- Name: record_holder_history_definition_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX record_holder_history_definition_idx ON public.record_holder_history USING btree (definition_id, held_from);
-
-
---
 -- Name: record_recompute_queue_build_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6843,28 +7499,14 @@ CREATE INDEX record_recompute_queue_build_idx ON public.record_recompute_queue U
 -- Name: record_recompute_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX record_recompute_queue_ready_idx ON public.record_recompute_queue USING btree (available_at) WHERE (locked_at IS NULL);
+CREATE INDEX record_recompute_queue_ready_idx ON public.record_recompute_queue USING btree (available_at) WHERE (claimed_at IS NULL);
 
 
 --
--- Name: record_result_holders_build_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: record_titles_category_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX record_result_holders_build_idx ON public.record_result_holders USING btree (build_id);
-
-
---
--- Name: record_results_definition_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX record_results_definition_idx ON public.record_results USING btree (definition_id);
-
-
---
--- Name: record_results_provisional_build_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX record_results_provisional_build_idx ON public.record_results USING btree (provisional_build_id);
+CREATE INDEX record_titles_category_idx ON public.record_titles USING btree (build_kind, base_title, category_key);
 
 
 --
@@ -6983,14 +7625,14 @@ CREATE INDEX search_documents_title_fts_idx ON public.search_documents USING gin
 -- Name: search_embedding_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (available_at) WHERE ((locked_at IS NULL) AND (dead_at IS NULL));
+CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
 
 --
 -- Name: search_projection_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue USING btree (available_at) WHERE ((locked_at IS NULL) AND (dead_at IS NULL));
+CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
 
 --
@@ -7071,10 +7713,38 @@ CREATE INDEX submission_draft_changes_actor_idx ON public.submission_draft_chang
 
 
 --
+-- Name: submission_draft_schematics_one_primary; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX submission_draft_schematics_one_primary ON public.submission_draft_schematics USING btree (draft_id) WHERE is_primary;
+
+
+--
+-- Name: submission_draft_schematics_source_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_draft_schematics_source_idx ON public.submission_draft_schematics USING btree (source_id);
+
+
+--
+-- Name: submission_drafts_actor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_drafts_actor_idx ON public.submission_drafts USING btree (submission_actor_account_id) WHERE (submission_actor_account_id IS NOT NULL);
+
+
+--
 -- Name: submission_drafts_expiry_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX submission_drafts_expiry_idx ON public.submission_drafts USING btree (expires_at) WHERE (status = ANY (ARRAY['editing'::text, 'processing'::text, 'needs_attention'::text]));
+
+
+--
+-- Name: submission_drafts_inferred_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_drafts_inferred_expiry_idx ON public.submission_drafts USING btree (expires_at) WHERE inferred;
 
 
 --
@@ -7085,6 +7755,13 @@ CREATE INDEX submission_drafts_owner_updated_idx ON public.submission_drafts USI
 
 
 --
+-- Name: submission_drafts_preparation_ready_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_drafts_preparation_ready_idx ON public.submission_drafts USING btree (preparation_retry_at) WHERE (preparation_retry_at IS NOT NULL);
+
+
+--
 -- Name: submission_drafts_source_installation_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7092,10 +7769,24 @@ CREATE INDEX submission_drafts_source_installation_idx ON public.submission_draf
 
 
 --
+-- Name: submission_finalization_jobs_actor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_finalization_jobs_actor_idx ON public.submission_finalization_jobs USING btree (requested_by_account_id) WHERE (requested_by_account_id IS NOT NULL);
+
+
+--
 -- Name: submission_finalization_jobs_attention_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX submission_finalization_jobs_attention_idx ON public.submission_finalization_jobs USING btree (attention_at) WHERE (status = 'needs_attention'::text);
+
+
+--
+-- Name: submission_finalization_jobs_one_active_attempt; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX submission_finalization_jobs_one_active_attempt ON public.submission_finalization_jobs USING btree (draft_id) WHERE (status = ANY (ARRAY['pending'::text, 'claimed'::text]));
 
 
 --
@@ -7110,6 +7801,83 @@ CREATE INDEX submission_finalization_jobs_ready_idx ON public.submission_finaliz
 --
 
 CREATE INDEX submission_finalization_results_build_idx ON public.submission_finalization_results USING btree (build_id);
+
+
+--
+-- Name: submission_receipt_media_upload_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_receipt_media_upload_idx ON public.submission_receipt_media USING btree (upload_id);
+
+
+--
+-- Name: submission_revision_proposals_actor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_revision_proposals_actor_idx ON public.submission_revision_proposals USING btree (requested_by_account_id);
+
+
+--
+-- Name: submission_revision_proposals_approver_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_revision_proposals_approver_idx ON public.submission_revision_proposals USING btree (approved_by_account_id);
+
+
+--
+-- Name: submission_revision_proposals_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_revision_proposals_build_idx ON public.submission_revision_proposals USING btree (build_id);
+
+
+--
+-- Name: submission_revision_proposals_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_revision_proposals_expiry_idx ON public.submission_revision_proposals USING btree (expires_at);
+
+
+--
+-- Name: submission_revision_proposals_owner_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_revision_proposals_owner_idx ON public.submission_revision_proposals USING btree (owner_account_id);
+
+
+--
+-- Name: submission_revision_proposals_run_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_revision_proposals_run_idx ON public.submission_revision_proposals USING btree (run_id);
+
+
+--
+-- Name: submission_revision_proposals_source_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_revision_proposals_source_idx ON public.submission_revision_proposals USING btree (source_message_id);
+
+
+--
+-- Name: submission_schematic_sources_actor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_schematic_sources_actor_idx ON public.submission_schematic_sources USING btree (uploaded_by_account_id);
+
+
+--
+-- Name: submission_schematic_sources_cleanup_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_schematic_sources_cleanup_idx ON public.submission_schematic_sources USING btree (updated_at) WHERE (state <> 'deleted'::text);
+
+
+--
+-- Name: submission_schematic_sources_owner_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX submission_schematic_sources_owner_idx ON public.submission_schematic_sources USING btree (owner_account_id);
 
 
 --
@@ -7141,6 +7909,62 @@ CREATE INDEX tag_relations_target_idx ON public.tag_relations USING btree (targe
 
 
 --
+-- Name: title_definition_facets_lookup_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_definition_facets_lookup_idx ON public.title_definition_facets USING btree (facet_kind, facet_id);
+
+
+--
+-- Name: title_definitions_title_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_definitions_title_idx ON public.title_definitions USING btree (title_id);
+
+
+--
+-- Name: title_holder_history_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_holder_history_build_idx ON public.title_holder_history USING btree (build_id);
+
+
+--
+-- Name: title_holder_history_definition_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_holder_history_definition_idx ON public.title_holder_history USING btree (definition_id, held_from);
+
+
+--
+-- Name: title_holders_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_holders_build_idx ON public.title_holders USING btree (build_id);
+
+
+--
+-- Name: title_results_definition_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_results_definition_idx ON public.title_results USING btree (definition_id);
+
+
+--
+-- Name: title_results_provisional_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_results_provisional_build_idx ON public.title_results USING btree (provisional_build_id);
+
+
+--
+-- Name: verification_codes_valid_code_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX verification_codes_valid_code_key ON public.verification_codes USING btree (code) WHERE valid;
+
+
+--
 -- Name: vote_sessions_author_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7152,6 +7976,13 @@ CREATE INDEX vote_sessions_author_idx ON public.vote_sessions USING btree (autho
 --
 
 CREATE INDEX votes_account_idx ON public.votes USING btree (account_id);
+
+
+--
+-- Name: votes_option_alias_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX votes_option_alias_idx ON public.votes USING btree (vote_session_id, option_alias_id);
 
 
 --
@@ -7218,10 +8049,24 @@ CREATE TRIGGER build_versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON
 
 
 --
+-- Name: build_vote_sessions build_vote_sessions_delete_vote_session; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_vote_sessions_delete_vote_session AFTER DELETE ON public.build_vote_sessions FOR EACH ROW EXECUTE FUNCTION public.delete_vote_session_after_build_vote_session_delete();
+
+
+--
 -- Name: build_vote_sessions build_vote_sessions_kind_subtype_check; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE CONSTRAINT TRIGGER build_vote_sessions_kind_subtype_check AFTER INSERT OR DELETE OR UPDATE ON public.build_vote_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_vote_session_kind_subtype();
+
+
+--
+-- Name: builds builds_category_subtype_check; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER builds_category_subtype_check AFTER INSERT OR UPDATE OF id, category ON public.builds DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
 
 
 --
@@ -7235,14 +8080,28 @@ CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_sta
 -- Name: builds builds_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER builds_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER builds_enqueue_discord_sync AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+
+--
+-- Name: builds builds_enqueue_discord_sync_on_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER builds_enqueue_discord_sync_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_discord_sync();
 
 
 --
 -- Name: builds builds_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: builds builds_enqueue_search_on_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER builds_enqueue_search_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_build_search_projection();
 
 
 --
@@ -7260,13 +8119,6 @@ CREATE CONSTRAINT TRIGGER delete_log_vote_sessions_kind_subtype_check AFTER INSE
 
 
 --
--- Name: builds delete_orphaned_build_vote_sessions_after_builds; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
-
-
---
 -- Name: door_timing_variants door_timing_variants_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -7278,6 +8130,13 @@ CREATE TRIGGER door_timing_variants_enqueue_discord_sync AFTER INSERT OR DELETE 
 --
 
 CREATE TRIGGER door_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.door_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: doors doors_category_subtype_check; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER doors_category_subtype_check AFTER INSERT OR DELETE OR UPDATE OF build_id ON public.doors DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
 
 
 --
@@ -7295,6 +8154,13 @@ CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.d
 
 
 --
+-- Name: entrances entrances_category_subtype_check; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER entrances_category_subtype_check AFTER INSERT OR DELETE OR UPDATE OF build_id ON public.entrances DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
+
+
+--
 -- Name: extender_timing_variants extender_timing_variants_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -7306,6 +8172,13 @@ CREATE TRIGGER extender_timing_variants_enqueue_discord_sync AFTER INSERT OR DEL
 --
 
 CREATE TRIGGER extender_timing_variants_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extender_timing_variants FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+
+--
+-- Name: extenders extenders_category_subtype_check; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER extenders_category_subtype_check AFTER INSERT OR DELETE OR UPDATE OF build_id ON public.extenders DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
 
 
 --
@@ -7330,10 +8203,10 @@ CREATE CONSTRAINT TRIGGER generic_vote_sessions_kind_subtype_check AFTER INSERT 
 
 
 --
--- Name: idempotency_requests idempotency_requests_mirror_caller; Type: TRIGGER; Schema: public; Owner: -
+-- Name: other_builds other_builds_category_subtype_check; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER idempotency_requests_mirror_caller BEFORE INSERT OR UPDATE OF caller, principal ON public.idempotency_requests FOR EACH ROW EXECUTE FUNCTION public.idempotency_requests_mirror_caller();
+CREATE CONSTRAINT TRIGGER other_builds_category_subtype_check AFTER INSERT OR DELETE OR UPDATE OF build_id ON public.other_builds DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
 
 
 --
@@ -7348,6 +8221,13 @@ CREATE TRIGGER permission_grants_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON 
 --
 
 CREATE TRIGGER permission_role_assignments_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_assignments FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+
+
+--
+-- Name: permission_role_includes permission_role_includes_acyclic; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER permission_role_includes_acyclic AFTER INSERT OR UPDATE ON public.permission_role_includes NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION public.check_permission_role_include_cycle();
 
 
 --
@@ -7379,27 +8259,6 @@ CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR 
 
 
 --
--- Name: record_result_holders record_result_holders_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER record_result_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_result_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
-
-
---
--- Name: record_results record_results_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER record_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.record_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
-
-
---
--- Name: builds set_locked_at; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
-
-
---
 -- Name: starboard_entries starboard_entries_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -7421,6 +8280,34 @@ CREATE TRIGGER starboards_enqueue_discord_sync AFTER UPDATE ON public.starboards
 
 
 --
+-- Name: submission_drafts submission_drafts_enqueue_status; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_drafts_enqueue_status AFTER INSERT OR DELETE OR UPDATE ON public.submission_drafts FOR EACH ROW EXECUTE FUNCTION public.enqueue_submission_status();
+
+
+--
+-- Name: submission_finalization_inputs submission_finalization_inputs_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_finalization_inputs_immutable BEFORE UPDATE ON public.submission_finalization_inputs FOR EACH ROW EXECUTE FUNCTION public.reject_submission_finalization_input_update();
+
+
+--
+-- Name: submission_supplied_attachments submission_intake_enqueue_status; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_intake_enqueue_status AFTER INSERT OR DELETE OR UPDATE ON public.submission_supplied_attachments FOR EACH ROW EXECUTE FUNCTION public.enqueue_submission_status();
+
+
+--
+-- Name: submission_inference_runs submission_runs_enqueue_status; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_runs_enqueue_status AFTER INSERT OR DELETE OR UPDATE ON public.submission_inference_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_submission_status();
+
+
+--
 -- Name: tag_aliases tag_aliases_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -7432,6 +8319,27 @@ CREATE TRIGGER tag_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON pu
 --
 
 CREATE TRIGGER tag_definitions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+
+--
+-- Name: title_holders title_holders_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+
+
+--
+-- Name: title_results title_results_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+
+
+--
+-- Name: utilities utilities_category_subtype_check; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER utilities_category_subtype_check AFTER INSERT OR DELETE OR UPDATE OF build_id ON public.utilities DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
 
 
 --
@@ -7838,11 +8746,35 @@ ALTER TABLE ONLY public.media_artifact_publications
 
 
 --
+-- Name: media_artifacts media_artifacts_object_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.media_artifacts
+    ADD CONSTRAINT media_artifacts_object_key_fkey FOREIGN KEY (object_key) REFERENCES public.media_artifact_objects(object_key);
+
+
+--
 -- Name: media_artifacts media_artifacts_upload_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.media_artifacts
     ADD CONSTRAINT media_artifacts_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES public.media_uploads(id) ON DELETE CASCADE;
+
+
+--
+-- Name: media_draft_references media_draft_references_draft_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.media_draft_references
+    ADD CONSTRAINT media_draft_references_draft_id_fkey FOREIGN KEY (draft_id) REFERENCES public.submission_drafts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: media_draft_references media_draft_references_upload_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.media_draft_references
+    ADD CONSTRAINT media_draft_references_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES public.media_uploads(id) ON DELETE RESTRICT;
 
 
 --
@@ -8070,19 +9002,11 @@ ALTER TABLE ONLY public.messages
 
 
 --
--- Name: record_competitions record_competitions_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_competitions
-    ADD CONSTRAINT record_competitions_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.versions(id) ON DELETE RESTRICT;
-
-
---
--- Name: record_computation_runs record_computation_runs_ruleset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: record_computation_runs record_computation_runs_rules_revision_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.record_computation_runs
-    ADD CONSTRAINT record_computation_runs_ruleset_id_fkey FOREIGN KEY (ruleset_id) REFERENCES public.record_rulesets(id) ON DELETE RESTRICT;
+    ADD CONSTRAINT record_computation_runs_rules_revision_id_fkey FOREIGN KEY (rules_revision_id) REFERENCES public.rules_revisions(id) ON DELETE RESTRICT;
 
 
 --
@@ -8094,70 +9018,6 @@ ALTER TABLE ONLY public.record_computation_runs
 
 
 --
--- Name: record_definition_facets record_definition_facets_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_definition_facets
-    ADD CONSTRAINT record_definition_facets_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.record_definitions(id) ON DELETE CASCADE;
-
-
---
--- Name: record_definitions record_definitions_competition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_definitions
-    ADD CONSTRAINT record_definitions_competition_id_fkey FOREIGN KEY (competition_id) REFERENCES public.record_competitions(public_id) ON DELETE RESTRICT;
-
-
---
--- Name: record_definitions record_definitions_ruleset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_definitions
-    ADD CONSTRAINT record_definitions_ruleset_id_fkey FOREIGN KEY (ruleset_id) REFERENCES public.record_rulesets(id) ON DELETE RESTRICT;
-
-
---
--- Name: record_definitions record_definitions_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_definitions
-    ADD CONSTRAINT record_definitions_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.versions(id) ON DELETE RESTRICT;
-
-
---
--- Name: record_holder_history record_holder_history_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_holder_history
-    ADD CONSTRAINT record_holder_history_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
-
-
---
--- Name: record_holder_history record_holder_history_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_holder_history
-    ADD CONSTRAINT record_holder_history_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.record_definitions(id) ON DELETE RESTRICT;
-
-
---
--- Name: record_holder_history record_holder_history_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_holder_history
-    ADD CONSTRAINT record_holder_history_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES public.record_holder_history(id) ON DELETE SET NULL;
-
-
---
--- Name: record_holder_history record_holder_history_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_holder_history
-    ADD CONSTRAINT record_holder_history_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
-
-
---
 -- Name: record_recompute_queue record_recompute_queue_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8166,43 +9026,11 @@ ALTER TABLE ONLY public.record_recompute_queue
 
 
 --
--- Name: record_result_holders record_result_holders_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: record_titles record_titles_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.record_result_holders
-    ADD CONSTRAINT record_result_holders_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
-
-
---
--- Name: record_result_holders record_result_holders_result_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_result_holders
-    ADD CONSTRAINT record_result_holders_result_id_fkey FOREIGN KEY (result_id) REFERENCES public.record_results(id) ON DELETE CASCADE;
-
-
---
--- Name: record_results record_results_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_results
-    ADD CONSTRAINT record_results_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.record_definitions(id) ON DELETE RESTRICT;
-
-
---
--- Name: record_results record_results_provisional_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_results
-    ADD CONSTRAINT record_results_provisional_build_id_fkey FOREIGN KEY (provisional_build_id) REFERENCES public.builds(id) ON DELETE SET NULL;
-
-
---
--- Name: record_results record_results_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.record_results
-    ADD CONSTRAINT record_results_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.record_titles
+    ADD CONSTRAINT record_titles_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.versions(id) ON DELETE RESTRICT;
 
 
 --
@@ -8358,11 +9186,43 @@ ALTER TABLE ONLY public.submission_draft_changes
 
 
 --
+-- Name: submission_draft_schematics submission_draft_schematics_draft_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_draft_schematics
+    ADD CONSTRAINT submission_draft_schematics_draft_id_fkey FOREIGN KEY (draft_id) REFERENCES public.submission_drafts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: submission_draft_schematics submission_draft_schematics_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_draft_schematics
+    ADD CONSTRAINT submission_draft_schematics_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.submission_schematic_sources(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: submission_drafts submission_drafts_owner_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.submission_drafts
     ADD CONSTRAINT submission_drafts_owner_account_id_fkey FOREIGN KEY (owner_account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: submission_drafts submission_drafts_submission_actor_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_drafts
+    ADD CONSTRAINT submission_drafts_submission_actor_account_id_fkey FOREIGN KEY (submission_actor_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_finalization_inputs submission_finalization_inputs_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_finalization_inputs
+    ADD CONSTRAINT submission_finalization_inputs_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.submission_finalization_jobs(id) ON DELETE CASCADE;
 
 
 --
@@ -8374,11 +9234,99 @@ ALTER TABLE ONLY public.submission_finalization_jobs
 
 
 --
+-- Name: submission_finalization_jobs submission_finalization_jobs_requested_by_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_finalization_jobs
+    ADD CONSTRAINT submission_finalization_jobs_requested_by_account_id_fkey FOREIGN KEY (requested_by_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: submission_finalization_results submission_finalization_results_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.submission_finalization_results
     ADD CONSTRAINT submission_finalization_results_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.submission_finalization_jobs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: submission_inference_runs submission_inference_runs_owner_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_inference_runs
+    ADD CONSTRAINT submission_inference_runs_owner_account_id_fkey FOREIGN KEY (owner_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_receipt_media submission_receipt_media_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_receipt_media
+    ADD CONSTRAINT submission_receipt_media_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.submission_finalization_results(job_id) ON DELETE CASCADE;
+
+
+--
+-- Name: submission_receipt_media submission_receipt_media_upload_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_receipt_media
+    ADD CONSTRAINT submission_receipt_media_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES public.media_uploads(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_revision_proposals submission_revision_proposals_approved_by_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_revision_proposals
+    ADD CONSTRAINT submission_revision_proposals_approved_by_account_id_fkey FOREIGN KEY (approved_by_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_revision_proposals submission_revision_proposals_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_revision_proposals
+    ADD CONSTRAINT submission_revision_proposals_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_revision_proposals submission_revision_proposals_owner_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_revision_proposals
+    ADD CONSTRAINT submission_revision_proposals_owner_account_id_fkey FOREIGN KEY (owner_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_revision_proposals submission_revision_proposals_requested_by_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_revision_proposals
+    ADD CONSTRAINT submission_revision_proposals_requested_by_account_id_fkey FOREIGN KEY (requested_by_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_schematic_sources submission_schematic_sources_owner_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_schematic_sources
+    ADD CONSTRAINT submission_schematic_sources_owner_account_id_fkey FOREIGN KEY (owner_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_schematic_sources submission_schematic_sources_uploaded_by_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_schematic_sources
+    ADD CONSTRAINT submission_schematic_sources_uploaded_by_account_id_fkey FOREIGN KEY (uploaded_by_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: submission_supplied_attachments submission_supplied_attachments_draft_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.submission_supplied_attachments
+    ADD CONSTRAINT submission_supplied_attachments_draft_id_fkey FOREIGN KEY (draft_id) REFERENCES public.submission_drafts(id) ON DELETE CASCADE;
 
 
 --
@@ -8446,6 +9394,110 @@ ALTER TABLE ONLY public.tag_relations
 
 
 --
+-- Name: title_definition_facets title_definition_facets_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_definition_facets
+    ADD CONSTRAINT title_definition_facets_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.title_definitions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: title_definition_facets title_definition_facets_facet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_definition_facets
+    ADD CONSTRAINT title_definition_facets_facet_id_fkey FOREIGN KEY (facet_id) REFERENCES public.tag_definitions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: title_definitions title_definitions_rules_revision_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_definitions
+    ADD CONSTRAINT title_definitions_rules_revision_id_fkey FOREIGN KEY (rules_revision_id) REFERENCES public.rules_revisions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: title_definitions title_definitions_title_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_definitions
+    ADD CONSTRAINT title_definitions_title_id_fkey FOREIGN KEY (title_id) REFERENCES public.record_titles(public_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: title_holder_history title_holder_history_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holder_history
+    ADD CONSTRAINT title_holder_history_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: title_holder_history title_holder_history_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holder_history
+    ADD CONSTRAINT title_holder_history_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.title_definitions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: title_holder_history title_holder_history_predecessor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holder_history
+    ADD CONSTRAINT title_holder_history_predecessor_id_fkey FOREIGN KEY (predecessor_id) REFERENCES public.title_holder_history(id) ON DELETE SET NULL;
+
+
+--
+-- Name: title_holder_history title_holder_history_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holder_history
+    ADD CONSTRAINT title_holder_history_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: title_holders title_holders_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holders
+    ADD CONSTRAINT title_holders_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: title_holders title_holders_result_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_holders
+    ADD CONSTRAINT title_holders_result_id_fkey FOREIGN KEY (result_id) REFERENCES public.title_results(id) ON DELETE CASCADE;
+
+
+--
+-- Name: title_results title_results_definition_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_results
+    ADD CONSTRAINT title_results_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.title_definitions(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: title_results title_results_provisional_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_results
+    ADD CONSTRAINT title_results_provisional_build_id_fkey FOREIGN KEY (provisional_build_id) REFERENCES public.builds(id) ON DELETE SET NULL;
+
+
+--
+-- Name: title_results title_results_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_results
+    ADD CONSTRAINT title_results_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
+
+
+--
 -- Name: utilities utilities_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8475,6 +9527,14 @@ ALTER TABLE ONLY public.vote_sessions
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: votes votes_option_alias_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.votes
+    ADD CONSTRAINT votes_option_alias_fkey FOREIGN KEY (vote_session_id, option_alias_id) REFERENCES public.vote_session_options(vote_session_id, id);
 
 
 --
