@@ -17,7 +17,7 @@ ENTITY_SQL_PATH = Path(__file__).with_name("postgres_entities.sql")
 """Sole definition of the entities Alembic owns in the public schema."""
 
 EXPECTED_FUNCTIONS = 15
-EXPECTED_TRIGGERS = 46
+EXPECTED_TRIGGERS = 48
 
 
 def parse_entities(

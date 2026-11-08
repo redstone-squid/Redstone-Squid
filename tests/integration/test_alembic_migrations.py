@@ -1738,3 +1738,38 @@ def test_role_includes_stay_within_one_guild(
                     connection.execute(include, {"role": ids[role], "inc": ids[included]})
     finally:
         engine.dispose()
+
+
+def test_build_lease_and_embedding_writes_queue_nothing(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a visible change to a build may queue search, recompute, or Discord work."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    engine = create_engine(migration_database_url)
+    queues = ("search_projection_queue", "record_recompute_queue", "discord_sync_queue")
+    try:
+        with engine.begin() as connection:
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            build_id = _insert_build(connection, account)
+            for queue in queues:
+                connection.execute(text(f"DELETE FROM {queue}"))
+            connection.execute(
+                text(
+                    "UPDATE builds SET locked_at = now(), lock_token = gen_random_uuid(), "
+                    "lock_expires_at = now() + interval '5 minutes' WHERE id = :id"
+                ),
+                {"id": build_id},
+            )
+            connection.execute(
+                text("UPDATE builds SET locked_at = NULL, lock_token = NULL, lock_expires_at = NULL WHERE id = :id"),
+                {"id": build_id},
+            )
+            assert all(connection.execute(text(f"SELECT count(*) FROM {queue}")).scalar_one() == 0 for queue in queues)
+
+            connection.execute(text("UPDATE builds SET description = 'Changed' WHERE id = :id"), {"id": build_id})
+            assert connection.execute(text("SELECT count(*) FROM search_projection_queue")).scalar_one() > 0
+            assert connection.execute(text("SELECT count(*) FROM discord_sync_queue")).scalar_one() > 0
+    finally:
+        engine.dispose()

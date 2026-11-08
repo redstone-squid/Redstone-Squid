@@ -583,7 +583,11 @@ $$;
 CREATE TRIGGER build_vote_sessions_delete_vote_session AFTER DELETE ON public.build_vote_sessions FOR EACH ROW EXECUTE FUNCTION public.delete_vote_session_after_build_vote_session_delete();
 
 
-CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+-- Lease and embedding writes change nothing a reader can see, so they must not queue work.
+-- Listing the ignored columns makes any new column count as content.
+CREATE TRIGGER builds_enqueue_search_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN ((to_jsonb(OLD.*) - ARRAY['embedding', 'locked_at', 'lock_token', 'lock_expires_at']) IS DISTINCT FROM (to_jsonb(NEW.*) - ARRAY['embedding', 'locked_at', 'lock_token', 'lock_expires_at'])) EXECUTE FUNCTION public.enqueue_build_search_projection();
 
 CREATE TRIGGER doors_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
@@ -613,7 +617,11 @@ CREATE TRIGGER title_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON 
 
 CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR UPDATE OF is_active ON public.record_computation_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
 
-CREATE TRIGGER builds_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+CREATE TRIGGER builds_enqueue_discord_sync AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
+
+-- Lease and embedding writes change nothing a reader can see, so they must not queue work.
+-- Listing the ignored columns makes any new column count as content.
+CREATE TRIGGER builds_enqueue_discord_sync_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN ((to_jsonb(OLD.*) - ARRAY['embedding', 'locked_at', 'lock_token', 'lock_expires_at']) IS DISTINCT FROM (to_jsonb(NEW.*) - ARRAY['embedding', 'locked_at', 'lock_token', 'lock_expires_at'])) EXECUTE FUNCTION public.enqueue_discord_sync();
 
 CREATE TRIGGER doors_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.doors FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
