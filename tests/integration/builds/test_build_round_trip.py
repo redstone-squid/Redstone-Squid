@@ -159,7 +159,6 @@ def _make_build(category: BuildCategory, account_id: int) -> Build:
         "animated_restrictions": [KNOWN_RESTRICTIONS["animated"]],
         "component_restrictions": [KNOWN_RESTRICTIONS["component"]],
         "miscellaneous_restrictions": [KNOWN_RESTRICTIONS["miscellaneous"]],
-        "extra_info": {"user": "Some additional context"},
         "creators_ign": ["Alice", "Bob"],
         "links": [
             BuildLink(url="https://example.com/a.png", media_type="image"),
@@ -736,10 +735,10 @@ async def test_detached_build_preview_changes_only_on_explicit_save(
 
     preview = loaded.copy_for_edit()
     preview.width = (loaded.width or 0) + 1
-    preview.extra_info["user"] = "preview only"
+    preview.extra_info["unknown_patterns"] = ["preview only"]
     preview.add_link("image", "https://example.com/preview.png")
     preview.tags[0].evidence = "preview evidence"
-    assert loaded.extra_info.get("user") != "preview only"
+    assert loaded.extra_info.get("unknown_patterns") != ["preview only"]
     assert "https://example.com/preview.png" not in loaded.image_urls
     assert loaded.tags[0].evidence != "preview evidence"
 
@@ -752,7 +751,7 @@ async def test_detached_build_preview_changes_only_on_explicit_save(
     saved = await transact(repository, lambda uow: uow.builds.get_by_id(loaded.id))
     assert saved is not None
     assert saved.width == preview.width
-    assert saved.extra_info["user"] == "preview only"
+    assert saved.extra_info["unknown_patterns"] == ["preview only"]
     assert "https://example.com/preview.png" in saved.image_urls
     assert saved.revision == loaded.revision + 1
 

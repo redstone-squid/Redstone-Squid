@@ -88,14 +88,9 @@ class AttachmentFailureInfo(TypedDict):
 class Info(TypedDict, total=False):
     """Additional submission details retained in the build's JSON metadata."""
 
-    user: str  # Provided by the submitter if they have any additional information to provide.
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
     server_info: ServerInfo
-    # Set when an attached schematic measures differently from the declared dimensions. The
-    # declared value still wins — an export is often cropped to the mechanism — so this records
-    # the disagreement for reviewers rather than resolving it.
-    schematic_dimension_mismatch: str
     schematic_duplicates: list[SchematicDuplicateInfo]
     attachment_failures: list[AttachmentFailureInfo]
     submission_provenance: dict[str, Any]

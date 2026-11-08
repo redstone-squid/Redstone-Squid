@@ -56,7 +56,7 @@ class RevisionFacts:
             animated_restrictions=tuple(draft.animated_restrictions),
             component_restrictions=tuple(draft.component_restrictions),
             miscellaneous_restrictions=tuple(draft.miscellaneous_restrictions),
-            description=draft.description or draft.extra_info.get("user"),
+            description=draft.description,
         )
 
     def patch(self, build: Build) -> BuildEditPatch:

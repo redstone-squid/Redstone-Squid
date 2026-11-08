@@ -35,5 +35,5 @@ def test_inferred_category_change_requires_a_different_target() -> None:
 
 
 def test_recalculation_retains_original_inferred_note() -> None:
-    facts = RevisionFacts.from_draft(BuildDraft(extra_info={"user": "Source explanation"}))
+    facts = RevisionFacts.from_draft(BuildDraft(description="Source explanation"))
     assert facts.description == "Source explanation"

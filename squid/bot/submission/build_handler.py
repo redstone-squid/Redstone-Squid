@@ -327,8 +327,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         elif "Directional with fixes" in build.miscellaneous_restrictions:
             desc.append("**Directional** with known fixes for each direction.")
 
-        if build.extra_info and (user_message := build.extra_info.get("user")):
-            desc.append("\n" + escape_markdown(user_message))
+        if build.description:
+            desc.append("\n" + escape_markdown(build.description))
 
         return "\n".join(desc) if desc else None
 

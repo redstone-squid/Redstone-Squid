@@ -59,7 +59,7 @@ def project_submission(
     }
     values: dict[str, JSONValue] = {
         "display_name": source.display_name,
-        "description": source.description or source.extra_info.get("user"),
+        "description": source.description,
         "creators": list(source.creators_ign),
         "capture_width": source.width,
         "capture_height": source.height,

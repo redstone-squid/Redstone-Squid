@@ -254,8 +254,8 @@ def existing_build() -> DoorBuild:
         submitter_account_id=1,
         submission_status=Status.PENDING,
         miscellaneous_restrictions=["Locational", "Directional with fixes", "Other"],
+        description="old",
         extra_info={
-            "user": "old",
             "server_info": {"server_ip": "old.example", "coordinates": "1 2 3"},
         },
     )
@@ -448,7 +448,7 @@ class TestAuthorizedEditing:
 
         build = await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
 
-        assert build.extra_info.get("user") == "mine"
+        assert build.description == "mine"
         assert len(repository.saved) == 1
 
     async def test_a_non_owner_without_the_node_is_refused_without_committing(self, existing_build: DoorBuild) -> None:
@@ -466,7 +466,7 @@ class TestAuthorizedEditing:
 
         build = await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="moderated"))
 
-        assert build.extra_info.get("user") == "moderated"
+        assert build.description == "moderated"
 
     async def test_ownership_does_not_survive_confirmation(self, existing_build: DoorBuild) -> None:
         """Confirmation ends the submitter's permission to edit through ownership alone."""

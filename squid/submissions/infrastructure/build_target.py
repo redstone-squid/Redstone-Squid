@@ -184,8 +184,6 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     extra_info: dict[str, JSONValue] = {
         "submission_provenance": _submission_provenance(submission),
     }
-    if submission.description is not None:
-        extra_info["user"] = submission.description
     if submission.taxonomy.restriction_proposals:
         extra_info["unknown_restrictions"] = {
             "miscellaneous_restrictions": list(submission.taxonomy.restriction_proposals)

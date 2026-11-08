@@ -280,6 +280,14 @@ async def test_build_handler_does_not_repeat_headline_component_restrictions(dis
     assert await handler.get_description() is None
 
 
+@pytest.mark.asyncio
+async def test_build_handler_shows_the_submitter_description_escaped(display_build: Build) -> None:
+    build = replace(display_build, description="Uses *two* observers")
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), build)
+
+    assert await handler.get_description() == "\nUses \\*two\\* observers"
+
+
 def test_build_handler_credits_the_sponsoring_server_and_website(display_build: Build) -> None:
     build = replace(
         display_build,

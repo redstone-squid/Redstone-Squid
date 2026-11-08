@@ -1830,3 +1830,92 @@ def test_hardening_constraints(
                 connection.execute(insert_code, {"valid": True})
     finally:
         engine.dispose()
+
+
+def test_build_notes_move_into_description_without_requeueing_unchanged_cards(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Merge extra_info.user into description, and queue Discord work only where the review card changes."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "f3c6b9e4a1d7")
+    engine = create_engine(migration_database_url)
+    queues = ("search_projection_queue", "discord_sync_queue")
+    candidates = [
+        {"description": None, "extra_info": {"user": "inferred note", "unknown_patterns": ["Odd"]}},
+        {"description": "kept", "extra_info": {}},
+    ]
+    try:
+        with engine.begin() as connection:
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            # The note only in extra_info, the same note in both places, and two notes that disagree.
+            only_user, same, conflict = (_insert_build(connection, account) for _ in range(3))
+            notes = {only_user: (None, "legacy"), same: ("same", "same"), conflict: ("current", "stale")}
+            for build_id, (description, user) in notes.items():
+                connection.execute(
+                    text(
+                        "UPDATE builds SET description = :description, "
+                        "extra_info = jsonb_build_object('user', CAST(:user AS text), 'server_info', '{}'::jsonb) "
+                        "WHERE id = :id"
+                    ),
+                    {"id": build_id, "description": description, "user": user},
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_inference_runs (id, owner_account_id, inputs, state, expires_at, candidates) "
+                    "VALUES (gen_random_uuid(), :account, '{}'::jsonb, 'completed', now() + interval '1 day', "
+                    "CAST(:candidates AS jsonb))"
+                ),
+                {"account": account, "candidates": json.dumps(candidates)},
+            )
+            for queue in queues:
+                connection.execute(text(f"DELETE FROM {queue}"))
+
+        command.upgrade(config, "a7d2c5e8f1b3")
+        with engine.connect() as connection:
+            rows = {
+                build_id: (description, extra_info)
+                for build_id, description, extra_info in connection.execute(
+                    text("SELECT id, description, extra_info FROM builds")
+                )
+            }
+            assert {build_id: rows[build_id] for build_id in notes} == {
+                only_user: ("legacy", {"server_info": {}}),
+                same: ("same", {"server_info": {}}),
+                conflict: ("current", {"server_info": {}}),
+            }
+            assert connection.execute(text("SELECT candidates FROM submission_inference_runs")).scalar_one() == [
+                {"description": "inferred note", "extra_info": {"unknown_patterns": ["Odd"]}},
+                {"description": "kept", "extra_info": {}},
+            ]
+            queued = {
+                queue: set(
+                    connection.execute(text(f"SELECT source_key FROM {queue} WHERE resource_kind = 'build'")).scalars()
+                )
+                for queue in queues
+            }
+            assert queued == {"search_projection_queue": {str(conflict)}, "discord_sync_queue": {str(conflict)}}
+            disabled = connection.execute(
+                text(
+                    "SELECT count(*) FROM pg_trigger WHERE tgrelid = 'public.builds'::regclass "
+                    "AND tgname LIKE 'builds_enqueue_%' AND tgenabled = 'D'"
+                )
+            ).scalar_one()
+            assert disabled == 0
+
+        command.downgrade(config, "f3c6b9e4a1d7")
+        with engine.connect() as connection:
+            restored = dict(connection.execute(text("SELECT id, extra_info->>'user' FROM builds")).tuples().all())
+            assert {build_id: restored[build_id] for build_id in notes} == {
+                only_user: "legacy",
+                same: "same",
+                conflict: "current",
+            }
+            assert connection.execute(text("SELECT candidates FROM submission_inference_runs")).scalar_one() == [
+                {"description": "inferred note", "extra_info": {"user": "inferred note", "unknown_patterns": ["Odd"]}},
+                {"description": "kept", "extra_info": {"user": "kept"}},
+            ]
+        command.upgrade(config, "head")
+    finally:
+        engine.dispose()

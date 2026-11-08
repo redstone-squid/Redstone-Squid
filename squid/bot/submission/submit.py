@@ -116,7 +116,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if restrictions is not None:
             await self.builds.classify_restrictions(draft, split_values(restrictions))
         if notes is not None and (parsed_notes := optional_text(notes)) is not None:
-            draft.extra_info["user"] = parsed_notes
+            draft.description = parsed_notes
 
         from uuid import NAMESPACE_URL, uuid4, uuid5
 

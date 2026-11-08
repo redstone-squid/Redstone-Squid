@@ -391,9 +391,6 @@ class SearchProjectionLoader:
         except DataIntegrityError, InvalidBuildError, NotImplementedError, TypeError, ValueError:
             title = f"{build.category or 'Build'} #{build.id}"
         description = build.description
-        if description is None:
-            submitted_description = build.extra_info.get("user")
-            description = submitted_description if isinstance(submitted_description, str) else None
         approved_assignments = tuple(
             assignment for assignment in build.tags if assignment.definition.moderation_status == "approved"
         )

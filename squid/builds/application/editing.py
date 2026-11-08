@@ -211,10 +211,6 @@ class BuildEditPatch:
 
         if not isinstance(self.extra_user_info, _Unset):
             build.description = self.extra_user_info
-            if self.extra_user_info is None:
-                build.extra_info.pop("user", None)
-            else:
-                build.extra_info["user"] = self.extra_user_info
 
         server_info = ServerInfo(**build.extra_info.get("server_info", {}))
         server_changed = any(

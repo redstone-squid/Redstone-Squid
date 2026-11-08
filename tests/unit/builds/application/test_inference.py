@@ -128,7 +128,7 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert build.patterns == ["Regular"]
     assert build.extra_info.get("unknown_patterns") == ["Unknown Pattern"]
     assert build.version_spec == "1.20+"
-    assert build.extra_info.get("user") == "first line\nsecond line"
+    assert build.description == "first line\nsecond line"
 
 
 async def test_infer_returns_multiple_or_no_builds() -> None:

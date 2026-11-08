@@ -303,4 +303,4 @@ class BuildInferenceService:
         build.version_spec = inferred.version_spec or await self._versions.newest("Java")
         build.versions = await self._versions.resolve_spec(build.version_spec)
         if inferred.author_note is not None:
-            build.extra_info["user"] = inferred.author_note
+            build.description = inferred.author_note
