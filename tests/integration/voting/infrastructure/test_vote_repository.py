@@ -166,6 +166,24 @@ async def seed_generic_poll(
     return session_id, message_id
 
 
+async def cast_ballot(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    session_id: int,
+    account_id: int,
+    option_id: str,
+    emoji: str,
+    weight: float,
+) -> StoredVoteMutation | None:
+    """Resolve the alias the way VoteService does, then cast through the repository."""
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
+    assert snapshot is not None
+    option = snapshot.option_by_id(option_id, GUILD_ID, emoji=emoji)
+    assert option is not None
+    return await transact(
+        repository, lambda uow: uow.votes.cast_vote(session_id, account_id, GUILD_ID, option, weight), commit=True
+    )
+
+
 async def test_vote_aggregates_are_persisted_by_repository(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
@@ -322,15 +340,9 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
 ) -> None:
     session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
 
-    inserted = await transact(
-        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
-    )
-    replaced = await transact(
-        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
-    )
-    removed = await transact(
-        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "deny", "👎", 1.0), commit=True
-    )
+    inserted = await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
+    replaced = await cast_ballot(repository, session_id, 7, "deny", "👎", 1.0)
+    removed = await cast_ballot(repository, session_id, 7, "deny", "👎", 1.0)
 
     assert inserted is not None
     assert (inserted.previous_weight, inserted.current_weight) == (None, 1.0)
@@ -359,9 +371,7 @@ async def test_threshold_closure_freezes_the_deciding_ballot(
 ) -> None:
     session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
 
-    mutation = await transact(
-        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, option_id, emoji, 1.0), commit=True
-    )
+    mutation = await cast_ballot(repository, session_id, 7, option_id, emoji, 1.0)
 
     assert mutation is not None
     assert mutation.just_closed
@@ -383,10 +393,8 @@ async def test_refresh_can_remove_and_reweigh_ballots_until_the_threshold_is_rea
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=3, fail_threshold=-3)
-    await transact(
-        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
-    )
-    await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 8, GUILD_ID, "deny", "👎", 1.0), commit=True)
+    await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
+    await cast_ballot(repository, session_id, 8, "deny", "👎", 1.0)
 
     refreshed = await transact(
         repository, lambda uow: uow.votes.refresh_weights(session_id, {7: 3.0, 8: 0.0}), commit=True
@@ -406,12 +414,8 @@ async def test_concurrent_votes_report_exactly_one_closure(
     session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-10)
 
     results = await asyncio.gather(
-        transact(
-            repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
-        ),
-        transact(
-            repository, lambda uow: uow.votes.cast_vote(session_id, 8, GUILD_ID, "approve", "👍", 1.0), commit=True
-        ),
+        cast_ballot(repository, session_id, 7, "approve", "👍", 1.0),
+        cast_ballot(repository, session_id, 8, "approve", "👍", 1.0),
     )
 
     mutations = [result for result in results if isinstance(result, StoredVoteMutation)]
@@ -442,8 +446,8 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
         ),
     )
 
-    await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "one", "1️⃣", 3), commit=True)
-    await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 8, GUILD_ID, "two", "2️⃣", 1), commit=True)
+    await cast_ballot(repository, session_id, 7, "one", "1️⃣", 3)
+    await cast_ballot(repository, session_id, 8, "two", "2️⃣", 1)
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
 
     assert snapshot is not None
@@ -797,9 +801,7 @@ async def test_ballot_references_one_alias_when_global_and_guild_aliases_overlap
         VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=GUILD_ID, position=1),
     )
     session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=2, options=options)
-    mutation = await transact(
-        repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, "approve", "👍", 1.0), commit=True
-    )
+    mutation = await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
     assert mutation is not None
     assert not mutation.just_closed
     assert mutation.session.votes == {7: 1.0}
@@ -808,6 +810,19 @@ async def test_ballot_references_one_alias_when_global_and_guild_aliases_overlap
             text("SELECT o.guild_id FROM votes v JOIN vote_session_options o ON o.id = v.option_alias_id")
         )
     assert alias_guild == GUILD_ID
+
+
+async def test_casting_an_alias_the_session_does_not_store_is_an_integrity_error(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The repository matches the exact alias rather than falling back to a similar one."""
+    session_id, _ = await seed_delete_log_vote(async_session_factory)
+    # The default aliases are global; a guild-scoped copy of one is a different alias.
+    scoped = VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=GUILD_ID)
+
+    with pytest.raises(DataIntegrityError, match="not one of the session's aliases"):
+        await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, scoped, 1.0))
 
 
 async def test_ballot_cannot_reference_another_sessions_alias(

@@ -129,14 +129,14 @@ class VoteRepository(Protocol):
         vote_session_id: int,
         account_id: int,
         guild_id: int,
-        option_id: str,
-        emoji: str,
+        option: VoteOption,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
         """Toggle the same option off or replace the ballot, then check thresholds.
 
-        Return None if the session is missing or closed. Supplied refresh weights apply
+        `option` is the exact alias the ballot uses, as resolved from the session's
+        options for `guild_id`. Return None if the session is missing or closed. Supplied refresh weights apply
         before the ballot change; nonpositive refresh values remove existing ballots.
         """
         ...

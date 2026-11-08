@@ -335,16 +335,16 @@ class VoteRepository:
         vote_session_id: int,
         account_id: int,
         guild_id: int,
-        option_id: str,
-        emoji: str,
+        option: VoteOption,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
         """Toggle or replace a ballot in an open session, returning None if missing or closed.
 
-        Refresh existing weights first, then compare stable option IDs to decide
-        whether to remove the voter's selection. Returned weights are positive
-        magnitudes; threshold scoring supplies the option's sign.
+        `option` is the alias the service resolved for `guild_id`, and must be one of
+        the session's stored aliases. Refresh existing weights first, then compare
+        stable option IDs to decide whether to remove the voter's selection. Returned
+        weights are positive magnitudes; threshold scoring supplies the option's sign.
         """
         session = self._session()
         row = await self._lock_session_row(session, vote_session_id)
@@ -355,28 +355,24 @@ class VoteRepository:
             select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
         )
         previous_weight = previous.weight if previous is not None else None
-        aliases = {option.id: option for option in row.options}
+        aliases = {alias.id: alias for alias in row.options}
         alias = next(
             (
-                option
-                for option in row.options
-                if option.identifier == option_id and option.emoji == emoji and option.guild_id == guild_id
+                alias
+                for alias in row.options
+                if (alias.identifier, alias.emoji, alias.guild_id) == (option.id, option.emoji, option.guild_id)
             ),
             None,
         )
         if alias is None:
-            alias = next(
-                (
-                    option
-                    for option in row.options
-                    if option.identifier == option_id and option.emoji == emoji and option.guild_id is None
-                ),
-                None,
+            # Aliases are written once with the session, so the service cannot have resolved
+            # an option the session does not store.
+            msg = "Vote option is not one of the session's aliases."
+            raise DataIntegrityError(
+                msg, context={"vote_session_id": vote_session_id, "option_id": option.id, "emoji": option.emoji}
             )
-        if alias is None:
-            return None
         # Aliases of the same logical option toggle the same ballot: ✅ after 👍 still means "approve".
-        toggled_off = previous is not None and aliases[previous.option_alias_id].identifier == option_id
+        toggled_off = previous is not None and aliases[previous.option_alias_id].identifier == option.id
         if toggled_off:
             await session.delete(previous)
             current_weight = None

@@ -171,8 +171,7 @@ class FakeVoteRepository:
         vote_session_id: int,
         account_id: int,
         guild_id: int,
-        option_id: str,
-        emoji: str,
+        option: VoteOption,
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
@@ -181,8 +180,8 @@ class FakeVoteRepository:
                 vote_session_id=vote_session_id,
                 account_id=account_id,
                 guild_id=guild_id,
-                option_id=option_id,
-                emoji=emoji,
+                option_id=option.id,
+                emoji=option.emoji,
                 desired_weight=desired_weight,
                 refreshed_weights=refreshed_weights,
             )

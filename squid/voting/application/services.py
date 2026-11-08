@@ -305,7 +305,7 @@ class VoteService:
             )
         async with self._uow_factory() as uow:
             mutation = await uow.votes.cast_vote(
-                vote_session_id, actor.account_id, actor.guild_id, option.id, option.emoji, weight, refreshed
+                vote_session_id, actor.account_id, actor.guild_id, option, weight, refreshed
             )
             await uow.commit()
         if mutation is None:
