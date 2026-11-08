@@ -19,6 +19,7 @@ from math import isfinite
 
 from whenever import Instant
 
+from squid.core.scores import round_score
 from squid.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -301,15 +302,15 @@ class VoteSessionSnapshot:
 
     @property
     def upvotes(self) -> float:
-        return sum(weight for weight in self.votes.values() if weight > 0)
+        return round_score(sum(weight for weight in self.votes.values() if weight > 0))
 
     @property
     def downvotes(self) -> float:
-        return -sum(weight for weight in self.votes.values() if weight < 0)
+        return round_score(-sum(weight for weight in self.votes.values() if weight < 0))
 
     @property
     def net_votes(self) -> float:
-        return sum(self.votes.values())
+        return round_score(sum(self.votes.values()))
 
     @property
     def visibility(self) -> VoteVisibility | None:

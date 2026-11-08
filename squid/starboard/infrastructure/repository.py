@@ -6,6 +6,7 @@ from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from squid.core.scores import round_score
 from squid.starboard.application.ports import EntryKey, EntryState, PendingVote
 from squid.starboard.models import (
     OriginMessage,
@@ -366,7 +367,7 @@ class PostgresStarboardRepository:
                     )
                 )
             ).one()
-            entry_row.score = float(score)
+            entry_row.score = round_score(float(score))
             entry_row.raw_count = int(raw_count)
             if force or entry_row.last_rendered_score != entry_row.score:
                 keys.append((entry_row.starboard_id, origin_message_id))

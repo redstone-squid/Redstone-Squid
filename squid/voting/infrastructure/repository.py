@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
+from squid.core.scores import round_score
 from squid.messages.errors import MessageNotFoundError
 from squid.messages.models import MessageRecord
 from squid.persistence.repository import BaseAsyncRepository
@@ -453,7 +454,7 @@ class VoteRepository:
             )
             .where(Vote.vote_session_id == row.id)
         )
-        net = sum(weight if choice is VoteChoice.APPROVE else -weight for weight, choice in selections)
+        net = round_score(sum(weight if choice is VoteChoice.APPROVE else -weight for weight, choice in selections))
         if net >= row.pass_threshold:
             result = VoteSessionResult.APPROVED
         elif net <= row.fail_threshold:

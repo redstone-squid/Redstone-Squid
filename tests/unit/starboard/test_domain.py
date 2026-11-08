@@ -94,3 +94,11 @@ def test_increasing_scores_never_remove_after_send(scores: list[float]) -> None:
         wanted = entry_should_be_posted(config(), score, origin_present=True, currently_posted=posted)
         assert not (posted and not wanted)
         posted = wanted
+
+
+def test_fractional_weights_reach_the_threshold() -> None:
+    """Ten votes weighted 0.1 must post on a board that requires one point."""
+    score = 0.0
+    for _ in range(10):
+        score += 0.1  # 0.9999999999999999, as PostgreSQL's float SUM returns it
+    assert entry_should_be_posted(config(required=1), score, origin_present=True, currently_posted=False)

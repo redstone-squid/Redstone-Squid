@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Literal
 
 from whenever import Instant
 
+from squid.core.scores import round_score
 from squid.reactions.domain import ReactionActor
 
 type StarboardDirection = Literal["up", "down"]
@@ -104,6 +105,7 @@ def entry_should_be_posted(
     if not origin_present:
         # A deleted source removes its mirror only where the board links deletions.
         return currently_posted and not config.link_deletes
+    score = round_score(score)
     if score <= config.required_remove:
         return False
     if score >= config.required:
