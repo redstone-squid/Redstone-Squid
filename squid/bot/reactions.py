@@ -1,13 +1,58 @@
 """Route Discord reaction events to voting, starboard, and other subscribers.
 
-ReactionRouterCog receives the gateway events and hands them to ReactionRouter.
-A subscriber is any object with methods marked by @reaction_handler; the bot
-subscribes cogs automatically when they are added and detaches them when they
-are removed, and other objects call ReactionRouter.subscribe themselves.
+ReactionRouterCog receives Discord's raw reaction events and hands them to
+ReactionRouter, which delivers each event to every subscriber that wants it.
+A subscriber is any object with methods marked by @reaction_handler. Each
+subscriber decides what a reaction means; the router handles ordering,
+filtering, shared lookups, and shutdown.
 
-Subscribers share message and member lookups for each event. The router keeps
-events for one message ordered; each subscriber decides what a reaction means
-and supplies any recovery needed when shutdown interrupts its work.
+Writing a subscriber
+--------------------
+Mark each handler method with the kinds of event it receives:
+
+    class Moderation(sd.Cog[BotT]):
+        reaction_filter: ClassVar[ReactionFilter] = ReactionFilter(guild_only=True)
+
+        @reaction_handler("add", filter=ReactionFilter(emojis=frozenset({"❌"})), recover=True)
+        async def delete_archived_message(self, event: ReactionEvent) -> None:
+            message = await event.message(own=True)
+            ...
+
+        @reaction_handler("clear", "clear_emoji")
+        async def forget_reactions(self, event: ReactionClearEvent) -> None: ...
+
+- Kinds. "add" and "remove" handlers receive a ReactionEvent. "clear" (every
+  reaction removed from a message) and "clear_emoji" (every reaction with one
+  emoji removed) handlers receive a ReactionClearEvent.
+- Filters. The optional `reaction_filter` class attribute applies to every
+  add and remove handler; without one, handlers receive every reaction except
+  this bot's own. A handler's `filter=` narrows that further: an event must
+  pass both. Filters only read the event payload, so put checks that need the
+  message or member in the handler, using ReactionEvent.message() and member().
+- Subscribing. The bot subscribes a cog when it is added and detaches it before
+  it is removed, so handlers run only while the cog is loaded. Any other object
+  calls ReactionRouter.subscribe(self) when it starts and detaches the returned
+  ReactionSubscription when it stops.
+- Several handlers. A subscriber may have several handlers for one kind. They
+  run concurrently, so steps that must happen in order belong in one handler.
+- Errors. The router logs and counts an exception from a handler, naming the
+  method, and does not retry the event.
+- Recovery. Shutdown waits for queued events to finish, by default for up to
+  ten seconds. Events still unfinished at that deadline, possibly with a
+  handler cancelled partway through, and events that arrive after shutdown
+  began, go to handlers declared with recover=True, with `event.recovering`
+  set. Such a handler must tolerate partial earlier work. Recovery has its own
+  short deadline; events it cannot finish are logged with the identifiers
+  needed to reconcile them by hand. Handlers without recover=True miss these
+  events.
+- Inheritance. A subclass that overrides a handler must apply @reaction_handler
+  again, as with discord.py's @Cog.listener.
+
+Ordering: events for one message are delivered in the order they arrived, and
+every handler for one event finishes before the next event for that message
+starts. Handlers for the same event run concurrently. Events for different
+messages usually do too, but the router spreads messages over a fixed number
+of queues, so two messages can share one and wait for each other.
 """
 
 import asyncio
