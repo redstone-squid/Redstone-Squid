@@ -2,7 +2,7 @@
 
 > **Status (2026-11-07).** Every claim from the original review has been rechecked against HEAD
 > `27dfc1096` and every decision is made. Nothing below has started. The same operating
-> assumptions as `docs/plans/schema-audit.md` apply: migrations run offline, existing data is not
+> assumptions as `docs/plans/completed/schema-audit.md` apply: migrations run offline, existing data is not
 > precious, and foreign keys are immediate unless the write order cannot be fixed. Every phase must
 > keep `test_migrations_create_schema_without_drift` passing.
 
@@ -10,20 +10,20 @@
 
 An external review of the schema listed a long set of claimed defects, from "corrupts data today"
 to "nice to have". This plan keeps only the ones that are still true at HEAD and records a decision
-for each one. Several claims were already fixed, mostly by `schema-audit.md`; they are listed so
+for each one. Several claims were already fixed, mostly by `completed/schema-audit.md`; they are listed so
 nobody re-reviews them.
 
 ## Already resolved
 
 | Claim | Resolved by |
 |---|---|
-| `check_record_category` accepts any string | The column was dropped (`schema-audit.md` Phase 6). |
+| `check_record_category` accepts any string | The column was dropped (`completed/schema-audit.md` Phase 6). |
 | `vote_sessions` threshold CHECK has a NULL hole | The CHECK now requires `IS NOT NULL` (`squid/voting/models.py`, `THRESHOLD_CONSTRAINT`). |
-| Identity on FK-only columns; `build_edit_history` | `schema-audit.md` Phase 0. |
+| Identity on FK-only columns; `build_edit_history` | `completed/schema-audit.md` Phase 0. |
 | `votes` does not reference its option; no status or result | Phase 2 alias FK; `vote_sessions.status` and `result` have CHECKs. |
 | Vote-session subtypes not enforced | `enforce_vote_session_kind_subtype` constraint triggers. |
-| `title_definitions` duplicates record title fields | `schema-audit.md` Phase 6. |
-| Role-inclusion cycles | `check_permission_role_include_cycle` (`schema-audit.md` Phase 1). |
+| `title_definitions` duplicates record title fields | `completed/schema-audit.md` Phase 6. |
+| Role-inclusion cycles | `check_permission_role_include_cycle` (`completed/schema-audit.md` Phase 1). |
 | `schematic_uploads.uploaded_by_discord_id` | Replaced by `uploaded_by_account_id`, FK `ON DELETE SET NULL`. |
 | Schematic job tables use a bespoke queue | Both use `QueueColumns`, `QueueSpec` and `ClaimedRowQueue`. |
 | Missing FK indexes | Phase 0 added 37. Only `notifications.event_id` remains (Phase 3). |
@@ -230,4 +230,4 @@ The CI-generated dump becomes the only one.
   not a database invariant, because a merge can leave two Java identities on one account.
 - **Tag name and alias collisions.** Lookups resolve a name only when exactly one tag matches, so a
   collision makes the name unresolvable rather than wrong.
-- **`starboard_sources.channel_id = 0`.** See `schema-audit.md` Phase 2.
+- **`starboard_sources.channel_id = 0`.** See `completed/schema-audit.md` Phase 2.

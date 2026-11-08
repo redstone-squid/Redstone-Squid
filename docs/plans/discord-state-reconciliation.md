@@ -1,7 +1,7 @@
 # Reconcile Discord-derived state
 
 > **Status (2026-11-07).** Decisions made; nothing below has started. Split out of
-> `docs/plans/schema-audit.md` Phase 2, where a foreign key on `votes.guild_id` turned out to depend
+> `docs/plans/completed/schema-audit.md` Phase 2, where a foreign key on `votes.guild_id` turned out to depend
 > on `server_settings` rows that the bot may never have created.
 
 ## Problem
@@ -63,7 +63,7 @@ Not every miscount needs repairing. Where a missed event only makes a number sli
   insert-on-conflict (`squid/settings/infrastructure/repository.py`), in the same transaction as
   the vote.
 - Then add the FK `votes.guild_id` → `server_settings.server_id` with `ON DELETE RESTRICT`,
-  matching `generic_vote_sessions.guild_id`. This depends on `schema-audit.md` Phase 2 having made
+  matching `generic_vote_sessions.guild_id`. This depends on `completed/schema-audit.md` Phase 2 having made
   `votes.guild_id` nullable.
 - Audit the other FKs to `server_settings` (`starboards`, `starboard_sources`,
   `starboard_origin_messages`, `messages.server_id`, `guild_vote_emojis`,

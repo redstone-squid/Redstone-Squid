@@ -1,7 +1,7 @@
 # Close the remaining schema-audit findings
 
-> **Status (2026-11-07).** Phases 0–4 and 6 are complete. Phase 5 remains deliberately
-> deferred until extender submission persistence settles. The decisions below record the
+> **Status (2026-11-08).** Complete. Phases 0–4 and 6 are implemented. Phase 5 is deferred until
+> extender submission persistence settles and is tracked in TODO.md. The decisions below record the
 > implemented design.
 
 | Phase | Implementation |

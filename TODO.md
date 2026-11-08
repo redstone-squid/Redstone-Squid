@@ -17,6 +17,8 @@
   - `SMALLEST FASTEST`
 - [ ] Add calculators and typed categories for entrances and utilities.
 - [ ] Add piston-extender create/update submission persistence; record computation and read/search mapping are supported.
+  - Then settle the door and extender timing representations (deferred Phase 5 of
+    `docs/plans/completed/schema-audit.md`): keep the `*_timing_variants` tables and write them, or drop them.
 - [x] Implement the fixed-size Door Rules title formatter.
   - Includes trapdoor rewrites, animated restrictions, named layouts, canonical aliases, conflict diagnostics, and
     current-version `[BROKEN]` presentation.
