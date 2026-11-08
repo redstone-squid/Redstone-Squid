@@ -52,13 +52,14 @@ class Message:
 
 @dataclass(frozen=True)
 class User:
+    id: int
     name: str
 
 
 class Bot:
     def get_user(self, user_id: int) -> User:
         assert user_id == 7
-        return User("builder")
+        return User(7, "builder")
 
 
 async def test_archive_copies_attachments_and_deletes_the_original() -> None:
@@ -86,6 +87,7 @@ async def test_archive_copies_attachments_and_deletes_the_original() -> None:
     assert "Reactions: 5" in call.kwargs["content"]
     assert "A useful old message" in call.kwargs["content"]
     assert call.kwargs["files"] == ["upload"]
+    assert "<@7> (builder `<@7>`) wrote:" in call.kwargs["content"]
     archived.add_reaction.assert_awaited_once_with("❌")
     message.delete.assert_awaited_once_with()
 

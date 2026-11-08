@@ -102,7 +102,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             user = message.author
         else:
             user = self.bot.get_user(message.author.id)
-        username_description = f" (username: {user.name})" if user else ""
+        username_description = f" ({user.name} `<@{user.id}>`)" if user else ""
         reaction_count = sum(reaction.count for reaction in message.reactions)
 
         sent_message = await message.channel.send(
