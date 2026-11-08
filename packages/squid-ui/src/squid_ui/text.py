@@ -6,7 +6,7 @@ until the render's Localization is known; resolution produces ResolvedText carry
 both content and its markup type for the planner and renderer.
 """
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -158,11 +158,30 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
         else:
             template = value.template if count == 1 else value.plural
     params = {
-        key: raw_md(resolve_text(param, localization).content) if isinstance(param, Message | ResolvedText) else param
+        key: _nested(param, localization, value.markup) if isinstance(param, Message | ResolvedText) else param
         for key, param in value.params.items()
     }
     content = _resolve_named(template, params, value.markup) if params else template
     return ResolvedText(content, value.markup)
+
+
+def _nested(value: Message | ResolvedText, localization: Localization, markup: Markup) -> RawMarkdown:
+    """Resolve text interpolated into a Message, escaping plain text that lands in Markdown."""
+    resolved = resolve_text(value, localization)
+    return RawMarkdown(discord_text(resolved) if markup is Markup.DISCORD_MARKDOWN else resolved.content)
+
+
+def join_text(parts: Iterable[TextLike], separator: str = "\n") -> Message:
+    """Join text without resolving it, so each Message still follows the render's locale.
+
+    Bare strings are trusted Markdown here, as everywhere else a TextLike is accepted. The
+    result is not a catalogue entry; translators see each part on its own.
+    """
+    params: dict[str, object] = {}
+    for index, part in enumerate(parts):
+        params[f"part{index}"] = ResolvedText(part) if isinstance(part, str) else part
+    literal = separator.replace("{", "{{").replace("}", "}}")
+    return Message(literal.join(f"{{{key}}}" for key in params), params)
 
 
 def source_text(value: TextLike) -> str:
@@ -285,6 +304,7 @@ __all__ = [
     "TextLike",
     "current_localization",
     "discord_text",
+    "join_text",
     "localization_scope",
     "md",
     "plain",

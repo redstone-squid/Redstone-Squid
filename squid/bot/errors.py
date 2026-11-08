@@ -21,7 +21,7 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError
-from squid.core.i18n import localization_for, tr_now
+from squid.core.i18n import localization_for, resolve_now, tr
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
 from squid.observability import (
@@ -34,7 +34,7 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
-from squid_ui.text import NEUTRAL, localization_scope
+from squid_ui.text import NEUTRAL, Message, TextLike, join_text, localization_scope
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,16 @@ class ErrorNotice:
     def to_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         """Build the composable Components V2 node for this error."""
         return error_node(self.title, self.detail)
+
+
+@dataclass(frozen=True, slots=True)
+class _NoticeDraft:
+    """An ErrorNotice whose text is not yet translated; `build_error_notice` resolves it."""
+
+    title: TextLike
+    detail: TextLike
+    error_id: str | None = None
+    reference: str | None = None
 
 
 def _sanitize_log_value(value: object) -> object:
@@ -138,113 +148,119 @@ def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | 
     return str(locale) if locale is not None else None
 
 
-def _present_missing_nodes(error: PermissionNodeRequired) -> ErrorNotice:
+def _present_missing_nodes(error: PermissionNodeRequired) -> _NoticeDraft:
     """Name the nodes a caller is missing, with what each one is for.
 
     Node names are identifiers and stay untranslated; their catalogue
     descriptions are translated, so a refusal reads as "you need this capability"
     rather than as a tier the user has no way to look up.
     """
-    described = "\n".join(
-        f"`{name}` — {tr_now(CATALOGUE[name].description)}" for name in error.nodes if name in CATALOGUE
+    described = join_text(
+        join_text([f"`{name}` — ", CATALOGUE[name].description], "") for name in error.nodes if name in CATALOGUE
     )
     if error.forbidden:
-        return ErrorNotice(
-            tr_now(t"Permission withheld"),
-            tr_now(t"An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.")
-            + f"\n\n{described}",
+        return _NoticeDraft(
+            tr(t"Permission withheld"),
+            join_text(
+                [
+                    tr(
+                        t"An administrator has explicitly withheld this from you. Ask them if you think that is a mistake."
+                    ),
+                    described,
+                ],
+                "\n\n",
+            ),
         )
     lead = (
-        tr_now(t"You need any one of these permissions to use this command:")
+        tr(t"You need any one of these permissions to use this command:")
         if error.mode == "any"
-        else tr_now(t"You need these permissions to use this command:")
+        else tr(t"You need these permissions to use this command:")
     )
-    return ErrorNotice(
-        tr_now(t"Missing permission"),
-        f"{lead}\n{described}",
-    )
+    return _NoticeDraft(tr(t"Missing permission"), join_text([lead, described]))
 
 
 def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
-    """Classify an exception into safe Discord-facing text, translated into `locale`."""
+    """Classify an exception into safe Discord-facing text, translated into `locale`.
+
+    The locale comes from the interaction rather than the guild's settings, because reading
+    settings may be what failed. The text is therefore translated here, not by the render.
+    """
+    draft = _build_error_notice(error)
     with localization_scope(localization_for(locale)):
-        return _build_error_notice(error)
+        return ErrorNotice(resolve_now(draft.title), resolve_now(draft.detail), draft.error_id, draft.reference)
 
 
-def _build_error_notice(error: BaseException) -> ErrorNotice:
+def _build_error_notice(error: BaseException) -> _NoticeDraft:
     error = unwrap_error(error)
     if isinstance(error, ConsentRequiredError):
         # Give Discord users an in-bot recovery path when an operation requires consent.
-        return ErrorNotice(
-            tr_now(t"Consent required"),
-            tr_now(t"Run `/account consent` to read the privacy notice and accept it."),
+        return _NoticeDraft(
+            tr(t"Consent required"),
+            tr(t"Run `/account consent` to read the privacy notice and accept it."),
         )
     if isinstance(error, (DomainError, ServiceUnavailableError)):
-        detail = tr_now(error.message)
-        if error.end_user_action:
-            detail = f"{detail} {tr_now(error.end_user_action)}"
-        return ErrorNotice(tr_now(error.title), detail)
+        return _NoticeDraft(error.title, error.public_text())
     if isinstance(error, commands.NoPrivateMessage):
-        return ErrorNotice(
-            tr_now(t"Server only"),
-            tr_now(t"This command cannot be used in a private message."),
+        return _NoticeDraft(
+            tr(t"Server only"),
+            tr(t"This command cannot be used in a private message."),
         )
     if isinstance(error, (commands.MissingRole, commands.MissingAnyRole, commands.MissingPermissions)):
-        return ErrorNotice(
-            tr_now(t"Missing permission"),
-            tr_now(t"You do not have permission to use this command."),
+        return _NoticeDraft(
+            tr(t"Missing permission"),
+            tr(t"You do not have permission to use this command."),
         )
     if isinstance(error, commands.NotOwner):
-        return ErrorNotice(
-            tr_now(t"Owner only"),
-            tr_now(t"Only the bot owner can use this command."),
+        return _NoticeDraft(
+            tr(t"Owner only"),
+            tr(t"Only the bot owner can use this command."),
         )
     if isinstance(error, PermissionNodeRequired):
         return _present_missing_nodes(error)
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
         seconds = error.retry_after
-        return ErrorNotice(
-            tr_now(t"Command on cooldown"),
-            tr_now(t"Try again in {seconds:.1f} seconds."),
+        return _NoticeDraft(
+            tr(t"Command on cooldown"),
+            tr(t"Try again in {seconds:.1f} seconds."),
         )
     if isinstance(error, commands.MaxConcurrencyReached):
-        return ErrorNotice(
-            tr_now(t"Command already running"),
-            tr_now(t"Wait for the current operation to finish and try again."),
+        return _NoticeDraft(
+            tr(t"Command already running"),
+            tr(t"Wait for the current operation to finish and try again."),
         )
     if isinstance(error, commands.CheckFailure):
-        return ErrorNotice(
-            tr_now(t"Command unavailable"),
-            str(error) or tr_now(t"You cannot use this command here."),
+        return _NoticeDraft(
+            tr(t"Command unavailable"),
+            str(error) or tr(t"You cannot use this command here."),
         )
     if isinstance(error, commands.UserInputError):
-        return ErrorNotice(
-            tr_now(t"Invalid command input"),
-            str(error) or tr_now(t"Check the command arguments and try again."),
+        return _NoticeDraft(
+            tr(t"Invalid command input"),
+            str(error) or tr(t"Check the command arguments and try again."),
         )
     if isinstance(error, app_commands.TransformerError):
-        return ErrorNotice(
-            tr_now(t"Invalid command input"),
-            tr_now(t"One of the command options is invalid."),
+        return _NoticeDraft(
+            tr(t"Invalid command input"),
+            tr(t"One of the command options is invalid."),
         )
     if isinstance(error, app_commands.CheckFailure):
-        return ErrorNotice(
-            tr_now(t"Command unavailable"),
-            tr_now(t"You cannot use this command here."),
+        return _NoticeDraft(
+            tr(t"Command unavailable"),
+            tr(t"You cannot use this command here."),
         )
 
     error_id = correlation_id()
     reference = correlation_reference(error_id)
-    return ErrorNotice(
-        tr_now(t"Something went wrong"),
+    return _NoticeDraft(
+        tr(t"Something went wrong"),
         _unexpected_error_detail(reference),
         error_id,
         reference,
     )
 
 
-def _unexpected_error_detail(error_id: str) -> str:
-    return tr_now(t"An unexpected error occurred. Reference: `{error_id}`")
+def _unexpected_error_detail(error_id: str) -> Message:
+    return tr(t"An unexpected error occurred. Reference: `{error_id}`")
 
 
 async def _capture(

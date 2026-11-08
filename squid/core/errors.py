@@ -4,8 +4,8 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import ClassVar, Self, override
 
-from squid.core.i18n import tr, tr_now
-from squid_ui.text import Message
+from squid.core.i18n import resolve_now, tr
+from squid_ui.text import Message, TextLike, join_text
 
 type JSONValue = bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
 
@@ -143,12 +143,15 @@ class SquidError(Exception):
         separator = "\n" if "\n" in message else " "
         return f"{message}{separator}{self.developer_action}"
 
+    def public_text(self) -> TextLike:
+        """Return the message and end-user action, translated when the reader's locale is known."""
+        if not self.end_user_action:
+            return self.message
+        return join_text([self.message, self.end_user_action], " ")
+
     def public_detail(self) -> str:
-        """Render the message and end-user action using the current locale."""
-        message = tr_now(self.message)
-        if self.end_user_action:
-            return f"{message} {tr_now(self.end_user_action)}"
-        return message
+        """Render `public_text` in the current locale, for callers that need a string now."""
+        return resolve_now(self.public_text())
 
     def with_context(
         self,

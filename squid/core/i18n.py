@@ -15,7 +15,7 @@ from typing import overload
 
 from babel import Locale, UnknownLocaleError
 
-from squid_ui.text import Localization, Message, current_localization, resolve_text
+from squid_ui.text import Localization, Message, TextLike, current_localization, discord_text, resolve_text
 
 DOMAIN = "squid"
 DEFAULT_LOCALE = "en"
@@ -102,6 +102,17 @@ def tr_now(message: Template | Message | str, /, *, plural: Template | None = No
     if isinstance(message, str):
         return tr(message)
     return resolve_text(message, current_localization()).content
+
+
+def resolve_now(text: TextLike, /) -> str:
+    """Translate text into the current localization and return it as Discord Markdown.
+
+    Prefer passing a Message to a renderer, which translates it for the reader. Use this
+    only where a string is required now: a discord.py argument that takes `str`, or text
+    built inside a `localization_scope` chosen for a reason the render does not know. A
+    bare string is returned as trusted Markdown without a catalogue lookup.
+    """
+    return discord_text(resolve_text(text, current_localization()))
 
 
 def locales_dir() -> Path:

@@ -10,11 +10,13 @@ from squid_ui.text import (
     Message,
     current_localization,
     discord_text,
+    join_text,
     localization_scope,
     md,
     plain,
     raw_md,
     resolve_text,
+    source_text,
 )
 
 
@@ -114,3 +116,30 @@ def test_timestamp_interpolation_uses_discord_tokens_and_plain_iso() -> None:
         "Updated <t:1787409000:R>"
     )
     assert plain(instant).content == "2026-08-22T14:30:00+00:00"
+
+
+def french() -> Localization:
+    catalogue = {"Hello": "Bonjour", "Bye {name}": "Au revoir {name}"}
+    return Localization("fr", lambda key: catalogue.get(key, key))
+
+
+def test_a_message_cannot_become_a_string_by_accident() -> None:
+    message = Message("Hello")
+
+    with pytest.raises(TypeError, match="no text until it is resolved"):
+        str(message)
+    with pytest.raises(TypeError, match="no text until it is resolved"):
+        _ = f"{message}!"
+
+
+def test_joined_text_stays_deferred_until_the_render_locale() -> None:
+    joined = join_text([Message("Hello"), "**trusted**", Message("Bye {name}", {"name": "*Ann*"})])
+
+    assert resolve_text(joined, french()).content == "Bonjour\n**trusted**\nAu revoir \\*Ann\\*"
+    assert source_text(joined) == "Hello\n**trusted**\nBye \\*Ann\\*"
+
+
+def test_joined_plain_text_is_escaped_inside_markdown() -> None:
+    joined = join_text([plain("*literal*"), "{braces}"], separator=" {} ")
+
+    assert resolve_text(joined, french()).content == "\\*literal\\* {} {braces}"

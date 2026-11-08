@@ -23,7 +23,7 @@ class InferenceCandidatesScreen(sd.Screen):
     selected: str | None = sl.state(None)
     category: str | None = sl.state(None)
     opened: str | None = sl.state(None)
-    notice: str = sl.state("")
+    notice: sl.TextLike = sl.state("")
     page: int = sl.state(0)
 
     def __init__(self, services: BotServices, run_id: UUID, candidates: tuple[InferenceCandidate, ...]) -> None:
@@ -111,7 +111,7 @@ class InferenceCandidatesScreen(sd.Screen):
                 await admit_candidates(self.services, candidates, actor=actor)
                 self.notice = "Retained inference recovered. Open a candidate to continue."
         except SquidError as error:
-            self.notice = error.public_detail()
+            self.notice = error.public_text()
 
     async def _select(self, event: sl.ChoiceEvent) -> None:
         self.selected = event.selected[0]
@@ -150,6 +150,6 @@ class InferenceCandidatesScreen(sd.Screen):
                 actor=actor,
             )
         except SquidError as error:
-            self.notice = error.public_detail()
+            self.notice = error.public_text()
         else:
             self.opened = str(draft.snapshot.id)

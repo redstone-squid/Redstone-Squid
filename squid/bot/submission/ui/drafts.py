@@ -37,7 +37,7 @@ class DraftEditorScreen(sd.Screen):
     page: int = sl.state(0)
     selected: str | None = sl.state(None)
     option_page: int = sl.state(0)
-    notice: str = sl.state("")
+    notice: sl.TextLike = sl.state("")
     options: tuple[ChoiceOption, ...] = sl.state((), opaque=True)
     selected_attachment: str | None = sl.state(None)
 
@@ -288,7 +288,7 @@ class DraftEditorScreen(sd.Screen):
                 self.draft.snapshot.id, self.actor_id, change, locale=None
             )
         except SquidError as error:
-            self.notice = error.public_detail()
+            self.notice = error.public_text()
         else:
             self.notice = "Saved."
         await self._reload()

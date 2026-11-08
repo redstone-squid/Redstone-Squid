@@ -22,7 +22,7 @@ class RevisionProposalScreen(sd.Screen):
     audience = "personal"
     timeout = 600
     proposal: RevisionProposal = sl.state(opaque=True)
-    notice: str = sl.state("")
+    notice: sl.TextLike = sl.state("")
 
     def __init__(self, services: BotServices, proposal: RevisionProposal, targets: tuple[int, ...]) -> None:
         self.services = services
@@ -77,7 +77,7 @@ class RevisionProposalScreen(sd.Screen):
                 self.proposal.id, int(event.selected[0]), actor
             )
         except SquidError as error:
-            self.notice = error.public_detail()
+            self.notice = error.public_text()
 
     async def _approve(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
@@ -85,7 +85,7 @@ class RevisionProposalScreen(sd.Screen):
         try:
             self.proposal = await self.services.submission_revisions.approve(self.proposal.id, actor)
         except SquidError as error:
-            self.notice = error.public_detail()
+            self.notice = error.public_text()
 
     async def _renew(self, event: sd.PressEvent) -> None:
         actor = await subject_for_interaction(event.context)
