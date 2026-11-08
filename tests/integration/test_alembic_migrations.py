@@ -39,6 +39,7 @@ SCHEMATIC_PUBLICATION_REVISION = "f8b9c0d1e2f3"
 NOTIFICATION_DELIVERY_OWNER_REVISION = "b5d9f2a7c0e3"
 NOTIFICATION_DELIVERY_OWNER_PARENT_REVISION = "a4c8e1f6b9d2"
 IMMUTABLE_FINALIZATION_INPUT_REVISION = "c8e2a5b0d3f6"
+QUEUE_CLAIM_CHECK_REVISION = "f3c6b9e4a1d7"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -639,6 +640,34 @@ def test_nullable_vote_thresholds_migrate_sentinels_in_both_directions(
                 text("SELECT pass_threshold, fail_threshold FROM vote_sessions WHERE id = :id"),
                 {"id": vote_session_id},
             ).one() == (32767, -32768)
+    finally:
+        engine.dispose()
+
+
+def test_queue_claim_check_migration_gives_tokenless_claims_a_token(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A claim made by code from before claim tokens must not block adding the claim check."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{QUEUE_CLAIM_CHECK_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO record_recompute_queue (scope_key, build_kind, claimed_at) "
+                    "VALUES ('door', 'door', now()) "
+                    "ON CONFLICT (scope_key) DO UPDATE SET claimed_at = now(), claim_token = NULL"
+                )
+            )
+
+        command.upgrade(config, QUEUE_CLAIM_CHECK_REVISION)
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT claim_token IS NOT NULL FROM record_recompute_queue WHERE scope_key = 'door'")
+            ).scalar_one()
     finally:
         engine.dispose()
 

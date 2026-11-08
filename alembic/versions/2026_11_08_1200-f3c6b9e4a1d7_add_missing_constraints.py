@@ -91,6 +91,13 @@ def upgrade() -> None:
     for name, condition in _SCHEMATIC_CHECKS:
         op.create_check_constraint(name, "build_schematics", condition)
     for table, kind in _QUEUE_CHECKS:
+        if kind == "claim":
+            # Code from before claim tokens could claim a row without minting one. Give such a claim
+            # a token so the check can be added; the claim then expires like any other.
+            op.execute(
+                f"UPDATE {table} SET claim_token = gen_random_uuid() "
+                "WHERE claimed_at IS NOT NULL AND claim_token IS NULL"
+            )
         name, condition = _queue_check(table, kind)
         op.create_check_constraint(name, table, condition)
 
