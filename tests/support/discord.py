@@ -13,12 +13,16 @@ from squid.accounts.application import AccountService
 from squid.bot.errors import UI_ERRORS
 from squid.bot.i18n import localization_resolver
 from squid.bot.ui import HOST_DEFAULTS
+from squid.diagnostics.application import ErrorReportService
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
+from squid.runtime import BotServices
+from squid.suggestions.application import SuggestionService
 from squid_reactivity import LocalTopicBus
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.testing import AsyncCallRecorder
 from squid_ui_discord.testing import InteractionHarness as UIInteractionHarness
+from tests.support.services import bot_services, is_configured
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -59,11 +63,6 @@ class _FollowupSource:
     delete_message: AsyncCallRecorder
 
 
-@dataclass(frozen=True, slots=True)
-class _ErrorServices:
-    error_reports: object
-
-
 @dataclass(slots=True)
 class _InteractionSource:
     response: _ResponseSource
@@ -97,7 +96,7 @@ def make_interaction(
     user_id: int = 1,
     guild_id: int | None = None,
     channel_id: int = 2,
-    error_reports: object | None = None,
+    error_reports: ErrorReportService | None = None,
 ) -> InteractionHarness:
     """Create the minimal interaction contract used by shared error handling.
 
@@ -106,7 +105,7 @@ def make_interaction(
     """
     send_initial = AsyncCallRecorder(result=_InitialResponseResult())
     send_followup = AsyncCallRecorder(result=_FollowupResult())
-    services = _ErrorServices(error_reports) if error_reports is not None else None
+    services = bot_services(error_reports=error_reports) if error_reports is not None else None
     client = make_layout_bot(services=services)
     interaction = cast(
         discord.Interaction[discord.Client],
@@ -196,13 +195,6 @@ class _AutocompleteAccounts(AccountService):
 
 
 @dataclass(frozen=True, slots=True)
-class _AutocompleteServices:
-    suggestions: object
-    permissions: _AutocompletePermissions
-    accounts: _AutocompleteAccounts
-
-
-@dataclass(frozen=True, slots=True)
 class _AccountIds:
     account_id: int
 
@@ -212,7 +204,7 @@ class _AccountIds:
 
 
 def make_autocomplete_interaction(
-    suggestions: object,
+    suggestions: SuggestionService,
     *,
     user_id: int = 1,
     guild_id: int | None = None,
@@ -230,7 +222,7 @@ def make_autocomplete_interaction(
         return False
 
     client = make_layout_bot(
-        services=_AutocompleteServices(
+        services=bot_services(
             suggestions=suggestions,
             permissions=_AutocompletePermissions(allowed_nodes),
             accounts=_AutocompleteAccounts(),
@@ -364,13 +356,20 @@ def make_layout_bot(**attributes: Any) -> Any:
     Reuse a supplied topic bus or create a local one. Localization uses the supplied settings
     service when present and NEUTRAL otherwise. Expose the runtime as ui and its manager as
     sessions, matching the attributes application code reads from the bot.
+
+    A supplied `services` must be a real `BotServices`; build it with
+    `tests.support.services.bot_services` so its doubles are checked against production.
     """
+    services = attributes.get("services")
+    if services is not None and not isinstance(services, BotServices):
+        raise TypeError(f"services must be a BotServices from bot_services(), got {type(services).__name__}")
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
 
     async def resolve(source: sd.contracts.LocalizationSource) -> Localization:
-        settings = getattr(getattr(client, "services", None), "settings", None)
-        return NEUTRAL if settings is None else await localization_resolver(source)
+        if services is None or not is_configured(services.settings):
+            return NEUTRAL
+        return await localization_resolver(source)
 
     runtime = sd.install(
         cast(discord.Client, client), sd.Config(defaults=HOST_DEFAULTS, bus=bus, localization=resolve, errors=UI_ERRORS)

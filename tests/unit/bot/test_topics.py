@@ -1,8 +1,7 @@
 """The bot's topic vocabulary and live-build publishing path."""
 
 import asyncio
-from dataclasses import dataclass
-from typing import Any, cast, override
+from typing import override
 
 import anyio
 
@@ -15,6 +14,7 @@ from squid.posts.domain import ResourceKind
 from squid.topics import resource_topic
 from squid_ui_discord import Everyone
 from squid_ui_discord.testing import delivered_to, message_harness
+from tests.support.services import bot_services
 
 
 class Projection(sl.Component):
@@ -69,11 +69,6 @@ class ReconcileRecorder(PostReconciler[RedstoneSquid]):
         self.calls.append((resource_kind, resource_key, generation))
 
 
-@dataclass(frozen=True)
-class TopicServices:
-    posts: PostService
-
-
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
     bus = sl.runtime.LocalTopicBus()
     scheduler = sd.MessageRootScheduler(bus)
@@ -91,7 +86,7 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     bot = RedstoneSquid.__new__(RedstoneSquid)
     bot.topic_bus = bus
     bot.topic_publisher = bus
-    bot.services = cast(Any, TopicServices(posts=posts))
+    bot.services = bot_services(posts=posts)
     bot.post_reconciler = reconciler
     source = "after"
 

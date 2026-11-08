@@ -1,6 +1,5 @@
 """Command wrappers preserve owner scopes, access checks, and consent responses."""
 
-from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -13,6 +12,7 @@ from squid.diagnostics.application import ErrorReportService
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
 from squid_ui_discord.testing import interaction_harness
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 @pytest.mark.parametrize("allowed", [True, False])
@@ -21,7 +21,7 @@ async def test_error_command_checks_access_before_presenting_in_its_cog_scope(
 ) -> None:
     reports = AsyncMock(spec=ErrorReportService)
     reports.recent.return_value = ()
-    bot = make_layout_bot(services=SimpleNamespace(error_reports=reports))
+    bot = make_layout_bot(services=bot_services(error_reports=reports))
     cog = diagnostics.Diagnostics(bot)
     interaction = interaction_harness(user_id=7)
     interaction.client = bot
@@ -55,8 +55,8 @@ async def test_error_command_checks_access_before_presenting_in_its_cog_scope(
 async def test_notification_consent_uses_the_command_request_without_a_second_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    accounts = object()
-    bot = make_layout_bot(services=SimpleNamespace(accounts=accounts, notifications=object()))
+    bot = make_layout_bot(services=bot_services())
+    accounts = bot.services.accounts
     cog = notifications.NotificationCog(bot)
     interaction = interaction_harness(user_id=7)
     interaction.client = bot

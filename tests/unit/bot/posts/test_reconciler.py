@@ -6,7 +6,7 @@ Cover redelivery, recovery after partial publication, and removal of unwanted po
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -15,8 +15,12 @@ from whenever import Instant
 import squid_ui_discord as sd
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
+from squid.messages.application import MessageService
+from squid.messages.domain import MessageFact
+from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind, Surface
 from squid.posts.models import DiscordPost
+from tests.support.services import bot_services
 
 GUILD = 500
 
@@ -102,12 +106,13 @@ class FakeChannel:
             raise discord.NotFound(response, "Unknown Message") from None
 
 
-class FakePosts:
+class FakePosts(PostService):
     """Enforce one live post per resource and channel in memory."""
 
     def __init__(self) -> None:
         self.posts: dict[int, DiscordPost] = {}
 
+    @override
     async def list_for_resource(self, resource_kind: ResourceKind, resource_key: str) -> Sequence[DiscordPost]:
         return [
             post
@@ -115,6 +120,7 @@ class FakePosts:
             if post.resource_kind == resource_kind and post.resource_key == resource_key
         ]
 
+    @override
     async def record(
         self,
         *,
@@ -145,6 +151,7 @@ class FakePosts:
             applied_revision=applied_revision,
         )
 
+    @override
     async def mark_rendered(self, message_id: int, applied_revision: int) -> None:
         post = self.posts[message_id]
         if post.applied_revision < applied_revision:
@@ -157,6 +164,7 @@ class FakePosts:
                 applied_revision=applied_revision,
             )
 
+    @override
     async def suppress(self, message_id: int) -> bool:
         post = self.posts.get(message_id)
         if post is None or not post.is_live:
@@ -172,18 +180,21 @@ class FakePosts:
         )
         return True
 
+    @override
     async def forget(self, message_id: int) -> None:
         self.posts.pop(message_id, None)
 
 
-class FakeMessages:
+class FakeMessages(MessageService):
     def __init__(self) -> None:
         self.observed: list[int] = []
         self.deleted: list[int] = []
 
-    async def observe(self, fact: Any) -> None:
+    @override
+    async def observe(self, fact: MessageFact) -> None:
         self.observed.append(fact.id)
 
+    @override
     async def mark_deleted(self, message_id: int) -> bool:
         self.deleted.append(message_id)
         return True
@@ -221,16 +232,10 @@ class FakeRenderer:
 class FakeBot:
     def __init__(self, channels: Sequence[FakeChannel]) -> None:
         self.channels = {channel.id: channel for channel in channels}
-        self.services = _Services()
+        self.services = bot_services(posts=FakePosts(), messages=FakeMessages())
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> FakeChannel | None:
         return self.channels.get(channel_id)
-
-
-@dataclass
-class _Services:
-    posts: FakePosts = field(default_factory=FakePosts)
-    messages: FakeMessages = field(default_factory=FakeMessages)
 
 
 def _reconciler(channels: Sequence[FakeChannel], renderer: FakeRenderer) -> Any:

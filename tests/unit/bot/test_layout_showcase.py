@@ -33,6 +33,7 @@ from squid_ui_discord.testing import (
     message_harness,
 )
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 class SettingsRecorder(SettingsService):
@@ -42,11 +43,6 @@ class SettingsRecorder(SettingsService):
     @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
-
-
-@dataclass(frozen=True)
-class Services:
-    settings: SettingsService
 
 
 @dataclass(frozen=True)
@@ -337,7 +333,7 @@ async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_res
 
 async def test_demo_command_and_controls_are_public() -> None:
     bot = make_layout_bot(
-        services=Services(settings=SettingsRecorder()),
+        services=bot_services(settings=SettingsRecorder()),
         topic_bus=sl.runtime.LocalTopicBus(),
     )
     cog = LayoutShowcaseCog(cast(Any, bot))

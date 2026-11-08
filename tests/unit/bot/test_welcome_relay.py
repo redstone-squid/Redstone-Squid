@@ -12,7 +12,9 @@ from pytest_mock import MockerFixture
 from squid.bot import welcome_relay
 from squid.community.application import WelcomeRelayService
 from squid.community.domain import WelcomeRelayPolicy
+from squid.runtime import BotServices
 from squid_ui_discord.testing import AsyncCallRecorder
+from tests.support.services import bot_services
 
 
 class CountingRandom(Random):
@@ -27,18 +29,13 @@ class CountingRandom(Random):
 
 
 @dataclass(frozen=True, slots=True)
-class Services:
-    welcome_relay: WelcomeRelayService
-
-
-@dataclass(frozen=True, slots=True)
 class CommunityConfig:
     welcome_relay_channel_id: int
 
 
 @dataclass(frozen=True, slots=True)
 class Bot:
-    services: Services
+    services: BotServices
     community_config: CommunityConfig
     get_or_fetch_messageable_channel: AsyncCallRecorder
 
@@ -73,7 +70,7 @@ async def test_welcome_relay_forwards_once_in_either_event_order_without_cache_o
     )
     general_channel = mocker.Mock(spec=discord.TextChannel)
     fetch_channel = AsyncCallRecorder(result=general_channel)
-    bot = Bot(Services(service), CommunityConfig(welcome_relay_channel_id=20), fetch_channel)
+    bot = Bot(bot_services(welcome_relay=service), CommunityConfig(welcome_relay_channel_id=20), fetch_channel)
     cog = welcome_relay.WelcomeRelay(cast(Any, bot))
     message = cast(
         discord.Message,

@@ -21,6 +21,7 @@ from squid.builds.domain import SourceMessage, Status
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, BuildLink, DoorBuild
 from squid.permissions.domain import Subject
+from squid.runtime import BotServices
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
@@ -36,6 +37,7 @@ from squid_ui_discord.testing import (
     message_harness,
 )
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -85,17 +87,12 @@ class EditRecorder(BuildService):
 
 
 @dataclass(frozen=True)
-class HandlerServices:
-    versions: VersionService
-
-
-@dataclass(frozen=True)
 class HandlerBot:
-    services: HandlerServices
+    services: BotServices
 
 
 def handler_bot() -> Any:
-    return HandlerBot(HandlerServices(VersionRecorder()))
+    return HandlerBot(bot_services(versions=VersionRecorder()))
 
 
 @pytest.fixture

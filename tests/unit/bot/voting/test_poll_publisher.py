@@ -4,25 +4,31 @@ Attaching a message here means recording its association with the vote session. 
 database write must reuse the Discord message rather than send another poll card.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast, override
 
 import discord
 import pytest
+from whenever import Instant
 
 from squid.bot.voting.publisher import DiscordPollPublisher, PollPublication, PollPublicationError
+from squid.messages.application.services import MessageService
 from squid.messages.domain import MessageFact
+from squid.voting.application import VoteService
 from squid.voting.domain import PollScope, VoteOption, VoteVisibility
+from tests.support.services import bot_services
 from tests.support.voting import GENERIC_OPTIONS
 
 
-class VoteRecorder:
+class VoteRecorder(VoteService):
     def __init__(self, *, attachment_failures: int = 0) -> None:
         self.attachment_failures = attachment_failures
         self.create_calls = 0
         self.attach_calls: list[tuple[int, int]] = []
 
+    @override
     async def create_generic_poll(
         self,
         *,
@@ -30,37 +36,34 @@ class VoteRecorder:
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
-        options: list[VoteOption] | tuple[VoteOption, ...],
+        options: Sequence[VoteOption],
         guild_id: int | None = None,
         scope: PollScope = PollScope.GUILD,
+        now: Instant | None = None,
     ) -> int:
-        del author_account_id, question, visibility, duration_seconds, options, guild_id, scope
+        del author_account_id, question, visibility, duration_seconds, options, guild_id, scope, now
         self.create_calls += 1
         return 41
 
+    @override
     async def attach_message(self, vote_session_id: int, message_id: int) -> None:
         self.attach_calls.append((vote_session_id, message_id))
         if len(self.attach_calls) <= self.attachment_failures:
             raise RuntimeError("temporary database failure")
 
 
-class MessageRecorder:
+class MessageRecorder(MessageService):
     def __init__(self) -> None:
         self.facts: list[MessageFact] = []
 
+    @override
     async def observe(self, fact: MessageFact) -> None:
         self.facts.append(fact)
 
 
-@dataclass(frozen=True)
-class Services:
-    votes: VoteRecorder
-    messages: MessageRecorder
-
-
 class Bot:
     def __init__(self, votes: VoteRecorder, messages: MessageRecorder) -> None:
-        self.services = Services(votes, messages)
+        self.services = bot_services(votes=votes, messages=messages)
         self.refresh_calls: list[tuple[str, str]] = []
 
     async def refresh_posts(self, resource_kind: str, resource_key: str) -> None:

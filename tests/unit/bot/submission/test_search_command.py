@@ -9,9 +9,11 @@ from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.application import BuildQueryService
 from squid.builds.models import Build
 from squid.core.errors import ValidationError
+from squid.runtime import BotServices
 from squid.search.application import SearchService
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
 from squid.settings.application import SettingsService
+from tests.support.services import bot_services
 
 
 class RecordingSearch(SearchService):
@@ -45,18 +47,13 @@ class SettingsRecorder(SettingsService):
 
 
 @dataclass(frozen=True)
-class CogServices:
-    settings: SettingsService
-
-
-@dataclass(frozen=True)
 class CogBot:
-    services: CogServices
+    services: BotServices
 
 
 def _cog(search: RecordingSearch) -> SearchCog[Any]:
     cog = SearchCog.__new__(SearchCog)
-    cog.bot = cast(Any, CogBot(services=CogServices(settings=SettingsRecorder())))
+    cog.bot = cast(Any, CogBot(services=bot_services(settings=SettingsRecorder())))
     cog.queries = BuildQueryRecorder()
     cog.search = search
     return cog

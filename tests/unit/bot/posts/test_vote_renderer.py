@@ -10,10 +10,12 @@ from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
 from squid.posts.models import DiscordPost
+from squid.runtime import BotServices
 from squid.settings.application import SettingsService
 from squid.settings.domain import Setting
 from squid.voting.application import VoteService
 from squid.voting.domain import PollScope, VoteMessage, VoteSessionSnapshot, VoteStatus
+from tests.support.services import bot_services
 from tests.support.voting import poll_snapshot
 
 OWNER_GUILD_ID = 10
@@ -81,18 +83,10 @@ class AccountRecorder(AccountService):
 
 
 @dataclass(frozen=True)
-class Services:
-    votes: VoteService
-    settings: SettingsService
-    posts: PostService
-    accounts: AccountService
-
-
-@dataclass(frozen=True)
 class Bot:
     guilds: list[Guild]
     channels: dict[int, Channel]
-    services: Services
+    services: BotServices
 
     def get_channel(self, channel_id: int) -> Channel | None:
         return self.channels.get(channel_id)
@@ -107,7 +101,7 @@ def renderer_for(snapshot: VoteSessionSnapshot, vote_channels: dict[int, int]) -
     bot = Bot(
         guilds=guilds,
         channels=channels,
-        services=Services(
+        services=bot_services(
             votes=VoteRecorder(snapshot),
             settings=SettingsRecorder(vote_channels),
             posts=PostRecorder(snapshot),

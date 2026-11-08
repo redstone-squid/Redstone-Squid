@@ -7,6 +7,8 @@ from whenever import Instant
 
 from squid.bot.events.dispatcher import DomainEventCog
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
+from squid.runtime import BotServices
+from tests.support.services import bot_services
 
 
 def _delivery(event_type: str = "build.confirmed", *, schema_version: int = 1) -> DomainEventDelivery:
@@ -56,20 +58,15 @@ class HandlerRecorder:
 
 
 @dataclass(frozen=True, slots=True)
-class _Services:
-    domain_events: EventServiceRecorder
-
-
-@dataclass(frozen=True, slots=True)
 class _Bot:
-    services: _Services
+    services: BotServices
 
 
 def _cog(*handlers: HandlerRecorder) -> tuple[Any, EventServiceRecorder]:
     """Build a cog without starting its loop, so dispatch can be driven directly."""
     events = EventServiceRecorder()
     cog = DomainEventCog.__new__(DomainEventCog)
-    cog.bot = _Bot(_Services(events))
+    cog.bot = _Bot(bot_services(domain_events=events))
     cog.handlers = {"build.confirmed": handlers} if handlers else {}
     return cog, events
 

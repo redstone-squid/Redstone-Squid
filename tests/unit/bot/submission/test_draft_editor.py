@@ -4,60 +4,94 @@ The editor uses the draft's pinned form schema; concurrent answer edits must not
 """
 
 from dataclasses import replace
-from types import SimpleNamespace
-from typing import cast
-from uuid import uuid4
+from typing import override
+from uuid import UUID, uuid4
 
 from whenever import Instant
 
 import squid_ui_discord as sd
 from squid.bot.submission.ui.drafts import DraftEditorScreen, draft_editor
 from squid.runtime import BotServices
-from squid.submissions.application import StoredDraft, build_submission_manifest
+from squid.submissions.application import (
+    AppliedDraftChange,
+    StoredDraft,
+    SubmissionDraftService,
+    SubmissionFinalizationService,
+    SubmissionFormService,
+    build_submission_manifest,
+)
+from squid.submissions.application.drafts import DraftActor
+from squid.submissions.application.finalization import SubmissionRequestResult
 from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
+from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.domain import (
     DraftChange,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
+    FormManifest,
     SubmissionOrigin,
 )
 from squid_ui.testing import labels
 from squid_ui.text import source_text
 from squid_ui_discord.testing import commit_render
+from tests.support.services import bot_services
 
 
-class Drafts:
+class Drafts(SubmissionDraftService):
     """Apply changes through DraftSnapshot revision checks while keeping the snapshot in memory."""
 
     def __init__(self, draft: StoredDraft) -> None:
         self.current = draft
-        self.actors: list[int] = []
+        self.actors: list[DraftActor] = []
         self.changes: list[DraftChange] = []
 
-    async def get_accessible(self, draft_id: object, actor: int) -> StoredDraft:
+    @override
+    async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         self.actors.append(actor)
         return self.current
 
-    async def apply_change(self, draft_id: object, actor: int, change: DraftChange, *, locale: str | None) -> None:
-        self.actors.append(actor)
+    @override
+    async def apply_change(
+        self,
+        draft_id: UUID,
+        account_id: DraftActor,
+        change: DraftChange,
+        *,
+        locale: str | None,
+        now: Instant | None = None,
+    ) -> AppliedDraftChange:
+        self.actors.append(account_id)
         self.changes.append(change)
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
+        return AppliedDraftChange(self.current)
 
 
-class Forms:
-    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None) -> object:
+class Forms(SubmissionFormService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None:
         return build_submission_manifest(revision=revision)
 
 
-class Intake:
-    async def list(self, draft_id: object, actor: int) -> tuple[()]:
+class Intake(SubmissionAttachmentIntake):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
         return ()
 
 
-class Finalization:
-    async def status(self, draft_id: object, actor: int) -> None:
+class Finalization(SubmissionFinalizationService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
         return None
 
 
@@ -71,14 +105,11 @@ def setup() -> tuple[BotServices, Drafts]:
         expires_at=now.add(days=7, days_assumed_24h_ok=True),
     )
     drafts = Drafts(draft)
-    services = cast(
-        BotServices,
-        SimpleNamespace(
-            submission_drafts=drafts,
-            submission_forms=Forms(),
-            submission_finalization=Finalization(),
-            submission_intake=Intake(),
-        ),
+    services = bot_services(
+        submission_drafts=drafts,
+        submission_forms=Forms(),
+        submission_finalization=Finalization(),
+        submission_intake=Intake(),
     )
     return services, drafts
 

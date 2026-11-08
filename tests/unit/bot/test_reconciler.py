@@ -6,7 +6,6 @@ Post creation and deletion behavior is covered in ``posts/test_reconciler.py``.
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import cast
 
 import anyio
@@ -20,6 +19,7 @@ from squid.sync import DiscordReconciliationService, ReconciliationAction, Recon
 from squid.topics import resource_topic
 from squid_reactivity import LocalTopicBus
 from tests.support.delivery_uow import ReconciliationUnitOfWork
+from tests.support.services import bot_services
 
 
 def _job(
@@ -63,17 +63,16 @@ class Renderer:
             raise RuntimeError("discord is down")
 
 
-@dataclass(frozen=True)
-class Services:
-    discord_reconciliation: DiscordReconciliationService
-
-
 class ReconciliationHarness:
     def __init__(self) -> None:
         self.events: list[object] = []
         self.queue = QueueRecorder(self.events)
         self.post_reconciler = Renderer(self.events)
-        self.services = Services(DiscordReconciliationService(uow_factory=lambda: ReconciliationUnitOfWork(self.queue)))
+        self.services = bot_services(
+            discord_reconciliation=DiscordReconciliationService(
+                uow_factory=lambda: ReconciliationUnitOfWork(self.queue)
+            )
+        )
         self.background_tasks = BackgroundTaskSupervisor()
         self.topic_publisher = LocalTopicBus()
         self.ready = anyio.Event()

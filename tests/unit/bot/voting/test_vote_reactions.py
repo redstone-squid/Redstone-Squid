@@ -1,23 +1,27 @@
 """Reaction adaptation with real consent, actor resolution, routing and task ownership."""
 
 import asyncio
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import anyio
 import discord
 import pytest
 from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.accounts.models import Account, AccountIdentity
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.voting.vote import VoteCog
+from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
 from squid.runtime import BackgroundTaskSupervisor
+from squid.settings.application import SettingsService
+from squid.voting.application import VoteService
 from squid.voting.application.ports import VoteActorResolver
 from squid.voting.domain import (
     CastVoteResult,
@@ -31,6 +35,7 @@ from squid.voting.domain import (
 )
 from squid_ui_discord.testing import MessageHarness
 from tests.support.discord import make_layout_bot, make_reaction_payload
+from tests.support.services import bot_services
 from tests.support.voting import GENERIC_OPTIONS, poll_snapshot
 
 if TYPE_CHECKING:
@@ -103,7 +108,7 @@ class Message:
 
 
 @dataclass
-class Accounts:
+class Accounts(AccountService):
     account: Account = field(
         default_factory=lambda: Account(
             id=7,
@@ -112,21 +117,23 @@ class Accounts:
         )
     )
 
+    @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         return self.account if self.account.identity_for(provider, subject) else None
 
 
 @dataclass
-class Permissions:
+class Permissions(PermissionService):
     subjects: list[Subject] = field(default_factory=list)
 
+    @override
     async def capabilities(self, subject: Subject, nodes: Iterable[PermissionNode | str]) -> frozenset[str]:
         self.subjects.append(subject)
         return frozenset()
 
 
 @dataclass
-class Votes:
+class Votes(VoteService):
     """Record casts without mutating the snapshot; tests explicitly seed resulting selections."""
 
     trace: list[str]
@@ -140,18 +147,23 @@ class Votes:
     rejection: VoteRejection | None = None
     resolver: VoteActorResolver | None = None
 
+    @override
     def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
         self.resolver = resolver
 
+    @override
     async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         return self.snapshot if vote_session_id == self.snapshot.id else None
 
+    @override
     async def get_session_for_message(self, message_id: int) -> VoteSessionSnapshot | None:
         return self.snapshot if any(message.id == message_id for message in self.snapshot.messages) else None
 
-    async def list_open(self, kind: VoteKind) -> tuple[VoteSessionSnapshot, ...]:
+    @override
+    async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
         return (self.snapshot,) if self.snapshot.kind is kind else ()
 
+    @override
     async def cast_vote(
         self, vote_session_id: int, actor: VoteActor, option_id: str, *, emoji: str | None = None
     ) -> CastVoteResult:
@@ -163,23 +175,24 @@ class Votes:
         return CastVoteResult(self.snapshot, self.rejection)
 
 
-class Settings:
+class Settings(SettingsService):
+    def __init__(self) -> None:
+        pass
+
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
-
-
-@dataclass
-class Services:
-    votes: Votes
-    accounts: Accounts = field(default_factory=Accounts)
-    permissions: Permissions = field(default_factory=Permissions)
-    settings: Settings = field(default_factory=Settings)
 
 
 class ReactionHarness:
     def __init__(self) -> None:
         self.trace: list[str] = []
-        self.services = Services(Votes(self.trace))
+        self.votes = Votes(self.trace)
+        self.accounts = Accounts()
+        self.permissions = Permissions()
+        self.services = bot_services(
+            votes=self.votes, accounts=self.accounts, permissions=self.permissions, settings=Settings()
+        )
         self.messages = {100: Message(self.trace), 101: Message(self.trace)}
         self.guilds = {guild_id: Guild(guild_id) for guild_id in (10, 11)}
         self.refreshes: list[tuple[str, str]] = []
@@ -245,12 +258,10 @@ class ReactionHarness:
         return ReactionEvent(payload, emoji, ReactionResolver(self.bot, None), recovering=recovering)
 
     def selected(self) -> None:
-        self.services.votes.snapshot = replace(
-            self.services.votes.snapshot, selections=(VoteSelection(7, 10, "one", "1️⃣", 1),)
-        )
+        self.votes.snapshot = replace(self.votes.snapshot, selections=(VoteSelection(7, 10, "one", "1️⃣", 1),))
 
     def anonymous(self) -> None:
-        self.services.votes.snapshot = poll_snapshot(messages=(VoteMessage(100, 200, 10),))
+        self.votes.snapshot = poll_snapshot(messages=(VoteMessage(100, 200, 10),))
 
 
 @pytest.fixture
@@ -265,7 +276,7 @@ async def test_reconciliation_job_is_supervised_and_stops_on_unload(reactions: R
             while "vote-reaction-reconciliation" not in reactions.supervisor.last_success:
                 await anyio.lowlevel.checkpoint()
         (job,) = reactions.cog.reactions._background_tasks
-        assert reactions.services.votes.resolver is reactions.cog
+        assert reactions.votes.resolver is reactions.cog
         assert reactions.messages[100].added == ["1️⃣", "2️⃣"]
         assert not job.finished.is_set()
         await reactions.cog.ui_unload()
@@ -281,19 +292,19 @@ async def test_routed_public_reactions_add_and_remove_a_ballot(reactions: Reacti
             await reactions.bot.reactions.dispatch_remove(reactions.event("REACTION_REMOVE").payload)
             await reactions.refreshed.get()
 
-    assert reactions.services.votes.casts == [(VoteActor(7, 70, guild_id=10), "one", "1️⃣")] * 2
+    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "one", "1️⃣")] * 2
     assert reactions.refreshes == [("vote_session", "1")] * 2
-    assert reactions.services.permissions.subjects == [Subject(account_id=7, guild_id=10)] * 2
+    assert reactions.permissions.subjects == [Subject(account_id=7, guild_id=10)] * 2
 
 
 async def test_anonymous_reaction_is_removed_only_after_commit(reactions: ReactionHarness) -> None:
     reactions.anonymous()
-    reactions.services.votes.failure = RuntimeError("database unavailable")
+    reactions.votes.failure = RuntimeError("database unavailable")
     async with reactions.running():
         with pytest.raises(RuntimeError, match="database unavailable"):
             await reactions.cog.reactions.on_reaction_add(reactions.event())
         assert reactions.messages[100].removed == []
-        reactions.services.votes.failure = None
+        reactions.votes.failure = None
         await reactions.cog.reactions.on_reaction_add(reactions.event())
         with anyio.fail_after(1):
             while not reactions.messages[100].removed:
@@ -301,7 +312,7 @@ async def test_anonymous_reaction_is_removed_only_after_commit(reactions: Reacti
         reactions.selected()
         await reactions.cog.reactions.on_reaction_add(reactions.event(recovering=True))
         assert reactions.messages[100].removed == [("1️⃣", 70)] * 2
-        assert len(reactions.services.votes.casts) == 1
+        assert len(reactions.votes.casts) == 1
 
     assert reactions.trace == ["committed", "removed", "removed"]
 
@@ -313,13 +324,13 @@ async def test_reconciliation_changes_public_selection_but_keeps_it_when_discord
     message = reactions.messages.pop(100)
     async with reactions.running():
         await reactions.cog.reactions.reconcile_session_reactions(1)
-        assert reactions.services.votes.casts == []
+        assert reactions.votes.casts == []
         assert reactions.refreshes == []
         reactions.messages[100] = message
         message.reactions = [Reaction("1️⃣"), Reaction("2️⃣", (Member(reactions.guilds[10]),))]
         await reactions.cog.reactions.reconcile_session_reactions(1)
 
-    assert reactions.services.votes.casts == [(VoteActor(7, 70, guild_id=10), "two", "2️⃣")]
+    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "two", "2️⃣")]
     assert reactions.refreshes == [("vote_session", "1")]
 
 
@@ -332,11 +343,11 @@ async def test_anonymous_recovery_cleans_committed_and_unconsented_reactions_wit
     message.reactions = [Reaction("1️⃣", (Member(reactions.guilds[10]),)), Reaction("2️⃣")]
     async with reactions.running():
         await reactions.cog.reactions.reconcile_session_reactions(1)
-        reactions.services.accounts.account = replace(reactions.services.accounts.account, consent=None)
-        reactions.services.votes.snapshot = replace(reactions.services.votes.snapshot, selections=())
+        reactions.accounts.account = replace(reactions.accounts.account, consent=None)
+        reactions.votes.snapshot = replace(reactions.votes.snapshot, selections=())
         await reactions.cog.reactions.reconcile_session_reactions(1)
 
-    assert reactions.services.votes.casts == []
+    assert reactions.votes.casts == []
     assert message.removed == [("1️⃣", 70)] * 2
 
 
@@ -347,7 +358,7 @@ async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_s
 
     Recovery must recognize the existing selection; removing either alias can withdraw it.
     """
-    reactions.services.votes.snapshot = poll_snapshot(
+    reactions.votes.snapshot = poll_snapshot(
         visibility=VoteVisibility.VISIBLE_LIVE,
         messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
         options=GENERIC_OPTIONS
@@ -363,14 +374,14 @@ async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_s
     async with reactions.running():
         await reactions.cog.reactions.reconcile_session_reactions(1)
         await reactions.cog.reactions.on_reaction_add(reactions.event(message_id=101, recovering=True))
-        assert reactions.services.votes.casts == []
+        assert reactions.votes.casts == []
         assert reactions.refreshes == []
         assert second.removed == []
         await reactions.cog.reactions.on_reaction_remove(
             reactions.event("REACTION_REMOVE", message_id=101, recovering=True)
         )
 
-    assert reactions.services.votes.casts == [(VoteActor(7, 70, guild_id=11), "one", "🔴")]
+    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=11), "one", "🔴")]
 
 
 async def test_clear_and_recovery_restore_options_without_toggling_ballots(reactions: ReactionHarness) -> None:
@@ -386,12 +397,12 @@ async def test_clear_and_recovery_restore_options_without_toggling_ballots(react
         await reactions.cog.reactions.on_reaction_clear(ReactionClearEvent(emoji, "1️⃣"))
         await reactions.cog.reactions.on_reaction_clear(ReactionClearEvent(clear))
 
-    assert reactions.services.votes.casts == []
+    assert reactions.votes.casts == []
     assert message.added == ["1️⃣", "2️⃣"] * 3
 
 
 async def test_unconsented_live_vote_explains_refusal_but_recovery_stays_quiet(reactions: ReactionHarness) -> None:
-    reactions.services.accounts.account = replace(reactions.services.accounts.account, consent=None)
+    reactions.accounts.account = replace(reactions.accounts.account, consent=None)
     message = reactions.messages[100]
     async with reactions.running():
         await reactions.cog.reactions.on_reaction_add(reactions.event(recovering=True))
@@ -399,7 +410,7 @@ async def test_unconsented_live_vote_explains_refusal_but_recovery_stays_quiet(r
         assert message.sent == []
         await reactions.cog.reactions.on_reaction_add(reactions.event())
 
-    assert reactions.services.votes.casts == []
+    assert reactions.votes.casts == []
     assert message.removed == [("1️⃣", 70)]
     assert len(message.sent) == 1
     assert message.sent[0]["delete_after"] == 30
@@ -408,7 +419,7 @@ async def test_unconsented_live_vote_explains_refusal_but_recovery_stays_quiet(r
 
 async def test_anonymous_refusal_removes_reactions_but_only_live_events_explain_it(reactions: ReactionHarness) -> None:
     reactions.anonymous()
-    reactions.services.votes.rejection = VoteRejection.NOT_ELIGIBLE
+    reactions.votes.rejection = VoteRejection.NOT_ELIGIBLE
     message = reactions.messages[100]
     async with reactions.running():
         await reactions.cog.reactions.on_reaction_add(reactions.event(recovering=True))
@@ -431,6 +442,6 @@ async def test_only_live_public_replacement_takes_back_the_previous_reaction(
     async with reactions.running():
         await handler.on_reaction_add(reactions.event(emoji="2️⃣", recovering=recovering))
 
-    assert reactions.services.votes.casts == [(VoteActor(7, 70, guild_id=10), "two", "2️⃣")]
+    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "two", "2️⃣")]
     assert reactions.messages[100].removed == ([] if recovering else [("1️⃣", 70)])
     assert reactions.refreshes == [("vote_session", "1")]

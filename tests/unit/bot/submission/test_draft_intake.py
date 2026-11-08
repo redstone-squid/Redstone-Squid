@@ -5,36 +5,45 @@ A failed download remains a draft requirement, so finalization cannot silently o
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
+from typing import cast, override
 from uuid import UUID, uuid4
 
 import discord
 import pytest
 
 from squid.bot.submission.draft_intake import receive_attachments
-from squid.runtime import BotServices
-from squid.submissions.application.intake import SuppliedAttachment
+from squid.submissions.application.drafts import DraftActor
+from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.domain.intake import IntakeStatus
+from tests.support.services import bot_services
 
 
-class Intake:
+class Intake(SubmissionAttachmentIntake):
     def __init__(self) -> None:
         self.files: dict[UUID, SuppliedAttachment] = {}
         self.registered: list[bytes] = []
 
-    async def reserve(self, draft: UUID, actor: int, source: UUID, filename: str, mime: str | None) -> None:
-        self.files[source] = SuppliedAttachment(source, filename, "image", IntakeStatus.PENDING)
+    @override
+    async def reserve(
+        self, draft_id: UUID, actor: DraftActor, source_id: UUID, filename: str, content_type: str | None
+    ) -> SuppliedAttachment:
+        self.files[source_id] = SuppliedAttachment(source_id, filename, "image", IntakeStatus.PENDING)
+        return self.files[source_id]
 
-    async def list(self, draft: UUID, actor: int) -> tuple[SuppliedAttachment, ...]:
+    @override
+    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
         return tuple(self.files.values())
 
-    async def register_file(self, draft: UUID, actor: int, source: UUID, path: Path, mime: str | None) -> None:
+    @override
+    async def register_file(
+        self, draft_id: UUID, actor: DraftActor, source_id: UUID, path: Path, content_type: str | None
+    ) -> None:
         self.registered.append(path.read_bytes())
-        self.files[source] = replace(self.files[source], status=IntakeStatus.READY)
+        self.files[source_id] = replace(self.files[source_id], status=IntakeStatus.READY)
 
-    async def fail(self, draft: UUID, actor: int, source: UUID) -> None:
-        self.files[source] = replace(self.files[source], status=IntakeStatus.FAILED)
+    @override
+    async def fail(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
+        self.files[source_id] = replace(self.files[source_id], status=IntakeStatus.FAILED)
 
 
 @dataclass
@@ -56,7 +65,7 @@ class Attachment:
 
 async def test_reserves_all_files_before_download_and_retains_partial_failure() -> None:
     intake = Intake()
-    services = cast(BotServices, SimpleNamespace(submission_intake=intake))
+    services = bot_services(submission_intake=intake)
     attachments = [Attachment(1, intake, fails=True), Attachment(2, intake)]
     await receive_attachments(services, uuid4(), 7, cast(list[discord.Attachment], attachments))
     assert [item.status for item in intake.files.values()] == [IntakeStatus.FAILED, IntakeStatus.READY]
@@ -66,7 +75,7 @@ async def test_reserves_all_files_before_download_and_retains_partial_failure() 
 @pytest.mark.parametrize("size", [16 * 1024 * 1024 + 1, 500 * 1024 * 1024])
 async def test_oversized_source_is_retained_without_downloading(size: int) -> None:
     intake = Intake()
-    services = cast(BotServices, SimpleNamespace(submission_intake=intake))
+    services = bot_services(submission_intake=intake)
     await receive_attachments(services, uuid4(), 7, cast(list[discord.Attachment], [Attachment(1, intake, size=size)]))
     assert [item.status for item in intake.files.values()] == [IntakeStatus.FAILED]
     assert intake.registered == []

@@ -11,12 +11,7 @@ import squid_ui_discord as sd
 from squid.bot import app as bot_app
 from squid_ui.text import Localization, current_localization
 from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
-
-
-@dataclass(frozen=True)
-class SetupServices:
-    error_reports: object
-    permission_epoch: object
+from tests.support.services import bot_services
 
 
 @dataclass
@@ -120,7 +115,7 @@ async def _localization(locale: str) -> Localization:
 async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
     bot.background_tasks = mocker.Mock()
-    bot.__dict__["services"] = SetupServices(error_reports=object(), permission_epoch=object())
+    bot.__dict__["services"] = bot_services()
     bot.__dict__["_BotBase__tree"] = TreeRecorder()
     bot.database_config = None
     bot.topic_bridge = None

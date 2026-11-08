@@ -1,7 +1,8 @@
 """Discord error adapter tests."""
 
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from contextlib import nullcontext
+from typing import override
 
 import discord
 import pytest
@@ -22,7 +23,8 @@ from squid.bot.errors import (
 )
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.errors import BuildNotFoundError
-from squid.core.errors import InternalError
+from squid.core.errors import InternalError, JSONValue
+from squid.diagnostics.application import ErrorReportService
 from squid.observability import TraceSpan, bind_correlation_id, correlation_id, unbind_correlation_id
 from squid_ui.text import Localization, current_localization
 from tests.support.discord import make_command_interaction, make_interaction, make_layout_bot, make_message
@@ -162,18 +164,41 @@ async def test_command_dispatch_scopes_context_and_records_only_safe_span_attrib
         span.set_error.assert_not_called()
 
 
-class RecordingReports:
+class RecordingReports(ErrorReportService):
     """Stand-in for the error report service, optionally a failing one."""
 
     def __init__(self, *, failing: bool = False) -> None:
         self.calls: list[dict[str, object]] = []
         self._failing = failing
 
-    async def record(self, error: BaseException, **kwargs: object) -> None:
+    @override
+    async def record(
+        self,
+        error: BaseException,
+        *,
+        correlation_id: str,
+        reference: str,
+        surface: str,
+        origin: str | None = None,
+        context: Mapping[str, JSONValue] | None = None,
+        log_tail: Sequence[str] = (),
+        work_lost: bool = False,
+    ) -> None:
         if self._failing:
             msg = "the database is down"
             raise RuntimeError(msg)
-        self.calls.append({"error": error, **kwargs})
+        self.calls.append(
+            {
+                "error": error,
+                "correlation_id": correlation_id,
+                "reference": reference,
+                "surface": surface,
+                "origin": origin,
+                "context": context,
+                "log_tail": log_tail,
+                "work_lost": work_lost,
+            }
+        )
 
 
 async def test_unexpected_error_redacts_reports_logs_and_response_without_mutating_context(

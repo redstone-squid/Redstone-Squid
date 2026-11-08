@@ -23,7 +23,9 @@ from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
 from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
+from squid.runtime import BotServices
 from tests.support.permissions import permission_uow_factory
+from tests.support.services import bot_services
 
 BUILTIN_ROWS = tuple(
     PermissionRole(id=index + 1, slug=role.key, guild_id=None, builtin_key=role.key, rank=role.rank, protected=True)
@@ -71,14 +73,8 @@ class Guild:
         return self.member if self.member is not None and self.member.id == user_id else None
 
 
-@dataclass(frozen=True)
-class Services:
-    accounts: AccountService
-    permissions: PermissionService
-
-
 class Bot:
-    def __init__(self, *, owner_id: int, services: Services, guild: Guild) -> None:
+    def __init__(self, *, owner_id: int, services: BotServices, guild: Guild) -> None:
         self.owner_id = owner_id
         self.owner_ids = None
         self.services = services
@@ -125,7 +121,7 @@ def _bot(
     guild = Guild(guild_id=100, owner_id=2)
     member = _member(member_id, guild) if member_id is not None else None
     guild.member = member
-    services = Services(
+    services = bot_services(
         accounts=FakeAccountService(),
         permissions=PermissionService(uow_factory=permission_uow_factory(store or FakePermissionStore())),
     )

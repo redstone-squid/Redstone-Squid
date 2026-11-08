@@ -1,14 +1,16 @@
 """Handlers applying a closed vote session's outcome."""
 
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, create_autospec
 
 import discord
 import pytest
 from whenever import Instant
 
 from squid.bot.events.handlers import DeleteVotedMessageHandler
+from squid.builds.application import BuildService
 from squid.events import DomainEvent
+from squid.voting.application import VoteService
 from squid.voting.domain import (
     BuildVoteTarget,
     DeleteLogVoteTarget,
@@ -20,6 +22,7 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
+from tests.support.services import bot_services
 from tests.support.voting import build_snapshot
 
 DELETE_TARGET = DeleteLogVoteTarget(message_id=7, channel_id=8, server_id=9)
@@ -47,8 +50,10 @@ def _event() -> DomainEvent:
 
 
 def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
+    votes = create_autospec(VoteService, instance=True, spec_set=True)
+    votes.get_session.return_value = snapshot
     bot = AsyncMock()
-    bot.services.votes.get_session = AsyncMock(return_value=snapshot)
+    bot.services = bot_services(votes=votes, builds=create_autospec(BuildService, instance=True, spec_set=True))
     return bot
 
 

@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, cast, override
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 
 import discord
 import pytest
@@ -18,8 +18,11 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
 from squid.settings.application import SettingsService
+from squid.submissions.application.inference_runs import SubmissionInferenceRuns
+from squid.submissions.application.revisions import RevisionProposalService
 from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 BUILD_LOG_CHANNEL = 500
 
@@ -100,13 +103,6 @@ class RecordingSubmitCommands(BuildSubmitCommands[Any]):
         return text_node("Review the recalculation proposal.")
 
 
-@dataclass(frozen=True)
-class Services:
-    settings: SettingsService
-    accounts: AccountService
-    permissions: PermissionService
-
-
 def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSubmitCommands:
     cog = RecordingSubmitCommands()
     account = (
@@ -122,7 +118,7 @@ def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSu
     cog.bot = cast(
         Any,
         make_layout_bot(
-            services=Services(
+            services=bot_services(
                 settings=SettingsRecorder(),
                 accounts=AccountRecorder(account),
                 permissions=StubPermissions(allowed=allowed),
@@ -222,13 +218,15 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
     from squid.builds.domain import BuildCategory, BuildDraft
 
     candidate = BuildDraft(category=BuildCategory.DOOR, width=9)
-    inference = SimpleNamespace(infer=AsyncMock(return_value=[SimpleNamespace(facts=candidate)]))
-    proposals = SimpleNamespace(create=AsyncMock(return_value=SimpleNamespace(id=uuid4())))
+    inference = create_autospec(SubmissionInferenceRuns, instance=True, spec_set=True)
+    inference.infer.return_value = [SimpleNamespace(facts=candidate)]
+    proposals = create_autospec(RevisionProposalService, instance=True, spec_set=True)
+    proposals.create.return_value = SimpleNamespace(id=uuid4())
     cog = cast(
         Any,
         SimpleNamespace(
             bot=SimpleNamespace(
-                services=SimpleNamespace(submission_inference=inference, submission_revisions=proposals),
+                services=bot_services(submission_inference=inference, submission_revisions=proposals),
                 inference_model="test-model",
                 inference_reasoning_effort=None,
             )

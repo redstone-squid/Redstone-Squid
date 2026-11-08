@@ -21,11 +21,14 @@ from squid.builds.domain import RestrictionTypeLiteral, Status
 from squid.builds.models import DoorBuild, OtherBuild
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
+from squid.posts.application import PostService
+from squid.posts.domain import PostReference
 from squid.settings.application import SettingsService
 from squid.topics import resource_topic
 from squid_ui.testing import RecordingResponder, press_event
 from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 def _interaction(client: Any, *, user_id: int = 7) -> discord.Interaction[Any]:
@@ -106,22 +109,25 @@ class BuildRenderer:
         return sl.paragraph("card")
 
 
-class Services:
-    def __init__(self, allowed: bool, builds: BuildService) -> None:
-        self.settings = SettingsRecorder()
-        self.accounts = AccountRecorder()
-        self.permissions = PermissionRecorder(allowed)
-        self.builds = builds
-
-
-def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
+def _cog(
+    build: Any, *, allowed: bool = True, account_id: int | None = 1, posts: PostService | None = None
+) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     builds = StubBuilds(build)
     cog.builds = builds
+    doubles: dict[str, object] = {
+        "settings": SettingsRecorder(),
+        "accounts": AccountRecorder(),
+        "permissions": PermissionRecorder(allowed),
+        "builds": builds,
+    }
+    if posts is not None:
+        doubles["posts"] = posts
+    services = bot_services(**doubles)
     cog.bot = cast(
         Any,
         make_layout_bot(
-            services=Services(allowed, builds),
+            services=services,
             account_ids=AccountIdResolver(account_id),
             is_owner=OwnerCheck(),
             for_build=lambda _build: BuildRenderer(),
@@ -235,20 +241,15 @@ async def test_a_missing_build_is_an_error_card() -> None:
     assert _component(_sent_view(await _run(cog))) is None
 
 
-class PostRecorder:
+class PostRecorder(PostService):
     def __init__(self, resource_key: str | None) -> None:
         self._resource_key = resource_key
 
-    async def resolve(self, message_id: int) -> Any:
+    @override
+    async def resolve(self, message_id: int) -> PostReference | None:
         if self._resource_key is None:
             return None
-
-        @dataclass(frozen=True)
-        class Post:
-            resource_kind: str
-            resource_key: str
-
-        return Post("build", self._resource_key)
+        return PostReference(message_id, "build", self._resource_key, "build_card")
 
 
 def _card(*, author_id: int) -> discord.Message:
@@ -272,10 +273,8 @@ async def _open_from_menu(cog: BuildEditCommands[Any], message: discord.Message)
 
 async def test_the_menu_opens_the_editor_behind_its_own_defer() -> None:
     """Opening from a resolved build card must produce an editor."""
-    cog = _cog(_door())
+    cog = _cog(_door(), posts=PostRecorder("1"))
     cog.bot.user = cast(Any, discord.Object(id=1))
-    cog.bot.services.posts = PostRecorder("1")
-    cog.bot.services.builds = cog.builds
 
     interaction = await _open_from_menu(cog, _card(author_id=1))
 
@@ -283,9 +282,8 @@ async def test_the_menu_opens_the_editor_behind_its_own_defer() -> None:
 
 
 async def test_the_menu_refuses_a_message_that_is_not_a_card() -> None:
-    cog = _cog(_door())
+    cog = _cog(_door(), posts=PostRecorder(None))
     cog.bot.user = cast(Any, discord.Object(id=1))
-    cog.bot.services.posts = PostRecorder(None)
 
     interaction = await _open_from_menu(cog, _card(author_id=1))
 

@@ -16,6 +16,7 @@ from squid.bot.ui import text_node
 from squid.settings.application import SettingsService
 from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 @dataclass(frozen=True)
@@ -39,11 +40,6 @@ class SettingsRecorder(SettingsService):
         return None
 
 
-@dataclass(frozen=True)
-class Services:
-    settings: SettingsService
-
-
 def make_context(bot: Any, *, slash: bool = False, in_guild: bool = True, dm_raises: Exception | None = None) -> Any:
     context = ContextHarness(message=MessageHarness(), bot=bot, user_id=1)
     context.guild = Guild(5, "en-US") if in_guild else None
@@ -58,7 +54,7 @@ def make_context(bot: Any, *, slash: bool = False, in_guild: bool = True, dm_rai
 
 
 def make_bot() -> Any:
-    return make_layout_bot(services=Services(settings=SettingsRecorder()))
+    return make_layout_bot(services=bot_services(settings=SettingsRecorder()))
 
 
 def _rendered(call: Any) -> str:

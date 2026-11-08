@@ -10,6 +10,7 @@ from whenever import Instant
 from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_duration
 from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
+from squid.runtime import BotServices
 from squid.voting.application import RoleVoteWeightPolicy, VoteService
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -32,6 +33,7 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import NEUTRAL, resolve_text
+from tests.support.services import bot_services
 from tests.support.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
@@ -394,12 +396,8 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
         guild: Guild
 
     @dataclass(frozen=True)
-    class Services:
-        votes: VoteService
-
-    @dataclass(frozen=True)
     class Bot:
-        services: Services
+        services: BotServices
 
     class PublisherRecorder(DiscordPollPublisher):
         @override
@@ -409,7 +407,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
 
     votes = VoteRecorder()
     channel = Channel(id=200, guild=Guild(id=10))
-    publisher = PublisherRecorder(cast(Any, Bot(services=Services(votes=votes))))
+    publisher = PublisherRecorder(cast(Any, Bot(services=bot_services(votes=votes))))
 
     await publisher.create_and_publish(
         author_account_id=1,

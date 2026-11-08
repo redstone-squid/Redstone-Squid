@@ -21,6 +21,7 @@ from squid.settings.application import SettingsService
 from squid.submissions.errors import DraftCapacityExceededError
 from squid_ui_discord.testing import InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 BUILD_LOG_CHANNEL = 500
 USER_ID = 42
@@ -78,12 +79,6 @@ class SettingsRecorder(SettingsService):
 
 
 @dataclass(frozen=True)
-class Services:
-    settings: SettingsService
-    accounts: AccountService
-
-
-@dataclass(frozen=True)
 class CommunityConfig:
     build_log_channel_ids: set[int]
 
@@ -104,7 +99,7 @@ class StickyRecorder(BuildLogConsentStickyMessage):
 
 class InferenceBot:
     def __init__(self, accounts: AccountService) -> None:
-        self.services = Services(settings=SettingsRecorder(), accounts=accounts)
+        self.services = bot_services(settings=SettingsRecorder(), accounts=accounts)
         self.community_config = CommunityConfig(build_log_channel_ids={BUILD_LOG_CHANNEL})
         self.inference_model = "gpt-5.6-luna"
         self.inference_reasoning_effort = "low"
@@ -206,7 +201,7 @@ def _make_interaction(accounts: AccountService) -> Any:
     interaction = InteractionHarness(USER_ID, message_id=999)
     source = interaction.source
     source.client = make_layout_bot(
-        services=Services(settings=SettingsRecorder(), accounts=accounts),
+        services=bot_services(settings=SettingsRecorder(), accounts=accounts),
     )
     source.guild = None
     source.guild_id = None

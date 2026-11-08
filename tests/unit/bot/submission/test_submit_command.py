@@ -1,7 +1,8 @@
 """`/build submit` as one request: the private defer is completed by the workspace."""
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Any, cast, override
+from uuid import UUID
 
 from whenever import Instant
 
@@ -11,12 +12,27 @@ from squid.accounts.models import Account
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.builds.application import BuildService
+from squid.builds.domain.models import SourceMessage
+from squid.schematics.application.services import SchematicService
 from squid.settings.application import SettingsService
-from squid.submissions.application import FormOptionSet, StoredDraft, build_submission_manifest
+from squid.submissions.application import (
+    AppliedDraftChange,
+    FormOptionSet,
+    StoredDraft,
+    SubmissionDraftService,
+    SubmissionFinalizationService,
+    SubmissionFormService,
+    build_submission_manifest,
+)
+from squid.submissions.application.drafts import DraftActor
+from squid.submissions.application.finalization import SubmissionRequestResult
 from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
-from squid.submissions.domain import DraftSnapshot
+from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.submissions.domain import DraftChange, DraftSnapshot, FormManifest, SubmissionOrigin
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui_discord.testing import InteractionHarness
 from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 class AccountRecorder(AccountService):
@@ -46,71 +62,108 @@ class BuildRecorder(BuildService):
         pass
 
 
-@dataclass(frozen=True)
-class Schematics:
-    available: bool = False
+class Schematics(SchematicService):
+    def __init__(self) -> None:
+        pass
+
+    @property
+    @override
+    def available(self) -> bool:
+        return False
 
 
-class Forms:
-    async def manifest(self, *, locale: str | None) -> Any:
+class Forms(SubmissionFormService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def manifest(self, *, locale: str | None) -> FormManifest:
         return build_submission_manifest()
 
-    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None) -> Any:
+    @override
+    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None:
         return build_submission_manifest(revision=revision)
 
+    @override
     async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
         return FormOptionSet(source, category, 1, ())
 
 
-class Drafts:
+class Drafts(SubmissionDraftService):
     def __init__(self) -> None:
         self.current: StoredDraft | None = None
 
-    async def create(self, **values: Any) -> StoredDraft:
-        now = Instant.now()
+    @override
+    async def create(
+        self,
+        *,
+        owner_account_id: int,
+        category: str,
+        origin: SubmissionOrigin,
+        client_capabilities: frozenset[str],
+        locale: str | None,
+        source_installation_id: UUID | None = None,
+        now: Instant | None = None,
+        draft_id: UUID | None = None,
+        inferred: bool = False,
+        source_messages: tuple[SourceMessage, ...] = (),
+        source_files: tuple[SubmissionSourceFile, ...] = (),
+        source_issues: tuple[str, ...] = (),
+        inference_run_id: UUID | None = None,
+    ) -> StoredDraft:
+        assert draft_id is not None
+        created = Instant.now()
         self.current = StoredDraft(
             snapshot=DraftSnapshot(
-                values["draft_id"],
-                values["owner_account_id"],
+                draft_id,
+                owner_account_id,
                 CURRENT_SUBMISSION_SCHEMA,
                 CURRENT_SUBMISSION_SCHEMA_REVISION,
-                values["category"],
+                category,
             ),
-            origin=values["origin"],
-            created_at=now,
-            updated_at=now,
-            expires_at=now.add(days=7, days_assumed_24h_ok=True),
+            origin=origin,
+            created_at=created,
+            updated_at=created,
+            expires_at=created.add(days=7, days_assumed_24h_ok=True),
         )
         return self.current
 
-    async def apply_change(self, draft_id: Any, actor: int, change: Any, *, locale: str | None) -> None:
+    @override
+    async def apply_change(
+        self,
+        draft_id: UUID,
+        account_id: DraftActor,
+        change: DraftChange,
+        *,
+        locale: str | None,
+        now: Instant | None = None,
+    ) -> AppliedDraftChange:
         assert self.current is not None
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
+        return AppliedDraftChange(self.current)
 
-    async def get_accessible(self, draft_id: Any, actor: int) -> StoredDraft:
+    @override
+    async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
         assert self.current is not None
         return self.current
 
 
-class Finalization:
-    async def status(self, draft_id: Any, actor: int) -> None:
+class Finalization(SubmissionFinalizationService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
         return None
 
 
-class Intake:
-    async def list(self, draft_id: Any, actor: int) -> tuple[()]:
+class Intake(SubmissionAttachmentIntake):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
         return ()
-
-
-@dataclass(frozen=True)
-class Services:
-    settings: SettingsService
-    accounts: AccountService
-    schematics: Schematics
-    submission_forms: Forms
-    submission_drafts: Drafts
-    submission_finalization: Finalization
-    submission_intake: Intake
 
 
 def _cog() -> BuildSubmitCommands[Any]:
@@ -118,8 +171,14 @@ def _cog() -> BuildSubmitCommands[Any]:
     cog.bot = cast(
         Any,
         make_layout_bot(
-            services=Services(
-                SettingsRecorder(), AccountRecorder(), Schematics(), Forms(), Drafts(), Finalization(), Intake()
+            services=bot_services(
+                settings=SettingsRecorder(),
+                accounts=AccountRecorder(),
+                schematics=Schematics(),
+                submission_forms=Forms(),
+                submission_drafts=Drafts(),
+                submission_finalization=Finalization(),
+                submission_intake=Intake(),
             )
         ),
     )

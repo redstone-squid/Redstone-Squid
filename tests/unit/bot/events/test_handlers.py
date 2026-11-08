@@ -15,6 +15,8 @@ from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
 from squid.builds.models import Build, OtherBuild
 from squid.events import DomainEvent, UnsupportedEventVersionError
+from squid.runtime import BotServices
+from tests.support.services import bot_services
 
 
 def _event(build_id: int = 42, *, event_type: str = "build.confirmed", schema_version: int = 1) -> DomainEvent:
@@ -49,24 +51,19 @@ class ReviewPublisherRecorder:
 
 
 @dataclass(frozen=True, slots=True)
-class _Services:
-    build_queries: BuildQueryRecorder
-
-
-@dataclass(frozen=True, slots=True)
 class _Bot:
-    services: _Services
+    services: BotServices
     publisher: ReviewPublisherRecorder
 
     def for_build(self, build: Build) -> ReviewPublisherRecorder:
-        assert build is self.services.build_queries.build
+        assert build is cast(BuildQueryRecorder, self.services.build_queries).build
         return self.publisher
 
 
 def _handler(build: Build) -> tuple[PostSubmittedBuildHandler, BuildQueryRecorder, ReviewPublisherRecorder]:
     queries = BuildQueryRecorder(build)
     publisher = ReviewPublisherRecorder()
-    bot = cast(Any, _Bot(_Services(queries), publisher))
+    bot = cast(Any, _Bot(bot_services(build_queries=queries), publisher))
     return PostSubmittedBuildHandler(bot), queries, publisher
 
 

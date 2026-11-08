@@ -10,8 +10,10 @@ from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
+from squid.runtime import BotServices
 from squid.settings.application import SettingsService
 from squid.settings.models import ServerSetting
+from tests.support.services import bot_services
 from tests.support.settings import FakeSettingsUnitOfWork, settings_state
 
 
@@ -34,13 +36,8 @@ class InteractionSource:
     interaction: None = None
 
 
-@dataclass(frozen=True)
-class Services:
-    settings: SettingsService
-
-
 class FakeClient:
-    def __init__(self, services: Services) -> None:
+    def __init__(self, services: BotServices) -> None:
         self.services = services
 
 
@@ -101,7 +98,7 @@ def test_localization_for_builds_the_negotiated_catalogue(mocker: MockerFixture)
 @pytest.mark.asyncio
 async def test_localization_resolver_uses_the_installed_bot_settings() -> None:
     service = _settings_service(locale="zh-CN")
-    client = FakeClient(Services(settings=service))
+    client = FakeClient(bot_services(settings=service))
     runtime = sd.install(cast(discord.Client, client), sd.Config(localization=localization_resolver))
     context = cast(
         "object",

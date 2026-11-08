@@ -6,8 +6,8 @@ Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any
-from unittest.mock import MagicMock
+from typing import Any, get_type_hints
+from unittest.mock import MagicMock, create_autospec
 
 import discord
 import pytest_asyncio
@@ -17,6 +17,8 @@ import squid_ui_discord as sd
 from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
+from squid.runtime import BotServices
+from tests.support.services import bot_services
 
 LOADABLE = (*EXTENSIONS, *(name for name in DEVELOPMENT_EXTENSIONS if name.startswith("squid.")))
 """Every extension this repo owns, development-only ones included.
@@ -25,6 +27,16 @@ A cog that only loads in development mode can still collide with a production on
 do so on the developer's machine rather than in CI. `jishaku` is left out because it is third
 party and need not be installed for these tests to mean anything.
 """
+
+
+def _autospecced_services() -> BotServices:
+    """Autospec every bot service, since cog setup across all extensions touches many of them."""
+    return bot_services(
+        **{
+            field: create_autospec(service, instance=True, spec_set=True)
+            for field, service in get_type_hints(BotServices).items()
+        }
+    )
 
 
 class StubBot(commands.Bot):
@@ -37,7 +49,7 @@ class StubBot(commands.Bot):
             tree_cls=SquidCommandTree,
         )
         self.ui = sd.install(self)
-        self.services = MagicMock()
+        self.services = _autospecced_services()
         self.reactions = MagicMock()
         self.background_tasks = MagicMock()
         self.post_reconciler = MagicMock()
