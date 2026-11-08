@@ -340,7 +340,7 @@ async def test_router_records_enqueue_queue_handler_and_shutdown_metrics(monkeyp
     }
     assert (
         "squid.reaction.handler.failures",
-        {"squid.reaction.kind": "add", "squid.reaction.consumer": "metrics-test"},
+        {"squid.reaction.kind": "add", "squid.reaction.consumer": "metrics-test.handle_add"},
     ) in counters
 
 
@@ -507,7 +507,7 @@ async def test_failed_recovery_logs_the_complete_replay_identity(caplog: pytest.
             await router.dispatch_add(make_reaction_payload(user_id=4))
 
     failed = next(record for record in caplog.records if "requires operator reconciliation" in record.getMessage())
-    assert failed.__dict__["squid.reaction.consumer"] == "vote"
+    assert failed.__dict__["squid.reaction.consumer"] == "vote.handle_add"
     assert failed.__dict__["squid.reaction.message_id"] == 10
     assert failed.__dict__["squid.reaction.channel_id"] == 20
     assert failed.__dict__["squid.reaction.guild_id"] == 30
@@ -624,19 +624,42 @@ async def test_subscribe_routes_to_decorated_methods_with_the_class_filter() -> 
     ]
 
 
-async def test_subscribe_rejects_missing_and_duplicate_handlers() -> None:
-    class Duplicate:
+async def test_handlers_for_one_kind_run_concurrently_and_fail_independently() -> None:
+    both_entered = anyio.Event()
+    entered: list[str] = []
+
+    class TwoHandlers:
+        async def _enter(self, name: str) -> None:
+            entered.append(name)
+            if len(entered) == 2:
+                both_entered.set()
+            # Each handler waits for the other, so this only finishes if they run concurrently.
+            with anyio.fail_after(1):
+                await both_entered.wait()
+
         @reaction_handler("add")
-        async def first(self, event: ReactionEvent) -> None: ...
+        async def first(self, event: ReactionEvent) -> None:
+            await self._enter("first")
+            msg = "first handler failed"
+            raise RuntimeError(msg)
 
-        @reaction_handler("add", "remove")
-        async def second(self, event: ReactionEvent) -> None: ...
+        @reaction_handler("add")
+        async def second(self, event: ReactionEvent) -> None:
+            await self._enter("second")
+            entered.append("second finished")
 
+    async with running_router() as router:
+        router.subscribe(TwoHandlers())
+        await router.dispatch_add(make_reaction_payload())
+        await router.close()
+
+    assert sorted(entered) == ["first", "second", "second finished"]
+
+
+async def test_subscribe_rejects_a_subscriber_without_handlers() -> None:
     async with running_router() as router:
         with pytest.raises(ValueError, match="no @reaction_handler"):
             router.subscribe(object())
-        with pytest.raises(ValueError, match="more than one 'add'"):
-            router.subscribe(Duplicate())
 
 
 def test_reaction_handler_rejects_mixed_event_types() -> None:

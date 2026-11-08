@@ -17,7 +17,7 @@ import functools
 import inspect
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, cast, overload, override
 
@@ -181,8 +181,6 @@ class ReactionClearEvent:
     """True when a handler declared with recover=True is called during shutdown recovery."""
 
 
-type ReactionActionCallback = Callable[[ReactionEvent], Awaitable[None]]
-type ReactionClearCallback = Callable[[ReactionClearEvent], Awaitable[None]]
 type ReactionKind = Literal["add", "remove", "clear", "clear_emoji"]
 type ReactionActionKind = Literal["add", "remove"]
 type ReactionClearKind = Literal["clear", "clear_emoji"]
@@ -216,7 +214,9 @@ def reaction_handler[F: Callable[..., Awaitable[None]]](
 
     "add" and "remove" handlers receive a ReactionEvent; "clear" and
     "clear_emoji" handlers receive a ReactionClearEvent, so one method cannot
-    mix the two groups. Each kind may have one handler per subscriber.
+    mix the two groups. A subscriber may have several handlers for one kind;
+    they run concurrently, so steps that must happen in order belong in one
+    handler.
 
     Args:
         kinds: The events this method handles.
@@ -256,17 +256,15 @@ def has_reaction_handlers(subscriber: object) -> bool:
 
 
 @dataclass(frozen=True, slots=True)
-class _ReactionRegistration:
+class _BoundHandler:
+    """One @reaction_handler method bound to its subscriber."""
+
     consumer: str
+    """The method's qualified name, e.g. "Admin.delete_archived_message", used in logs and metrics."""
+    kinds: frozenset[ReactionKind]
+    recover: bool
     reaction_filter: ReactionFilter
-    add: ReactionActionCallback | None
-    remove: ReactionActionCallback | None
-    clear: ReactionClearCallback | None
-    clear_emoji: ReactionClearCallback | None
-    recover_add: ReactionActionCallback | None
-    recover_remove: ReactionActionCallback | None
-    recover_clear: ReactionClearCallback | None
-    recover_clear_emoji: ReactionClearCallback | None
+    callback: Callable[[Any], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -329,7 +327,7 @@ class ReactionRouter:
             raise ValueError(msg)
         self._bot = bot
         self._supervisor = supervisor
-        self._registrations: dict[int, _ReactionRegistration] = {}
+        self._registrations: dict[int, tuple[_BoundHandler, ...]] = {}
         self._next_registration_id = 0
         capacity = (max_pending + concurrency - 1) // concurrency
         self._queues = tuple(asyncio.Queue[_QueuedEvent](maxsize=capacity) for _ in range(concurrency))
@@ -346,52 +344,38 @@ class ReactionRouter:
         """Route events to the subscriber's @reaction_handler methods until detached.
 
         The bot calls this for cogs; other subscribers call it when they start.
-        Logs and metrics name the subscriber by its class's qualified name. The
-        subscriber's `reaction_filter` class attribute, if any, selects which add
-        and remove events reach it.
+        The subscriber's `reaction_filter` class attribute, if any, selects which
+        add and remove events reach its handlers.
 
         Dispatch captures registrations before enqueueing, so detaching does not
         retract that snapshot. Recovery can run for events that never entered a queue
         or for accepted events interrupted during shutdown.
 
         Raises:
-            ValueError: The subscriber has no handlers, or two handlers for one kind.
+            ValueError: The subscriber has no @reaction_handler methods.
+            TypeError: The subscriber's `reaction_filter` is not a ReactionFilter.
         """
-        handlers: dict[ReactionKind, Callable[[Any], Awaitable[None]]] = {}
-        recover: set[ReactionKind] = set()
-        for name, spec in _handler_specs(subscriber):
-            for kind in spec.kinds:
-                if kind in handlers:
-                    msg = f"{type(subscriber).__qualname__} has more than one {kind!r} reaction handler."
-                    raise ValueError(msg)
-                handlers[kind] = getattr(subscriber, name)
-                if spec.recover:
-                    recover.add(kind)
-        if not handlers:
-            msg = f"{type(subscriber).__qualname__} has no @reaction_handler methods."
-            raise ValueError(msg)
+        cls_name = type(subscriber).__qualname__
         reaction_filter = getattr(subscriber, "reaction_filter", _DEFAULT_FILTER)
         if not isinstance(reaction_filter, ReactionFilter):
-            msg = f"{type(subscriber).__qualname__}.reaction_filter must be a ReactionFilter."
+            msg = f"{cls_name}.reaction_filter must be a ReactionFilter."
             raise TypeError(msg)
-
-        def recovery(kind: ReactionKind) -> Callable[[Any], Awaitable[None]] | None:
-            return handlers[kind] if kind in recover else None
-
+        handlers = tuple(
+            _BoundHandler(
+                f"{cls_name}.{name}",
+                frozenset(spec.kinds),
+                spec.recover,
+                reaction_filter,
+                getattr(subscriber, name),
+            )
+            for name, spec in _handler_specs(subscriber)
+        )
+        if not handlers:
+            msg = f"{cls_name} has no @reaction_handler methods."
+            raise ValueError(msg)
         registration_id = self._next_registration_id
         self._next_registration_id += 1
-        self._registrations[registration_id] = _ReactionRegistration(
-            type(subscriber).__qualname__,
-            reaction_filter,
-            handlers.get("add"),
-            handlers.get("remove"),
-            handlers.get("clear"),
-            handlers.get("clear_emoji"),
-            recovery("add"),
-            recovery("remove"),
-            recovery("clear"),
-            recovery("clear_emoji"),
-        )
+        self._registrations[registration_id] = handlers
         return ReactionSubscription(self, registration_id)
 
     def _detach(self, registration_id: int) -> None:
@@ -499,42 +483,23 @@ class ReactionRouter:
         self, kind: Literal["add", "remove"], event: ReactionEvent, *, recovery: bool = False
     ) -> tuple[_ReactionCallback[ReactionEvent], ...]:
         return tuple(
-            _ReactionCallback(registration.consumer, callback)
-            for registration in self._registrations.values()
-            if registration.reaction_filter.accepts(event)
-            and (
-                callback := (
-                    registration.recover_add
-                    if recovery and kind == "add"
-                    else registration.recover_remove
-                    if recovery
-                    else registration.add
-                    if kind == "add"
-                    else registration.remove
-                )
-            )
-            is not None
+            _ReactionCallback(handler.consumer, handler.callback)
+            for handler in self._handlers(kind, recovery=recovery)
+            if handler.reaction_filter.accepts(event)
         )
 
     def _clear_callbacks(
         self, kind: Literal["clear", "clear_emoji"], *, recovery: bool = False
     ) -> tuple[_ReactionCallback[ReactionClearEvent], ...]:
         return tuple(
-            _ReactionCallback(registration.consumer, callback)
-            for registration in self._registrations.values()
-            if (
-                callback := (
-                    registration.recover_clear
-                    if recovery and kind == "clear"
-                    else registration.recover_clear_emoji
-                    if recovery
-                    else registration.clear
-                    if kind == "clear"
-                    else registration.clear_emoji
-                )
-            )
-            is not None
+            _ReactionCallback(handler.consumer, handler.callback) for handler in self._handlers(kind, recovery=recovery)
         )
+
+    def _handlers(self, kind: ReactionKind, *, recovery: bool) -> Iterator[_BoundHandler]:
+        for handlers in self._registrations.values():
+            for handler in handlers:
+                if kind in handler.kinds and (handler.recover or not recovery):
+                    yield handler
 
     async def _dispatch(self, item: _QueuedEvent) -> None:
         closing = False
