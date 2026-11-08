@@ -16,7 +16,7 @@ from squid.core.i18n import (
     negotiate_locale_candidates,
     tr,
 )
-from squid_ui.text import Message, current_localization, localization_scope
+from squid_ui.text import Localization, Message, current_localization, localization_scope
 
 
 def test_deferred_msgid_extracts_plural_templates_as_a_pair() -> None:
@@ -94,22 +94,31 @@ def test_tr_uses_and_restores_ambient_localization() -> None:
 
 def test_tr_falls_back_to_source_string_for_unknown_locale() -> None:
     with localization_scope(localization_for("xx-XX")):
-        assert tr("Hello") == "Hello"
+        assert tr("Hello").resolve() == "Hello"
 
 
 def test_tr_falls_back_to_source_string_for_missing_key() -> None:
     with localization_scope(localization_for("en")):
-        assert tr("This msgid does not exist anywhere.") == "This msgid does not exist anywhere."
+        assert tr("This msgid does not exist anywhere.").resolve() == "This msgid does not exist anywhere."
 
 
-def test_tr_applies_format_params_after_translation() -> None:
-    with localization_scope(localization_for("en")):
-        assert tr("Try again in {seconds:.1f} seconds.", seconds=2.5) == "Try again in 2.5 seconds."
+def test_a_plain_string_defers_and_keeps_braces_literal() -> None:
+    message = tr("Use {braces} as written.")
+
+    assert message == Message("Use {braces} as written.")
+    with localization_scope(Localization("fr", lambda key: {"Use {braces} as written.": "Tel quel {braces}."}[key])):
+        assert message.resolve() == "Tel quel {braces}."
+
+
+def test_a_plain_string_cannot_have_a_plural() -> None:
+    count = 2
+    with pytest.raises(TypeError, match="template string"):
+        tr("build", plural=t"{count} builds")  # type: ignore[call-overload]  # the misuse under test
 
 
 def test_tr_none_locale_uses_default() -> None:
     with localization_scope(localization_for(None)):
-        assert tr("Hello") == "Hello"
+        assert tr("Hello").resolve() == "Hello"
 
 
 def test_negotiate_locale_exact_match() -> None:

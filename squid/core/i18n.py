@@ -15,7 +15,7 @@ from typing import overload
 
 from babel import Locale, UnknownLocaleError
 
-from squid_ui.text import Localization, Message, current_localization
+from squid_ui.text import Localization, Message
 
 DOMAIN = "squid"
 DEFAULT_LOCALE = "en"
@@ -48,43 +48,41 @@ def tr(message: Template, /, *, plural: Template | None = None) -> Message: ...
 
 
 @overload
-def tr(message: str, /, **params: object) -> str: ...
+def tr(message: str, /) -> Message: ...
 
 
-def tr(message: str | Template, /, **params: object) -> str | Message:
-    """Defer a template string until render time, when the reader's locale is known.
+def tr(message: str | Template, /, *, plural: Template | None = None) -> Message:
+    """Defer text until render time, when the reader's locale is known.
 
-    `tr(t"Hello {name}")` returns a Message that renderers translate later, in the
-    reader's locale. Pass the Message on, interpolate it into another `tr` template, or
-    combine several with `+` or `Message.join`; call `.resolve()` only where a string is
-    required. A plain string is a legacy form, translated immediately and formatted with any
-    keyword arguments.
+    `tr("Saved.")` and `tr(t"Hello {name}")` both return a Message that renderers translate
+    later, in the reader's locale. Use a template string only to interpolate values; a
+    plain string is the catalogue key as written, and braces in it stay literal. Pass the
+    Message on, interpolate it into another `tr` template, or combine several with `+` or
+    `Message.join`; call `.resolve()` only where a string is required.
 
-    Template placeholders must be simple identifiers. Plural templates must use the
-    same placeholders as the singular form and include an integer `count`.
+    Template placeholders must be simple identifiers. Plurals need a template string:
+    both forms must use the same placeholders and include an integer `count`.
     """
-    if isinstance(message, Template):
-        plural = params.pop("plural", None)
-        if params:
-            detail = "template strings already contain their interpolation values"
+    if isinstance(message, str):
+        if plural is not None:
+            detail = "plural forms need a template string with an integer 'count'"
             raise TypeError(detail)
-        singular_message = _message_from_template(message)
-        if plural is None:
-            return singular_message
-        if not isinstance(plural, Template):
-            detail = "plural template must be a Python template string"
-            raise TypeError(detail)
-        plural_message = _message_from_template(plural)
-        if singular_message.params.keys() != plural_message.params.keys():
-            detail = "singular and plural templates must use the same placeholders"
-            raise ValueError(detail)
-        count = singular_message.params.get("count")
-        if not isinstance(count, int):
-            detail = "plural templates require an integer 'count' interpolation"
-            raise TypeError(detail)
-        return Message(singular_message.template, singular_message.params, plural=plural_message.template)
-    text = current_localization().gettext(message)
-    return text.format(**params) if params else text
+        return Message(message)
+    singular_message = _message_from_template(message)
+    if plural is None:
+        return singular_message
+    if not isinstance(plural, Template):
+        detail = "plural template must be a Python template string"
+        raise TypeError(detail)
+    plural_message = _message_from_template(plural)
+    if singular_message.params.keys() != plural_message.params.keys():
+        detail = "singular and plural templates must use the same placeholders"
+        raise ValueError(detail)
+    count = singular_message.params.get("count")
+    if not isinstance(count, int):
+        detail = "plural templates require an integer 'count' interpolation"
+        raise TypeError(detail)
+    return Message(singular_message.template, singular_message.params, plural=plural_message.template)
 
 
 def locales_dir() -> Path:

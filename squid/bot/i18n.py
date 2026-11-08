@@ -66,4 +66,4 @@ class SquidAppCommandTranslator(app_commands.Translator):
         if resolved == DEFAULT_LOCALE:
             return None  # Let discord.py fall back to the source string.
         with localization_scope(localization_for(resolved)):
-            return tr(string.message)
+            return tr(string.message).resolve()
