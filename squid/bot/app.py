@@ -3,7 +3,7 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, Self, override
 
 import anyio
@@ -21,7 +21,7 @@ from squid.bot.errors import UI_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
-from squid.bot.reactions import ReactionRouter
+from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.ui import HOST_DEFAULTS
@@ -150,6 +150,7 @@ class RedstoneSquid(Bot):
         self.source_code_url = config.source_code_url
         self.background_tasks = BackgroundTaskSupervisor()
         self.reactions = ReactionRouter(self, self.background_tasks)
+        self._reaction_subscriptions: dict[str, ReactionSubscription] = {}
         self.post_reconciler = PostReconciler(
             self,
             [
@@ -189,6 +190,39 @@ class RedstoneSquid(Bot):
     def sessions(self) -> SessionManager:
         """The installed registry for live Discord sessions."""
         return self.ui.sessions
+
+    @override
+    async def add_cog(
+        self,
+        cog: commands.Cog,
+        /,
+        *,
+        override: bool = False,
+        guild: discord.abc.Snowflake | None = discord.utils.MISSING,
+        guilds: Sequence[discord.abc.Snowflake] = discord.utils.MISSING,
+    ) -> None:
+        """Add a cog and subscribe its @reaction_handler methods, as discord.py does for listeners.
+
+        The subscription starts after the cog has loaded, so handlers never run before ui_load.
+        """
+        await super().add_cog(cog, override=override, guild=guild, guilds=guilds)
+        if has_reaction_handlers(cog):
+            self._reaction_subscriptions[cog.qualified_name] = self.reactions.subscribe(cog)
+
+    @override
+    async def remove_cog(
+        self,
+        name: str,
+        /,
+        *,
+        guild: discord.abc.Snowflake | None = discord.utils.MISSING,
+        guilds: Sequence[discord.abc.Snowflake] = discord.utils.MISSING,
+    ) -> commands.Cog | None:
+        """Detach the cog's reaction handlers, then remove it, so no new events arrive during unload."""
+        subscription = self._reaction_subscriptions.pop(name, None)
+        if subscription is not None:
+            subscription.detach()
+        return await super().remove_cog(name, guild=guild, guilds=guilds)
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""

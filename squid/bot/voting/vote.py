@@ -31,7 +31,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         super().__init__(bot)
         self.vote_service = bot.services.votes
         self.publisher = DiscordPollPublisher(bot)
-        self.reactions = VoteReactionHandler(bot, consumer=type(self).__qualname__)
+        self.reactions = VoteReactionHandler(bot)
         self.vote_service.set_actor_resolver(self)
 
     @override

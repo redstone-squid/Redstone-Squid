@@ -10,13 +10,19 @@ reactions alone never prove a stored ballot was withdrawn.
 import asyncio
 import contextlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import discord
 
 from squid.accounts.domain import IdentityProvider
 from squid.bot.i18n import localization_for, resolve_locale
-from squid.bot.reactions import ReactionClearEvent, ReactionEvent
+from squid.bot.reactions import (
+    ReactionClearEvent,
+    ReactionEvent,
+    ReactionFilter,
+    ReactionSubscription,
+    reaction_handler,
+)
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import tr
@@ -47,29 +53,24 @@ class _ObservedReaction:
 class VoteReactionHandler:
     """Handle and reconcile vote reactions for one loaded voting cog.
 
-    close detaches this handler and cancels its background jobs; closing a voting
-    session is a separate operation performed by the voting service.
+    start subscribes this handler to reactions and starts reconciliation. close
+    detaches it and cancels its background jobs; closing a voting session is a
+    separate operation performed by the voting service.
     """
 
-    def __init__(self, bot: squid.bot.app.RedstoneSquid, *, consumer: str) -> None:
+    reaction_filter: ClassVar[ReactionFilter] = ReactionFilter(guild_only=True)
+
+    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self.bot = bot
         self.vote_service = bot.services.votes
         self._background_tasks: set[JobHandle] = set()
         self._lock = asyncio.Lock()
-        self._subscription = bot.reactions.subscribe(
-            consumer,
-            add=self.on_reaction_add,
-            remove=self.on_reaction_remove,
-            clear=self.on_reaction_clear,
-            clear_emoji=self.on_reaction_clear,
-            recover_add=self.recover_reaction_add,
-            recover_remove=self.recover_reaction_remove,
-            recover_clear=self.on_reaction_clear,
-            recover_clear_emoji=self.on_reaction_clear,
-        )
+        self._subscription: ReactionSubscription | None = None
 
     def start(self) -> None:
-        """Start periodic reconciliation after the cog has registered."""
+        """Subscribe to reactions and start periodic reconciliation after the cog has loaded."""
+        # Not a cog, so the bot does not subscribe it automatically.
+        self._subscription = self.bot.reactions.subscribe(self)
         self._track(
             self.bot.background_tasks.start_periodic(
                 self.reconcile_open_reactions,
@@ -80,7 +81,8 @@ class VoteReactionHandler:
 
     async def close(self) -> None:
         """Detach routing and settle reconciliation and anonymous-reaction cleanup."""
-        self._subscription.detach()
+        if self._subscription is not None:
+            self._subscription.detach()
         await self.bot.background_tasks.cancel(*self._background_tasks)
 
     def _track(self, handle: JobHandle) -> None:
@@ -92,20 +94,20 @@ class VoteReactionHandler:
         self._background_tasks = {tracked for tracked in self._background_tasks if not tracked.finished.is_set()}
         self._background_tasks.add(handle)
 
+    @reaction_handler("add", recover=True)
     async def on_reaction_add(self, event: ReactionEvent) -> None:
-        """Record a live ballot and explain any actionable refusal."""
-        async with self._lock:
-            await self._add(event, recovering=False)
+        """Record a ballot.
 
-    async def recover_reaction_add(self, event: ReactionEvent) -> None:
-        """Recover an interrupted ballot quietly and await its reaction cleanup."""
+        Live handling explains any actionable refusal. Recovery stays quiet and
+        awaits its reaction cleanup instead of scheduling it.
+        """
         async with self._lock:
-            await self._add(event, recovering=True)
+            await self._add(event)
 
-    async def _add(self, event: ReactionEvent, *, recovering: bool) -> None:
+    async def _add(self, event: ReactionEvent) -> None:
         payload = event.payload
-        if payload.guild_id is None or (self.bot.user is not None and payload.user_id == self.bot.user.id):
-            return
+        recovering = event.recovering
+        assert payload.guild_id is not None  # The subscription is guild-only.
         snapshot = await self.vote_service.get_session_for_message(payload.message_id)
         if snapshot is None or not snapshot.is_open:
             return
@@ -114,8 +116,8 @@ class VoteReactionHandler:
         if option is None:
             return
         message = await event.message()
-        member = await event.resolve_member()
-        if message is None or member is None or member.bot:
+        member = await event.member(humans_only=True)
+        if message is None or member is None:
             return
         account_id = await self._consented_account_id(member.id)
         if account_id is None:
@@ -151,28 +153,21 @@ class VoteReactionHandler:
         if remove_reaction and recovering:
             await self._remove_reaction(message, payload.emoji, member)
 
+    @reaction_handler("remove", recover=True)
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
-        """Synchronize removal of a publicly retained reaction."""
-        await self._remove(event, recovering=False)
-
-    async def recover_reaction_remove(self, event: ReactionEvent) -> None:
-        """Idempotently recover a public reaction removal from a guild."""
-        await self._remove(event, recovering=True)
-
-    async def _remove(self, event: ReactionEvent, *, recovering: bool) -> None:
+        """Synchronize removal of a publicly retained reaction; recovery may repeat it safely."""
         async with self._lock:
             payload = event.payload
+            recovering = event.recovering
             snapshot = await self.vote_service.get_session_for_message(payload.message_id)
             if snapshot is None or not snapshot.is_open or snapshot.is_anonymous:
-                return
-            if recovering and payload.guild_id is None:
                 return
             # Removing a reaction needs no fresh consent and must never create an account.
             account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
             if account_id is None:
                 return
-            member = await event.resolve_member()
-            if member is None or member.bot:
+            member = await event.member(humans_only=True)
+            if member is None:
                 return
             actor = await resolve_actor(self.bot, member, account_id=account_id)
             result, changed = await self._set_reaction_selection(snapshot, actor, str(payload.emoji), selected=False)
@@ -180,6 +175,7 @@ class VoteReactionHandler:
             if result.accepted and changed and session is not None:
                 await self.bot.refresh_posts("vote_session", str(session.id))
 
+    @reaction_handler("clear", "clear_emoji", recover=True)
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
         """Restore options after any clear without inferring that stored ballots vanished."""
         await self._restore_reactions(event.payload.message_id)

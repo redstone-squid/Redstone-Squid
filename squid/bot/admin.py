@@ -1,7 +1,7 @@
 """Various admin commands for the bot."""
 
 import re
-from typing import TYPE_CHECKING, Literal, Self, override
+from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
 import discord
 from discord import app_commands
@@ -10,7 +10,7 @@ from discord.ext.commands import Greedy
 
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
-from squid.bot.reactions import ReactionEvent
+from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
@@ -33,18 +33,13 @@ if TYPE_CHECKING:
 class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Cog for admin commands."""
 
+    reaction_filter: ClassVar[ReactionFilter] = ReactionFilter(emojis=frozenset({"❌"}))
+
     def __init__(self, bot: BotT):
         super().__init__(bot)
         self.tags = bot.services.tags
         self.restrictions = bot.services.restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
-        self._reaction_subscription = self.bot.reactions.subscribe(
-            type(self).__qualname__, add=self.on_reaction_add, recover_add=self.on_reaction_add
-        )
-
-    @override
-    async def ui_unload(self) -> None:
-        self._reaction_subscription.detach()
 
     @autocompletes(build_id="builds")
     @sd.command(name="tags", description="Browse, apply, propose, and moderate build tags")
@@ -122,17 +117,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await sent_message.add_reaction("❌")
         await message.delete()
 
-    async def on_reaction_add(self, event: ReactionEvent) -> None:
+    @reaction_handler("add", recover=True)
+    async def delete_archived_message(self, event: ReactionEvent) -> None:
+        """Delete an archived copy when the original message's author reacts with ❌."""
         payload = event.payload
-        if event.emoji != "❌":
-            return
-        assert self.bot.user is not None
-        if payload.user_id == self.bot.user.id:
-            return
-        message = await event.message()
+        message = await event.message(own=True)
         if message is None:
-            return
-        if message.author.id != self.bot.user.id:
             return
         header = message.content.splitlines()[0] if message.content else ""
         match = self._archive_header_pattern.match(header)

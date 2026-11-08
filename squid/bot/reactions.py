@@ -1,6 +1,10 @@
 """Route Discord reaction events to voting, starboard, and other subscribers.
 
 ReactionRouterCog receives the gateway events and hands them to ReactionRouter.
+A subscriber is any object with methods marked by @reaction_handler; the bot
+subscribes cogs automatically when they are added and detaches them when they
+are removed, and other objects call ReactionRouter.subscribe themselves.
+
 Subscribers share message and member lookups for each event. The router keeps
 events for one message ordered; each subscriber decides what a reaction means
 and supplies any recovery needed when shutdown interrupts its work.
@@ -8,12 +12,14 @@ and supplies any recovery needed when shutdown interrupts its work.
 
 import asyncio
 import contextlib
+import dataclasses
 import functools
+import inspect
 import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, cast, override
+from typing import TYPE_CHECKING, Any, Literal, cast, overload, override
 
 import anyio
 import discord
@@ -73,22 +79,96 @@ class ReactionResolver:
             object.__setattr__(self, "_member_loaded", True)
             return member
 
+    @property
+    def own_user_id(self) -> int:
+        """Return this bot's Discord user ID; reactions only arrive after login sets it."""
+        user = self._bot.user
+        assert user is not None
+        return user.id
+
 
 @dataclass(frozen=True, slots=True)
 class ReactionEvent:
-    """A Discord reaction action with lookups scoped to this dispatch."""
+    """A reaction added or removed by a Discord user.
+
+    Subscribers receive the same event and share its message and member lookups.
+    The filters on message() and member() affect only the caller's result, never
+    the shared lookup another subscriber sees.
+
+    "Own" refers to this bot's Discord account: an own reaction is one the bot
+    added, and an own message is one the bot sent.
+    """
 
     payload: discord.RawReactionActionEvent
     emoji: str
     _resolver: ReactionResolver = field(repr=False, compare=False)
+    recovering: bool = False
+    """True when a handler declared with recover=True is called during shutdown recovery."""
 
-    async def message(self) -> discord.Message | None:
-        """Return this dispatch's shared message lookup result."""
-        return await self._resolver.message(self.payload.channel_id, self.payload.message_id)
+    @property
+    def is_own_reaction(self) -> bool:
+        """Whether this bot added or removed the reaction."""
+        return self.payload.user_id == self._resolver.own_user_id
 
-    async def resolve_member(self) -> discord.Member | None:
-        """Return this dispatch's shared member lookup result."""
-        return await self._resolver.member(self.payload.guild_id, self.payload.user_id)
+    async def message(self, *, own: bool | None = None) -> discord.Message | None:
+        """Return the message that received the reaction.
+
+        The first call fetches the message; later calls on this event reuse that result.
+
+        Args:
+            own: True accepts only messages this bot sent, False only messages
+                someone else sent, and None accepts any message.
+
+        Returns:
+            The message, or None if it is rejected by `own` or cannot be found or
+            accessed. Other lookup errors propagate, and a later call retries.
+        """
+        message = await self._resolver.message(self.payload.channel_id, self.payload.message_id)
+        if message is None or own is None:
+            return message
+        return message if (message.author.id == self._resolver.own_user_id) == own else None
+
+    async def member(self, *, humans_only: bool = False) -> discord.Member | None:
+        """Return the guild member who reacted, or None outside a guild or if they cannot be found.
+
+        Args:
+            humans_only: Return None for bot accounts.
+        """
+        member = await self._resolver.member(self.payload.guild_id, self.payload.user_id)
+        if member is not None and humans_only and member.bot:
+            return None
+        return member
+
+
+@dataclass(frozen=True, slots=True)
+class ReactionFilter:
+    """Choose which reaction add and remove events reach a subscriber.
+
+    A subscriber declares its filter as a `reaction_filter` class attribute.
+    The router checks it against the gateway payload before queuing the
+    subscriber's handlers, including recovery, so a rejected event costs no
+    Discord lookups. Clear events are not filtered.
+
+    The default filter accepts every reaction except this bot's own.
+    """
+
+    emojis: frozenset[str] | None = None
+    """Accept only these emoji strings, compared exactly with ReactionEvent.emoji. None accepts any emoji."""
+    guild_only: bool = False
+    """Reject reactions in direct messages."""
+    include_own: bool = False
+    """Accept reactions this bot added or removed."""
+
+    def accepts(self, event: ReactionEvent) -> bool:
+        """Return whether `event` passes every check."""
+        if self.emojis is not None and event.emoji not in self.emojis:
+            return False
+        if self.guild_only and event.payload.guild_id is None:
+            return False
+        return self.include_own or not event.is_own_reaction
+
+
+_DEFAULT_FILTER = ReactionFilter()
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,16 +177,88 @@ class ReactionClearEvent:
 
     payload: discord.RawReactionClearEvent | discord.RawReactionClearEmojiEvent
     emoji: str | None = None
+    recovering: bool = False
+    """True when a handler declared with recover=True is called during shutdown recovery."""
 
 
 type ReactionActionCallback = Callable[[ReactionEvent], Awaitable[None]]
 type ReactionClearCallback = Callable[[ReactionClearEvent], Awaitable[None]]
 type ReactionKind = Literal["add", "remove", "clear", "clear_emoji"]
+type ReactionActionKind = Literal["add", "remove"]
+type ReactionClearKind = Literal["clear", "clear_emoji"]
+
+_HANDLER_ATTRIBUTE = "__squid_reaction_handler__"
+_ACTION_KINDS: frozenset[str] = frozenset({"add", "remove"})
+
+
+@dataclass(frozen=True, slots=True)
+class _HandlerSpec:
+    kinds: tuple[ReactionKind, ...]
+    recover: bool
+
+
+@overload
+def reaction_handler[F: Callable[[Any, ReactionEvent], Awaitable[None]]](
+    *kinds: ReactionActionKind, recover: bool = False
+) -> Callable[[F], F]: ...
+
+
+@overload
+def reaction_handler[F: Callable[[Any, ReactionClearEvent], Awaitable[None]]](
+    *kinds: ReactionClearKind, recover: bool = False
+) -> Callable[[F], F]: ...
+
+
+def reaction_handler[F: Callable[..., Awaitable[None]]](
+    *kinds: ReactionKind, recover: bool = False
+) -> Callable[[F], F]:
+    """Mark a method to receive the given kinds of reaction event.
+
+    "add" and "remove" handlers receive a ReactionEvent; "clear" and
+    "clear_emoji" handlers receive a ReactionClearEvent, so one method cannot
+    mix the two groups. Each kind may have one handler per subscriber.
+
+    Args:
+        kinds: The events this method handles.
+        recover: Also call this method for events that shutdown interrupted
+            or never queued. The event's `recovering` flag is then True. A
+            recovering handler must tolerate partial earlier processing.
+    """
+    if not kinds:
+        msg = "reaction_handler needs at least one event kind."
+        raise TypeError(msg)
+    if len({kind in _ACTION_KINDS for kind in kinds}) > 1:
+        msg = "reaction_handler cannot mix add/remove with clear events; they receive different event types."
+        raise TypeError(msg)
+
+    def decorate(method: F) -> F:
+        setattr(method, _HANDLER_ATTRIBUTE, _HandlerSpec(kinds, recover))
+        return method
+
+    return decorate
+
+
+def _handler_specs(subscriber: object) -> list[tuple[str, _HandlerSpec]]:
+    """Return the name and spec of every @reaction_handler method on the subscriber's class."""
+    cls = type(subscriber)
+    specs: list[tuple[str, _HandlerSpec]] = []
+    for name in dir(cls):
+        # getattr_static so scanning never runs a property or descriptor.
+        spec = getattr(inspect.getattr_static(cls, name), _HANDLER_ATTRIBUTE, None)
+        if isinstance(spec, _HandlerSpec):
+            specs.append((name, spec))
+    return specs
+
+
+def has_reaction_handlers(subscriber: object) -> bool:
+    """Return whether the subscriber's class has any @reaction_handler method."""
+    return bool(_handler_specs(subscriber))
 
 
 @dataclass(frozen=True, slots=True)
 class _ReactionRegistration:
     consumer: str
+    reaction_filter: ReactionFilter
     add: ReactionActionCallback | None
     remove: ReactionActionCallback | None
     clear: ReactionClearCallback | None
@@ -190,41 +342,55 @@ class ReactionRouter:
         self._shutdown_timeout = shutdown_timeout
         self._closing = False
 
-    def subscribe(
-        self,
-        consumer: str,
-        *,
-        add: ReactionActionCallback | None = None,
-        remove: ReactionActionCallback | None = None,
-        clear: ReactionClearCallback | None = None,
-        clear_emoji: ReactionClearCallback | None = None,
-        recover_add: ReactionActionCallback | None = None,
-        recover_remove: ReactionActionCallback | None = None,
-        recover_clear: ReactionClearCallback | None = None,
-        recover_clear_emoji: ReactionClearCallback | None = None,
-    ) -> ReactionSubscription:
-        """Register callbacks and optional shutdown recovery for one consumer.
+    def subscribe(self, subscriber: object) -> ReactionSubscription:
+        """Route events to the subscriber's @reaction_handler methods until detached.
+
+        The bot calls this for cogs; other subscribers call it when they start.
+        Logs and metrics name the subscriber by its class's qualified name. The
+        subscriber's `reaction_filter` class attribute, if any, selects which add
+        and remove events reach it.
 
         Dispatch captures registrations before enqueueing, so detaching does not
         retract that snapshot. Recovery can run for events that never entered a queue
-        or for accepted events interrupted during shutdown. It must tolerate partial
-        prior processing and either reconcile state or record durable retry intent.
+        or for accepted events interrupted during shutdown.
+
+        Raises:
+            ValueError: The subscriber has no handlers, or two handlers for one kind.
         """
-        if all(callback is None for callback in (add, remove, clear, clear_emoji)):
-            msg = "A reaction subscription requires at least one callback."
+        handlers: dict[ReactionKind, Callable[[Any], Awaitable[None]]] = {}
+        recover: set[ReactionKind] = set()
+        for name, spec in _handler_specs(subscriber):
+            for kind in spec.kinds:
+                if kind in handlers:
+                    msg = f"{type(subscriber).__qualname__} has more than one {kind!r} reaction handler."
+                    raise ValueError(msg)
+                handlers[kind] = getattr(subscriber, name)
+                if spec.recover:
+                    recover.add(kind)
+        if not handlers:
+            msg = f"{type(subscriber).__qualname__} has no @reaction_handler methods."
             raise ValueError(msg)
+        reaction_filter = getattr(subscriber, "reaction_filter", _DEFAULT_FILTER)
+        if not isinstance(reaction_filter, ReactionFilter):
+            msg = f"{type(subscriber).__qualname__}.reaction_filter must be a ReactionFilter."
+            raise TypeError(msg)
+
+        def recovery(kind: ReactionKind) -> Callable[[Any], Awaitable[None]] | None:
+            return handlers[kind] if kind in recover else None
+
         registration_id = self._next_registration_id
         self._next_registration_id += 1
         self._registrations[registration_id] = _ReactionRegistration(
-            consumer,
-            add,
-            remove,
-            clear,
-            clear_emoji,
-            recover_add,
-            recover_remove,
-            recover_clear,
-            recover_clear_emoji,
+            type(subscriber).__qualname__,
+            reaction_filter,
+            handlers.get("add"),
+            handlers.get("remove"),
+            handlers.get("clear"),
+            handlers.get("clear_emoji"),
+            recovery("add"),
+            recovery("remove"),
+            recovery("clear"),
+            recovery("clear_emoji"),
         )
         return ReactionSubscription(self, registration_id)
 
@@ -323,19 +489,20 @@ class ReactionRouter:
             _QueuedReaction(
                 kind,
                 event,
-                self._action_callbacks(kind),
-                self._action_callbacks(kind, recovery=True),
+                self._action_callbacks(kind, event),
+                self._action_callbacks(kind, event, recovery=True),
                 time.monotonic(),
             )
         )
 
     def _action_callbacks(
-        self, kind: Literal["add", "remove"], *, recovery: bool = False
+        self, kind: Literal["add", "remove"], event: ReactionEvent, *, recovery: bool = False
     ) -> tuple[_ReactionCallback[ReactionEvent], ...]:
         return tuple(
             _ReactionCallback(registration.consumer, callback)
             for registration in self._registrations.values()
-            if (
+            if registration.reaction_filter.accepts(event)
+            and (
                 callback := (
                     registration.recover_add
                     if recovery and kind == "add"
@@ -455,7 +622,9 @@ class ReactionRouter:
             # `_QueuedEvent` is a union of two `_QueuedReaction` instantiations, so the checker cannot
             # rebind EventT across the union even though each queued item pairs its own event type with
             # its own callbacks -- which is exactly what the generic dataclass guarantees.
-            functools.partial(self._run_recovery, callback, item.kind, item.event)  # pyright: ignore[reportArgumentType]
+            functools.partial(  # pyright: ignore[reportArgumentType]
+                self._run_recovery, callback, item.kind, dataclasses.replace(item.event, recovering=True)
+            )
             for callback in item.recoveries
         )
 

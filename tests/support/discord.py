@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
@@ -318,6 +319,7 @@ class ReactionBotHarness:
 class _ReactionBotSource:
     guild: discord.Guild | None
     get_or_fetch_message: AsyncCallRecorder
+    user: SimpleNamespace
 
     def get_guild(self, guild_id: int) -> discord.Guild | None:
         del guild_id
@@ -325,16 +327,16 @@ class _ReactionBotSource:
 
 
 def make_reaction_bot(
-    *, guild: discord.Guild | None = None, message: discord.Message | None = None
+    *, guild: discord.Guild | None = None, message: discord.Message | None = None, user_id: int = 99
 ) -> ReactionBotHarness:
-    """Create a bot double returning the supplied guild and recording message fetches.
+    """Create a bot double logged in as `user_id`, returning the supplied guild and recording message fetches.
 
     Guild lookup ignores the requested ID; tests requiring real lookup behavior need a client.
     """
     get_or_fetch_message = AsyncCallRecorder(result=message)
     bot = cast(
         "squid.bot.app.RedstoneSquid",
-        _ReactionBotSource(guild, get_or_fetch_message),
+        _ReactionBotSource(guild, get_or_fetch_message, SimpleNamespace(id=user_id)),
     )
     return ReactionBotHarness(bot, get_or_fetch_message)
 

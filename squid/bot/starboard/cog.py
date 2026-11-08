@@ -2,14 +2,14 @@
 
 import contextlib
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Self, override
+from typing import TYPE_CHECKING, ClassVar, Self, override
 
 import discord
 from discord import app_commands
 from whenever import Instant
 
 import squid_ui_discord as sd
-from squid.bot.reactions import ReactionClearEvent, ReactionEvent
+from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
 from squid.bot.utils.permissions import allows, enforce, hide_unless
@@ -52,32 +52,26 @@ able to reach the group that contains it.
 class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Mirror messages after their weighted reactions cross configured thresholds."""
 
+    reaction_filter: ClassVar[ReactionFilter] = ReactionFilter(guild_only=True)
+
     def __init__(self, bot: BotT) -> None:
         super().__init__(bot)
         self.service = bot.services.starboards
         self._debouncer = EntryDebouncer(self._refresh_key, bot.background_tasks)
-        self._reaction_subscription = self.bot.reactions.subscribe(
-            type(self).__qualname__,
-            add=self.on_reaction_add,
-            remove=self.on_reaction_remove,
-            clear=self.on_reaction_clear,
-            clear_emoji=self.on_reaction_clear_emoji,
-        )
 
     @override
     async def ui_unload(self) -> None:
-        self._reaction_subscription.detach()
         await self._debouncer.close()
 
+    @reaction_handler("add")
     async def on_reaction_add(self, event: ReactionEvent) -> None:
         payload = event.payload
-        if payload.guild_id is None or self.bot.user is None or payload.user_id == self.bot.user.id:
-            return
+        assert payload.guild_id is not None  # The subscription is guild-only.
         if not await self.service.is_relevant_emoji(payload.guild_id, event.emoji):
             return
-        message = await event.message()
-        member = await event.resolve_member()
-        if message is None or member is None or member.bot or message.author.id == self.bot.user.id:
+        message = await event.message(own=False)
+        member = await event.member(humans_only=True)
+        if message is None or member is None:
             return
         origin = self._origin(message)
         result = await self.service.record_vote(
@@ -90,15 +84,19 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 await message.remove_reaction(payload.emoji, member)
         self._schedule(result.keys)
 
+    @reaction_handler("remove")
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
         payload = event.payload
-        if payload.guild_id is None or not await self.service.is_relevant_emoji(payload.guild_id, event.emoji):
+        assert payload.guild_id is not None  # The subscription is guild-only.
+        if not await self.service.is_relevant_emoji(payload.guild_id, event.emoji):
             return
         self._schedule(await self.service.withdraw_vote(payload.message_id, payload.user_id, event.emoji))
 
+    @reaction_handler("clear")
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
         self._schedule(await self.service.clear_votes(event.payload.message_id))
 
+    @reaction_handler("clear_emoji")
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
         self._schedule(await self.service.clear_votes(event.payload.message_id, event.emoji))
 
