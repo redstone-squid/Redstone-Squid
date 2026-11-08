@@ -2,10 +2,9 @@
 
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
-from typing import Any, cast, override
+from typing import cast, override
 from unittest.mock import create_autospec
 
-from squid.builds.application import BuildService
 from squid.config import WorkerConfig
 from squid.diagnostics.application import ErrorReportService
 from squid.events import DomainEventService
@@ -14,9 +13,9 @@ from squid.notifications import NotificationService
 from squid.runtime import BackgroundTaskSupervisor, JobHandle, WorkerServices
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
-from squid.voting.application import VoteService
 from squid.worker.app import DatabaseWorker
 from squid.worker.rendering import SchematicPreviewWorker
+from tests.support.services import worker_services as checked_worker_services
 
 
 def make_worker(
@@ -43,41 +42,6 @@ def make_worker(
         supervisor=supervisor,
         schematic_pool=schematic_pool,
     )
-
-
-class StubBuildService(BuildService):
-    """Supply the build-service identity required by worker event handlers."""
-
-    def __init__(self) -> None:
-        pass
-
-
-class StubVoteService(VoteService):
-    """Supply the vote-service identity required by worker event handlers."""
-
-    def __init__(self) -> None:
-        pass
-
-
-class StubEventService(DomainEventService):
-    """Supply the event-service identity required by the core event runner."""
-
-    def __init__(self) -> None:
-        pass
-
-
-class StubNotificationService(NotificationService):
-    """Supply the notification-service identity required by worker handlers."""
-
-    def __init__(self) -> None:
-        pass
-
-
-class StubErrorReportService(ErrorReportService):
-    """Supply the error-report service captured by the supervisor."""
-
-    def __init__(self) -> None:
-        pass
 
 
 class MediaCleanupRecorder(MediaStorageCleanup):
@@ -172,28 +136,18 @@ def worker_services(
     events: DomainEventService | None = None,
     notifications: NotificationService | None = None,
 ) -> WorkerServices:
-    """Build the concrete worker service container around stateful test services."""
+    """Build the worker service graph around the stateful services these scheduling tests observe."""
     maintenance = maintenance or MaintenanceRecorder()
-    return WorkerServices(
-        builds=StubBuildService(),
-        error_reports=StubErrorReportService(),
-        artifacts=cast(Any, object()),
-        votes=StubVoteService(),
-        records=cast(Any, object()),
-        events=events or StubEventService(),
-        event_wake_listener=None,
-        notifications=notifications or StubNotificationService(),
-        schematics=cast(Any, object()),
-        schematic_jobs=cast(Any, object()),
-        schematic_renders=cast(Any, object()),
-        media_runner=None,
-        media_cleanup=cleanup or MediaCleanupRecorder(),
-        submission_finalization=cast(Any, object()),
-        search_embeddings=cast(Any, object()),
-        refresh_search_index=cast(Any, object()),
-        record_queue_health=maintenance.record_queue_health,
-        purge_idempotency=maintenance.purge_idempotency,
-        cleanup_submission_schematics=maintenance.cleanup_submission_schematics,
-        cleanup_submission_inference=maintenance.cleanup_submission_inference,
-        expire_submission_drafts=maintenance.expire_submission_drafts,
-    )
+    observed: dict[str, object] = {
+        "media_cleanup": cleanup or MediaCleanupRecorder(),
+        "record_queue_health": maintenance.record_queue_health,
+        "purge_idempotency": maintenance.purge_idempotency,
+        "cleanup_submission_schematics": maintenance.cleanup_submission_schematics,
+        "cleanup_submission_inference": maintenance.cleanup_submission_inference,
+        "expire_submission_drafts": maintenance.expire_submission_drafts,
+    }
+    if events is not None:
+        observed["events"] = events
+    if notifications is not None:
+        observed["notifications"] = notifications
+    return checked_worker_services(**observed)

@@ -4,24 +4,19 @@ from typing import cast, override
 
 from whenever import Instant
 
+from squid.builds.application import BuildService
 from squid.builds.models import Build
 from squid.config import WorkerConfig
-from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
+from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
+from squid.notifications import NotificationService
+from squid.voting.application import VoteService
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from tests.support.voting import build_snapshot
-from tests.unit.worker.fakes import (
-    StubBuildService,
-    StubEventService,
-    StubNotificationService,
-    StubVoteService,
-    SupervisorRecorder,
-    make_worker,
-    worker_services,
-)
+from tests.unit.worker.fakes import SupervisorRecorder, make_worker, worker_services
 
 
-class VoteRecorder(StubVoteService):
+class VoteRecorder(VoteService):
     def __init__(self, snapshot: VoteSessionSnapshot) -> None:
         self.snapshot = snapshot
         self.requested_ids: list[int] = []
@@ -32,7 +27,7 @@ class VoteRecorder(StubVoteService):
         return self.snapshot
 
 
-class BuildRecorder(StubBuildService):
+class BuildRecorder(BuildService):
     def __init__(self) -> None:
         self.confirmed: list[int] = []
         self.denied: list[int] = []
@@ -48,7 +43,7 @@ class BuildRecorder(StubBuildService):
         return cast(Build, object())
 
 
-class EventRecorder(StubEventService):
+class EventRecorder(DomainEventService):
     def __init__(self, *deliveries: DomainEventDelivery) -> None:
         self.deliveries = deliveries
         self.completed: list[DomainEventDelivery] = []
@@ -83,7 +78,7 @@ class FailingHandler:
         raise self.error
 
 
-class NotificationRecorder(StubNotificationService):
+class NotificationRecorder(NotificationService):
     def __init__(self) -> None:
         self.materialized: list[DomainEvent] = []
 
