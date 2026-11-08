@@ -1,6 +1,6 @@
 """Starboard application ports and transport plans."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -65,7 +65,9 @@ class StarboardRepository(Protocol):
 
     async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None: ...
 
-    async def disable_channel(self, channel_id: int) -> None: ...
+    async def referenced_channels(self, guild_id: int) -> frozenset[int]: ...
+
+    async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> bool: ...
 
     async def create(self, config: StarboardConfig) -> StarboardConfig: ...
 

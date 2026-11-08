@@ -1,8 +1,7 @@
-"""The guild settings workspace and guild-lifecycle registration."""
+"""The guild settings workspace."""
 
 from typing import TYPE_CHECKING, Self
 
-import discord
 from discord import app_commands
 
 import squid_ui_discord as sd
@@ -55,16 +54,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Setti
             authorize=authorize,
             owner_guild_id=self.bot.owner_server_id,
         )
-
-    @sd.Cog.listener("on_guild_join")
-    async def on_guild_join(self, guild: discord.Guild) -> None:
-        """Register a guild when the bot joins it."""
-        await self.settings_service.guild_joined(guild.id)
-
-    @sd.Cog.listener("on_guild_remove")
-    async def on_guild_remove(self, guild: discord.Guild) -> None:
-        """Remove a guild registration when the bot leaves it."""
-        await self.settings_service.guild_removed(guild.id)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

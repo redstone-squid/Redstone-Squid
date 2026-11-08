@@ -116,10 +116,6 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         for message_id in payload.message_ids:
             self._schedule(await self.service.mark_origin_deleted(message_id), force=True)
 
-    @sd.Cog.listener()
-    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
-        await self.service.disable_channel(channel.id)
-
     def _schedule(self, keys: Iterable[EntryKey], *, force: bool = False) -> None:
         for key in keys:
             self._debouncer.schedule(key, force=force)

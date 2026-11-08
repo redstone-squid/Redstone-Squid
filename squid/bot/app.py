@@ -73,6 +73,7 @@ EXTENSIONS = (
     "squid.bot.reactions",
     "squid.bot.messages",
     "squid.bot.settings",
+    "squid.bot.guild_state",
     "squid.bot.submission",
     "squid.bot.log",
     "squid.bot.help",

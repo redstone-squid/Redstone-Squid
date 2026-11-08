@@ -129,3 +129,28 @@ async def test_whole_guild_and_channel_sources_do_not_duplicate_configs(
         configs = await uow.starboards.configs_for_source(10, 30)
 
     assert [item.id for item in configs] == [created.id]
+
+
+async def test_forgetting_a_deleted_channel_disables_its_board_and_drops_it_as_a_source(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # "first" posts to channel 20 and also reads from channel 30; "second" posts to channel 21.
+    # Guild 10 has no settings row yet: creating a board makes one.
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        first = await uow.starboards.create(StarboardConfig(id=0, guild_id=10, channel_id=20, name="first", required=1))
+        await uow.starboards.create(StarboardConfig(id=0, guild_id=10, channel_id=21, name="second", required=1))
+        await uow.commit()
+    async with async_session_factory.begin() as session:
+        await session.execute(insert(StarboardSource).values(starboard_id=first.id, guild_id=10, channel_id=30))
+
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        assert await uow.starboards.referenced_channels(10) == {20, 21, 30}
+        assert await uow.starboards.forget_channels(10, {20, 30})
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(async_session_factory) as uow:
+        boards = {board.name: board for board in await uow.starboards.list_for_guild(10)}
+        # The disabled board's destination is no longer listed, so it is not checked again.
+        assert await uow.starboards.referenced_channels(10) == {21}
+        assert not await uow.starboards.forget_channels(10, {20, 30})
+    assert (boards["first"].enabled, boards["second"].enabled) == (False, True)

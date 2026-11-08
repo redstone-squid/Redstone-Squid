@@ -1,5 +1,6 @@
 """Apply starboard policy and commit votes, scores, and configuration changes."""
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from math import isfinite
 
@@ -231,11 +232,30 @@ class StarboardService:
             await uow.starboards.mark_rendered(starboard_id, origin_message_id, score)
             await uow.commit()
 
-    async def disable_channel(self, channel_id: int) -> None:
-        """Disable boards targeting the channel; cached emoji lookups are not invalidated."""
+    async def referenced_channels(self, guild_id: int) -> frozenset[int]:
+        """Return the guild's channels that enabled boards post to or read from.
+
+        Sources that cover every channel in the guild are not listed. Disabled boards are left
+        out because nothing posts to them, so a deleted destination is not checked again after
+        `forget_channels` has disabled its board.
+        """
         async with self._uow_factory() as uow:
-            await uow.starboards.disable_channel(channel_id)
+            return await uow.starboards.referenced_channels(guild_id)
+
+    async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> None:
+        """Stop using channels of this guild that Discord has deleted.
+
+        A board whose destination is gone is disabled rather than deleted, so an administrator
+        can point it at a new channel and keep its configuration. A source channel that is gone
+        is removed from every board that read from it.
+        """
+        async with self._uow_factory() as uow:
+            changed = await uow.starboards.forget_channels(guild_id, channel_ids)
             await uow.commit()
+        if changed:
+            # A disabled board stops counting reactions in every guild it reads from, so any
+            # guild's cached emoji set may now be too large.
+            self._emoji_cache.clear()
 
     def invalidate_cache(self, guild_id: int) -> None:
         """Discard this service instance's cached reaction aliases for one source guild."""

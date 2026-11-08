@@ -1,8 +1,8 @@
 """PostgreSQL starboard repository."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 
-from sqlalchemy import case, delete, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, union, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -254,11 +254,32 @@ class PostgresStarboardRepository:
         config = await self._with_emojis(session, starboard_row)
         return EntryState(config, origin_row, entry_row)
 
-    async def disable_channel(self, channel_id: int) -> None:
+    async def referenced_channels(self, guild_id: int) -> frozenset[int]:
         session = self._session()
-        await session.execute(
-            update(StarboardConfig).where(StarboardConfig.channel_id == channel_id).values(enabled=False)
+        destinations = select(StarboardConfig.channel_id).where(
+            StarboardConfig.guild_id == guild_id, StarboardConfig.enabled
         )
+        sources = select(StarboardSource.channel_id).where(
+            StarboardSource.guild_id == guild_id, StarboardSource.channel_id != 0
+        )
+        return frozenset(await session.scalars(union(destinations, sources)))
+
+    async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> bool:
+        """Disable boards posting to the channels and remove them as sources; report any change."""
+        session = self._session()
+        ids = list(channel_ids)
+        disabled = await session.scalars(
+            update(StarboardConfig)
+            .where(StarboardConfig.guild_id == guild_id, StarboardConfig.channel_id.in_(ids), StarboardConfig.enabled)
+            .values(enabled=False)
+            .returning(StarboardConfig.id)
+        )
+        removed = await session.scalars(
+            delete(StarboardSource)
+            .where(StarboardSource.guild_id == guild_id, StarboardSource.channel_id.in_(ids))
+            .returning(StarboardSource.starboard_id)
+        )
+        return bool(disabled.all()) | bool(removed.all())
 
     async def create(self, config: StarboardConfig) -> StarboardConfig:
         """Assign an ID and subscribe the new board to all channels in its guild."""
