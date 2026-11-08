@@ -31,11 +31,11 @@ type VisibilityResolver = Callable[[sd.ActionEvent], Awaitable[InboxVisibility]]
 def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
     match kind:
         case SubscriptionKind.CREATOR:
-            return tr(t"Creator")
+            return tr("Creator")
         case SubscriptionKind.RECORD:
-            return tr(t"Record")
+            return tr("Record")
         case SubscriptionKind.RECORD_FILTER:
-            return tr(t"Record filter")
+            return tr("Record filter")
 
 
 class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
@@ -111,19 +111,19 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.closed:
-            return (sl.section(sl.heading(tr(t"Notifications closed"))),)
-        on, off = tr(t"On"), tr(t"Off")
+            return (sl.section(sl.heading(tr("Notifications closed"))),)
+        on, off = tr("On"), tr("Off")
         fields = (
-            sl.field(tr(t"Web inbox"), on if self.web_enabled else off),
-            sl.field(tr(t"Discord DMs"), on if self.dm_enabled else off),
-            sl.field(tr(t"Following"), self._subscription_list()),
-            sl.field(tr(t"Unread"), str(sum(item.read_at is None for item in self._inbox))),
+            sl.field(tr("Web inbox"), on if self.web_enabled else off),
+            sl.field(tr("Discord DMs"), on if self.dm_enabled else off),
+            sl.field(tr("Following"), self._subscription_list()),
+            sl.field(tr("Unread"), str(sum(item.read_at is None for item in self._inbox))),
         )
-        description = tr(t"Toggle where notifications arrive, and unfollow what you no longer want.")
+        description = tr("Toggle where notifications arrive, and unfollow what you no longer want.")
         suspension_note = self._suspension_note()
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
-                sl.heading(tr(t"Notifications")),
+                sl.heading(tr("Notifications")),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(*fields),
                 suspension_note and sl.note(suspension_note),
@@ -153,7 +153,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
                         sl.choice(
                             self._inbox_label(notification),
                             key=str(notification.id),
-                            description=tr(t"Unread") if notification.read_at is None else tr(t"Read"),
+                            description=tr("Unread") if notification.read_at is None else tr("Read"),
                         )
                         for notification in self._inbox
                     ),
@@ -166,13 +166,13 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
         nodes.extend(
             (
                 sl.toggle(
-                    tr(t"Web inbox"),
+                    tr("Web inbox"),
                     key="web",
                     on=sl.controlled(self.web_enabled, self._toggle_web),
                     tone=sl.Tone.SUCCESS if self.web_enabled else sl.Tone.NEUTRAL,
                 ),
                 sl.toggle(
-                    tr(t"Discord DMs"),
+                    tr("Discord DMs"),
                     key="dm",
                     on=sl.controlled(self.dm_enabled, self._toggle_dm),
                     tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
@@ -182,13 +182,13 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
         nodes.extend(
             (
                 sl.form(
-                    tr(t"Follow creator"),
+                    tr("Follow creator"),
                     sl.forms.FormSpec(
-                        tr(t"Follow a creator"),
+                        tr("Follow a creator"),
                         (
                             sl.forms.TextField(
                                 key="creator",
-                                label=tr(t"Creator profile ID"),
+                                label=tr("Creator profile ID"),
                                 maximum=36,
                             ),
                         ),
@@ -197,13 +197,13 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
                     on_submit=self._follow_creator,
                 ),
                 sl.form(
-                    tr(t"Follow record"),
+                    tr("Follow record"),
                     sl.forms.FormSpec(
-                        tr(t"Follow a record"),
+                        tr("Follow a record"),
                         (
                             sl.forms.TextField(
                                 key="record_title",
-                                label=tr(t"Record title ID"),
+                                label=tr("Record title ID"),
                                 maximum=36,
                             ),
                         ),
@@ -212,7 +212,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
                     on_submit=self._follow_record,
                 ),
                 sl.form(
-                    tr(t"Follow matching records"),
+                    tr("Follow matching records"),
                     self._filter_form(),
                     key="follow-filter",
                     on_submit=self._follow_filter,
@@ -222,26 +222,26 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
         nodes.append(
             sl.action_controls(
                 sl.action_control(
-                    tr(t"Unfollow selected"),
+                    tr("Unfollow selected"),
                     self._unfollow,
                     key="unfollow_selected",
                     tone=sl.Tone.DANGER,
                     available=bool(self.selected_ids),
                 ),
                 sl.action_control(
-                    tr(t"Mark selected read"),
+                    tr("Mark selected read"),
                     self._mark_selected_read,
                     key="mark_selected_read",
                     available=bool(self.selected_inbox_ids),
                 ),
                 sl.action_control(
-                    tr(t"Mark selected unread"),
+                    tr("Mark selected unread"),
                     self._mark_selected_unread,
                     key="mark_selected_unread",
                     available=bool(self.selected_inbox_ids),
                 ),
                 sl.action_control(
-                    tr(t"Close"),
+                    tr("Close"),
                     self._close,
                     key="close",
                 ),
@@ -299,27 +299,27 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
     async def _follow_creator(self, event: sd.SubmitEvent) -> None:
         creator = self._uuid(event.values["creator"])
         if creator is None:
-            await event.notice(tr(t"Enter a creator profile ID in UUID form."))
+            await event.notice(tr("Enter a creator profile ID in UUID form."))
             return
         await self._notifications.subscribe(
             self._account_id,
             kind=SubscriptionKind.CREATOR,
             subject_id=creator,
         )
-        await self._followed(event, tr(t"Following that creator."))
+        await self._followed(event, tr("Following that creator."))
 
     async def _follow_record(self, event: sd.SubmitEvent) -> None:
         """Follow the stable record title UUID, so the subscription survives record rebuilds."""
         record_title = self._uuid(event.values["record_title"])
         if record_title is None:
-            await event.notice(tr(t"Enter a record title ID in UUID form."))
+            await event.notice(tr("Enter a record title ID in UUID form."))
             return
         await self._notifications.subscribe(
             self._account_id,
             kind=SubscriptionKind.RECORD,
             subject_id=record_title,
         )
-        await self._followed(event, tr(t"Following that record."))
+        await self._followed(event, tr("Following that record."))
 
     async def _follow_filter(self, event: sd.SubmitEvent) -> None:
         build_kind = self._optional_text(event.values.get("build_kind"))
@@ -328,7 +328,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
         tag = event.values.get("tag")
         tag_value = self._optional_text(event.values.get("tag_value"))
         if not any((build_kind, base_title, version_scope, tag is not None)):
-            await event.notice(tr(t"Choose at least one record filter."))
+            await event.notice(tr("Choose at least one record filter."))
             return
         record_filter = RecordSubscriptionFilter(
             build_kinds=frozenset({build_kind}) if build_kind else frozenset(),
@@ -343,7 +343,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
             kind=SubscriptionKind.RECORD_FILTER,
             record_filter=record_filter,
         )
-        await self._followed(event, tr(t"Following records matching that filter."))
+        await self._followed(event, tr("Following records matching that filter."))
 
     async def _followed(self, event: sd.SubmitEvent, notice: sl.TextLike) -> None:
         await self._refresh(event)
@@ -369,13 +369,13 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
     @staticmethod
     def _filter_form() -> sl.forms.FormSpec:
         return sl.forms.FormSpec(
-            tr(t"Follow matching records"),
+            tr("Follow matching records"),
             (
-                sl.forms.TextField(key="build_kind", label=tr(t"Build kind"), required=False, maximum=100),
-                sl.forms.TextField(key="base_title", label=tr(t"Base title"), required=False, maximum=100),
-                sl.forms.TextField(key="version_scope", label=tr(t"Version scope"), required=False, maximum=100),
-                sl.forms.IntField(key="tag", label=tr(t"Showcase tag ID"), required=False, minimum=1),
-                sl.forms.TextField(key="tag_value", label=tr(t"Exact tag value"), required=False, maximum=100),
+                sl.forms.TextField(key="build_kind", label=tr("Build kind"), required=False, maximum=100),
+                sl.forms.TextField(key="base_title", label=tr("Base title"), required=False, maximum=100),
+                sl.forms.TextField(key="version_scope", label=tr("Version scope"), required=False, maximum=100),
+                sl.forms.IntField(key="tag", label=tr("Showcase tag ID"), required=False, minimum=1),
+                sl.forms.TextField(key="tag_value", label=tr("Exact tag value"), required=False, maximum=100),
             ),
         )
 
@@ -385,7 +385,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
 
     def _subscription_list(self) -> sl.TextLike:
         if not self._subscriptions:
-            return tr(t"_Nothing yet._")
+            return tr("_Nothing yet._")
         params: dict[str, object] = {}
         lines: list[str] = []
         for index, subscription in enumerate(self.subscriptions):
@@ -403,19 +403,19 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
     def _inbox_label(notification: InboxNotification) -> sl.TextLike:
         match notification.kind.value:
             case "build_confirmed":
-                return tr(t"Build confirmed")
+                return tr("Build confirmed")
             case "build_denied":
-                return tr(t"Build denied")
+                return tr("Build denied")
             case "creator_build_confirmed":
-                return tr(t"Creator build confirmed")
+                return tr("Creator build confirmed")
             case "record_gained":
-                return tr(t"Record gained")
+                return tr("Record gained")
             case "staff_build_submitted":
-                return tr(t"Build awaiting review")
+                return tr("Build awaiting review")
             # The cases above cover NotificationKind exhaustively today; the default is what a
             # kind added to the enum later renders as instead of falling off the end.
             case _:  # pyright: ignore[reportUnnecessaryComparison]
-                return tr(t"Build notification")
+                return tr("Build notification")
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
         return _kind_label(subscription.kind)
@@ -428,7 +428,7 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
     def _suspension_note(self) -> sl.TextLike | None:
         if self._preferences is None or self._preferences.dm_suspended_at is None:
             return None
-        return tr(t"Discord rejected a DM, so DMs are suspended until you re-enable them.")
+        return tr("Discord rejected a DM, so DMs are suspended until you re-enable them.")
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:

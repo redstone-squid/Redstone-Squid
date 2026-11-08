@@ -71,7 +71,7 @@ class ConsentPrompt(sd.UserSessionScreen):
     session = sd.SessionSpec(
         "consent",
         admission=sd.AdmissionSpec(
-            collision=sd.Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
+            collision=sd.Reject(notice=tr("You already have a consent prompt open. Please answer that one."))
         ),
     )
     timeout = CONSENT_PROMPT_TIMEOUT_SECONDS
@@ -123,8 +123,8 @@ class ConsentPrompt(sd.UserSessionScreen):
                     key="accept",
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action_control(tr(t"Cancel"), self._cancel, key="cancel"),
-                sl.action_control(tr(t"Privacy notice"), self._privacy, key="privacy"),
+                sl.action_control(tr("Cancel"), self._cancel, key="cancel"),
+                sl.action_control(tr("Privacy notice"), self._privacy, key="privacy"),
                 key="consent-actions",
             ),
         )
@@ -227,22 +227,22 @@ def _consent_prompt(
     if preview is None:
         return ConsentPrompt(
             user_id=user_id,
-            title=tr(t"Before Redstone Squid stores anything about you"),
+            title=tr("Before Redstone Squid stores anything about you"),
             summary=tr(
-                t"Agreeing stores your Discord user ID and records this consent, so the bot can "
-                t"recognise you and attribute your builds. Cancelling stores nothing."
+                "Agreeing stores your Discord user ID and records this consent, so the bot can "
+                "recognise you and attribute your builds. Cancelling stores nothing."
             ),
             fields=(
                 CardField(
-                    tr(t"Discord account"),
+                    tr("Discord account"),
                     tr(t"<@{user_id}> (`{user_id}`)"),
                 ),
                 CardField(
-                    tr(t"Consent recorded"),
+                    tr("Consent recorded"),
                     tr(t"Notice {version}, timed at the moment you agree."),
                 ),
             ),
-            accept_label=tr(t"Agree"),
+            accept_label=tr("Agree"),
             wait_timeout=timeout,
             on_answer=on_answer,
         )
@@ -252,25 +252,25 @@ def _consent_prompt(
         user_id=user_id,
         title=tr(t"Link {username} to your Discord account"),
         summary=tr(
-            t"Agreeing stores your Discord user ID, your Minecraft UUID and your current "
-            t"Minecraft username, and records this consent. Cancelling stores nothing."
+            "Agreeing stores your Discord user ID, your Minecraft UUID and your current "
+            "Minecraft username, and records this consent. Cancelling stores nothing."
         ),
         fields=(
             CardField(
-                tr(t"Minecraft account"),
+                tr("Minecraft account"),
                 tr(t"**{username}**\n`{uuid}`"),
             ),
             CardField(
-                tr(t"Discord account"),
+                tr("Discord account"),
                 tr(t"<@{user_id}> (`{user_id}`)"),
             ),
-            CardField(tr(t"Build credit"), _link_credit_value(preview)),
+            CardField(tr("Build credit"), _link_credit_value(preview)),
             CardField(
-                tr(t"Consent recorded"),
+                tr("Consent recorded"),
                 tr(t"Notice {version}, timed at the moment you agree."),
             ),
         ),
-        accept_label=tr(t"Agree and link"),
+        accept_label=tr("Agree and link"),
         wait_timeout=timeout,
         on_answer=on_answer,
     )
@@ -397,7 +397,7 @@ async def ensure_consented_account(
     consent = await prompt_for_consent(request, user_id=user.id, timeout=timeout, parent=parent)
     if consent is NOT_ASKED or consent is None:
         if consent is None:
-            await request.respond(text_node(tr(t"Cancelled. No account information was stored.")), audience="personal")
+            await request.respond(text_node(tr("Cancelled. No account information was stored.")), audience="personal")
         return None
 
     granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)

@@ -103,7 +103,7 @@ def delivery_message(delivery: PendingNotificationDelivery) -> Message:
     if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
         if isinstance(build_id, int):
             return tr(t"A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:{build_id}`.")
-        return tr(t"A new build is awaiting staff review.")
+        return tr("A new build is awaiting staff review.")
     if delivery.kind is NotificationKind.RECORD_GAINED:
         raw_records = delivery.payload.get("records", [])
         count = len(raw_records) if isinstance(raw_records, list) else 1
@@ -112,12 +112,12 @@ def delivery_message(delivery: PendingNotificationDelivery) -> Message:
             plural=t"A credited build gained {count} records.",
         )
     if delivery.kind is NotificationKind.BUILD_CONFIRMED:
-        return tr(t"Your build was confirmed.")
+        return tr("Your build was confirmed.")
     if delivery.kind is NotificationKind.BUILD_DENIED:
-        return tr(t"Your build was denied.")
+        return tr("Your build was denied.")
     if delivery.kind is NotificationKind.CREATOR_BUILD_CONFIRMED:
-        return tr(t"A creator you follow has a newly confirmed build.")
-    return tr(t"A build notification is available.")
+        return tr("A creator you follow has a newly confirmed build.")
+    return tr("A build notification is available.")
 
 
 def render_delivery(

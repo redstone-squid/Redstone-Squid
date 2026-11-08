@@ -91,7 +91,7 @@ class NotificationService:
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[NotificationUnitOfWork], retention_days: int = 90) -> None:
         if retention_days < 1:
-            msg = tr(t"retention_days must be positive")
+            msg = tr("retention_days must be positive")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._retention_days = retention_days
@@ -129,10 +129,10 @@ class NotificationService:
                 raise ConsentRequiredError(account_id=account_id)
             if kind is SubscriptionKind.RECORD_FILTER:
                 if subject_id is not None or record_filter is None:
-                    msg = tr(t"record_filter subscriptions require only a structured filter")
+                    msg = tr("record_filter subscriptions require only a structured filter")
                     raise ValidationError(msg)
             elif subject_id is None or record_filter is not None:
-                msg = tr(t"creator and record subscriptions require only a subject_id")
+                msg = tr("creator and record subscriptions require only a subject_id")
                 raise ValidationError(msg)
             elif not await uow.notifications.subscription_target_exists(kind, subject_id):
                 raise NotificationSubscriptionNotFoundError(public_context={"subject_id": str(subject_id)})
@@ -168,7 +168,7 @@ class NotificationService:
         """Return one page of web-visible inbox items in newest-first display order."""
         async with self._uow_factory() as uow:
             if not 1 <= page_size <= 100:
-                msg = tr(t"page_size must be between 1 and 100")
+                msg = tr("page_size must be between 1 and 100")
                 raise InvalidStateError(msg)
             rows = await uow.notifications.list_inbox(
                 account_id,
@@ -238,7 +238,7 @@ class NotificationService:
         """Reserve ready Discord DMs and commit their claim tokens before returning."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 100:
-                msg = tr(t"delivery claim limit must be between 1 and 100")
+                msg = tr("delivery claim limit must be between 1 and 100")
                 raise InvalidStateError(msg)
             result = await uow.notifications.claim_deliveries(limit=limit)
             await uow.commit()

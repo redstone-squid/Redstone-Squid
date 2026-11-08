@@ -161,7 +161,7 @@ def _coerce_decimal(raw: str, field: FieldDefinition) -> Decimal:
         else:
             value = Decimal(normalized)
     if not value.is_finite():
-        msg = tr(t"Search numbers must be finite")
+        msg = tr("Search numbers must be finite")
         raise ValidationError(msg)
     if field.numeric_step is not None and value % field.numeric_step != 0:
         field_name = field.name

@@ -42,18 +42,18 @@ CONVERSATION_TYPES = (
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
 SETTING_LABELS: dict[ScalarChannelSetting, Message] = {
-    "Smallest": tr(t"Smallest-record builds"),
-    "Fastest": tr(t"Fastest-record builds"),
-    "First": tr(t"First-of-a-kind builds"),
-    "Builds": tr(t"Confirmed builds"),
-    "Vote": tr(t"Builds awaiting review"),
+    "Smallest": tr("Smallest-record builds"),
+    "Fastest": tr("Fastest-record builds"),
+    "First": tr("First-of-a-kind builds"),
+    "Builds": tr("Confirmed builds"),
+    "Vote": tr("Builds awaiting review"),
 }
 """What each channel setting is for, named rather than title-cased so it translates."""
 
 KIND_LABELS: dict[VoteKind, Message] = {
-    VoteKind.BUILD: tr(t"Build reviews"),
-    VoteKind.DELETE_LOG: tr(t"Deletion votes"),
-    VoteKind.GENERIC: tr(t"Polls"),
+    VoteKind.BUILD: tr("Build reviews"),
+    VoteKind.DELETE_LOG: tr("Deletion votes"),
+    VoteKind.GENERIC: tr("Polls"),
 }
 
 
@@ -168,13 +168,13 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
 
     def _server_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         description = (
-            tr(t"Change as many as you like; an emptied picker clears that setting.")
+            tr("Change as many as you like; an emptied picker clears that setting.")
             if self._capabilities.edit_server
             else None
         )
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
-                sl.heading(tr(t"Server settings")),
+                sl.heading(tr("Server settings")),
                 description and sl.truncate(sl.paragraph(description)),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._server_fields())),
             )
@@ -206,7 +206,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
                 sl.choices(
                     *(
                         sl.choice(
-                            tr(t"Follow Discord") if tag == FOLLOW_DISCORD else tag,
+                            tr("Follow Discord") if tag == FOLLOW_DISCORD else tag,
                             key=tag,
                         )
                         for tag in (FOLLOW_DISCORD, *sorted(SUPPORTED_LOCALES))
@@ -219,14 +219,14 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         # Only once there is something to reverse: an always-present disabled pair would be
         # two dead controls on a panel most readers never undo anything on.
         if self._capabilities.edit_server and self.history.can_undo:
-            actions.append(sl.action_control(tr(t"Undo"), self._undo, key="undo"))
+            actions.append(sl.action_control(tr("Undo"), self._undo, key="undo"))
         if self._capabilities.edit_server and self.history.can_redo:
-            actions.append(sl.action_control(tr(t"Redo"), self._redo, key="redo"))
+            actions.append(sl.action_control(tr("Redo"), self._redo, key="redo"))
         if self.shows_voting:
-            actions.append(sl.action_control(tr(t"Voting"), self._show_voting, key="voting"))
+            actions.append(sl.action_control(tr("Voting"), self._show_voting, key="voting"))
         actions.append(
             sl.action_control(
-                tr(t"Close"),
+                tr("Close"),
                 self._close,
                 key="close",
             )
@@ -257,7 +257,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
                     selection=sl.controlled((), self._role_changed),
                     minimum=1,
                     maximum=1,
-                    placeholder=tr(t"Choose a role"),
+                    placeholder=tr("Choose a role"),
                 )
             )
         actions: list[sl.semantic.ActionControl] = []
@@ -265,13 +265,13 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             actions.extend(
                 (
                     sl.action_control(
-                        tr(t"Edit emojis"),
+                        tr("Edit emojis"),
                         self._edit_emojis,
                         key="edit-emojis",
                         emphasis=sl.semantic.Emphasis.STRONG,
                     ),
                     sl.action_control(
-                        tr(t"Confirm reset") if self.confirming_reset else tr(t"Reset"),
+                        tr("Confirm reset") if self.confirming_reset else tr("Reset"),
                         self._reset,
                         key="reset",
                         tone=sl.Tone.DANGER if self.confirming_reset else sl.Tone.NEUTRAL,
@@ -279,10 +279,10 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
                 )
             )
         if self.shows_server:
-            actions.append(sl.action_control(tr(t"Back"), self._show_server, key="server"))
+            actions.append(sl.action_control(tr("Back"), self._show_server, key="server"))
         actions.append(
             sl.action_control(
-                tr(t"Close"),
+                tr("Close"),
                 self._close,
                 key="close",
             )
@@ -295,7 +295,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             return
         channel_id = event.selected[0].id if event.selected else None
         if channel_id is not None and not isinstance(channel_id, int):
-            await event.notice(tr(t"That channel selection is invalid."))
+            await event.notice(tr("That channel selection is invalid."))
             return
         await self.set_channel(setting, channel_id)
 
@@ -317,11 +317,11 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             return
         role_id = event.selected[0].id
         if not isinstance(role_id, int):
-            await event.notice(tr(t"That role selection is invalid."))
+            await event.notice(tr("That role selection is invalid."))
             return
         role = self._guild.get_role(role_id)
         if role is None:
-            await event.notice(tr(t"That role has been deleted."))
+            await event.notice(tr("That role has been deleted."))
             return
         role_name = role.name
         await event.present_form(
@@ -353,7 +353,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         try:
             await self.set_weight(role_id, float(text) if text else None)
         except InvalidVoteConfigurationError, ValueError:
-            await event.notice(tr(t"A vote multiplier must be a positive number, such as 1.5."))
+            await event.notice(tr("A vote multiplier must be a positive number, such as 1.5."))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
         form = _VoteEmojisForm.from_submission(event)
@@ -362,7 +362,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]
             if len(parts) != 2:
-                await event.notice(tr(t"Each line must read `choice | emoji`."))
+                await event.notice(tr("Each line must read `choice | emoji`."))
                 return
             choice_text, emoji = parts
             try:
@@ -409,7 +409,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             change = result.entry.label
             await event.notice(tr(t"Undid: {change}"))
         elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
-            await event.notice(tr(t"That change was modified elsewhere and cannot be undone safely."))
+            await event.notice(tr("That change was modified elsewhere and cannot be undone safely."))
 
     async def _redo(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
@@ -419,7 +419,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             change = result.entry.label
             await event.notice(tr(t"Redid: {change}"))
         elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
-            await event.notice(tr(t"That change was modified elsewhere and cannot be redone safely."))
+            await event.notice(tr("That change was modified elsewhere and cannot be redone safely."))
 
     async def _show_voting(self, event: sl.PressEvent) -> None:
         await self.open_voting()
@@ -433,7 +433,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
-        await event.notice(tr(t"You are no longer allowed to change this."))
+        await event.notice(tr("You are no longer allowed to change this."))
         return False
 
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
@@ -466,7 +466,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         await self._write_locale(locale, locale or previous_locale, message_root)
         self._locale_override = locale
         self.history.record(
-            tr(t"Changed the bot language"),
+            tr("Changed the bot language"),
             compensate=sl.runtime.CompensationSpec(
                 lambda _key: self._write_locale(previous_override, previous_locale, message_root),
                 lambda commit: f"settings:{self._guild.id}:locale:{commit.context.action_id}",
@@ -512,14 +512,14 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         language = (
             self._locale_override
             if self._locale_override is not None
-            else tr(t"Following this server's Discord language")
+            else tr("Following this server's Discord language")
         )
-        fields.append(CardField(tr(t"Bot language"), language))
+        fields.append(CardField(tr("Bot language"), language))
         return fields
 
     def _channel_display(self, channel_id: int | None) -> sl.TextLike:
         if channel_id is None:
-            return tr(t"_Not set_")
+            return tr("_Not set_")
         if self._guild.get_channel_or_thread(channel_id) is None:
             return tr(t"_Not found_ ({channel_id})")
         return sl.md("{mention}", mention=sl.raw_md(f"<#{channel_id}>"))
@@ -529,7 +529,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         emojis = (
             "\n".join(f"{option.emoji} — {option.choice.value}" for option in preset.options)
             if preset is not None and preset.options
-            else tr(t"_None_")
+            else tr("_None_")
         )
         weight_params: dict[str, object] = {}
         weight_lines: list[str] = []
@@ -537,10 +537,10 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             key = f"role_{index}"
             weight_params[key] = self._role_display(weight.role_id)
             weight_lines.append(f"{{{key}}} — {weight.multiplier:g}x")
-        weights = sl.text.Message("\n".join(weight_lines), weight_params) if weight_lines else tr(t"_None_")
+        weights = sl.text.Message("\n".join(weight_lines), weight_params) if weight_lines else tr("_None_")
         return [
-            CardField(tr(t"Emojis"), emojis),
-            CardField(tr(t"Role multipliers"), weights),
+            CardField(tr("Emojis"), emojis),
+            CardField(tr("Role multipliers"), weights),
         ]
 
     def _role_display(self, role_id: int) -> sl.TextLike:
@@ -552,12 +552,12 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
     def _scope_note(self) -> sl.TextLike | None:
         if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
             return None
-        return tr(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
+        return tr("Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
 
 
 class _VoteWeightForm(sl.forms.Form):
     multiplier = sl.forms.TextField(
-        label=tr(t"Multiplier; leave empty to remove this role's weight"),
+        label=tr("Multiplier; leave empty to remove this role's weight"),
         placeholder="1.5",
         required=False,
         maximum=16,
@@ -566,7 +566,7 @@ class _VoteWeightForm(sl.forms.Form):
 
 class _VoteEmojisForm(sl.forms.Form):
     aliases = sl.forms.TextAreaField(
-        label=tr(t"One `choice | emoji` per line"),
+        label=tr("One `choice | emoji` per line"),
         placeholder="approve | ✅\ndeny | ❌",
         minimum=1,
         maximum=1000,

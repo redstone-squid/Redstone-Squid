@@ -23,19 +23,19 @@ class RgbaColor:
 
     def __post_init__(self) -> None:
         if not all(math.isfinite(channel) and 0.0 <= channel <= 1.0 for channel in self):
-            msg = tr(t"RGBA channels must be finite numbers between 0 and 1.")
+            msg = tr("RGBA channels must be finite numbers between 0 and 1.")
             raise ValidationError(msg)
 
     @classmethod
     def from_channels(cls, channels: Sequence[object]) -> Self:
         """Decode exactly four numeric channels from a configuration or wire array."""
         if len(channels) != 4:
-            msg = tr(t"RGBA colours require exactly four channels.")
+            msg = tr("RGBA colours require exactly four channels.")
             raise ValidationError(msg)
         try:
             return cls(*(float(cast(str | SupportsFloat, channel)) for channel in channels))
         except (TypeError, ValueError) as error:
-            msg = tr(t"RGBA channels must be numbers.")
+            msg = tr("RGBA channels must be numbers.")
             raise ValidationError(msg) from error
 
     def __iter__(self) -> Iterator[float]:
@@ -60,7 +60,7 @@ class VerifiedResourcePack:
 
     def __post_init__(self) -> None:
         if not isinstance(self.data, bytes):
-            msg = tr(t"Resource-pack data must be immutable bytes.")
+            msg = tr("Resource-pack data must be immutable bytes.")
             raise ValidationError(msg)
         if self.media_type != RESOURCE_PACK_MEDIA_TYPE:
             media_type = RESOURCE_PACK_MEDIA_TYPE
@@ -68,7 +68,7 @@ class VerifiedResourcePack:
             raise ValidationError(msg)
         actual = hashlib.sha256(self.data).hexdigest()
         if self.sha256 != actual:
-            msg = tr(t"Resource-pack bytes do not match their SHA-256 digest.")
+            msg = tr("Resource-pack bytes do not match their SHA-256 digest.")
             raise ValidationError(msg)
 
     @classmethod

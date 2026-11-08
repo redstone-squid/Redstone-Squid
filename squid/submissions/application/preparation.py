@@ -42,7 +42,7 @@ class PreparationRejected:
 
     def __post_init__(self) -> None:
         if not self.issues:
-            msg = tr(t"rejected submission preparation requires at least one issue")
+            msg = tr("rejected submission preparation requires at least one issue")
             raise InvalidStateError(msg)
 
 

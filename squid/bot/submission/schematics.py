@@ -71,9 +71,9 @@ _CANDIDATE_LIMIT = 20
 
 def _describe_input_refusal(error: AmbiguousSimulationInputError) -> Message:
     """Say why the simulator refused, then list the inputs it would accept."""
-    lines: list[TextLike] = [tr(t"### Simulation input not resolved"), error.public_text()]
+    lines: list[TextLike] = [tr("### Simulation input not resolved"), error.public_text()]
     if error.candidates:
-        lines.append(tr(t"**Inputs found in this schematic**:"))
+        lines.append(tr("**Inputs found in this schematic**:"))
         lines.extend(f"- `{x} {y} {z}`" for x, y, z in error.candidates[:_CANDIDATE_LIMIT])
         if len(error.candidates) > _CANDIDATE_LIMIT:
             count = len(error.candidates) - _CANDIDATE_LIMIT
@@ -89,12 +89,12 @@ def _describe_timing(result: SimulationResult) -> Message:
         duration = result.last_piston_tick + 1
         movement = tr(t"tick {tick} ({duration} gt after input)")
     else:
-        movement = tr(t"none observed")
-    settled = result.settled_tick if result.settled_tick is not None else tr(t"no")
+        movement = tr("none observed")
+    settled = result.settled_tick if result.settled_tick is not None else tr("no")
     changes = result.block_changes
     pistons = result.piston_events
     redstone = result.redstone_events
-    status = tr(t"passed") if result.trustworthy else tr(t"inconclusive")
+    status = tr("passed") if result.trustworthy else tr("inconclusive")
     summary = tr(
         t"### Simulated timing evidence\n"
         t"**Input**: ({x}, {y}, {z}) ({source})\n"
@@ -103,7 +103,7 @@ def _describe_timing(result: SimulationResult) -> Message:
         t"**Evidence**: {changes} block changes; {pistons} piston events; {redstone} redstone events\n"
         t"**Integrity checks**: {status}"
     )
-    footer = tr(t"-# Moderator evidence only. This does not alter the human-declared or official record timing.")
+    footer = tr("-# Moderator evidence only. This does not alter the human-declared or official record timing.")
     return Message.join("\n", [summary, *(f"- {note}" for note in result.notes), footer])
 
 

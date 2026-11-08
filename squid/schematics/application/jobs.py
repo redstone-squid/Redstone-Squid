@@ -115,7 +115,7 @@ class SchematicJobService:
         retention_hours: int = 24,
     ) -> None:
         if max_attempts < 1 or retention_hours < 1:
-            msg = tr(t"Schematic job retry and retention settings must be positive.")
+            msg = tr("Schematic job retry and retention settings must be positive.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._max_attempts = max_attempts
@@ -140,7 +140,7 @@ class SchematicJobService:
         """Commit and return up to limit leases that workers can begin processing."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 32:
-                msg = tr(t"Schematic job claim limit must be between 1 and 32.")
+                msg = tr("Schematic job claim limit must be between 1 and 32.")
                 raise InvalidStateError(msg)
             result = await uow.schematic_jobs.claim(limit=limit)
             await uow.commit()
@@ -204,7 +204,7 @@ class SchematicJobService:
         objects are not part of job cleanup.
         """
         if not 1 <= limit <= 500:
-            msg = tr(t"Schematic job cleanup limit must be between 1 and 500.")
+            msg = tr("Schematic job cleanup limit must be between 1 and 500.")
             raise InvalidStateError(msg)
         async with self._uow_factory() as uow:
             jobs = await uow.schematic_jobs.claim_cleanup(limit=limit)

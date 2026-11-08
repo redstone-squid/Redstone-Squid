@@ -53,7 +53,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if account is None or account.id is None or account.needs_consent_refresh:
             if await ensure_consented_account(request, self.bot.services.accounts) is None:
                 return None
-            return sd.Response(text_node(tr(t"Thanks. Run `/poll` again to open the editor.")), audience="personal")
+            return sd.Response(text_node(tr("Thanks. Run `/poll` again to open the editor.")), audience="personal")
         # Bound out here because `publish` runs later: a narrowing of `account.id` does not survive
         # into a closure, and the identity the poll is attributed to is fixed at command time.
         author_account_id = account.id
@@ -71,7 +71,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             if draft.scope is PollScope.NETWORK and not (
                 isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
             ):
-                raise InvalidVoteConfigurationError(tr(t"You may no longer publish a poll to every server."))
+                raise InvalidVoteConfigurationError(tr("You may no longer publish a poll to every server."))
             publication = await self.publisher.create_and_publish(
                 author_account_id=author_account_id,
                 channel=cast(GuildMessageable, channel),
@@ -89,7 +89,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def delete_vote_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Open a vote on deleting the message that was right-clicked."""
         if request.guild is None or message.guild != request.guild:
-            return error_node(tr(t"Cannot vote on this message"), tr(t"The message is not from this guild."))
+            return error_node(tr("Cannot vote on this message"), tr("The message is not from this guild."))
 
         author_account_id = await ensure_consented_account(request, self.bot.services.accounts)
 
@@ -100,7 +100,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         # than into the ephemeral reply the right-click opened. The placeholder is adopted by the
         # reconciler, which replaces it with the vote card.
         placeholder = await self.ui.send(
-            message.channel, info_node(tr(t"Working"), tr(t"Getting information...")), locale=request.locale
+            message.channel, info_node(tr("Working"), tr("Getting information...")), locale=request.locale
         )
         published = placeholder.delivery.message if isinstance(placeholder, sd.Sent) else None
         if published is None:
@@ -117,7 +117,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             with contextlib.suppress(discord.HTTPException):
                 await published.delete()
             raise
-        return text_node(tr(t"Deletion vote opened."))
+        return text_node(tr("Deletion vote opened."))
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Resolve member roles and capabilities for a persisted voter's weight refresh.

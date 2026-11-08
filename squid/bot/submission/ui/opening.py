@@ -66,8 +66,8 @@ async def show_build_editor(request: sd.Request[Any], screen: BuildEditScreen) -
     if not await screen.may_edit():
         await request.respond(
             error_node(
-                tr(t"Cannot edit this build"),
-                tr(t"Only the pending build's submitter or a trusted staff member can edit it."),
+                tr("Cannot edit this build"),
+                tr("Only the pending build's submitter or a trusted staff member can edit it."),
             ),
             audience="personal",
         )

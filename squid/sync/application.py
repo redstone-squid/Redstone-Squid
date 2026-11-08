@@ -92,7 +92,7 @@ class DiscordReconciliationService:
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[ReconciliationUnitOfWork], max_attempts: int = 8) -> None:
         if max_attempts < 1:
-            msg = tr(t"max_attempts must be positive")
+            msg = tr("max_attempts must be positive")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._max_attempts = max_attempts
@@ -101,7 +101,7 @@ class DiscordReconciliationService:
         """Claim ready work and commit its leases, including replacements for expired claims."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 100:
-                msg = tr(t"claim limit must be between 1 and 100")
+                msg = tr("claim limit must be between 1 and 100")
                 raise InvalidStateError(msg)
             result = await uow.reconciliation.claim(limit=limit)
             await uow.commit()

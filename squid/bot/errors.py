@@ -160,17 +160,17 @@ def _present_missing_nodes(error: PermissionNodeRequired) -> _NoticeDraft:
     )
     if error.forbidden:
         return _NoticeDraft(
-            tr(t"Permission withheld"),
-            tr(t"An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.")
+            tr("Permission withheld"),
+            tr("An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.")
             + "\n\n"
             + described,
         )
     lead = (
-        tr(t"You need any one of these permissions to use this command:")
+        tr("You need any one of these permissions to use this command:")
         if error.mode == "any"
-        else tr(t"You need these permissions to use this command:")
+        else tr("You need these permissions to use this command:")
     )
-    return _NoticeDraft(tr(t"Missing permission"), lead + "\n" + described)
+    return _NoticeDraft(tr("Missing permission"), lead + "\n" + described)
 
 
 def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
@@ -189,64 +189,64 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
     if isinstance(error, ConsentRequiredError):
         # Give Discord users an in-bot recovery path when an operation requires consent.
         return _NoticeDraft(
-            tr(t"Consent required"),
-            tr(t"Run `/account consent` to read the privacy notice and accept it."),
+            tr("Consent required"),
+            tr("Run `/account consent` to read the privacy notice and accept it."),
         )
     if isinstance(error, (DomainError, ServiceUnavailableError)):
         return _NoticeDraft(error.title, error.public_text())
     if isinstance(error, commands.NoPrivateMessage):
         return _NoticeDraft(
-            tr(t"Server only"),
-            tr(t"This command cannot be used in a private message."),
+            tr("Server only"),
+            tr("This command cannot be used in a private message."),
         )
     if isinstance(error, (commands.MissingRole, commands.MissingAnyRole, commands.MissingPermissions)):
         return _NoticeDraft(
-            tr(t"Missing permission"),
-            tr(t"You do not have permission to use this command."),
+            tr("Missing permission"),
+            tr("You do not have permission to use this command."),
         )
     if isinstance(error, commands.NotOwner):
         return _NoticeDraft(
-            tr(t"Owner only"),
-            tr(t"Only the bot owner can use this command."),
+            tr("Owner only"),
+            tr("Only the bot owner can use this command."),
         )
     if isinstance(error, PermissionNodeRequired):
         return _present_missing_nodes(error)
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
         seconds = error.retry_after
         return _NoticeDraft(
-            tr(t"Command on cooldown"),
+            tr("Command on cooldown"),
             tr(t"Try again in {seconds:.1f} seconds."),
         )
     if isinstance(error, commands.MaxConcurrencyReached):
         return _NoticeDraft(
-            tr(t"Command already running"),
-            tr(t"Wait for the current operation to finish and try again."),
+            tr("Command already running"),
+            tr("Wait for the current operation to finish and try again."),
         )
     if isinstance(error, commands.CheckFailure):
         return _NoticeDraft(
-            tr(t"Command unavailable"),
-            str(error) or tr(t"You cannot use this command here."),
+            tr("Command unavailable"),
+            str(error) or tr("You cannot use this command here."),
         )
     if isinstance(error, commands.UserInputError):
         return _NoticeDraft(
-            tr(t"Invalid command input"),
-            str(error) or tr(t"Check the command arguments and try again."),
+            tr("Invalid command input"),
+            str(error) or tr("Check the command arguments and try again."),
         )
     if isinstance(error, app_commands.TransformerError):
         return _NoticeDraft(
-            tr(t"Invalid command input"),
-            tr(t"One of the command options is invalid."),
+            tr("Invalid command input"),
+            tr("One of the command options is invalid."),
         )
     if isinstance(error, app_commands.CheckFailure):
         return _NoticeDraft(
-            tr(t"Command unavailable"),
-            tr(t"You cannot use this command here."),
+            tr("Command unavailable"),
+            tr("You cannot use this command here."),
         )
 
     error_id = correlation_id()
     reference = correlation_reference(error_id)
     return _NoticeDraft(
-        tr(t"Something went wrong"),
+        tr("Something went wrong"),
         _unexpected_error_detail(reference),
         error_id,
         reference,

@@ -62,7 +62,7 @@ class SearchEmbeddingService:
         max_attempts: int = 5,
     ) -> None:
         if max_attempts < 1:
-            msg = tr(t"Embedding max_attempts must be positive.")
+            msg = tr("Embedding max_attempts must be positive.")
             raise InvalidStateError(msg)
         self._model = model
         self._uow_factory = uow_factory
@@ -80,7 +80,7 @@ class SearchEmbeddingService:
         Cancellation propagates without recording a failure.
         """
         if not 1 <= limit <= 32:
-            msg = tr(t"Embedding claim limit must be between 1 and 32.")
+            msg = tr("Embedding claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
         succeeded = failed = 0
         async with self._uow_factory() as uow:
@@ -111,7 +111,7 @@ class SearchEmbeddingService:
 
 def _require_embedding(embedding: list[float] | None) -> list[float]:
     if embedding is None:
-        msg = tr(t"The configured embedding provider did not return a vector.")
+        msg = tr("The configured embedding provider did not return a vector.")
         raise InvalidStateError(msg)
     return embedding
 

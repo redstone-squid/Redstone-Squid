@@ -74,9 +74,9 @@ def reciprocal_rank_fusion(
             is negative.
     """
     if k <= 0:
-        raise ValidationError(tr(t"k must be positive"))
+        raise ValidationError(tr("k must be positive"))
     if branch_limit <= 0:
-        raise ValidationError(tr(t"branch_limit must be positive"))
+        raise ValidationError(tr("branch_limit must be positive"))
     scores: defaultdict[tuple[str, str], float] = defaultdict(float)
     documents: dict[tuple[str, str], RankedCandidate] = {}
     for branch, candidates in branches.items():

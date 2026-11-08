@@ -80,8 +80,8 @@ class PermissionNode:
 class InvalidPatternError(ValidationError):
     """A permission pattern is not well-formed."""
 
-    default_message = tr(t"That is not a valid permission pattern.")
-    default_title = tr(t"Invalid permission pattern")
+    default_message = tr("That is not a valid permission pattern.")
+    default_title = tr("Invalid permission pattern")
 
 
 class UnknownPermissionNodeError(InvalidStateError):

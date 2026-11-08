@@ -7,8 +7,8 @@ from squid.core.i18n import tr
 class VoteSessionNotFoundError(NotFoundError):
     """No vote session exists for the requested identifier."""
 
-    default_message = tr(t"Vote session not found.")
-    default_title = tr(t"Vote session not found")
+    default_message = tr("Vote session not found.")
+    default_title = tr("Vote session not found")
     default_code = ErrorCode.VOTE_SESSION_NOT_FOUND
     default_resource = "vote_session"
 
@@ -23,7 +23,7 @@ class VoteSessionNotFoundError(NotFoundError):
 class InvalidVoteConfigurationError(ConfigurationError):
     """Voting options, thresholds, weights, or poll metadata violate configuration rules."""
 
-    default_message = tr(t"Vote configuration is invalid.")
+    default_message = tr("Vote configuration is invalid.")
     default_code = ErrorCode.INVALID_VOTE_CONFIGURATION
     default_resource = "vote"
 
@@ -31,5 +31,5 @@ class InvalidVoteConfigurationError(ConfigurationError):
 class DiscordMemberServiceUnavailableError(ServiceUnavailableError):
     """Discord could not provide current guild membership facts."""
 
-    default_message = tr(t"Discord membership information is temporarily unavailable.")
+    default_message = tr("Discord membership information is temporarily unavailable.")
     default_resource = "discord"

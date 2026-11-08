@@ -61,5 +61,5 @@ def classify_attachment(filename: str, content_type: str | None, size: int, *, m
         # The accepted extensions are carried in the public context rather than interpolated
         # here: `end_user_action` is translated without parameters, so a formatted list would
         # come back with its placeholder intact in every locale but English.
-        end_user_action=tr(t"Attach an image, a video, or a Minecraft schematic file."),
+        end_user_action=tr("Attach an image, a video, or a Minecraft schematic file."),
     )

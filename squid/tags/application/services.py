@@ -81,14 +81,14 @@ class TagService:
         async with self._uow_factory() as uow:
             normalized_name = " ".join(display_name.casefold().split())
             if not 1 <= len(normalized_name) <= 80:
-                msg = tr(t"Tag names must contain between 1 and 80 characters.")
+                msg = tr("Tag names must contain between 1 and 80 characters.")
                 raise ValidationError(msg)
             normalized_query = query_name.casefold().strip() if query_name is not None else None
             if normalized_query == "":
                 normalized_query = None
             if normalized_query is not None and _QUERY_NAME.fullmatch(normalized_query) is None:
                 msg = tr(
-                    t"query names must start with a letter and contain only lowercase letters, digits, or underscores"
+                    "query names must start with a letter and contain only lowercase letters, digits, or underscores"
                 )
                 raise ValidationError(msg)
             result = await uow.tags.create_showcase(
@@ -150,7 +150,7 @@ class TagService:
                 or definition.semantic_kind.value != "showcase"
                 or definition.moderation_status is not TagModerationStatus.APPROVED
             ):
-                msg = tr(t"An approved user showcase tag is required.")
+                msg = tr("An approved user showcase tag is required.")
                 raise ValidationError(msg)
             value = _coerce_assignment_value(definition, raw_value)
             assigned = await uow.tags.assign_showcase(
@@ -160,7 +160,7 @@ class TagService:
                 actor_account_id=actor_account_id,
             )
             if not assigned:
-                msg = tr(t"The build does not exist or was not submitted by you.")
+                msg = tr("The build does not exist or was not submitted by you.")
                 raise ValidationError(msg)
             await uow.commit()
             return definition

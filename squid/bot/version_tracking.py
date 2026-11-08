@@ -74,25 +74,23 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
             label=lambda item: item.value,
             summary=lambda item: f"{item.value} · {item.edition}",
             detail=lambda item: sl.fields(
-                sl.field(tr(t"Version"), item.value),
-                sl.field(tr(t"Edition"), item.edition),
+                sl.field(tr("Version"), item.value),
+                sl.field(tr("Edition"), item.edition),
             ),
             page_size=15,
-            title=tr(t"Recognized Minecraft versions"),
-            empty=tr(t"No Minecraft versions are recognized yet."),
+            title=tr("Recognized Minecraft versions"),
+            empty=tr("No Minecraft versions are recognized yet."),
         )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sl.status(tr(t"Loading versions."))
-            if self._browser is None
-            else self.boundary(self._browser, key="browser")
+            sl.status(tr("Loading versions.")) if self._browser is None else self.boundary(self._browser, key="browser")
         ]
         if self._can_create:
             nodes.append(
                 sl.form(
-                    tr(t"Add version"),
+                    tr("Add version"),
                     _AddVersionForm().spec(),
                     key="add-version",
                     on_submit=self._add,
@@ -100,7 +98,7 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
             )
         nodes.append(
             sl.action_controls(
-                sl.action_control(tr(t"Close"), self._close, key="close"),
+                sl.action_control(tr("Close"), self._close, key="close"),
                 key="version-actions",
             )
         )
@@ -108,7 +106,7 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
 
     async def _add(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_create():
-            await event.notice(tr(t"You are no longer allowed to add versions."))
+            await event.notice(tr("You are no longer allowed to add versions."))
             return
         form = _AddVersionForm.from_submission(event)
         edition = form.edition
@@ -162,14 +160,14 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
 
 
 class _AddVersionForm(sl.forms.Form):
-    title = tr(t"Add Minecraft version")
+    title = tr("Add Minecraft version")
 
     edition = sl.forms.ChoiceField[Edition](
-        label=tr(t"Edition"),
+        label=tr("Edition"),
         default="Java",
         options=(
-            sl.forms.ChoiceOption("java", tr(t"Java"), "Java"),
-            sl.forms.ChoiceOption("bedrock", tr(t"Bedrock"), "Bedrock"),
+            sl.forms.ChoiceOption("java", tr("Java"), "Java"),
+            sl.forms.ChoiceOption("bedrock", tr("Bedrock"), "Bedrock"),
         ),
     )
-    version = sl.forms.TextField(label=tr(t"Version"), maximum=100)
+    version = sl.forms.TextField(label=tr("Version"), maximum=100)

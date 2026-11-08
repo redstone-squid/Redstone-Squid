@@ -85,9 +85,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         """Archive the message selected through Discord's Apps menu."""
         await enforce(request, MESSAGE_ARCHIVE_CREATE)
         if request.guild is None or message.guild != request.guild:
-            return text_node(tr(t"That message is not from this server."))
+            return text_node(tr("That message is not from this server."))
         await self._archive_message(message)
-        return text_node(tr(t"Message archived."))
+        return text_node(tr("Message archived."))
 
     async def _archive_message(self, message: discord.Message) -> None:
         """Copy one message in place and remove the original."""
@@ -149,7 +149,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             else:
                 synced = await tree.sync()
 
-            scope = tr(t"globally") if spec is None else tr(t"to the current guild")
+            scope = tr("globally") if spec is None else tr("to the current guild")
             count = len(synced)
             return text_node(tr(t"Synced {count} commands {scope}."))
 
@@ -171,9 +171,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def get_sheets_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the google sheets link"""
         return link_node(
-            tr(t"Build spreadsheet"),
+            tr("Build spreadsheet"),
             "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
-            label=tr(t"Open spreadsheet"),
+            label=tr("Open spreadsheet"),
         )
 
     @sd.prefix_command(name="db", hidden=True)
@@ -181,9 +181,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def get_database_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the database link"""
         return link_node(
-            tr(t"Database"),
+            tr("Database"),
             "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
-            label=tr(t"Open database"),
+            label=tr("Open database"),
         )
 
     # Not `error`: that name now belongs to the stored-error lookup group, which is the command

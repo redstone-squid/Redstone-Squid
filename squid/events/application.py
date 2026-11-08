@@ -57,7 +57,7 @@ class DomainEventService:
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[DomainEventUnitOfWork], max_attempts: int = 8) -> None:
         if max_attempts < 1:
-            msg = tr(t"max_attempts must be positive")
+            msg = tr("max_attempts must be positive")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._max_attempts = max_attempts
@@ -71,10 +71,10 @@ class DomainEventService:
         """
         async with self._uow_factory() as uow:
             if not consumer:
-                msg = tr(t"consumer must be a non-empty name")
+                msg = tr("consumer must be a non-empty name")
                 raise InvalidStateError(msg)
             if not 1 <= limit <= 100:
-                msg = tr(t"claim limit must be between 1 and 100")
+                msg = tr("claim limit must be between 1 and 100")
                 raise InvalidStateError(msg)
             result = await uow.domain_events.claim(consumer=consumer, limit=limit)
             await uow.commit()

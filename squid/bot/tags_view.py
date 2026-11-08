@@ -142,8 +142,8 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
                 )
             ),
             page_size=15,
-            title=tr(t"Published build tags"),
-            empty=tr(t"No public build tags are available."),
+            title=tr("Published build tags"),
+            empty=tr("No public build tags are available."),
         )
         if TAG_PROPOSAL_LIST in self._capabilities:
             pending = tuple(await self._tags.pending())
@@ -165,20 +165,20 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
                     _ModerationActions(tag, actions, self._request_moderation) if actions else _tag_fields(tag)
                 ),
                 page_size=15,
-                title=tr(t"Tag proposals awaiting review"),
-                empty=tr(t"No tag proposals are awaiting review."),
+                title=tr("Tag proposals awaiting review"),
+                empty=tr("No tag proposals are awaiting review."),
             )
         self._build_tabs()
 
     def _build_tabs(self) -> None:
         assert self._catalogue is not None
-        tabs = [sp.Tab("catalogue", tr(t"Catalogue"), self._catalogue)]
-        tabs.append(sp.Tab("contribute", tr(t"Propose and apply"), self._contribution_nodes()))
+        tabs = [sp.Tab("catalogue", tr("Catalogue"), self._catalogue)]
+        tabs.append(sp.Tab("contribute", tr("Propose and apply"), self._contribution_nodes()))
         if self._pending is not None:
-            tabs.append(sp.Tab("moderation", tr(t"Moderation"), self._pending))
+            tabs.append(sp.Tab("moderation", tr("Moderation"), self._pending))
         if RESTRICTION_ALIAS_CREATE in self._capabilities:
-            tabs.append(sp.Tab("aliases", tr(t"Restriction aliases"), self._alias_nodes()))
-        self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr(t"Build tags")).build_component()
+            tabs.append(sp.Tab("aliases", tr("Restriction aliases"), self._alias_nodes()))
+        self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr("Build tags")).build_component()
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
@@ -188,21 +188,21 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
             action_label = _action_label(action)
             return (
                 sl.section(
-                    sl.heading(tr(t"Confirm tag moderation")),
+                    sl.heading(tr("Confirm tag moderation")),
                     sl.paragraph(tr(t"{action_label} **{tag_name}**?")),
                 ),
                 self.boundary(self._decision, key="moderation-decision"),
             )
         if self._tabs is None:
-            return (sl.status(tr(t"Loading build tags.")),)
+            return (sl.status(tr("Loading build tags.")),)
         return (
             self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="tag-actions"),
+            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="tag-actions"),
         )
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:
-            return (sl.note(tr(t"Link and consent an account in `/account` before proposing or applying tags.")),)
+            return (sl.note(tr("Link and consent an account in `/account` before proposing or applying tags.")),)
         assignment = _ApplyForm().spec()
         if self._build_id is not None:
             assignment = replace(
@@ -214,9 +214,9 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
                 ),
             )
         return (
-            sl.form(tr(t"Propose tag"), self._proposal_form(), key="propose", on_submit=self._propose),
+            sl.form(tr("Propose tag"), self._proposal_form(), key="propose", on_submit=self._propose),
             sl.form(
-                tr(t"Apply tag to build"),
+                tr("Apply tag to build"),
                 assignment,
                 key="apply",
                 on_submit=self._apply,
@@ -230,7 +230,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
     def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
-                tr(t"Add restriction alias"),
+                tr("Add restriction alias"),
                 _AliasForm().spec(),
                 key="restriction-alias",
                 on_submit=self._add_alias,
@@ -240,7 +240,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
     async def _propose(self, event: sl.SubmitEvent) -> None:
         account_id = self._actor_account_id
         if account_id is None:
-            await event.notice(tr(t"A linked, consented account is required."))
+            await event.notice(tr("A linked, consented account is required."))
             return
         form = _ProposalForm.from_submission(event)
         name = form.name
@@ -259,7 +259,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
     async def _apply(self, event: sl.SubmitEvent) -> None:
         account_id = self._actor_account_id
         if account_id is None:
-            await event.notice(tr(t"A linked, consented account is required."))
+            await event.notice(tr("A linked, consented account is required."))
             return
         form = _ApplyForm.from_submission(event)
         build_id = self._build_id or form.build_id
@@ -279,9 +279,9 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
         try:
             await self._restrictions.add_alias(restriction, alias)
         except AliasAlreadyAddedError:
-            await event.notice(tr(t"That alias is already on this restriction."))
+            await event.notice(tr("That alias is already on this restriction."))
             return
-        await event.notice(tr(t"Restriction alias added."))
+        await event.notice(tr("Restriction alias added."))
 
     async def _request_moderation(
         self,
@@ -291,10 +291,10 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
     ) -> None:
         self._pending_action = (tag, action)
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-            tr(t"This changes the public tag catalogue."),
+            tr("This changes the public tag catalogue."),
             (
-                sp.DecisionOption("confirm", tr(t"Confirm"), sl.Tone.DANGER),
-                sp.DecisionOption("cancel", tr(t"Cancel")),
+                sp.DecisionOption("confirm", tr("Confirm"), sl.Tone.DANGER),
+                sp.DecisionOption("cancel", tr("Cancel")),
             ),
             key="tag-moderation",
         ).build_component(on_decide=self._decide)
@@ -327,7 +327,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
-        await event.notice(tr(t"You are no longer allowed to perform this tag operation."))
+        await event.notice(tr("You are no longer allowed to perform this tag operation."))
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
@@ -340,39 +340,39 @@ def _tag_summary(tag: TagDefinition) -> str:
 
 def _tag_fields(tag: TagDefinition) -> sl.semantic.Fields:
     return sl.fields(
-        sl.field(tr(t"ID"), str(tag.id)),
-        sl.field(tr(t"Kind"), tag.semantic_kind.value),
-        sl.field(tr(t"Value"), tag.value_type.value),
-        sl.field(tr(t"Query field"), tag.query_name or "—"),
+        sl.field(tr("ID"), str(tag.id)),
+        sl.field(tr("Kind"), tag.semantic_kind.value),
+        sl.field(tr("Value"), tag.value_type.value),
+        sl.field(tr("Query field"), tag.query_name or "—"),
     )
 
 
 def _action_label(action: str) -> sl.TextLike:
-    return {"approve": tr(t"Approve"), "reject": tr(t"Reject"), "archive": tr(t"Archive")}[action]
+    return {"approve": tr("Approve"), "reject": tr("Reject"), "archive": tr("Archive")}[action]
 
 
 class _ProposalForm(sl.forms.Form):
-    title = tr(t"Propose showcase tag")
+    title = tr("Propose showcase tag")
 
-    name = sl.forms.TextField(label=tr(t"Display name"), maximum=80)
+    name = sl.forms.TextField(label=tr("Display name"), maximum=80)
     value_type = sl.forms.ChoiceField(
-        label=tr(t"Value type"),
+        label=tr("Value type"),
         default=TagValueType.NONE,
         options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in TagValueType),
     )
-    query_name = sl.forms.TextField(label=tr(t"Query field"), required=False, maximum=64)
+    query_name = sl.forms.TextField(label=tr("Query field"), required=False, maximum=64)
 
 
 class _AliasForm(sl.forms.Form):
-    title = tr(t"Add restriction alias")
+    title = tr("Add restriction alias")
 
-    restriction = sl.forms.TextField(label=tr(t"Canonical restriction"), maximum=100)
-    alias = sl.forms.TextField(label=tr(t"New alias"), maximum=100)
+    restriction = sl.forms.TextField(label=tr("Canonical restriction"), maximum=100)
+    alias = sl.forms.TextField(label=tr("New alias"), maximum=100)
 
 
 class _ApplyForm(sl.forms.Form):
-    title = tr(t"Apply showcase tag")
+    title = tr("Apply showcase tag")
 
-    build_id = sl.forms.IntField(label=tr(t"Build ID"), minimum=1)
-    tag_id = sl.forms.IntField(label=tr(t"Tag ID"), minimum=1)
-    value = sl.forms.TextField(label=tr(t"Value"), required=False, maximum=300)
+    build_id = sl.forms.IntField(label=tr("Build ID"), minimum=1)
+    tag_id = sl.forms.IntField(label=tr("Tag ID"), minimum=1)
+    value = sl.forms.TextField(label=tr("Value"), required=False, maximum=300)

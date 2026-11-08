@@ -60,7 +60,7 @@ class ErrorReportService:
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if retention_hours < 1:
-            msg = tr(t"Error report retention must be at least one hour.")
+            msg = tr("Error report retention must be at least one hour.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._retention_hours = retention_hours

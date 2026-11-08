@@ -546,7 +546,7 @@ def _serialize_category_value(value: Decimal | str | bool | None) -> str:
         return str(value).lower()
     if isinstance(value, str):
         return value
-    msg = tr(t"Parameterized record restriction is missing a category value.")
+    msg = tr("Parameterized record restriction is missing a category value.")
     raise DataIntegrityError(msg)
 
 

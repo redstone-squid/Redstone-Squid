@@ -236,7 +236,7 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
             try:
                 item.spec.parser(_submitted_text(values, item.key))
             except ValueError as error:
-                errors.append(sl.forms.FieldError(field, message=str(error) or tr(t"Invalid value")))
+                errors.append(sl.forms.FieldError(field, message=str(error) or tr("Invalid value")))
         return tuple(errors)
 
     return sl.forms.FormSpec(tr(t"Edit build, section {page}"), tuple(fields), validator=validate)
@@ -347,13 +347,13 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         if self.saved:
             return (
                 sl.section(
-                    sl.heading(tr(t"Changes saved")),
-                    sl.paragraph(tr(t"The build card has been refreshed.")),
+                    sl.heading(tr("Changes saved")),
+                    sl.paragraph(tr("The build card has been refreshed.")),
                 ),
             )
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
-            return (sl.status(tr(t"Loading build.")),)
+            return (sl.status(tr("Loading build.")),)
         page = self.page
         pages = self.max_pages
         validation_error = self.validation_error
@@ -363,48 +363,48 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
             else tr(t"Fix these values before review:\n{validation_error}")
         )
         controls: list[sl.semantic.ActionControl] = [
-            sl.action_control(tr(t"Edit this section"), self._open, key="open"),
-            sl.action_control(tr(t"Previous"), self._previous, key="previous", available=self.page != 1),
-            sl.action_control(tr(t"Next"), self._next, key="next", available=self.page != self.max_pages),
+            sl.action_control(tr("Edit this section"), self._open, key="open"),
+            sl.action_control(tr("Previous"), self._previous, key="previous", available=self.page != 1),
+            sl.action_control(tr("Next"), self._next, key="next", available=self.page != self.max_pages),
         ]
         if self.confirming:
             controls.extend(
                 (
                     sl.action_control(
-                        tr(t"Apply changes"),
+                        tr("Apply changes"),
                         self._apply,
                         key="apply",
                         tone=sl.Tone.SUCCESS,
                     ),
-                    sl.action_control(tr(t"Back"), self._unconfirm, key="unconfirm"),
+                    sl.action_control(tr("Back"), self._unconfirm, key="unconfirm"),
                 )
             )
         else:
             controls.append(
                 sl.action_control(
-                    tr(t"Review changes"),
+                    tr("Review changes"),
                     self._review,
                     key="review",
                     tone=sl.Tone.SUCCESS,
                 )
             )
         if self.validation_error:
-            controls.append(sl.action_control(tr(t"Reload latest"), self._reload, key="reload"))
-        controls.append(sl.action_control(tr(t"Close"), self._close, key="close"))
+            controls.append(sl.action_control(tr("Reload latest"), self._reload, key="reload"))
+        controls.append(sl.action_control(tr("Close"), self._close, key="close"))
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._recovered:
             nodes.append(
                 sl.status(
-                    tr(t"Fresh editor loaded. Unsaved changes from the previous editor were discarded."),
+                    tr("Fresh editor loaded. Unsaved changes from the previous editor were discarded."),
                     tone=sl.Tone.WARNING,
                 )
             )
         nodes.append(
             sl.section(
-                sl.heading(tr(t"Edit build")),
+                sl.heading(tr("Edit build")),
                 sl.truncate(sl.paragraph(description)),
-                sl.fields(sl.field(tr(t"Fields in this section"), self.summary_text())),
-                sl.note(tr(t"Reloading a fresh editor discards every staged change in this one.")),
+                sl.fields(sl.field(tr("Fields in this section"), self.summary_text())),
+                sl.note(tr("Reloading a fresh editor discards every staged change in this one.")),
                 accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         )
@@ -417,7 +417,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
             nodes.append(
                 sl.action_controls(
                     sl.routed_action_control(
-                        tr(t"Reload fresh editor"),
+                        tr("Reload fresh editor"),
                         build_edit_recovery.id(build_id=self._build_id),
                         key="restart",
                     ),
@@ -464,7 +464,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         if self.validation_error:
             return
         if not any(item.modified for item in self.items):
-            self.validation_error = tr(t"No changes to review yet.")
+            self.validation_error = tr("No changes to review yet.")
             return
         self.confirming = True
 
@@ -490,7 +490,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
             except BuildRevisionMismatchError:
                 self.confirming = False
                 self.validation_error = tr(
-                    t"This build changed while you were editing. Reload the latest version; your staged changes will be discarded."
+                    "This build changed while you were editing. Reload the latest version; your staged changes will be discarded."
                 )
                 self.invalidate()
                 return
@@ -518,6 +518,6 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
         if not await self.may_edit():
-            await event.notice(tr(t"Only the pending build's submitter or a trusted staff member can edit it."))
+            await event.notice(tr("Only the pending build's submitter or a trusted staff member can edit it."))
             return False
         return True

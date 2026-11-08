@@ -104,29 +104,29 @@ class StarboardConfig(Base, kw_only=True):
     def validate(self) -> None:
         """Check the configuration values before saving or using them."""
         if not self.name.strip():
-            msg = tr(t"Starboard name cannot be empty.")
+            msg = tr("Starboard name cannot be empty.")
             raise ValidationError(msg)
         if not isfinite(self.required) or not isfinite(self.required_remove):
-            msg = tr(t"Starboard thresholds must be finite.")
+            msg = tr("Starboard thresholds must be finite.")
             raise ValidationError(msg)
         if self.required <= self.required_remove:
-            msg = tr(t"The post threshold must exceed the removal threshold.")
+            msg = tr("The post threshold must exceed the removal threshold.")
             raise ValidationError(msg)
         if self.min_age_seconds < 0 or self.max_age_seconds < 0:
-            msg = tr(t"Starboard message ages cannot be negative.")
+            msg = tr("Starboard message ages cannot be negative.")
             raise ValidationError(msg)
         if self.max_age_seconds and self.min_age_seconds > self.max_age_seconds:
-            msg = tr(t"The minimum message age cannot exceed the maximum.")
+            msg = tr("The minimum message age cannot exceed the maximum.")
             raise ValidationError(msg)
         if not 0 <= self.colour <= 0xFFFFFF:
-            msg = tr(t"Starboard colour must be a valid RGB value.")
+            msg = tr("Starboard colour must be a valid RGB value.")
             raise ValidationError(msg)
         if not self.display_emoji.strip():
-            msg = tr(t"Starboard display emoji cannot be empty.")
+            msg = tr("Starboard display emoji cannot be empty.")
             raise ValidationError(msg)
         aliases = [item.emoji for item in self.emojis]
         if len(aliases) != len(set(aliases)):
-            msg = tr(t"Starboard emojis must be unique.")
+            msg = tr("Starboard emojis must be unique.")
             raise ValidationError(msg)
 
 
@@ -159,13 +159,13 @@ class StarboardEmoji(Base, kw_only=True):
     def validate(self) -> None:
         """Check the configuration values before saving or using them."""
         if not self.emoji.strip():
-            msg = tr(t"Starboard emoji cannot be empty.")
+            msg = tr("Starboard emoji cannot be empty.")
             raise ValidationError(msg)
         if not isfinite(self.multiplier) or self.multiplier <= 0:
-            msg = tr(t"Starboard emoji multiplier must be finite and greater than zero.")
+            msg = tr("Starboard emoji multiplier must be finite and greater than zero.")
             raise ValidationError(msg)
         if self.position < 0:
-            msg = tr(t"Starboard emoji position cannot be negative.")
+            msg = tr("Starboard emoji position cannot be negative.")
             raise ValidationError(msg)
 
 

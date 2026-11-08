@@ -42,7 +42,7 @@ def _reason_context(
 class InstallationUnavailableError(NotFoundError):
     """The requested installation is absent, unowned, revoked, or stale."""
 
-    default_message = tr(t"The Paper installation is unavailable.")
+    default_message = tr("The Paper installation is unavailable.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -52,7 +52,7 @@ class InstallationUnavailableError(NotFoundError):
 class AccountConsentRequiredError(AuthorizationError):
     """An account lacks the currently required privacy consent receipt."""
 
-    default_message = tr(t"Current privacy consent is required.")
+    default_message = tr("Current privacy consent is required.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -62,7 +62,7 @@ class AccountConsentRequiredError(AuthorizationError):
 class InvalidInstallationCredentialError(AuthenticationError):
     """A Paper installation credential could not be authenticated."""
 
-    default_message = tr(t"The Paper installation credential is invalid.")
+    default_message = tr("The Paper installation credential is invalid.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -72,7 +72,7 @@ class InvalidInstallationCredentialError(AuthenticationError):
 class InvalidChallengeError(ValidationError):
     """A device or user code does not identify an available challenge."""
 
-    default_message = tr(t"The authorization challenge is invalid.")
+    default_message = tr("The authorization challenge is invalid.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -82,7 +82,7 @@ class InvalidChallengeError(ValidationError):
 class AuthorizationPendingError(ConflictError):
     """A valid challenge is still waiting for account approval."""
 
-    default_message = tr(t"The authorization challenge is awaiting approval.")
+    default_message = tr("The authorization challenge is awaiting approval.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -92,7 +92,7 @@ class AuthorizationPendingError(ConflictError):
 class ChallengeExpiredError(ConflictError):
     """A challenge passed its short expiry window."""
 
-    default_message = tr(t"The authorization challenge has expired.")
+    default_message = tr("The authorization challenge has expired.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -102,7 +102,7 @@ class ChallengeExpiredError(ConflictError):
 class ChallengeAlreadyExchangedError(ConflictError):
     """An approved challenge already yielded its one-time token response."""
 
-    default_message = tr(t"The authorization challenge was already exchanged.")
+    default_message = tr("The authorization challenge was already exchanged.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -112,7 +112,7 @@ class ChallengeAlreadyExchangedError(ConflictError):
 class ChallengeApprovalDeniedError(AuthorizationError):
     """The approving account cannot represent the requested Java identity."""
 
-    default_message = tr(t"This account cannot approve the requested Java identity.")
+    default_message = tr("This account cannot approve the requested Java identity.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -122,7 +122,7 @@ class ChallengeApprovalDeniedError(AuthorizationError):
 class TooManyActiveChallengesError(RateLimitedError):
     """An initiator reached its bounded active-challenge allowance."""
 
-    default_message = tr(t"Too many authorization challenges are active.")
+    default_message = tr("Too many authorization challenges are active.")
     default_resource = "minecraft_auth"
     _RATE_LIMIT_RETRY_SECONDS = 60
 
@@ -134,7 +134,7 @@ class TooManyActiveChallengesError(RateLimitedError):
 class InvalidPkceError(ValidationError):
     """A Fabric PKCE value is malformed or does not match."""
 
-    default_message = tr(t"The Fabric PKCE proof is invalid.")
+    default_message = tr("The Fabric PKCE proof is invalid.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:
@@ -144,7 +144,7 @@ class InvalidPkceError(ValidationError):
 class InvalidPlayerTokenError(AuthenticationError):
     """A player token is malformed, expired, revoked, stale, or mismatched."""
 
-    default_message = tr(t"The Minecraft player token is invalid.")
+    default_message = tr("The Minecraft player token is invalid.")
     default_resource = "minecraft_auth"
 
     def __init__(self) -> None:

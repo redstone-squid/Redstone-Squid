@@ -103,7 +103,7 @@ class LocalArtifactStore:
             or not normalized.parts
             or any(part in {"", ".", ".."} for part in normalized.parts)
         ):
-            raise ValidationError(tr(t"Artifact keys must be non-empty relative paths without traversal."))
+            raise ValidationError(tr("Artifact keys must be non-empty relative paths without traversal."))
         return self._directory.joinpath(self._prefix, *normalized.parts)
 
     @staticmethod
@@ -135,7 +135,7 @@ class S3ArtifactStore:
 
     def __init__(self, config: ObjectStorageConfig) -> None:
         if config.backend != "s3" or config.bucket is None:
-            raise InvalidStateError(tr(t"S3ArtifactStore requires an S3 object-storage configuration."))
+            raise InvalidStateError(tr("S3ArtifactStore requires an S3 object-storage configuration."))
         session = boto3.session.Session(
             aws_access_key_id=config.access_key.get_secret_value() if config.access_key is not None else None,
             aws_secret_access_key=(config.secret_key.get_secret_value() if config.secret_key is not None else None),
@@ -244,7 +244,7 @@ class S3ArtifactStore:
             or not normalized.parts
             or any(part in {"", ".", ".."} for part in normalized.parts)
         ):
-            raise ValidationError(tr(t"Artifact keys must be non-empty relative paths without traversal."))
+            raise ValidationError(tr("Artifact keys must be non-empty relative paths without traversal."))
         relative = normalized.as_posix()
         return f"{self._prefix}/{relative}" if self._prefix else relative
 
@@ -348,11 +348,11 @@ class _RegularSource:
         except OSError as error:
             if error.errno != errno.ELOOP:
                 raise
-            raise ValidationError(tr(t"Artifact sources must be regular files.")) from error
+            raise ValidationError(tr("Artifact sources must be regular files.")) from error
         try:
             initial = os.fstat(descriptor)
             if not stat.S_ISREG(initial.st_mode):
-                raise ValidationError(tr(t"Artifact sources must be regular files."))
+                raise ValidationError(tr("Artifact sources must be regular files."))
             if initial.st_size > self._max_bytes:
                 msg = f"Artifact exceeds the {self._max_bytes}-byte transfer budget."
                 raise ArtifactTooLargeError(msg)
@@ -435,4 +435,4 @@ def _write_body_atomic(body: Any, destination: Path, max_bytes: int, *, expected
 
 def _require_positive_budget(max_bytes: int) -> None:
     if max_bytes < 1:
-        raise InvalidStateError(tr(t"Artifact transfer budgets must be positive."))
+        raise InvalidStateError(tr("Artifact transfer budgets must be positive."))

@@ -33,15 +33,15 @@ class ErrorReportOperations(Protocol):
 
 
 def _traceback_footer(page: int, pages: int) -> sl.TextLike:
-    section = tr(t"Traceback")
+    section = tr("Traceback")
     return tr(t"{section} — page {page} of {pages} · the attachment has the whole report")
 
 
 ERROR_CHROME = dataclasses.replace(
     CHROME,
-    not_yours=tr(t"These error controls belong to someone else."),
-    previous=tr(t"Earlier"),
-    next=tr(t"Later"),
+    not_yours=tr("These error controls belong to someone else."),
+    previous=tr("Earlier"),
+    next=tr("Later"),
     page_footer=_traceback_footer,
 )
 
@@ -109,9 +109,9 @@ class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if isinstance(status, sl.resources.Failed):
-            nodes.append(sl.note(tr(t"Could not check for updates. You can still refresh reports.")))
+            nodes.append(sl.note(tr("Could not check for updates. You can still refresh reports.")))
         elif changed:
-            nodes.append(sl.note(tr(t"The report list has changed. Refresh when you are ready.")))
+            nodes.append(sl.note(tr("The report list has changed. Refresh when you are ready.")))
         return tuple(nodes)
 
 
@@ -127,7 +127,7 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
         changed = isinstance(status, sl.resources.Ready) and status.value
         return sl.action_controls(
             sl.action_control(
-                tr(t"Refresh reports"),
+                tr("Refresh reports"),
                 self._refresh,
                 key="refresh",
                 tone=sl.Tone.INFO if changed else sl.Tone.NEUTRAL,
@@ -140,7 +140,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
     """An error browser that ends when closed, cleared, replaced, or timed out."""
 
     timeout = SESSION_SECONDS
-    audience = sd.Private(tr(t"An error report names internal paths, so it is never posted in a channel."))
+    audience = sd.Private(tr("An error report names internal paths, so it is never posted in a channel."))
     chrome = ERROR_CHROME
 
     work_lost_only: bool = sl.state(default=False)
@@ -170,13 +170,13 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
         self._matches = 1
         self._clear_decision = sp.confirm(
             sl.section(
-                sl.heading(tr(t"Clear every error report?")),
-                sl.paragraph(tr(t"This permanently deletes reports that have not expired yet.")),
+                sl.heading(tr("Clear every error report?")),
+                sl.paragraph(tr("This permanently deletes reports that have not expired yet.")),
             ),
             key="clear-errors",
             on_confirm=self._clear,
             on_cancel=self._cancel_clear,
-            confirm_label=tr(t"Delete reports"),
+            confirm_label=tr("Delete reports"),
         )
 
     @override
@@ -204,8 +204,8 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
             summary=_list_line,
             detail=lambda report: self._render_report(report, 1),
             page_size=10,
-            title=tr(t"Recent errors"),
-            empty=tr(t"Nothing has failed within the retention window."),
+            title=tr("Recent errors"),
+            empty=tr("Nothing has failed within the retention window."),
         )
 
     @property
@@ -220,7 +220,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
             return sl.Document(
                 (
                     sl.section(
-                        sl.heading(tr(t"Errors cleared")),
+                        sl.heading(tr("Errors cleared")),
                         sl.paragraph(tr(t"Deleted {count} stored error reports.")),
                     ),
                 )
@@ -230,7 +230,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
         if self._detail is not None:
             return sl.Document((self._render_report(self._detail, self._matches), self._detail_actions()))
         if self._browser is None:
-            return sl.Document((sl.status(tr(t"Loading error reports.")),))
+            return sl.Document((sl.status(tr("Loading error reports.")),))
         assert self._updates is not None
         return sl.Document(
             (
@@ -238,12 +238,12 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
                 self.boundary(self._updates, key="updates"),
                 sl.action_controls(
                     sl.action_control(
-                        tr(t"Show all") if self.work_lost_only else tr(t"Show work lost only"),
+                        tr("Show all") if self.work_lost_only else tr("Show work lost only"),
                         self._toggle_filter,
                         key="filter",
                     ),
                     sl.action_control(
-                        tr(t"Clear all"),
+                        tr("Clear all"),
                         self._confirm_clear,
                         key="clear",
                         tone=sl.Tone.DANGER,
@@ -258,7 +258,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
 
     def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         reference = report.reference
-        traceback_text: sl.TextLike = report.traceback.strip() or tr(t"No traceback was recorded.")
+        traceback_text: sl.TextLike = report.traceback.strip() or tr("No traceback was recorded.")
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sd.v2.heading(tr(t"Error {reference}")),
             # Opens at the end because the failing frame is the last one.
@@ -267,14 +267,14 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
             # front; the attachment carries all of it.
-            children.append(sd.v2.heading(tr(t"Log tail"), level=3, priority=2))
+            children.append(sd.v2.heading(tr("Log tail"), level=3, priority=2))
             children.append(
                 sd.v2.code("\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8)
             )
         children.append(sl.fields(*_summary_fields(report, matches)))
         children.append(
             sl.download(
-                tr(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
+                tr("Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
             )
         )
         return sl.stack(*children)
@@ -284,7 +284,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
 
     def _close_action(self) -> sl.semantic.ActionControl:
         return sl.action_control(
-            tr(t"Close"),
+            tr("Close"),
             self._close,
             key="close",
         )
@@ -304,7 +304,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
     async def _clear(self, event: sp.TransitionEvent[sp.DecisionState]) -> None:
         if self._authorize_clear is None or not await self._authorize_clear():
             self.confirming_clear = False
-            await event.source.notice(tr(t"You are no longer allowed to clear error reports."))
+            await event.source.notice(tr("You are no longer allowed to clear error reports."))
             return
         self.cleared_count = await self._operations.clear_all()
         self.confirming_clear = False
@@ -356,22 +356,22 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
     identifier = sl.raw_md(f"`{report.correlation_id}`")
     entries = [
         sl.field(
-            tr(t"When"),
+            tr("When"),
             sl.md(t"{report.occurred_at.to_stdlib()}"),
         ),
-        sl.field(tr(t"Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
-        sl.field(tr(t"Exception"), sl.md(t"{report.exception_type}")),
-        sl.field(tr(t"Full ID"), sl.md(t"{identifier}")),
+        sl.field(tr("Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
+        sl.field(tr("Exception"), sl.md(t"{report.exception_type}")),
+        sl.field(tr("Full ID"), sl.md(t"{identifier}")),
     ]
     if report.work_lost:
-        entries.append(sl.field(tr(t"Work lost"), tr(t"This job was abandoned; nothing will retry it.")))
+        entries.append(sl.field(tr("Work lost"), tr("This job was abandoned; nothing will retry it.")))
     if matches > 1:
         # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
         # would have a moderator confidently reading the wrong incident.
         count = matches
         entries.append(
             sl.field(
-                tr(t"Ambiguous"),
+                tr("Ambiguous"),
                 tr(t"{count} reports share this reference; this is the newest."),
             )
         )

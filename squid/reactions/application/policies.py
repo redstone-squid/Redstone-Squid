@@ -29,7 +29,7 @@ class RoleWeightPolicy(WeightPolicy):
         staff_multiplier: float = 3.0,
     ) -> None:
         if not isfinite(staff_multiplier) or staff_multiplier <= 0:
-            msg = tr(t"Staff multiplier must be finite and greater than zero.")
+            msg = tr("Staff multiplier must be finite and greater than zero.")
             raise InvalidStateError(msg)
         self._provider = provider
         self._eligibility = eligibility

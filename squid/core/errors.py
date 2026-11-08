@@ -95,8 +95,8 @@ class SquidError(Exception):
     Callers must choose safe public messages; this class does not redact them.
     """
 
-    default_message: ClassVar[str | Message] = tr(t"An application error occurred.")
-    default_title: ClassVar[str | Message] = tr(t"Application error")
+    default_message: ClassVar[str | Message] = tr("An application error occurred.")
+    default_title: ClassVar[str | Message] = tr("Application error")
     default_code: ClassVar[ErrorCode] = ErrorCode.INTERNAL_ERROR
     default_resource: ClassVar[str | None] = None
     default_developer_action: ClassVar[str | None] = None
@@ -183,54 +183,54 @@ class SquidError(Exception):
 class DomainError(SquidError):
     """Base class for expected domain and user-caused failures."""
 
-    default_message = tr(t"The requested operation could not be completed.")
-    default_title = tr(t"Request failed")
+    default_message = tr("The requested operation could not be completed.")
+    default_title = tr("Request failed")
     default_code = ErrorCode.DOMAIN_ERROR
 
 
 class ValidationError(DomainError, ValueError):
     """Input does not satisfy an application rule."""
 
-    default_message = tr(t"The supplied value is invalid.")
-    default_title = tr(t"Invalid value")
+    default_message = tr("The supplied value is invalid.")
+    default_title = tr("Invalid value")
     default_code = ErrorCode.VALIDATION_ERROR
 
 
 class NotFoundError(DomainError, LookupError):
     """A requested resource does not exist."""
 
-    default_message = tr(t"The requested resource was not found.")
-    default_title = tr(t"Resource not found")
+    default_message = tr("The requested resource was not found.")
+    default_title = tr("Resource not found")
     default_code = ErrorCode.NOT_FOUND
 
 
 class ConflictError(DomainError, RuntimeError):
     """An operation conflicts with current application state."""
 
-    default_message = tr(t"The operation conflicts with the current state.")
-    default_title = tr(t"Operation conflict")
+    default_message = tr("The operation conflicts with the current state.")
+    default_title = tr("Operation conflict")
 
 
 class AuthenticationError(DomainError):
     """Authentication credentials are absent or invalid."""
 
-    default_message = tr(t"Unauthorized.")
-    default_title = tr(t"Unauthorized")
+    default_message = tr("Unauthorized.")
+    default_title = tr("Unauthorized")
     default_code = ErrorCode.UNAUTHORIZED
 
 
 class AuthorizationError(DomainError):
     """The authenticated caller is not allowed to perform an operation."""
 
-    default_message = tr(t"You do not have permission to perform this action.")
-    default_title = tr(t"Forbidden")
+    default_message = tr("You do not have permission to perform this action.")
+    default_title = tr("Forbidden")
 
 
 class RateLimitedError(DomainError):
     """A caller exceeded a rate limit; retry_after is the wait in seconds."""
 
-    default_message = tr(t"Too many requests. Please try again later.")
-    default_title = tr(t"Too many requests")
+    default_message = tr("Too many requests. Please try again later.")
+    default_title = tr("Too many requests")
     default_code = ErrorCode.RATE_LIMITED
 
     def __init__(self, retry_after: int) -> None:
@@ -241,37 +241,37 @@ class RateLimitedError(DomainError):
 class InternalError(SquidError):
     """A failure whose diagnostic detail must not be exposed to callers."""
 
-    default_message = tr(t"An internal application error occurred.")
-    default_title = tr(t"Internal error")
+    default_message = tr("An internal application error occurred.")
+    default_title = tr("Internal error")
     default_code = ErrorCode.INTERNAL_ERROR
-    default_end_user_action = tr(t"Please try again later.")
+    default_end_user_action = tr("Please try again later.")
 
 
 class ConfigurationError(InternalError, ValueError):
     """Application configuration is invalid or incomplete."""
 
-    default_message = tr(t"Application configuration is invalid.")
+    default_message = tr("Application configuration is invalid.")
     default_code = ErrorCode.CONFIGURATION_ERROR
 
 
 class InvalidStateError(InternalError, RuntimeError):
     """Internal objects are in an invalid state for the requested operation."""
 
-    default_message = tr(t"Application state is invalid for this operation.")
+    default_message = tr("Application state is invalid for this operation.")
     default_code = ErrorCode.INVALID_STATE
 
 
 class InfrastructureError(InternalError):
     """An infrastructure dependency failed."""
 
-    default_message = tr(t"An infrastructure dependency failed.")
+    default_message = tr("An infrastructure dependency failed.")
     default_code = ErrorCode.INFRASTRUCTURE_ERROR
 
 
 class PersistenceError(InfrastructureError):
     """A persistence operation failed."""
 
-    default_message = tr(t"A persistence operation failed.")
+    default_message = tr("A persistence operation failed.")
     default_code = ErrorCode.PERSISTENCE_ERROR
     default_resource = "database"
 
@@ -279,12 +279,12 @@ class PersistenceError(InfrastructureError):
 class DataIntegrityError(PersistenceError):
     """Persisted data violates application expectations."""
 
-    default_message = tr(t"Persisted data is inconsistent with application expectations.")
+    default_message = tr("Persisted data is inconsistent with application expectations.")
     default_code = ErrorCode.DATA_INTEGRITY_ERROR
 
 
 class ServiceUnavailableError(InfrastructureError):
     """An external service is temporarily unavailable."""
 
-    default_message = tr(t"A required service is temporarily unavailable.")
-    default_title = tr(t"Service unavailable")
+    default_message = tr("A required service is temporarily unavailable.")
+    default_title = tr("Service unavailable")

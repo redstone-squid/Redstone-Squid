@@ -135,7 +135,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         state = self.projection.status
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
-            return (sl.status(tr(t"Loading build.")),)
+            return (sl.status(tr("Loading build.")),)
         if isinstance(state, sl.resources.Ready):
             build, node = state.value
         else:
@@ -151,7 +151,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._schematic_result is not None:
             nodes.append(sl.note(self._schematic_result))
         if self._asset is not None:
-            nodes.append(sl.download(tr(t"Download result"), self._asset, key="build-download"))
+            nodes.append(sl.download(tr("Download result"), self._asset, key="build-download"))
         return tuple(nodes)
 
     def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None:
@@ -161,33 +161,31 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             and self._actor_account_id is not None
             and build.submitter_account_id == self._actor_account_id
         ):
-            actions.append(sl.routed_action_control(tr(t"Edit"), build_edit.id(build_id=self._build_id), key="edit"))
+            actions.append(sl.routed_action_control(tr("Edit"), build_edit.id(build_id=self._build_id), key="edit"))
         if build.submission_status is Status.PENDING and self._capabilities.approve:
-            actions.append(
-                sl.action_control(tr(t"Approve"), self._request_approve, key="approve", tone=sl.Tone.SUCCESS)
-            )
+            actions.append(sl.action_control(tr("Approve"), self._request_approve, key="approve", tone=sl.Tone.SUCCESS))
         if build.submission_status is Status.PENDING and self._capabilities.reject:
-            actions.append(sl.action_control(tr(t"Reject"), self._request_reject, key="reject", tone=sl.Tone.DANGER))
+            actions.append(sl.action_control(tr("Reject"), self._request_reject, key="reject", tone=sl.Tone.DANGER))
         if self._capabilities.debug:
-            actions.append(sl.action_control(tr(t"Debug download"), self._debug, key="debug"))
+            actions.append(sl.action_control(tr("Debug download"), self._debug, key="debug"))
         return sl.action_controls(*actions, key="build-actions") if actions else None
 
     def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if not self._schematics.available:
             return ()
         actions = [
-            sl.action_control(tr(t"Schematic info"), self._schematic_info, key="schematic-info"),
-            sl.action_control(tr(t"Download schematic"), self._schematic_download, key="schematic-download"),
-            sl.action_control(tr(t"Render schematic"), self._schematic_render, key="schematic-render"),
+            sl.action_control(tr("Schematic info"), self._schematic_info, key="schematic-info"),
+            sl.action_control(tr("Download schematic"), self._schematic_download, key="schematic-download"),
+            sl.action_control(tr("Render schematic"), self._schematic_render, key="schematic-render"),
         ]
         if self._capabilities.detect_lattice:
-            actions.append(sl.action_control(tr(t"Detect lattice"), self._detect_lattice, key="detect-lattice"))
+            actions.append(sl.action_control(tr("Detect lattice"), self._detect_lattice, key="detect-lattice"))
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.action_controls(*actions, key="schematic-actions")
         ]
-        nodes.append(sl.form(tr(t"Convert schematic"), self._convert_form(), key="convert", on_submit=self._convert))
+        nodes.append(sl.form(tr("Convert schematic"), self._convert_form(), key="convert", on_submit=self._convert))
         if self._capabilities.measure_timing:
-            nodes.append(sl.form(tr(t"Measure timing"), self._timing_form(), key="timing", on_submit=self._timing))
+            nodes.append(sl.form(tr("Measure timing"), self._timing_form(), key="timing", on_submit=self._timing))
         return tuple(nodes)
 
     @staticmethod
@@ -202,7 +200,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         action = self._pending_review or "review"
         build_id = self._build_id
         return sl.section(
-            sl.heading(tr(t"Confirm review decision")),
+            sl.heading(tr("Confirm review decision")),
             sl.paragraph(tr(t"{action} build #{build_id}?")),
         )
 
@@ -215,10 +213,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def _request_review(self, action: str) -> None:
         self._pending_review = action
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-            tr(t"This changes the build's review state."),
+            tr("This changes the build's review state."),
             (
-                sp.DecisionOption("confirm", tr(t"Confirm"), sl.Tone.DANGER),
-                sp.DecisionOption("cancel", tr(t"Cancel")),
+                sp.DecisionOption("confirm", tr("Confirm"), sl.Tone.DANGER),
+                sp.DecisionOption("cancel", tr("Cancel")),
             ),
             key="build-review",
         ).build_component(on_decide=self._decide_review)
@@ -237,7 +235,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         else:
             await self._builds.deny(self._build_id)
         await self._refresh_posts(self._build_id)
-        await event.source.notice(tr(t"Build review state updated."))
+        await event.source.notice(tr("Build review state updated."))
 
     async def _debug(self, event: sl.PressEvent) -> None:
         if not await self._may(event, BUILD_SUBMISSION_DEBUG):
@@ -246,7 +244,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
         build = await self._queries.get(self._build_id)
         if build is None:
-            await event.notice(tr(t"That build is no longer available."))
+            await event.notice(tr("That build is no longer available."))
             return
         data = _debug_dump(build).encode()
         self._asset = sl.document.Asset(
@@ -259,7 +257,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _primary(self, event: sl.ActionEvent):
         stored = await self._schematics.featured_for_build(self._build_id)
         if stored is None:
-            await event.notice(tr(t"This build has no schematic attached."))
+            await event.notice(tr("This build has no schematic attached."))
         return stored
 
     async def _schematic_info(self, event: sl.PressEvent) -> None:
@@ -314,7 +312,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         raw = form.input or None
         position = _parse_position(raw)
         if raw is not None and position is None:
-            await event.notice(tr(t"Input position must contain three integers, for example `12 5 -3`."))
+            await event.notice(tr("Input position must contain three integers, for example `12 5 -3`."))
             return
         try:
             result = await self._schematics.measure_timing(self._build_id, input_position=position)
@@ -328,7 +326,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return
         lattice = await self._schematics.detect_lattice(self._build_id)
         self._schematic_result = (
-            tr(t"No repeating lattice was detected in this schematic.")
+            tr("No repeating lattice was detected in this schematic.")
             if lattice is None
             else _describe_lattice(lattice)
         )
@@ -344,7 +342,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
-        await event.notice(tr(t"You are no longer allowed to perform this build operation."))
+        await event.notice(tr("You are no longer allowed to perform this build operation."))
         return False
 
 
@@ -389,8 +387,8 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
             summary=lambda build: f"{build.category} · {cast(Status, build.submission_status).name.lower()}",
             detail=self._detail,
             page_size=15,
-            title=tr(t"Build catalogue"),
-            empty=tr(t"No builds are available."),
+            title=tr("Build catalogue"),
+            empty=tr("No builds are available."),
         )
         self._selected: _BuildDetail | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
@@ -401,11 +399,11 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
             await self._select(self._initial_id)
         self._tabs = sp.Tabs(
             (
-                sp.Tab("browse", tr(t"Browse"), self._browser),
-                sp.Tab("find", tr(t"Find build"), self._find_nodes()),
+                sp.Tab("browse", tr("Browse"), self._browser),
+                sp.Tab("find", tr("Find build"), self._find_nodes()),
             ),
             key="build-tabs",
-            title=tr(t"Builds"),
+            title=tr("Builds"),
         ).build_component()
 
     @override
@@ -414,28 +412,28 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
             return (
                 self.boundary(self._selected, key="selected-build"),
                 sl.action_controls(
-                    sl.action_control(tr(t"Back to builds"), self._back, key="back"),
-                    sl.action_control(tr(t"Close"), self._close, key="close"),
+                    sl.action_control(tr("Back to builds"), self._back, key="back"),
+                    sl.action_control(tr("Close"), self._close, key="close"),
                     key="selected-actions",
                 ),
             )
         if self._tabs is None:
-            return (sl.status(tr(t"Loading builds.")),)
+            return (sl.status(tr("Loading builds.")),)
         return (
             self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="build-screen-actions"),
+            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="build-screen-actions"),
         )
 
     def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
-                tr(t"Open by ID"),
+                tr("Open by ID"),
                 _OpenBuildForm().spec(),
                 key="open-id",
                 on_submit=self._open_id,
             ),
             sl.form(
-                tr(t"Search by meaning"),
+                tr("Search by meaning"),
                 _SearchForm().spec(),
                 key="semantic-search",
                 on_submit=self._search,
@@ -466,13 +464,13 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
         form = _OpenBuildForm.from_submission(event)
         build_id = form.id
         if not await self._select(build_id):
-            await event.notice(tr(t"No visible build has that ID."))
+            await event.notice(tr("No visible build has that ID."))
 
     async def _search(self, event: sl.SubmitEvent) -> None:
         form = _SearchForm.from_submission(event)
         build = await self._queries.semantic(form.query)
         if build is None or build.id is None or not await self._select(build.id):
-            await event.notice(tr(t"No visible build matches that search."))
+            await event.notice(tr("No visible build matches that search."))
 
     async def _back(self, _event: sl.PressEvent) -> None:
         self._selected = None
@@ -482,33 +480,33 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
 
 
 class _ConvertForm(sl.forms.Form):
-    title = tr(t"Convert schematic")
+    title = tr("Convert schematic")
 
     format = sl.forms.ChoiceField(
-        label=tr(t"Output format"),
+        label=tr("Output format"),
         default=SchematicFormat.LITEMATIC,
         options=tuple(
             sl.forms.ChoiceOption(file_format.value, file_format.value, file_format)
             for file_format in WRITABLE_EXTENSIONS
         ),
     )
-    data_version = sl.forms.IntField(label=tr(t"Minecraft data version"), required=False)
-    version = sl.forms.TextField(label=tr(t"Minecraft version name"), required=False, maximum=100)
+    data_version = sl.forms.IntField(label=tr("Minecraft data version"), required=False)
+    version = sl.forms.TextField(label=tr("Minecraft version name"), required=False, maximum=100)
 
 
 class _TimingForm(sl.forms.Form):
-    title = tr(t"Measure schematic timing")
+    title = tr("Measure schematic timing")
 
-    input = sl.forms.TextField(label=tr(t"Input position (x y z)"), required=False, maximum=100)
+    input = sl.forms.TextField(label=tr("Input position (x y z)"), required=False, maximum=100)
 
 
 class _OpenBuildForm(sl.forms.Form):
-    title = tr(t"Open build")
+    title = tr("Open build")
 
-    id = sl.forms.IntField(label=tr(t"Build ID"), minimum=1)
+    id = sl.forms.IntField(label=tr("Build ID"), minimum=1)
 
 
 class _SearchForm(sl.forms.Form):
-    title = tr(t"Find build")
+    title = tr("Find build")
 
-    query = sl.forms.TextField(label=tr(t"Description or title"), maximum=500)
+    query = sl.forms.TextField(label=tr("Description or title"), maximum=500)

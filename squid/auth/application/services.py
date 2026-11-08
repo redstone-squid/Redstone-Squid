@@ -62,7 +62,7 @@ class ApiKeyService:
         self._permissions = permissions
         self._pepper = pepper.encode() if isinstance(pepper, str) else pepper
         if not self._pepper:
-            msg = tr(t"API key pepper must not be empty.")
+            msg = tr("API key pepper must not be empty.")
             raise InvalidStateError(msg)
         self._now = now
         self._token_bytes = token_bytes

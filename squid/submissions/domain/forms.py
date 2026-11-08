@@ -66,10 +66,10 @@ class ChoiceOption:
 
     def __post_init__(self) -> None:
         if not self.value.strip() or self.value != self.value.strip() or len(self.value) > 120:
-            msg = tr(t"choice values must be 1-120 characters without surrounding whitespace")
+            msg = tr("choice values must be 1-120 characters without surrounding whitespace")
             raise ValidationError(msg)
         if not self.label.strip():
-            msg = tr(t"choice labels cannot be blank")
+            msg = tr("choice labels cannot be blank")
             raise ValidationError(msg)
 
 
@@ -116,17 +116,17 @@ class FieldConstraints:
 
     def __post_init__(self) -> None:
         if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
-            msg = tr(t"minimum cannot exceed maximum")
+            msg = tr("minimum cannot exceed maximum")
             raise ValidationError(msg)
         for name in ("min_length", "max_length", "min_items", "max_items"):
             value = getattr(self, name)
             if value is not None and value < 0:
                 raise ValidationError(tr(t"{name} cannot be negative"))
         if self.min_length is not None and self.max_length is not None and self.min_length > self.max_length:
-            msg = tr(t"min_length cannot exceed max_length")
+            msg = tr("min_length cannot exceed max_length")
             raise ValidationError(msg)
         if self.min_items is not None and self.max_items is not None and self.min_items > self.max_items:
-            msg = tr(t"min_items cannot exceed max_items")
+            msg = tr("min_items cannot exceed max_items")
             raise ValidationError(msg)
 
 
@@ -229,10 +229,10 @@ class FormManifest:
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"[a-z][a-z0-9_.-]{0,127}", self.schema_id):
-            msg = tr(t"schema_id must be a stable lowercase identifier")
+            msg = tr("schema_id must be a stable lowercase identifier")
             raise ValidationError(msg)
         if self.revision < 1 or self.minimum_protocol < 1 or self.maximum_protocol < self.minimum_protocol:
-            msg = tr(t"form revision and protocol bounds must be positive and ordered")
+            msg = tr("form revision and protocol bounds must be positive and ordered")
             raise ValidationError(msg)
         _require_unique((section.id for section in self.common_sections), "common section IDs")
         _require_unique((category.code for category in self.categories), "category codes")

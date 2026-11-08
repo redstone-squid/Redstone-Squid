@@ -108,11 +108,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
-            return text_node(tr(t"That creator page could not be found."))
+            return text_node(tr("That creator page could not be found."))
         if public.hidden:
             return card_node(
-                tr(t"Hidden creator page"),
-                tr(t"This creator has hidden their page. Their build credit is still listed."),
+                tr("Hidden creator page"),
+                tr("This creator has hidden their page. Their build credit is still listed."),
                 fields=public_profile_fields(public),
             )
         return card_node(

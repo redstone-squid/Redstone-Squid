@@ -82,19 +82,19 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
                 discord_role_id=self._discord_role_id,
                 guild_id=self._guild_id,
             )
-            tabs.append(sp.Tab("subject", tr(t"Subject"), self._subject_browser(rules, assignments)))
+            tabs.append(sp.Tab("subject", tr("Subject"), self._subject_browser(rules, assignments)))
             subject_forms = self._subject_forms()
             if subject_forms:
-                tabs.append(sp.Tab("assignments", tr(t"Rules and assignments"), subject_forms))
+                tabs.append(sp.Tab("assignments", tr("Rules and assignments"), subject_forms))
         if self._may_manage_roles:
             roles = await self._admin.roles(guild_id=self._guild_id)
-            tabs.append(sp.Tab("roles", tr(t"Internal roles"), self._role_browser(roles)))
-            tabs.append(sp.Tab("role-editor", tr(t"Edit roles"), self._role_forms()))
+            tabs.append(sp.Tab("roles", tr("Internal roles"), self._role_browser(roles)))
+            tabs.append(sp.Tab("role-editor", tr("Edit roles"), self._role_forms()))
         if PERM_NODE_VIEW in self._capabilities:
-            tabs.append(sp.Tab("catalogue", tr(t"Catalogue"), self._catalogue()))
+            tabs.append(sp.Tab("catalogue", tr("Catalogue"), self._catalogue()))
         if PERM_AUDIT_VIEW in self._capabilities:
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
-            tabs.append(sp.Tab("audit", tr(t"Audit"), self._audit(audit)))
+            tabs.append(sp.Tab("audit", tr("Audit"), self._audit(audit)))
         subject_label = self._subject_label
         self._tabs = sp.Tabs(tabs, key="access-tabs", title=tr(t"Access for {subject_label}")).build_component()
 
@@ -112,15 +112,15 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             slug = self._pending_delete
             return (
                 sl.section(
-                    sl.heading(tr(t"Delete internal role")), sl.paragraph(tr(t"Delete **{slug}** and its assignments?"))
+                    sl.heading(tr("Delete internal role")), sl.paragraph(tr(t"Delete **{slug}** and its assignments?"))
                 ),
                 self.boundary(self._decision, key="delete-decision"),
             )
         if self._tabs is None:
-            return (sl.status(tr(t"Loading access controls.")),)
+            return (sl.status(tr("Loading access controls.")),)
         return (
             self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="access-actions"),
+            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="access-actions"),
         )
 
     def _subject_browser(
@@ -134,18 +134,18 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             summary=_subject_item_summary,
             detail=_subject_item_detail,
             page_size=15,
-            title=tr(t"Rules and assignments"),
-            empty=tr(t"This subject has no explicit access rules or internal roles."),
+            title=tr("Rules and assignments"),
+            empty=tr("This subject has no explicit access rules or internal roles."),
         )
 
     def _subject_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._may_grant:
-            nodes.append(sl.form(tr(t"Change direct rule"), self._rule_form(), key="rule", on_submit=self._change_rule))
+            nodes.append(sl.form(tr("Change direct rule"), self._rule_form(), key="rule", on_submit=self._change_rule))
         if self._may_manage_roles:
             nodes.append(
                 sl.form(
-                    tr(t"Change role assignment"),
+                    tr("Change role assignment"),
                     self._assignment_form(),
                     key="assignment",
                     on_submit=self._change_assignment,
@@ -173,16 +173,16 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             summary=_role_summary,
             detail=lambda role: _role_detail(role, roles),
             page_size=15,
-            title=tr(t"Internal roles"),
-            empty=tr(t"No internal roles are visible in this server."),
+            title=tr("Internal roles"),
+            empty=tr("No internal roles are visible in this server."),
         )
 
     def _role_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
-                tr(t"Create internal role"), self._create_role_form(), key="create-role", on_submit=self._create_role
+                tr("Create internal role"), self._create_role_form(), key="create-role", on_submit=self._create_role
             ),
-            sl.form(tr(t"Edit internal role"), self._edit_role_form(), key="edit-role", on_submit=self._edit_role),
+            sl.form(tr("Edit internal role"), self._edit_role_form(), key="edit-role", on_submit=self._edit_role),
         )
 
     @staticmethod
@@ -203,13 +203,13 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             label=lambda node: node.name,
             summary=lambda node: f"{node.scope.value} · {node.default.value}",
             detail=lambda node: sl.fields(
-                sl.field(tr(t"Scope"), node.scope.value),
-                sl.field(tr(t"Default"), node.default.value),
-                sl.field(tr(t"Description"), node.description),
+                sl.field(tr("Scope"), node.scope.value),
+                sl.field(tr("Default"), node.default.value),
+                sl.field(tr("Description"), node.description),
             ),
             page_size=15,
-            title=tr(t"Permission catalogue"),
-            empty=tr(t"No permission nodes are registered."),
+            title=tr("Permission catalogue"),
+            empty=tr("No permission nodes are registered."),
         )
 
     @staticmethod
@@ -224,8 +224,8 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             summary=_audit_summary,
             detail=_audit_detail,
             page_size=15,
-            title=tr(t"Permission audit"),
-            empty=tr(t"No permission changes are recorded for this server."),
+            title=tr("Permission audit"),
+            empty=tr("No permission changes are recorded for this server."),
         )
 
     async def _change_rule(self, event: sl.SubmitEvent) -> None:
@@ -257,7 +257,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
                 reason=form.reason or None,
             )
         await self._refresh()
-        await event.notice(tr(t"Direct permission rule updated."))
+        await event.notice(tr("Direct permission rule updated."))
 
     async def _change_assignment(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
@@ -287,7 +287,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
                 scope_guild_id=scope,
             )
         await self._refresh()
-        await event.notice(tr(t"Internal role assignment updated."))
+        await event.notice(tr("Internal role assignment updated."))
 
     async def _create_role(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
@@ -316,16 +316,16 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         if operation == "delete":
             self._pending_delete = slug
             self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-                tr(t"Deleting an internal role removes every assignment of it."),
+                tr("Deleting an internal role removes every assignment of it."),
                 (
-                    sp.DecisionOption("confirm", tr(t"Delete role"), sl.Tone.DANGER),
-                    sp.DecisionOption("cancel", tr(t"Cancel")),
+                    sp.DecisionOption("confirm", tr("Delete role"), sl.Tone.DANGER),
+                    sp.DecisionOption("cancel", tr("Cancel")),
                 ),
                 key="delete-role",
             ).build_component(on_decide=self._decide_delete)
             return
         if not value:
-            await event.notice(tr(t"This operation needs a value."))
+            await event.notice(tr("This operation needs a value."))
             return
         if operation in {"include", "exclude"}:
             await self._admin.add_pattern(
@@ -342,7 +342,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         elif operation == "rank":
             await self._admin.set_rank(actor, role, int(value))
         await self._refresh()
-        await event.notice(tr(t"Internal role updated."))
+        await event.notice(tr("Internal role updated."))
 
     async def _decide_delete(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
         """Recheck authority and reload the role after the user confirms deletion."""
@@ -362,7 +362,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         for node in nodes:
             if await self._authorize(node):
                 return True
-        await event.notice(tr(t"You are no longer allowed to change access controls."))
+        await event.notice(tr("You are no longer allowed to change access controls."))
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
@@ -372,11 +372,11 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
 def _scope_field() -> sl.forms.ChoiceField[str]:
     return sl.forms.ChoiceField(
         key="scope",
-        label=tr(t"Scope"),
+        label=tr("Scope"),
         default="guild",
         options=(
-            sl.forms.ChoiceOption("guild", tr(t"This server"), "guild"),
-            sl.forms.ChoiceOption("global", tr(t"Everywhere"), "global"),
+            sl.forms.ChoiceOption("guild", tr("This server"), "guild"),
+            sl.forms.ChoiceOption("global", tr("Everywhere"), "global"),
         ),
     )
 
@@ -398,14 +398,14 @@ def _subject_item_summary(row: PermissionGrant | PermissionRoleAssignment) -> st
 def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment) -> sl.semantic.Fields:
     if isinstance(row, PermissionGrant):
         return sl.fields(
-            sl.field(tr(t"Effect"), effect_label(row.effect)),
-            sl.field(tr(t"Pattern"), row.pattern),
-            sl.field(tr(t"Scope"), scope_label(row.scope_guild_id)),
-            sl.field(tr(t"Reason"), row.reason or "—"),
+            sl.field(tr("Effect"), effect_label(row.effect)),
+            sl.field(tr("Pattern"), row.pattern),
+            sl.field(tr("Scope"), scope_label(row.scope_guild_id)),
+            sl.field(tr("Reason"), row.reason or "—"),
         )
     return sl.fields(
-        sl.field(tr(t"Internal role"), row.role_slug),
-        sl.field(tr(t"Scope"), scope_label(row.scope_guild_id)),
+        sl.field(tr("Internal role"), row.role_slug),
+        sl.field(tr("Scope"), scope_label(row.scope_guild_id)),
     )
 
 
@@ -418,9 +418,9 @@ def _role_summary(role: PermissionRole) -> str:
 def _role_detail(role: PermissionRole, roles: tuple[PermissionRole, ...]) -> sl.semantic.Fields:
     by_id = {item.id: item.slug for item in roles}
     return sl.fields(
-        sl.field(tr(t"Includes"), ", ".join(role.includes) or "—"),
-        sl.field(tr(t"Excludes"), ", ".join(role.excludes) or "—"),
-        sl.field(tr(t"Composed roles"), ", ".join(by_id[item] for item in role.includes_roles if item in by_id) or "—"),
+        sl.field(tr("Includes"), ", ".join(role.includes) or "—"),
+        sl.field(tr("Excludes"), ", ".join(role.excludes) or "—"),
+        sl.field(tr("Composed roles"), ", ".join(by_id[item] for item in role.includes_roles if item in by_id) or "—"),
     )
 
 
@@ -430,70 +430,70 @@ def _audit_summary(row: PermissionAuditEntry) -> str:
 
 def _audit_detail(row: PermissionAuditEntry) -> sl.semantic.Fields:
     return sl.fields(
-        sl.field(tr(t"Action"), row.action),
-        sl.field(tr(t"Pattern"), row.pattern or "—"),
-        sl.field(tr(t"Reason"), row.reason or "—"),
-        sl.field(tr(t"Actor account"), str(row.actor_account_id or "—")),
+        sl.field(tr("Action"), row.action),
+        sl.field(tr("Pattern"), row.pattern or "—"),
+        sl.field(tr("Reason"), row.reason or "—"),
+        sl.field(tr("Actor account"), str(row.actor_account_id or "—")),
     )
 
 
 _ROLE_ACTIONS = (
-    ("include", tr(t"Include pattern")),
-    ("exclude", tr(t"Exclude pattern")),
-    ("remove-pattern", tr(t"Remove pattern")),
-    ("compose", tr(t"Include role")),
-    ("decompose", tr(t"Remove included role")),
-    ("rank", tr(t"Set rank")),
-    ("delete", tr(t"Delete role")),
+    ("include", tr("Include pattern")),
+    ("exclude", tr("Exclude pattern")),
+    ("remove-pattern", tr("Remove pattern")),
+    ("compose", tr("Include role")),
+    ("decompose", tr("Remove included role")),
+    ("rank", tr("Set rank")),
+    ("delete", tr("Delete role")),
 )
 
 
 class _RuleForm(sl.forms.Form):
-    title = tr(t"Change direct permission rule")
+    title = tr("Change direct permission rule")
 
     operation = sl.forms.ChoiceField(
-        label=tr(t"Operation"),
+        label=tr("Operation"),
         options=(
-            sl.forms.ChoiceOption("allow", tr(t"Allow"), "allow"),
-            sl.forms.ChoiceOption("deny", tr(t"Deny"), "deny"),
-            sl.forms.ChoiceOption("forbid", tr(t"Forbid"), "forbid"),
-            sl.forms.ChoiceOption("revoke", tr(t"Revoke"), "revoke"),
+            sl.forms.ChoiceOption("allow", tr("Allow"), "allow"),
+            sl.forms.ChoiceOption("deny", tr("Deny"), "deny"),
+            sl.forms.ChoiceOption("forbid", tr("Forbid"), "forbid"),
+            sl.forms.ChoiceOption("revoke", tr("Revoke"), "revoke"),
         ),
     )
-    pattern = sl.forms.TextField(label=tr(t"Permission pattern"), maximum=200)
+    pattern = sl.forms.TextField(label=tr("Permission pattern"), maximum=200)
     scope = _scope_field()
-    reason = sl.forms.TextField(label=tr(t"Reason"), required=False, maximum=500)
+    reason = sl.forms.TextField(label=tr("Reason"), required=False, maximum=500)
 
 
 class _AssignmentForm(sl.forms.Form):
-    title = tr(t"Change internal role assignment")
+    title = tr("Change internal role assignment")
 
     operation = sl.forms.ChoiceField(
-        label=tr(t"Operation"),
+        label=tr("Operation"),
         options=(
-            sl.forms.ChoiceOption("assign", tr(t"Assign"), "assign"),
-            sl.forms.ChoiceOption("unassign", tr(t"Unassign"), "unassign"),
+            sl.forms.ChoiceOption("assign", tr("Assign"), "assign"),
+            sl.forms.ChoiceOption("unassign", tr("Unassign"), "unassign"),
         ),
     )
-    slug = sl.forms.TextField(label=tr(t"Internal role slug"), maximum=100)
+    slug = sl.forms.TextField(label=tr("Internal role slug"), maximum=100)
     scope = _scope_field()
-    reason = sl.forms.TextField(label=tr(t"Reason"), required=False, maximum=500)
+    reason = sl.forms.TextField(label=tr("Reason"), required=False, maximum=500)
 
 
 class _CreateRoleForm(sl.forms.Form):
-    title = tr(t"Create internal role")
+    title = tr("Create internal role")
 
-    slug = sl.forms.TextField(label=tr(t"Slug"), maximum=100)
-    name = sl.forms.TextField(label=tr(t"Display name"), maximum=100)
-    rank = sl.forms.IntField(label=tr(t"Management rank"), default=0, minimum=0, maximum=999)
+    slug = sl.forms.TextField(label=tr("Slug"), maximum=100)
+    name = sl.forms.TextField(label=tr("Display name"), maximum=100)
+    rank = sl.forms.IntField(label=tr("Management rank"), default=0, minimum=0, maximum=999)
     scope = _scope_field()
 
 
 class _EditRoleForm(sl.forms.Form):
-    title = tr(t"Edit internal role")
+    title = tr("Edit internal role")
 
     operation = sl.forms.ChoiceField(
-        label=tr(t"Operation"), options=tuple((sl.forms.ChoiceOption(key, label, key) for key, label in _ROLE_ACTIONS))
+        label=tr("Operation"), options=tuple((sl.forms.ChoiceOption(key, label, key) for key, label in _ROLE_ACTIONS))
     )
-    slug = sl.forms.TextField(label=tr(t"Role slug"), maximum=100)
-    value = sl.forms.TextField(label=tr(t"Pattern, included role, or rank"), required=False, maximum=200)
+    slug = sl.forms.TextField(label=tr("Role slug"), maximum=100)
+    value = sl.forms.TextField(label=tr("Pattern, included role, or rank"), required=False, maximum=200)

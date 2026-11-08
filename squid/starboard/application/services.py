@@ -211,7 +211,7 @@ class StarboardService:
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
         async with self._uow_factory() as uow:
             if multiplier is not None and (not isfinite(multiplier) or multiplier <= 0):
-                msg = tr(t"Role multiplier must be finite and greater than zero.")
+                msg = tr("Role multiplier must be finite and greater than zero.")
                 raise ValidationError(msg)
             await uow.starboards.set_role_multiplier(config.id, role_id, multiplier)
             await uow.commit()

@@ -19,7 +19,7 @@ from squid_ui.text import Message
 class InvalidAccountError(ValidationError):
     """Account data is invalid."""
 
-    default_message = tr(t"The account data is invalid.")
+    default_message = tr("The account data is invalid.")
     default_code = ErrorCode.INVALID_ACCOUNT
     default_resource = "account"
 
@@ -42,7 +42,7 @@ def _identity_context(
 class AccountNotFoundError(NotFoundError):
     """An application account could not be found."""
 
-    default_message = tr(t"Account not found.")
+    default_message = tr("Account not found.")
     default_code = ErrorCode.ACCOUNT_NOT_FOUND
     default_resource = "account"
 
@@ -66,11 +66,11 @@ class AccountIdentityNotFoundError(NotFoundError):
     hold two of the same provider — a merge moves every identity row across.
     """
 
-    default_message = tr(t"That linked identity does not belong to your account.")
-    default_title = tr(t"Identity not found")
+    default_message = tr("That linked identity does not belong to your account.")
+    default_title = tr("Identity not found")
     default_code = ErrorCode.ACCOUNT_IDENTITY_NOT_FOUND
     default_resource = "account_identity"
-    default_end_user_action = tr(t"List your linked identities and try again with one of those.")
+    default_end_user_action = tr("List your linked identities and try again with one of those.")
 
     def __init__(self, identity_id: int, *, account_id: int | None = None) -> None:
         context: dict[str, JSONValue] = {"identity_id": identity_id}
@@ -84,11 +84,11 @@ class AccountIdentityNotFoundError(NotFoundError):
 class LastIdentityError(ConflictError):
     """Unlinking would leave the account without a sign-in identity."""
 
-    default_message = tr(t"You cannot unlink your only remaining identity.")
-    default_title = tr(t"Last identity")
+    default_message = tr("You cannot unlink your only remaining identity.")
+    default_title = tr("Last identity")
     default_code = ErrorCode.LAST_IDENTITY
     default_resource = "account_identity"
-    default_end_user_action = tr(t"Link another identity first, then unlink this one.")
+    default_end_user_action = tr("Link another identity first, then unlink this one.")
 
     def __init__(self, *, account_id: int | None = None) -> None:
         super().__init__(context={} if account_id is None else {"account_id": account_id})
@@ -98,8 +98,8 @@ class LastIdentityError(ConflictError):
 class InvalidProfileError(ValidationError):
     """Profile content failed validation."""
 
-    default_message = tr(t"The profile data is invalid.")
-    default_title = tr(t"Invalid profile")
+    default_message = tr("The profile data is invalid.")
+    default_title = tr("Invalid profile")
     default_code = ErrorCode.INVALID_PROFILE
     default_resource = "account_profile"
 
@@ -107,40 +107,40 @@ class InvalidProfileError(ValidationError):
 class InvalidMergeCodeError(ValidationError):
     """A merge code is unknown, already spent, or expired."""
 
-    default_message = tr(t"That merge code is invalid or expired.")
-    default_title = tr(t"Invalid merge code")
+    default_message = tr("That merge code is invalid or expired.")
+    default_title = tr("Invalid merge code")
     default_code = ErrorCode.INVALID_MERGE_CODE
     default_resource = "account_merge"
-    default_end_user_action = tr(t"Generate a new merge code from the account you want to absorb, then try again.")
+    default_end_user_action = tr("Generate a new merge code from the account you want to absorb, then try again.")
 
 
 class InvalidMergeProofError(ValidationError):
     """The merge names the same account twice or lacks recent proof for both accounts."""
 
-    default_message = tr(t"Both accounts must be authenticated again before they can be merged.")
-    default_title = tr(t"Recent account proof required")
+    default_message = tr("Both accounts must be authenticated again before they can be merged.")
+    default_title = tr("Recent account proof required")
     default_resource = "account_merge"
-    default_end_user_action = tr(t"Authenticate both accounts again, then retry the merge.")
+    default_end_user_action = tr("Authenticate both accounts again, then retry the merge.")
 
 
 class InvalidVerificationCodeError(ValidationError):
     """A verification code is invalid or expired."""
 
-    default_message = tr(t"The verification code is invalid or expired.")
-    default_title = tr(t"Invalid verification code")
+    default_message = tr("The verification code is invalid or expired.")
+    default_title = tr("Invalid verification code")
     default_code = ErrorCode.INVALID_VERIFICATION_CODE
     default_resource = "verification_code"
-    default_end_user_action = tr(t"Generate a new code and try again.")
+    default_end_user_action = tr("Generate a new code and try again.")
 
 
 class LinkReservationExpiredError(ValidationError):
     """The reservation token no longer matches a live hold on the verification code."""
 
-    default_message = tr(t"The linking prompt expired before you answered it.")
-    default_title = tr(t"Prompt expired")
+    default_message = tr("The linking prompt expired before you answered it.")
+    default_title = tr("Prompt expired")
     default_code = ErrorCode.LINK_RESERVATION_EXPIRED
     default_resource = "verification_code"
-    default_end_user_action = tr(t"Run /account link again with a fresh code from the game.")
+    default_end_user_action = tr("Run /account link again with a fresh code from the game.")
 
 
 class VerificationAttemptsExhaustedError(RateLimitedError):
@@ -150,21 +150,21 @@ class VerificationAttemptsExhaustedError(RateLimitedError):
     limits guessing at codes that can link someone else's Minecraft identity.
     """
 
-    default_message = tr(t"Too many incorrect verification codes.")
-    default_title = tr(t"Too many attempts")
+    default_message = tr("Too many incorrect verification codes.")
+    default_title = tr("Too many attempts")
     default_code = ErrorCode.VERIFICATION_ATTEMPTS_EXHAUSTED
     default_resource = "verification_code"
-    default_end_user_action = tr(t"Wait for the cooling-off period to pass, then generate a new code in game.")
+    default_end_user_action = tr("Wait for the cooling-off period to pass, then generate a new code in game.")
 
 
 class AccountAlreadyLinkedError(ConflictError):
     """An account is already linked to a different Minecraft account."""
 
-    default_message = tr(t"Your account is already linked to a different Minecraft account.")
-    default_title = tr(t"Account already linked")
+    default_message = tr("Your account is already linked to a different Minecraft account.")
+    default_title = tr("Account already linked")
     default_code = ErrorCode.ACCOUNT_ALREADY_LINKED
     default_resource = "account"
-    default_end_user_action = tr(t"Unlink the current account before linking a new one.")
+    default_end_user_action = tr("Unlink the current account before linking a new one.")
 
     def __init__(
         self,
@@ -184,11 +184,11 @@ class AccountAlreadyLinkedError(ConflictError):
 class ConsentRequiredError(ValidationError):
     """An account must accept the current privacy notice before this action."""
 
-    default_message = tr(t"You need to accept the current privacy notice before completing this action.")
-    default_title = tr(t"Consent required")
+    default_message = tr("You need to accept the current privacy notice before completing this action.")
+    default_title = tr("Consent required")
     default_code = ErrorCode.CONSENT_REQUIRED
     default_resource = "account"
-    default_end_user_action = tr(t"Review and accept the current privacy notice, then try again.")
+    default_end_user_action = tr("Review and accept the current privacy notice, then try again.")
 
     def __init__(
         self,
@@ -208,11 +208,11 @@ class StaleConsentNoticeError(ConflictError):
     A client holding a cached notice would otherwise record agreement to wording nobody saw.
     """
 
-    default_message = tr(t"The privacy notice has changed since this one was shown.")
-    default_title = tr(t"Privacy notice out of date")
+    default_message = tr("The privacy notice has changed since this one was shown.")
+    default_title = tr("Privacy notice out of date")
     default_code = ErrorCode.CONSENT_VERSION_STALE
     default_resource = "account"
-    default_end_user_action = tr(t"Re-read the current privacy notice, then accept it again.")
+    default_end_user_action = tr("Re-read the current privacy notice, then accept it again.")
 
     def __init__(self, *, offered: str, current: str) -> None:
         super().__init__(
@@ -226,11 +226,11 @@ class StaleConsentNoticeError(ConflictError):
 class CreatorAliasNotFoundError(NotFoundError):
     """No creator alias exists with the requested normalized name."""
 
-    default_message = tr(t"No build credits a creator by that name.")
-    default_title = tr(t"Creator name not found")
+    default_message = tr("No build credits a creator by that name.")
+    default_title = tr("Creator name not found")
     default_code = ErrorCode.CREATOR_ALIAS_NOT_FOUND
     default_resource = "creator_alias"
-    default_end_user_action = tr(t"Check the spelling against the creator list on a build you worked on.")
+    default_end_user_action = tr("Check the spelling against the creator list on a build you worked on.")
 
     def __init__(self, name: str) -> None:
         super().__init__(context={"name": name}, public_context={"name": name})
@@ -240,11 +240,11 @@ class CreatorAliasNotFoundError(NotFoundError):
 class CreatorNotFoundError(NotFoundError):
     """No creator profile exists for the requested identifier."""
 
-    default_message = tr(t"Creator not found.")
-    default_title = tr(t"Creator not found")
+    default_message = tr("Creator not found.")
+    default_title = tr("Creator not found")
     default_code = ErrorCode.CREATOR_NOT_FOUND
     default_resource = "creator"
-    default_end_user_action = tr(t"Check the creator ID and try again.")
+    default_end_user_action = tr("Check the creator ID and try again.")
 
     def __init__(self, creator_id: UUID) -> None:
         identifier = str(creator_id)
@@ -259,11 +259,11 @@ class AliasAlreadyClaimedError(ConflictError):
     The internal account ID remains in diagnostic context.
     """
 
-    default_message = tr(t"That creator name is already claimed by another account.")
-    default_title = tr(t"Creator name already claimed")
+    default_message = tr("That creator name is already claimed by another account.")
+    default_title = tr("Creator name already claimed")
     default_code = ErrorCode.ALIAS_ALREADY_CLAIMED
     default_resource = "creator_alias"
-    default_end_user_action = tr(t"Ask staff to review the claim if you believe the name is yours.")
+    default_end_user_action = tr("Ask staff to review the claim if you believe the name is yours.")
 
     def __init__(
         self,
@@ -300,8 +300,8 @@ class AliasAlreadyClaimedError(ConflictError):
 class ClaimNotFoundError(NotFoundError):
     """No pending claim matches the requested identifier."""
 
-    default_message = tr(t"No pending claim matches that ID.")
-    default_title = tr(t"Claim not found")
+    default_message = tr("No pending claim matches that ID.")
+    default_title = tr("Claim not found")
     default_code = ErrorCode.CLAIM_NOT_FOUND
     default_resource = "creator_alias_claim"
 
@@ -313,11 +313,11 @@ class ClaimNotFoundError(NotFoundError):
 class NoLinkedMinecraftAccountError(NotFoundError):
     """The account has no Java identity to refresh."""
 
-    default_message = tr(t"You do not have a Minecraft account linked.")
-    default_title = tr(t"No Minecraft account linked")
+    default_message = tr("You do not have a Minecraft account linked.")
+    default_title = tr("No Minecraft account linked")
     default_code = ErrorCode.MINECRAFT_ACCOUNT_NOT_FOUND
     default_resource = "account_identity"
-    default_end_user_action = tr(t"Link a Minecraft account first, then try again.")
+    default_end_user_action = tr("Link a Minecraft account first, then try again.")
 
     def __init__(self, *, account_id: int | None = None) -> None:
         super().__init__(context={} if account_id is None else {"account_id": account_id})
@@ -327,10 +327,10 @@ class NoLinkedMinecraftAccountError(NotFoundError):
 class MinecraftAccountNotFoundError(NotFoundError):
     """A Minecraft UUID does not identify an account."""
 
-    default_message = tr(t"Minecraft account not found.")
+    default_message = tr("Minecraft account not found.")
     default_code = ErrorCode.MINECRAFT_ACCOUNT_NOT_FOUND
     default_resource = "minecraft_account"
-    default_end_user_action = tr(t"Check the UUID and try again.")
+    default_end_user_action = tr("Check the UUID and try again.")
 
     def __init__(self, minecraft_uuid: UUID) -> None:
         value = str(minecraft_uuid)
@@ -344,7 +344,7 @@ class MinecraftAccountNotFoundError(NotFoundError):
 class MinecraftServiceUnavailableError(ServiceUnavailableError):
     """The Mojang session service failed."""
 
-    default_message = tr(t"The Minecraft account service is temporarily unavailable.")
+    default_message = tr("The Minecraft account service is temporarily unavailable.")
     default_code = ErrorCode.MINECRAFT_SERVICE_UNAVAILABLE
     default_resource = "minecraft_account"
-    default_end_user_action = tr(t"Try again in a few minutes.")
+    default_end_user_action = tr("Try again in a few minutes.")

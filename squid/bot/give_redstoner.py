@@ -118,15 +118,15 @@ class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
         source_channel_mention = sl.raw_md(f"<#{self._source_channel_id}>")
         actions: list[sl.semantic.ActionControl] = []
         if self._can_deploy:
-            actions.append(sl.action_control(tr(t"Deploy role controls"), self._deploy, key="deploy"))
-        actions.append(sl.action_control(tr(t"Close"), self._close, key="close"))
+            actions.append(sl.action_control(tr("Deploy role controls"), self._deploy, key="deploy"))
+        actions.append(sl.action_control(tr("Close"), self._close, key="close"))
         return (
             sl.section(
-                sl.heading(tr(t"Redstoner automation")),
+                sl.heading(tr("Redstoner automation")),
                 sl.fields(
-                    sl.field(tr(t"Role"), sl.md(tr(t"{role_mention}"))),
-                    sl.field(tr(t"Source channel"), sl.md(tr(t"{source_channel_mention}"))),
-                    sl.field(tr(t"Server"), str(self._guild_id)),
+                    sl.field(tr("Role"), sl.md(tr(t"{role_mention}"))),
+                    sl.field(tr("Source channel"), sl.md(tr(t"{source_channel_mention}"))),
+                    sl.field(tr("Server"), str(self._guild_id)),
                 ),
             ),
             sl.action_controls(*actions, key="redstoner-admin-actions"),
@@ -134,10 +134,10 @@ class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
 
     async def _deploy(self, event: sl.PressEvent) -> None:
         if not await self._authorize_deploy():
-            await event.notice(tr(t"You are no longer allowed to deploy Redstoner controls."))
+            await event.notice(tr("You are no longer allowed to deploy Redstoner controls."))
             return
         await self._publish_panel()
-        await event.notice(tr(t"Redstoner role controls deployed."))
+        await event.notice(tr("Redstoner role controls deployed."))
 
     async def _close(self, event: sl.PressEvent) -> None:
         event.finish_on_success()
@@ -160,7 +160,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await enforce(request, REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC, mode="any")
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id:
-            return sd.Response(text_node(tr(t"This is only available in the bot's home server.")), audience="personal")
+            return sd.Response(text_node(tr("This is only available in the bot's home server.")), audience="personal")
 
         async def may_deploy() -> bool:
             return await allows(request, REDSTONER_PANEL_MANAGE)
@@ -207,9 +207,9 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await enforce(request, REDSTONER_ROLE_RESYNC)
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id or message.guild != guild:
-            return text_node(tr(t"That message is not in the bot's home server."))
+            return text_node(tr("That message is not in the bot's home server."))
         await self.give_redstoner_from_message(message)
-        return text_node(tr(t"Redstoner automation resynced."))
+        return text_node(tr("Redstoner automation resynced."))
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
         """Give the redstoner role to a user based on a Starboard message."""
@@ -238,7 +238,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
             with localization_scope(localization_for(locale)):
-                payload = render_payload([text_node(tr(t"Could not find the redstoner role."))])
+                payload = render_payload([text_node(tr("Could not find the redstoner role."))])
             await send_to(message.channel)(payload)
             return
         await member.add_roles(redstoner_role)

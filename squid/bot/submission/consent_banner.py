@@ -36,11 +36,11 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await request.respond(
             text_node(
                 tr(
-                    t"### Consent Already Granted\n"
-                    t"Your account has already accepted the current privacy notice. Redstone Squid automatically "
-                    t"indexes your submissions in build log channels.\n\n"
-                    t"*Tip:* If you posted a build before your consent was recorded, right-click that message and "
-                    t"select **Apps > Recalculate Build** to index it now."
+                    "### Consent Already Granted\n"
+                    "Your account has already accepted the current privacy notice. Redstone Squid automatically "
+                    "indexes your submissions in build log channels.\n\n"
+                    "*Tip:* If you posted a build before your consent was recorded, right-click that message and "
+                    "select **Apps > Recalculate Build** to index it now."
                 )
             ),
             audience="personal",
@@ -51,24 +51,24 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     version = CURRENT_CONSENT_VERSION
     component = ConsentPrompt(
         user_id=user_id,
-        title=tr(t"Enable Automatic Build Ingestion"),
+        title=tr("Enable Automatic Build Ingestion"),
         summary=tr(
-            t"Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
-            t"Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
-            t"your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
-            t"your posts ignored by automated ingestion."
+            "Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
+            "Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
+            "your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
+            "your posts ignored by automated ingestion."
         ),
         fields=(
             CardField(
-                tr(t"Discord account"),
+                tr("Discord account"),
                 tr(t"<@{user_id}> ({user_id})"),
             ),
             CardField(
-                tr(t"Consent recorded"),
+                tr("Consent recorded"),
                 tr(t"Notice {version}, timed at the moment you agree."),
             ),
         ),
-        accept_label=tr(t"Agree & Enable Ingestion"),
+        accept_label=tr("Agree & Enable Ingestion"),
         wait_timeout=120,
     )
     outcome = await request.respond(component)

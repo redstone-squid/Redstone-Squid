@@ -21,18 +21,18 @@ from squid_ui_discord import send_to
 if TYPE_CHECKING:
     import squid.bot.app
 
-MORE_INFORMATION = tr(t"Use `/help <command>` to get more information.")
+MORE_INFORMATION = tr("Use `/help <command>` to get more information.")
 
 DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
-    (tr(t"Build"), frozenset({"build"})),
-    (tr(t"Discover"), frozenset({"search", "tags"})),
-    (tr(t"Account"), frozenset({"account", "notifications"})),
-    (tr(t"Community"), frozenset({"poll"})),
+    (tr("Build"), frozenset({"build"})),
+    (tr("Discover"), frozenset({"search", "tags"})),
+    (tr("Account"), frozenset({"account", "notifications"})),
+    (tr("Community"), frozenset({"poll"})),
     (
-        tr(t"Administration & setup"),
+        tr("Administration & setup"),
         frozenset({"access", "errors", "records", "redstoner", "settings", "starboard", "versions"}),
     ),
-    (tr(t"Information"), frozenset({"help"})),
+    (tr("Information"), frozenset({"help"})),
 )
 """Top-level command categories, kept separate so tests can check registered command names."""
 
@@ -73,8 +73,8 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
             summary=lambda item: getattr(item, "short_doc", None) or getattr(item, "description", ""),
             detail=self._detail,
             page_size=10,
-            title=tr(t"Redstone Squid help"),
-            empty=tr(t"No commands are available."),
+            title=tr("Redstone Squid help"),
+            empty=tr("No commands are available."),
         )
 
     def _find(self, needle: str | None) -> AnyCommand | None:
@@ -88,7 +88,7 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
         qualified_name = command.qualified_name
         heading = f"/{qualified_name}{f' {signature}' if signature else ''}"
         description = (
-            getattr(command, "help", None) or getattr(command, "description", None) or tr(t"No details provided")
+            getattr(command, "help", None) or getattr(command, "description", None) or tr("No details provided")
         )
         # Only the group variants of this union carry subcommands; the annotation keeps the
         # duck-typed lookup from collapsing to an empty tuple type.
@@ -109,7 +109,7 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
         if self._needle is not None and self._focused is None:
             needle = self._needle
             body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = sl.section(
-                sl.heading(tr(t"Command not found")),
+                sl.heading(tr("Command not found")),
                 sl.paragraph(tr(t"No command named `{needle}` is available.")),
             )
         elif self._focused is not None:
@@ -118,16 +118,16 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
             body = self.boundary(self._browser, key="browser")
         project_url = self._bot.source_code_url or PROJECT_URL
         links: list[sl.semantic.Link] = [
-            sl.link(tr(t"Source"), project_url, key="source"),
-            sl.link(tr(t"Submission form"), SUBMISSION_FORM_URL, key="form"),
-            sl.link(tr(t"Documentation"), f"{project_url}/tree/master/docs", key="docs"),
-            sl.link(tr(t"Regulations"), REGULATIONS_URL, key="regulations"),
+            sl.link(tr("Source"), project_url, key="source"),
+            sl.link(tr("Submission form"), SUBMISSION_FORM_URL, key="form"),
+            sl.link(tr("Documentation"), f"{project_url}/tree/master/docs", key="docs"),
+            sl.link(tr("Regulations"), REGULATIONS_URL, key="regulations"),
         ]
         if self._bot.user is not None:
             links.insert(
                 0,
                 sl.link(
-                    tr(t"Invite"),
+                    tr("Invite"),
                     f"https://discordapp.com/oauth2/authorize?client_id={self._bot.user.id}&scope=bot&permissions=8",
                     key="invite",
                 ),
@@ -135,7 +135,7 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
         return (
             body,
             sl.action_controls(*links, key="help-links"),
-            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="help-actions"),
+            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="help-actions"),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
@@ -145,7 +145,7 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
 def _summary(command: AnyCommand) -> TextLike:
     """Return a prefix command's short documentation or an app command's description."""
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
-    return text or tr(t"No details provided")
+    return text or tr("No details provided")
 
 
 def _command_section(
@@ -253,7 +253,7 @@ class Help(commands.MinimalHelpCommand):
             and build_config.commit_message is not None
         ):
             footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await send_to(self.get_destination())(render_payload([card_node(tr(t"Help"), desc, footer=footer)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr("Help"), desc, footer=footer)]))
 
     # !help <command>
     @override
@@ -264,7 +264,7 @@ class Help(commands.MinimalHelpCommand):
                 [
                     card_node(
                         tr(t"Command Help - `{name}`"),
-                        command.help or tr(t"No details provided"),
+                        command.help or tr("No details provided"),
                     )
                 ]
             )
@@ -273,7 +273,7 @@ class Help(commands.MinimalHelpCommand):
     @staticmethod
     def get_commands_brief_details(commands_: Sequence[Command[Any, Any, Any]]) -> Message:
         """Format names, signatures, and short descriptions in input order, each on a new line."""
-        no_details = tr(t"No details provided")
+        no_details = tr("No details provided")
         details: list[TextLike] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
@@ -293,10 +293,10 @@ class Help(commands.MinimalHelpCommand):
 
         listed = list(commands_)
         description = sl.raw_md(group.cog.description)
-        commands = self.get_commands_brief_details(listed) if listed else tr(t"None")
+        commands = self.get_commands_brief_details(listed) if listed else tr("None")
         more_information = MORE_INFORMATION
         desc = tr(t"{description}\n\nUsable Subcommands: {commands}\n\n{more_information}")
-        await send_to(self.get_destination())(render_payload([card_node(tr(t"Command Help"), desc)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
         return None
 
     # !help <cog>
@@ -306,10 +306,10 @@ class Help(commands.MinimalHelpCommand):
         commands_ = cog.walk_commands()
         listed = list(commands_)
         description = sl.raw_md(cog.description)
-        commands = self.get_commands_brief_details(listed) if listed else tr(t"None")
+        commands = self.get_commands_brief_details(listed) if listed else tr("None")
         more_information = MORE_INFORMATION
         desc = tr(t"{description}\n\nUsable Subcommands:{commands}\n\n{more_information}")
-        await send_to(self.get_destination())(render_payload([card_node(tr(t"Command Help"), desc)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
@@ -320,7 +320,7 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
-        await send_to(self.get_destination())(render_payload([error_node(tr(t"Error."), error)]))
+        await send_to(self.get_destination())(render_payload([error_node(tr("Error."), error)]))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

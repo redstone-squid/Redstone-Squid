@@ -33,8 +33,8 @@ from squid_ui.text import localization_scope
 logger = logging.getLogger(__name__)
 
 PROBLEM_DETAIL_MEDIA_TYPE = "application/problem+json"
-INTERNAL_ERROR_DETAIL = tr(t"An internal server error occurred.")
-SERVICE_UNAVAILABLE_DETAIL = tr(t"A required service is temporarily unavailable. Please try again later.")
+INTERNAL_ERROR_DETAIL = tr("An internal server error occurred.")
+SERVICE_UNAVAILABLE_DETAIL = tr("A required service is temporarily unavailable. Please try again later.")
 
 
 def _route_template(request: Request) -> str | None:

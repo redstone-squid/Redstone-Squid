@@ -43,7 +43,7 @@ class SchematicRenderJobService:
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[SchematicRenderUnitOfWork], max_attempts: int = 5) -> None:
         if max_attempts < 1:
-            msg = tr(t"Render max_attempts must be positive.")
+            msg = tr("Render max_attempts must be positive.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._max_attempts = max_attempts
@@ -52,7 +52,7 @@ class SchematicRenderJobService:
         """Commit and return up to limit leases for preview publication."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 32:
-                msg = tr(t"Render claim limit must be between 1 and 32.")
+                msg = tr("Render claim limit must be between 1 and 32.")
                 raise InvalidStateError(msg)
             result = await uow.schematic_renders.claim(limit=limit)
             await uow.commit()

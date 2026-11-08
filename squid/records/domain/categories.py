@@ -47,7 +47,7 @@ def generate_category_subsets(
     categories. A negative size limit raises `ValidationError` when iteration starts.
     """
     if max_size < 0:
-        msg = tr(t"Maximum category size cannot be negative.")
+        msg = tr("Maximum category size cannot be negative.")
         raise ValidationError(msg)
 
     canonical_facets = tuple(sorted(semantics.closure(facets)))

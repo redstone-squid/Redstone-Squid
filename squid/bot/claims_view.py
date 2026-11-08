@@ -62,8 +62,8 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self.closed:
             return (
                 sl.section(
-                    sl.heading(tr(t"Claims closed")),
-                    sl.paragraph(tr(t"This review queue is closed.")),
+                    sl.heading(tr("Claims closed")),
+                    sl.paragraph(tr("This review queue is closed.")),
                 ),
             )
         entries = tuple(_claim_entry(claim) for claim in self._claims)
@@ -74,7 +74,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
             )
             if entries
-            else sd.v2.text(tr(t"No creator credit claims are awaiting review."))
+            else sd.v2.text(tr("No creator credit claims are awaiting review."))
         )
         choices: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None
         if self._claims:
@@ -98,9 +98,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._can_approve:
             buttons.append(
                 sl.action_control(
-                    tr(t"Take the name")
+                    tr("Take the name")
                     if self.selected_id is not None and self.reassign_armed == self.selected_id
-                    else tr(t"Approve"),
+                    else tr("Approve"),
                     self._approve,
                     key="approve",
                     tone=sl.Tone.DANGER if self.reassign_armed == self.selected_id else sl.Tone.SUCCESS,
@@ -110,16 +110,16 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._can_reject:
             buttons.append(
                 sl.action_control(
-                    tr(t"Reject"),
+                    tr("Reject"),
                     self._reject,
                     key="reject",
                     available=self.selected is not None,
                 )
             )
-        buttons.append(sl.action_control(tr(t"Close"), self._close, key="close"))
+        buttons.append(sl.action_control(tr("Close"), self._close, key="close"))
         return (
             sd.v2.panel(
-                sd.v2.heading(tr(t"Creator credit claims awaiting review")),
+                sd.v2.heading(tr("Creator credit claims awaiting review")),
                 body,
                 choices,
                 accent=DISCORD_BLUE,
@@ -147,7 +147,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return
         node = ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT
         if not await self._authorize(node):
-            await event.notice(tr(t"You are no longer allowed to resolve creator claims."))
+            await event.notice(tr("You are no longer allowed to resolve creator claims."))
             return
 
         async def resolve(live: sd.ActionEvent, staff_account_id: int) -> None:
@@ -215,4 +215,4 @@ def _claim_label(claim: AliasClaim) -> sl.text.Message:
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
     """Explain the second deliberate approval click."""
-    return conflict.message + " " + tr(t"Approving again takes the name from them.")
+    return conflict.message + " " + tr("Approving again takes the name from them.")

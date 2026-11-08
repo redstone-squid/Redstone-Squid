@@ -10,9 +10,9 @@ from squid.bot.ui import CardField, tr
 from squid_ui.text import Message, raw_md
 
 _PROVIDER_LABELS = {
-    IdentityProvider.DISCORD: tr(t"Discord"),
-    IdentityProvider.JAVA: tr(t"Minecraft (Java)"),
-    IdentityProvider.BEDROCK: tr(t"Minecraft (Bedrock)"),
+    IdentityProvider.DISCORD: tr("Discord"),
+    IdentityProvider.JAVA: tr("Minecraft (Java)"),
+    IdentityProvider.BEDROCK: tr("Minecraft (Bedrock)"),
 }
 
 
@@ -44,9 +44,9 @@ def own_profile_fields(profile: AccountProfile) -> list[CardField]:
     """Render pronouns and links; the account panel renders identity visibility separately."""
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr(t"Pronouns"), profile.pronouns))
+        fields.append(CardField(tr("Pronouns"), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr(t"Links"), render_links(profile.links)))
+        fields.append(CardField(tr("Links"), render_links(profile.links)))
     return fields
 
 
@@ -71,20 +71,20 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
     """
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr(t"Pronouns"), profile.pronouns))
+        fields.append(CardField(tr("Pronouns"), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr(t"Links"), render_links(profile.links)))
+        fields.append(CardField(tr("Links"), render_links(profile.links)))
     if profile.identities:
         fields.append(
             CardField(
-                tr(t"Linked accounts"),
+                tr("Linked accounts"),
                 Message.join("\n", (_public_identity_label(identity) for identity in profile.identities)),
             )
         )
     if profile.aliases:
         fields.append(
             CardField(
-                tr(t"Creator credit"),
+                tr("Creator credit"),
                 Message.join("\n", (_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases)),
             )
         )

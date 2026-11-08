@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 REJECTION_MESSAGES = {
-    VoteRejection.NOT_FOUND: tr(t"That message is not an open vote."),
-    VoteRejection.CLOSED: tr(t"That vote is already closed."),
-    VoteRejection.NOT_ELIGIBLE: tr(t"You do not have a trusted role."),
-    VoteRejection.INVALID_OPTION: tr(t"That option is not available on this vote."),
-    VoteRejection.WRONG_GUILD: tr(t"That vote belongs to a different server."),
-    VoteRejection.NOT_AUTHORIZED: tr(t"Only the poll creator or staff can do that."),
+    VoteRejection.NOT_FOUND: tr("That message is not an open vote."),
+    VoteRejection.CLOSED: tr("That vote is already closed."),
+    VoteRejection.NOT_ELIGIBLE: tr("You do not have a trusted role."),
+    VoteRejection.INVALID_OPTION: tr("That option is not available on this vote."),
+    VoteRejection.WRONG_GUILD: tr("That vote belongs to a different server."),
+    VoteRejection.NOT_AUTHORIZED: tr("Only the poll creator or staff can do that."),
 }
 """One localizable sentence per typed rejection.
 

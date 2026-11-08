@@ -63,7 +63,7 @@ class IdempotencyService:
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if ttl_hours < 1:
-            msg = tr(t"Idempotency retention must be at least one hour.")
+            msg = tr("Idempotency retention must be at least one hour.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._ttl_hours = ttl_hours

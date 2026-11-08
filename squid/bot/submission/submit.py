@@ -103,7 +103,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            return error_node(tr(t"Check the dimensions"), str(error))
+            return error_node(tr("Check the dimensions"), str(error))
 
         if door_type is not None:
             draft.door_orientation = door_type
@@ -270,8 +270,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         await enforce(request, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
             return error_node(
-                tr(t"Nothing to recalculate"),
-                tr(t"Builds are only read out of messages posted in a build log channel."),
+                tr("Nothing to recalculate"),
+                tr("Builds are only read out of messages posted in a build log channel."),
             )
 
         account = await self.bot.services.accounts.get_account_by_identity(
@@ -282,7 +282,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
             return error_node(
-                tr(t"Author has not consented"),
+                tr("Author has not consented"),
                 tr(
                     t"The author of this message (<@{user_id}>) has not consented to data storage. "
                     t"They must grant consent before this build can be ingested."

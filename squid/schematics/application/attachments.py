@@ -33,7 +33,7 @@ class SchematicPublication:
             and self.rights_attested_by_account_id is not None
         )
         if self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD and not rights_complete:
-            msg = tr(t"public schematic downloads require a license and rights attestation")
+            msg = tr("public schematic downloads require a license and rights attestation")
             raise DataIntegrityError(msg)
 
     @property

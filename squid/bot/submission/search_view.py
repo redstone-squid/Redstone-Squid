@@ -104,7 +104,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             *(
                 (
                     sl.action_controls(
-                        sl.action_control(tr(t"View build"), self._open_build, key="open-build"),
+                        sl.action_control(tr("View build"), self._open_build, key="open-build"),
                         key="build-actions",
                     ),
                 )
@@ -116,11 +116,11 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _open_build(self, event: sl.ActionEvent) -> None:
         build_id = _build_id(self.hit)
         if build_id is None or self._load_build is None or self._render_build is None:
-            await event.notice(tr(t"That build is no longer available."))
+            await event.notice(tr("That build is no longer available."))
             return
         build = await self._load_build(build_id)
         if build is None:
-            await event.notice(tr(t"That build is no longer available."))
+            await event.notice(tr("That build is no longer available."))
             return
         self._build_node = await self._render_build(build)
 
@@ -154,12 +154,12 @@ class SearchScreen(sd.UserSessionScreen, session_name="search"):
             detail=self._detail,
             overview=self._overview,
             page_size=request.page_size,
-            title=tr(t"Search results"),
-            empty=tr(t"No results match this query."),
+            title=tr("Search results"),
+            empty=tr("No results match this query."),
             copy=sp.LoadingCopy(
-                loading=tr(t"Loading search results…"),
-                failed=tr(t"Could not load search results."),
-                retry=tr(t"Retry"),
+                loading=tr("Loading search results…"),
+                failed=tr("Could not load search results."),
+                retry=tr("Retry"),
             ),
         )
         self._browser.window.replace(self._source.initial_loaded())
@@ -219,13 +219,13 @@ class SearchScreen(sd.UserSessionScreen, session_name="search"):
         if self.closed:
             return (
                 sl.section(
-                    sl.heading(tr(t"Search closed")),
-                    sl.truncate(sl.paragraph(tr(t"This search is closed."))),
+                    sl.heading(tr("Search closed")),
+                    sl.truncate(sl.paragraph(tr("This search is closed."))),
                 ),
             )
         return (
             self.boundary(self._browser, key="results"),
-            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="search-actions"),
+            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="search-actions"),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
@@ -248,17 +248,17 @@ def _detail_title(hit: SearchHit) -> str:
 def _metadata_label(kind: str) -> sl.TextLike:
     match kind:
         case "restriction":
-            return tr(t"Restriction")
+            return tr("Restriction")
         case "pattern":
-            return tr(t"Pattern")
+            return tr("Pattern")
         case "showcase":
-            return tr(t"Showcase tag")
+            return tr("Showcase tag")
         case "creator":
-            return tr(t"Creator")
+            return tr("Creator")
         case "version":
-            return tr(t"Version")
+            return tr("Version")
         case "tag":
-            return tr(t"Tag")
+            return tr("Tag")
         case _:
             return kind
 

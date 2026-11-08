@@ -24,7 +24,7 @@ def starboard_layout(
         heading = f"{message.author.mention} · {heading}"
     children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
         sd.v2.section(
-            sd.v2.text(heading + "\n" + (message.content or tr(t"-# (no text content)"))),
+            sd.v2.text(heading + "\n" + (message.content or tr("-# (no text content)"))),
             accessory=sd.v2.thumbnail(avatar_url),
         )
     ]
@@ -38,7 +38,7 @@ def starboard_layout(
     if config.jump_to_message:
         children.append(
             sd.v2.row(
-                sd.v2.link_button(tr(t"Original message"), message.jump_url),
+                sd.v2.link_button(tr("Original message"), message.jump_url),
             )
         )
     footer: list[sl.TextLike] = [f"{config.display_emoji} {entry.score:g}"]

@@ -49,7 +49,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
 
         build = await self.builds.get(build_id)
         if build is None:
-            await request.respond(error_node(tr(t"Error"), tr(t"No build with that ID.")), audience="personal")
+            await request.respond(error_node(tr("Error"), tr("No build with that ID.")), audience="personal")
             return
 
         screen = await prepare_build_editor(request, build, self.builds)
@@ -79,7 +79,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             fields = ", ".join(sorted(inapplicable))
             await request.respond(
                 error_node(
-                    tr(t"Not a field of this build"),
+                    tr("Not a field of this build"),
                     tr(t"This build has no {fields}. Open the workspace to see what it does have."),
                 ),
                 audience="personal",
@@ -92,15 +92,15 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
     async def edit_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """A context menu command to edit a build."""
         if message.author.id != self.bot.user.id:  # type: ignore
-            return text_node(tr(t"This does not look like a build."))
+            return text_node(tr("This does not look like a build."))
 
         # The post mapping identifies the build; a message record alone has no resource association.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
-            return text_node(tr(t"This does not look like a build."))
+            return text_node(tr("This does not look like a build."))
 
         build = await self.builds.get(int(post.resource_key))
         if build is None:
-            return text_node(tr(t"This does not look like a build."))
+            return text_node(tr("This does not look like a build."))
         await open_build_editor(request, build)
         return None

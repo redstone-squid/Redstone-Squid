@@ -54,7 +54,7 @@ class DraftChangeKey(str):
 
     def __new__(cls, value: str) -> DraftChangeKey:
         if not isinstance(value, str) or _IDEMPOTENCY_KEY.fullmatch(value) is None:
-            msg = tr(t"draft change keys must be 8-255 visible ASCII characters")
+            msg = tr("draft change keys must be 8-255 visible ASCII characters")
             raise ValidationError(msg)
         return super().__new__(cls, value)
 
@@ -87,7 +87,7 @@ class FieldOperation:
             field_id = self.field_id
             raise ValidationError(tr(t"invalid draft field ID: {field_id}"))
         if self.kind is FieldOperationKind.UNSET and self.value is not None:
-            msg = tr(t"unset operations cannot carry a value")
+            msg = tr("unset operations cannot carry a value")
             raise ValidationError(msg)
         if self.kind is FieldOperationKind.SET:
             _require_json_budget(
@@ -113,24 +113,24 @@ class DraftChange:
     def __post_init__(self) -> None:
         object.__setattr__(self, "idempotency_key", DraftChangeKey(self.idempotency_key))
         if self.base_revision < 0:
-            msg = tr(t"base_revision cannot be negative")
+            msg = tr("base_revision cannot be negative")
             raise ValidationError(msg)
         if _CLIENT_ID.fullmatch(self.client_instance_id) is None:
-            msg = tr(t"client_instance_id has an invalid format")
+            msg = tr("client_instance_id has an invalid format")
             raise ValidationError(msg)
         if not self.operations:
-            msg = tr(t"draft changes require at least one operation")
+            msg = tr("draft changes require at least one operation")
             raise ValidationError(msg)
         if len(self.operations) > MAX_DRAFT_OPERATIONS:
             limit = MAX_DRAFT_OPERATIONS
             raise ValidationError(tr(t"draft changes cannot exceed {limit} operations"))
         operation_ids = [operation.operation_id for operation in self.operations]
         if len(operation_ids) != len(set(operation_ids)):
-            msg = tr(t"operation IDs must be unique within a draft change")
+            msg = tr("operation IDs must be unique within a draft change")
             raise ValidationError(msg)
         field_ids = [operation.field_id for operation in self.operations]
         if len(field_ids) != len(set(field_ids)):
-            msg = tr(t"a draft change may mutate each field at most once")
+            msg = tr("a draft change may mutate each field at most once")
             raise ValidationError(msg)
 
 
@@ -158,10 +158,10 @@ class DraftSnapshot:
 
     def __post_init__(self) -> None:
         if self.owner_account_id < 1:
-            msg = tr(t"owner_account_id must be positive")
+            msg = tr("owner_account_id must be positive")
             raise ValidationError(msg)
         if self.schema_revision < 1 or self.revision < 0:
-            msg = tr(t"schema_revision must be positive and revision cannot be negative")
+            msg = tr("schema_revision must be positive and revision cannot be negative")
             raise ValidationError(msg)
         _require_json_budget(
             self.answers,
@@ -199,7 +199,7 @@ class DraftSnapshot:
                 max_depth=MAX_DRAFT_JSON_DEPTH + 1,
             )
         except TypeError, ValueError:
-            msg = tr(t"The draft answers exceed the retained data limit.")
+            msg = tr("The draft answers exceed the retained data limit.")
             raise ValidationError(
                 msg,
                 resource="submission_draft",
@@ -242,10 +242,10 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
         item, depth = stack.pop()
         nodes += 1
         if nodes > MAX_DRAFT_JSON_NODES:
-            msg = tr(t"draft JSON values contain too many nodes")
+            msg = tr("draft JSON values contain too many nodes")
             raise ValidationError(msg)
         if depth > max_depth:
-            msg = tr(t"draft JSON values are nested too deeply")
+            msg = tr("draft JSON values are nested too deeply")
             raise ValidationError(msg)
         if item is None or isinstance(item, bool):
             estimated_bytes += 5
@@ -253,12 +253,12 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
             estimated_bytes += len(item.encode("utf-8")) + 2
         elif isinstance(item, int):
             if item.bit_length() > 256:
-                msg = tr(t"draft JSON integers are too large")
+                msg = tr("draft JSON integers are too large")
                 raise ValidationError(msg)
             estimated_bytes += 80
         elif isinstance(item, float):
             if not math.isfinite(item):
-                msg = tr(t"draft JSON numbers must be finite")
+                msg = tr("draft JSON numbers must be finite")
                 raise ValidationError(msg)
             estimated_bytes += 32
         elif isinstance(item, Mapping):
@@ -266,7 +266,7 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
             estimated_bytes += 2 + len(item)
             for key, nested in item.items():
                 if not isinstance(key, str):
-                    msg = tr(t"draft JSON object keys must be strings")
+                    msg = tr("draft JSON object keys must be strings")
                     raise ValidationError(msg)
                 estimated_bytes += len(key.encode("utf-8")) + 3
                 stack.append((nested, depth + 1))
@@ -275,24 +275,24 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
             estimated_bytes += 2 + len(item)
             stack.extend((nested, depth + 1) for nested in item)
         else:
-            msg = tr(t"draft values must be JSON-compatible")
+            msg = tr("draft values must be JSON-compatible")
             raise ValidationError(msg)
         if estimated_bytes > max_bytes:
-            msg = tr(t"draft JSON values exceed the retained byte limit")
+            msg = tr("draft JSON values exceed the retained byte limit")
             raise ValidationError(msg)
     try:
         encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
     except (TypeError, ValueError, RecursionError) as error:
-        msg = tr(t"draft values must be JSON-compatible")
+        msg = tr("draft values must be JSON-compatible")
         raise ValidationError(msg) from error
     if len(encoded) > max_bytes:
-        msg = tr(t"draft JSON values exceed the retained byte limit")
+        msg = tr("draft JSON values exceed the retained byte limit")
         raise ValidationError(msg)
 
 
 def _require_new_container(value: object, seen: set[int]) -> None:
     identity = id(value)
     if identity in seen:
-        msg = tr(t"draft JSON values cannot contain cycles or shared containers")
+        msg = tr("draft JSON values cannot contain cycles or shared containers")
         raise ValidationError(msg)
     seen.add(identity)

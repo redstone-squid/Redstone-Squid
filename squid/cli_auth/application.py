@@ -55,7 +55,7 @@ class CliSecretCodec:
 
     def __init__(self, pepper: bytes) -> None:
         if len(pepper) < 32:
-            msg = tr(t"CLI authorization pepper must contain at least 32 bytes.")
+            msg = tr("CLI authorization pepper must contain at least 32 bytes.")
             raise InvalidStateError(msg)
         self._pepper = pepper
 
@@ -138,7 +138,7 @@ class CliAuthorizationService:
             )
             <= 0
         ):
-            msg = tr(t"CLI authorization limits must be positive.")
+            msg = tr("CLI authorization limits must be positive.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._codec = codec
@@ -235,7 +235,7 @@ class CliAuthorizationService:
                 exchanged_at=now,
             )
             if persisted_session.device_id != persisted_device.id:
-                msg = tr(t"Persisted CLI session does not belong to its device.")
+                msg = tr("Persisted CLI session does not belong to its device.")
                 raise DataIntegrityError(msg)
             result = IssuedCliSession(persisted_device, persisted_session, token)
             await uow.commit()
@@ -457,13 +457,13 @@ def _validate_public_key(public_key: bytes) -> None:
 def _device_label(value: str) -> str:
     normalized = " ".join(value.split())
     if not 1 <= len(normalized) <= 80:
-        msg = tr(t"CLI device label must contain 1 to 80 characters.")
+        msg = tr("CLI device label must contain 1 to 80 characters.")
         raise ValidationError(msg)
     return normalized
 
 
 def _length_prefixed(value: bytes) -> bytes:
     if len(value) > 65535:
-        msg = tr(t"Signed CLI proof component is too long.")
+        msg = tr("Signed CLI proof component is too long.")
         raise InvalidStateError(msg)
     return len(value).to_bytes(2, byteorder="big") + value

@@ -587,7 +587,7 @@ class AccountRepository:
                     holder_account_id=alias.account_id,
                     # Staff audience: the flag that moves a held credit already exists, so say so
                     # rather than telling a reviewer to ask staff.
-                    end_user_action=tr(t"Approve with `reassign: True` to move the name to the claimant."),
+                    end_user_action=tr("Approve with `reassign: True` to move the name to the claimant."),
                 )
             alias.account_id = claim.account_id
             alias.claimed_at = now()

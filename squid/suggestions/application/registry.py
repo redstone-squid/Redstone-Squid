@@ -20,8 +20,8 @@ SOURCE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 class UnknownSuggestionSourceError(NotFoundError):
     """The requested suggestion source is not registered."""
 
-    default_message = tr(t"No such suggestion source.")
-    default_title = tr(t"Unknown suggestion source")
+    default_message = tr("No such suggestion source.")
+    default_title = tr("Unknown suggestion source")
     default_code = ErrorCode.NOT_FOUND
     default_resource = "suggestion_source"
 

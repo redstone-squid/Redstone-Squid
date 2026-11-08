@@ -49,7 +49,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
         await _refuse(request, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
-    await request.respond(text_node(tr(t"Poll closed.")), audience="personal")
+    await request.respond(text_node(tr("Poll closed.")), audience="personal")
 
 
 @polls.route(poll_refresh)
@@ -64,7 +64,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
     result = await bot.services.votes.refresh(snapshot.id)
     if result.session is not None:
         await bot.refresh_posts("vote_session", str(result.session.id))
-    text = tr(t"Poll weights refreshed.")
+    text = tr("Poll weights refreshed.")
     if not result.complete:
         # Report unresolved voters as a count without exposing their account IDs.
         count = len(result.unresolved_account_ids)

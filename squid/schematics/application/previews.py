@@ -46,12 +46,12 @@ class RenderSkipReason(StrEnum):
 
 
 _RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, Message] = {
-    RenderSkipReason.RENDERING_DISABLED: tr(t"Schematic previews are not enabled on this instance."),
-    RenderSkipReason.NO_PRIMARY_SCHEMATIC: tr(t"This build has no primary schematic to preview."),
-    RenderSkipReason.POISONED_FILE: tr(t"This schematic file already crashed the engine on this instance."),
-    RenderSkipReason.OVER_BLOCK_BUDGET: tr(t"This schematic has too many blocks to preview."),
-    RenderSkipReason.OVER_VOLUME_BUDGET: tr(t"This schematic is too large to preview."),
-    RenderSkipReason.MISSING_FILE: tr(t"The stored schematic file is missing, so it cannot be previewed."),
+    RenderSkipReason.RENDERING_DISABLED: tr("Schematic previews are not enabled on this instance."),
+    RenderSkipReason.NO_PRIMARY_SCHEMATIC: tr("This build has no primary schematic to preview."),
+    RenderSkipReason.POISONED_FILE: tr("This schematic file already crashed the engine on this instance."),
+    RenderSkipReason.OVER_BLOCK_BUDGET: tr("This schematic has too many blocks to preview."),
+    RenderSkipReason.OVER_VOLUME_BUDGET: tr("This schematic is too large to preview."),
+    RenderSkipReason.MISSING_FILE: tr("The stored schematic file is missing, so it cannot be previewed."),
 }
 
 
