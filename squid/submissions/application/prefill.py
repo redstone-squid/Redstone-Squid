@@ -9,7 +9,7 @@ reported for review, while the original BuildDraft remains available to callers.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from squid.builds.domain import BuildDraft
+from squid.builds.domain import BuildDraft, UnresolvedTaxonomy
 from squid.core.errors import JSONValue
 from squid.submissions.application.forms import SubmissionFormService
 from squid.submissions.domain import ChoiceOption, FormManifest, SubmissionOrigin
@@ -90,16 +90,21 @@ def project_submission(
     exact_version = _known(source.version_spec or (source.versions[0] if len(source.versions) == 1 else ""), versions)
     if exact_version is not None:
         answers["source_version"] = exact_version
+    # Names the taxonomy could not resolve still go through the catalog match below, so they become
+    # proposals and reach the finalized build as unresolved names instead of disappearing.
+    unresolved_taxonomy = UnresolvedTaxonomy.read(source.extra_info)
     restrictions = [
         *source.wiring_placement_restrictions,
         *source.animated_restrictions,
         *source.component_restrictions,
         *source.miscellaneous_restrictions,
+        *unresolved_taxonomy.restriction_names(),
     ]
+    patterns = [*source.patterns, *unresolved_taxonomy.patterns]
     unresolved: list[str] = []
     for field_id, proposed_id, names, catalog in (
         ("restrictions", "restriction_proposals", restrictions, "approved_restrictions"),
-        ("patterns", "pattern_proposals", source.patterns, "approved_patterns"),
+        ("patterns", "pattern_proposals", patterns, "approved_patterns"),
     ):
         if not names:
             continue

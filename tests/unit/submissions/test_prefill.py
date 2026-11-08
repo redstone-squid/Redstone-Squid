@@ -65,3 +65,28 @@ def test_invalid_inferred_values_are_flagged_for_correction() -> None:
     )
     assert "capture_width" not in result.answers
     assert result.unresolved == ("capture_width",)
+
+
+def test_names_inference_could_not_resolve_become_proposals() -> None:
+    draft = BuildDraft(
+        category=BuildCategory.DOOR,
+        patterns=["Regular"],
+        component_restrictions=["Observerless"],
+        extra_info={
+            "unknown_restrictions": {"wiring_placement_restrictions": ["Floating wires"]},
+            "unknown_patterns": ["Spiral"],
+        },
+    )
+    result = project_submission(
+        draft,
+        build_submission_manifest(),
+        {
+            "approved_patterns": (ChoiceOption("regular", "Regular"),),
+            "approved_restrictions": (ChoiceOption("observerless", "Observerless"),),
+        },
+        origin=SubmissionOrigin.DISCORD,
+    )
+    assert result.answers["restrictions"] == ["observerless"]
+    assert result.answers["restriction_proposals"] == ["Floating wires"]
+    assert result.answers["patterns"] == ["regular"]
+    assert result.answers["pattern_proposals"] == ["Spiral"]
