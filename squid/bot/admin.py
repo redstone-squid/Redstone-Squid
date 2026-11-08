@@ -110,7 +110,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 f"{message.author.mention}{username_description} wrote:"
                 f"\nReactions: {reaction_count}"
                 f"\n```\n{message.clean_content}```"
-                "\nIf you are the author of this message, react with ❌ to delete this archived copy."
+                "\nIf you are the author, you may delete this message by reacting with ❌."
             ),
             embeds=message.embeds,
             files=[await attachment.to_file() for attachment in message.attachments],
