@@ -9,7 +9,8 @@ from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import BuildCategory
 from squid.builds.models import Build
-from squid.core.i18n import tr_now
+from squid.core.i18n import tr
+from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +80,7 @@ class BoundBuildField[ValueT]:
     value: ValueT
     current_text: str
     modified: bool = False
-    validation_error: str | None = None
+    validation_error: TextLike | None = None
 
     @property
     def key(self) -> str:
@@ -97,7 +98,7 @@ class BoundBuildField[ValueT]:
         try:
             value = self.spec.parser(text)
         except ValueError as error:
-            self.validation_error = str(error) or tr_now(t"Invalid value")
+            self.validation_error = str(error) or tr(t"Invalid value")
             return
         self.value = value
         self.current_text = text

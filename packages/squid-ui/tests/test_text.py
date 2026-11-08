@@ -8,9 +8,9 @@ from squid_ui.text import (
     Localization,
     Markup,
     Message,
+    ResolvedText,
     current_localization,
     discord_text,
-    join_text,
     localization_scope,
     md,
     plain,
@@ -133,13 +133,33 @@ def test_a_message_cannot_become_a_string_by_accident() -> None:
 
 
 def test_joined_text_stays_deferred_until_the_render_locale() -> None:
-    joined = join_text([Message("Hello"), "**trusted**", Message("Bye {name}", {"name": "*Ann*"})])
+    joined = Message.join("\n", [Message("Hello"), "**trusted**", Message("Bye {name}", {"name": "*Ann*"})])
 
     assert resolve_text(joined, french()).content == "Bonjour\n**trusted**\nAu revoir \\*Ann\\*"
     assert source_text(joined) == "Hello\n**trusted**\nBye \\*Ann\\*"
 
 
 def test_joined_plain_text_is_escaped_inside_markdown() -> None:
-    joined = join_text([plain("*literal*"), "{braces}"], separator=" {} ")
+    joined = Message.join(" {} ", [plain("*literal*"), "{braces}"])
 
     assert resolve_text(joined, french()).content == "\\*literal\\* {} {braces}"
+
+
+def test_adding_text_keeps_messages_deferred() -> None:
+    greeting = "> " + Message("Hello") + " " + plain("*Ann*")
+
+    assert isinstance(greeting, Message)
+    assert resolve_text(greeting, french()).content == "> Bonjour \\*Ann\\*"
+
+
+def test_adding_resolved_text_stays_resolved() -> None:
+    combined = plain("*a*") + " **b**"
+
+    assert combined == ResolvedText("\\*a\\* **b**")
+    assert ("x" + combined).content == "x\\*a\\* **b**"
+
+
+def test_resolve_uses_the_current_localization() -> None:
+    with localization_scope(french()):
+        assert Message("Hello").resolve() == "Bonjour"
+        assert plain("*a*").resolve() == "\\*a\\*"

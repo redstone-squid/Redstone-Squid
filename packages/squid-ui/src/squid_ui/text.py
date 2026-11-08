@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from string.templatelib import Interpolation, Template
-from typing import Any, Protocol, override
+from typing import Any, Protocol, overload, override
 
 
 class Markup(StrEnum):
@@ -25,10 +25,31 @@ class Markup(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ResolvedText:
-    """Text after interpolation and translation, before target planning."""
+    """Text after interpolation and translation, before target planning.
+
+    Concatenating with `+` follows the same rules as `Message`. Joining resolved text with a
+    bare string or more resolved text gives resolved Markdown; joining it with a Message gives
+    a Message.
+    """
 
     content: str
     markup: Markup = Markup.DISCORD_MARKDOWN
+
+    @overload
+    def __add__(self, other: str | ResolvedText) -> ResolvedText: ...
+    @overload
+    def __add__(self, other: Message) -> Message: ...
+    def __add__(self, other: TextLike) -> ResolvedText | Message:
+        if isinstance(other, Message):
+            return Message.join("", (self, other))
+        return ResolvedText(discord_text(self) + discord_text(_as_resolved(other)))
+
+    def __radd__(self, other: str) -> ResolvedText:
+        return ResolvedText(other + discord_text(self))
+
+    def resolve(self) -> str:
+        """Return this text as Discord Markdown."""
+        return discord_text(self)
 
 
 class MarkupText(Protocol):
@@ -90,9 +111,13 @@ def localization_scope(localization: Localization) -> Iterator[None]:
 class Message:
     """Translatable text deferred until a render has a localization.
 
-    A Message holds a catalogue key and its values, not text, so it cannot be joined,
-    formatted, or measured as a string. Pass it to a renderer, interpolate it into another
-    Message, or resolve it explicitly with `resolve_text`.
+    A Message holds a catalogue key and its values, not text, so it cannot be formatted or
+    measured as a string. Pass it to a renderer, interpolate it into another Message, or
+    combine it with `+` or `Message.join`, which keep every part deferred. Call `resolve`
+    only where a string is required now.
+
+    For example, `tr(t"Saved.") + " " + tr(t"Undo is available.")` is one Message whose two
+    sentences are translated separately when it renders. Bare strings are trusted Markdown.
     """
 
     template: str
@@ -109,6 +134,30 @@ class Message:
     @override
     def __format__(self, format_spec: str) -> str:
         return str(self)
+
+    def __add__(self, other: TextLike) -> Message:
+        return Message.join("", (self, other))
+
+    def __radd__(self, other: str | ResolvedText) -> Message:
+        return Message.join("", (other, self))
+
+    @staticmethod
+    def join(separator: str, parts: Iterable[TextLike]) -> Message:
+        """Join text with `separator`, keeping each part deferred until the render's locale.
+
+        The result is not a catalogue entry; translators see each part on its own.
+        """
+        params = {f"part{index}": _as_resolved(part) for index, part in enumerate(parts)}
+        literal = separator.replace("{", "{{").replace("}", "}}")
+        return Message(literal.join(f"{{{key}}}" for key in params), params)
+
+    def resolve(self) -> str:
+        """Translate into the current localization now and return Discord Markdown.
+
+        Use this only where a string is required: a discord.py argument that takes `str`,
+        a JSON response, or text built inside a `localization_scope` chosen on purpose.
+        """
+        return discord_text(resolve_text(self, current_localization()))
 
 
 type TextLike = str | ResolvedText | Message
@@ -171,17 +220,9 @@ def _nested(value: Message | ResolvedText, localization: Localization, markup: M
     return RawMarkdown(discord_text(resolved) if markup is Markup.DISCORD_MARKDOWN else resolved.content)
 
 
-def join_text(parts: Iterable[TextLike], separator: str = "\n") -> Message:
-    """Join text without resolving it, so each Message still follows the render's locale.
-
-    Bare strings are trusted Markdown here, as everywhere else a TextLike is accepted. The
-    result is not a catalogue entry; translators see each part on its own.
-    """
-    params: dict[str, object] = {}
-    for index, part in enumerate(parts):
-        params[f"part{index}"] = ResolvedText(part) if isinstance(part, str) else part
-    literal = separator.replace("{", "{{").replace("}", "}}")
-    return Message(literal.join(f"{{{key}}}" for key in params), params)
+def _as_resolved[T: Message | ResolvedText](part: T | str) -> T | ResolvedText:
+    """Treat a bare string as trusted Markdown, as everywhere a TextLike is accepted."""
+    return ResolvedText(part) if isinstance(part, str) else part
 
 
 def source_text(value: TextLike) -> str:
@@ -304,7 +345,6 @@ __all__ = [
     "TextLike",
     "current_localization",
     "discord_text",
-    "join_text",
     "localization_scope",
     "md",
     "plain",

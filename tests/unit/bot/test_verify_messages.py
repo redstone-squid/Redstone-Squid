@@ -19,6 +19,7 @@ from squid.bot.account_presentation import (
 from squid.bot.profile_render import present_claimant
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.providers.records import AliasClaimProvider, _claimant_description
+from squid_ui.text import source_text
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_UUID = UUID("22222222-2222-2222-2222-222222222222")
@@ -38,21 +39,21 @@ def _refresh(**overrides: object) -> IdentityRefresh:
 def test_unchanged_name_says_nothing_changed() -> None:
     message = refresh_message(_refresh(current_name="Steve", previous_name="Steve"))
 
-    assert "still **Steve**" in message
-    assert "changed from" not in message
+    assert "still **Steve**" in source_text(message)
+    assert "changed from" not in source_text(message)
 
 
 def test_rename_names_both_the_old_and_new_name() -> None:
     message = refresh_message(_refresh())
 
-    assert "**OldName**" in message
-    assert "**NewName**" in message
+    assert "**OldName**" in source_text(message)
+    assert "**NewName**" in source_text(message)
 
 
 def test_a_claimed_credit_is_reported() -> None:
     message = refresh_message(_refresh(claimed_alias=CreatorAlias(id=5, name="NewName", account_id=1)))
 
-    assert "Build credits under **NewName**" in message
+    assert "Build credits under **NewName**" in source_text(message)
 
 
 def test_a_contested_name_says_it_was_not_moved_and_names_the_claim() -> None:
@@ -66,9 +67,9 @@ def test_a_contested_name_says_it_was_not_moved_and_names_the_claim() -> None:
         ),
     )
 
-    assert "**Contested**" in message
-    assert "not moved" in message
-    assert "#3" in message
+    assert "**Contested**" in source_text(message)
+    assert "not moved" in source_text(message)
+    assert "#3" in source_text(message)
 
 
 def test_retained_names_are_listed() -> None:
@@ -79,17 +80,17 @@ def test_retained_names_are_listed() -> None:
         ),
     )
 
-    assert "**OldName**" in message
-    assert "**OlderName**" in message
+    assert "**OldName**" in source_text(message)
+    assert "**OlderName**" in source_text(message)
 
 
 def test_a_link_names_the_account_it_linked() -> None:
     message = link_message(_refresh(current_name="Notch", previous_name=None))
 
-    assert "linked to **Notch**" in message
+    assert "linked to **Notch**" in source_text(message)
     # Not the refresh headline: a first link never "changed" or "stayed the same".
-    assert "still" not in message
-    assert "changed from" not in message
+    assert "still" not in source_text(message)
+    assert "changed from" not in source_text(message)
 
 
 def test_a_link_reports_the_credit_it_claimed() -> None:
@@ -99,7 +100,7 @@ def test_a_link_reports_the_credit_it_claimed() -> None:
         ),
     )
 
-    assert "Build credits under **Notch**" in message
+    assert "Build credits under **Notch**" in source_text(message)
 
 
 def test_a_link_reports_a_contested_credit() -> None:
@@ -115,8 +116,8 @@ def test_a_link_reports_a_contested_credit() -> None:
         ),
     )
 
-    assert "not moved" in message
-    assert "#3" in message
+    assert "not moved" in source_text(message)
+    assert "#3" in source_text(message)
 
 
 def test_link_and_refresh_describe_a_credit_in_the_same_words() -> None:
@@ -128,8 +129,8 @@ def test_link_and_refresh_describe_a_credit_in_the_same_words() -> None:
     shared = reconciliation_lines(refresh)
 
     assert shared
-    assert all(line in link_message(refresh) for line in shared)
-    assert all(line in refresh_message(refresh) for line in shared)
+    assert all(source_text(line) in source_text(link_message(refresh)) for line in shared)
+    assert all(source_text(line) in source_text(refresh_message(refresh)) for line in shared)
 
 
 def _preview(*, held_elsewhere: bool = False) -> LinkPreview:
@@ -281,4 +282,4 @@ async def test_registered_claim_provider_uses_the_canonical_presentation() -> No
 )
 def test_every_branch_renders_something(refresh: IdentityRefresh) -> None:
     """No combination may produce an empty message, which Discord rejects outright."""
-    assert refresh_message(refresh).strip()
+    assert source_text(refresh_message(refresh)).strip()

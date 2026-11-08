@@ -1,7 +1,6 @@
 """Render command discovery, focused command help, and project links."""
 
 from collections.abc import Mapping, Sequence
-from textwrap import dedent
 from typing import TYPE_CHECKING, Any, Protocol, Self, cast, override
 
 import discord
@@ -12,10 +11,11 @@ from discord.ext.commands import Cog, Command, Group
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import CardField, CardSection, card_node, error_node, render_payload, tr, tr_now
+from squid.bot.ui import CardField, CardSection, card_node, error_node, render_payload, tr
 from squid.config import BuildConfig
 from squid.suggestions.application import candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
+from squid_ui.text import Message, TextLike
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -142,10 +142,10 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
         event.finish_on_success()
 
 
-def _summary(command: AnyCommand) -> str:
+def _summary(command: AnyCommand) -> TextLike:
     """Return a prefix command's short documentation or an app command's description."""
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
-    return text or tr_now(t"No details provided")
+    return text or tr(t"No details provided")
 
 
 def _command_section(
@@ -242,9 +242,9 @@ class Help(commands.MinimalHelpCommand):
 
         # Avoid running each command's authorization checks just to render the directory.
         description = sl.raw_md(self.context.bot.description)
-        commands = sl.raw_md(self.get_commands_brief_details(commands_))
-        more_information = sl.raw_md(tr_now(MORE_INFORMATION))
-        desc = dedent(tr_now(t"{description}\n\nCommands:{commands}\n\n{more_information}\n"))
+        commands = self.get_commands_brief_details(commands_)
+        more_information = MORE_INFORMATION
+        desc = tr(t"{description}\n\nCommands:{commands}\n\n{more_information}\n")
         footer: str | None = None
         build_config = getattr(self.context.bot, "build_config", None)
         if (
@@ -271,30 +271,14 @@ class Help(commands.MinimalHelpCommand):
         )
 
     @staticmethod
-    def get_commands_brief_details(
-        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
-    ) -> list[str] | str:
-        """Format names, signatures, and short descriptions in input order.
-
-        Return separate lines when `return_as_list` is True, or concatenate them for
-        a message body. Each entry begins with a newline.
-        """
-        no_details = tr_now(t"No details provided")
-        details: list[str] = []
+    def get_commands_brief_details(commands_: Sequence[Command[Any, Any, Any]]) -> Message:
+        """Format names, signatures, and short descriptions in input order, each on a new line."""
+        no_details = tr(t"No details provided")
+        details: list[TextLike] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
-            details.append(f"\n`{command.qualified_name}{signature}` - {command.short_doc or no_details}")
-        if return_as_list:
-            return details
-        return "".join(details)
-
-    @staticmethod
-    def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
-        no_details = tr_now(t"No details provided")
-        details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or no_details}" for cog in cogs]
-        if return_as_list:
-            return details
-        return "".join(details)
+            details.append(f"\n`{command.qualified_name}{signature}` - " + (command.short_doc or no_details))
+        return Message.join("", details)
 
     # Group help lists immediate children; cog help below walks all of the cog's commands.
     @override
@@ -307,10 +291,10 @@ class Help(commands.MinimalHelpCommand):
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        command_details = self.get_commands_brief_details(list(commands_))
+        listed = list(commands_)
         description = sl.raw_md(group.cog.description)
-        commands = sl.raw_md(command_details or tr_now(t"None"))
-        more_information = sl.raw_md(tr_now(MORE_INFORMATION))
+        commands = self.get_commands_brief_details(listed) if listed else tr(t"None")
+        more_information = MORE_INFORMATION
         desc = tr(t"{description}\n\nUsable Subcommands: {commands}\n\n{more_information}")
         await send_to(self.get_destination())(render_payload([card_node(tr(t"Command Help"), desc)]))
         return None
@@ -320,17 +304,18 @@ class Help(commands.MinimalHelpCommand):
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
         commands_ = cog.walk_commands()
-        command_details = self.get_commands_brief_details(list(commands_))
+        listed = list(commands_)
         description = sl.raw_md(cog.description)
-        commands = sl.raw_md(command_details or tr_now(t"None"))
-        more_information = sl.raw_md(tr_now(MORE_INFORMATION))
+        commands = self.get_commands_brief_details(listed) if listed else tr(t"None")
+        more_information = MORE_INFORMATION
         desc = tr(t"{description}\n\nUsable Subcommands:{commands}\n\n{more_information}")
         await send_to(self.get_destination())(render_payload([card_node(tr(t"Command Help"), desc)]))
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
         name = string
-        return tr_now(t"Unable to find command `{name}`. Use /help to get a list of available commands.")
+        # discord.py passes this string straight to send_error_message.
+        return tr(t"Unable to find command `{name}`. Use /help to get a list of available commands.").resolve()
 
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method

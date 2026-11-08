@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import localization_for
 from squid.bot.ui import CardField, tr
-from squid.core.i18n import SUPPORTED_LOCALES, tr_now
+from squid.core.i18n import SUPPORTED_LOCALES
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
 from squid.settings.domain import ScalarChannelSetting
@@ -199,7 +199,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
                         minimum=0,
                         maximum=1,
                         conversation_types=CONVERSATION_TYPES,
-                        placeholder=tr_now(SETTING_LABELS[setting]),
+                        placeholder=SETTING_LABELS[setting],
                     )
                 )
             children.append(
@@ -236,7 +236,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
 
     def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         scope_note = self._scope_note()
-        kind_label = tr_now(KIND_LABELS[self.kind])
+        kind_label = KIND_LABELS[self.kind]
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"Voting — {kind_label}")),
@@ -244,7 +244,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
                 scope_note and sl.note(scope_note),
             ),
             sl.choices(
-                *(sl.choice(tr_now(label), key=kind.value) for kind, label in KIND_LABELS.items()),
+                *(sl.choice(label, key=kind.value) for kind, label in KIND_LABELS.items()),
                 key="vote-kind",
                 selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
@@ -444,7 +444,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         previous = self._channels[setting]
         await self._write_channel(setting, channel_id)
         self._channels = {**self._channels, setting: channel_id}
-        setting_label = tr_now(SETTING_LABELS[setting])
+        setting_label = SETTING_LABELS[setting]
         self.history.record(
             tr(t"Changed {setting_label}"),
             compensate=sl.runtime.CompensationSpec(
@@ -506,7 +506,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
 
     def _server_fields(self) -> list[CardField]:
         fields = [
-            CardField(tr_now(SETTING_LABELS[setting]), self._channel_display(self._channels[setting]))
+            CardField(SETTING_LABELS[setting], self._channel_display(self._channels[setting]))
             for setting in CHANNEL_SETTINGS
         ]
         language = (

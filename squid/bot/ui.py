@@ -16,7 +16,7 @@ import discord
 
 import squid_ui as ui
 import squid_ui_discord as sd
-from squid.core.i18n import tr, tr_now
+from squid.core.i18n import tr
 
 
 class DiscordColour(IntEnum):
@@ -55,7 +55,6 @@ __all__ = [
     "render_payload",
     "text_node",
     "tr",
-    "tr_now",
     "truncate_display_text",
 ]
 

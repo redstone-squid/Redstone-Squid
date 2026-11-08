@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid.core.i18n import tr, tr_now
+from squid.core.i18n import tr
 from squid.permissions.domain import (
     BUILTIN_ROLES,
     BUILTIN_ROLES_BY_KEY,
@@ -36,7 +36,7 @@ def test_node_names_follow_the_convention() -> None:
 
 def test_every_node_is_described() -> None:
     """Descriptions are user-facing: they are what `/perm nodes` shows."""
-    assert all(tr_now(node.description).strip() for node in CATALOGUE)
+    assert all(node.description.resolve().strip() for node in CATALOGUE)
 
 
 def test_nodes_can_form_capability_sets_after_description_localization() -> None:

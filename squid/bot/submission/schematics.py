@@ -4,7 +4,7 @@ from squid.core.i18n import tr
 from squid.schematics.application import RenderSkipReason, StoredSchematic
 from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
 from squid.schematics.errors import AmbiguousSimulationInputError
-from squid_ui.text import Message, TextLike, join_text
+from squid_ui.text import Message, TextLike
 
 WRITABLE_EXTENSIONS = {
     SchematicFormat.LITEMATIC: "litematic",
@@ -50,7 +50,7 @@ def _describe(stored: StoredSchematic, *, render_skip: RenderSkipReason | None =
         lines.append(tr(t"**No preview**: {reason}"))
     analyzer = stored.analysis.analyzer_version
     lines.append(tr(t"-# Read by {analyzer}. Block count is not the Door Rules cumulative volume."))
-    return join_text(lines)
+    return Message.join("\n", lines)
 
 
 def _parse_position(value: str | None) -> Vector3 | None:
@@ -78,7 +78,7 @@ def _describe_input_refusal(error: AmbiguousSimulationInputError) -> Message:
         if len(error.candidates) > _CANDIDATE_LIMIT:
             count = len(error.candidates) - _CANDIDATE_LIMIT
             lines.append(tr(t"-# …and {count} more not listed."))
-    return join_text(lines)
+    return Message.join("\n", lines)
 
 
 def _describe_timing(result: SimulationResult) -> Message:
@@ -104,7 +104,7 @@ def _describe_timing(result: SimulationResult) -> Message:
         t"**Integrity checks**: {status}"
     )
     footer = tr(t"-# Moderator evidence only. This does not alter the human-declared or official record timing.")
-    return join_text([summary, *(f"- {note}" for note in result.notes), footer])
+    return Message.join("\n", [summary, *(f"- {note}" for note in result.notes), footer])
 
 
 def _describe_lattice(lattice: AutostackLattice) -> Message:

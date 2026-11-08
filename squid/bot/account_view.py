@@ -29,8 +29,9 @@ from squid.accounts.domain import (
 )
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import AccountIdentity, AccountProfile
+from squid.bot.profile_render import identity_label as _identity_label
 from squid.bot.profile_render import own_profile_avatar
-from squid.bot.ui import CardField, tr, tr_now
+from squid.bot.ui import CardField, tr
 from squid.core.errors import ValidationError
 
 SESSION_SECONDS = 300
@@ -57,33 +58,6 @@ class ConsentRequest(Protocol):
 
 def _link_count(count: int) -> sl.text.Message:
     return tr(t"{count} links")
-
-
-def _provider_label(provider: IdentityProvider) -> sl.TextLike:
-    match provider:
-        case IdentityProvider.DISCORD:
-            return tr(t"Discord")
-        case IdentityProvider.JAVA:
-            return tr(t"Minecraft (Java)")
-        case IdentityProvider.BEDROCK:
-            return tr(t"Minecraft (Bedrock)")
-
-
-def _identity_label(identity: AccountIdentity) -> sl.TextLike:
-    provider = _provider_label(identity.provider)
-    if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
-        subject = identity.discord_id
-        return tr(t"{provider} — <@{subject}>")
-    name = identity.display_name or identity.subject
-    return tr(t"{provider} — {name}")
-
-
-def _error_detail(error: ValidationError) -> sl.TextLike:
-    message = tr_now(error.message)
-    if error.end_user_action is None:
-        return message
-    action = tr_now(error.end_user_action)
-    return tr(t"{message} {action}")
 
 
 class AccountScreen(sd.UserSessionScreen, session_name="account"):
@@ -360,7 +334,7 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
         try:
             ProfileLink.parse(str(values["label"]), str(values["url"]))
         except ValidationError as error:
-            return (sl.forms.FormError(_error_detail(error)),)
+            return (sl.forms.FormError(error.public_text()),)
         return ()
 
     def _raw_profile_update(self, values: sp.EditorValues) -> ProfileUpdate:
@@ -380,7 +354,7 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
         try:
             self._profile_update(values)
         except ValidationError as error:
-            return (sl.forms.FormError(_error_detail(error)),)
+            return (sl.forms.FormError(error.public_text()),)
         return ()
 
     def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:

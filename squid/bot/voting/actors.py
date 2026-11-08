@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from squid.bot.ui import tr, tr_now
+from squid.bot.ui import tr
 from squid.bot.utils.permissions import build_subject
 from squid.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
@@ -12,6 +12,7 @@ from squid.permissions.domain.catalogue import (
     VOTE_WEIGHT_STAFF,
 )
 from squid.voting.domain import VoteActor, VoteRejection
+from squid_ui.text import Message
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -31,9 +32,9 @@ fails the lookup here instead of leaking `not_eligible` into a user's channel.
 """
 
 
-def describe_rejection(rejection: VoteRejection) -> str:
-    """Render a typed rejection using the ambient localization."""
-    return tr_now(REJECTION_MESSAGES[rejection])
+def describe_rejection(rejection: VoteRejection) -> Message:
+    """Return the sentence that explains a typed rejection."""
+    return REJECTION_MESSAGES[rejection]
 
 
 async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> VoteActor:

@@ -1,7 +1,7 @@
 """Find translation keys in source code when building the Babel message catalog.
 
-Babel handles ordinary translation calls. This extractor also recognizes tr() and
-tr_now() template strings and Discord's locale_str() declarations. It records template
+Babel handles ordinary translation calls. This extractor also recognizes tr()
+template strings and Discord's locale_str() declarations. It records template
 placeholders as names, such as {name}, without evaluating their values; the
 same key can then be translated for every value supplied at runtime.
 """
@@ -13,11 +13,11 @@ from typing import Any
 
 from babel.messages.extract import extract_python
 
-TRANSLATION_FUNCTIONS = frozenset({"tr", "tr_now"})
+TRANSLATION_FUNCTIONS = frozenset({"tr"})
 
 
 def deferred_msgid(call: ast.Call) -> str | tuple[str, str] | None:
-    """Return a literal translation key or singular/plural pair from a tr() or tr_now() call."""
+    """Return a literal translation key or singular/plural pair from a tr() call."""
     if not isinstance(call.func, ast.Name) or call.func.id not in TRANSLATION_FUNCTIONS or not call.args:
         return None
 

@@ -25,7 +25,7 @@ from squid.accounts.domain import (
     IdentityProvider,
     LinkPreview,
 )
-from squid.bot.ui import CardField, text_node, tr, tr_now
+from squid.bot.ui import CardField, text_node, tr
 from squid.bot.utils.sentinel import Sentinel
 
 
@@ -136,7 +136,7 @@ class ConsentPrompt(sd.UserSessionScreen):
         await self._finish(event, None)
 
     async def _privacy(self, event: sd.PressEvent) -> None:
-        await event.notice(tr_now(PRIVACY_NOTICE))
+        await event.notice(PRIVACY_NOTICE)
 
     async def _finish(self, event: sd.PressEvent, consent: AccountConsent | None) -> None:
         self._answer.consent = consent

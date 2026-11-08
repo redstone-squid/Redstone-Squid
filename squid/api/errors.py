@@ -25,7 +25,7 @@ from squid.core.errors import (
     SquidError,
     ValidationError,
 )
-from squid.core.i18n import localization_for, tr, tr_now
+from squid.core.i18n import localization_for, tr
 from squid.diagnostics.log_capture import captured
 from squid.observability import correlation_id
 from squid_ui.text import localization_scope
@@ -165,7 +165,7 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
     status_code = _status_for_error(exc)
     if isinstance(exc, DomainError):
         with localization_scope(localization_for(locale)):
-            title = tr_now(exc.title)
+            title = exc.title if isinstance(exc.title, str) else exc.title.resolve()
             detail = exc.public_detail()
         return _problem_response(
             ProblemDetail(
@@ -196,7 +196,7 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
     service_unavailable = isinstance(exc, ServiceUnavailableError)
     with localization_scope(localization_for(locale)):
         title = tr("Service unavailable") if service_unavailable else tr("Internal server error")
-        detail = tr_now(SERVICE_UNAVAILABLE_DETAIL if service_unavailable else INTERNAL_ERROR_DETAIL)
+        detail = (SERVICE_UNAVAILABLE_DETAIL if service_unavailable else INTERNAL_ERROR_DETAIL).resolve()
     return _problem_response(
         ProblemDetail(
             title=title,
@@ -274,7 +274,7 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc, extra=captured())
     with localization_scope(localization_for(locale)):
         title = tr("Internal server error")
-        detail = tr_now(INTERNAL_ERROR_DETAIL)
+        detail = INTERNAL_ERROR_DETAIL.resolve()
     return _problem_response(
         ProblemDetail(
             title=title,

@@ -18,7 +18,7 @@ from squid.bot.profile_render import (
 )
 from squid.bot.ui import card_node, text_node
 from squid.bot.utils.permissions import allows
-from squid.core.i18n import tr, tr_now
+from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -26,6 +26,7 @@ from squid.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
 )
+from squid_ui.text import Message
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -135,8 +136,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
             await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
 
 
-def _missing_creator_page(user: str) -> str:
-    return tr_now(t"{user} doesn't have a creator page.")
+def _missing_creator_page(user: str) -> Message:
+    return tr(t"{user} doesn't have a creator page.")
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

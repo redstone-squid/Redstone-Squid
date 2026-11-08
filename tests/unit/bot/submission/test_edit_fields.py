@@ -13,6 +13,7 @@ from squid.builds.application import BuildService
 from squid.builds.domain import BuildCategory
 from squid.builds.models import DoorBuild, ExtenderBuild, UtilityBuild
 from squid_ui.testing import submit_event
+from squid_ui.text import source_text
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
@@ -216,7 +217,7 @@ def test_edit_link_fields_name_every_invalid_url() -> None:
 
         assert bound.modified is False
         assert bound.validation_error is not None
-        assert "`invalid`, `ftp://also-invalid`" in bound.validation_error
+        assert "`invalid`, `ftp://also-invalid`" in source_text(bound.validation_error)
 
 
 def test_unexpected_edit_parser_failures_propagate() -> None:

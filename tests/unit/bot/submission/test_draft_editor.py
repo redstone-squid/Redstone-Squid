@@ -23,6 +23,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from squid_ui.testing import labels
+from squid_ui.text import source_text
 from squid_ui_discord.testing import commit_render
 
 
@@ -110,7 +111,7 @@ async def test_stale_modal_does_not_overwrite_a_newer_edit() -> None:
     await editor._save("display_name", "Newer value")
     await editor._save("display_name", "Stale modal", base_revision=base_revision)
     assert editor.draft.snapshot.answers["display_name"] == "Newer value"
-    assert editor.notice == DraftRevisionConflictError(expected=0, actual=1).public_detail()
+    assert source_text(editor.notice) == DraftRevisionConflictError(expected=0, actual=1).public_detail()
 
 
 def test_every_visible_field_comes_from_the_manifest() -> None:

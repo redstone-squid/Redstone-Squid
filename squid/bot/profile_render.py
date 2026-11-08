@@ -6,8 +6,8 @@ rendering can include the caller's hidden identities and avatar.
 
 from squid.accounts.domain import IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity, avatar_url_for
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
-from squid.bot.ui import CardField, tr, tr_now
-from squid_ui.text import raw_md
+from squid.bot.ui import CardField, tr
+from squid_ui.text import Message, raw_md
 
 _PROVIDER_LABELS = {
     IdentityProvider.DISCORD: tr(t"Discord"),
@@ -16,23 +16,23 @@ _PROVIDER_LABELS = {
 }
 
 
-def provider_label(provider: IdentityProvider) -> str:
+def provider_label(provider: IdentityProvider) -> Message:
     """Name a provider the way a player would."""
-    return tr_now(_PROVIDER_LABELS[provider])
+    return _PROVIDER_LABELS[provider]
 
 
-def identity_label(identity: AccountIdentity) -> str:
+def identity_label(identity: AccountIdentity) -> Message:
     """Name one identity for a picker or a list.
 
     A Discord identity renders as a mention, which is the only handle a reader can click; every
     other provider has a stored display name worth showing, and falls back to the subject.
     """
-    provider = raw_md(provider_label(identity.provider))
+    provider = provider_label(identity.provider)
     if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
         subject = identity.discord_id
-        return tr_now(t"{provider} — <@{subject}>")
+        return tr(t"{provider} — <@{subject}>")
     name = identity.display_name or identity.subject
-    return tr_now(t"{provider} — {name}")
+    return tr(t"{provider} — {name}")
 
 
 def render_links(links: tuple[ProfileLink, ...]) -> str:
@@ -78,27 +78,27 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
         fields.append(
             CardField(
                 tr(t"Linked accounts"),
-                "\n".join(_public_identity_label(identity) for identity in profile.identities),
+                Message.join("\n", (_public_identity_label(identity) for identity in profile.identities)),
             )
         )
     if profile.aliases:
         fields.append(
             CardField(
                 tr(t"Creator credit"),
-                "\n".join(_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases),
+                Message.join("\n", (_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases)),
             )
         )
     return fields
 
 
-def _public_identity_label(identity: PublicIdentity) -> str:
-    provider = raw_md(provider_label(identity.provider))
+def _public_identity_label(identity: PublicIdentity) -> Message:
+    provider = provider_label(identity.provider)
     name = identity.display_name or identity.subject
-    return tr_now(t"{provider} — {name}")
+    return tr(t"{provider} — {name}")
 
 
-def _alias_credit_label(name: str, count: int) -> str:
-    return tr_now(t"**{name}** — {count} build(s)")
+def _alias_credit_label(name: str, count: int) -> Message:
+    return tr(t"**{name}** — {count} build", plural=t"**{name}** — {count} builds")
 
 
 def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
@@ -107,6 +107,8 @@ def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
     Prefer a Discord mention when allowed, then a Java name, public creator ID,
     Discord ID, and finally the internal account ID. Disable mentions for select
     descriptions, where Discord would display the raw mention syntax.
+
+    Returns a string because autocomplete and select descriptions truncate it.
     """
     claimant = claim.claimant
     if claimant is not None:
@@ -118,11 +120,11 @@ def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
             return java.display_name
         if claimant.public_creator_id is not None:
             creator_id = raw_md(claimant.public_creator_id)
-            return tr_now(t"creator `{creator_id}`")
+            return tr(t"creator `{creator_id}`").resolve()
         if discord is not None and discord.discord_id is not None:
             # Reached only without a mention: the snowflake is the last handle left, and it is a
             # diagnostic here rather than a name.
             discord_id = raw_md(discord.discord_id)
-            return tr_now(t"Discord user `{discord_id}`")
+            return tr(t"Discord user `{discord_id}`").resolve()
     account_id = raw_md(claim.account_id)
-    return tr_now(t"unidentified account (internal ID `{account_id}`)")
+    return tr(t"unidentified account (internal ID `{account_id}`)").resolve()

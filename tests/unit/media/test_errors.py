@@ -8,7 +8,7 @@ from babel.messages.pofile import read_po
 
 import squid.media.errors as media_errors
 from squid.core.errors import SquidError
-from squid.core.i18n import locales_dir, localization_for, tr_now
+from squid.core.i18n import locales_dir, localization_for
 from squid.media.domain import MediaLimitMeasure, MediaViolation
 from squid.media.errors import (
     DraftMediaConflictError,
@@ -83,10 +83,12 @@ def test_public_attachment_errors_localize_title_detail_and_action_at_render_tim
 
     with localization_scope(localization):
         for error in errors:
-            assert tr_now(error.title).startswith(f"{locale}:")
-            assert tr_now(error.message).startswith(f"{locale}:")
-            assert error.end_user_action is not None
-            assert tr_now(error.end_user_action).startswith(f"{locale}:")
+            assert isinstance(error.title, Message)
+            assert isinstance(error.message, Message)
+            assert isinstance(error.end_user_action, Message)
+            assert error.title.resolve().startswith(f"{locale}:")
+            assert error.message.resolve().startswith(f"{locale}:")
+            assert error.end_user_action.resolve().startswith(f"{locale}:")
 
 
 def _public_attachment_errors() -> dict[type[SquidError], SquidError]:
@@ -143,7 +145,7 @@ def test_public_attachment_error_copy_is_complete_in_real_catalogs(locale: str) 
                 assert isinstance(message, Message)
                 assert message.template == template
                 assert template in catalog_keys
-                rendered = tr_now(message)
+                rendered = message.resolve()
                 assert rendered == localization.gettext(message.template)
                 if locale == "zh-CN":
                     assert rendered != message.template

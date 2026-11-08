@@ -15,7 +15,7 @@ from typing import overload
 
 from babel import Locale, UnknownLocaleError
 
-from squid_ui.text import Localization, Message, TextLike, current_localization, discord_text, resolve_text
+from squid_ui.text import Localization, Message, current_localization
 
 DOMAIN = "squid"
 DEFAULT_LOCALE = "en"
@@ -54,10 +54,11 @@ def tr(message: str, /, **params: object) -> str: ...
 def tr(message: str | Template, /, **params: object) -> str | Message:
     """Defer a template string until render time, when the reader's locale is known.
 
-    `tr(t"Hello {name}")` returns a Message that renderers translate later. Prefer it
-    to `tr_now` wherever the text ends up in a component, so it follows the render's
-    locale. A plain string is a legacy form, translated immediately and formatted
-    with any keyword arguments.
+    `tr(t"Hello {name}")` returns a Message that renderers translate later, in the
+    reader's locale. Pass the Message on, interpolate it into another `tr` template, or
+    combine several with `+` or `Message.join`; call `.resolve()` only where a string is
+    required. A plain string is a legacy form, translated immediately and formatted with any
+    keyword arguments.
 
     Template placeholders must be simple identifiers. Plural templates must use the
     same placeholders as the singular form and include an integer `count`.
@@ -84,35 +85,6 @@ def tr(message: str | Template, /, **params: object) -> str | Message:
         return Message(singular_message.template, singular_message.params, plural=plural_message.template)
     text = current_localization().gettext(message)
     return text.format(**params) if params else text
-
-
-def tr_now(message: Template | Message | str, /, *, plural: Template | None = None) -> str:
-    """Translate into the current localization immediately and return Discord Markdown.
-
-    Use this only where text has to be a string now: composed into a larger string,
-    or translated inside an explicit `localization_scope` chosen for a reason the
-    render does not know about. Interpolated values are escaped as with `tr`. A plain
-    string is looked up as a catalogue key, as `tr` does.
-    """
-    if isinstance(message, Template):
-        message = tr(message, plural=plural)
-    elif plural is not None:
-        detail = "plural forms belong to the template, not to an existing message"
-        raise TypeError(detail)
-    if isinstance(message, str):
-        return tr(message)
-    return resolve_text(message, current_localization()).content
-
-
-def resolve_now(text: TextLike, /) -> str:
-    """Translate text into the current localization and return it as Discord Markdown.
-
-    Prefer passing a Message to a renderer, which translates it for the reader. Use this
-    only where a string is required now: a discord.py argument that takes `str`, or text
-    built inside a `localization_scope` chosen for a reason the render does not know. A
-    bare string is returned as trusted Markdown without a catalogue lookup.
-    """
-    return discord_text(resolve_text(text, current_localization()))
 
 
 def locales_dir() -> Path:

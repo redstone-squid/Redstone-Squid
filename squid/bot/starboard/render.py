@@ -6,8 +6,9 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import localization_for
 from squid.bot.ui import render_payload
-from squid.core.i18n import tr, tr_now
+from squid.core.i18n import tr
 from squid.starboard.application import EntryState
+from squid_ui.text import Message
 
 
 def starboard_layout(
@@ -23,7 +24,7 @@ def starboard_layout(
         heading = f"{message.author.mention} · {heading}"
     children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
         sd.v2.section(
-            sd.v2.text(f"{heading}\n{message.content or tr_now(t'-# (no text content)')}"),
+            sd.v2.text(heading + "\n" + (message.content or tr(t"-# (no text content)"))),
             accessory=sd.v2.thumbnail(avatar_url),
         )
     ]
@@ -40,11 +41,12 @@ def starboard_layout(
                 sd.v2.link_button(tr(t"Original message"), message.jump_url),
             )
         )
-    score = f"{config.display_emoji} {entry.score:g}"
+    footer: list[sl.TextLike] = [f"{config.display_emoji} {entry.score:g}"]
     if entry.raw_count != entry.score:
         count = entry.raw_count
-        score += tr_now(t" ({count} reactions)")
-    children.append(sd.v2.footer(f"{score} · <#{message.channel.id}>"))
+        footer.append(tr(t" ({count} reactions)"))
+    footer.append(f" · <#{message.channel.id}>")
+    children.append(sd.v2.footer(Message.join("", footer)))
     return render_payload(
         [sd.v2.panel(*(children), accent=config.colour)],
         localization=localization_for(locale),

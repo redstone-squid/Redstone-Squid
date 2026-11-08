@@ -30,6 +30,7 @@ from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild
 from squid.topics import resource_topic
+from squid_ui.text import Message
 
 _DOOR_ONLY = frozenset({BuildCategory.DOOR})
 
@@ -332,8 +333,8 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         for item in self.items:
             if item.key == key:
                 item.stage(text)
-                previous = self.validation_error if isinstance(self.validation_error, str) else None
-                self.validation_error = "\n".join(error for error in (previous, item.validation_error) if error) or None
+                errors = [error for error in (self.validation_error, item.validation_error) if error]
+                self.validation_error = Message.join("\n", errors) if errors else None
                 return True
         return False
 
@@ -438,14 +439,14 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
             )
 
     async def _edited(self, event: sl.SubmitEvent) -> None:
-        errors: list[str] = []
+        errors: list[sl.TextLike] = []
         for item in self.items[5 * (self.page - 1) : 5 * self.page]:
             item.stage(_submitted_text(event.values, item.key))
             if item.validation_error:
-                errors.append(f"**{item.spec.label}:** {item.validation_error}")
-        self.validation_error = "\n".join(errors) or None
+                errors.append(f"**{item.spec.label}:** " + item.validation_error)
+        self.validation_error = Message.join("\n", errors) if errors else None
         if errors:
-            error_text = "\n".join(errors)
+            error_text = Message.join("\n", errors)
             await event.notice(tr(t"Fix these values before review:\n{error_text}"))
         self.invalidate()
 

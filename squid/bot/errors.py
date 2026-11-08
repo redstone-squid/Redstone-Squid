@@ -21,7 +21,7 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError
-from squid.core.i18n import localization_for, resolve_now, tr
+from squid.core.i18n import localization_for, tr
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
 from squid.observability import (
@@ -34,7 +34,7 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
-from squid_ui.text import NEUTRAL, Message, TextLike, join_text, localization_scope
+from squid_ui.text import NEUTRAL, Message, TextLike, localization_scope
 
 logger = logging.getLogger(__name__)
 
@@ -155,28 +155,22 @@ def _present_missing_nodes(error: PermissionNodeRequired) -> _NoticeDraft:
     descriptions are translated, so a refusal reads as "you need this capability"
     rather than as a tier the user has no way to look up.
     """
-    described = join_text(
-        join_text([f"`{name}` — ", CATALOGUE[name].description], "") for name in error.nodes if name in CATALOGUE
+    described = Message.join(
+        "\n", (f"`{name}` — " + CATALOGUE[name].description for name in error.nodes if name in CATALOGUE)
     )
     if error.forbidden:
         return _NoticeDraft(
             tr(t"Permission withheld"),
-            join_text(
-                [
-                    tr(
-                        t"An administrator has explicitly withheld this from you. Ask them if you think that is a mistake."
-                    ),
-                    described,
-                ],
-                "\n\n",
-            ),
+            tr(t"An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.")
+            + "\n\n"
+            + described,
         )
     lead = (
         tr(t"You need any one of these permissions to use this command:")
         if error.mode == "any"
         else tr(t"You need these permissions to use this command:")
     )
-    return _NoticeDraft(tr(t"Missing permission"), join_text([lead, described]))
+    return _NoticeDraft(tr(t"Missing permission"), lead + "\n" + described)
 
 
 def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
@@ -187,7 +181,7 @@ def build_error_notice(error: BaseException, locale: str | None = None) -> Error
     """
     draft = _build_error_notice(error)
     with localization_scope(localization_for(locale)):
-        return ErrorNotice(resolve_now(draft.title), resolve_now(draft.detail), draft.error_id, draft.reference)
+        return ErrorNotice(_resolved(draft.title), _resolved(draft.detail), draft.error_id, draft.reference)
 
 
 def _build_error_notice(error: BaseException) -> _NoticeDraft:
@@ -257,6 +251,10 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
         error_id,
         reference,
     )
+
+
+def _resolved(text: TextLike) -> str:
+    return text if isinstance(text, str) else text.resolve()
 
 
 def _unexpected_error_detail(error_id: str) -> Message:
