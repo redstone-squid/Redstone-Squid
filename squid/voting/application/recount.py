@@ -8,7 +8,7 @@ are actually on the cards and casts the ballots they imply.
 Reading every reacting user is one Discord request per hundred users per option per card, so
 recounts are not run on a timer. They run when someone asks for one and immediately before a
 session closes, so the final result reflects the cards. See
-`docs/plans/discord-state-reconciliation.md`.
+`docs/plans/completed/discord-state-reconciliation.md`.
 
 The recount never withdraws a ballot. A missing reaction does not show that the voter changed
 their mind: the card may be unreachable, the reactions may have been cleared, or an anonymous

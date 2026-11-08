@@ -176,7 +176,7 @@ translates it to `0` (`guild_id or 0` on insert, `guild_id == 0` in `_close_at_t
    reaction was made in. Make it nullable instead of `0`. **Decision:** the FK to
    `server_settings` is not part of this plan. Settings rows are currently created only by
    `on_guild_join`, so guilds the bot joined while offline have none. The FK lands in
-   `docs/plans/discord-state-reconciliation.md` Phase 1, once guild presence is reconciled and
+   `docs/plans/completed/discord-state-reconciliation.md` Phase 1, once guild presence is reconciled and
    casting a vote ensures the settings row exists.
 4. Repository: write `option.guild_id` as-is, resolve the alias id when casting a vote, and replace
    the guild-or-global join in `_close_at_threshold` and the snapshot loader with a join on

@@ -1,8 +1,8 @@
 # Schema integrity hardening
 
 > **Status (2026-11-08).** Phases 1–6 are implemented except two items, marked below:
-> 1.3 (display units) waits on a decision, and Phase 4 (`messages`) waits on
-> `discord-state-reconciliation.md` Phase 3. The same operating assumptions as `docs/plans/completed/schema-audit.md`
+> 1.3 (display units) waits on a decision, and Phase 4 (`messages`) is unblocked now that
+> `completed/discord-state-reconciliation.md` Phase 3 is done. The same operating assumptions as `docs/plans/completed/schema-audit.md`
 > apply: migrations run offline, existing data is not precious, and foreign keys are immediate
 > unless the write order cannot be fixed. Every phase must keep
 > `test_migrations_create_schema_without_drift` passing.
@@ -180,7 +180,7 @@ One migration. Every item is independent.
 
 ## Phase 4 — One source of truth
 
-- **`messages` vs `starboard_origin_messages`** — **not started; blocked on reconciliation Phase 3.** Both store the snowflake, guild, channel, author,
+- **`messages` vs `starboard_origin_messages`** — **not started; reconciliation Phase 3 is done, so it can start.** Both store the snowflake, guild, channel, author,
   creation time and `deleted_at` for the same Discord message, and nothing links them. They already
   diverge: the starboard upsert resets `deleted_at` to NULL, and see 1.4 for bulk deletes.
   **Decision:**
@@ -188,8 +188,9 @@ One migration. Every item is independent.
     columns (`author_is_bot`, `is_nsfw`, `has_image`, `seen_at`). Deletion state is then read from
     `messages`.
   - The starboard reaction path gets or creates the `messages` row in the same transaction, the
-    ensure-on-write rule from `docs/plans/discord-state-reconciliation.md`.
-  - Do this after that plan's Phase 3, which reworks the same write path.
+    ensure-on-write rule from `docs/plans/completed/discord-state-reconciliation.md`.
+  - That plan's Phase 3 changed the same write path: `record_votes` and `recount_votes` now also
+    call `ensure_server_settings`.
 
 ## Phase 5 — Float scores and the database clock
 
