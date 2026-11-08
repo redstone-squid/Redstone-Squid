@@ -88,12 +88,27 @@ def localization_scope(localization: Localization) -> Iterator[None]:
 
 @dataclass(frozen=True, slots=True)
 class Message:
-    """Translatable text deferred until a render has a localization."""
+    """Translatable text deferred until a render has a localization.
+
+    A Message holds a catalogue key and its values, not text, so it cannot be joined,
+    formatted, or measured as a string. Pass it to a renderer, interpolate it into another
+    Message, or resolve it explicitly with `resolve_text`.
+    """
 
     template: str
     params: Mapping[str, object] = field(default_factory=dict)
     markup: Markup = Markup.DISCORD_MARKDOWN
     plural: str | None = None
+
+    @override
+    def __str__(self) -> str:
+        # Without this, an f-string or str() silently shows the dataclass repr to users.
+        msg = f"Message {self.template!r} has no text until it is resolved in a localization"
+        raise TypeError(msg)
+
+    @override
+    def __format__(self, format_spec: str) -> str:
+        return str(self)
 
 
 type TextLike = str | ResolvedText | Message
@@ -148,6 +163,14 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
     }
     content = _resolve_named(template, params, value.markup) if params else template
     return ResolvedText(content, value.markup)
+
+
+def source_text(value: TextLike) -> str:
+    """Return the untranslated source text, for logs, internal action names, and tests.
+
+    Never show the result to a reader; renderers translate a Message into the reader's locale.
+    """
+    return resolve_text(value, NEUTRAL).content
 
 
 def discord_text(value: MarkupText) -> str:
@@ -267,4 +290,5 @@ __all__ = [
     "plain",
     "raw_md",
     "resolve_text",
+    "source_text",
 ]

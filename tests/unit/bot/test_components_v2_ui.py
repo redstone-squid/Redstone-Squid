@@ -27,6 +27,7 @@ from squid.sponsors import PublicSponsor
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition
 from squid_ui.testing import RecordingResponder, press_event
+from squid_ui.text import source_text
 from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,
@@ -270,7 +271,8 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
     await component.projection.reload()
 
     assert component.saved is False
-    assert "changed while you were editing" in str(component.validation_error)
+    assert component.validation_error is not None
+    assert "changed while you were editing" in source_text(component.validation_error)
     assert "Reload latest" in str(component.render())
 
 

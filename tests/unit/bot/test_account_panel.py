@@ -35,7 +35,7 @@ from squid.bot.verify import VerifyCog
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
 from squid_ui.testing import labels
-from squid_ui.text import NEUTRAL, resolve_text
+from squid_ui.text import NEUTRAL, resolve_text, source_text
 from squid_ui_discord.testing import commit_render, interaction_harness
 
 ACCOUNT_ID = 42
@@ -94,9 +94,9 @@ class NoticeSource:
     def __init__(self, **values: object) -> None:
         self.values = values
         self.errors: tuple[sl.forms.FormIssue, ...] = ()
-        self.notices: list[object] = []
+        self.notices: list[sl.TextLike] = []
 
-    async def notice(self, text: object, **_kwargs: object) -> None:
+    async def notice(self, text: sl.TextLike, **_kwargs: object) -> None:
         self.notices.append(text)
 
 
@@ -343,7 +343,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
     assert accounts.released == []
     assert len(event.notices) == 1
-    assert "linked to **Notch**" in str(event.notices[0])
+    assert "linked to **Notch**" in source_text(event.notices[0])
 
 
 @pytest.mark.parametrize("abandoned", [False, True], ids=["cancel", "timeout"])
@@ -461,7 +461,7 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
     assert accounts.created_consents == [granted]
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
     assert accounts.released == []
-    assert "linked to **Notch**" in str(prompt.notices[0])
+    assert "linked to **Notch**" in source_text(prompt.notices[0])
 
 
 async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
@@ -572,7 +572,7 @@ async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> 
         assert event.notices == [refresh_message(refresh)]
     else:
         assert len(event.notices) == 1
-        assert "no longer allowed" in str(event.notices[0])
+        assert "no longer allowed" in source_text(event.notices[0])
 
 
 async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> None:
@@ -600,7 +600,7 @@ async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> 
     await workspace._refresh_member_identity(cast(sd.SubmitEvent, event))
 
     assert accounts.identity_reads == []
-    assert "no longer allowed" in str(event.notices[0])
+    assert "no longer allowed" in source_text(event.notices[0])
 
 
 async def test_staff_refresh_reports_a_named_member_without_an_account() -> None:

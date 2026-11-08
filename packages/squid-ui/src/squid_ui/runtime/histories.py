@@ -60,7 +60,7 @@ from squid_ui.errors import SquidUiError
 from squid_ui.factories import action_control, control_group
 from squid_ui.interactions import ActionEvent
 from squid_ui.semantic import ControlGroup
-from squid_ui.text import TextLike
+from squid_ui.text import TextLike, source_text
 
 logger = logging.getLogger(__name__)
 
@@ -627,7 +627,7 @@ class History:
         entry.state = HistoryEntryState.REVERSING
         cause = current_action()
         context = action_context or ActionContext.create(
-            f"Undo {entry.label}",
+            f"Undo {source_text(entry.label)}",
             kind=ActionPurpose.UNDO,
             cause=None if cause is None else cause.causal_ref(),
             root_action_id=None if cause is None else cause.root_action_id,
@@ -696,7 +696,7 @@ class History:
             uuid.uuid7(),
             original.causal_ref(),
             original.root_action_id,
-            f"Compensate {entry.label}",
+            f"Compensate {source_text(entry.label)}",
         )
         execution = CompensationExecution(operation_context, key)
         execution.transition(CompensationStatus.REVERTING)
@@ -706,7 +706,7 @@ class History:
         entry.state = HistoryEntryState.REVERSING
         self._owner.invalidate()
         intent_context = ActionContext.create(
-            f"Begin compensation for {entry.label}",
+            f"Begin compensation for {source_text(entry.label)}",
             kind=ActionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
             root_action_id=original.root_action_id,
@@ -786,7 +786,7 @@ class History:
                 self._owner.invalidate()
                 return result
         compensation_context = ActionContext.create(
-            f"Apply compensation for {entry.label}",
+            f"Apply compensation for {source_text(entry.label)}",
             kind=ActionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
             root_action_id=original.root_action_id,
@@ -841,7 +841,7 @@ class History:
         entry.state = HistoryEntryState.REAPPLYING
         cause = current_action()
         context = ActionContext.create(
-            f"Redo {entry.label}",
+            f"Redo {source_text(entry.label)}",
             kind=ActionPurpose.REDO,
             cause=None if cause is None else cause.causal_ref(),
             root_action_id=None if cause is None else cause.root_action_id,
@@ -1054,7 +1054,7 @@ def _entry_snapshot(entry: HistoryEntry) -> HistoryEntrySnapshot:
         None if entry.last_result is None or entry.last_result.conflict is None else str(entry.last_result.conflict)
     )
     return HistoryEntrySnapshot(
-        str(entry.label), entry.recorded_at, str(entry.original_action_id), entry.state.value, conflict
+        source_text(entry.label), entry.recorded_at, str(entry.original_action_id), entry.state.value, conflict
     )
 
 
