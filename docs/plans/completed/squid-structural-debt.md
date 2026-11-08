@@ -1,7 +1,7 @@
 # Structural debt in squid and its tests
 
-Status: sections 1-3 are implemented. Section 4 is deferred until new metadata producers or
-consumers justify a concrete boundary (see its reassessment).
+Status: implemented. Section 4 was narrowed to the metadata keys that had several readers and
+writers; provenance and legacy enrichment stay untyped until they gain readers.
 Reviewed: 2026-11-08.
 
 The approved submission design and implementation record are in
@@ -202,33 +202,43 @@ Pyrefly reports zero errors.
 
 ## 4. Give build metadata explicit types and ownership
 
-Reassessment, 2026-10-29: submission convergence left one provenance writer and no provenance reader;
-enrichment currently has legacy rendering but no production writers. A wholesale metadata wrapper
-would add a representation without removing shared interpretation today. Revisit this track when
-new producers or consumers justify a concrete boundary, rather than expanding it for compatibility.
+### Original review
 
-### Evidence and growth risk
+`Info` in `squid/builds/domain/models.py` combined notes, server details, unresolved taxonomy,
+duplicate evidence, attachment failures, and `submission_provenance: dict[str, Any]`. Multiple
+layers mutated its nested structures. The review proposed typed provenance and enrichment values
+behind one compatibility boundary, keeping the stored JSON shape.
 
-`Info` in `squid/builds/domain/models.py` combines notes, server details, unresolved taxonomy,
-duplicate evidence, attachment failures, and `submission_provenance: dict[str, Any]`. Multiple layers
-mutate its nested structures. Each new key distributes more interpretation and compatibility policy.
+### Reassessment, 2026-11-08
 
-### Intended changes
+Submission convergence removed the growth the review expected. `submission_provenance` has one
+writer and no reader. The enrichment keys (`schematic_duplicates`, `attachment_failures`) are read
+only to show legacy rows and have no writer. Typing them would add a layer without removing any
+shared interpretation, so they stay as they are until they gain readers.
 
-- Introduce typed provenance and enrichment values and explicit operations for adding or replacing
-  evidence. Start with these growing structures rather than redesigning every build field.
-- Decode and encode persisted metadata through one compatibility boundary. Preserve the existing JSON
-  storage shape initially; do not require a database migration for the type extraction.
-- Preserve unrelated and historical metadata on updates. Define handling for missing optional fields,
-  unknown keys, and malformed historical values before replacing direct dictionary access.
-- Migrate producers and consumers together, including submission flows and review-card rendering.
+The keys with several readers and writers were elsewhere:
 
-### Acceptance
+- `unknown_restrictions` and `unknown_patterns` hold names that matched no official tag. They were
+  written by finalization, inference, and edit-time taxonomy resolution, each with its own rules,
+  and read by titles and the public listing.
+- `user` duplicated the `description` column, and readers disagreed about which to prefer.
 
-- Historical payload fixtures and round-trip tests demonstrate storage compatibility and preservation
-  of unrelated keys. Invalid evidence receives explicit handling rather than silently changing meaning.
-- Provenance and enrichment updates no longer require callers to know nested persistence dictionaries.
-- Rendering and finalization retain existing user-visible evidence.
+### Completion, 2026-11-08
+
+- `f3c3848f1` made `description` the only copy of the submitter's note. Migration `a7d2c5e8f1b3`
+  merges `extra_info.user` into `description` (keeping `description` when both disagree) for builds
+  and retained inference candidates. It re-queues search and Discord work only for builds whose
+  review card changes. It also removed the unused `schematic_dimension_mismatch` key.
+- `4a8b921ad` added `UnresolvedTaxonomy` in `squid/builds/domain/taxonomy.py`, the only reader and
+  writer of the unresolved-name keys. The stored JSON shape is unchanged. Each save retries the
+  build's unresolved names, so a name becomes a tag once an official tag matches it. Nothing else
+  removes names: they exist mainly to preserve what a bad inference produced.
+- `8251ee07c` carried inference's unresolved names into submission-form proposals. Before, prefill
+  read only recognized names, so automatic pipelines submitting inferred drafts lost them.
+
+Validation: migration tests cover upgrade, downgrade, and queued work; unit tests cover the type's
+round trip, deduplication, malformed storage, retry on save, and prefill proposals. Architecture,
+build, submission, search, and bot suites pass, and project-wide Pyrefly reports zero errors.
 
 ## Sequencing and validation
 
