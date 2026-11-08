@@ -35,6 +35,7 @@ class Attachment:
 
 @dataclass(frozen=True)
 class Reaction:
+    emoji: str
     count: int
 
 
@@ -69,7 +70,7 @@ async def test_archive_copies_attachments_and_deletes_the_original() -> None:
     attachment = Attachment()
     message = Message(
         author=author,
-        reactions=(Reaction(count=3), Reaction(count=2)),
+        reactions=(Reaction("⭐", 3), Reaction("🔥", 2)),
         channel=channel,
         clean_content="A useful old message",
         embeds=("embed",),
@@ -84,7 +85,7 @@ async def test_archive_copies_attachments_and_deletes_the_original() -> None:
     attachment.to_file.assert_awaited_once_with()
     call = channel.send.await_args
     assert call is not None
-    assert "Reactions: 5" in call.kwargs["content"]
+    assert "⭐:3 🔥:2" in call.kwargs["content"]
     assert "A useful old message" in call.kwargs["content"]
     assert call.kwargs["files"] == ["upload"]
     assert "<@7> (builder `<@7>`) wrote:" in call.kwargs["content"]

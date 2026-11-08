@@ -103,15 +103,15 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         else:
             user = self.bot.get_user(message.author.id)
         username_description = f" ({user.name} `<@{user.id}>`)" if user else ""
-        reaction_count = sum(reaction.count for reaction in message.reactions)
+        reactions = message.reactions
+        has_reactions = len(reactions) != 0
 
+        content = f"{message.author.mention}{username_description} wrote:\n```\n{message.clean_content}```"
+        if has_reactions:
+            content += "\n" + " ".join(f"{reaction.emoji}:{reaction.count}" for reaction in reactions)
+        content += "\nIf you are the author, you may delete this message by reacting with ❌."
         sent_message = await message.channel.send(
-            content=(
-                f"{message.author.mention}{username_description} wrote:"
-                f"\nReactions: {reaction_count}"
-                f"\n```\n{message.clean_content}```"
-                "\nIf you are the author, you may delete this message by reacting with ❌."
-            ),
+            content=content,
             embeds=message.embeds,
             files=[await attachment.to_file() for attachment in message.attachments],
             stickers=message.stickers,
