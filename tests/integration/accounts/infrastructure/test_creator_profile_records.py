@@ -58,6 +58,9 @@ async def _credit_builds(
             )
         ).all()
         await session.execute(
+            insert(Base.metadata.tables["other_builds"]), [{"build_id": build_id} for build_id in build_ids]
+        )
+        await session.execute(
             insert(Base.metadata.tables["build_creators"]),
             [{"build_id": build_id, "alias_id": alias.id} for build_id in build_ids],
         )

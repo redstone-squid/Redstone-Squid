@@ -40,7 +40,7 @@ _CHECKS = (
     (RecordTitle.__table__, "record_titles_base_title_check", BaseTitle),
     (RecordTitle.__table__, "record_titles_build_kind_check", BuildKind),
     (RecordTitle.__table__, "record_titles_version_scope_check", VersionScope),
-    (DefinitionFacet.__table__, "title_definition_facets_kind_check", FacetKind),
+    # title_definition_facets_kind_check admits only restrictions; candidate facets use the other kinds.
     (ComputationRun.__table__, "record_computation_runs_build_kind_check", BuildKind),
     (ComputationRun.__table__, "record_computation_runs_status_check", ComputationStatus),
     (TitleResult.__table__, "title_results_status_check", ResolutionStatus),

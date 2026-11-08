@@ -134,6 +134,8 @@ class InboxNotification(Base, kw_only=True):
         UniqueConstraint("id", "account_id", name="notifications_id_account_key"),
         Index("notifications_account_inbox_idx", "account_id", "id"),
         Index("notifications_created_idx", "created_at"),
+        # The domain_events prune checks and cascades into notifications by event.
+        Index("notifications_event_idx", "event_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
@@ -176,12 +178,7 @@ class NotificationDeliveryRecord(QueueColumns, DeadLetterColumns, Base, kw_only=
         ),
         Index("notification_deliveries_account_idx", "account_id"),
         UniqueConstraint("notification_id", name="notification_deliveries_notification_id_key"),
-        CheckConstraint("attempts >= 0", name="notification_deliveries_attempts_nonnegative"),
         CheckConstraint("generation > 0", name="notification_deliveries_generation_positive"),
-        CheckConstraint(
-            "(claimed_at IS NULL) = (claim_token IS NULL)",
-            name="notification_deliveries_claim_complete",
-        ),
         Index(
             "notification_deliveries_ready_idx",
             "available_at",

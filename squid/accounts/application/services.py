@@ -41,7 +41,7 @@ from squid.accounts.errors import (
     VerificationAttemptsExhaustedError,
 )
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
-from squid.core.errors import InvalidStateError
+from squid.core.errors import ConflictError, InvalidStateError
 from squid.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,9 @@ VERIFICATION_LOCKOUT_SECONDS = 15 * 60
 """Longer than a code lives, so a lockout always outlasts the codes it was protecting."""
 
 VERIFICATION_CODE_DIGITS = 10
+
+VERIFICATION_CODE_ATTEMPTS = 5
+"""How many fresh codes to try when each collides with a valid code another player holds."""
 
 LINK_RESERVATION_TTL_SECONDS = 180
 """Reservation lifetime, in seconds, for a code awaiting consent.
@@ -523,12 +526,16 @@ class AccountService:
         minecraft_username = await self._minecraft_username_lookup(minecraft_uuid)
         if minecraft_username is None:
             raise MinecraftAccountNotFoundError(minecraft_uuid)
-        code = self._verification_code_factory()
         async with self._uow_factory() as uow:
-            await uow.accounts.replace_verification_code(
-                minecraft_uuid=minecraft_uuid,
-                code=str(code),
-                username=minecraft_username,
-            )
-            await uow.commit()
-        return code
+            # Codes are short, so a fresh one can collide with a code another player still holds.
+            for _ in range(VERIFICATION_CODE_ATTEMPTS):
+                code = self._verification_code_factory()
+                if await uow.accounts.replace_verification_code(
+                    minecraft_uuid=minecraft_uuid,
+                    code=str(code),
+                    username=minecraft_username,
+                ):
+                    await uow.commit()
+                    return code
+        msg = f"No unused verification code found after {VERIFICATION_CODE_ATTEMPTS} attempts."
+        raise ConflictError(msg)

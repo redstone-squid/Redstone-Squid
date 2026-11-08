@@ -23,7 +23,6 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
-    Integer,
     SmallInteger,
     Text,
     UniqueConstraint,
@@ -90,7 +89,6 @@ class TitleDefinition(Base, kw_only=True):
         UUID(as_uuid=True),
         ForeignKey("record_titles.public_id", name="title_definitions_title_id_fkey", ondelete="RESTRICT"),
         nullable=False,
-        default_factory=uuid.uuid4,
     )
     rules_revision_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -183,10 +181,8 @@ class DefinitionFacet(Base, kw_only=True):
 
     __tablename__ = "title_definition_facets"
     __table_args__ = (
-        CheckConstraint(
-            "facet_kind IN ('restriction', 'type', 'pattern', 'category')",
-            name="title_definition_facets_kind_check",
-        ),
+        # Only restrictions identify a record category; patterns and types appear in candidate facets only.
+        CheckConstraint("facet_kind = 'restriction'", name="title_definition_facets_kind_check"),
         Index("title_definition_facets_lookup_idx", "facet_kind", "facet_id"),
     )
 
@@ -200,7 +196,11 @@ class DefinitionFacet(Base, kw_only=True):
         primary_key=True,
     )
     facet_kind: Mapped[FacetKind] = mapped_column(StrEnumText(FacetKind), primary_key=True)
-    facet_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    facet_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("tag_definitions.id", name="title_definition_facets_facet_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
 
 

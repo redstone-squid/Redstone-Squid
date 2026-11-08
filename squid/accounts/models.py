@@ -22,7 +22,6 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
-    SmallInteger,
     Text,
     UniqueConstraint,
     event,
@@ -465,9 +464,11 @@ class VerificationCode(Base, kw_only=True):
             "(reserved_token IS NULL) = (reserved_until IS NULL)",
             name="verification_codes_reservation_complete",
         ),
+        # Lookups match on the code alone, so two valid rows with one code would be ambiguous.
+        Index("verification_codes_valid_code_key", "code", unique=True, postgresql_where=text("valid")),
     )
 
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=None)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=None)
     minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     code: Mapped[str] = mapped_column(Text, nullable=False)
     username: Mapped[str] = mapped_column(Text, nullable=False, default="")

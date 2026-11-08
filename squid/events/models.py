@@ -47,10 +47,6 @@ class DomainEventDeliveryRecord(QueueColumns, DeadLetterColumns, Base, kw_only=T
 
     __tablename__ = "domain_event_deliveries"
     __table_args__ = (
-        CheckConstraint(
-            "(claimed_at IS NULL) = (claim_token IS NULL)",
-            name="domain_event_deliveries_claim_complete",
-        ),
         Index(
             "domain_event_deliveries_ready_idx",
             "available_at",

@@ -17,6 +17,7 @@ async def _seed(session: AsyncSession) -> int:
             {"account_id": account_id},
         )
     ).scalar_one()
+    await session.execute(text("INSERT INTO utilities (build_id) VALUES (:id)"), {"id": build_id})
     await session.execute(
         text("INSERT INTO messages (id, guild_id, channel_id, author_id) VALUES (100, 999, 200, 300)")
     )
@@ -99,13 +100,16 @@ async def test_generations_are_unique_across_resources(
         await session.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
         account_id = (await session.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id"))).scalar_one()
         for _ in range(3):
-            await session.execute(
-                text(
-                    "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
-                    "VALUES (0, 'Utility', :account_id, false)"
-                ),
-                {"account_id": account_id},
-            )
+            build_id = (
+                await session.execute(
+                    text(
+                        "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
+                        "VALUES (0, 'Utility', :account_id, false) RETURNING id"
+                    ),
+                    {"account_id": account_id},
+                )
+            ).scalar_one()
+            await session.execute(text("INSERT INTO utilities (build_id) VALUES (:id)"), {"id": build_id})
 
     async with migrated_session_factory() as session:
         generations = list(

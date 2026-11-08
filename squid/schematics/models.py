@@ -103,6 +103,29 @@ class BuildSchematic(Base, kw_only=True):
             "'cc_by_nc_4_0', 'cc_by_nc_sa_4_0', 'cc_by_nc_nd_4_0')",
             name="build_schematics_license_check",
         ),
+        # The analyzer already guarantees these; the checks catch a bad write from elsewhere.
+        CheckConstraint(
+            "width >= 0 AND height >= 0 AND length >= 0 AND allocated_width >= 0 AND allocated_height >= 0 "
+            "AND allocated_length >= 0 AND block_count >= 0 AND entity_count >= 0 AND palette_size >= 0",
+            name="build_schematics_measurements_nonnegative",
+        ),
+        CheckConstraint(
+            "bounding_volume = width::bigint * height * length",
+            name="build_schematics_bounding_volume_check",
+        ),
+        CheckConstraint("block_count <= bounding_volume", name="build_schematics_block_count_check"),
+        CheckConstraint(
+            "width <= allocated_width AND height <= allocated_height AND length <= allocated_length",
+            name="build_schematics_tight_within_allocated",
+        ),
+        CheckConstraint(
+            "visibility <> 'public_download' OR published_at IS NOT NULL",
+            name="build_schematics_public_is_published",
+        ),
+        CheckConstraint(
+            "withdrawn_at IS NULL OR (published_at IS NOT NULL AND withdrawn_at >= published_at)",
+            name="build_schematics_withdrawn_after_published",
+        ),
         Index(
             "build_schematics_public_download_idx",
             "build_id",

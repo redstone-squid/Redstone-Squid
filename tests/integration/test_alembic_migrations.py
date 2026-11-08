@@ -189,8 +189,8 @@ def test_migrations_create_schema_without_drift(
             queue_health_before = {row.queue: row for row in connection.execute(QUEUE_HEALTH_STATEMENT).mappings()}
             connection.execute(
                 text(
-                    "INSERT INTO discord_sync_queue (resource_kind, source_key, claimed_at) "
-                    "VALUES ('vote_session', 'expired-health-claim', now() - interval '6 minutes')"
+                    "INSERT INTO discord_sync_queue (resource_kind, source_key, claimed_at, claim_token) "
+                    "VALUES ('vote_session', 'expired-health-claim', now() - interval '6 minutes', gen_random_uuid())"
                 )
             )
             queue_health_after = {row.queue: row for row in connection.execute(QUEUE_HEALTH_STATEMENT).mappings()}
@@ -937,6 +937,7 @@ def test_sponsor_migration_refuses_to_discard_retained_provenance(
                 ),
                 {"account_id": account_id, "installation_id": installation_id},
             ).scalar_one()
+            connection.execute(text("INSERT INTO utilities (build_id) VALUES (:id)"), {"id": build_id})
 
         with pytest.raises(DBAPIError, match="cannot downgrade while sponsor attribution schema data is retained"):
             command.downgrade(config, "f4a5b6c7d8e9")
@@ -1589,7 +1590,7 @@ def test_record_terminology_preserves_identities_and_json(
                 {"id": document_id},
             )
 
-        command.upgrade(config, "head")
+        command.upgrade(config, "c0e4f7a2d5b8")
         with engine.connect() as connection:
             assert connection.execute(text("SELECT public_id FROM record_titles")).scalar_one() == title_id
             assert connection.execute(text("SELECT version_scope FROM record_titles")).scalar_one() == "up_to_date"
@@ -1614,7 +1615,7 @@ def test_record_terminology_preserves_identities_and_json(
                 "up_to_date",
             ]
 
-        command.downgrade(config, "-1")
+        command.downgrade(config, "b9d3e6f1c4a7")
         with engine.connect() as connection:
             assert connection.execute(text("SELECT public_id FROM record_competitions")).scalar_one() == title_id
             assert connection.execute(text("SELECT version_scope FROM record_competitions")).scalar_one() == "current"
@@ -1771,5 +1772,61 @@ def test_build_lease_and_embedding_writes_queue_nothing(
             connection.execute(text("UPDATE builds SET description = 'Changed' WHERE id = :id"), {"id": build_id})
             assert connection.execute(text("SELECT count(*) FROM search_projection_queue")).scalar_one() > 0
             assert connection.execute(text("SELECT count(*) FROM discord_sync_queue")).scalar_one() > 0
+    finally:
+        engine.dispose()
+
+
+def test_hardening_constraints(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject builds without their category's subtype row, duplicate versions, and duplicate valid codes."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    command.upgrade(Config("alembic.ini", toml_file="pyproject.toml"), "head")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+        insert_build = text(
+            "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
+            "VALUES (0, 'Door', :account, false) RETURNING id"
+        )
+        # The subtype check is deferred, so it fires at commit.
+        for subtype in (None, "other_builds"):
+            connection = engine.connect()
+            try:
+                build_id = connection.execute(insert_build, {"account": account}).scalar_one()
+                if subtype is not None:
+                    connection.execute(text(f"INSERT INTO {subtype} (build_id) VALUES (:id)"), {"id": build_id})
+                with pytest.raises(DBAPIError, match="subtype counts"):
+                    connection.commit()
+            finally:
+                connection.close()
+
+        with engine.begin() as connection:
+            insert_version = text(
+                "INSERT INTO versions (edition, major_version, minor_version, patch_number) VALUES ('Java', 99, 0, 0)"
+            )
+            connection.execute(insert_version)
+            with pytest.raises(DBAPIError), connection.begin_nested():
+                connection.execute(insert_version)
+            for edition, major in (("Lego", 1), ("Java", -1)):
+                with pytest.raises(DBAPIError), connection.begin_nested():
+                    connection.execute(
+                        text(
+                            "INSERT INTO versions (edition, major_version, minor_version, patch_number) "
+                            "VALUES (:edition, :major, 0, 0)"
+                        ),
+                        {"edition": edition, "major": major},
+                    )
+
+            insert_code = text(
+                "INSERT INTO verification_codes (minecraft_uuid, code, username, valid) "
+                "VALUES (gen_random_uuid(), 'same', 'Player', :valid)"
+            )
+            connection.execute(insert_code, {"valid": True})
+            connection.execute(insert_code, {"valid": False})
+            with pytest.raises(DBAPIError), connection.begin_nested():
+                connection.execute(insert_code, {"valid": True})
     finally:
         engine.dispose()

@@ -311,7 +311,7 @@ async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
         build_ids = (
             await session.scalars(
                 insert(Base.metadata.tables["builds"])
-                .values([{"submission_status": 1, "submitter_account_id": submitter.id}] * 3)
+                .values([{"submission_status": 1, "submitter_account_id": submitter.id, "category": "Other"}] * 3)
                 .returning(Base.metadata.tables["builds"].c.id)
             )
         ).all()

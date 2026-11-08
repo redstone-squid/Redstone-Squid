@@ -152,11 +152,11 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
     digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, digest, make_analysis(block_count=10), primary=True)
 
-    await repository.record_analysis(1, digest, make_analysis(block_count=99), primary=True)
+    await repository.record_analysis(1, digest, make_analysis(block_count=59), primary=True)
 
     stored = await repository.list_for_build(1)
     assert len(stored) == 1
-    assert stored[0].analysis.metrics.block_count == 99
+    assert stored[0].analysis.metrics.block_count == 59
     async with async_session_factory() as session:
         queued = await session.scalar(text("SELECT count(*) FROM schematic_render_queue WHERE build_id = 1"))
     assert queued == 1
@@ -554,7 +554,7 @@ async def test_a_fingerprint_from_another_engine_version_never_matches(
 async def test_metric_neighbours_shortlist_builds_of_comparable_size(
     repository: SchematicStorageService,
 ) -> None:
-    close = make_analysis(dimensions=(3, 4, 5), block_count=100)
+    close = make_analysis(dimensions=(3, 4, 5), block_count=50)
     far = make_analysis(dimensions=(80, 90, 100), block_count=100_000)
     for build_id, payload, analysis in ((1, b"close", close), (2, b"far", far)):
         digest = await repository.put_file(payload, source_format=SchematicFormat.LITEMATIC)
@@ -604,12 +604,12 @@ async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
         publication=publication,
     )
 
-    await repository.record_analysis(1, digest, make_analysis(block_count=99), primary=True)
+    await repository.record_analysis(1, digest, make_analysis(block_count=59), primary=True)
     stored = await repository.get_for_build(1, schematic_id)
 
     assert stored is not None
     assert stored.publication == publication
-    assert stored.analysis.metrics.block_count == 99
+    assert stored.analysis.metrics.block_count == 59
 
 
 async def test_schema_ceiling_accepts_the_exact_boundary_and_refuses_one_byte_more(

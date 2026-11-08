@@ -70,6 +70,7 @@ class FakeAccountRepository:
         self.claims: dict[int, AliasClaim] = {}
         self.link_result = VerificationLinkResult()
         self.created_code: tuple[UUID, str, str] | None = None
+        self.taken_codes: set[str] = set()
         self.merge_result: AccountMerge | None = None
         self.refreshed: tuple[int, UUID, str] | None = None
         self.reservable: dict[str, LinkPreview] = {}
@@ -352,8 +353,11 @@ class FakeAccountRepository:
         self.claims[claim_id] = resolved
         return resolved
 
-    async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None:
+    async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> bool:
+        if code in self.taken_codes:
+            return False
         self.created_code = (minecraft_uuid, code, username)
+        return True
 
     async def verification_lockout(self, provider: IdentityProvider, subject: str) -> Instant | None:
         return self.lockouts.get((provider, subject))
@@ -674,6 +678,18 @@ async def test_code_generation_validates_java_identity() -> None:
 
     with pytest.raises(MinecraftAccountNotFoundError):
         await service(FakeAccountRepository(), None).generate_verification_code(JAVA_UUID)
+
+
+async def test_code_generation_retries_a_code_another_player_holds() -> None:
+    repository = FakeAccountRepository()
+    repository.taken_codes = {"111111"}
+    codes = iter((111111, 222222))
+    accounts = AccountService(
+        username_lookup("Player"), lambda: next(codes), uow_factory=lambda: AccountScope(repository)
+    )
+
+    assert await accounts.generate_verification_code(JAVA_UUID) == 222222
+    assert repository.created_code == (JAVA_UUID, "222222", "Player")
 
 
 async def test_refresh_looks_up_the_current_name_and_delegates() -> None:

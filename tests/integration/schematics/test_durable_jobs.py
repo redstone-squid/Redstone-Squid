@@ -297,7 +297,11 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
             await session.execute(
                 update(SchematicJob)
                 .where(SchematicJob.id == job_id)
-                .values(available_at=func.now(), claimed_at=text("now() - interval '6 minutes'"))
+                .values(
+                    available_at=func.now(),
+                    claimed_at=text("now() - interval '6 minutes'"),
+                    claim_token=func.gen_random_uuid(),
+                )
             )
         await runner.process_batch()
     completed = await jobs.get(job_id)

@@ -202,7 +202,6 @@ class MediaNormalizationJobRecord(QueueColumns, DeadLetterColumns, Base, kw_only
             "status IN ('pending', 'claimed', 'completed', 'dead', 'discarded')",
             name="media_normalization_jobs_status_check",
         ),
-        CheckConstraint("attempts >= 0", name="media_normalization_jobs_attempts_nonnegative"),
         CheckConstraint(
             "(status = 'pending' AND claimed_at IS NULL AND claim_token IS NULL "
             "AND completed_at IS NULL AND dead_at IS NULL AND discarded_at IS NULL) OR "

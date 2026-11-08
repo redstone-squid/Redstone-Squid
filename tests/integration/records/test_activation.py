@@ -38,6 +38,8 @@ from squid.records.models import (
     TitleDefinition,
     TitleHolderHistory,
 )
+from squid.tags.domain.models import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagDefinition
 from squid.versions.models import Version
 from tests.support.database import record_queries
 from tests.support.submission_targets import seed_account_and_version, submission_build
@@ -155,6 +157,21 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
 ) -> None:
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
+    # Stored facets reference real restriction tags; the batch below uses ids 1 and 2.
+    async with sessions.begin() as session:
+        for tag_id, name in ((1, "Flush"), (2, "Seamless")):
+            session.add(
+                TagDefinition(
+                    id=tag_id,
+                    stable_key=name.casefold(),
+                    display_name=name,
+                    authority=TagAuthority.OFFICIAL,
+                    semantic_kind=TagSemanticKind.RESTRICTION,
+                    restriction_type="miscellaneous",
+                    value_type=TagValueType.NONE,
+                    moderation_status=TagModerationStatus.APPROVED,
+                )
+            )
     build = submission_build(BuildCategory.DOOR, owner)
     await transact(partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.builds.save(build), commit=True)
     assert build.id is not None

@@ -1005,24 +1005,24 @@ class AccountRepository:
         minecraft_uuid: uuid.UUID,
         code: str,
         username: str,
-    ) -> None:
-        """Invalidate prior codes and insert their replacement atomically."""
+    ) -> bool:
+        """Replace the UUID's codes with a new one, keeping one row per UUID.
+
+        Returns:
+            False, with nothing inserted, when another UUID already holds a valid row with this code.
+            Lookups match on the code alone, so a duplicate would be ambiguous.
+        """
         session = self._session()
         await session.execute(
-            update(VerificationCodeModel)
-            .where(
-                VerificationCodeModel.minecraft_uuid == minecraft_uuid,
-                VerificationCodeModel.valid.is_(True),
-            )
-            .values(valid=False)
+            delete(VerificationCodeModel).where(VerificationCodeModel.minecraft_uuid == minecraft_uuid)
         )
-        session.add(
-            VerificationCodeModel(
-                minecraft_uuid=minecraft_uuid,
-                code=self.hash_verification_code(code),
-                username=username,
-            )
+        inserted = await session.execute(
+            insert(VerificationCodeModel)
+            .values(minecraft_uuid=minecraft_uuid, code=self.hash_verification_code(code), username=username)
+            .on_conflict_do_nothing(index_elements=["code"], index_where=text("valid"))
+            .returning(VerificationCodeModel.id)
         )
+        return inserted.scalar_one_or_none() is not None
 
     @staticmethod
     def _attach_identity(account_id: int, identity: AccountIdentity) -> AccountIdentity:

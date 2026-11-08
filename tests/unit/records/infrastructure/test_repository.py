@@ -1,3 +1,4 @@
+import uuid
 from typing import cast
 
 from sqlalchemy import CheckConstraint, Index, Table
@@ -40,6 +41,7 @@ def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
 
 def test_gap_rows_carry_the_definition_title() -> None:
     definition = TitleDefinition(
+        title_id=uuid.uuid4(),
         rules_revision_id=1,
         title="Fastest 2x2 Door",
         subtitle="All-time",
