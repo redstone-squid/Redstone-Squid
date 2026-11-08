@@ -91,7 +91,6 @@ class FormProtocolTest {
             valid.replace("\"created_at\":\"2030-01-01T00:00:00Z\"", "\"created_at\":\"tomorrow\""),
             valid.replace("\"expires_at\":\"2030-01-08T00:00:00Z\"", "\"expires_at\":\"2030-01-01T00:00:00Z\""),
             valid.replace("Workshop door", "x".repeat(121)),
-            valid.replace("Workshop door", "   "),
         )
 
         invalid.forEach { summary ->
@@ -99,6 +98,13 @@ class FormProtocolTest {
                 FormProtocolJson.decodeDraftList("""{"drafts":[$summary]}""")
             }
         }
+    }
+
+    @Test
+    fun `active draft discovery accepts a blank display name because the server stores one verbatim`() {
+        val blank = draftSummaryDocument(1).replace("Workshop door", "   ")
+
+        assertEquals("   ", FormProtocolJson.decodeDraftList("""{"drafts":[$blank]}""").drafts.single().displayName)
     }
 
     @Test
