@@ -37,6 +37,7 @@ Uses Python 3.14+ and discord.py.
 ## Documentation
 
 We have littered too much into documentations. Try to write clear understandable English for engineers.
+Read @docs/code-documentation-style.md
 
 ## Validation
 
