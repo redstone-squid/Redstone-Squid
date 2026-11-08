@@ -1,6 +1,6 @@
 """Server settings application ports."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Protocol
 
 from squid.settings.models import ServerSetting
@@ -15,6 +15,8 @@ class SettingsStore(Protocol):
     async def get_many(self, server_ids: Iterable[int]) -> Sequence[ServerSetting]: ...
 
     async def get_or_create_for_update(self, server_id: int) -> ServerSetting: ...
+
+    async def sync_presence(self, present_server_ids: Collection[int]) -> tuple[Sequence[int], Sequence[int]]: ...
 
 
 class SettingsUnitOfWork(UnitOfWork, Protocol):

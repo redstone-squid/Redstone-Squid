@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.scores import round_score
+from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.starboard.application.ports import EntryKey, EntryState, PendingVote
 from squid.starboard.models import (
     OriginMessage,
@@ -74,6 +75,7 @@ class PostgresStarboardRepository:
         if not votes:
             return ()
         await self._lock(session, origin.id)
+        await ensure_server_settings(session, (origin.guild_id,))
         await session.scalar(
             pg_insert(OriginMessage)
             .values(
@@ -153,6 +155,7 @@ class PostgresStarboardRepository:
     ) -> Sequence[EntryKey]:
         session = self._session()
         await self._lock(session, origin.id)
+        await ensure_server_settings(session, (origin.guild_id,))
         await session.scalar(
             pg_insert(OriginMessage)
             .values(
@@ -260,6 +263,7 @@ class PostgresStarboardRepository:
     async def create(self, config: StarboardConfig) -> StarboardConfig:
         """Assign an ID and subscribe the new board to all channels in its guild."""
         session = self._session()
+        await ensure_server_settings(session, (config.guild_id,))
         del config.id
         session.add(config)
         await session.flush()

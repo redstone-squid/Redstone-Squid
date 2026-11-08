@@ -503,6 +503,34 @@ async def test_generic_polls_store_null_thresholds_rather_than_sentinels(
     assert thresholds == (None, None)
 
 
+async def test_a_poll_in_a_guild_without_settings_creates_the_settings_row(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A guild joined while the bot was offline has no settings row until something needs one."""
+    unseen_guild_id = GUILD_ID + 1
+    session_id, _ = await seed_generic_poll(
+        async_session_factory,
+        repository,
+        question="New guild",
+        visibility=VoteVisibility.VISIBLE_LIVE,
+        deadline=Instant.now().add(hours=1),
+        options=(
+            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
+            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
+        ),
+        guild_id=unseen_guild_id,
+        attach=False,
+    )
+
+    async with async_session_factory() as session:
+        assert await session.get(ServerSetting, unseen_guild_id) is not None
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
+    assert snapshot is not None
+    assert snapshot.poll is not None
+    assert snapshot.poll.guild_id == unseen_guild_id
+
+
 async def test_a_poll_can_be_created_before_it_belongs_to_any_guild(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],

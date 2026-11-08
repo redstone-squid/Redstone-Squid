@@ -272,7 +272,12 @@ class Vote(Base):
         ForeignKey("accounts.id", name="votes_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    guild_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("server_settings.server_id", name="votes_guild_id_fkey", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    """The guild whose card the ballot was cast on, which decides the option's emoji alias."""
     # References the exact VoteSessionOption row used, including its emoji and guild scope.
     # Its identifier may be shared by several aliases, so that string cannot identify the FK target.
     option_alias_id: Mapped[int] = mapped_column(BigInteger, nullable=False)

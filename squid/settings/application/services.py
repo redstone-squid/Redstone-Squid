@@ -1,6 +1,6 @@
 """Server settings application services."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import cast
 
 from squid.settings.application.ports import SettingsUnitOfWork
@@ -36,6 +36,48 @@ class SettingsService:
             if settings is not None:
                 settings.in_server = False
                 await uow.commit()
+
+    async def sync_presence(self, present_server_ids: Iterable[int]) -> tuple[Sequence[int], Sequence[int]]:
+        """Mark exactly the given guilds as present, creating settings for any not seen before.
+
+        This repairs `guild_joined` and `guild_removed` events missed while the bot was offline.
+        Pass every guild the bot is currently in: any guild not listed is marked absent.
+
+        Returns:
+            The guilds that became present and the guilds that became absent.
+        """
+        async with self._uow_factory() as uow:
+            changes = await uow.settings.sync_presence(frozenset(present_server_ids))
+            await uow.commit()
+            return changes
+
+    async def referenced_channels(self, server_id: int) -> frozenset[int]:
+        """Return the channel IDs this guild's settings point at."""
+        async with self._uow_factory() as uow:
+            row = await uow.settings.get(server_id)
+            if row is None:
+                return frozenset()
+            return frozenset(
+                channel_id for column in _CHANNEL_FIELDS.values() if (channel_id := getattr(row, column)) is not None
+            )
+
+    async def forget_channels(self, server_id: int, channel_ids: Collection[int]) -> tuple[Setting, ...]:
+        """Clear every channel setting that points at one of the given deleted channels.
+
+        Returns:
+            The settings that were cleared.
+        """
+        async with self._uow_factory() as uow:
+            row = await uow.settings.get(server_id, for_update=True)
+            if row is None:
+                return ()
+            cleared = tuple(
+                setting for setting, column in _CHANNEL_FIELDS.items() if getattr(row, column) in channel_ids
+            )
+            for setting in cleared:
+                setattr(row, _CHANNEL_FIELDS[setting], None)
+            await uow.commit()
+            return cleared
 
     async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | None]:
         """Return the requested channel setting, omitting servers without settings."""

@@ -1,12 +1,42 @@
 """SQLAlchemy server settings repository."""
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.settings.models import ServerSetting
+
+
+async def ensure_server_settings(session: AsyncSession, server_ids: Iterable[int | None]) -> Sequence[int]:
+    """Create default settings rows for guilds that have none, in the caller's transaction.
+
+    `server_settings` is the table of guilds the bot knows about, and several tables reference
+    it by foreign key. Its rows are normally created when the bot joins a guild, but that event
+    can be missed, so every write that stores a guild ID calls this first instead of assuming the
+    row exists. Concurrent callers are safe: the insert skips rows that already exist.
+
+    The new row's `in_server` keeps its default of true. Guild presence is owned by
+    `SettingsService.guild_joined`, `guild_removed`, and `sync_presence`, which correct it.
+
+    Args:
+        session: The database session of the transaction that will reference the guilds.
+        server_ids: Guild IDs to ensure. None, which stands for a DM, is skipped.
+
+    Returns:
+        The guild IDs whose rows this call created.
+    """
+    ids = sorted({server_id for server_id in server_ids if server_id is not None})
+    if not ids:
+        return ()
+    inserted = await session.scalars(
+        insert(ServerSetting)
+        .values([{"server_id": server_id} for server_id in ids])
+        .on_conflict_do_nothing(index_elements=[ServerSetting.server_id])
+        .returning(ServerSetting.server_id)
+    )
+    return inserted.all()
 
 
 class SettingsRepository:
@@ -29,7 +59,30 @@ class SettingsRepository:
     async def get_or_create_for_update(self, server_id: int) -> ServerSetting:
         """Create a missing row safely under concurrent first writes, then lock it."""
         session = self._session()
-        await session.execute(insert(ServerSetting).values(server_id=server_id).on_conflict_do_nothing())
+        await ensure_server_settings(session, (server_id,))
         return (
             await session.scalars(select(ServerSetting).where(ServerSetting.server_id == server_id).with_for_update())
         ).one()
+
+    async def sync_presence(self, present_server_ids: Collection[int]) -> tuple[Sequence[int], Sequence[int]]:
+        """Make `in_server` true exactly for the given guilds, creating rows for new ones.
+
+        Returns:
+            The guilds that became present (including newly created rows) and the guilds
+            that became absent.
+        """
+        session = self._session()
+        ids = list(present_server_ids)
+        created = set(await ensure_server_settings(session, ids))
+        present = ServerSetting.server_id.in_(ids)
+        flipped = (
+            await session.execute(
+                update(ServerSetting)
+                .where(ServerSetting.in_server.is_distinct_from(present))
+                .values(in_server=present)
+                .returning(ServerSetting.server_id, ServerSetting.in_server)
+            )
+        ).all()
+        joined = sorted(created | {server_id for server_id, in_server in flipped if in_server})
+        left = sorted(server_id for server_id, in_server in flipped if not in_server)
+        return joined, left

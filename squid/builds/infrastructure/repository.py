@@ -35,6 +35,7 @@ from squid.builds.models import (
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
 from squid.messages.models import MessageRecord
 from squid.persistence.types import now
+from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
 from squid.tags.models import (
     TagAssignment,
@@ -709,6 +710,7 @@ class BuildRepository:
         if not build.source_messages:
             return
 
+        await ensure_server_settings(session, (source.guild_id for source in build.source_messages))
         for source in build.source_messages:
             assert source.author_id is not None, "A source message must record its author."
             await session.execute(

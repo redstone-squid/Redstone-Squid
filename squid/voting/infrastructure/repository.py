@@ -15,6 +15,7 @@ from squid.messages.errors import MessageNotFoundError
 from squid.messages.models import MessageRecord
 from squid.persistence.repository import BaseAsyncRepository
 from squid.posts.models import DiscordPost
+from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,
@@ -168,6 +169,7 @@ class VoteRepository:
         options = normalize_vote_options(options, kind=VoteKind.GENERIC)
         session = self._session()
         session_id = await self._create_session(session, author_account_id, VoteKind.GENERIC, None, None, options)
+        await ensure_server_settings(session, (guild_id,))
         await session.execute(
             insert(GenericVoteSession).values(
                 vote_session_id=session_id,
@@ -352,6 +354,7 @@ class VoteRepository:
         if row is None or row.status is not VoteStatus.OPEN:
             return None
         await self._apply_refresh(session, row, refreshed_weights or {})
+        await ensure_server_settings(session, (guild_id,))
         previous = await session.scalar(
             select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
         )
@@ -494,6 +497,7 @@ class VoteRepository:
 
     async def set_emoji_preset(self, preset: EmojiPreset) -> None:
         session = self._session()
+        await ensure_server_settings(session, (preset.guild_id,))
         await session.execute(
             delete(GuildVoteEmoji).where(GuildVoteEmoji.guild_id == preset.guild_id, GuildVoteEmoji.kind == preset.kind)
         )
@@ -526,6 +530,7 @@ class VoteRepository:
 
     async def set_role_weight(self, weight: RoleWeight) -> None:
         session = self._session()
+        await ensure_server_settings(session, (weight.guild_id,))
         await session.execute(
             pg_insert(GuildVoteRoleWeight)
             .values(

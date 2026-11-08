@@ -11,6 +11,8 @@ COMMENT ON TABLE public.votes IS 'One account''s selected option and cached posi
 
 COMMENT ON COLUMN public.votes.weight IS 'Cached positive magnitude; the option choice determines the sign used in threshold scoring.';
 
+COMMENT ON COLUMN public.votes.guild_id IS 'The guild whose card the ballot was cast on, which decides the option''s emoji alias.';
+
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_pkey PRIMARY KEY (vote_session_id, account_id);
 
@@ -22,6 +24,9 @@ CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON pu
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.votes
+    ADD CONSTRAINT votes_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_option_alias_fkey FOREIGN KEY (vote_session_id, option_alias_id) REFERENCES public.vote_session_options(vote_session_id, id);

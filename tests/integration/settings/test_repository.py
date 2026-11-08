@@ -6,7 +6,7 @@ from functools import partial
 
 import pytest
 from anyio import CancelScope, create_task_group, sleep
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -14,6 +14,7 @@ from squid.core.errors import InvalidStateError
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.application import SettingsService
+from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.settings.models import ServerSetting
 
 _TABLES = [Base.metadata.tables["server_settings"]]
@@ -86,6 +87,51 @@ async def test_guild_remove_persists_membership_and_allows_rejoining(
         assert row is not None
         assert row.in_server is True
         assert row.voting_channel_id == 1002
+
+
+async def test_sync_presence_creates_missing_guilds_and_marks_absent_ones(
+    service: SettingsService,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # 123 was left while offline, 456 is still present, 789 was joined while offline.
+    await service.set_channel(123, "Vote", 1002)
+    await service.guild_joined(456)
+
+    joined, left = await service.sync_presence([456, 789])
+
+    assert (joined, left) == ([789], [123])
+    async with async_session_factory() as session:
+        rows = {row.server_id: row for row in (await session.scalars(select(ServerSetting))).all()}
+    assert {server_id: row.in_server for server_id, row in rows.items()} == {123: False, 456: True, 789: True}
+    assert rows[123].voting_channel_id == 1002
+    assert await service.sync_presence([456, 789]) == ([], [])
+    assert await service.sync_presence([123, 456, 789]) == ([123], [])
+
+
+async def test_ensure_server_settings_creates_only_missing_rows(
+    service: SettingsService,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await service.set_locale(123, "fr")
+
+    async with async_session_factory() as session, session.begin():
+        created = await ensure_server_settings(session, [123, None, 456, 456])
+
+    assert created == [456]
+    assert await service.get_locale(123) == "fr"
+    assert await service.get_all(456) == dict.fromkeys(("Smallest", "Fastest", "First", "Builds", "Vote"))
+
+
+async def test_forget_channels_clears_only_matching_settings(service: SettingsService) -> None:
+    await service.set_channel(123, "Vote", 1002)
+    await service.set_channel(123, "Builds", 1003)
+    await service.set_channel(123, "Fastest", 1004)
+
+    assert await service.referenced_channels(123) == {1002, 1003, 1004}
+    assert set(await service.forget_channels(123, {1002, 1004, 9999})) == {"Vote", "Fastest"}
+
+    assert await service.referenced_channels(123) == {1003}
+    assert await service.forget_channels(456, {1003}) == ()
 
 
 async def test_locale_service_creates_missing_settings(service: SettingsService) -> None:

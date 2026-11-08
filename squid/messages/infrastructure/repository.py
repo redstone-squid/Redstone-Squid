@@ -11,6 +11,7 @@ from whenever import Instant
 
 from squid.messages.domain import MessageFact
 from squid.messages.models import MessageRecord
+from squid.settings.infrastructure.repository import ensure_server_settings
 
 
 class MessageRepository:
@@ -48,6 +49,7 @@ class MessageRepository:
             )
         )
         session = self._session()
+        await ensure_server_settings(session, (fact.guild_id,))
         await session.scalar(statement.returning(MessageRecord), execution_options={"populate_existing": True})
 
     async def record_edit(self, message_id: int, content: str | None, edited_at: Instant) -> bool:

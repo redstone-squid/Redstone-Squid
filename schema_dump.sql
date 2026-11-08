@@ -5384,6 +5384,13 @@ COMMENT ON COLUMN public.votes.weight IS 'Cached positive magnitude; the option 
 
 
 --
+-- Name: COLUMN votes.guild_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.votes.guild_id IS 'The guild whose card the ballot was cast on, which decides the option''s emoji alias.';
+
+
+--
 -- Name: web_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -9527,6 +9534,14 @@ ALTER TABLE ONLY public.vote_sessions
 
 ALTER TABLE ONLY public.votes
     ADD CONSTRAINT votes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: votes votes_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.votes
+    ADD CONSTRAINT votes_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE RESTRICT;
 
 
 --
