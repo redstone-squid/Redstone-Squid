@@ -12,9 +12,10 @@ from squid.builds.domain import (
     BuildCategory,
     BuildDraft,
     DoorOrientationLiteral,
+    RestrictionField,
     RestrictionTypeLiteral,
     SourceMessage,
-    UnknownRestrictions,
+    UnresolvedTaxonomy,
     parse_time_string,
 )
 from squid.core.concurrency import run_all_awaitables
@@ -264,24 +265,28 @@ class BuildInferenceService:
 
         # Finish or cancel all validation calls before leaving this inference step.
         results = await run_all_awaitables(validations)
-        unknown = UnknownRestrictions()
-        build.extra_info["unknown_restrictions"] = unknown
+        # Keep what the taxonomy rejected: an automatic pipeline may submit this draft unreviewed.
+        unresolved_restrictions: list[tuple[RestrictionField, str]] = []
+        unresolved_patterns: list[str] = []
         for destination, (recognized, unrecognized) in zip(destinations, results, strict=True):
             if destination == "component":
                 build.component_restrictions = recognized
-                unknown["component_restrictions"] = unrecognized
+                unresolved_restrictions.extend(("component_restrictions", name) for name in unrecognized)
             elif destination == "wiring":
                 build.wiring_placement_restrictions = recognized
-                unknown["wiring_placement_restrictions"] = unrecognized
+                unresolved_restrictions.extend(("wiring_placement_restrictions", name) for name in unrecognized)
             elif destination == "animated":
                 build.animated_restrictions = recognized
-                unknown["animated_restrictions"] = unrecognized
+                unresolved_restrictions.extend(("animated_restrictions", name) for name in unrecognized)
             elif destination == "miscellaneous":
                 build.miscellaneous_restrictions = recognized
-                unknown["miscellaneous_restrictions"] = unrecognized
+                unresolved_restrictions.extend(("miscellaneous_restrictions", name) for name in unrecognized)
             else:
                 build.patterns = recognized
-                build.extra_info["unknown_patterns"] = unrecognized
+                unresolved_patterns.extend(unrecognized)
+        UnresolvedTaxonomy.read(build.extra_info).add(
+            restrictions=unresolved_restrictions, patterns=unresolved_patterns
+        ).write(build.extra_info)
 
     async def _apply_fields(self, build: BuildDraft, inferred: InferredBuild) -> None:
         categories = {

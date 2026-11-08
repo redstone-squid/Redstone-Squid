@@ -16,16 +16,17 @@ from squid.builds.domain.models import (
     ServerInfo,
     SourceMessage,
     Status,
-    UnknownRestrictions,
     parse_time_string,
     sort_restrictions,
 )
+from squid.builds.domain.taxonomy import RESTRICTION_FIELDS, RestrictionField, UnresolvedTaxonomy, normalize_tag_name
 
 __all__ = [
     "BUILD_TYPES",
     "DOOR_ORIENTATION_NAMES",
     "RECORD_CATEGORIES",
     "RESTRICTIONS",
+    "RESTRICTION_FIELDS",
     "BuildCategory",
     "BuildCategoryLiteral",
     "BuildDraft",
@@ -33,11 +34,13 @@ __all__ = [
     "Info",
     "MediaTypeLiteral",
     "RecordCategoryLiteral",
+    "RestrictionField",
     "RestrictionTypeLiteral",
     "ServerInfo",
     "SourceMessage",
     "Status",
-    "UnknownRestrictions",
+    "UnresolvedTaxonomy",
+    "normalize_tag_name",
     "parse_time_string",
     "sort_restrictions",
 ]

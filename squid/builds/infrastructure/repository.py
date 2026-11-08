@@ -19,7 +19,7 @@ from whenever import Instant
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.models import Account, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
-from squid.builds.domain import BuildCategory, Info, Status, UnknownRestrictions
+from squid.builds.domain import BuildCategory, Info, Status, UnresolvedTaxonomy
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.infrastructure.loading import BuildLoader
 from squid.builds.models import (
@@ -99,19 +99,15 @@ def _public_summary_from_selected_row(
         msg = "A public build has invalid category or status metadata."
         raise DataIntegrityError(msg, context={"build_id": row.get("id")}) from exc
 
-    unknown_restrictions = row["unknown_restrictions"]
-    unknown_patterns = row["unknown_patterns"]
-    if unknown_restrictions is not None and not isinstance(unknown_restrictions, dict):
-        msg = "A public build has malformed unknown restriction metadata."
-        raise DataIntegrityError(msg, context={"build_id": row["id"]})
-    if unknown_patterns is not None and not isinstance(unknown_patterns, list):
-        msg = "A public build has malformed unknown pattern metadata."
-        raise DataIntegrityError(msg, context={"build_id": row["id"]})
+    # The listing selects only the unresolved taxonomy keys from extra_info; titles need nothing else.
+    stored = {key: row[key] for key in ("unknown_restrictions", "unknown_patterns") if row[key] is not None}
+    try:
+        unresolved = UnresolvedTaxonomy.read(cast(Info, stored))
+    except DataIntegrityError as exc:
+        msg = "A public build has malformed unresolved taxonomy metadata."
+        raise DataIntegrityError(msg, context={"build_id": row["id"]}) from exc
     extra_info: Info = {}
-    if unknown_restrictions is not None:
-        extra_info["unknown_restrictions"] = cast(UnknownRestrictions, unknown_restrictions)
-    if unknown_patterns is not None:
-        extra_info["unknown_patterns"] = unknown_patterns
+    unresolved.write(extra_info)
 
     common: dict[str, Any] = {
         "id": row["id"],

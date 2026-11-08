@@ -15,6 +15,7 @@ from squid.catalogue.domain import (
 )
 
 from .models import Status
+from .taxonomy import UnresolvedTaxonomy
 
 _SHOWCASE_QUALIFIER = re.compile(r"(?:\d+\.\d+\s*s|\d+\s*[Bb]locks)")
 
@@ -22,31 +23,31 @@ _SHOWCASE_QUALIFIER = re.compile(r"(?:\d+\.\d+\s*s|\d+\s*[Bb]locks)")
 def format_build_category(build: Build) -> FormattedTitle:
     """Format the canonical category title without individual-build decoration."""
     formatter = RulesTitleFormatter()
-    unknown = build.extra_info.get("unknown_restrictions", {})
+    unresolved = UnresolvedTaxonomy.read(build.extra_info)
     match build:
         case DoorBuild():
             return formatter.format_door(
                 DoorCategory(
                     wiring_restrictions=(
                         *build.wiring_placement_restrictions,
-                        *unknown.get("wiring_placement_restrictions", ()),
+                        *unresolved.restriction_names("wiring_placement_restrictions"),
                     ),
                     animated_restrictions=(
                         *build.animated_restrictions,
-                        *unknown.get("animated_restrictions", ()),
+                        *unresolved.restriction_names("animated_restrictions"),
                     ),
                     size=_door_size(build),
-                    types=(*build.patterns, *build.extra_info.get("unknown_patterns", ())),
+                    types=(*build.patterns, *unresolved.patterns),
                     orientation=_required(build.orientation, "Door orientation type"),
                     component_restrictions=(
                         *build.component_restrictions,
-                        *unknown.get("component_restrictions", ()),
+                        *unresolved.restriction_names("component_restrictions"),
                     ),
                     miscellaneous_restrictions=(
                         *build.miscellaneous_restrictions,
                         *(
                             value
-                            for value in unknown.get("miscellaneous_restrictions", ())
+                            for value in unresolved.restriction_names("miscellaneous_restrictions")
                             if not _SHOWCASE_QUALIFIER.match(value)
                         ),
                     ),
@@ -57,23 +58,23 @@ def format_build_category(build: Build) -> FormattedTitle:
                 ExtenderCategory(
                     wiring_restrictions=(
                         *build.wiring_placement_restrictions,
-                        *unknown.get("wiring_placement_restrictions", ()),
+                        *unresolved.restriction_names("wiring_placement_restrictions"),
                     ),
                     orientation=_required(build.orientation, "Extender orientation"),
                     length=_required_positive(build.extension_length, "Extender length"),
                     types=(
                         *(build.patterns or ([build.extender_type] if build.extender_type else [])),
-                        *build.extra_info.get("unknown_patterns", ()),
+                        *unresolved.patterns,
                     ),
                     component_restrictions=(
                         *build.component_restrictions,
-                        *unknown.get("component_restrictions", ()),
+                        *unresolved.restriction_names("component_restrictions"),
                     ),
                     miscellaneous_restrictions=(
                         *build.miscellaneous_restrictions,
                         *(
                             value
-                            for value in unknown.get("miscellaneous_restrictions", ())
+                            for value in unresolved.restriction_names("miscellaneous_restrictions")
                             if not _SHOWCASE_QUALIFIER.match(value)
                         ),
                     ),
@@ -120,13 +121,17 @@ def _door_size(build: DoorBuild) -> str:
 
 
 def _showcase_qualifiers(build: Build) -> Iterable[str]:
-    unknown = build.extra_info.get("unknown_restrictions", {})
-    return (value for value in unknown.get("miscellaneous_restrictions", ()) if _SHOWCASE_QUALIFIER.match(value))
+    unresolved = UnresolvedTaxonomy.read(build.extra_info)
+    return (
+        value
+        for value in unresolved.restriction_names("miscellaneous_restrictions")
+        if _SHOWCASE_QUALIFIER.match(value)
+    )
 
 
 def _unknown_components(build: Build, *, markdown: bool) -> Iterable[str]:
-    unknown = build.extra_info.get("unknown_restrictions", {})
-    return (_italic(value) if markdown else value for value in unknown.get("component_restrictions", ()))
+    unresolved = UnresolvedTaxonomy.read(build.extra_info)
+    return (_italic(value) if markdown else value for value in unresolved.restriction_names("component_restrictions"))
 
 
 def _render_tokens(tokens: tuple[TitleToken, ...], *, markdown: bool) -> Iterable[str]:

@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol, cast
 from uuid import UUID
 
-from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info
+from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info, UnresolvedTaxonomy
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError, JSONValue
@@ -184,12 +184,11 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     extra_info: dict[str, JSONValue] = {
         "submission_provenance": _submission_provenance(submission),
     }
-    if submission.taxonomy.restriction_proposals:
-        extra_info["unknown_restrictions"] = {
-            "miscellaneous_restrictions": list(submission.taxonomy.restriction_proposals)
-        }
-    if pattern_proposals:
-        extra_info["unknown_patterns"] = list(pattern_proposals)
+    # The form does not ask which kind of restriction a proposal is, so record proposals as miscellaneous.
+    UnresolvedTaxonomy().add(
+        restrictions=[("miscellaneous_restrictions", name) for name in submission.taxonomy.restriction_proposals],
+        patterns=pattern_proposals,
+    ).write(cast(Info, extra_info))
 
     common: dict[str, Any] = {
         "versions": [submission.source_version],

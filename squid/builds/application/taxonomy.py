@@ -2,17 +2,12 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol
 
-from squid.builds.domain import BuildCategory, UnknownRestrictions
+from squid.builds.domain import BuildCategory, UnresolvedTaxonomy
 from squid.builds.models import Build
 from squid.tags.domain import TagAuthority, TagSemanticKind
 from squid.tags.models import TagAssignment
-
-
-def normalize_tag_name(value: str) -> str:
-    """Collapse case and internal whitespace the way taxonomy resolution matches names."""
-    return " ".join(value.casefold().split())
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,20 +44,30 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
     the other direction, then rewrites the lists with the resolved display names
     so the prepared build agrees with what a later reload will show.
 
-    Replace official restriction and pattern tags while retaining other tags.
-    Keep unknown or ambiguous input in extra_info for reviewers. Doors and
-    extenders with no requested pattern use Regular.
+    Replace official restriction and pattern tags while retaining other tags. Names that resolve
+    to no single official tag become the build's unresolved names (see UnresolvedTaxonomy). The
+    build's earlier unresolved names are resolved again, so one that now matches an official tag
+    becomes an assignment. Doors and extenders with no requested or unresolved pattern use Regular.
     """
-    restrictions = [value for values in build.restrictions.values() for value in values or ()]
-    patterns = list(build.patterns) or (
+    # Collect every name to resolve, deduplicated the way unresolved names are, so that the ones the
+    # resolver reports as unknown can be kept with their spelling and restriction field.
+    requested = UnresolvedTaxonomy.read(build.extra_info).add(
+        restrictions=[
+            (field_name, value) for field_name, values in build.restrictions.items() for value in values or ()
+        ],
+        patterns=build.patterns,
+    )
+    patterns = list(requested.patterns) or (
         ["Regular"] if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} else []
     )
     resolution = await resolver.resolve_official(
         build_kind=build.category.value,
-        restrictions=restrictions,
+        restrictions=requested.restriction_names(),
         patterns=patterns,
     )
-    _record_unknowns(build, patterns, resolution)
+    requested.retain(restrictions=resolution.unknown_restrictions, patterns=resolution.unknown_patterns).write(
+        build.extra_info
+    )
 
     retained = [
         assignment
@@ -96,21 +101,3 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
     build.patterns = [
         definition.display_name for definition in resolved if definition.semantic_kind is TagSemanticKind.PATTERN
     ]
-
-
-def _record_unknowns(build: Build, patterns: Sequence[str], resolution: TaxonomyResolution) -> None:
-    """Merge unresolvable names into ``extra_info`` so nothing is silently lost."""
-    current_restrictions: UnknownRestrictions = {}
-    current_restrictions.update(build.extra_info.get("unknown_restrictions", {}))
-    for field_name, values in build.restrictions.items():
-        new_values = [value for value in values or () if normalize_tag_name(value) in resolution.unknown_restrictions]
-        existing_values = cast(list[str], current_restrictions.get(field_name, []))
-        if new_values or existing_values:
-            current_restrictions[field_name] = list(dict.fromkeys([*existing_values, *new_values]))
-    if current_restrictions:
-        build.extra_info["unknown_restrictions"] = current_restrictions
-
-    new_patterns = [value for value in patterns if normalize_tag_name(value) in resolution.unknown_patterns]
-    existing_patterns = build.extra_info.get("unknown_patterns", [])
-    if new_patterns or existing_patterns:
-        build.extra_info["unknown_patterns"] = list(dict.fromkeys([*existing_patterns, *new_patterns]))

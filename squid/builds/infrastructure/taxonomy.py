@@ -6,7 +6,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
+from squid.builds.application.taxonomy import TaxonomyResolution
+from squid.builds.domain import normalize_tag_name
 from squid.builds.domain.models import RestrictionTypeLiteral
 from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 from squid.builds.infrastructure.restrictions import RestrictionRepository, get_restriction_id

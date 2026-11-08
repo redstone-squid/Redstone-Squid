@@ -15,8 +15,8 @@ from squid.builds.application.services import (
     BuildEditor,
     BuildService,
 )
-from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
-from squid.builds.domain import BuildCategory, Status
+from squid.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
+from squid.builds.domain import BuildCategory, Status, normalize_tag_name
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
@@ -517,3 +517,28 @@ async def test_permission_revoked_during_preparation_prevents_commit(existing_bu
     with pytest.raises(AuthorizationError):
         await service.apply_edit(BuildEditor(Subject(account_id=2)), 42, BuildEditPatch(extra_user_info="denied"))
     assert repository.saved == []
+
+
+async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() -> None:
+    build = DoorBuild(component_restrictions=["No Slime"], patterns=["Spiral"])
+
+    await apply_build_taxonomy(build, FakeTaxonomyResolver())
+
+    assert build.component_restrictions == []
+    assert build.patterns == []
+    assert build.extra_info == {
+        "unknown_restrictions": {"component_restrictions": ["No Slime"]},
+        "unknown_patterns": ["Spiral"],
+    }
+
+    # An unrelated edit keeps the names, and does not add Regular in place of the unresolved pattern.
+    await apply_build_taxonomy(build, FakeTaxonomyResolver())
+    assert build.patterns == []
+    assert build.extra_info["unknown_patterns"] == ["Spiral"]
+
+    resolver = FakeTaxonomyResolver(known_restrictions={"No Slime": "component"}, known_patterns=("Spiral",))
+    await apply_build_taxonomy(build, resolver)
+
+    assert build.component_restrictions == ["No Slime"]
+    assert build.patterns == ["Spiral"]
+    assert build.extra_info == {}
