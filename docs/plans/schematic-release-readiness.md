@@ -22,11 +22,11 @@ format conversion, piston simulation, and worker recovery passed integration tes
 
 - Verify the deployed synchronized-draft upload flow end to end. The upload endpoint and backend reader exist and are
   wired into finalization; Paper/Fabric finalization still depends on the world-extraction adapters below.
-- Complete and verify the Minecraft platform world-extraction adapters, which currently report capture unavailable.
-- Grant the new Discord schematic permissions. The build browser now lets anyone use a publicly downloadable schematic.
-  For any other schematic, download and convert require `build.schematic.download_private`; info, render, timing,
-  and lattice detection require `build.schematic.view_private`. The uploader is always allowed. The global-admin
-  role includes both nodes; no other built-in role does, so grant them to moderators who need them.
+- Minecraft world capture and upload are planned in [minecraft-build-verification.md](minecraft-build-verification.md),
+  [minecraft-schematic-upload.md](minecraft-schematic-upload.md),
+  [minecraft-paper-world-capture.md](minecraft-paper-world-capture.md), and
+  [minecraft-fabric-world-capture.md](minecraft-fabric-world-capture.md). The platform adapters report capture
+  unavailable until those land.
 - Verify actual resource-pack rendering and the deployed upload-to-publication flow.
 
 ## Deployment and stored data
