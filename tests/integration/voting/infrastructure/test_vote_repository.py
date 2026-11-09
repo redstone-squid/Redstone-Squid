@@ -1,7 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
 from functools import partial
-from typing import cast
 
 import pytest
 from alembic_utils.pg_function import PGFunction
@@ -41,7 +40,7 @@ from squid.voting.models import (
     VoteSession,
     VoteSessionOption,
 )
-from tests.support.schema import with_foreign_key_targets
+from tests.support.schema import model_tables, with_foreign_key_targets
 from tests.support.unit_of_work import transact
 from tests.support.voting import (
     AUTHOR_ACCOUNT_IDS,
@@ -56,14 +55,16 @@ from tests.support.voting import (
 )
 
 _TABLES: tuple[Table, ...] = with_foreign_key_targets(
-    cast(Table, VoteSession.__table__),
-    cast(Table, VoteSessionOption.__table__),
-    cast(Table, BuildVoteSession.__table__),
-    cast(Table, DeleteLogVoteSession.__table__),
-    cast(Table, GenericVoteSession.__table__),
-    cast(Table, Vote.__table__),
-    cast(Table, Message.__table__),
-    cast(Table, DiscordPost.__table__),
+    *model_tables(
+        VoteSession,
+        VoteSessionOption,
+        BuildVoteSession,
+        DeleteLogVoteSession,
+        GenericVoteSession,
+        Vote,
+        Message,
+        DiscordPost,
+    )
 )
 
 _KIND_SUBTYPE_ENTITIES = {
@@ -117,10 +118,8 @@ async def referenced_rows(vote_schema: None, async_session_factory: async_sessio
             insert(Account).values([{"id": account_id} for account_id in (*AUTHOR_ACCOUNT_IDS, *VOTER_ACCOUNT_IDS)])
         )
         await session.execute(insert(ServerSetting).values(server_id=GUILD_ID))
-        # `Build.__table__`, not `Build`: the entity is the base of a joined-inheritance
-        # hierarchy, so an ORM-level insert targets the polymorphic join rather than a table.
         await session.execute(
-            insert(cast(Table, Build.__table__)).values(
+            insert(Build).values(
                 id=BUILD_ID,
                 category="Other",
                 submission_status=Status.PENDING,
@@ -801,7 +800,7 @@ async def test_deferred_kind_subtype_invariant_rejects_invalid_final_shapes(
                 )
             if invalid_shape == "duplicate_build":
                 await session.execute(
-                    insert(cast(Table, Build.__table__)).values(
+                    insert(Build).values(
                         id=BUILD_ID + 1,
                         submission_status=Status.PENDING,
                         submitter_account_id=AUTHOR_ACCOUNT_IDS[0],

@@ -2,10 +2,9 @@
 
 from collections.abc import Callable
 from datetime import timedelta
-from typing import cast
 from uuid import uuid4
 
-from sqlalchemy import Select, Table, and_, delete, func, or_, select, update
+from sqlalchemy import Select, and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -21,8 +20,6 @@ from squid.schematics.models import (
     SchematicRender,
     SchematicRenderQueueItem,
 )
-
-_BUILD_TABLE = cast(Table, Build.__table__)
 
 
 class PostgresSchematicPreviewRepository:
@@ -192,7 +189,7 @@ class PostgresSchematicPreviewRepository:
         build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
         if build_id is None:
             return None
-        await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
+        await session.scalar(select(Build.id).where(Build.id == build_id).with_for_update())
         preview_object = await session.scalar(
             select(SchematicPreviewObject).where(SchematicPreviewObject.object_key == object_key).with_for_update()
         )
@@ -230,7 +227,7 @@ class PostgresSchematicPreviewRepository:
         build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
         if build_id is None:
             return False
-        await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
+        await session.scalar(select(Build.id).where(Build.id == build_id).with_for_update())
         current_id = await session.scalar(
             select(BuildSchematic.id).where(
                 BuildSchematic.build_id == build_id,
@@ -295,9 +292,7 @@ class PostgresSchematicPreviewRepository:
             )
         )
         await session.execute(insert(BuildLink).values(build_id=build_id, url=url, media_type="render"))
-        await session.execute(
-            update(_BUILD_TABLE).where(_BUILD_TABLE.c.id == build_id).values(revision=_BUILD_TABLE.c.revision + 1)
-        )
+        await session.execute(update(Build).where(Build.id == build_id).values(revision=Build.revision + 1))
 
     @staticmethod
     async def _clear_generated_preview_link(session: AsyncSession, build_id: int) -> None:
@@ -320,9 +315,7 @@ class PostgresSchematicPreviewRepository:
                 BuildLink.url.in_(registered_urls),
             )
         )
-        await session.execute(
-            update(_BUILD_TABLE).where(_BUILD_TABLE.c.id == build_id).values(revision=_BUILD_TABLE.c.revision + 1)
-        )
+        await session.execute(update(Build).where(Build.id == build_id).values(revision=Build.revision + 1))
 
     @staticmethod
     def _registered_preview_urls(build_id: int) -> Select[str]:

@@ -1,9 +1,8 @@
 """SQLAlchemy persistence adapter for stored schematics."""
 
 from collections.abc import Callable
-from typing import cast
 
-from sqlalchemy import ColumnElement, Select, Table, and_, func, or_, select, update
+from sqlalchemy import ColumnElement, Select, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +17,6 @@ from squid.schematics.domain.models import (
 from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewRepository
 from squid.schematics.models import BuildSchematic, SchematicFile
-
-_BUILD_TABLE = cast(Table, Build.__table__)
 
 _FINGERPRINT_COLUMNS = {
     FingerprintPreset.STRUCTURAL: BuildSchematic.fingerprint_structural,
@@ -99,7 +96,7 @@ class PostgresSchematicRepository:
         )
         session = self._session()
         if primary:
-            await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
+            await session.scalar(select(Build.id).where(Build.id == build_id).with_for_update())
             # The partial unique index allows only one primary per build, so the previous
             # holder must be demoted in the same transaction as the new one is promoted.
             await session.execute(

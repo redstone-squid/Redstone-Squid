@@ -209,6 +209,8 @@ class BuildRepository:
         """
         if not build_ids:
             return ()
+        # Core tables keep the joins explicit: subtype ORM columns resolve to their own table, so an ORM
+        # projection would still have to name each table to outer-join it rather than cross-join it.
         builds = Build.__table__
         door = DoorBuild.__table__
         extender = ExtenderBuild.__table__
