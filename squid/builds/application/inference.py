@@ -14,11 +14,11 @@ from squid.builds.domain import (
     DoorOrientationLiteral,
     RestrictionField,
     RestrictionTypeLiteral,
-    SourceMessage,
     UnresolvedTaxonomy,
     parse_time_string,
 )
 from squid.core.concurrency import run_all_awaitables
+from squid.messages.domain import MessageSnapshot
 from squid.versions.domain import Edition
 
 logger = logging.getLogger(__name__)
@@ -211,8 +211,8 @@ class BuildInferenceService:
             # inferred build to its text and follow-up attachments.
             build = BuildDraft(
                 source_messages=tuple(
-                    SourceMessage(
-                        message_id=message.message_id,
+                    MessageSnapshot(
+                        id=message.message_id,
                         guild_id=source.server_id,
                         channel_id=source.channel_id,
                         author_id=message.author_id,

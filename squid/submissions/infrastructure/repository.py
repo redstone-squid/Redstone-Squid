@@ -9,11 +9,11 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.builds.domain import SourceMessage
 from squid.core.errors import JSONValue
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.messages.domain import MessageSnapshot
 from squid.persistence.advisory_locks import (
     AdvisoryLockNamespace,
     lock_key,
@@ -403,7 +403,7 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         submission_actor_account_id=draft.submission_actor_account_id,
         origin=draft.origin,
         source_installation_id=draft.source_installation_id,
-        source_messages=TypeAdapter(tuple[SourceMessage, ...]).dump_python(draft.source_messages, mode="json"),
+        source_messages=TypeAdapter(tuple[MessageSnapshot, ...]).dump_python(draft.source_messages, mode="json"),
         source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).dump_python(draft.source_files, mode="json"),
         source_issues=list(draft.source_issues),
         inference_run_id=draft.inference_run_id,
@@ -430,7 +430,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         updated_at=model.updated_at,
         expires_at=model.expires_at,
         source_installation_id=model.source_installation_id,
-        source_messages=TypeAdapter(tuple[SourceMessage, ...]).validate_python(model.source_messages),
+        source_messages=TypeAdapter(tuple[MessageSnapshot, ...]).validate_python(model.source_messages),
         source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(model.source_files),
         source_issues=tuple(model.source_issues),
         inference_run_id=model.inference_run_id,

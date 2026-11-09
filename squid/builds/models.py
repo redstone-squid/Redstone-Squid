@@ -40,11 +40,12 @@ from squid.builds.domain import (
     MediaTypeLiteral,
     Status,
 )
-from squid.builds.domain.models import SourceMessage, StagedMedia, StagedTaxonomy, freeze_fields, frozen_field
+from squid.builds.domain.models import StagedMedia, StagedTaxonomy, freeze_fields, frozen_field
 from squid.builds.errors import InvalidBuildError
 from squid.config import EMBEDDING_DIMENSION
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
+from squid.messages.domain import MessageSnapshot
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, IntEnumSmallInt, StrEnumText
 from squid.sponsors import PublicSponsor
@@ -207,7 +208,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
     """Public sponsor details captured at submission time."""
     submitter_discord_id: int | None = None
-    source_messages: Final[tuple[SourceMessage, ...]] = frozen_field(default=())
+    source_messages: Final[tuple[MessageSnapshot, ...]] = frozen_field(default=())
     """Source messages in submission order. This provenance is fixed after submission."""
 
     def __post_init__(self) -> None:
@@ -263,7 +264,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
         values["sponsor"] = None if self.sponsor is None else asdict(self.sponsor)
         return values
 
-    def copy_for_edit(self, *, source_messages: tuple[SourceMessage, ...] | None = None) -> Build:
+    def copy_for_edit(self, *, source_messages: tuple[MessageSnapshot, ...] | None = None) -> Build:
         """Create an unsaved copy for previewing edits, without ORM history.
 
         Most values are deep-copied. Links and tag assignments are rebuilt, but

@@ -169,7 +169,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         for source in self.build.source_messages:
             if source.channel_id is not None:
-                return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
+                return await self.bot.get_or_fetch_message(source.channel_id, source.id)
         return None
 
     async def render_payload(self) -> sd.message_payload.MessagePayload:

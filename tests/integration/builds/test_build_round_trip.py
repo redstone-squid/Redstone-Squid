@@ -17,14 +17,16 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.builds.domain import BuildCategory, SourceMessage, Status
+from squid.builds.domain import BuildCategory, Status
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
+from squid.messages.domain import MessageSnapshot
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.models import ServerSetting
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -417,14 +419,15 @@ async def test_source_messages_round_trip(
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
         source_messages=(
-            SourceMessage(
-                message_id=6000,
+            MessageSnapshot(
+                id=6000,
                 guild_id=4000,
                 channel_id=5000,
                 author_id=7000,
                 content="the original submission text",
+                created_at=Instant.from_utc(2026, 11, 9),
             ),
-            SourceMessage(message_id=6001, guild_id=4000, channel_id=5000, author_id=7000, content="a follow-up"),
+            MessageSnapshot(id=6001, guild_id=4000, channel_id=5000, author_id=7000, content="a follow-up"),
         ),
     )
     await transact(repository, lambda uow: uow.builds.save(frozen), commit=True)
@@ -432,12 +435,13 @@ async def test_source_messages_round_trip(
 
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(frozen.id))
     assert loaded is not None
-    assert [message.message_id for message in loaded.source_messages] == [6000, 6001]
+    assert [message.id for message in loaded.source_messages] == [6000, 6001]
     first = loaded.source_messages[0]
     assert first.guild_id == 4000
     assert first.channel_id == 5000
     assert first.author_id == 7000
     assert first.content == "the original submission text"
+    assert first.created_at == Instant.from_utc(2026, 11, 9)
     # The submission link points at the request, not at a trailing image.
     assert loaded.original_link == "https://discord.com/channels/4000/5000/6000"
 
@@ -448,7 +452,7 @@ async def test_one_message_can_source_several_builds(
     """A build-log message can supply provenance for every build in a submission bundle."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    shared = SourceMessage(message_id=8000, guild_id=4000, channel_id=5000, author_id=7000, content="two doors")
+    shared = MessageSnapshot(id=8000, guild_id=4000, channel_id=5000, author_id=7000, content="two doors")
 
     build_ids: list[int] = []
     for _ in range(2):
@@ -468,7 +472,7 @@ async def test_one_message_can_source_several_builds(
     for build_id in build_ids:
         loaded = await transact(repository, lambda uow, build_id=build_id: uow.builds.get_by_id(build_id))
         assert loaded is not None
-        assert [message.message_id for message in loaded.source_messages] == [8000]
+        assert [message.id for message in loaded.source_messages] == [8000]
 
 
 # --- Edit-time taxonomy handling ---------------------------------------------

@@ -26,6 +26,7 @@ class MessageRepository:
         `observed_at` is only set on insert: it records when the bot first saw the
         message, which a later sighting must not overwrite.
         """
+        assert snapshot.author_id is not None, "A message must record its author."
         statement = (
             pg_insert(Message)
             .values(

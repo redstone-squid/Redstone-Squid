@@ -22,6 +22,7 @@ from whenever import Instant
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
+from squid.messages.domain import MessageSnapshot
 from squid.sponsors import PublicSponsor
 from squid.tags.models import TagAssignment
 
@@ -170,34 +171,6 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
         if "frozen" in f.metadata:
             setattr(cls, f.name, FrozenField(f.name))
     return cls
-
-
-@dataclass(frozen=True, slots=True)
-class SourceMessage:
-    """A Discord message a build was submitted or inferred from.
-
-    A build can have several: a submission is often a body message plus follow-up
-    images, and one build-log message can yield several builds at once.
-    """
-
-    message_id: int
-    guild_id: int | None = None
-    channel_id: int | None = None
-    author_id: int | None = None
-    content: str | None = None
-
-    @property
-    def link(self) -> str | None:
-        """Return the message jump link, or None if its channel is unknown.
-
-        DM links are unsupported and raise NotImplementedError.
-        """
-        if self.channel_id is None:
-            return None
-        if self.guild_id is None:
-            msg = "This message is from DMs."
-            raise NotImplementedError(msg)
-        return f"https://discord.com/channels/{self.guild_id}/{self.channel_id}/{self.message_id}"
 
 
 class StagedMedia:
@@ -367,7 +340,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
     completion_evidence: str | None = None
     description: str | None = None
 
-    source_messages: tuple[SourceMessage, ...] = ()
+    source_messages: tuple[MessageSnapshot, ...] = ()
 
     ai_generated: bool | None = None
 

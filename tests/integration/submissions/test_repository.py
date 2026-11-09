@@ -13,10 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.models import Account
-from squid.builds.domain import SourceMessage
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.messages.domain import MessageSnapshot
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
@@ -494,7 +494,7 @@ async def test_stable_draft_identity_rejects_changed_inference_provenance(
     retained = replace(
         _stored(account_id, origin=SubmissionOrigin.DISCORD),
         inferred=True,
-        source_messages=(SourceMessage(40, content="original"),),
+        source_messages=(MessageSnapshot(40, content="original"),),
         source_files=(source,),
         inference_run_id=UUID(int=805),
     )
@@ -504,7 +504,7 @@ async def test_stable_draft_identity_rejects_changed_inference_provenance(
         await transact(
             repository,
             lambda uow: uow.submission_drafts.create(
-                replace(retained, source_messages=(SourceMessage(40, content="changed"),))
+                replace(retained, source_messages=(MessageSnapshot(40, content="changed"),))
             ),
             commit=True,
         )

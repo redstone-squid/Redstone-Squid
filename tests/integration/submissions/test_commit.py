@@ -16,6 +16,7 @@ from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.messages.domain import MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
@@ -290,16 +291,15 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
 ) -> None:
     from pydantic import TypeAdapter
 
-    from squid.builds.domain import SourceMessage
     from squid.submissions.models.entities import SubmissionDraft
 
     sessions = migrated_session_factory
     claim = await claimed_submission(sessions)
-    source = SourceMessage(123456, channel_id=456, author_id=789, content="Original inferred facts")
+    source = MessageSnapshot(123456, channel_id=456, author_id=789, content="Original inferred facts")
     async with sessions.begin() as session:
         draft = await session.get(SubmissionDraft, claim.draft_id)
         assert draft is not None
-        draft.source_messages = TypeAdapter(tuple[SourceMessage, ...]).dump_python((source,), mode="json")
+        draft.source_messages = TypeAdapter(tuple[MessageSnapshot, ...]).dump_python((source,), mode="json")
     builds = partial(SqlAlchemyUnitOfWork, sessions)
     result = await BuildSubmissionExecutor(
         PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, sessions)

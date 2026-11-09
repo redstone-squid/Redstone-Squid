@@ -716,11 +716,12 @@ class BuildRepository:
             await session.execute(
                 pg_insert(Message)
                 .values(
-                    id=source.message_id,
+                    id=source.id,
                     guild_id=source.guild_id,
                     channel_id=source.channel_id,
                     author_id=source.author_id,
                     content=source.content,
+                    created_at=source.created_at,
                     observed_at=Instant.now(),
                 )
                 .on_conflict_do_update(
@@ -730,6 +731,7 @@ class BuildRepository:
                         "channel_id": source.channel_id,
                         "author_id": source.author_id,
                         "content": source.content,
+                        **({"created_at": source.created_at} if source.created_at is not None else {}),
                     },
                 )
             )
@@ -737,7 +739,7 @@ class BuildRepository:
         await session.execute(
             pg_insert(BuildSourceMessage).values(
                 [
-                    {"build_id": build.id, "message_id": source.message_id, "position": position}
+                    {"build_id": build.id, "message_id": source.id, "position": position}
                     for position, source in enumerate(build.source_messages)
                 ]
             )

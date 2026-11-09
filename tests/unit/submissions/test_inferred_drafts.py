@@ -8,8 +8,9 @@ from uuid import uuid4
 import pytest
 from whenever import Instant
 
-from squid.builds.domain import BuildCategory, BuildDraft, SourceMessage
+from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.errors import ValidationError
+from squid.messages.domain import MessageSnapshot
 from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
 from squid.submissions.application.forms import SubmissionFormService, build_submission_manifest
 from squid.submissions.application.inference_runs import InferenceCandidate
@@ -59,7 +60,7 @@ class Forms:
 
 async def test_materialization_reuses_identity_without_overwriting_corrections() -> None:
     drafts = Drafts()
-    source = SourceMessage(123)
+    source = MessageSnapshot(123)
     candidate = InferenceCandidate(
         uuid4(), uuid4(), 7, BuildDraft(category=BuildCategory.DOOR, door_width=3, source_messages=(source,))
     )

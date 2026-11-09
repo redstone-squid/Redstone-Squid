@@ -7,9 +7,9 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
-from squid.builds.domain import SourceMessage
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.messages.domain import MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.domain import PermissionNode, Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
@@ -68,7 +68,7 @@ class StoredDraft:
     preparation_retry_at: Instant | None = None
     inferred: bool = False
     submission_actor_account_id: int | None = None
-    source_messages: tuple[SourceMessage, ...] = ()
+    source_messages: tuple[MessageSnapshot, ...] = ()
     source_files: tuple[SubmissionSourceFile, ...] = ()
     source_issues: tuple[str, ...] = ()
     inference_run_id: UUID | None = None
@@ -272,7 +272,7 @@ class SubmissionDraftService:
         now: Instant | None = None,
         draft_id: UUID | None = None,
         inferred: bool = False,
-        source_messages: tuple[SourceMessage, ...] = (),
+        source_messages: tuple[MessageSnapshot, ...] = (),
         source_files: tuple[SubmissionSourceFile, ...] = (),
         source_issues: tuple[str, ...] = (),
         inference_run_id: UUID | None = None,

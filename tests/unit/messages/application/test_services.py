@@ -43,6 +43,7 @@ class FakeMessageRepository:
         snapshot = self.snapshots.get(message_id)
         if snapshot is None:
             return None
+        assert snapshot.author_id is not None
         return Message(
             id=snapshot.id,
             channel_id=snapshot.channel_id,

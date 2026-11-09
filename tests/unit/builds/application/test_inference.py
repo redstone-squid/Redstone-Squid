@@ -113,7 +113,7 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
     assert generator.calls[0][2:] == (InferenceResult, "test-model", (), "low")
     # Both primary messages are retained in submission order, each keeping its own
     # content: the bundle is a body message plus a follow-up, not one concatenation.
-    assert [message.message_id for message in build.source_messages] == [10, 11]
+    assert [message.id for message in build.source_messages] == [10, 11]
     assert [message.content for message in build.source_messages] == ["A redstone door", "and it is fast"]
     assert build.source_messages[0].channel_id == 30
     assert build.source_messages[0].guild_id == 40

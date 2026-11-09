@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import AccountIdentity, CreatorAlias
-from squid.builds.domain import BuildCategory, SourceMessage
+from squid.builds.domain import BuildCategory
 from squid.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
     Build,
@@ -17,6 +17,7 @@ from squid.builds.models import (
     BuildVersion,
 )
 from squid.core.errors import DataIntegrityError
+from squid.messages.domain import MessageSnapshot
 from squid.messages.models import Message
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAuthority, TagSemanticKind
@@ -30,7 +31,7 @@ class _CrossContextValues:
     creators: Mapping[int, list[str]]
     submitter_discord_ids: Mapping[int, int]
     versions: Mapping[int, list[str]]
-    source_messages: Mapping[int, list[SourceMessage]]
+    source_messages: Mapping[int, list[MessageSnapshot]]
 
 
 class BuildLoader:
@@ -90,7 +91,7 @@ class BuildLoader:
             )
 
         # Join source links to messages so the whole page needs one provenance query.
-        source_messages: dict[int, list[SourceMessage]] = {build_id: [] for build_id in build_ids}
+        source_messages: dict[int, list[MessageSnapshot]] = {build_id: [] for build_id in build_ids}
         for build_id, message in await session.execute(
             select(BuildSourceMessage.build_id, Message)
             .join(Message, BuildSourceMessage.message_id == Message.id)
@@ -151,14 +152,15 @@ class BuildLoader:
         return sql_build
 
 
-def _source_message(message: Message) -> SourceMessage:
+def _source_message(message: Message) -> MessageSnapshot:
     """Map one stored message reached through a build's source-message link."""
-    return SourceMessage(
-        message_id=message.id,
+    return MessageSnapshot(
+        id=message.id,
         guild_id=message.guild_id,
         channel_id=message.channel_id,
         author_id=message.author_id,
         content=message.content,
+        created_at=message.created_at,
     )
 
 

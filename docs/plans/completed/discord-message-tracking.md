@@ -59,6 +59,13 @@ the old `ON DELETE SET NULL` left behind.
 backfill data loss: one message can source a whole bundle, and one build can span a
 body message plus follow-up images.
 
+Builds and drafts carry these messages as immutable `MessageSnapshot` values from
+`squid.messages.domain`; `source_messages` names their role in the build. The
+shared snapshot allows unknown channel and author IDs while drafting, but storing
+a message requires its author. Saved drafts with the older `message_id` key still
+load; new payloads use `id`. The persisted `Message` model holds observation, edit,
+and deletion state separately.
+
 **One reconcile loop.** `discord_posts` holds only applied state; what a post *should*
 look like lives on the `discord_sync_queue` row, so staleness is a join rather than a
 desired revision copied onto every post by a trigger. A partial unique index over

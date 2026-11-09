@@ -12,7 +12,7 @@ from squid.accounts.models import Account
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.builds.application import BuildService
-from squid.builds.domain.models import SourceMessage
+from squid.messages.domain import MessageSnapshot
 from squid.schematics.application.services import SchematicService
 from squid.settings.application import SettingsService
 from squid.submissions.application import (
@@ -106,7 +106,7 @@ class Drafts(SubmissionDraftService):
         now: Instant | None = None,
         draft_id: UUID | None = None,
         inferred: bool = False,
-        source_messages: tuple[SourceMessage, ...] = (),
+        source_messages: tuple[MessageSnapshot, ...] = (),
         source_files: tuple[SubmissionSourceFile, ...] = (),
         source_issues: tuple[str, ...] = (),
         inference_run_id: UUID | None = None,

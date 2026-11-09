@@ -12,10 +12,10 @@ from squid.builds.domain import (
     DoorOrientationLiteral,
     Info,
     MediaTypeLiteral,
-    SourceMessage,
     Status,
 )
 from squid.builds.models import BuildLink
+from squid.messages.domain import MessageSnapshot
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import RecordOperator, TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
@@ -100,7 +100,7 @@ class BuildDraftPayload:
     completion_evidence: str | None = None
     description: str | None = None
 
-    source_messages: tuple[SourceMessage, ...] = ()
+    source_messages: tuple[MessageSnapshot, ...] = ()
 
     ai_generated: bool | None = None
 
