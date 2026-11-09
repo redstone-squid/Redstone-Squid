@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, Literal, cast, override
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast, override
 
 import anyio
 import discord
@@ -33,6 +33,7 @@ from squid.voting.domain import (
     VoteSessionSnapshot,
     VoteVisibility,
 )
+from squid.voting.infrastructure.discord_cards import DiscordVoteCards
 from squid_ui_discord.testing import MessageHarness
 from tests.support.discord import make_layout_bot, make_reaction_payload
 from tests.support.services import bot_services
@@ -47,7 +48,26 @@ class PartialChannel:
     messages: dict[int, Any]
 
     def get_partial_message(self, message_id: int) -> Any:
-        return self.messages[message_id]
+        return self.messages.get(message_id, DeletedMessage())
+
+
+class DeletedMessage:
+    """A partial message for a card that is gone, which Discord answers with 404."""
+
+    async def fetch(self) -> NoReturn:
+        raise discord.NotFound(cast(Any, NotFoundResponse()), "Unknown Message")
+
+    async def add_reaction(self, emoji: str) -> NoReturn:
+        await self.fetch()
+
+    async def remove_reaction(self, emoji: object, user: object) -> NoReturn:
+        await self.fetch()
+
+
+@dataclass(frozen=True)
+class NotFoundResponse:
+    status: int = 404
+    reason: str = "Not Found"
 
 
 @dataclass
@@ -104,6 +124,9 @@ class Message:
     async def send(self, **kwargs: object) -> discord.Message:
         self.sent.append(kwargs)
         return MessageHarness().source
+
+    async def fetch(self) -> Message:
+        return self
 
     async def add_reaction(self, emoji: str) -> None:
         self.added.append(emoji)
@@ -209,7 +232,11 @@ class ReactionHarness:
         self.accounts = Accounts()
         self.permissions = Permissions()
         self.services = bot_services(
-            votes=self.votes, accounts=self.accounts, permissions=self.permissions, settings=Settings()
+            votes=self.votes,
+            accounts=self.accounts,
+            permissions=self.permissions,
+            settings=Settings(),
+            vote_cards=DiscordVoteCards,
         )
         self.messages = {100: Message(self.trace), 101: Message(self.trace)}
         self.guilds = {guild_id: Guild(guild_id) for guild_id in (10, 11)}

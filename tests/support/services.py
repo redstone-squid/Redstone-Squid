@@ -10,12 +10,14 @@ stand-in. Construction rejects two kinds of drift that a cast would hide:
 
 An unconfigured stand-in is an instance of its service type, but any attribute access fails with
 an AssertionError naming the service. A test that reaches a service it did not configure fails at
-that point instead of continuing with a permissive mock.
+that point instead of continuing with a permissive mock. An unconfigured factory field, such as
+`BotServices.vote_cards`, builds unconfigured stand-ins for its product.
 """
 
 import inspect
+from collections.abc import Callable
 from functools import cache
-from typing import Any, NoReturn, cast, get_args, get_type_hints
+from typing import Any, NoReturn, cast, get_args, get_origin, get_type_hints
 
 from squid.runtime import BotServices, WorkerServices
 
@@ -47,12 +49,25 @@ def unconfigured[ServiceT](service: type[ServiceT]) -> ServiceT:
     return cast(ServiceT, _unconfigured_type(service)())
 
 
+class _UnconfiguredFactory(_Unconfigured):
+    """Stands in for a factory field: what it builds is an unconfigured stand-in for the product."""
+
+    def __init__(self, product: type) -> None:
+        self._product = product
+
+    def __call__(self, *args: object) -> object:
+        return unconfigured(self._product)
+
+
 def is_configured(service: object) -> bool:
     """Whether `service` is a double the test supplied rather than an unconfigured stand-in."""
     return not isinstance(service, _Unconfigured)
 
 
 def _declared_types(annotation: object) -> list[type]:
+    if get_origin(annotation) is Callable:
+        # A factory's argument and return types are not the field's type; leave it to the type checker.
+        return []
     return [arg for arg in get_args(annotation) or (annotation,) if inspect.isclass(arg) and arg is not type(None)]
 
 
@@ -104,6 +119,8 @@ def _build[ContainerT](
             values[field] = value
         elif field in defaults:
             values[field] = defaults[field]
+        elif get_origin(annotation) is Callable:
+            values[field] = _UnconfiguredFactory(get_args(annotation)[-1])
         else:
             values[field] = unconfigured(_declared_types(annotation)[0])
     return container(**values)

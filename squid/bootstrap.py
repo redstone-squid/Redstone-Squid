@@ -115,11 +115,8 @@ from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.application.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
 from squid.voting.application.recount import BallotRecounter
-from squid.voting.infrastructure.discord_rest import (
-    DiscordRestActorResolver,
-    DiscordRestSession,
-    DiscordRestVoteCards,
-)
+from squid.voting.infrastructure.discord_cards import DiscordVoteCards
+from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver, RestOnlyClient, rest_client
 from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)
@@ -551,24 +548,24 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def discord_rest_session(self) -> DiscordRestSession | None:
-        """The bot-token REST client shared by every adapter, so they share rate-limit accounting."""
+    def discord_rest_client(self) -> RestOnlyClient | None:
+        """The gateway-less bot-token client shared by every adapter, so they share rate-limit accounting."""
         if self.config.discord_bot_token is None:
             return None
-        session = DiscordRestSession(
+        client = rest_client(
             self.config.discord_bot_token.get_secret_value(),
             api_url=str(self.config.upstream_http.discord_api_url),
         )
-        self.resources.push_async_callback(session.aclose)
-        return session
+        self.resources.push_async_callback(client.close)
+        return client
 
     @cached_property
     def vote_members(self) -> DiscordRestActorResolver | None:
-        session = self.discord_rest_session
-        if session is None:
+        client = self.discord_rest_client
+        if client is None:
             return None
         resolver = DiscordRestActorResolver(
-            session,
+            client,
             capabilities=self.permissions,
             discord_ids=AccountVoterDiscordIdLookup(self.accounts),
         )
@@ -579,10 +576,10 @@ class _ServiceGraph:
     def rest_ballot_recounter(self) -> BallotRecounter | None:
         """Recount ballots through Discord's REST API, for processes without a gateway."""
         resolver = self.vote_members
-        session = self.discord_rest_session
-        if resolver is None or session is None:
+        client = self.discord_rest_client
+        if resolver is None or client is None:
             return None
-        cards = DiscordRestVoteCards(session)
+        cards = DiscordVoteCards(client)
         return BallotRecounter(self.votes, cards, AccountConsentedVoterLookup(self.accounts), resolver)
 
     @cached_property
@@ -745,6 +742,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
+        vote_cards=DiscordVoteCards,
         discord_reconciliation=DiscordReconciliationService(uow_factory=graph.uow_factory),
         domain_events=DomainEventService(uow_factory=graph.uow_factory),
         notifications=graph.notifications,

@@ -15,6 +15,7 @@ from types import TracebackType
 from typing import Any, Self
 
 import anyio
+import discord
 from anyio.abc import TaskGroup
 from whenever import Instant
 
@@ -70,7 +71,7 @@ from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.application.ports import InteractiveVoteActorResolver
-from squid.voting.application.recount import BallotRecounter
+from squid.voting.application.recount import BallotRecounter, VoteCardReactions
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,8 @@ class BotServices:
     accounts: AccountService
     versions: VersionService
     votes: VoteService
+    vote_cards: Callable[[discord.Client], VoteCardReactions]
+    """Build the vote card adapter for the bot's own client, which bootstrap cannot see."""
     discord_reconciliation: DiscordReconciliationService
     domain_events: DomainEventService
     notifications: NotificationService

@@ -9,7 +9,7 @@ retried. Missing reactions alone never prove a stored ballot was withdrawn.
 """
 
 import contextlib
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, ClassVar
 
@@ -30,8 +30,8 @@ from squid.core.locks import KeyedLock
 from squid.runtime import JobHandle
 from squid.voting.application.accounts import AccountConsentedVoterLookup
 from squid.voting.application.ports import VoteActorResolver
-from squid.voting.application.recount import BallotRecounter, CardReactions
-from squid.voting.domain import CastVoteResult, VoteActor, VoteMessage, VoteRejection, VoteSessionSnapshot
+from squid.voting.application.recount import BallotRecounter
+from squid.voting.domain import CastVoteResult, VoteActor, VoteRejection, VoteSessionSnapshot
 from squid_ui.text import Message, localization_scope, raw_md
 from squid_ui_discord import send_to
 
@@ -44,42 +44,6 @@ _QUIET_REJECTIONS = frozenset({VoteRejection.NOT_FOUND, VoteRejection.CLOSED, Vo
 Racing a close, or reacting with an emoji that is not an option, is ordinary and
 would otherwise put a bot message in the channel for every stray reaction.
 """
-
-
-class DiscordVoteCards:
-    """Read and change vote card reactions through the bot's gateway client.
-
-    This implements `VoteCardReactions` for the bot. Reading a card fetches it and pages
-    through the users of each option's reaction, so it costs Discord requests in proportion
-    to the number of voters.
-    """
-
-    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
-        self.bot = bot
-
-    async def read(self, card: VoteMessage, emojis: Sequence[str]) -> CardReactions | None:
-        message = await self.bot.get_or_fetch_message(card.channel_id, card.id)
-        if message is None:
-            return None
-        reactions = {str(reaction.emoji): reaction for reaction in message.reactions}
-        voters: dict[str, list[int]] = {}
-        for emoji in emojis:
-            reaction = reactions.get(emoji)
-            if reaction is not None:
-                voters[emoji] = [user.id async for user in reaction.users(limit=None) if not user.bot]
-        own = frozenset(emoji for emoji in emojis if (reaction := reactions.get(emoji)) is not None and reaction.me)
-        return CardReactions(voters, own)
-
-    async def remove(self, card: VoteMessage, emoji: str, user_id: int) -> None:
-        with contextlib.suppress(discord.NotFound, discord.Forbidden):
-            await self._message(card).remove_reaction(emoji, discord.Object(user_id))
-
-    async def add_own(self, card: VoteMessage, emoji: str) -> None:
-        with contextlib.suppress(discord.NotFound, discord.Forbidden):
-            await self._message(card).add_reaction(emoji)
-
-    def _message(self, card: VoteMessage) -> discord.PartialMessage:
-        return self.bot.get_partial_messageable(card.channel_id).get_partial_message(card.id)
 
 
 class VoteReactionHandler:
@@ -100,7 +64,7 @@ class VoteReactionHandler:
         self.bot = bot
         self.vote_service = bot.services.votes
         self._voters = AccountConsentedVoterLookup(bot.services.accounts)
-        self._recounter = BallotRecounter(self.vote_service, DiscordVoteCards(bot), self._voters, actors)
+        self._recounter = BallotRecounter(self.vote_service, bot.services.vote_cards(bot), self._voters, actors)
         self._background_tasks: set[JobHandle] = set()
         self._session_locks: KeyedLock[int] = KeyedLock()
         self._recounting: dict[int, int] = {}
