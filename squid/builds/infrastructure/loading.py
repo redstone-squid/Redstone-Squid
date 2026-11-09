@@ -17,7 +17,7 @@ from squid.builds.models import (
     BuildVersion,
 )
 from squid.core.errors import DataIntegrityError
-from squid.messages.domain import MessageSnapshot
+from squid.messages.domain import MessageRef
 from squid.messages.models import Message
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAuthority, TagSemanticKind
@@ -31,7 +31,7 @@ class _CrossContextValues:
     creators: Mapping[int, list[str]]
     submitter_discord_ids: Mapping[int, int]
     versions: Mapping[int, list[str]]
-    source_messages: Mapping[int, list[MessageSnapshot]]
+    source_messages: Mapping[int, list[MessageRef]]
 
 
 class BuildLoader:
@@ -91,14 +91,14 @@ class BuildLoader:
             )
 
         # Join source links to messages so the whole page needs one provenance query.
-        source_messages: dict[int, list[MessageSnapshot]] = {build_id: [] for build_id in build_ids}
-        for build_id, message in await session.execute(
-            select(BuildSourceMessage.build_id, Message)
+        source_messages: dict[int, list[MessageRef]] = {build_id: [] for build_id in build_ids}
+        for build_id, message_id, channel_id, guild_id in await session.execute(
+            select(BuildSourceMessage.build_id, Message.id, Message.channel_id, Message.guild_id)
             .join(Message, BuildSourceMessage.message_id == Message.id)
             .where(BuildSourceMessage.build_id.in_(build_ids))
             .order_by(BuildSourceMessage.build_id, BuildSourceMessage.position)
         ):
-            source_messages[build_id].append(_source_message(message))
+            source_messages[build_id].append(MessageRef(message_id, channel_id=channel_id, guild_id=guild_id))
 
         return _CrossContextValues(creators, submitter_discord_ids, versions, source_messages)
 
@@ -150,18 +150,6 @@ class BuildLoader:
         object.__setattr__(sql_build, "__frozen_source_messages", source_messages)
         object.__setattr__(sql_build, "__frozen_sponsor", _sponsor(sql_build))
         return sql_build
-
-
-def _source_message(message: Message) -> MessageSnapshot:
-    """Map one stored message reached through a build's source-message link."""
-    return MessageSnapshot(
-        id=message.id,
-        guild_id=message.guild_id,
-        channel_id=message.channel_id,
-        author_id=message.author_id,
-        content=message.content,
-        created_at=message.created_at,
-    )
 
 
 def _sponsor(build: Build) -> PublicSponsor | None:

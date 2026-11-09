@@ -16,7 +16,7 @@ from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
-from squid.messages.domain import MessageSnapshot
+from squid.messages.domain import MessageRef, MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
@@ -307,7 +307,10 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
     assert isinstance(result, FinalizedBuild)
     saved = await transact(builds, lambda uow: uow.builds.get_by_id(result.build_id))
     assert saved is not None
-    assert saved.source_messages == (source,)
+    assert saved.source_messages == (MessageRef(123456, channel_id=456),)
+    stored = await transact(builds, lambda uow: uow.messages.get_by_id(123456))
+    assert stored is not None
+    assert stored.content == "Original inferred facts"
 
 
 async def test_executor_recovers_a_loaded_source_build(

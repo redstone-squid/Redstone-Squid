@@ -26,7 +26,7 @@ from squid.builds.domain import BuildCategory, Status
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
-from squid.messages.domain import MessageSnapshot
+from squid.messages.domain import MessageRef, MessageSnapshot
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.models import ServerSetting
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -435,15 +435,49 @@ async def test_source_messages_round_trip(
 
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(frozen.id))
     assert loaded is not None
-    assert [message.id for message in loaded.source_messages] == [6000, 6001]
-    first = loaded.source_messages[0]
-    assert first.guild_id == 4000
-    assert first.channel_id == 5000
-    assert first.author_id == 7000
-    assert first.content == "the original submission text"
-    assert first.created_at == Instant.from_utc(2026, 11, 9)
+    assert loaded.source_messages == (
+        MessageRef(6000, channel_id=5000, guild_id=4000),
+        MessageRef(6001, channel_id=5000, guild_id=4000),
+    )
     # The submission link points at the request, not at a trailing image.
     assert loaded.original_link == "https://discord.com/channels/4000/5000/6000"
+    stored = await transact(repository, lambda uow: uow.messages.get_by_id(6000))
+    assert stored is not None
+    assert stored.author_id == 7000
+    assert stored.content == "the original submission text"
+    assert stored.created_at == Instant.from_utc(2026, 11, 9)
+
+
+async def test_saving_a_build_keeps_newer_source_message_content(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A build edit must not roll back a Discord edit recorded after the build was loaded."""
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    source = MessageSnapshot(id=6100, guild_id=4000, channel_id=5000, author_id=7000, content="original")
+    build = OtherBuild(
+        submission_status=Status.PENDING,
+        submitter_account_id=account_id,
+        versions=["Java 1.21.0"],
+        source_messages=(source,),
+    )
+    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
+    assert build.id is not None
+
+    loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert loaded is not None
+    await transact(repository, lambda uow: uow.messages.record_edit(6100, "edited", Instant.now()), commit=True)
+    edited = loaded.copy_for_edit()
+    edited.description = "changed"
+    await transact(repository, lambda uow: uow.builds.save(edited), commit=True)
+
+    stored = await transact(repository, lambda uow: uow.messages.get_by_id(6100))
+    assert stored is not None
+    assert stored.content == "edited"
+    reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert reloaded is not None
+    assert reloaded.description == "changed"
+    assert reloaded.source_messages == (MessageRef(6100, channel_id=5000, guild_id=4000),)
 
 
 async def test_one_message_can_source_several_builds(

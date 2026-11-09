@@ -33,6 +33,7 @@ from squid.builds.models import (
     ExtenderBuild,
 )
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
+from squid.messages.domain import MessageSnapshot
 from squid.messages.models import Message
 from squid.persistence.types import now
 from squid.settings.infrastructure.repository import ensure_server_settings
@@ -698,42 +699,35 @@ class BuildRepository:
 
     @staticmethod
     async def _sync_source_messages(build: Build, session: AsyncSession) -> None:
-        """Save source-message details and replace the build's ordered links to them.
+        """Replace the build's ordered links to its source messages.
 
-        Several builds can share a source message, so stored messages are upserted.
-        Write them here instead of through MessageService so the message and its
-        build link commit together; the link's foreign key requires the message
-        to exist before the link is inserted.
+        Snapshots, which a new build carries from its draft, are recorded first if
+        the message is not stored yet. An existing row is left alone: it may hold a
+        later edit or deletion, and other features read it too. Plain references must
+        point at stored messages. Write here instead of through MessageService so the
+        messages and the build's links commit together.
         """
         assert build.id is not None
         await session.execute(delete(BuildSourceMessage).where(BuildSourceMessage.build_id == build.id))
         if not build.source_messages:
             return
 
-        await ensure_server_settings(session, (source.guild_id for source in build.source_messages))
-        for source in build.source_messages:
-            assert source.author_id is not None, "A source message must record its author."
+        snapshots = [source for source in build.source_messages if isinstance(source, MessageSnapshot)]
+        await ensure_server_settings(session, (snapshot.guild_id for snapshot in snapshots))
+        for snapshot in snapshots:
+            assert snapshot.author_id is not None, "A source message must record its author."
             await session.execute(
                 pg_insert(Message)
                 .values(
-                    id=source.id,
-                    guild_id=source.guild_id,
-                    channel_id=source.channel_id,
-                    author_id=source.author_id,
-                    content=source.content,
-                    created_at=source.created_at,
+                    id=snapshot.id,
+                    guild_id=snapshot.guild_id,
+                    channel_id=snapshot.channel_id,
+                    author_id=snapshot.author_id,
+                    content=snapshot.content,
+                    created_at=snapshot.created_at,
                     observed_at=Instant.now(),
                 )
-                .on_conflict_do_update(
-                    index_elements=[Message.id],
-                    set_={
-                        "guild_id": source.guild_id,
-                        "channel_id": source.channel_id,
-                        "author_id": source.author_id,
-                        "content": source.content,
-                        **({"created_at": source.created_at} if source.created_at is not None else {}),
-                    },
-                )
+                .on_conflict_do_nothing(index_elements=[Message.id])
             )
 
         await session.execute(

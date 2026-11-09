@@ -20,7 +20,7 @@ from squid.builds.application import BuildEditor, BuildService
 from squid.builds.domain import Status
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, BuildLink, DoorBuild
-from squid.messages.domain import MessageSnapshot
+from squid.messages.domain import MessageRef
 from squid.permissions.domain import Subject
 from squid.runtime import BotServices
 from squid.search.application import SearchService
@@ -115,7 +115,7 @@ def display_build() -> Build:
         versions=["Java 1.20"],
         links=[BuildLink(url="https://example.com/build.png", media_type="image")],
         extra_info={},
-        source_messages=(MessageSnapshot(id=3, guild_id=1, channel_id=2),),
+        source_messages=(MessageRef(id=3, guild_id=1, channel_id=2),),
     )
 
 
