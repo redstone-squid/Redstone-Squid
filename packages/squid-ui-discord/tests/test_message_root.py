@@ -6,7 +6,6 @@ loading, and shutdown, using recorded Discord calls instead of network requests.
 """
 
 import asyncio
-import inspect
 import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -969,7 +968,8 @@ class TestRenderAndWire:
 
 class TestAccessPolicy:
     def test_access_is_a_required_keyword(self) -> None:
-        assert inspect.signature(MessageRoot).parameters["access"].default is inspect.Parameter.empty
+        with pytest.raises(TypeError, match="access"):
+            MessageRoot(Counter())  # type: ignore[missing-argument]
 
     async def test_everyone_admits_any_user(self) -> None:
         component = Counter()

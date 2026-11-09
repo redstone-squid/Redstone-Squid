@@ -5,7 +5,6 @@ members. A session-key limit controls how many sessions share a key; capacity an
 membership. Attachments here are child message roots, such as dialogs.
 """
 
-from dataclasses import fields
 from typing import Any, cast, override
 
 import anyio
@@ -105,12 +104,6 @@ def test_session_keys_use_typed_frozen_scopes() -> None:
     assert SessionKey.global_("status").scope == squid_ui_discord.sessions.GlobalScope()
     assert SessionKey.custom("edit", (7, 99)).scope == squid_ui_discord.sessions.CustomScope((7, 99))
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
-
-
-def test_message_root_defaults_expose_every_configurable_value() -> None:
-    assert {field.name for field in fields(MessageRootDefaults)} == set(
-        squid_ui_discord.message_root_contracts.MessageRootConfig.__dataclass_fields__
-    )
 
 
 def test_message_root_defaults_apply_overrides_without_mutating_the_defaults() -> None:

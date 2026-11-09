@@ -1,8 +1,7 @@
 """Operational devtools runtime contracts."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import override
-from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -18,10 +17,10 @@ from squid_ui_discord.devtools_runtime import (
     DevToolsPolicy,
     DevToolsRuntime,
 )
-from squid_ui_discord.durability import PurgeResult
+from squid_ui_discord.durability import DurableSessionRuntime, PurgeResult
 from squid_ui_discord.message_root_scheduler import MessageRootSchedulerSnapshot
 from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import delivered_to, message_harness
+from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -100,7 +99,8 @@ async def test_close_session_requires_confirmation_and_finishes_all_roots() -> N
 async def test_wait_idle_observes_sync_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
     profiler = MemoryProfiler()
     bus = sl.runtime.LocalTopicBus()
-    callback = Mock()
+    seen: list[sl.runtime.Topic] = []
+    callback = seen.append
     bus.subscribe(sl.runtime.Topic("devtools", "test"), callback)
     bus.publish(sl.runtime.Topic("devtools", "test"))
     with profiler.operation(OperationKind.DISPATCH, name="devtools-test"):
@@ -108,7 +108,7 @@ async def test_wait_idle_observes_sync_topics_and_clear_profile_resets_bounded_d
     runtime = DevToolsRuntime(bus=bus, profiler=profiler, policy=DevToolsPolicy.full_access())
 
     await runtime.wait_idle()
-    callback.assert_called_once_with(sl.runtime.Topic("devtools", "test"))
+    assert seen == [sl.runtime.Topic("devtools", "test")]
     topics = runtime.snapshot().topics
     assert topics is not None
     assert topics.queued == 0
@@ -239,9 +239,17 @@ def test_policy_rejects_confirmation_for_a_disabled_action() -> None:
         DevToolsPolicy.allow(confirmations=frozenset({DevToolsAction.CLOSE_SESSION}))
 
 
+class PurgeRecorder(DurableSessionRuntime):
+    def __init__(self) -> None:
+        self.purge_calls: AsyncCallRecorder = AsyncCallRecorder()
+
+    async def purge(self, record_keys: Sequence[str]) -> tuple[PurgeResult, ...]:
+        return await self.purge_calls(record_keys)
+
+
 async def test_purge_persistence_requires_confirmation_and_returns_store_results() -> None:
-    durable = AsyncMock()
-    durable.purge.return_value = (PurgeResult(record_key="record-1", deleted=True, reason="deleted"),)
+    durable = PurgeRecorder()
+    durable.purge_calls.return_value = (PurgeResult(record_key="record-1", deleted=True, reason="deleted"),)
     policy = DevToolsPolicy(
         enabled=frozenset({DevToolsAction.PURGE_PERSISTENCE}),
         confirmations=frozenset({DevToolsAction.PURGE_PERSISTENCE}),
@@ -254,4 +262,4 @@ async def test_purge_persistence_requires_confirmation_and_returns_store_results
     result = await runtime.purge_persistence(("record-1",), confirmed=True)
 
     assert result == (PurgeResult(record_key="record-1", deleted=True, reason="deleted"),)
-    durable.purge.assert_awaited_once_with(("record-1",))
+    durable.purge_calls.assert_awaited_once_with(("record-1",))

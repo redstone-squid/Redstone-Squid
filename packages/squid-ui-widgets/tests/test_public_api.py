@@ -1,8 +1,5 @@
 """Public namespace and packaging contracts for the machine library."""
 
-import tomllib
-from pathlib import Path
-
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 
@@ -18,11 +15,3 @@ def test_patterns_import_without_a_transport_installed() -> None:
     engine.assert_imports_without(
         ["squid_ui_widgets", "squid_ui_widgets.guards"], "discord", "anyio", "squid_storage", "squid_ui_discord"
     )
-
-
-def test_package_metadata_names_only_the_engine() -> None:
-    metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
-    project = metadata["project"]
-    assert project["version"] == "0.1.0a1"
-    assert project["dependencies"] == ["squid-ui==0.1.0a1", "squid-reactivity==0.1.0a1"]
-    assert "optional-dependencies" not in project

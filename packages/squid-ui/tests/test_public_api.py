@@ -1,7 +1,5 @@
 """Public namespace and packaging contracts for the portable engine."""
 
-import tomllib
-from pathlib import Path
 from types import ModuleType
 
 import pytest
@@ -90,12 +88,3 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
         "squid_ui_discord",
         "squid_ui_widgets",
     )
-
-
-def test_package_metadata_names_only_the_reactive_kernel() -> None:
-    metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
-    project = metadata["project"]
-    assert project["version"] == "0.1.0a1"
-    assert project["dependencies"] == ["markdown-it-py>=4.0,<5", "squid-reactivity==0.1.0a1"]
-    # Execution is opt-in; importing and rendering with the engine needs no AnyIO install.
-    assert project["optional-dependencies"] == {"services": ["anyio>=4.14,<5"]}

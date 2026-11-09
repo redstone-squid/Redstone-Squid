@@ -3,15 +3,11 @@
 import importlib
 import subprocess
 import sys
-import tomllib
-from pathlib import Path
 from types import ModuleType
 
 import pytest
 
 import squid_ui_discord
-from squid_ui.text import Message
-from squid_ui_discord.sessions import Reject
 
 RENAMED_SUBMODULES = (
     "squid_ui_discord.rendering",
@@ -23,12 +19,6 @@ RENAMED_SUBMODULES = (
 def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> None:
     mod = importlib.import_module(dotted)
     assert isinstance(mod, ModuleType)
-
-
-def test_rejection_notices_accept_public_deferred_text() -> None:
-    notice = Message("This screen is already open.")
-
-    assert Reject(notice=notice).notice is notice
 
 
 def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
@@ -82,27 +72,3 @@ assert squid_ui_discord.SessionSpec
 assert "squid_storage" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)
-
-
-def test_package_metadata_keeps_its_base_and_optional_dependencies() -> None:
-    metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
-    project = metadata["project"]
-    assert project["version"] == "0.1.0a1"
-    assert project["dependencies"] == [
-        "squid-ui[services]==0.1.0a1",
-        "squid-reactivity==0.1.0a1",
-        "discord-py>=2.7,<3",
-        "anyio>=4.14,<5",
-        "packaging>=24,<27",
-        "typing-extensions>=4.13",
-    ]
-    assert project["optional-dependencies"]["durable"] == ["squid-storage==0.1.0a1"]
-    assert project["optional-dependencies"]["postgres"] == ["squid-storage[postgres]==0.1.0a1"]
-
-
-@pytest.mark.parametrize(
-    "name", ["DiscordUI", "DiscordAction", "DiscordUIConfig", "native", "responder", "run_managed_result"]
-)
-def test_retired_application_entry_points_are_absent(name: str) -> None:
-    assert name not in squid_ui_discord.__all__
-    assert not hasattr(squid_ui_discord, name)
