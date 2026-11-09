@@ -64,8 +64,8 @@ def _ranked() -> sp.RankedList:
     return sp.RankedList(("A", "B", "C"), key="ranked", label=str, value=len, page_size=2)
 
 
-def _wizard() -> sp.Wizard:
-    return sp.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True)
+def _wizard() -> sp.machines.Wizard:
+    return sp.machines.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True)
 
 
 MACHINES: tuple[tuple[str, MachineFactory], ...] = (

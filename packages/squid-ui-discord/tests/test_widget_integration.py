@@ -54,7 +54,7 @@ def _ranked() -> sl.Component[sl.DiscordTarget]:
 
 
 def _wizard() -> sl.Component[sl.DiscordTarget]:
-    return sp.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True).build_component()
+    return sp.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True)
 
 
 def _agreement() -> sl.Component[sl.DiscordTarget]:

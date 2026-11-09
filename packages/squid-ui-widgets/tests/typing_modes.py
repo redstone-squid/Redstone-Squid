@@ -40,3 +40,34 @@ routed = sp.RouteDriver[sp.TabsState, ComponentsV2Target](lambda route: route.ac
 assert_type(routed, DocumentLike[ComponentsV2Target])
 plan(routed, target=v2())
 plan(routed, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+
+
+v2_wizard = sp.Wizard("Setup", (sp.WizardStep("details", "Details", Panel((Text("V2 only"),))),))
+assert_type(v2_wizard, sp.Wizard[ComponentsV2Target])
+assert_type(v2_wizard.machine, sp.machines.Wizard[ComponentsV2Target])
+accepts_classic(v2_wizard)  # pyrefly: ignore[bad-argument-type]  # pyright: ignore[reportArgumentType]
+
+
+class NativeContext:
+    pass
+
+
+class NativePanel(sl.Component[ComponentsV2Target, NativeContext]):
+    def render(self) -> DocumentLike[ComponentsV2Target, NativeContext]:
+        return sl.paragraph("Native context required")
+
+
+native_tabs = sp.Tabs((sp.Tab("native", "Native", NativePanel()),), key="native")
+assert_type(native_tabs, sp.Tabs[ComponentsV2Target, NativeContext])
+assert_type(native_tabs.machine, sp.machines.Tabs[ComponentsV2Target, NativeContext])
+native_wizard = sp.Wizard("Native", (sp.WizardStep("native", "Native", NativePanel()),))
+assert_type(native_wizard, sp.Wizard[ComponentsV2Target, NativeContext])
+assert_type(native_wizard.machine, sp.machines.Wizard[ComponentsV2Target, NativeContext])
+
+
+def accepts_portable_context(component: sl.Component[ComponentsV2Target]) -> None:
+    del component
+
+
+accepts_portable_context(native_tabs)  # pyrefly: ignore[bad-argument-type]  # pyright: ignore[reportArgumentType]
+accepts_portable_context(native_wizard)  # pyrefly: ignore[bad-argument-type]  # pyright: ignore[reportArgumentType]

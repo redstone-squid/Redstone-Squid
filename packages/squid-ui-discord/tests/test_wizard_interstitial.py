@@ -42,7 +42,7 @@ async def _submit_form(message_root: MessageRoot, key: str, value: str) -> None:
 
 
 async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> None:
-    wizard = sp.Wizard("Build", _steps).build_component()
+    wizard = sp.Wizard("Build", _steps)
     message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
     commit_render(message_root)
 
@@ -64,7 +64,7 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
             sp.WizardStep("name", "Name", _form("Name", "name")),
             sp.WizardStep("done", "Done", "Review"),
         ),
-    ).build_component()
+    )
     message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
     commit_render(message_root)
 

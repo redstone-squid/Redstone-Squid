@@ -1,9 +1,9 @@
 """Reusable interactions built from layout nodes and component state.
 
-Menu, Decision, Wizard, and the editors separate their transition rules from event
+Menu, Decision, and the editors separate their transition rules from event
 delivery. Call ``build_component`` to keep their state in a ComponentDriver, or use
 RouteDriver to encode state into routed controls for a host to recover on each click.
-Tabs is directly mountable; its pure definition lives in ``machines.Tabs``.
+Tabs and Wizard are directly mountable; their pure definitions live in ``machines``.
 Browser, SearchPicker, and SourceRankedList are components that load data through resources;
 Agreement is a component that collects approvals from named participants.
 

@@ -271,9 +271,10 @@ class PollScreen(sd.UserGuildSessionScreen, session_name="poll-wizard"):
             _poll_steps(allow_network),
             key="poll",
             review=sp.WizardReview(label=tr("Review poll"), summarize=_review),
+            on_finish=self._finish,
         )
-        self.wizard = wizard
-        self.driver = wizard.build_component(on_finish=self._finish)
+        self.wizard = wizard.machine
+        self.driver = wizard
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

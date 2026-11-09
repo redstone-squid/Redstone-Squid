@@ -48,9 +48,10 @@ reason, inverted: the guard *vocabulary* is portable and has no opinion about wh
 looks like, but `confirm` answers with a rendered question, so it belongs beside the shell it
 renders. It composes with `all_of` and `any_of` like any other guard.
 
-## Mounting Tabs
+## Mounting Tabs and Wizard
 
-`Tabs` is a component: construct it once and place it with `self.boundary(tabs, key="tabs")`.
+`Tabs` and `Wizard` are components. Construct a tab component once and place it with
+`self.boundary(tabs, key="tabs")`.
 Pass `on_change` and optional `initial_state` to its constructor. Each instance owns its
 selection; `machine_state` is nonpersistent reactive state.
 
@@ -59,6 +60,12 @@ Migration: replace `Tabs(...).build_component(on_change=callback, initial=state)
 still selects the default tab key; an explicit `initial_state` overrides that starting state.
 
 For pure transitions or routed controls, construct `squid_ui_widgets.machines.Tabs` and
-use `RouteDriver`. A mounted component exposes its pure definition through `.machine`;
+use `RouteDriver`. A mounted component exposes its pure definition through read-only `.machine`;
 configuration and transition methods are not forwarded onto the component. Definitions
 containing child component instances cannot be shared across simultaneous mounts.
+
+Likewise, replace `Wizard(...).build_component(on_finish=callback, initial=state)` with
+`Wizard(..., on_finish=callback, initial_state=state)`. The callback receives answers for
+the current branch when incomplete state becomes complete; closing remains explicit through
+`event.source.finish_on_success()`. Routed hosts use `machines.Wizard` and supply their own
+state codec. Other machine-based widgets retain `build_component()` for now.

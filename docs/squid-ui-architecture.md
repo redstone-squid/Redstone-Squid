@@ -479,21 +479,21 @@ can use `MyForm.from_submission(event)` to bind an already validated event witho
 it as prefill. `FormSpec` retains `ACCEPT_AND_MARK` for mapping-based consumers; descriptor forms
 always route invalid attempts to `on_invalid`.
 
-## Patterns: one state machine, two shells
+## Widgets: one state machine, two drivers
 
-Reusable interaction patterns are authored as pure `state -> tree` state machines. Control and
-content construction enter through `PatternControls`; a pattern never hard-codes `sl.action_control`, a
+Machine-based widgets are authored as pure `state -> tree` state machines. Control and
+content construction enter through `MachineControls`; a pattern never hard-codes `sl.action_control`, a
 route id, or a frontend message root. The same specification therefore has two execution paths:
 
 | Shell | State location | Controls | Interaction result |
 |---|---|---|---|
-| `ComponentShell` | its declared `pattern_state = sl.state()` | closure-backed `ActionControl`, `Choices`, and `FormTrigger` | mutate state and let the message root redraw |
-| `RouterShell` | caller-defined route parameters | `RoutedAction` and `RoutedChoices` | decode state and replace the complete document |
+| `ComponentDriver` | its declared `machine_state = sl.state(persist=False)` | closure-backed `ActionControl`, `Choices`, and `FormTrigger` | mutate state and let the message root redraw |
+| `RouteDriver` | caller-defined route parameters | `RoutedActionControl` and `RoutedChoices` | decode state and replace the complete document |
 
-`PatternRoute(action, state, phase)` is the route-builder boundary. A deterministic button has
+`TransitionRoute(action, state, phase)` is the route-builder boundary. A deterministic button has
 `phase="next"`; the pattern transition has already run and `state` is what the replacement document
 renders. A select or form has `phase="input"`; its route carries the state the submitted values apply
-to, and the handler passes those values to `RouterShell.transition`. Routed form handlers obtain the
+to, and the handler passes those values to `RouteDriver.transition`. Routed form handlers obtain the
 prefilled schema from the pattern's `form_for` method. This distinction prevents a routed shell from
 smuggling an in-process callback into a supposedly restart-surviving control.
 
@@ -511,6 +511,11 @@ stored cursors and are clamped by the same policy as planner-owned lists. The cu
   window's membership, group exclusions are applied during the merge, validation gates Apply, and an
   Apply edge dispatches only when the committed set changes. Panels with at most five options expose
   a form alternate to the planner.
+
+`Tabs` and `Wizard` construct mounted components directly. Their pure definitions are
+available as `squid_ui_widgets.machines.Tabs` and `.Wizard` for routed hosts. Mounted
+instances expose their definitions through read-only `.machine` and their current state
+through `.machine_state`. Other machine-based widgets still use `build_component()`.
 
 `Agreement` deliberately sits beside the pure pattern catalogue rather than inside it. Its
 transition is actor-keyed, so it is a mounted component with two explicitly non-persistent

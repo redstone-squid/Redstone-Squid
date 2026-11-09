@@ -11,6 +11,8 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.Wizard
 
+::: squid_ui_widgets.machines.Wizard
+
 ::: squid_ui_widgets.WizardStep
 
 ::: squid_ui_widgets.WizardAnswer
