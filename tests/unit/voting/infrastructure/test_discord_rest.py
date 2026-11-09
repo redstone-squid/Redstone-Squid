@@ -10,7 +10,7 @@ import aiohttp
 import pytest
 from aiohttp import ClientResponse
 from discord.errors import DiscordServerError, Forbidden, HTTPException, NotFound, RateLimited
-from discord.http import Route
+from discord.http import HTTPClient, Route
 
 from squid.voting.domain import VoteKind, VoteMessage
 from squid.voting.errors import DiscordMemberServiceUnavailableError
@@ -18,6 +18,7 @@ from squid.voting.infrastructure.discord_rest import (
     DiscordRestActorResolver,
     DiscordRestSession,
     DiscordRestVoteCards,
+    RestOnlyClient,
     rebased_url,
 )
 
@@ -73,7 +74,12 @@ class FakeDiscordIds:
 
 def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestActorResolver:
     kwargs.setdefault("discord_ids", FakeDiscordIds())
-    return DiscordRestActorResolver(DiscordRestSession.wrapping(cast(Any, http)), **kwargs)
+    return DiscordRestActorResolver(session_for(http), **kwargs)
+
+
+def session_for(http: object) -> DiscordRestSession:
+    """A session whose client sends every request to the stub `http`."""
+    return DiscordRestSession.wrapping(RestOnlyClient(cast(HTTPClient, http)))
 
 
 async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
@@ -174,7 +180,7 @@ async def test_member_rejects_malformed_payload(payload: Any) -> None:
 async def test_shutdown_closes_an_owned_client_exactly_once() -> None:
     http = StubHTTPClient({"roles": []})
     session = DiscordRestSession("token")
-    session._http = cast(Any, http)  # Stands in for the client a first request would log in.
+    session._client = RestOnlyClient(cast(HTTPClient, http))  # Stands in for the client a first request logs in.
     resolver = DiscordRestActorResolver(session, discord_ids=FakeDiscordIds())
 
     await session.aclose()
@@ -188,7 +194,7 @@ async def test_shutdown_closes_an_owned_client_exactly_once() -> None:
 async def test_a_wrapped_client_is_not_closed_by_the_session() -> None:
     http = StubHTTPClient({"roles": []})
 
-    await DiscordRestSession.wrapping(cast(Any, http)).aclose()
+    await session_for(http).aclose()
 
     assert http.closes == 0
 
@@ -254,6 +260,31 @@ async def test_resolve_reports_an_account_without_discord_as_weightless() -> Non
     assert actor.role_ids == frozenset()
 
 
+def user_payload(user_id: int, *, bot: bool = False) -> dict[str, Any]:
+    return {"id": str(user_id), "username": f"user{user_id}", "discriminator": "0", "avatar": None, "bot": bot}
+
+
+def message_payload(card: VoteMessage, reactions: list[dict[str, Any]]) -> dict[str, Any]:
+    """A message as Discord's REST API returns it, with the fields discord.py's `Message` requires."""
+    return {
+        "id": str(card.id),
+        "channel_id": str(card.channel_id),
+        "author": user_payload(99, bot=True),
+        "content": "",
+        "timestamp": "2026-01-01T00:00:00+00:00",
+        "edited_timestamp": None,
+        "tts": False,
+        "mention_everyone": False,
+        "mentions": [],
+        "mention_roles": [],
+        "attachments": [],
+        "embeds": [],
+        "pinned": False,
+        "type": 0,
+        "reactions": reactions,
+    }
+
+
 class StubVoteCardHTTPClient:
     """Serve one card's message and reaction users the way Discord's REST API pages them."""
 
@@ -270,7 +301,7 @@ class StubVoteCardHTTPClient:
         return self.message
 
     async def get_reaction_users(
-        self, channel_id: int, message_id: int, emoji: str, limit: int, after: int | None = None
+        self, channel_id: int, message_id: int, emoji: str, limit: int, after: int | None = None, type: Any = None
     ) -> Any:
         self.pages.append((emoji, after))
         users = self.users[emoji]
@@ -288,34 +319,33 @@ class StubVoteCardHTTPClient:
 
 
 async def test_vote_cards_page_through_human_voters_and_report_the_bots_own_reactions() -> None:
-    message = {
-        "reactions": [
+    card = VoteMessage(100, 200, 10)
+    message = message_payload(
+        card,
+        [
             {"emoji": {"id": None, "name": "1️⃣"}, "me": True, "count": 151},
             {"emoji": {"id": "123456789012345678", "name": "yes"}, "me": False, "count": 1},
-        ]
-    }
-    one = [{"id": "1", "bot": True}, *({"id": str(user_id)} for user_id in range(2, 152))]
-    http = StubVoteCardHTTPClient(message, {"1️⃣": one, "yes:123456789012345678": [{"id": "7"}]})
-    cards = DiscordRestVoteCards(DiscordRestSession.wrapping(cast(Any, http)))
-    card = VoteMessage(100, 200, 10)
+        ],
+    )
+    one = [user_payload(1, bot=True), *(user_payload(user_id) for user_id in range(2, 152))]
+    http = StubVoteCardHTTPClient(message, {"1️⃣": one, "yes:123456789012345678": [user_payload(7)]})
+    cards = DiscordRestVoteCards(session_for(http))
 
     reactions = await cards.read(card, ("1️⃣", "<:yes:123456789012345678>", "2️⃣"))
 
     assert reactions is not None
-    assert reactions.voters["1️⃣"] == list(range(2, 152))
+    assert sorted(reactions.voters["1️⃣"]) == list(range(2, 152))
     assert reactions.voters["<:yes:123456789012345678>"] == [7]
     assert "2️⃣" not in reactions.voters
     assert reactions.own == {"1️⃣"}
     assert http.pages == [("1️⃣", None), ("1️⃣", 100), ("yes:123456789012345678", None)]
     await cards.remove(card, "<:yes:123456789012345678>", 7)
     await cards.add_own(card, "2️⃣")
-    assert (http.removed, http.added) == ([("yes:123456789012345678", 7)], ["2️⃣"])
+    assert (http.removed, http.added) == ([(":yes:123456789012345678", 7)], ["2️⃣"])
 
 
 @pytest.mark.parametrize(("kind", "status"), [(Forbidden, 403), (NotFound, 404)])
 async def test_an_unreadable_vote_card_reads_as_none(kind: type[HTTPException], status: int) -> None:
-    cards = DiscordRestVoteCards(
-        DiscordRestSession.wrapping(cast(Any, StubVoteCardHTTPClient(discord_error(kind, status), {})))
-    )
+    cards = DiscordRestVoteCards(session_for(StubVoteCardHTTPClient(discord_error(kind, status), {})))
 
     assert await cards.read(VoteMessage(100, 200, 10), ("1️⃣",)) is None

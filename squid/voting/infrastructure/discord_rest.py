@@ -1,22 +1,24 @@
 """Discord REST adapters for vote member facts and vote card reactions, for processes without a gateway.
 
-Both adapters send their requests through one `DiscordRestSession`. discord.py tracks rate limits per
-`HTTPClient`, so sharing a single client keeps every request made with the bot token in one rate-limit
-accounting instead of letting each adapter discover the limits separately.
+Both adapters send their requests through one `DiscordRestSession`, which holds a discord.py `Client` that
+is logged in with the bot token but never connects to the gateway. Without the gateway the client has no
+cache, so every message or member is fetched, but discord.py still parses the responses and pages through
+results. discord.py tracks rate limits per `HTTPClient`, so sharing a single client keeps every request made
+with the bot token in one rate-limit accounting.
 """
 
 import asyncio
 import contextlib
 import enum
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Callable, Sequence
 from time import monotonic
 from typing import Any, Protocol, override
 
 import aiohttp
+import discord
 from discord.errors import DiscordException, Forbidden, NotFound
 from discord.http import HTTPClient, Route
-from discord.partial_emoji import PartialEmoji
 
 from squid.permissions.application.ports import ActorCapabilityResolver
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
@@ -31,27 +33,6 @@ MAX_RATE_LIMIT_WAIT_SECONDS = 60.0
 
 
 # Shared client
-
-
-class DiscordRestClient(Protocol):
-    """The discord.py `HTTPClient` operations these adapters use."""
-
-    # These return awaitables rather than being declared `async`: discord.py's `HTTPClient`
-    # methods are plain methods handing back the coroutine `request` produced, which satisfies
-    # this structurally but not the stricter `CoroutineType` an `async def` in a protocol asks for.
-    def get_member(self, guild_id: int, member_id: int) -> Awaitable[Any]: ...
-
-    def get_message(self, channel_id: int, message_id: int) -> Awaitable[Any]: ...
-
-    def get_reaction_users(
-        self, channel_id: int, message_id: int, emoji: str, limit: int, after: int | None = None
-    ) -> Awaitable[Any]: ...
-
-    def add_reaction(self, channel_id: int, message_id: int, emoji: str) -> Awaitable[Any]: ...
-
-    def remove_reaction(self, channel_id: int, message_id: int, emoji: str, member_id: int) -> Awaitable[Any]: ...
-
-    async def close(self) -> None: ...
 
 
 class DiscordRestSessionClosedError(RuntimeError):
@@ -89,8 +70,19 @@ class _RebasedHTTPClient(HTTPClient):
         return await super().request(route, **kwargs)
 
 
+class RestOnlyClient(discord.Client):
+    """A discord.py client that sends REST requests through `http` and never opens a gateway connection."""
+
+    def __init__(self, http: HTTPClient) -> None:
+        super().__init__(intents=discord.Intents.none())
+        # Client.__init__ builds its own HTTPClient and hands it to the ConnectionState
+        # that models such as Message and Reaction send their requests through, so
+        # both references must point at the replacement.
+        self.http = self._connection.http = http
+
+
 class DiscordRestSession:
-    """A bot-token HTTP client that logs in on first use and is shared by the REST adapters.
+    """A bot-token REST client that logs in on first use and is shared by the REST adapters.
 
     Login is lazy because the service graph is built synchronously, outside the event
     loop; a process that never makes a Discord request never opens a session. `aclose`
@@ -104,43 +96,45 @@ class DiscordRestSession:
     def __init__(self, bot_token: str, *, api_url: str = DEFAULT_DISCORD_API_URL) -> None:
         self._token = bot_token
         self._api_url = api_url
-        self._http: DiscordRestClient | None = None
-        self._owns_http = True
+        self._client: discord.Client | None = None
+        self._owns_client = True
         self._closed = False
         self._login_lock = asyncio.Lock()
 
     @classmethod
-    def wrapping(cls, http: DiscordRestClient) -> DiscordRestSession:
+    def wrapping(cls, client: discord.Client) -> DiscordRestSession:
         """Use an already logged-in client, which `aclose` will not close."""
         session = cls("")
-        session._http = http
-        session._owns_http = False
+        session._client = client
+        session._owns_client = False
         return session
 
-    async def client(self) -> DiscordRestClient:
+    async def client(self) -> discord.Client:
         """Return the logged-in client, logging in on the first call."""
         if self._closed:
             msg = "The Discord REST session is shut down."
             raise DiscordRestSessionClosedError(msg)
-        if self._http is not None:
-            return self._http
+        if self._client is not None:
+            return self._client
         async with self._login_lock:
-            if self._http is None:
+            if self._client is None:
                 http = _RebasedHTTPClient(
                     asyncio.get_running_loop(),
                     base=self._api_url,
                     max_ratelimit_timeout=MAX_RATE_LIMIT_WAIT_SECONDS,
                 )
+                # `Client.login` would also fetch the application's details, which these
+                # adapters never use; logging the HTTP client in is all requests need.
                 await http.static_login(self._token)
-                self._http = http
-            return self._http
+                self._client = RestOnlyClient(http)
+            return self._client
 
     async def aclose(self) -> None:
         """Close the client this session created, once."""
         self._closed = True
-        http, self._http = self._http, None
-        if self._owns_http and http is not None:
-            await http.close()
+        client, self._client = self._client, None
+        if self._owns_client and client is not None:
+            await client.close()
 
 
 # Vote members
@@ -255,8 +249,10 @@ class DiscordRestActorResolver:
 
     async def _fetch_membership(self, account_id: int, discord_id: int, guild_id: int) -> _Membership:
         try:
-            http = await self._session.client()
-            payload = await http.get_member(guild_id, discord_id)
+            client = await self._session.client()
+            # The raw payload is enough: only the role IDs matter, and parsing a Member
+            # would need a Guild object, which a gateway-less client does not have.
+            payload = await client.http.get_member(guild_id, discord_id)
         except NotFound:
             return _NotAMember.ABSENT
         except Forbidden:
@@ -304,21 +300,12 @@ class DiscordRestActorResolver:
 # Vote cards
 
 
-_REACTION_PAGE_SIZE = 100
-"""The most users Discord returns for one reaction per request."""
-
-
-def _route_emoji(emoji: str) -> str:
-    """Write a stored emoji the way reaction URLs need it: Unicode as is, custom as `name:id`."""
-    parsed = PartialEmoji.from_str(emoji)
-    return parsed.name if parsed.id is None else f"{parsed.name}:{parsed.id}"
-
-
 class DiscordRestVoteCards:
     """Read and change the reactions on vote cards through Discord's REST API.
 
-    This implements `VoteCardReactions` for the worker, which has no gateway connection and
-    so no message cache: every read fetches the card and pages through each option's users.
+    This implements `VoteCardReactions` for the worker. It mirrors the bot's gateway
+    `DiscordVoteCards`, except that it always fetches the card because there is no message
+    cache. Reading a card costs Discord requests in proportion to the number of voters.
 
     A card that is deleted or hidden reads as None. Other Discord failures, such as a rate
     limit longer than `MAX_RATE_LIMIT_WAIT_SECONDS` or an outage, propagate.
@@ -328,39 +315,29 @@ class DiscordRestVoteCards:
         self._session = session
 
     async def read(self, card: VoteMessage, emojis: Sequence[str]) -> CardReactions | None:
-        http = await self._session.client()
         try:
-            message = await http.get_message(card.channel_id, card.id)
+            message = await (await self._message(card)).fetch()
         except NotFound, Forbidden:
             return None
-        # The message lists each reaction once with whether this bot made it; only the
-        # emojis someone reacted with need their users paged through.
-        mine = {
-            str(PartialEmoji.from_dict(reaction["emoji"])): bool(reaction.get("me"))
-            for reaction in message.get("reactions", ())
-        }
-        voters = {emoji: await self._human_users(http, card, emoji) for emoji in emojis if emoji in mine}
-        return CardReactions(voters, frozenset(emoji for emoji in emojis if mine.get(emoji)))
+        reactions = {str(reaction.emoji): reaction for reaction in message.reactions}
+        voters: dict[str, list[int]] = {}
+        for emoji in emojis:
+            reaction = reactions.get(emoji)
+            if reaction is not None:
+                voters[emoji] = [user.id async for user in reaction.users(limit=None) if not user.bot]
+        own = frozenset(emoji for emoji in emojis if (reaction := reactions.get(emoji)) is not None and reaction.me)
+        return CardReactions(voters, own)
 
     async def remove(self, card: VoteMessage, emoji: str, user_id: int) -> None:
-        http = await self._session.client()
+        message = await self._message(card)
         with contextlib.suppress(NotFound, Forbidden):
-            await http.remove_reaction(card.channel_id, card.id, _route_emoji(emoji), user_id)
+            await message.remove_reaction(emoji, discord.Object(user_id))
 
     async def add_own(self, card: VoteMessage, emoji: str) -> None:
-        http = await self._session.client()
+        message = await self._message(card)
         with contextlib.suppress(NotFound, Forbidden):
-            await http.add_reaction(card.channel_id, card.id, _route_emoji(emoji))
+            await message.add_reaction(emoji)
 
-    async def _human_users(self, http: DiscordRestClient, card: VoteMessage, emoji: str) -> list[int]:
-        """Page through everyone reacting with `emoji`, leaving out bots."""
-        user_ids: list[int] = []
-        after: int | None = None
-        while True:
-            page = await http.get_reaction_users(
-                card.channel_id, card.id, _route_emoji(emoji), _REACTION_PAGE_SIZE, after=after
-            )
-            user_ids.extend(int(user["id"]) for user in page if not user.get("bot"))
-            if len(page) < _REACTION_PAGE_SIZE:
-                return user_ids
-            after = int(page[-1]["id"])
+    async def _message(self, card: VoteMessage) -> discord.PartialMessage:
+        client = await self._session.client()
+        return client.get_partial_messageable(card.channel_id).get_partial_message(card.id)

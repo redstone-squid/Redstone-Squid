@@ -29,7 +29,7 @@ class CardReactions:
     """The vote reactions on one card, as Discord currently reports them."""
 
     voters: Mapping[str, Sequence[int]]
-    """Discord IDs of the people reacting with each requested emoji, in Discord's order.
+    """Discord IDs of the people reacting with each requested emoji, in no particular order.
 
     Bots, including this one, are left out. An emoji nobody reacted with may be missing.
     """
