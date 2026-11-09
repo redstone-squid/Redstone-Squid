@@ -1,9 +1,9 @@
 # Command surface audit
 
 > **Status.** Findings inventory, compiled 2026-08-17 by reading every cog with a UX eye. This
-> expands the complaint list in [README.md](../../command-redesign/README.md); each finding is tagged with the phase
+> expands the complaint list in [README.md](README.md); each finding is tagged with the phase
 > that should absorb it. Anything untagged was originally phase 5's; what phase 5 turned out
-> to be too large to hold is now phases 6–10, and [README.md](../../command-redesign/README.md) is the map.
+> to be too large to hold is now phases 6–10, and [README.md](README.md) is the map.
 
 The surface when this was written: **~108 commands across 19 top-level groups**
 (`build` 14, `settings` 11,
@@ -22,7 +22,7 @@ the count above, which is the number the redesign was argued from.)*
   This single fact produces most of the "too many commands" feeling. Fix is cheap relative to
   impact: set `default_permissions` (and/or `guild_only`) on staff groups so the picker shrinks
   to what the viewer can actually run. Runtime nodes stay as the real gate. **Done
-  2026-08-18**, before phase 2: see [README.md](../../command-redesign/README.md) for the eight commands and the
+  2026-08-18**, before phase 2: see [README.md](README.md) for the eight commands and the
   permission bit each one claims.
 - **C2 — Ephemerality has no policy.** Three patterns coexist: always-ephemeral (72 sites),
   `ephemeral=ctx.interaction is not None` (11 sites), and always-public. Near-identical

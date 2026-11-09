@@ -1,8 +1,10 @@
 # Discord command experience redesign
 
-> **Status.** In progress. Phases land one at a time; each phase has its own plan file in this
-> series and is marked here when delivered. Completed phases are archived under
-> `docs/plans/completed/command-redesign`; phases 8–10 remain unstarted.
+> **Status.** Complete. Phases 0–7 have their own plan files in this directory. Phases 8–10
+> were never written up as plans; their work landed directly (2026-08-29 onward) as the
+> `/starboard` workspace, the `/access` workspace that replaced `/perm` and `/role`, and the
+> small-group cleanup noted in the phase table. The command counts below are from before
+> those phases.
 
 ## Why
 
@@ -10,7 +12,7 @@ Dogfooding findings from actually using the bot (2026-08-17). The command surfac
 by feature and it shows: ~108 commands across 19 top-level groups, several of which overlap,
 fight the Discord UI, or demand more typing than the task deserves. Concrete complaints, from
 the person actually using it (a fuller code-level inventory lives in
-[00-audit.md](../completed/command-redesign/00-audit.md)):
+[00-audit.md](00-audit.md)):
 
 - **Submission is split across two commands with opposite flaws.** `/build submit` asks for
   four attachments *first* and then hides every typed field behind a modal — and Discord modals
@@ -38,7 +40,7 @@ sets `default_permissions`, so all ~108 commands appear in every user's picker**
 gates only fire at runtime; ephemerality and i18n are applied inconsistently; five commands
 take pasted message links where a right-click context menu belongs; raw IDs, UUIDs, and
 ranking scores leak into user-facing output; and pagination is reinvented (or skipped) per
-command. See [00-audit.md](../completed/command-redesign/00-audit.md) for the per-group breakdown.
+command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 
 ## Principles
 
@@ -59,17 +61,17 @@ command. See [00-audit.md](../completed/command-redesign/00-audit.md) for the pe
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 0 | [00-audit.md](../completed/command-redesign/00-audit.md) | Code-level audit of all 19 groups; cross-cutting defects C1–C7 | **Done** |
-| 1 | [01-build-submit.md](../completed/command-redesign/01-build-submit.md) | One `/build submit`: typed fields with autocomplete first, attachments last, workspace kept; `submit-full` removed | **Delivered** |
-| 2 | [02-search.md](../completed/command-redesign/02-search.md) | One `/search`: taxonomies named in `scope`, tag kinds indexed, one sort option; `/patterns` removed and `/restrictions` reduced to its staff command | **Delivered** |
-| 3 | [03-diagnostics.md](../completed/command-redesign/03-diagnostics.md) | `/error`: reports page inline, `recent` entries open in place, and every reply is private on the prefix side too | **Delivered** |
-| 4 | [04-settings.md](../completed/command-redesign/04-settings.md) | `/settings` opens a panel: every key on one screen with a picker each, voting configured where it is displayed; `list`/`get`/`clear`/`voting show`/`voting emojis` removed | **Delivered** |
-| 5 | [05-condensation.md](../completed/command-redesign/05-condensation.md) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | **Delivered** |
-| 6 | [06-build.md](../completed/command-redesign/06-build.md) | `/build`, 15 commands: one edit surface instead of two that disagree about who may edit; `queue` paginated and de-idded; the loose schematic tools moved under `build schematic` | **Delivered** |
-| 7 | [07-account.md](../completed/command-redesign/07-account.md) | `/account`, 12 commands: identity and profile management stop making you read an id off one command to type into the next, as claim review already has (5.4) | **Delivered** |
-| 8 | 08-small-groups.md (todo) | `/info` folds into `/help`; `/version`, `/redstoner` and `/tag` polish; the poll wizard's untranslated half of C3; the last C4 message arguments | Not started |
-| 9 | 09-starboard.md (todo) | `/starboard`, 14 commands of CRUD across two subgroups, become a board panel | Not started |
-| 10 | 10-permission-admin.md (todo) | `/role` and what is left of `/perm`: 20 staff commands, and a group name that means something else in Discord | Not started |
+| 0 | [00-audit.md](00-audit.md) | Code-level audit of all 19 groups; cross-cutting defects C1–C7 | **Done** |
+| 1 | [01-build-submit.md](01-build-submit.md) | One `/build submit`: typed fields with autocomplete first, attachments last, workspace kept; `submit-full` removed | **Delivered** |
+| 2 | [02-search.md](02-search.md) | One `/search`: taxonomies named in `scope`, tag kinds indexed, one sort option; `/patterns` removed and `/restrictions` reduced to its staff command | **Delivered** |
+| 3 | [03-diagnostics.md](03-diagnostics.md) | `/error`: reports page inline, `recent` entries open in place, and every reply is private on the prefix side too | **Delivered** |
+| 4 | [04-settings.md](04-settings.md) | `/settings` opens a panel: every key on one screen with a picker each, voting configured where it is displayed; `list`/`get`/`clear`/`voting show`/`voting emojis` removed | **Delivered** |
+| 5 | [05-condensation.md](05-condensation.md) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | **Delivered** |
+| 6 | [06-build.md](06-build.md) | `/build`, 15 commands: one edit surface instead of two that disagree about who may edit; `queue` paginated and de-idded; the loose schematic tools moved under `build schematic` | **Delivered** |
+| 7 | [07-account.md](07-account.md) | `/account`, 12 commands: identity and profile management stop making you read an id off one command to type into the next, as claim review already has (5.4) | **Delivered** |
+| 8 | — | `/info` folds into `/help`; `/version`, `/redstoner` and `/tag` polish; the poll wizard's untranslated half of C3; the last C4 message arguments | **Delivered** without a plan: `/info` removed, `/tags` and `/versions` replace `/tag` and `/version`, `redstoner resync` is a context menu, poll strings go through `tr()` except the "Close poll" and "Refresh weights" labels in `squid/bot/voting/controls.py` |
+| 9 | — | `/starboard`, 14 commands of CRUD across two subgroups, become a board panel | **Delivered** without a plan (`starboard: replace crud commands with a workspace`) |
+| 10 | — | `/role` and what is left of `/perm`: 20 staff commands, and a group name that means something else in Discord | **Delivered** without a plan: both merged into `/access` |
 
 **C1, picker visibility, is delivered** (2026-08-18), ahead of phase 2 as the audit
 recommended. `hide_unless(...)` in `squid/bot/utils/permissions.py` wraps
@@ -99,7 +101,7 @@ Phase 5 was scoped as a sweep over what no other phase owned, and its own plan d
 groups by name: `/starboard`, `/role` plus the rest of `/perm`, and `build edit`'s flags. Each
 is a phase-sized rebuild rather than a step in a sweep, and the audit's per-group findings for
 `/build`, `/account` and the small groups were never claimed by anything either. Those are
-phases 6–10. Nothing here is new analysis: it is [00-audit.md](../completed/command-redesign/00-audit.md)'s untagged
+phases 6–10. Nothing here is new analysis: it is [00-audit.md](00-audit.md)'s untagged
 remainder plus phase 5's explicit deferrals, sliced so each phase is one surface.
 
 Ordering is by **who is affected**, not by size. Phases 6–8 finish the *public* surface —
@@ -142,8 +144,8 @@ inferred from whichever plan happened to mention them last.
 |---|---------|--------|
 | C1 | Staff commands visible to everyone | **Done** (2026-08-18), see below |
 | C2 | No ephemerality policy | **Done** (5.7) — the rule and its two helpers live in `squid/bot/utils/visibility.py`; `RunningMessage` cannot be ephemeral and is recorded as a gap |
-| C3 | Replies bypassing i18n and layouts | Settings (4) and notifications (5.3) done; the poll wizard is still entirely untranslated bare strings — phase 8 |
-| C4 | Message arguments where a right-click belongs | Polls done (5.1), `build recalc` done (6.3); `redstoner resync` is phase 8 |
-| C5 | Raw internals in user-facing output | Search done (2), `build queue` done (6.1), claim ids done (5.4); `records lookup`'s restriction ids and notification subject UUIDs are recorded as deliberate deferrals in [05-condensation.md](../completed/command-redesign/05-condensation.md) |
+| C3 | Replies bypassing i18n and layouts | Done apart from the two poll control labels noted under phase 8 |
+| C4 | Message arguments where a right-click belongs | Polls done (5.1), `build recalc` done (6.3); `redstoner resync` is a context menu (8) |
+| C5 | Raw internals in user-facing output | Search done (2), `build queue` done (6.1), claim ids done (5.4); `records lookup`'s restriction ids and notification subject UUIDs are recorded as deliberate deferrals in [05-condensation.md](05-condensation.md) |
 | C6 | Ad-hoc pagination | **Done** — the paginator landed in phase 6.1 with `build queue`, and 5.4 and 5.6 took the other four call sites. Phases 7–9 use it rather than reinventing one each |
 | C7 | Hybrid commands that are not | **Done** — phase 1 (`build submit-full`), phase 4 (`voting emojis`), phase 5.1 (`/poll`), phase 6.2 (`build edit`, whose prefix half skipped the preview) |
