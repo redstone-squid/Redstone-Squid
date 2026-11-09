@@ -33,6 +33,27 @@ Build previews use `copy_for_edit()` to copy application facts without copying S
 values when editing them. New fields belong on the entity; explicit input and output schemas change only when their
 contracts need the field. See [Adding a build attribute](new-build-attribute.md).
 
+Build history stores operations in `build_edit_history` and shared JSON snapshots in `build_history_states`.
+Use `uow.build_history.list_history(build_id)` for timeline metadata and `get_history_entry(build_id, entry_id)`
+for detached before/after states. These internal queries do not authorize readers and can inspect deleted builds.
+Database triggers reject updates, deletes, and truncation of either history table.
+
+Build writers supply a `BuildChange` identifying the authenticated account or named system actor. Repository writes
+capture persisted state under the build lock and append history in the same transaction. To group nested repository
+writes, enclose them in `async with uow.builds.changes(change)` and commit only after that scope exits. Its attribution
+wins over nested contexts. New direct SQL or tracked-entity write paths must join a recording operation before mutation;
+manual SQL is outside the capture guarantee. Multi-build operations must acquire their complete build set in ID order.
+
+Consecutive edits reuse their shared state. If the stored history no longer matches the actual pre-edit state, the
+recorder preserves that state separately rather than attributing the discrepancy to the editor. No-op saves and changes
+limited to leases, embeddings, timestamps, or revision counters create no history. Snapshots include attachment identity
+and publication metadata, but not binary files or recomputable schematic analyses. Decimal tag values are strings to
+preserve precision. Extend the explicit snapshot serializer when adding build fields; retain old payload formats.
+
+Pause application writers before applying the build-history migration and deploy the recording code before restarting
+them. The migration takes one baseline of each existing build; it cannot recover prior edits. Retain history indefinitely.
+Disabling the append-only guards is an explicit maintenance operation, not an application write path.
+
 Architecture tests cover entity equality, explicit relationship loading, model dependencies, and transaction ownership.
 Repository integration tests check detached access, round trips, revision guards, preview isolation, and transaction behavior.
 

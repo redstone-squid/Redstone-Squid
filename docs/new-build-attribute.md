@@ -16,3 +16,7 @@
 Entities are tracked within an application unit of work and detached when its scope closes. Prepare build previews
 with `copy_for_edit()`, then apply edits through the build service, which rechecks permissions and the expected revision
 before committing. Replace JSON and array values when editing them so SQLAlchemy tracks the change.
+
+When adding a persisted build attribute, include it in the explicit build-history snapshot serializer and test its
+before/after values. Introduce a new snapshot schema version when changing existing payload meanings; historical
+snapshots remain immutable.
