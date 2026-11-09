@@ -62,20 +62,6 @@ COMMENT ON EXTENSION vector IS 'vector data type and ivfflat and hnsw access met
 
 
 --
--- Name: bump_discord_sync_generation(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.bump_discord_sync_generation() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.generation := OLD.generation + 1;
-    RETURN NEW;
-END;
-$$;
-
-
---
 -- Name: bump_permission_epoch(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -335,16 +321,44 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM public.builds WHERE id = target_key) THEN RETURN NULL; END IF;
     END IF;
 
+    -- The generation is drawn from a sequence rather than counted per row. Acknowledging
+    -- a job deletes its queue row, so a per-row counter restarted at 1 on the next edit
+    -- and could name a revision below one already applied. Sequences are exempt from
+    -- rollback, which is exactly what a staleness token needs.
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
-    VALUES (target_kind, target_key::text, target_action, now(), NULL, NULL, 0, NULL)
+        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+    VALUES (
+        target_kind, target_key::text, target_action,
+        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+    )
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
+        generation = EXCLUDED.generation,
         enqueued_at = EXCLUDED.enqueued_at,
         claimed_at = NULL,
         dead_at = NULL,
         attempts = 0,
         last_error = NULL;
+
+    -- A review card embeds the build it is voting on, so a build change makes the
+    -- session's cards stale too. Their posts are keyed by session, not by build, so
+    -- the sessions have to be enqueued in their own right.
+    IF target_kind = 'build' AND target_action = 'refresh' THEN
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'vote_session', bvs.vote_session_id::text, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        FROM public.build_vote_sessions bvs
+        WHERE bvs.build_id = target_key
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET generation = EXCLUDED.generation,
+            enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL,
+            dead_at = NULL,
+            attempts = 0,
+            last_error = NULL;
+    END IF;
     RETURN NULL;
 END;
 $$;
@@ -401,12 +415,15 @@ BEGIN
             last_error = NULL;
 
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
-        SELECT 'build', assignment.build_id::text, 'refresh', now(), NULL, NULL, 0, NULL
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'build', assignment.build_id::text, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
         FROM public.build_tag_assignments assignment
         WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action,
+            generation = EXCLUDED.generation,
             enqueued_at = EXCLUDED.enqueued_at,
             claimed_at = NULL,
             dead_at = NULL,
@@ -435,6 +452,65 @@ $$;
 
 
 --
+-- Name: enqueue_starboard_sync(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_starboard_sync() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_key text;
+BEGIN
+    IF TG_TABLE_NAME = 'starboards' THEN
+        -- A configuration change restyles or re-thresholds every entry on the board.
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        FROM public.starboard_entries e
+        WHERE e.starboard_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+        RETURN NULL;
+    END IF;
+
+    IF TG_TABLE_NAME = 'starboard_origin_messages' THEN
+        target_key := NULL;
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        FROM public.starboard_entries e
+        WHERE e.origin_message_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+        RETURN NULL;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        target_key := OLD.starboard_id || ':' || OLD.origin_message_id;
+    ELSE
+        target_key := NEW.starboard_id || ':' || NEW.origin_message_id;
+    END IF;
+    INSERT INTO public.discord_sync_queue
+        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+    VALUES (
+        'starboard_entry', target_key, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'refresh' END,
+        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+    )
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action, generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
+        claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+    RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: get_quantified_version_names(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -451,121 +527,6 @@ BEGIN
         v.patch_number AS quantified_name
     FROM
         versions v;
-END;
-$$;
-
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
-
---
--- Name: builds; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.builds (
-    id bigint NOT NULL,
-    submission_status smallint NOT NULL,
-    edited_time timestamp with time zone DEFAULT now(),
-    record_category text,
-    extra_info jsonb DEFAULT '{}'::jsonb NOT NULL,
-    width integer,
-    height integer,
-    depth integer,
-    completion_time text,
-    submission_time timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    category text,
-    ai_generated boolean NOT NULL,
-    original_message_id bigint,
-    version_spec text,
-    embedding public.vector(1536),
-    is_locked boolean DEFAULT false NOT NULL,
-    locked_at timestamp with time zone,
-    completion_at timestamp with time zone,
-    completion_evidence text,
-    description text,
-    submitter_account_id integer NOT NULL,
-    lock_token uuid,
-    lock_expires_at timestamp with time zone,
-    revision bigint DEFAULT 1 NOT NULL,
-    display_name text,
-    source_submission_draft_id uuid,
-    sponsor_installation_id uuid,
-    sponsor_display_name text,
-    sponsor_address text,
-    sponsor_description text,
-    sponsor_website_url text,
-    CONSTRAINT builds_display_name_valid CHECK (((display_name IS NULL) OR ((display_name = btrim(display_name)) AND (display_name <> ''::text) AND (char_length(display_name) <= 120)))),
-    CONSTRAINT builds_lock_lease_complete CHECK (((is_locked AND (lock_token IS NOT NULL) AND (lock_expires_at IS NOT NULL)) OR ((NOT is_locked) AND (lock_token IS NULL) AND (lock_expires_at IS NULL)))),
-    CONSTRAINT builds_revision_positive CHECK ((revision > 0)),
-    CONSTRAINT builds_sponsor_address_length CHECK (((sponsor_address IS NULL) OR ((char_length(sponsor_address) >= 1) AND (char_length(sponsor_address) <= 255)))),
-    CONSTRAINT builds_sponsor_description_length CHECK (((sponsor_description IS NULL) OR ((char_length(sponsor_description) >= 1) AND (char_length(sponsor_description) <= 500)))),
-    CONSTRAINT builds_sponsor_display_name_length CHECK (((sponsor_display_name IS NULL) OR ((char_length(sponsor_display_name) >= 1) AND (char_length(sponsor_display_name) <= 80)))),
-    CONSTRAINT builds_sponsor_projection_complete CHECK (((sponsor_installation_id IS NOT NULL) OR ((sponsor_display_name IS NULL) AND (sponsor_address IS NULL) AND (sponsor_description IS NULL) AND (sponsor_website_url IS NULL)))),
-    CONSTRAINT builds_sponsor_website_valid CHECK (((sponsor_website_url IS NULL) OR (((char_length(sponsor_website_url) >= 1) AND (char_length(sponsor_website_url) <= 2048)) AND (sponsor_website_url ~ '^https?://'::text)))),
-    CONSTRAINT check_record_category CHECK ((record_category = ANY (ARRAY['Smallest'::text, 'Fastest'::text, 'First'::text, 'Smallest Fastest'::text, 'Fastest Smallest'::text, NULL::text]))),
-    CONSTRAINT check_status CHECK ((submission_status = ANY (ARRAY[0, 1, 2]))),
-    CONSTRAINT submissions_build_depth_check CHECK ((depth > 0)),
-    CONSTRAINT submissions_build_height_check CHECK ((height > 0)),
-    CONSTRAINT submissions_build_width_check CHECK ((width > 0))
-);
-
-
---
--- Name: TABLE builds; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.builds IS 'A build submitted by a user.';
-
-
---
--- Name: COLUMN builds.embedding; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.builds.embedding IS 'Application-owned semantic vector stored in the authoritative build row.';
-
-
---
--- Name: get_unsent_builds(bigint); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.get_unsent_builds(server_id_input bigint) RETURNS SETOF public.builds
-    LANGUAGE plpgsql
-    AS $$
-  begin
-    return query select *
-    from builds
-    where id not in (
-      select build_id
-      from messages
-      where server_id = server_id_input
-      )
-    and submission_status = 1;  -- accepted
-  end;
-$$;
-
-
---
--- Name: initialize_discord_message_projection(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.initialize_discord_message_projection() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    current_generation bigint;
-BEGIN
-    IF NEW.projection_resource_kind IS NULL OR NEW.projection_source_key IS NULL THEN
-        RETURN NEW;
-    END IF;
-    SELECT generation INTO current_generation
-    FROM public.discord_sync_queue
-    WHERE resource_kind = NEW.projection_resource_kind
-      AND source_key = NEW.projection_source_key;
-    NEW.desired_action := 'refresh';
-    NEW.desired_revision := COALESCE(current_generation, 1);
-    NEW.applied_revision := NEW.desired_revision;
-    RETURN NEW;
 END;
 $$;
 
@@ -603,24 +564,6 @@ BEGIN
             ARRAY[]::text[]
         );
     END LOOP;
-END;
-$$;
-
-
---
--- Name: project_discord_message_desired_state(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.project_discord_message_desired_state() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    UPDATE public.messages
-    SET desired_action = NEW.action,
-        desired_revision = NEW.generation
-    WHERE projection_resource_kind = NEW.resource_kind
-      AND projection_source_key = NEW.source_key;
-    RETURN NULL;
 END;
 $$;
 
@@ -682,19 +625,9 @@ end;
 $$;
 
 
---
--- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
---
+SET default_tablespace = '';
 
-CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$;
-
+SET default_table_access_method = heap;
 
 --
 -- Name: account_identities; Type: TABLE; Schema: public; Owner: -
@@ -801,6 +734,90 @@ CREATE TABLE public.api_keys (
 --
 
 COMMENT ON TABLE public.api_keys IS 'A revocable high-entropy credential used by an API service client.';
+
+
+--
+-- Name: COLUMN api_keys.id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.id IS 'Internal identifier unrelated to the public token key ID.';
+
+
+--
+-- Name: COLUMN api_keys.key_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.key_id IS 'Public lookup portion of the API token.';
+
+
+--
+-- Name: COLUMN api_keys.secret_hash; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.secret_hash IS 'HMAC-SHA256 digest of the unrecoverable token secret.';
+
+
+--
+-- Name: COLUMN api_keys.label; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.label IS 'Human-readable description of the credential''s owner or purpose.';
+
+
+--
+-- Name: COLUMN api_keys.scopes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.scopes IS 'Capabilities granted to this credential.';
+
+
+--
+-- Name: COLUMN api_keys.owner_account_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.owner_account_id IS 'Optional account responsible for the credential.';
+
+
+--
+-- Name: COLUMN api_keys.created_by_account_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.created_by_account_id IS 'Account that created the credential, when known.';
+
+
+--
+-- Name: COLUMN api_keys.created_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.created_at IS 'When the credential was created.';
+
+
+--
+-- Name: COLUMN api_keys.expires_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.expires_at IS 'Optional instant after which authentication is rejected.';
+
+
+--
+-- Name: COLUMN api_keys.revoked_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.revoked_at IS 'When the credential was revoked, or ``None`` while active.';
+
+
+--
+-- Name: COLUMN api_keys.last_used_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.last_used_at IS 'Most recent throttled usage timestamp.';
+
+
+--
+-- Name: COLUMN api_keys.last_used_ip; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.api_keys.last_used_ip IS 'IP address associated with the most recent recorded use.';
 
 
 --
@@ -944,6 +961,142 @@ an engine upgrade therefore becomes a visible backfill rather than a silent regr
 
 
 --
+-- Name: COLUMN build_schematics.file_sha256; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.file_sha256 IS 'The stored bytes this analysis describes. `RESTRICT` because several builds can share
+one file and losing it would strand every analysis that references it.';
+
+
+--
+-- Name: COLUMN build_schematics.is_primary; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.is_primary IS 'Whether this is the schematic shown on the build card and used for duplicate checks.';
+
+
+--
+-- Name: COLUMN build_schematics.original_filename; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.original_filename IS 'The name the uploader''s file had, kept for display only. Never trusted for typing.';
+
+
+--
+-- Name: COLUMN build_schematics.width; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.width IS 'Tight content width. Machine-read, unlike the human-declared value on `builds`.';
+
+
+--
+-- Name: COLUMN build_schematics.allocated_width; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.allocated_width IS 'Width of the region the file allocates, which can far exceed the tight content.';
+
+
+--
+-- Name: COLUMN build_schematics.block_count; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.block_count IS 'Non-air block count. **Not** the Door Rules cumulative volume, which counts air pockets
+and carries hallway, frame, and hitbox exceptions no static read can apply.';
+
+
+--
+-- Name: COLUMN build_schematics.bounding_volume; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.bounding_volume IS 'Tight bounding box volume including air. Materialised so it can be range-scanned.';
+
+
+--
+-- Name: COLUMN build_schematics.palette_size; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.palette_size IS 'How many distinct block states the file declares.';
+
+
+--
+-- Name: COLUMN build_schematics.source_data_version; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.source_data_version IS 'The Minecraft data version the file declares, or `None` when it declares none.';
+
+
+--
+-- Name: COLUMN build_schematics.signs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.signs IS 'Sign text recovered from the schematic, as `{x, y, z, text}` objects.';
+
+
+--
+-- Name: COLUMN build_schematics.fingerprint_structural; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.fingerprint_structural IS 'Coarse translation-invariant bucket. A build differing by a single block still matches,
+so this is a pre-filter feeding pairwise ranking and never a duplicate verdict by itself.';
+
+
+--
+-- Name: COLUMN build_schematics.fingerprint_shape; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.fingerprint_shape IS 'Translation- and rotation-invariant identity. This is the primary duplicate index.';
+
+
+--
+-- Name: COLUMN build_schematics.fingerprint_exact; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.fingerprint_exact IS 'Material- and orientation-sensitive identity, the strict tier.';
+
+
+--
+-- Name: COLUMN build_schematics.signature_structural; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.signature_structural IS 'The engine''s structural signature document, kept for pre-filter experiments.';
+
+
+--
+-- Name: COLUMN build_schematics.analyzer_version; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.analyzer_version IS 'Which engine build produced the fingerprints on this row, e.g. `nucleation-0.9.2`.';
+
+
+--
+-- Name: COLUMN build_schematics.analysis_schema_version; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.analysis_schema_version IS 'Which revision of *our* analysis produced this row, bumped when we change what we read.';
+
+
+--
+-- Name: COLUMN build_schematics.lattice; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.lattice IS 'The highest-coverage repeating unit cell found, if the build has one.';
+
+
+--
+-- Name: COLUMN build_schematics.simulation_evidence; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.simulation_evidence IS 'Staff-triggered tick-engine evidence. It never changes the build''s declared timing.';
+
+
+--
+-- Name: COLUMN build_schematics.visibility; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.visibility IS 'Explicit download choice. Existing attachments remain private until re-attested.';
+
+
+--
 -- Name: build_schematics_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -960,6 +1113,36 @@ CREATE SEQUENCE public.build_schematics_id_seq
 --
 
 ALTER SEQUENCE public.build_schematics_id_seq OWNED BY public.build_schematics.id;
+
+
+--
+-- Name: build_source_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.build_source_messages (
+    build_id bigint NOT NULL,
+    message_id bigint NOT NULL,
+    "position" smallint NOT NULL
+);
+
+
+--
+-- Name: TABLE build_source_messages; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.build_source_messages IS 'Association table between builds and the Discord messages they came from.
+
+Many-to-many in both directions: one submission can span a body message plus
+follow-up images, and one build-log message can yield several builds at once.
+The message side is RESTRICT because a message row is a retained fact that
+outlives the builds referring to it; deleting a build only drops the link.';
+
+
+--
+-- Name: COLUMN build_source_messages."position"; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_source_messages."position" IS 'Submission order, so the first message stays identifiable as the request itself.';
 
 
 --
@@ -1034,6 +1217,85 @@ ALTER TABLE public.build_vote_sessions ALTER COLUMN vote_session_id ADD GENERATE
     NO MAXVALUE
     CACHE 1
 );
+
+
+--
+-- Name: builds; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.builds (
+    id bigint NOT NULL,
+    submission_status smallint NOT NULL,
+    edited_time timestamp with time zone DEFAULT now(),
+    record_category text,
+    extra_info jsonb DEFAULT '{}'::jsonb NOT NULL,
+    width integer,
+    height integer,
+    depth integer,
+    completion_time text,
+    submission_time timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    category text,
+    ai_generated boolean NOT NULL,
+    version_spec text,
+    embedding public.vector(1536),
+    is_locked boolean DEFAULT false NOT NULL,
+    locked_at timestamp with time zone,
+    completion_at timestamp with time zone,
+    completion_evidence text,
+    description text,
+    submitter_account_id integer NOT NULL,
+    lock_token uuid,
+    lock_expires_at timestamp with time zone,
+    revision bigint DEFAULT 1 NOT NULL,
+    display_name text,
+    source_submission_draft_id uuid,
+    sponsor_installation_id uuid,
+    sponsor_display_name text,
+    sponsor_address text,
+    sponsor_description text,
+    sponsor_website_url text,
+    CONSTRAINT builds_display_name_valid CHECK (((display_name IS NULL) OR ((display_name = btrim(display_name)) AND (display_name <> ''::text) AND (char_length(display_name) <= 120)))),
+    CONSTRAINT builds_lock_lease_complete CHECK (((is_locked AND (lock_token IS NOT NULL) AND (lock_expires_at IS NOT NULL)) OR ((NOT is_locked) AND (lock_token IS NULL) AND (lock_expires_at IS NULL)))),
+    CONSTRAINT builds_revision_positive CHECK ((revision > 0)),
+    CONSTRAINT builds_sponsor_address_length CHECK (((sponsor_address IS NULL) OR ((char_length(sponsor_address) >= 1) AND (char_length(sponsor_address) <= 255)))),
+    CONSTRAINT builds_sponsor_description_length CHECK (((sponsor_description IS NULL) OR ((char_length(sponsor_description) >= 1) AND (char_length(sponsor_description) <= 500)))),
+    CONSTRAINT builds_sponsor_display_name_length CHECK (((sponsor_display_name IS NULL) OR ((char_length(sponsor_display_name) >= 1) AND (char_length(sponsor_display_name) <= 80)))),
+    CONSTRAINT builds_sponsor_projection_complete CHECK (((sponsor_installation_id IS NOT NULL) OR ((sponsor_display_name IS NULL) AND (sponsor_address IS NULL) AND (sponsor_description IS NULL) AND (sponsor_website_url IS NULL)))),
+    CONSTRAINT builds_sponsor_website_valid CHECK (((sponsor_website_url IS NULL) OR (((char_length(sponsor_website_url) >= 1) AND (char_length(sponsor_website_url) <= 2048)) AND (sponsor_website_url ~ '^https?://'::text)))),
+    CONSTRAINT check_record_category CHECK ((record_category = ANY (ARRAY['Smallest'::text, 'Fastest'::text, 'First'::text, 'Smallest Fastest'::text, 'Fastest Smallest'::text, NULL::text]))),
+    CONSTRAINT check_status CHECK ((submission_status = ANY (ARRAY[0, 1, 2]))),
+    CONSTRAINT submissions_build_depth_check CHECK ((depth > 0)),
+    CONSTRAINT submissions_build_height_check CHECK ((height > 0)),
+    CONSTRAINT submissions_build_width_check CHECK ((width > 0))
+);
+
+
+--
+-- Name: TABLE builds; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.builds IS 'A build submitted by a user.';
+
+
+--
+-- Name: COLUMN builds.embedding; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.embedding IS 'Application-owned semantic vector stored in the authoritative build row.';
+
+
+--
+-- Name: COLUMN builds.source_submission_draft_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.source_submission_draft_id IS 'Stable finalization key retained even if the short-lived source draft is later pruned.';
+
+
+--
+-- Name: COLUMN builds.sponsor_installation_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.sponsor_installation_id IS 'Opaque Paper installation ID snapshotted without a mutable foreign key.';
 
 
 --
@@ -1196,14 +1458,15 @@ ALTER SEQUENCE public.creator_alias_claims_id_seq OWNED BY public.creator_alias_
 CREATE TABLE public.creator_aliases (
     id integer NOT NULL,
     name text NOT NULL,
-    normalized_name text GENERATED ALWAYS AS (lower(btrim(name))) STORED NOT NULL,
+    normalized_name text NOT NULL,
     account_id integer,
     claimed_at timestamp with time zone,
     claim_method text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT creator_aliases_claim_complete CHECK (((account_id IS NULL) = (claimed_at IS NULL))),
     CONSTRAINT creator_aliases_claim_method_check CHECK (((claim_method IS NULL) OR (claim_method = ANY (ARRAY['verified_ign'::text, 'staff_approved'::text, 'migrated'::text])))),
-    CONSTRAINT creator_aliases_claim_method_complete CHECK (((account_id IS NULL) = (claim_method IS NULL)))
+    CONSTRAINT creator_aliases_claim_method_complete CHECK (((account_id IS NULL) = (claim_method IS NULL))),
+    CONSTRAINT creator_aliases_normalized_name_folded CHECK (((normalized_name = btrim(normalized_name)) AND (normalized_name !~ '[A-Z]'::text)))
 );
 
 
@@ -1261,6 +1524,70 @@ ALTER TABLE public.delete_log_vote_sessions ALTER COLUMN vote_session_id ADD GEN
 
 
 --
+-- Name: discord_posts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.discord_posts (
+    message_id bigint NOT NULL,
+    channel_id bigint NOT NULL,
+    resource_kind text NOT NULL,
+    resource_key text NOT NULL,
+    surface text NOT NULL,
+    applied_revision bigint DEFAULT 0 NOT NULL,
+    posted_at timestamp with time zone DEFAULT now() NOT NULL,
+    rendered_at timestamp with time zone,
+    suppressed_at timestamp with time zone,
+    CONSTRAINT discord_posts_applied_revision_check CHECK ((applied_revision >= 0)),
+    CONSTRAINT discord_posts_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text, 'starboard_entry'::text]))),
+    CONSTRAINT discord_posts_surface_check CHECK ((surface = ANY (ARRAY['build_card'::text, 'build_review'::text, 'vote_card'::text, 'starboard_entry'::text])))
+);
+
+
+--
+-- Name: TABLE discord_posts; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.discord_posts IS 'A Discord message the bot owns and keeps rendered for some resource.
+
+Holds only applied state. What the post *should* look like lives in the matching
+`discord_sync_queue` row, so staleness is `applied_revision < queue.generation`
+rather than a desired revision copied onto every post by a trigger.';
+
+
+--
+-- Name: COLUMN discord_posts.channel_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_posts.channel_id IS 'Denormalised from `messages.channel_id`: a unique index cannot span a join.';
+
+
+--
+-- Name: COLUMN discord_posts.applied_revision; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_posts.applied_revision IS 'The queue generation this post was last rendered at.';
+
+
+--
+-- Name: COLUMN discord_posts.suppressed_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_posts.suppressed_at IS 'Set when the post was deleted outside the bot. Renderers choose whether to repost.';
+
+
+--
+-- Name: discord_sync_generation_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.discord_sync_generation_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
 -- Name: discord_sync_queue; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1274,9 +1601,9 @@ CREATE TABLE public.discord_sync_queue (
     attempts integer DEFAULT 0 NOT NULL,
     last_error text,
     dead_at timestamp with time zone,
-    generation bigint DEFAULT 1 NOT NULL,
+    generation bigint DEFAULT nextval('public.discord_sync_generation_seq'::regclass) NOT NULL,
     CONSTRAINT discord_sync_queue_action_check CHECK ((action = ANY (ARRAY['refresh'::text, 'delete'::text]))),
-    CONSTRAINT discord_sync_queue_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text])))
+    CONSTRAINT discord_sync_queue_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text, 'starboard_entry'::text])))
 );
 
 
@@ -1285,6 +1612,17 @@ CREATE TABLE public.discord_sync_queue (
 --
 
 COMMENT ON TABLE public.discord_sync_queue IS 'A coalesced request to refresh one Discord-rendered resource.';
+
+
+--
+-- Name: COLUMN discord_sync_queue.generation; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.discord_sync_queue.generation IS 'A globally monotonic staleness token, not a per-row counter.
+
+Acknowledging a job deletes its queue row, so a counter restarted at 1 on the next
+enqueue and could name a revision below one a post had already applied. Sequence
+values survive that because they are never rolled back or reused.';
 
 
 --
@@ -1436,12 +1774,26 @@ CREATE TABLE public.doors (
 
 
 --
+-- Name: TABLE doors; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.doors IS 'A door build with specific dimensions and timing information.';
+
+
+--
 -- Name: entrances; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.entrances (
     build_id bigint NOT NULL
 );
+
+
+--
+-- Name: TABLE entrances; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.entrances IS 'An entrance build.';
 
 
 --
@@ -1493,12 +1845,19 @@ CREATE TABLE public.extenders (
 
 
 --
+-- Name: TABLE extenders; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.extenders IS 'An extender build.';
+
+
+--
 -- Name: generic_vote_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.generic_vote_sessions (
     vote_session_id bigint NOT NULL,
-    guild_id bigint NOT NULL,
+    guild_id bigint,
     question text NOT NULL,
     visibility text NOT NULL,
     deadline timestamp with time zone NOT NULL,
@@ -1511,6 +1870,16 @@ CREATE TABLE public.generic_vote_sessions (
 --
 
 COMMENT ON TABLE public.generic_vote_sessions IS 'Metadata for a user-created generic poll.';
+
+
+--
+-- Name: COLUMN generic_vote_sessions.guild_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.generic_vote_sessions.guild_id IS 'The guild whose emoji palette the poll was drafted against.
+
+Nullable so a poll can be created by a transport that has no guild -- the REST API
+or a standalone draft -- and have its presentation messages attached afterwards.';
 
 
 --
@@ -1750,24 +2119,15 @@ COMMENT ON TABLE public.media_uploads IS 'Immutable raw-upload metadata used to 
 --
 
 CREATE TABLE public.messages (
-    server_id bigint NOT NULL,
-    build_id bigint,
+    guild_id bigint,
     channel_id bigint,
     id bigint NOT NULL,
-    updated_at timestamp with time zone,
-    purpose text NOT NULL,
     content text,
     author_id bigint NOT NULL,
-    vote_session_id bigint,
-    projection_resource_kind text,
-    projection_source_key text,
-    desired_action text DEFAULT 'refresh'::text NOT NULL,
-    desired_revision bigint DEFAULT 1 NOT NULL,
-    applied_revision bigint DEFAULT 1 NOT NULL,
-    CONSTRAINT messages_desired_action_check CHECK ((desired_action = ANY (ARRAY['refresh'::text, 'delete'::text]))),
-    CONSTRAINT messages_projection_identity_complete CHECK (((projection_resource_kind IS NULL) = (projection_source_key IS NULL))),
-    CONSTRAINT messages_projection_resource_kind_check CHECK (((projection_resource_kind IS NULL) OR (projection_resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text])))),
-    CONSTRAINT messages_projection_revisions_valid CHECK (((desired_revision > 0) AND (applied_revision > 0) AND (applied_revision <= desired_revision)))
+    created_at timestamp with time zone,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    edited_at timestamp with time zone,
+    deleted_at timestamp with time zone
 );
 
 
@@ -1775,14 +2135,61 @@ CREATE TABLE public.messages (
 -- Name: TABLE messages; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.messages IS 'A message associated with a build or vote session.';
+COMMENT ON TABLE public.messages IS 'A Discord message the bot has seen.
+
+One row per Discord message, holding only what is true about the message itself.
+Why it matters is expressed by the tables that reference it: `discord_posts` for
+the messages the bot owns and renders, `build_source_messages` for the ones a
+build was inferred from.';
 
 
 --
--- Name: COLUMN messages.purpose; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN messages.guild_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.messages.purpose IS 'The reason why the message is stored in the database';
+COMMENT ON COLUMN public.messages.guild_id IS 'The guild the message was sent in, or NULL in DMs.';
+
+
+--
+-- Name: COLUMN messages.id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.messages.id IS 'The Discord snowflake. Never generated here; the message exists before the row.';
+
+
+--
+-- Name: COLUMN messages.content; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.messages.content IS 'Never exposed through the API. Retained for offline build inference and edit views.';
+
+
+--
+-- Name: COLUMN messages.created_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.messages.created_at IS 'When Discord created the message, denormalised from the snowflake.';
+
+
+--
+-- Name: COLUMN messages.observed_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.messages.observed_at IS 'When the bot first recorded this message.';
+
+
+--
+-- Name: COLUMN messages.edited_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.messages.edited_at IS 'When `content` was last refreshed from a Discord edit.';
+
+
+--
+-- Name: COLUMN messages.deleted_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.messages.deleted_at IS 'Set when Discord reports the message gone. The row is a retained fact, never erased.';
 
 
 --
@@ -2066,6 +2473,13 @@ CREATE TABLE public.other_builds (
 
 
 --
+-- Name: TABLE other_builds; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.other_builds IS 'A build which does not fit one of the structured catalogue categories.';
+
+
+--
 -- Name: permission_audit_log; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2091,7 +2505,25 @@ CREATE TABLE public.permission_audit_log (
 -- Name: TABLE permission_audit_log; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.permission_audit_log IS 'An append-only record of one permission mutation.';
+COMMENT ON TABLE public.permission_audit_log IS 'An append-only record of one permission mutation.
+
+Written in the same transaction as the change it describes. The repository
+exposes no update or delete path for this table.';
+
+
+--
+-- Name: COLUMN permission_audit_log.action; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_audit_log.action IS 'What happened: `grant`, `revoke`, `role_create`, `role_pattern_add`, and so on.';
+
+
+--
+-- Name: COLUMN permission_audit_log.reason; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_audit_log.reason IS 'Mandatory for `forbid`, enforced by the service rather than the schema so
+the column stays usable for the actions that do not need it.';
 
 
 --
@@ -2124,27 +2556,12 @@ CREATE TABLE public.permission_epoch (
 -- Name: TABLE permission_epoch; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.permission_epoch IS 'A single counter bumped by any permission write.';
+COMMENT ON TABLE public.permission_epoch IS 'A single counter bumped by any permission write.
 
-
---
--- Name: permission_epoch_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.permission_epoch_id_seq
-    AS smallint
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: permission_epoch_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.permission_epoch_id_seq OWNED BY public.permission_epoch.id;
+Three processes each hold their own rule-set cache, so a grant issued in the
+API has to become visible in the bot. A trigger bumps this row and sends
+`NOTIFY squid_permissions`; watchers treat the notification as a latency hint
+and poll this counter as the durable signal.';
 
 
 --
@@ -2175,6 +2592,38 @@ CREATE TABLE public.permission_grants (
 --
 
 COMMENT ON TABLE public.permission_grants IS 'A direct allow, deny or forbid attached to an account or a Discord role.';
+
+
+--
+-- Name: COLUMN permission_grants.granted_by_account_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_grants.granted_by_account_id IS 'Who issued this, or NULL when the system did: a migration backfill or the
+owner recovery CLI has no human grantor, and inventing one would put a
+fictional account into the audit trail.';
+
+
+--
+-- Name: COLUMN permission_grants.subject_role_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_grants.subject_role_id IS 'A Discord role snowflake, when the rule is attached to a role.';
+
+
+--
+-- Name: COLUMN permission_grants.subject_guild_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_grants.subject_guild_id IS 'The guild the subject Discord role lives in.';
+
+
+--
+-- Name: COLUMN permission_grants.scope_guild_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_grants.scope_guild_id IS 'Where the rule applies, or NULL for everywhere. A guild-scoped rule can
+never satisfy a global node; the resolver checks that against the node''s
+declared scope, so nodes added later are safe under old grants.';
 
 
 --
@@ -2217,6 +2666,13 @@ CREATE TABLE public.permission_role_assignments (
 --
 
 COMMENT ON TABLE public.permission_role_assignments IS 'A role held by an account or by everyone with a Discord role.';
+
+
+--
+-- Name: COLUMN permission_role_assignments.granted_by_account_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_role_assignments.granted_by_account_id IS 'Who issued this, or NULL when the system did. See `PermissionGrant`.';
 
 
 --
@@ -2271,7 +2727,27 @@ CREATE TABLE public.permission_role_patterns (
 -- Name: TABLE permission_role_patterns; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.permission_role_patterns IS 'One pattern a role includes or subtracts.';
+COMMENT ON TABLE public.permission_role_patterns IS 'One pattern a role includes or subtracts.
+
+Subtraction is not a deny: it withholds the pattern from *this* role''s
+contribution, and any other role including it still confers it. That is
+Azure''s `NotActions` semantics, and it is why a role can be written as "this
+namespace, minus its destructive members" without poisoning other grants.';
+
+
+--
+-- Name: COLUMN permission_role_patterns.pattern; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_role_patterns.pattern IS 'A node name, a `*`/`**` wildcard, or an `@tag` selector.';
+
+
+--
+-- Name: COLUMN permission_role_patterns.mode; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_role_patterns.mode IS '1 to include, -1 to subtract. One mode per pattern, so a role cannot
+contradict itself.';
 
 
 --
@@ -2298,7 +2774,55 @@ CREATE TABLE public.permission_roles (
 -- Name: TABLE permission_roles; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.permission_roles IS 'A named bundle of permission patterns.';
+COMMENT ON TABLE public.permission_roles IS 'A named bundle of permission patterns.
+
+Built-in roles keep their pattern lists in code, so this row exists only to
+give assignments a foreign key; any `permission_role_patterns` rows attached
+to a built-in are additive overrides on top of the code-defined list.';
+
+
+--
+-- Name: COLUMN permission_roles.slug; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_roles.slug IS 'Stable handle used in commands, unique within the owning guild.';
+
+
+--
+-- Name: COLUMN permission_roles.name; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_roles.name IS 'Display name.';
+
+
+--
+-- Name: COLUMN permission_roles.guild_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_roles.guild_id IS 'The guild owning this role, or NULL for a global one.';
+
+
+--
+-- Name: COLUMN permission_roles.builtin_key; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_roles.builtin_key IS 'Identifies a role whose patterns are defined in code rather than here.';
+
+
+--
+-- Name: COLUMN permission_roles.rank; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_roles.rank IS 'Management hierarchy only: who may edit whom. Deliberately absent from
+permission resolution, so reordering roles can never change an authorization
+outcome. Enforced by property P10.';
+
+
+--
+-- Name: COLUMN permission_roles.protected; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.permission_roles.protected IS 'Refuses structural edits from anyone but the bot owner.';
 
 
 --
@@ -2639,16 +3163,11 @@ ALTER TABLE public.record_rulesets ALTER COLUMN id ADD GENERATED BY DEFAULT AS I
 
 CREATE TABLE public.schematic_files (
     sha256 text NOT NULL,
-    data bytea,
     byte_size integer NOT NULL,
     source_format text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    object_key text,
-    storage_state text DEFAULT 'ready'::text NOT NULL,
-    verified_at timestamp with time zone,
-    CONSTRAINT schematic_files_has_storage_location CHECK (((data IS NOT NULL) OR (object_key IS NOT NULL))),
-    CONSTRAINT schematic_files_size_bounded CHECK (((byte_size > 0) AND (byte_size <= 16777216))),
-    CONSTRAINT schematic_files_storage_state_check CHECK ((storage_state = ANY (ARRAY['pending'::text, 'verified'::text, 'ready'::text])))
+    object_key text NOT NULL,
+    CONSTRAINT schematic_files_size_bounded CHECK (((byte_size > 0) AND (byte_size <= 16777216)))
 );
 
 
@@ -2657,6 +3176,27 @@ CREATE TABLE public.schematic_files (
 --
 
 COMMENT ON TABLE public.schematic_files IS 'Relational metadata for a content-addressed schematic artifact.';
+
+
+--
+-- Name: COLUMN schematic_files.sha256; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.schematic_files.sha256 IS 'Lowercase hex SHA-256 of the object payload, and the identity of this row.';
+
+
+--
+-- Name: COLUMN schematic_files.byte_size; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.schematic_files.byte_size IS 'Object payload size used to bound downloads.';
+
+
+--
+-- Name: COLUMN schematic_files.source_format; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.schematic_files.source_format IS 'The format the content sniffer identified, e.g. `litematic`.';
 
 
 --
@@ -2755,6 +3295,13 @@ CREATE TABLE public.schematic_renders (
 --
 
 COMMENT ON TABLE public.schematic_renders IS 'A replaceable preview artifact keyed by the complete rendering recipe.';
+
+
+--
+-- Name: COLUMN schematic_renders.recipe_hash; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.schematic_renders.recipe_hash IS 'SHA-256 of the pack, camera recipe, output dimensions, and analyzer version.';
 
 
 --
@@ -2946,6 +3493,13 @@ COMMENT ON TABLE public.server_settings IS 'Settings for a Discord server.';
 
 
 --
+-- Name: COLUMN server_settings.locale; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.server_settings.locale IS 'Admin-configured language override, e.g. "en" or "zh-CN". Falls back to Discord''s guild/user locale when unset.';
+
+
+--
 -- Name: starboard_emojis; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2976,8 +3530,6 @@ COMMENT ON TABLE public.starboard_emojis IS 'An ordered upvote or downvote emoji
 CREATE TABLE public.starboard_entries (
     starboard_id bigint NOT NULL,
     origin_message_id bigint NOT NULL,
-    posted_message_id bigint,
-    posted_channel_id bigint,
     score double precision DEFAULT 0.0 NOT NULL,
     raw_count integer DEFAULT 0 NOT NULL,
     last_rendered_score double precision,
@@ -3250,6 +3802,13 @@ COMMENT ON TABLE public.submission_drafts IS 'The compact current state of an ac
 
 
 --
+-- Name: COLUMN submission_drafts.source_installation_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.submission_drafts.source_installation_id IS 'Server-derived Paper installation retained independently of credential generations.';
+
+
+--
 -- Name: submission_finalization_jobs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3498,6 +4057,13 @@ CREATE TABLE public.utilities (
 
 
 --
+-- Name: TABLE utilities; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.utilities IS 'A utility build.';
+
+
+--
 -- Name: verification_codes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3561,6 +4127,15 @@ COMMENT ON TABLE public.versions IS 'A version of Minecraft that a build is comp
 
 
 --
+-- Name: COLUMN versions.data_version; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.versions.data_version IS 'Minecraft''s own numeric world-format version, needed to retarget a schematic at this
+release. Nullable because Bedrock has no equivalent and Java releases predating the field
+have none either.';
+
+
+--
 -- Name: versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3615,13 +4190,18 @@ CREATE TABLE public.vote_sessions (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     status text NOT NULL,
     kind text NOT NULL,
-    fail_threshold smallint NOT NULL,
-    pass_threshold smallint NOT NULL,
+    fail_threshold smallint,
+    pass_threshold smallint,
     result text DEFAULT 'pending'::text NOT NULL,
     author_account_id integer NOT NULL,
-    CONSTRAINT vote_sessions_fail_threshold_check CHECK ((fail_threshold < 0)),
-    CONSTRAINT vote_sessions_pass_threshold_check CHECK ((pass_threshold > 0)),
-    CONSTRAINT vote_sessions_result_check CHECK ((result = ANY (ARRAY['approved'::text, 'denied'::text, 'cancelled'::text, 'pending'::text])))
+    CONSTRAINT vote_sessions_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text]))),
+    CONSTRAINT vote_sessions_result_check CHECK ((result = ANY (ARRAY['approved'::text, 'denied'::text, 'cancelled'::text, 'pending'::text]))),
+    CONSTRAINT vote_sessions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text]))),
+    CONSTRAINT vote_sessions_threshold_kind_check CHECK (
+CASE
+    WHEN (kind = 'generic'::text) THEN ((pass_threshold IS NULL) AND (fail_threshold IS NULL))
+    ELSE ((pass_threshold > 0) AND (fail_threshold < 0))
+END)
 );
 
 
@@ -3750,13 +4330,6 @@ ALTER TABLE ONLY public.creator_aliases ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
--- Name: permission_epoch id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.permission_epoch ALTER COLUMN id SET DEFAULT nextval('public.permission_epoch_id_seq'::regclass);
-
-
---
 -- Name: schematic_jobs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3862,6 +4435,14 @@ ALTER TABLE ONLY public.build_schematics
 
 ALTER TABLE ONLY public.build_schematics
     ADD CONSTRAINT build_schematics_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: build_source_messages build_source_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_source_messages
+    ADD CONSTRAINT build_source_messages_pkey PRIMARY KEY (build_id, message_id);
 
 
 --
@@ -3998,6 +4579,14 @@ ALTER TABLE ONLY public.creator_aliases
 
 ALTER TABLE ONLY public.delete_log_vote_sessions
     ADD CONSTRAINT delete_log_vote_sessions_pkey PRIMARY KEY (vote_session_id);
+
+
+--
+-- Name: discord_posts discord_posts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discord_posts
+    ADD CONSTRAINT discord_posts_pkey PRIMARY KEY (message_id);
 
 
 --
@@ -5092,6 +5681,27 @@ CREATE UNIQUE INDEX creator_alias_claims_one_pending_per_account ON public.creat
 
 
 --
+-- Name: creator_aliases_normalized_name_prefix_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX creator_aliases_normalized_name_prefix_idx ON public.creator_aliases USING btree (normalized_name text_pattern_ops);
+
+
+--
+-- Name: discord_posts_resource_channel_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX discord_posts_resource_channel_key ON public.discord_posts USING btree (resource_kind, resource_key, channel_id) WHERE (suppressed_at IS NULL);
+
+
+--
+-- Name: discord_posts_resource_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX discord_posts_resource_idx ON public.discord_posts USING btree (resource_kind, resource_key);
+
+
+--
 -- Name: discord_sync_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5201,13 +5811,6 @@ CREATE INDEX media_uploads_draft_idx ON public.media_uploads USING btree (draft_
 --
 
 CREATE INDEX media_uploads_raw_cleanup_idx ON public.media_uploads USING btree (created_at) WHERE (raw_deleted_at IS NULL);
-
-
---
--- Name: messages_projection_pending_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX messages_projection_pending_idx ON public.messages USING btree (desired_revision) WHERE ((projection_resource_kind IS NOT NULL) AND (desired_revision > applied_revision));
 
 
 --
@@ -5421,13 +6024,6 @@ CREATE INDEX record_results_definition_idx ON public.record_results USING btree 
 
 
 --
--- Name: schematic_files_storage_state_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX schematic_files_storage_state_idx ON public.schematic_files USING btree (storage_state, created_at);
-
-
---
 -- Name: schematic_jobs_expiry_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5467,6 +6063,13 @@ CREATE INDEX search_document_facets_numeric_idx ON public.search_document_facets
 --
 
 CREATE INDEX search_document_facets_text_idx ON public.search_document_facets USING btree (field_name, text_value) WHERE (text_value IS NOT NULL);
+
+
+--
+-- Name: search_document_facets_text_prefix_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_document_facets_text_prefix_idx ON public.search_document_facets USING btree (field_name, lower(text_value) text_pattern_ops) WHERE (text_value IS NOT NULL);
 
 
 --
@@ -5544,13 +6147,6 @@ CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue
 --
 
 CREATE UNIQUE INDEX starboard_emojis_position_key ON public.starboard_emojis USING btree (starboard_id, "position");
-
-
---
--- Name: starboard_entries_posted_message_key; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX starboard_entries_posted_message_key ON public.starboard_entries USING btree (posted_message_id) WHERE (posted_message_id IS NOT NULL);
 
 
 --
@@ -5750,20 +6346,6 @@ CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON 
 
 
 --
--- Name: discord_sync_queue discord_sync_queue_bump_generation; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER discord_sync_queue_bump_generation BEFORE UPDATE OF enqueued_at ON public.discord_sync_queue FOR EACH ROW WHEN ((old.enqueued_at IS DISTINCT FROM new.enqueued_at)) EXECUTE FUNCTION public.bump_discord_sync_generation();
-
-
---
--- Name: discord_sync_queue discord_sync_queue_project_desired_state; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER discord_sync_queue_project_desired_state AFTER INSERT OR UPDATE OF generation, action ON public.discord_sync_queue FOR EACH ROW EXECUTE FUNCTION public.project_discord_message_desired_state();
-
-
---
 -- Name: door_timing_variants door_timing_variants_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -5817,13 +6399,6 @@ CREATE TRIGGER extenders_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE O
 --
 
 CREATE TRIGGER extenders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.extenders FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
-
-
---
--- Name: messages messages_initialize_discord_projection; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER messages_initialize_discord_projection BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.initialize_discord_message_projection();
 
 
 --
@@ -5890,6 +6465,27 @@ CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE
 
 
 --
+-- Name: starboard_entries starboard_entries_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER starboard_entries_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE OF score ON public.starboard_entries FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
+
+
+--
+-- Name: starboard_origin_messages starboard_origin_messages_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER starboard_origin_messages_enqueue_discord_sync AFTER UPDATE OF deleted_at ON public.starboard_origin_messages FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
+
+
+--
+-- Name: starboards starboards_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER starboards_enqueue_discord_sync AFTER UPDATE ON public.starboards FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
+
+
+--
 -- Name: tag_aliases tag_aliases_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -5901,13 +6497,6 @@ CREATE TRIGGER tag_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON pu
 --
 
 CREATE TRIGGER tag_definitions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
-
-
---
--- Name: messages update_messages_updated_at; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -6019,6 +6608,22 @@ ALTER TABLE ONLY public.build_schematics
 
 
 --
+-- Name: build_source_messages build_source_messages_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_source_messages
+    ADD CONSTRAINT build_source_messages_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: build_source_messages build_source_messages_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_source_messages
+    ADD CONSTRAINT build_source_messages_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: build_tag_assignments build_tag_assignments_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6072,14 +6677,6 @@ ALTER TABLE ONLY public.build_vote_sessions
 
 ALTER TABLE ONLY public.build_vote_sessions
     ADD CONSTRAINT build_vote_sessions_vote_session_id_fkey FOREIGN KEY (vote_session_id) REFERENCES public.vote_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: builds builds_original_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.builds
-    ADD CONSTRAINT builds_original_message_id_fkey FOREIGN KEY (original_message_id) REFERENCES public.messages(id) ON UPDATE CASCADE ON DELETE SET NULL;
 
 
 --
@@ -6160,6 +6757,14 @@ ALTER TABLE ONLY public.creator_aliases
 
 ALTER TABLE ONLY public.delete_log_vote_sessions
     ADD CONSTRAINT delete_log_vote_sessions_vote_session_id_fkey FOREIGN KEY (vote_session_id) REFERENCES public.vote_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: discord_posts discord_posts_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.discord_posts
+    ADD CONSTRAINT discord_posts_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE RESTRICT;
 
 
 --
@@ -6272,14 +6877,6 @@ ALTER TABLE ONLY public.media_artifacts
 
 ALTER TABLE ONLY public.media_normalization_jobs
     ADD CONSTRAINT media_normalization_jobs_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES public.media_uploads(id) ON DELETE CASCADE;
-
-
---
--- Name: messages messages_vote_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT messages_vote_session_id_fkey FOREIGN KEY (vote_session_id) REFERENCES public.vote_sessions(id) ON DELETE SET NULL;
 
 
 --
@@ -6491,19 +7088,11 @@ ALTER TABLE ONLY public.public_creator_redirects
 
 
 --
--- Name: messages public_messages_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT public_messages_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE SET NULL;
-
-
---
 -- Name: messages public_messages_server_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.messages
-    ADD CONSTRAINT public_messages_server_id_fkey FOREIGN KEY (server_id) REFERENCES public.server_settings(server_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT public_messages_server_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE RESTRICT;
 
 
 --
