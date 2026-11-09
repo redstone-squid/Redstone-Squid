@@ -6,7 +6,6 @@ Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, cast
 
 import discord
 import pytest_asyncio
@@ -16,7 +15,7 @@ import squid_ui_discord as sd
 from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS, CatboxClient, MediaPreviewClient, PostReconciler
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
-from squid.bot.reactions import ReactionRouter
+from squid.bot.reactions import ReactionRouter, ReactionSubscription
 from squid.bot.utils.permissions import AccountIdCache
 from squid.config import BuildConfig, CommunityConfig
 from squid.voting.application import VoteService
@@ -42,8 +41,27 @@ class RegistrationVotes(VoteService):
         self.resolver = resolver
 
 
+class ReactionRegistrations(ReactionRouter):
+    """Record registration across extension reloads without dispatching gateway events."""
+
+    def __init__(self) -> None:
+        self.subscribers: dict[int, object] = {}
+        self.next_id = 0
+
+    def subscribe(self, subscriber: object) -> ReactionSubscription:
+        self.next_id += 1
+        self.subscribers[self.next_id] = subscriber
+        return ReactionSubscription(self, self.next_id)
+
+    def _detach(self, registration_id: int) -> None:
+        self.subscribers.pop(registration_id, None)
+
+    async def close(self) -> None:
+        self.subscribers.clear()
+
+
 class StubBot(commands.Bot):
-    """A real command registry with checked service placeholders and a reaction router."""
+    """A real command registry with checked services and recorded reaction registration."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -56,7 +74,7 @@ class StubBot(commands.Bot):
         self.sessions = self.ui.sessions
         self.services = bot_services(votes=RegistrationVotes())
         self.background_tasks = SchedulingRecorder()
-        self.reactions = ReactionRouter(cast(Any, self), self.background_tasks)
+        self.reactions = ReactionRegistrations()
         self.post_reconciler = unconfigured(PostReconciler)
         self.account_ids = AccountIdCache()
         self.build_config = BuildConfig()
@@ -88,9 +106,6 @@ async def _loaded_bot(extensions: Sequence[str]) -> AsyncIterator[commands.Bot]:
     try:
         for extension in extensions:
             await bot.load_extension(extension)
-            if extension == "squid.bot.reactions":
-                # Extension loading replaces this module, including its handler marker types.
-                bot.reactions = sys.modules[extension].ReactionRouter(bot, bot.background_tasks)
         yield bot
     finally:
         await bot.ui.close()

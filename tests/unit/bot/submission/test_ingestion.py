@@ -1,21 +1,23 @@
 """Inference intake delegates to persisted drafts without direct build writes."""
 
 from dataclasses import dataclass, replace
-from typing import Any, cast
-from uuid import uuid4
+from typing import Any, Literal, cast
+from uuid import UUID, uuid4
 
 import discord
 import pytest
 from whenever import Instant
 
 from squid.bot.submission import ingestion
+from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.permissions.domain import Subject
 from squid.runtime import BotServices
-from squid.submissions.application.drafts import StoredDraft
-from squid.submissions.application.finalization import SubmissionFinalizationService
+from squid.submissions.application.drafts import DraftActor, StoredDraft
+from squid.submissions.application.finalization import FinalizationJobSnapshot, SubmissionFinalizationService
 from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
+from squid.submissions.domain.finalization import FinalizationJobStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.services import bot_services
@@ -26,19 +28,45 @@ class InferenceRecorder(SubmissionInferenceRuns):
         self.infer_calls: AsyncCallRecorder = AsyncCallRecorder()
         self.resume_calls: AsyncCallRecorder = AsyncCallRecorder()
 
-    async def infer(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.infer_calls(*args, **kwargs)
+    async def infer(
+        self,
+        run_id: UUID,
+        owner: int,
+        bundle: BuildInferenceInput,
+        *,
+        model: str,
+        reasoning_effort: str | None = None,
+        source_files: tuple[SubmissionSourceFile, ...] = (),
+        purpose: Literal["submission", "recalculation"] = "submission",
+    ) -> tuple[InferenceCandidate, ...]:
+        return await self.infer_calls(
+            run_id,
+            owner,
+            bundle,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            source_files=source_files,
+            purpose=purpose,
+        )
 
-    async def resume(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.resume_calls(*args, **kwargs)
+    async def resume(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...] | None:
+        return await self.resume_calls(run_id, actor)
 
 
 class FinalizationRecorder(SubmissionFinalizationService):
     def __init__(self) -> None:
         self.submit_calls: AsyncCallRecorder = AsyncCallRecorder()
 
-    async def submit(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.submit_calls(*args, **kwargs)
+    async def submit(
+        self,
+        draft_id: UUID,
+        account_id: DraftActor,
+        *,
+        locale: str | None,
+        now: Instant | None = None,
+    ) -> FinalizationJobSnapshot:
+        await self.submit_calls(draft_id, account_id, locale=locale)
+        return FinalizationJobSnapshot(uuid4(), draft_id, 1, FinalizationJobStatus.PENDING, 0, now or Instant.now())
 
 
 @dataclass(frozen=True, slots=True)

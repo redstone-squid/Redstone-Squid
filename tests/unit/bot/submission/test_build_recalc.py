@@ -2,9 +2,9 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, cast, override
+from typing import Any, Literal, cast, override
 from unittest.mock import MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import discord
 import pytest
@@ -16,6 +16,7 @@ from squid.accounts.models import Account
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.permissions import PermissionNodeRequired
+from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
@@ -23,6 +24,7 @@ from squid.settings.application import SettingsService
 from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
 from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui_discord.testing import (
     AsyncCallRecorder,
     ContextHarness,
@@ -223,16 +225,50 @@ class RetainedInference(SubmissionInferenceRuns):
     def __init__(self, candidate: InferenceCandidate) -> None:
         self.infer_calls: AsyncCallRecorder = AsyncCallRecorder(result=(candidate,))
 
-    async def infer(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.infer_calls(*args, **kwargs)
+    async def infer(
+        self,
+        run_id: UUID,
+        owner: int,
+        bundle: BuildInferenceInput,
+        *,
+        model: str,
+        reasoning_effort: str | None = None,
+        source_files: tuple[SubmissionSourceFile, ...] = (),
+        purpose: Literal["submission", "recalculation"] = "submission",
+    ) -> tuple[InferenceCandidate, ...]:
+        return await self.infer_calls(
+            run_id,
+            owner,
+            bundle,
+            model=model,
+            reasoning_effort=reasoning_effort,
+            source_files=source_files,
+            purpose=purpose,
+        )
 
 
 class Proposals(RevisionProposalService):
     def __init__(self, proposal: RevisionProposal) -> None:
         self.create_calls: AsyncCallRecorder = AsyncCallRecorder(result=proposal)
 
-    async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.create_calls(*args, **kwargs)
+    async def create(
+        self,
+        *,
+        run_id: UUID,
+        index: int,
+        owner_account_id: int,
+        actor: Subject,
+        source_message_id: int,
+        candidate: BuildDraft,
+    ) -> RevisionProposal:
+        return await self.create_calls(
+            run_id=run_id,
+            index=index,
+            owner_account_id=owner_account_id,
+            actor=actor,
+            source_message_id=source_message_id,
+            candidate=candidate,
+        )
 
 
 async def test_production_recalculation_retains_candidates_without_submitting(monkeypatch: pytest.MonkeyPatch) -> None:

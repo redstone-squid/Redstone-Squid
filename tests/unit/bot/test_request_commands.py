@@ -1,5 +1,6 @@
 """Command wrappers preserve owner scopes, access checks, and consent responses."""
 
+from collections.abc import Sequence
 from typing import Any, cast
 
 import pytest
@@ -8,6 +9,7 @@ import squid_ui_discord as sd
 from squid.bot import diagnostics, notifications
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.diagnostics.application import ErrorReportService
+from squid.diagnostics.models import ErrorReport
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
 from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
 from tests.support.discord import make_layout_bot
@@ -18,8 +20,8 @@ class Reports(ErrorReportService):
     def __init__(self) -> None:
         self.recent_calls: AsyncCallRecorder = AsyncCallRecorder(result=())
 
-    async def recent(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.recent_calls(*args, **kwargs)
+    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+        return await self.recent_calls(limit=limit, work_lost_only=work_lost_only)
 
 
 @pytest.mark.parametrize("allowed", [True, False])

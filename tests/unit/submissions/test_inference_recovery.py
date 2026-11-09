@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -74,8 +74,14 @@ class RecoveringInference(BuildInferenceService):
     def __init__(self) -> None:
         self.infer_calls: AsyncCallRecorder = AsyncCallRecorder(callback=self._infer)
 
-    async def infer(self, *args: Any, **kwargs: Any) -> Any:
-        return await self.infer_calls(*args, **kwargs)
+    async def infer(
+        self,
+        source: BuildInferenceInput,
+        *,
+        model: str,
+        reasoning_effort: str | None = None,
+    ) -> list[BuildDraft]:
+        return await self.infer_calls(source, model=model, reasoning_effort=reasoning_effort)
 
     async def _infer(
         self, source: BuildInferenceInput, *, model: str, reasoning_effort: str | None = None
