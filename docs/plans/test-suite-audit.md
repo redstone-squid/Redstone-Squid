@@ -66,6 +66,16 @@ There are two layers:
 Add to the bot layer only what needs bot services; anything else belongs in the package harness, so other hosts can
 use it too.
 
+## Execution order
+
+1. Replace Discord package callback mocks with the existing async recorder and use harness fault fields.
+2. Replace bot service graphs with concrete service subclasses and checked service containers.
+3. Review the remaining worker, repository, and boundary tests against the disposition rules; record retained doubles.
+4. Run focused tests per batch, then default tests, PostgreSQL integration tests, Ruff, Pyrefly, and migration checks.
+   Record capability failures separately from test regressions.
+
+Each batch is committed independently after its focused checks. The remaining-work lists stay open until reviewed.
+
 ## Remaining work
 
 State as of 2026-11-09: 5,920 tests collected. The original scan found `SimpleNamespace` in 69 modules and mocks in
