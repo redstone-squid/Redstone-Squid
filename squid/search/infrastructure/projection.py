@@ -811,10 +811,10 @@ def _assignment_value(assignment: TagAssignment) -> str | Decimal | bool | None:
 def _render_tag_assignment(assignment: TagAssignment) -> str:
     definition = assignment.definition
     name = definition.display_name
-    value = _assignment_value(assignment)
+    value = assignment.presentation_value
     if value is None:
         return name
-    unit = assignment.display_unit or definition.default_display_unit or ""
+    unit = assignment.presentation_unit.key if assignment.presentation_unit else ""
     template = definition.render_template
     try:
         return template.format(name=name, value=value, unit=unit)

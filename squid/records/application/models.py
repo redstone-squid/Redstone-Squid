@@ -40,6 +40,7 @@ class CandidateFacet:
     record_operator: str | None = None
     render_template: str = "{name}"
     display_unit: str | None = None
+    display_scale: Decimal = Decimal(1)
 
     @property
     def category_name(self) -> str:
@@ -47,6 +48,8 @@ class CandidateFacet:
         value = self.category_value if self.category_value is not None else self.assigned_value
         if value is None:
             return self.name
+        if isinstance(value, Decimal):
+            value *= self.display_scale
         rendered_value = _render_scalar(value)
         unit = self.display_unit or ""
         return self.render_template.format(name=self.name, value=rendered_value, unit=unit).strip()

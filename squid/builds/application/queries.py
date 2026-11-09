@@ -92,8 +92,8 @@ class PublicBuildSummary:
                 PublicBuildTag(
                     key=assignment.definition.stable_key,
                     name=assignment.definition.display_name,
-                    value=assignment.value,
-                    unit=assignment.display_unit,
+                    value=assignment.presentation_value,
+                    unit=assignment.presentation_unit.key if assignment.presentation_unit else None,
                 )
                 for assignment in build.tags
             ),

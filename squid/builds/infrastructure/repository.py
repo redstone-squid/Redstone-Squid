@@ -41,6 +41,7 @@ from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
 from squid.tags.models import (
     TagAssignment,
     TagDefinition,
+    UnitDefinition,
 )
 from squid.versions.models import Version
 
@@ -300,18 +301,8 @@ class BuildRepository:
             }
         )
         tag_rows = await session.execute(
-            select(
-                TagAssignment.build_id,
-                TagDefinition.stable_key,
-                TagDefinition.display_name,
-                TagDefinition.authority,
-                TagDefinition.semantic_kind,
-                TagDefinition.restriction_type,
-                TagAssignment.numeric_value,
-                TagAssignment.text_value,
-                TagAssignment.boolean_value,
-                TagAssignment.display_unit,
-            )
+            select(TagAssignment)
+            .options(selectinload(TagAssignment.definition))
             .join(TagDefinition, TagDefinition.id == TagAssignment.tag_id)
             .where(TagAssignment.build_id.in_(public_ids))
             .order_by(
@@ -320,28 +311,23 @@ class BuildRepository:
                 TagAssignment.tag_id,
             )
         )
-        for tag_row in tag_rows:
-            value = (
-                tag_row.numeric_value
-                if tag_row.numeric_value is not None
-                else tag_row.text_value
-                if tag_row.text_value is not None
-                else tag_row.boolean_value
-            )
-            public_tags[tag_row.build_id].append(
+        for assignment in tag_rows.scalars():
+            tag_row = assignment.definition
+            value = assignment.presentation_value
+            public_tags[assignment.build_id].append(
                 PublicBuildTag(
                     key=tag_row.stable_key,
                     name=tag_row.display_name,
                     value=value,
-                    unit=tag_row.display_unit,
+                    unit=assignment.presentation_unit.key if assignment.presentation_unit else None,
                 )
             )
             if tag_row.authority != TagAuthority.OFFICIAL:
                 continue
             if tag_row.semantic_kind == TagSemanticKind.PATTERN:
-                title_taxonomy[tag_row.build_id]["patterns"].append(tag_row.display_name)
+                title_taxonomy[assignment.build_id]["patterns"].append(tag_row.display_name)
             elif tag_row.semantic_kind == TagSemanticKind.RESTRICTION and tag_row.restriction_type is not None:
-                title_taxonomy[tag_row.build_id][tag_row.restriction_type].append(tag_row.display_name)
+                title_taxonomy[assignment.build_id][tag_row.restriction_type].append(tag_row.display_name)
 
         by_id = {
             row["id"]: _public_summary_from_selected_row(
@@ -624,6 +610,8 @@ class BuildRepository:
             msg = f"Unknown tag definition IDs: {missing}"
             raise InvalidBuildError(msg, context={"build_id": build.id, "tag_ids": missing})
 
+        units = {unit.key: unit for unit in await session.scalars(select(UnitDefinition))}
+
         for assignment in assignments:
             definition = definitions[assignment.definition.id]
             if definition.value_type != assignment.definition.value_type:
@@ -633,7 +621,13 @@ class BuildRepository:
                 TagAssignment(
                     definition=definition,
                     value=assignment.value,
-                    display_unit=assignment.display_unit,
+                    display_unit=(
+                        assignment.display_unit
+                        if assignment.display_unit in units
+                        and definition.canonical_unit_definition is not None
+                        and units[assignment.display_unit].dimension == definition.canonical_unit_definition.dimension
+                        else None
+                    ),
                     display_order=assignment.display_order,
                     evidence=assignment.evidence,
                     provenance=assignment.provenance,

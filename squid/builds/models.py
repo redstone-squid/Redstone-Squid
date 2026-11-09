@@ -284,6 +284,8 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
             TagAssignment(tag.definition, tag.value, tag.display_unit, tag.display_order, tag.evidence, tag.provenance)
             for tag in self.tags
         ]
+        for original, copied in zip(self.tags, values["tags"], strict=True):
+            copied.display_unit_definition = original.display_unit_definition
         if source_messages is not None:
             values["source_messages"] = source_messages
         return type(self)(**values)

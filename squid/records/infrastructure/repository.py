@@ -825,7 +825,13 @@ def _restriction_facets(assignments: Sequence[TagAssignment]) -> tuple[Candidate
             assigned_value=_assignment_value(assignment),
             record_operator=assignment.definition.record_operator,
             render_template=assignment.definition.render_template,
-            display_unit=assignment.display_unit or assignment.definition.default_display_unit,
+            display_unit=assignment.presentation_unit.key if assignment.presentation_unit else None,
+            display_scale=(
+                assignment.definition.canonical_unit_definition.scale_to_base
+                / assignment.presentation_unit.scale_to_base
+                if assignment.definition.canonical_unit_definition and assignment.presentation_unit
+                else Decimal(1)
+            ),
         )
         for assignment in assignments
         if _is_record_tag(assignment.definition, "restriction")
@@ -842,7 +848,13 @@ def _pattern_facets(assignments: Sequence[TagAssignment]) -> tuple[CandidateFace
             value_type=assignment.value_type,
             assigned_value=_assignment_value(assignment),
             render_template=assignment.definition.render_template,
-            display_unit=assignment.display_unit or assignment.definition.default_display_unit,
+            display_unit=assignment.presentation_unit.key if assignment.presentation_unit else None,
+            display_scale=(
+                assignment.definition.canonical_unit_definition.scale_to_base
+                / assignment.presentation_unit.scale_to_base
+                if assignment.definition.canonical_unit_definition and assignment.presentation_unit
+                else Decimal(1)
+            ),
         )
         for assignment in assignments
         if _is_record_tag(assignment.definition, "pattern")

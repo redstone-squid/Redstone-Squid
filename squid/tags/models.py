@@ -142,6 +142,12 @@ class TagDefinition(Base, kw_only=True):
         ForeignKey("tag_units.key", name="tag_definitions_display_unit_fkey", ondelete="RESTRICT"),
         default=None,
     )
+    canonical_unit_definition: Mapped[UnitDefinition | None] = relationship(
+        foreign_keys=[canonical_unit], lazy="joined", init=False
+    )
+    default_display_unit_definition: Mapped[UnitDefinition | None] = relationship(
+        foreign_keys=[default_display_unit], lazy="joined", init=False
+    )
     numeric_step: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     render_template: Mapped[str] = mapped_column(Text, nullable=False, default="{name}")
     default_display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
@@ -280,6 +286,9 @@ class TagAssignment(Base, kw_only=True, init=False):
         default=None,
     )
     """Unit used for presentation; the stored numeric value uses the definition's canonical unit."""
+    display_unit_definition: Mapped[UnitDefinition | None] = relationship(
+        foreign_keys=[display_unit], lazy="joined", init=False
+    )
     display_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     evidence: Mapped[str | None] = mapped_column(Text, default=None)
     provenance: Mapped[str] = mapped_column(Text, nullable=False, default="submitted")
@@ -318,6 +327,20 @@ class TagAssignment(Base, kw_only=True, init=False):
         self.provenance = provenance
         self.created_by_account_id = created_by_account_id
         self.created_at = self.updated_at = now()
+
+    @property
+    def presentation_unit(self) -> UnitDefinition | None:
+        """The requested display unit, falling back to the definition's default and canonical unit."""
+        return (
+            self.display_unit_definition
+            or self.definition.default_display_unit_definition
+            or self.definition.canonical_unit_definition
+        )
+
+    @property
+    def presentation_value(self) -> TagValue:
+        """The value converted for presentation; stored values remain canonical."""
+        return convert_display_value(self.value, self.definition.canonical_unit_definition, self.presentation_unit)
 
     @property
     def value(self) -> TagValue:
@@ -397,3 +420,15 @@ class TagRecordThreshold(Base, kw_only=True):
     )
     numeric_value: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+def convert_display_value(
+    value: TagValue, canonical: UnitDefinition | None, display: UnitDefinition | None
+) -> TagValue:
+    """Convert a numeric canonical value to a compatible display unit."""
+    if not isinstance(value, Decimal) or canonical is None or display is None:
+        return value
+    if canonical.dimension != display.dimension:
+        msg = "Display and canonical units must have the same dimension"
+        raise ValueError(msg)
+    return value * canonical.scale_to_base / display.scale_to_base
