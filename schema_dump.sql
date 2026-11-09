@@ -210,24 +210,28 @@ BEGIN
         SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
     END IF;
 
-    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-    VALUES ('build', target_build_id::text, target_action, now())
+    INSERT INTO public.search_projection_queue
+        (resource_kind, source_key, action, enqueued_at, available_at)
+    VALUES ('build', target_build_id::text, target_action, now(), now())
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
         attempts = 0,
         locked_at = NULL,
+        claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
 
     IF target_kind IN ('door', 'extender') THEN
         INSERT INTO public.record_recompute_queue
-            (scope_key, build_kind, build_id, reasons, enqueued_at)
+            (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
         VALUES (
             target_kind,
             target_kind,
             CASE WHEN TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE' THEN NULL ELSE target_build_id END,
             '["source_change"]'::jsonb,
+            now(),
             now()
         )
         ON CONFLICT (scope_key) DO UPDATE
@@ -239,8 +243,10 @@ BEGIN
                 ) AS reason
             ),
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             attempts = 0,
             locked_at = NULL,
+            claim_token = NULL,
             last_error = NULL;
     END IF;
     RETURN NULL;
@@ -260,31 +266,38 @@ DECLARE
 BEGIN
     IF TG_TABLE_NAME = 'record_results' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
         VALUES (
             'record',
             'result:' || target_result_id::text,
             CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END,
+            now(),
             now()
         )
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        VALUES ('record', 'result:' || target_result_id::text, 'upsert', now())
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        VALUES ('record', 'result:' || target_result_id::text, 'upsert', now(), now())
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSE
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'record', 'result:' || rr.id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'record', 'result:' || rr.id::text, 'upsert', now(), now()
         FROM public.record_results rr
         WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -326,16 +339,19 @@ BEGIN
     -- and could name a revision below one already applied. Sequences are exempt from
     -- rollback, which is exactly what a staleness token needs.
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        (resource_kind, source_key, action, generation, enqueued_at, available_at,
+         claimed_at, claim_token, dead_at, attempts, last_error)
     VALUES (
         target_kind, target_key::text, target_action,
-        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
     )
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         generation = EXCLUDED.generation,
         enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
         claimed_at = NULL,
+        claim_token = NULL,
         dead_at = NULL,
         attempts = 0,
         last_error = NULL;
@@ -345,16 +361,19 @@ BEGIN
     -- the sessions have to be enqueued in their own right.
     IF target_kind = 'build' AND target_action = 'refresh' THEN
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'vote_session', bvs.vote_session_id::text, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.build_vote_sessions bvs
         WHERE bvs.build_id = target_key
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET generation = EXCLUDED.generation,
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             claimed_at = NULL,
+            claim_token = NULL,
             dead_at = NULL,
             attempts = 0,
             last_error = NULL;
@@ -391,60 +410,73 @@ BEGIN
         target_action := 'delete';
     END IF;
 
-    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-    VALUES ('metadata', target_kind || ':' || target_id::text, target_action, now())
+    INSERT INTO public.search_projection_queue
+        (resource_kind, source_key, action, enqueued_at, available_at)
+    VALUES ('metadata', target_kind || ':' || target_id::text, target_action, now(), now())
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
         attempts = 0,
         locked_at = NULL,
+        claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
 
     IF TG_TABLE_NAME IN ('tag_definitions', 'tag_aliases') THEN
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', assignment.build_id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'build', assignment.build_id::text, 'upsert', now(), now()
         FROM public.build_tag_assignments assignment
         WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert',
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             attempts = 0,
             locked_at = NULL,
+            claim_token = NULL,
             dead_at = NULL,
             last_error = NULL;
 
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'build', assignment.build_id::text, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.build_tag_assignments assignment
         WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action,
             generation = EXCLUDED.generation,
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             claimed_at = NULL,
+            claim_token = NULL,
             dead_at = NULL,
             attempts = 0,
             last_error = NULL;
     ELSIF TG_TABLE_NAME = 'creator_aliases' THEN
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', bc.build_id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'build', bc.build_id::text, 'upsert', now(), now()
         FROM public.build_creators bc
         WHERE bc.alias_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'versions' THEN
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', bv.build_id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'build', bv.build_id::text, 'upsert', now(), now()
         FROM public.build_versions bv
         WHERE bv.version_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -464,30 +496,34 @@ BEGIN
     IF TG_TABLE_NAME = 'starboards' THEN
         -- A configuration change restyles or re-thresholds every entry on the board.
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.starboard_entries e
         WHERE e.starboard_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
         RETURN NULL;
     END IF;
 
     IF TG_TABLE_NAME = 'starboard_origin_messages' THEN
         target_key := NULL;
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.starboard_entries e
         WHERE e.origin_message_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
         RETURN NULL;
     END IF;
 
@@ -497,14 +533,16 @@ BEGIN
         target_key := NEW.starboard_id || ':' || NEW.origin_message_id;
     END IF;
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        (resource_kind, source_key, action, generation, enqueued_at, available_at,
+         claimed_at, claim_token, dead_at, attempts, last_error)
     VALUES (
         'starboard_entry', target_key, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'refresh' END,
-        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
     )
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action, generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-        claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+        available_at = EXCLUDED.available_at,
+        claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
     RETURN NULL;
 END;
 $$;
@@ -642,8 +680,7 @@ CREATE TABLE public.account_identities (
     verified_at timestamp with time zone DEFAULT now() NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT account_identities_provider_check CHECK ((provider = ANY (ARRAY['discord'::text, 'java'::text, 'bedrock'::text]))),
-    CONSTRAINT account_identities_subject_check CHECK (((subject = btrim(subject)) AND (subject <> ''::text))),
-    CONSTRAINT account_identities_subject_format_check CHECK ((((provider <> 'discord'::text) OR (subject ~ '^[1-9][0-9]*$'::text)) AND ((provider <> 'bedrock'::text) OR (subject ~ '^[1-9][0-9]*$'::text)) AND ((provider <> 'java'::text) OR (subject ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text))))
+    CONSTRAINT account_identities_subject_check CHECK (((subject = btrim(subject)) AND (subject <> ''::text)))
 );
 
 
@@ -686,7 +723,7 @@ CREATE TABLE public.accounts (
 -- Name: TABLE accounts; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.accounts IS 'An internal principal independent of every external identity provider.';
+COMMENT ON TABLE public.accounts IS 'An internal caller independent of every external identity provider.';
 
 
 --
@@ -933,7 +970,6 @@ CREATE TABLE public.build_schematics (
     analyzer_version text NOT NULL,
     analysis_schema_version smallint NOT NULL,
     lattice jsonb,
-    uploaded_by_discord_id bigint,
     analyzed_at timestamp with time zone DEFAULT now() NOT NULL,
     simulation_evidence jsonb,
     visibility text DEFAULT 'legacy_unverified'::text NOT NULL,
@@ -942,6 +978,7 @@ CREATE TABLE public.build_schematics (
     rights_attested_by_account_id integer,
     published_at timestamp with time zone,
     withdrawn_at timestamp with time zone,
+    uploaded_by_account_id integer,
     CONSTRAINT build_schematics_license_check CHECK (((license_code IS NULL) OR (license_code = ANY (ARRAY['cc0_1_0'::text, 'cc_by_4_0'::text, 'cc_by_sa_4_0'::text, 'cc_by_nd_4_0'::text, 'cc_by_nc_4_0'::text, 'cc_by_nc_sa_4_0'::text, 'cc_by_nc_nd_4_0'::text])))),
     CONSTRAINT build_schematics_publication_complete CHECK (((visibility <> 'public_download'::text) OR ((license_code IS NOT NULL) AND (rights_attested_at IS NOT NULL) AND (rights_attested_by_account_id IS NOT NULL)))),
     CONSTRAINT build_schematics_visibility_check CHECK ((visibility = ANY (ARRAY['legacy_unverified'::text, 'reviewer_only'::text, 'public_download'::text])))
@@ -1097,6 +1134,14 @@ COMMENT ON COLUMN public.build_schematics.visibility IS 'Explicit download choic
 
 
 --
+-- Name: COLUMN build_schematics.uploaded_by_account_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.build_schematics.uploaded_by_account_id IS 'Who supplied the file, beside `rights_attested_by_account_id` so the table
+carries one attribution style rather than two.';
+
+
+--
 -- Name: build_schematics_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -1160,9 +1205,9 @@ CREATE TABLE public.build_tag_assignments (
     display_order smallint,
     evidence text,
     provenance text NOT NULL,
-    created_by_discord_id bigint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_account_id integer,
     CONSTRAINT build_tag_assignments_finite_numeric_check CHECK (((numeric_value IS NULL) OR ((numeric_value)::text <> ALL (ARRAY['NaN'::text, 'Infinity'::text, '-Infinity'::text])))),
     CONSTRAINT build_tag_assignments_order_check CHECK (((display_order IS NULL) OR (display_order >= 0))),
     CONSTRAINT build_tag_assignments_provenance_check CHECK ((provenance = ANY (ARRAY['submitted'::text, 'inferred'::text, 'moderated'::text, 'legacy_import'::text]))),
@@ -1602,6 +1647,8 @@ CREATE TABLE public.discord_sync_queue (
     last_error text,
     dead_at timestamp with time zone,
     generation bigint DEFAULT nextval('public.discord_sync_generation_seq'::regclass) NOT NULL,
+    available_at timestamp with time zone DEFAULT now() NOT NULL,
+    claim_token uuid,
     CONSTRAINT discord_sync_queue_action_check CHECK ((action = ANY (ARRAY['refresh'::text, 'delete'::text]))),
     CONSTRAINT discord_sync_queue_resource_kind_check CHECK ((resource_kind = ANY (ARRAY['build'::text, 'vote_session'::text, 'starboard_entry'::text])))
 );
@@ -1611,7 +1658,22 @@ CREATE TABLE public.discord_sync_queue (
 -- Name: TABLE discord_sync_queue; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.discord_sync_queue IS 'A coalesced request to refresh one Discord-rendered resource.';
+COMMENT ON TABLE public.discord_sync_queue IS 'A coalesced request to refresh one Discord-rendered resource.
+
+Not an event queue, despite the shape. Rows are coalesced on
+`(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO
+UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is where
+the coalescing actually happens — deleted on acknowledgement, and carry a
+`generation` compared against a post''s applied revision as a staleness token
+rather than read as an ordering. An event log would be append-only and
+replayable; this table is neither. A row means "this resource''s Discord posts
+are stale", and re-reading it tells you what the resource should look like
+now, not what happened to it.
+
+Discord-specific on purpose: every row exists to repair a Discord post, and
+the only consumer renders them (`squid/bot/sync/reconciler.py`). The
+application layer speaks of *reconciliation* rather than *sync* because a
+sync names a transfer, and nothing here transfers anything.';
 
 
 --
@@ -1794,6 +1856,130 @@ CREATE TABLE public.entrances (
 --
 
 COMMENT ON TABLE public.entrances IS 'An entrance build.';
+
+
+--
+-- Name: error_reports; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.error_reports (
+    id uuid NOT NULL,
+    correlation_id text NOT NULL,
+    reference text NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    surface text NOT NULL,
+    origin text,
+    exception_type text NOT NULL,
+    message text NOT NULL,
+    error_code text,
+    traceback text NOT NULL,
+    context jsonb NOT NULL,
+    log_tail jsonb NOT NULL,
+    work_lost boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: TABLE error_reports; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.error_reports IS 'One unexpected failure, retained so the reference its user was shown can be resolved.';
+
+
+--
+-- Name: COLUMN error_reports.correlation_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.correlation_id IS 'The full correlation ID, as it appears in logs and the Request-Id response header.';
+
+
+--
+-- Name: COLUMN error_reports.reference; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.reference IS 'The shortened form shown to the user, indexed because it is what they quote back.
+
+Not unique: it is a 48-bit prefix of the correlation ID, so a collision is possible even
+though it is vanishingly unlikely, and a unique constraint would turn that into a failure to
+record the second error rather than an ambiguous lookup.';
+
+
+--
+-- Name: COLUMN error_reports.occurred_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.occurred_at IS 'When the failure was captured.';
+
+
+--
+-- Name: COLUMN error_reports.expires_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.expires_at IS 'When retention drops this report.';
+
+
+--
+-- Name: COLUMN error_reports.surface; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.surface IS 'Which transport failed: an application command, a view callback, a route, a worker job.';
+
+
+--
+-- Name: COLUMN error_reports.origin; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.origin IS 'The command name, route, or job the failure came from, when the surface knows it.';
+
+
+--
+-- Name: COLUMN error_reports.exception_type; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.exception_type IS 'Qualified name of the raised exception class.';
+
+
+--
+-- Name: COLUMN error_reports.message; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.message IS 'The exception''s own string form, which is never shown to the user who triggered it.';
+
+
+--
+-- Name: COLUMN error_reports.error_code; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.error_code IS 'The application ErrorCode, when the failure carried one.';
+
+
+--
+-- Name: COLUMN error_reports.traceback; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.traceback IS 'Rendered traceback, truncated from the front so the frames nearest the failure survive.';
+
+
+--
+-- Name: COLUMN error_reports.context; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.context IS 'Redacted diagnostic context. Never contains stable Discord account identifiers.';
+
+
+--
+-- Name: COLUMN error_reports.log_tail; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.log_tail IS 'What the process logged under this correlation ID before failing, oldest first.';
+
+
+--
+-- Name: COLUMN error_reports.work_lost; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.error_reports.work_lost IS 'Whether this failure permanently abandoned work, as a dead-lettered job does.';
 
 
 --
@@ -2304,7 +2490,6 @@ CREATE TABLE public.notification_deliveries (
     id bigint NOT NULL,
     notification_id bigint NOT NULL,
     account_id integer NOT NULL,
-    discord_id bigint NOT NULL,
     generation bigint DEFAULT 1 NOT NULL,
     nonce uuid DEFAULT gen_random_uuid() NOT NULL,
     available_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -2452,7 +2637,8 @@ CREATE TABLE public.oauth_states (
     code_verifier text NOT NULL,
     redirect_to text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    expires_at timestamp with time zone NOT NULL
+    expires_at timestamp with time zone NOT NULL,
+    provider text NOT NULL
 );
 
 
@@ -2461,6 +2647,13 @@ CREATE TABLE public.oauth_states (
 --
 
 COMMENT ON TABLE public.oauth_states IS 'One-time OAuth PKCE state shared across API replicas.';
+
+
+--
+-- Name: COLUMN oauth_states.provider; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.oauth_states.provider IS 'The namespace this state was minted for; the callback refuses a mismatch.';
 
 
 --
@@ -3036,7 +3229,9 @@ CREATE TABLE public.record_recompute_queue (
     enqueued_at timestamp with time zone DEFAULT now() NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
     locked_at timestamp with time zone,
-    last_error text
+    last_error text,
+    available_at timestamp with time zone DEFAULT now() NOT NULL,
+    claim_token uuid
 );
 
 
@@ -3220,6 +3415,7 @@ CREATE TABLE public.schematic_jobs (
     error_kind text,
     error_context jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    claim_token uuid,
     CONSTRAINT schematic_jobs_operation_check CHECK ((operation = ANY (ARRAY['capabilities'::text, 'analyze'::text, 'convert'::text, 'compare'::text, 'render'::text, 'simulate'::text, 'autostack'::text]))),
     CONSTRAINT schematic_jobs_single_terminal_state CHECK (((completed_at IS NULL) OR (dead_at IS NULL)))
 );
@@ -3261,7 +3457,9 @@ CREATE TABLE public.schematic_render_queue (
     claimed_at timestamp with time zone,
     dead_at timestamp with time zone,
     attempts integer DEFAULT 0 NOT NULL,
-    last_error text
+    last_error text,
+    available_at timestamp with time zone DEFAULT now() NOT NULL,
+    claim_token uuid
 );
 
 
@@ -3419,7 +3617,9 @@ CREATE TABLE public.search_embedding_queue (
     attempts integer DEFAULT 0 NOT NULL,
     locked_at timestamp with time zone,
     last_error text,
-    dead_at timestamp with time zone
+    dead_at timestamp with time zone,
+    available_at timestamp with time zone DEFAULT now() NOT NULL,
+    claim_token uuid
 );
 
 
@@ -3444,6 +3644,8 @@ CREATE TABLE public.search_projection_queue (
     locked_at timestamp with time zone,
     last_error text,
     dead_at timestamp with time zone,
+    available_at timestamp with time zone DEFAULT now() NOT NULL,
+    claim_token uuid,
     CONSTRAINT search_projection_queue_action_check CHECK ((action = ANY (ARRAY['upsert'::text, 'delete'::text])))
 );
 
@@ -3946,10 +4148,10 @@ CREATE TABLE public.tag_definitions (
     render_template text NOT NULL,
     default_display_order smallint NOT NULL,
     moderation_status text NOT NULL,
-    created_by_discord_id bigint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     archived_at timestamp with time zone,
+    created_by_account_id integer,
     CONSTRAINT tag_definitions_authority_check CHECK ((authority = ANY (ARRAY['official'::text, 'user'::text]))),
     CONSTRAINT tag_definitions_display_order_check CHECK ((default_display_order >= 0)),
     CONSTRAINT tag_definitions_moderation_status_check CHECK ((moderation_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'archived'::text]))),
@@ -4064,6 +4266,35 @@ COMMENT ON TABLE public.utilities IS 'A utility build.';
 
 
 --
+-- Name: verification_attempts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.verification_attempts (
+    provider text NOT NULL,
+    subject text NOT NULL,
+    consecutive_failures integer DEFAULT 0 NOT NULL,
+    locked_until timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT verification_attempts_failures_non_negative CHECK ((consecutive_failures >= 0)),
+    CONSTRAINT verification_attempts_provider_valid CHECK ((provider = ANY (ARRAY['discord'::text, 'java'::text, 'bedrock'::text])))
+);
+
+
+--
+-- Name: TABLE verification_attempts; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.verification_attempts IS 'Consecutive failed code redemptions for one external identity.
+
+Keyed on `(provider, subject)` rather than on an account, because the guesser may not have an
+account yet: a redemption is the first thing many callers ever do, and creating a row for
+someone in order to rate-limit them would defeat the point. No foreign key for the same reason.
+
+The counter is *consecutive*: a success clears it, so an honest user who mistypes twice and then
+gets it right is never closer to a lockout than someone who never failed.';
+
+
+--
 -- Name: verification_codes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4074,7 +4305,10 @@ CREATE TABLE public.verification_codes (
     created timestamp with time zone DEFAULT now() NOT NULL,
     expires timestamp with time zone DEFAULT (now() + '00:10:00'::interval) NOT NULL,
     username text NOT NULL,
-    valid boolean DEFAULT true NOT NULL
+    valid boolean DEFAULT true NOT NULL,
+    reserved_token text,
+    reserved_until timestamp with time zone,
+    CONSTRAINT verification_codes_reservation_complete CHECK (((reserved_token IS NULL) = (reserved_until IS NULL)))
 );
 
 
@@ -4083,6 +4317,27 @@ CREATE TABLE public.verification_codes (
 --
 
 COMMENT ON TABLE public.verification_codes IS 'A verification code for linking Java Edition identities.';
+
+
+--
+-- Name: COLUMN verification_codes.reserved_token; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.verification_codes.reserved_token IS 'Digest of the token held by whoever is currently being shown this code''s consent prompt.
+
+A digest rather than the token, for the same reason `code` is one. Deliberately says nothing
+about *who* reserved it: the prompt runs before an account exists, and the notice promises that
+cancelling stores no account information, so a reservation identifies nobody.';
+
+
+--
+-- Name: COLUMN verification_codes.reserved_until; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.verification_codes.reserved_until IS 'When the hold lapses, freeing the code without anything having to reap it.
+
+A crashed process therefore costs one prompt''s worth of delay rather than a stuck code, and the
+legitimate owner can always mint a fresh one from the game.';
 
 
 --
@@ -4209,7 +4464,7 @@ END)
 -- Name: TABLE vote_sessions; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.vote_sessions IS 'A voting session for builds or log deletions.';
+COMMENT ON TABLE public.vote_sessions IS 'A voting session for builds, log deletions, or generic polls.';
 
 
 --
@@ -4239,7 +4494,6 @@ ALTER TABLE public.vote_sessions ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDE
 
 CREATE TABLE public.votes (
     vote_session_id bigint NOT NULL,
-    discord_id bigint NOT NULL,
     weight double precision NOT NULL,
     guild_id bigint DEFAULT 0 NOT NULL,
     option_id text NOT NULL,
@@ -4282,8 +4536,7 @@ CREATE TABLE public.web_sessions (
     expires_at timestamp with time zone NOT NULL,
     last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
     revoked_at timestamp with time zone,
-    user_agent text,
-    discord_id bigint NOT NULL
+    user_agent text
 );
 
 
@@ -4659,6 +4912,14 @@ ALTER TABLE ONLY public.doors
 
 ALTER TABLE ONLY public.entrances
     ADD CONSTRAINT entrances_pkey PRIMARY KEY (build_id);
+
+
+--
+-- Name: error_reports error_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.error_reports
+    ADD CONSTRAINT error_reports_pkey PRIMARY KEY (id);
 
 
 --
@@ -5470,6 +5731,14 @@ ALTER TABLE ONLY public.utilities
 
 
 --
+-- Name: verification_attempts verification_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.verification_attempts
+    ADD CONSTRAINT verification_attempts_pkey PRIMARY KEY (provider, subject);
+
+
+--
 -- Name: verification_codes verification_codes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5705,7 +5974,7 @@ CREATE INDEX discord_posts_resource_idx ON public.discord_posts USING btree (res
 -- Name: discord_sync_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX discord_sync_queue_ready_idx ON public.discord_sync_queue USING btree (enqueued_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
+CREATE INDEX discord_sync_queue_ready_idx ON public.discord_sync_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
 
 --
@@ -5720,6 +5989,41 @@ CREATE INDEX domain_event_deliveries_ready_idx ON public.domain_event_deliveries
 --
 
 CREATE INDEX domain_events_aggregate_idx ON public.domain_events USING btree (aggregate_kind, aggregate_id);
+
+
+--
+-- Name: error_reports_correlation_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX error_reports_correlation_id_idx ON public.error_reports USING btree (correlation_id);
+
+
+--
+-- Name: error_reports_expires_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX error_reports_expires_at_idx ON public.error_reports USING btree (expires_at);
+
+
+--
+-- Name: error_reports_occurred_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX error_reports_occurred_at_idx ON public.error_reports USING btree (occurred_at);
+
+
+--
+-- Name: error_reports_reference_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX error_reports_reference_idx ON public.error_reports USING btree (reference);
+
+
+--
+-- Name: error_reports_work_lost_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX error_reports_work_lost_idx ON public.error_reports USING btree (occurred_at) WHERE work_lost;
 
 
 --
@@ -6006,7 +6310,7 @@ CREATE INDEX record_holder_history_definition_idx ON public.record_holder_histor
 -- Name: record_recompute_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX record_recompute_queue_ready_idx ON public.record_recompute_queue USING btree (enqueued_at) WHERE (locked_at IS NULL);
+CREATE INDEX record_recompute_queue_ready_idx ON public.record_recompute_queue USING btree (available_at) WHERE (locked_at IS NULL);
 
 
 --
@@ -6041,7 +6345,7 @@ CREATE INDEX schematic_jobs_ready_idx ON public.schematic_jobs USING btree (avai
 -- Name: schematic_render_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX schematic_render_queue_ready_idx ON public.schematic_render_queue USING btree (enqueued_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
+CREATE INDEX schematic_render_queue_ready_idx ON public.schematic_render_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
 
 --
@@ -6132,14 +6436,14 @@ CREATE INDEX search_documents_title_fts_idx ON public.search_documents USING gin
 -- Name: search_embedding_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (enqueued_at) WHERE ((locked_at IS NULL) AND (dead_at IS NULL));
+CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (available_at) WHERE ((locked_at IS NULL) AND (dead_at IS NULL));
 
 
 --
 -- Name: search_projection_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue USING btree (enqueued_at) WHERE ((locked_at IS NULL) AND (dead_at IS NULL));
+CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue USING btree (available_at) WHERE ((locked_at IS NULL) AND (dead_at IS NULL));
 
 
 --
@@ -6608,6 +6912,14 @@ ALTER TABLE ONLY public.build_schematics
 
 
 --
+-- Name: build_schematics build_schematics_uploaded_by_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_schematics
+    ADD CONSTRAINT build_schematics_uploaded_by_account_id_fkey FOREIGN KEY (uploaded_by_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;
+
+
+--
 -- Name: build_source_messages build_source_messages_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6629,6 +6941,14 @@ ALTER TABLE ONLY public.build_source_messages
 
 ALTER TABLE ONLY public.build_tag_assignments
     ADD CONSTRAINT build_tag_assignments_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+
+
+--
+-- Name: build_tag_assignments build_tag_assignments_created_by_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.build_tag_assignments
+    ADD CONSTRAINT build_tag_assignments_created_by_account_id_fkey FOREIGN KEY (created_by_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;
 
 
 --
@@ -7421,6 +7741,14 @@ ALTER TABLE ONLY public.tag_applicabilities
 
 ALTER TABLE ONLY public.tag_definitions
     ADD CONSTRAINT tag_definitions_canonical_unit_fkey FOREIGN KEY (canonical_unit_key) REFERENCES public.tag_units(key) ON DELETE RESTRICT;
+
+
+--
+-- Name: tag_definitions tag_definitions_created_by_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_created_by_account_id_fkey FOREIGN KEY (created_by_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;
 
 
 --
