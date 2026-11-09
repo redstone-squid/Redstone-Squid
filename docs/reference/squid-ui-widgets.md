@@ -57,6 +57,8 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.Tabs
 
+::: squid_ui_widgets.machines.Tabs
+
 ::: squid_ui_widgets.Tab
 
 ::: squid_ui_widgets.TabsState

@@ -39,7 +39,7 @@ def _menu() -> sl.Component[sl.DiscordTarget]:
 
 
 def _tabs() -> sl.Component[sl.DiscordTarget]:
-    return sp.Tabs((sp.Tab("one", "One", "Body"), sp.Tab("two", "Two", "Other")), key="tabs").build_component()
+    return sp.Tabs((sp.Tab("one", "One", "Body"), sp.Tab("two", "Two", "Other")), key="tabs")
 
 
 def _multi_choice() -> sl.Component[sl.DiscordTarget]:

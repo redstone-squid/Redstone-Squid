@@ -47,3 +47,18 @@ keeps that true.
 reason, inverted: the guard *vocabulary* is portable and has no opinion about what a refusal
 looks like, but `confirm` answers with a rendered question, so it belongs beside the shell it
 renders. It composes with `all_of` and `any_of` like any other guard.
+
+## Mounting Tabs
+
+`Tabs` is a component: construct it once and place it with `self.boundary(tabs, key="tabs")`.
+Pass `on_change` and optional `initial_state` to its constructor. Each instance owns its
+selection; `machine_state` is nonpersistent reactive state.
+
+Migration: replace `Tabs(...).build_component(on_change=callback, initial=state)` with
+`Tabs(..., on_change=callback, initial_state=state)`. The `initial` constructor argument
+still selects the default tab key; an explicit `initial_state` overrides that starting state.
+
+For pure transitions or routed controls, construct `squid_ui_widgets.machines.Tabs` and
+use `RouteDriver`. A mounted component exposes its pure definition through `.machine`;
+configuration and transition methods are not forwarded onto the component. Definitions
+containing child component instances cannot be shared across simultaneous mounts.

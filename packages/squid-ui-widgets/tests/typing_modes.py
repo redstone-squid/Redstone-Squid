@@ -19,8 +19,9 @@ assert_type(v2_tab, sp.Tab[ComponentsV2Target])
 v2_tabs = sp.Tabs((v2_tab,), key="tabs")
 assert_type(v2_tabs, sp.Tabs[ComponentsV2Target])
 
-v2_component = v2_tabs.build_component()
-assert_type(v2_component, sp.ComponentDriver[sp.TabsState, ComponentsV2Target])
+v2_component = v2_tabs
+assert_type(v2_component, sp.Tabs[ComponentsV2Target])
+assert_type(v2_component.machine, sp.machines.Tabs[ComponentsV2Target])
 
 portable_tabs = sp.Tabs((sp.Tab("details", "Details", sl.paragraph("portable")),), key="tabs")
 assert_type(portable_tabs, sp.Tabs[sl.RenderTarget])
@@ -30,11 +31,11 @@ def accepts_classic(component: sl.Component[ClassicTarget]) -> None:
     del component
 
 
-accepts_classic(portable_tabs.build_component())
+accepts_classic(portable_tabs)
 accepts_classic(v2_component)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 routed = sp.RouteDriver[sp.TabsState, ComponentsV2Target](lambda route: route.action).render(
-    v2_tabs, v2_tabs.initial_state
+    v2_tabs.machine, v2_tabs.machine_state
 )
 assert_type(routed, DocumentLike[ComponentsV2Target])
 plan(routed, target=v2())

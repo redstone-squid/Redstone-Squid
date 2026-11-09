@@ -211,11 +211,16 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
         handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
         finish_actions: Collection[str] = (),
     ) -> None:
-        self.machine = machine
+        self._machine = machine
         self.machine_state = machine.initial_state if isinstance(initial, _MissingInitialState) else initial
         self.on_change = on_change
         self.handlers = dict(handlers or {})
         self.finish_actions = frozenset(finish_actions)
+
+    @property
+    def machine(self) -> StateMachine[StateT, RenderTargetT, ContextT]:
+        """The definition paired with this driver's state for its lifetime."""
+        return self._machine
 
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:

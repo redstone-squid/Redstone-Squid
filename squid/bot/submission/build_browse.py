@@ -422,7 +422,7 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
             ),
             key="build-tabs",
             title=tr("Builds"),
-        ).build_component()
+        )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

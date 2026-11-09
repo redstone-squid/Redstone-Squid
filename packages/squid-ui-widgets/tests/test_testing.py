@@ -8,8 +8,8 @@ from squid_ui import testing as engine
 from squid_ui_widgets import testing as wt
 
 
-def _tabs() -> sp.Tabs:
-    return sp.Tabs(
+def _tabs() -> sp.machines.Tabs:
+    return sp.machines.Tabs(
         (sp.Tab("general", "General", "general body"), sp.Tab("privacy", "Privacy", "privacy body")),
         key="settings",
     )

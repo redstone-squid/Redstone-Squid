@@ -101,7 +101,7 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
             tabs.append(sp.Tab("merge", tr("Merge accounts"), self._merge_nodes()))
         if self._claims is not None:
             tabs.append(sp.Tab("review", tr("Review claims"), self._claims))
-        self._tabs = sp.Tabs(tabs, key="account-tabs", title=tr("Account")).build_component()
+        self._tabs = sp.Tabs(tabs, key="account-tabs", title=tr("Account"))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

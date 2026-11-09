@@ -1,8 +1,9 @@
 """Reusable interactions built from layout nodes and component state.
 
-Menu, Tabs, Decision, Wizard, and the editors separate their transition rules from event
+Menu, Decision, Wizard, and the editors separate their transition rules from event
 delivery. Call ``build_component`` to keep their state in a ComponentDriver, or use
 RouteDriver to encode state into routed controls for a host to recover on each click.
+Tabs is directly mountable; its pure definition lives in ``machines.Tabs``.
 Browser, SearchPicker, and SourceRankedList are components that load data through resources;
 Agreement is a component that collects approvals from named participants.
 
@@ -10,7 +11,7 @@ Widget commits accept values within the widget's state. Application callbacks de
 to persist those values or perform business actions.
 """
 
-from squid_ui_widgets import guards
+from squid_ui_widgets import guards, machines
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection
 from squid_ui_widgets._paging import PagePosition
 from squid_ui_widgets._window import DEFAULT_LOADING_COPY, LoadingCopy
@@ -148,5 +149,6 @@ __all__ = [
     "WizardStep",
     "confirm",
     "guards",
+    "machines",
     "place_roster",
 ]

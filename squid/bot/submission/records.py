@@ -137,7 +137,7 @@ class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
                 )
             )
         tabs.append(sp.Tab("maintenance", tr("Lookup and rebuild"), self._maintenance_nodes()))
-        self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr("Records")).build_component()
+        self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr("Records"))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

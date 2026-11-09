@@ -49,8 +49,8 @@ def _menu() -> sp.Menu:
     return sp.Menu("Menu", (sp.MenuEntry("entry", "Entry", "Body"),))
 
 
-def _tabs() -> sp.Tabs:
-    return sp.Tabs((sp.Tab("one", "One", "Body"), sp.Tab("two", "Two", "Other")), key="tabs")
+def _tabs() -> sp.machines.Tabs:
+    return sp.machines.Tabs((sp.Tab("one", "One", "Body"), sp.Tab("two", "Two", "Other")), key="tabs")
 
 
 def _multi_choice() -> sp.MultiChoice:

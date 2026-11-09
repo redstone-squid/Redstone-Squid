@@ -178,7 +178,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
             tabs.append(sp.Tab("moderation", tr("Moderation"), self._pending))
         if RESTRICTION_ALIAS_CREATE in self._capabilities:
             tabs.append(sp.Tab("aliases", tr("Restriction aliases"), self._alias_nodes()))
-        self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr("Build tags")).build_component()
+        self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr("Build tags"))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

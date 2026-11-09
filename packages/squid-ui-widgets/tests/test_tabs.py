@@ -2,8 +2,11 @@
 
 from typing import override
 
+import pytest
+
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_reactivity.core import transaction
 from squid_ui import testing as engine
 from squid_ui.semantic import Choices
 from squid_ui_widgets import testing as wt
@@ -30,7 +33,7 @@ def _settings() -> sp.Tabs:
 
 
 async def test_selecting_a_tab_swaps_the_body_and_nothing_else() -> None:
-    harness = wt.mounted(_settings())
+    harness = wt.driving(_settings())
 
     assert "general body" in harness.texts()
     assert "privacy body" not in harness.texts()
@@ -45,7 +48,7 @@ async def test_selecting_a_tab_swaps_the_body_and_nothing_else() -> None:
 async def test_a_strip_too_wide_for_buttons_becomes_one_picker_over_every_tab() -> None:
     """Tabs uses a picker above five tabs; that picker must retain every destination."""
     many = sp.Tabs([sp.Tab(str(index), f"Tab {index}", sl.paragraph(str(index))) for index in range(6)], key="many")
-    harness = wt.mounted(many)
+    harness = wt.driving(many)
 
     picker = engine.find(harness.nodes, Choices, key="many")
 
@@ -59,7 +62,7 @@ async def test_a_strip_too_wide_for_buttons_becomes_one_picker_over_every_tab() 
 
 async def test_only_the_selected_tab_embeds_its_component() -> None:
     """Only the selected body should render, while the strip retains all destinations."""
-    harness = wt.mounted(
+    harness = wt.driving(
         sp.Tabs([sp.Tab("one", "One", Screen("one")), sp.Tab("two", "Two", Screen("two"))], key="screens")
     )
 
@@ -72,7 +75,7 @@ async def test_only_the_selected_tab_embeds_its_component() -> None:
 
 
 def test_the_router_shell_encodes_the_next_state_for_a_small_strip() -> None:
-    small = sp.Tabs([sp.Tab("one", "One", "one"), sp.Tab("two", "Two", "two")], key="tabs")
+    small = sp.machines.Tabs([sp.Tab("one", "One", "one"), sp.Tab("two", "Two", "two")], key="tabs")
 
     render = wt.routed(small)
 
@@ -82,8 +85,47 @@ def test_the_router_shell_encodes_the_next_state_for_a_small_strip() -> None:
 
 def test_the_router_shell_encodes_the_current_state_when_the_strip_takes_input() -> None:
     """The selection arrives with the interaction, so its route carries the input state."""
-    many = sp.Tabs([sp.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
+    many = sp.machines.Tabs([sp.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
 
     render = wt.routed(many)
 
     assert render.route_for("select") == sp.TransitionRoute("select", sp.TabsState("0"), "input")
+
+
+async def test_components_keep_independent_state_and_notify_their_own_callback() -> None:
+    seen: list[tuple[sp.TabsState, sp.TabsState]] = []
+
+    async def changed(event: sp.TransitionEvent[sp.TabsState]) -> None:
+        seen.append((event.previous, event.state))
+
+    entries = (sp.Tab("one", "One", "first"), sp.Tab("two", "Two", "second"))
+    first = sp.Tabs(entries, key="tabs", on_change=changed)
+    second = sp.Tabs(entries, key="tabs")
+    await wt.driving(first).press("tabs.two")
+
+    assert first.machine_state == sp.TabsState("two")
+    assert second.machine_state == sp.TabsState("one")
+    assert seen == [(sp.TabsState("one"), sp.TabsState("two"))]
+
+
+def test_explicit_state_overrides_initial_tab_without_changing_machine_default() -> None:
+    tabs = sp.Tabs(
+        (sp.Tab("one", "One", "first"), sp.Tab("two", "Two", "second")),
+        key="tabs",
+        initial="one",
+        initial_state=sp.TabsState("two"),
+    )
+    assert wt.driving(tabs).texts() == ["second"]
+    assert tabs.machine.initial_state == sp.TabsState("one")
+
+
+async def test_callback_failure_rolls_back_selection_in_a_host_transaction() -> None:
+    async def failed(event: sp.TransitionEvent[sp.TabsState]) -> None:
+        assert event.state == sp.TabsState("two")
+        raise ValueError("save failed")
+
+    tabs = sp.Tabs((sp.Tab("one", "One", "first"), sp.Tab("two", "Two", "second")), key="tabs", on_change=failed)
+    harness = wt.driving(tabs)
+    with pytest.raises(ValueError, match="save failed"), transaction():
+        await harness.press("tabs.two")
+    assert tabs.machine_state == sp.TabsState("one")

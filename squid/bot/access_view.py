@@ -96,7 +96,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
             tabs.append(sp.Tab("audit", tr("Audit"), self._audit(audit)))
         subject_label = self._subject_label
-        self._tabs = sp.Tabs(tabs, key="access-tabs", title=tr(t"Access for {subject_label}")).build_component()
+        self._tabs = sp.Tabs(tabs, key="access-tabs", title=tr(t"Access for {subject_label}"))
 
     @property
     def _may_grant(self) -> bool:

@@ -92,7 +92,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             tabs.append(sp.Tab("emojis", tr("Emojis"), self._emoji_nodes()))
         if STARBOARD_WEIGHT_EDIT in self._capabilities:
             tabs.append(sp.Tab("weights", tr("Role weights"), self._weight_nodes()))
-        self._tabs = sp.Tabs(tabs, key="starboard-tabs", title=tr("Starboard configuration")).build_component()
+        self._tabs = sp.Tabs(tabs, key="starboard-tabs", title=tr("Starboard configuration"))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
