@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from squid_reactivity.resources import AsyncBinding, PendingMode
+from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import Address
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
@@ -11,8 +11,9 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.presentation import PresentationState
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
+from squid_ui.runtime.render_cache import RenderCache
 from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _owns_current_activity, _ServiceLifecycle
-from squid_ui.runtime.tree import ComponentTree, IncrementalRender, _ComponentRender, _ExpandedSubtree
+from squid_ui.runtime.tree import ComponentTree
 from squid_ui.target_types import RenderTarget
 
 
@@ -55,13 +56,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.plan_memo = PlanMemo()
         self.components: dict[str, AnyComponent] = {}
-        self._render_cache: dict[AnyComponent, _ComponentRender[RenderTargetT]] = {}
-        self._subtree_cache: dict[str, _ExpandedSubtree[RenderTargetT]] = {}
-        self._dirty_components: set[AnyComponent] = set()
-        self._forced_components: set[AnyComponent] = set()
-        self._dirty_paths: set[str] = set()
-        self._component_paths: dict[AnyComponent, str] = {}
-        self._force_all = True
+        self._cache = RenderCache[RenderTargetT]()
         self._candidate_tree: ComponentTree[RenderTargetT] | None = None
         self._candidate_revision = -1
         self._committed_tree: ComponentTree[RenderTargetT] | None = None
@@ -94,18 +89,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if not relevant:
             return
 
-        matched: set[AnyComponent] = set()
-        covered: set[Address] = set()
-        for component, snapshot in self._render_cache.items():
-            observed = relevant.intersection(snapshot.observation.addresses())
-            if observed:
-                matched.add(component)
-                covered.update(observed)
-        self._invalidate_components(
-            matched,
-            force_all=covered != relevant,
-            check_dependencies=True,
-        )
+        matched, covered = self._cache.observing(relevant)
+        self._invalidate_components(matched, force_all=not covered, check_dependencies=True)
 
     def invalidate_address(self, address: Address) -> None:
         """Invalidate component snapshots that observed one current bus address."""
@@ -122,20 +107,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.revision += 1
         self.dirty = True
         self._candidate_tree = None
-        if force_all:
-            self._force_all = True
-        for component in components:
-            self._dirty_components.add(component)
-            if not check_dependencies:
-                self._forced_components.add(component)
-            path = self._component_paths.get(component)
-            if path is None:
-                self._force_all = True
-            else:
-                self._dirty_paths.add(path)
-                while path != "$":
-                    path = "$" if "." not in path else path.rsplit(".", 1)[0]
-                    self._dirty_paths.add(path)
+        self._cache.invalidate(components, force_all=force_all, check_dependencies=check_dependencies)
         if self.on_invalidate is not None:
             self.on_invalidate()
 
@@ -166,7 +138,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             # Mounted scheduler paths opt into the committed fast path after recording their cause.
             self.revision += 1
             self.dirty = True
-            self._force_all = True
+            self._cache.require_full_render()
             self._candidate_tree = None
         if reuse_committed and self._candidate_tree is not None and self._candidate_revision == self.revision:
             if not terminal:
@@ -189,21 +161,13 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             runtime=self,
             context=self.context,
             defer=defer,
-            incremental=IncrementalRender(
-                render_cache=self._render_cache,
-                dirty=self._dirty_components,
-                forced=self._forced_components,
-                force_all=self._force_all,
-                subtree_cache=self._subtree_cache,
-                dirty_paths=self._dirty_paths,
-                component_paths=self._component_paths,
-            ),
+            incremental=self._cache.expansion(),
         )
         if not terminal:
             self._validate_execution_host(tree)
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
-        self._clear_render_invalidations()
+        self._cache.rendered()
         if not tree.deferred:
             self._candidate_tree = tree
             self._candidate_revision = self.revision
@@ -216,18 +180,9 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
     def _backdated_to_committed(self) -> bool:
         """Whether every attributed invalidation settled to its committed render value."""
-        if self._committed_tree is None or self._force_all or self._forced_components or not self._dirty_components:
+        if self._committed_tree is None or not self._cache.can_backdate():
             return False
-        for component in self._dirty_components:
-            cached = self._render_cache.get(component)
-            if (
-                cached is None
-                or cached.revision != component.__dict__.get("_state_revision", 0)
-                or not cached.observation.current()
-                or cached.observation.addresses() != cached.addresses
-            ):
-                return False
-        self._clear_render_invalidations()
+        self._cache.rendered()
         self._candidate_tree = self._committed_tree
         self._candidate_revision = self.revision
         return True
@@ -239,53 +194,9 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         source must be an atomic binding from that same snapshot, and no dirty ancestor may
         remove or recontextualize the component before it renders again.
         """
-        if self._committed_tree is None or self._force_all or not self._dirty_components:
+        if self._committed_tree is None:
             return ()
-
-        dirty_paths = {
-            component: path
-            for component in self._dirty_components
-            if (path := self._component_paths.get(component)) is not None
-        }
-        if len(dirty_paths) != len(self._dirty_components):
-            return ()
-
-        found: list[AsyncBinding] = []
-        seen: set[int] = set()
-        for component, path in dirty_paths.items():
-            if component in self._forced_components:
-                continue
-            if any(
-                ancestor is not component and (ancestor_path == "$" or path.startswith(f"{ancestor_path}."))
-                for ancestor, ancestor_path in dirty_paths.items()
-            ):
-                continue
-            cached = self._render_cache.get(component)
-            if cached is None or cached.revision != component.__dict__.get("_state_revision", 0):
-                continue
-            atomic = {
-                id(binding): binding for binding in cached.async_bindings if binding.pending_mode is PendingMode.ATOMIC
-            }
-            moved = tuple(
-                source for source, version in tuple(cached.observation.sources.items()) if source.settle() != version
-            )
-            if not moved or any(id(source) not in atomic for source in moved):
-                continue
-            bindings = tuple(atomic[id(source)] for source in moved)
-            if not all(binding.pending for binding in bindings):
-                continue
-            for binding in bindings:
-                identity = id(binding)
-                if identity not in seen:
-                    seen.add(identity)
-                    found.append(binding)
-        return tuple(found)
-
-    def _clear_render_invalidations(self) -> None:
-        self._dirty_components.clear()
-        self._forced_components.clear()
-        self._force_all = False
-        self._dirty_paths.clear()
+        return self._cache.pending_atomic_resources()
 
     def commit(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int | None = None) -> None:
         """Reconcile a delivered tree, unmounting children first and mounting parents first.
@@ -323,17 +234,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                     component._parent = None
                 if self.components.get(path) is component:
                     self.components.pop(path)
-                self._component_paths.pop(component, None)
+                self._cache.remove_path(component)
             for path, component in sorted(tree._added_components, key=lambda item: depth(item[0])):
                 self.components[path] = component
-                self._component_paths[component] = path
+                self._cache.add_path(component, path)
                 self._mount(component, path)
-            for path, component in tree._removed_components:
-                if component not in self._component_paths:
-                    self._render_cache.pop(component, None)
-                cached_subtree = self._subtree_cache.get(path)
-                if cached_subtree is not None and cached_subtree.component is component:
-                    self._subtree_cache.pop(path)
+            self._cache.discard_removed(tree._removed_components)
             self._committed_tree = tree
             if rendered_revision is None or self.revision == rendered_revision:
                 self._candidate_tree = tree
@@ -360,20 +266,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         for path, component in sorted(added, key=lambda item: depth(item[0])):
             self._mount(component, path)
         self.components = dict(tree.components)
-        self._component_paths = {component: path for path, component in tree.components.items()}
         self._committed_tree = tree
         if rendered_revision is None or self.revision == rendered_revision:
             self._candidate_tree = tree
             self._candidate_revision = self.revision
-        live = set(tree.components.values())
-        self._render_cache = {
-            component: snapshot for component, snapshot in self._render_cache.items() if component in live
-        }
-        self._subtree_cache = {
-            path: snapshot
-            for path, snapshot in self._subtree_cache.items()
-            if tree.components.get(path) is snapshot.component
-        }
+        self._cache.retain(tree.components)
         self.dirty = rendered_revision is not None and self.revision != rendered_revision
         self._raise_hook_errors()
 
@@ -448,12 +345,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             component._runtime = None
             component._parent = None
         self.components.clear()
-        self._render_cache.clear()
-        self._subtree_cache.clear()
-        self._dirty_components.clear()
-        self._forced_components.clear()
-        self._dirty_paths.clear()
-        self._component_paths.clear()
+        self._cache.clear()
         self._candidate_tree = None
         self._committed_tree = None
         self.plan_memo.clear()

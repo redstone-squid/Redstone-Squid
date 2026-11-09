@@ -364,14 +364,14 @@ class TestRenderCaching:
         initial = runtime.render()
         runtime.commit(initial, rendered_revision=runtime.revision)
         components = runtime.components
-        component_paths = runtime._component_paths
+        component_paths = runtime._cache.expansion().component_paths
 
         root.leaves[50].value = 1
         changed = runtime.render(reuse_committed=True)
         runtime.commit(changed, rendered_revision=runtime.revision)
 
         assert runtime.components is components
-        assert runtime._component_paths is component_paths
+        assert runtime._cache.expansion().component_paths is component_paths
         assert runtime.components["50"] is root.leaves[50]
 
     def test_structural_commit_reconciles_only_the_changed_subtree(self) -> None:
@@ -415,7 +415,7 @@ class TestRenderCaching:
         initial = runtime.render()
         runtime.commit(initial, rendered_revision=runtime.revision)
         components = runtime.components
-        component_paths = runtime._component_paths
+        component_paths = runtime._cache.expansion().component_paths
 
         root.leaves[50].visible = True
         mounted = runtime.render(reuse_committed=True)
@@ -423,7 +423,7 @@ class TestRenderCaching:
 
         child = root.leaves[50].child
         assert runtime.components is components
-        assert runtime._component_paths is component_paths
+        assert runtime._cache.expansion().component_paths is component_paths
         assert runtime.components["50.child"] is child
         assert child.mounts == 1
         assert child.unmounts == 0
@@ -433,11 +433,11 @@ class TestRenderCaching:
         runtime.commit(unmounted, rendered_revision=runtime.revision)
 
         assert runtime.components is components
-        assert runtime._component_paths is component_paths
+        assert runtime._cache.expansion().component_paths is component_paths
         assert "50.child" not in runtime.components
         assert child.mounts == 1
         assert child.unmounts == 1
-        assert child not in runtime._render_cache
+        assert child not in runtime._cache.expansion().render_cache
 
     def test_dirty_nested_leaf_splices_through_structural_ancestors(self, monkeypatch) -> None:
         class Leaf(Component[sl.ComponentsV2Target]):

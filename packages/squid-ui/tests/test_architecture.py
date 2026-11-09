@@ -119,6 +119,7 @@ def test_planning_owns_live_results_and_scene_preserves_action_modes() -> None:
             ("squid_ui.runtime.component", "squid_ui.runtime.expansion", "squid_ui.runtime.owner", "squid_ui.planning"),
         ),
         ("expansion", ("squid_ui.runtime.component", "squid_ui.runtime.owner", "squid_ui.planning")),
+        ("render_cache", ("squid_ui.runtime.component", "squid_ui.runtime.owner", "squid_ui.planning")),
     ),
 )
 def test_component_execution_dependencies_flow_toward_the_contract(module: str, forbidden: tuple[str, ...]) -> None:

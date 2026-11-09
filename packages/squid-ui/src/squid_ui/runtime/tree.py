@@ -101,8 +101,9 @@ class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget, ContextT = o
 
     render_cache stores individual component results; subtree_cache stores results
     with their children already expanded. Dirty sets identify which cached results
-    need checking or replacement. ComponentRuntime retains these collections across
-    renders, and tree expansion updates them in place.
+    need checking or replacement. RenderCache retains these collections across
+    renders and lends them to tree expansion for synchronous updates. Standalone callers
+    can also construct an independent view.
     """
 
     render_cache: dict[AnyComponent, _ComponentRender[RenderTargetT, ContextT]] = field(default_factory=dict)
