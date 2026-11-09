@@ -3,7 +3,8 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, cast, override
-from unittest.mock import MagicMock, create_autospec
+from unittest.mock import MagicMock
+from uuid import uuid4
 
 import discord
 import pytest
@@ -15,12 +16,20 @@ from squid.accounts.models import Account
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.permissions import PermissionNodeRequired
+from squid.builds.domain import BuildCategory, BuildDraft
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
 from squid.settings.application import SettingsService
-from squid.submissions.application.inference_runs import SubmissionInferenceRuns
+from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
+from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
 from squid.submissions.application.revisions import RevisionProposalService
-from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
+from squid_ui_discord.testing import (
+    AsyncCallRecorder,
+    ContextHarness,
+    InteractionHarness,
+    MessageHarness,
+    invoke_context_menu,
+)
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 
@@ -210,41 +219,51 @@ async def test_recalc_refuses_when_author_is_unconsented() -> None:
     assert cog.consent_sticky.calls == [message.channel]
 
 
+class RetainedInference(SubmissionInferenceRuns):
+    def __init__(self, candidate: InferenceCandidate) -> None:
+        self.infer_calls: AsyncCallRecorder = AsyncCallRecorder(result=(candidate,))
+
+    async def infer(self, *args: Any, **kwargs: Any) -> Any:
+        return await self.infer_calls(*args, **kwargs)
+
+
+class Proposals(RevisionProposalService):
+    def __init__(self, proposal: RevisionProposal) -> None:
+        self.create_calls: AsyncCallRecorder = AsyncCallRecorder(result=proposal)
+
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        return await self.create_calls(*args, **kwargs)
+
+
 async def test_production_recalculation_retains_candidates_without_submitting(monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-    from uuid import uuid4
-
-    from squid.builds.domain import BuildCategory, BuildDraft
-
     candidate = BuildDraft(category=BuildCategory.DOOR, width=9)
-    inference = create_autospec(SubmissionInferenceRuns, instance=True, spec_set=True)
-    inference.infer.return_value = [SimpleNamespace(facts=candidate)]
-    proposals = create_autospec(RevisionProposalService, instance=True, spec_set=True)
-    proposals.create.return_value = SimpleNamespace(id=uuid4())
-    cog = cast(
-        Any,
-        SimpleNamespace(
-            bot=SimpleNamespace(
-                services=bot_services(submission_inference=inference, submission_revisions=proposals),
-                inference_model="test-model",
-                inference_reasoning_effort=None,
-            )
-        ),
+    run_id = uuid4()
+    inference = RetainedInference(InferenceCandidate(uuid4(), run_id, 1, candidate))
+    now = Instant.now()
+    proposal = RevisionProposal(
+        uuid4(), run_id, 1, 7, 123, RevisionFacts.from_draft(candidate), None, None, {}, {}, now, now.add(hours=1)
+    )
+    proposals = Proposals(proposal)
+    cog = _cog()
+    cog.bot.services = bot_services(submission_inference=inference, submission_revisions=proposals)
+    cog.bot.inference_model = "test-model"
+    cog.bot.inference_reasoning_effort = None
+    monkeypatch.setattr(
+        "squid.bot.submission.message_context.assemble_bundle", AsyncCallRecorder(result="retained-input")
     )
     monkeypatch.setattr(
-        "squid.bot.submission.message_context.assemble_bundle", AsyncMock(return_value="retained-input")
+        "squid.bot.utils.permissions.subject_for_interaction", AsyncCallRecorder(result=Subject(account_id=7))
     )
-    monkeypatch.setattr(
-        "squid.bot.utils.permissions.subject_for_interaction", AsyncMock(return_value=Subject(account_id=7))
-    )
+    context = ContextHarness().source
+    context.interaction = InteractionHarness().source
+    context.interaction.id = 55
     result = await BuildSubmitCommands.propose_recalculation(
         cog,
-        cast(Any, SimpleNamespace(interaction=SimpleNamespace(id=55))),
-        cast(Any, SimpleNamespace(id=123)),
+        context,
+        MessageHarness(message_id=123).source,
         owner_account_id=1,
     )
     assert result is not None
-    assert proposals.create.await_args.kwargs["candidate"] is candidate
-    assert proposals.create.await_args.kwargs["owner_account_id"] == 1
-    assert proposals.create.await_args.kwargs["source_message_id"] == 123
+    assert proposals.create_calls.await_args.kwargs["candidate"] is candidate
+    assert proposals.create_calls.await_args.kwargs["owner_account_id"] == 1
+    assert proposals.create_calls.await_args.kwargs["source_message_id"] == 123

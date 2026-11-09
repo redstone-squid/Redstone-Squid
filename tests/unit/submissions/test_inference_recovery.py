@@ -4,8 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import cast
-from unittest.mock import AsyncMock, call
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -24,6 +23,7 @@ from squid.submissions.application.inference_runs import (
     candidate_id,
 )
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
+from squid_ui_discord.testing import AsyncCallRecorder, CallRecord
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 
@@ -70,12 +70,27 @@ class RetainedRun:
         return self.owner, deepcopy(self.inputs), self.completed, self.candidates
 
 
+class RecoveringInference(BuildInferenceService):
+    def __init__(self) -> None:
+        self.infer_calls: AsyncCallRecorder = AsyncCallRecorder(callback=self._infer)
+
+    async def infer(self, *args: Any, **kwargs: Any) -> Any:
+        return await self.infer_calls(*args, **kwargs)
+
+    async def _infer(
+        self, source: BuildInferenceInput, *, model: str, reasoning_effort: str | None = None
+    ) -> list[BuildDraft]:
+        if self.infer_calls.await_count == 1:
+            raise RuntimeError("model unavailable")
+        return [BuildDraft(door_width=3)]
+
+
 @dataclass
 class Recovery:
     service: SubmissionInferenceRuns
     repository: RetainedRun
     artifacts: LocalArtifactStore
-    inference: AsyncMock
+    inference: RecoveringInference
     bundle: BuildInferenceInput
 
     @property
@@ -91,8 +106,7 @@ async def recovery(tmp_path: Path) -> Recovery:
     """Retain the inputs from an initial model failure, then return one candidate on the next call."""
     repository = RetainedRun()
     artifacts = LocalArtifactStore(tmp_path)
-    inference = AsyncMock(spec=BuildInferenceService)
-    inference.infer.side_effect = [RuntimeError("model unavailable"), [BuildDraft(door_width=3)]]
+    inference = RecoveringInference()
     bundle = BuildInferenceInput.from_single_message(
         author_name="owner",
         content="original facts",
@@ -120,12 +134,12 @@ async def test_retry_recovers_original_inputs_and_replays_candidates_without_pri
     assert candidates[0].facts.door_width == 3
     assert candidates[0].owner_account_id == recovery.repository.owner
     assert candidates[0].run_id == recovery.repository.id
-    expected = call(recovery.bundle, model="original-model", reasoning_effort="low")
-    assert recovery.inference.infer.await_args_list == [expected, expected]
+    expected = CallRecord((recovery.bundle,), {"model": "original-model", "reasoning_effort": "low"})
+    assert recovery.inference.infer_calls.await_args_list == [expected, expected]
 
     await recovery.artifacts.delete(recovery.image_key)
     assert await recovery.resume() == candidates
-    assert recovery.inference.infer.await_count == 2
+    assert recovery.inference.infer_calls.await_count == 2
     with pytest.raises(AuthorizationError):
         await recovery.resume(account_id=8)
 
@@ -137,7 +151,7 @@ async def test_failed_run_checks_owner_and_image_integrity_before_invoking_model
         await recovery.resume(account_id=8)
     with pytest.raises(ConflictError, match="retained inference image is unavailable"):
         await recovery.resume()
-    assert recovery.inference.infer.await_count == 1
+    assert recovery.inference.infer_calls.await_count == 1
     assert not recovery.repository.completed
     assert recovery.repository.token is None
 

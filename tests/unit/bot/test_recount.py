@@ -1,15 +1,26 @@
 """The /recount command's routing, permission check, and request limits."""
 
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 
 from squid.bot.recount import RecountCog
+from squid.bot.starboard.cog import StarboardCog
+from squid.bot.voting.reactions import VoteReactionHandler
+from squid.bot.voting.vote import VoteCog
+from squid.messages.models import Message
+from squid.posts.application import PostService
 from squid.posts.domain import PostReference
+from squid.starboard.application import StarboardService
+from squid.starboard.application.ports import EntryState
+from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEntry
+from squid.voting.application import VoteService
 from squid.voting.domain import VoteMessage, VoteSessionSnapshot, VoteStatus
 from squid_ui.text import NEUTRAL, resolve_text
+from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
+from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 from tests.support.voting import poll_snapshot
 
 GUILD_ID = 10
@@ -17,7 +28,7 @@ LINK = f"https://discord.com/channels/{GUILD_ID}/200/100"
 
 
 @dataclass
-class VoteReactions:
+class VoteReactions(VoteReactionHandler):
     running: set[int] = field(default_factory=set)
     recounted: list[int] = field(default_factory=list)
 
@@ -30,12 +41,48 @@ class VoteReactions:
 
 
 @dataclass
-class Starboard:
+class Starboard(StarboardCog):
     recounted: list[int] = field(default_factory=list)
 
     async def recount(self, message: Any) -> tuple[tuple[int, int], ...]:
         self.recounted.append(message.id)
         return ((1, message.id),)
+
+
+class Votes(VoteService):
+    def __init__(self, snapshot: VoteSessionSnapshot | None) -> None:
+        self.get_session_for_message = AsyncCallRecorder(result=snapshot)
+
+
+class Posts(PostService):
+    def __init__(self, mirror_of: int | None) -> None:
+        self.mirror_of = mirror_of
+
+    async def resolve(self, message_id: int) -> PostReference | None:
+        if self.mirror_of is None:
+            return None
+        return PostReference(message_id, "starboard_entry", f"1:{self.mirror_of}", "starboard_entry")
+
+
+class Starboards(StarboardService):
+    def __init__(self) -> None:
+        pass
+
+    async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState:
+        return EntryState(
+            StarboardConfig(id=starboard_id, guild_id=GUILD_ID, channel_id=200, name="main"),
+            OriginMessage(
+                id=origin_message_id,
+                author_is_bot=False,
+                message=Message(id=origin_message_id, channel_id=300, author_id=1),
+            ),
+            StarboardEntry(starboard_id=starboard_id, origin_message_id=origin_message_id),
+        )
+
+
+class VotingCog(VoteCog):
+    def __init__(self, reactions: VoteReactions) -> None:
+        self.reactions = reactions
 
 
 class Harness:
@@ -44,27 +91,12 @@ class Harness:
         self.starboard = Starboard()
         self.authorized = 0
 
-        async def get_session_for_message(message_id: int) -> VoteSessionSnapshot | None:
-            return snapshot
-
-        async def resolve(message_id: int) -> PostReference | None:
-            if mirror_of is None:
-                return None
-            return PostReference(message_id, "starboard_entry", f"1:{mirror_of}", "starboard_entry")
-
-        async def entry_state(starboard_id: int, origin_message_id: int) -> Any:
-            return SimpleNamespace(origin=SimpleNamespace(channel_id=300, id=origin_message_id))
-
         async def get_or_fetch_message(channel_id: int, message_id: int) -> Any:
-            return SimpleNamespace(id=message_id, channel_id=channel_id, guild=SimpleNamespace(id=GUILD_ID))
+            return MessageHarness(message_id=message_id, channel_id=channel_id, guild_id=GUILD_ID).source
 
-        cogs = {"VoteCog": SimpleNamespace(reactions=self.reactions), "StarboardCog": self.starboard}
-        bot = SimpleNamespace(
-            services=SimpleNamespace(
-                votes=SimpleNamespace(get_session_for_message=get_session_for_message),
-                posts=SimpleNamespace(resolve=resolve),
-                starboards=SimpleNamespace(entry_state=entry_state),
-            ),
+        cogs = {"VoteCog": VotingCog(self.reactions), "StarboardCog": self.starboard}
+        bot = make_layout_bot(
+            services=bot_services(votes=Votes(snapshot), posts=Posts(mirror_of), starboards=Starboards()),
             get_cog=cogs.get,
             get_or_fetch_message=get_or_fetch_message,
         )

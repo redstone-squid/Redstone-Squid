@@ -16,7 +16,6 @@ that point instead of continuing with a permissive mock.
 import inspect
 from functools import cache
 from typing import Any, NoReturn, cast, get_args, get_type_hints
-from unittest.mock import NonCallableMock
 
 from squid.runtime import BotServices, WorkerServices
 
@@ -60,14 +59,12 @@ def _declared_types(annotation: object) -> list[type]:
 def _is_instance(value: object, declared: type) -> bool:
     if getattr(declared, "_is_protocol", False):
         # Most service protocols are not runtime-checkable; a double must name the protocol as a base.
-        return declared in type(value).__mro__ or (isinstance(value, NonCallableMock) and value.__class__ is declared)
+        return declared in type(value).__mro__
     return isinstance(value, declared)
 
 
 def _phantom_methods(value: object, service: type) -> list[str]:
     """Public methods a hand-written double defines below `service` that `service` does not have."""
-    if isinstance(value, NonCallableMock):
-        return []
     owners = type(value).__mro__[: type(value).__mro__.index(service)]
     return sorted(
         name

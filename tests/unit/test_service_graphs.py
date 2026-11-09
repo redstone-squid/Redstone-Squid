@@ -1,7 +1,6 @@
 """The checked bot and worker service graphs reject the drift an unchecked double would hide."""
 
 from typing import override
-from unittest.mock import create_autospec
 
 import pytest
 
@@ -43,16 +42,13 @@ def test_a_double_inventing_a_method_production_lacks_is_rejected() -> None:
         worker_services(error_reports=Stale())
 
 
-def test_subclasses_and_autospecs_are_accepted_as_configured() -> None:
+def test_subclasses_are_accepted_as_configured() -> None:
     class Narrowed(_Reports):
         @override
         def __repr__(self) -> str:
             return "Narrowed"
 
-    autospec = create_autospec(ErrorReportService, instance=True, spec_set=True)
-
     assert is_configured(bot_services(error_reports=Narrowed()).error_reports)
-    assert bot_services(error_reports=autospec).error_reports is autospec
 
 
 def test_an_unknown_field_is_rejected() -> None:

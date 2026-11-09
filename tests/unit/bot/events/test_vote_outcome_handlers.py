@@ -1,7 +1,7 @@
 """Handlers applying a closed vote session's outcome."""
 
-from typing import Any
-from unittest.mock import AsyncMock, create_autospec
+from types import SimpleNamespace
+from typing import Any, cast
 
 import discord
 import pytest
@@ -22,6 +22,8 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
+from squid_ui_discord.testing import AsyncCallRecorder, MessageHarness
+from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import build_snapshot
 
@@ -49,12 +51,19 @@ def _event() -> DomainEvent:
     )
 
 
+class VotesRecorder(VoteService):
+    def __init__(self, snapshot: VoteSessionSnapshot | None) -> None:
+        self.get_session = AsyncCallRecorder(result=snapshot)
+
+
+class BuildsRecorder(BuildService):
+    def __init__(self) -> None:
+        self.confirm = AsyncCallRecorder()
+        self.deny = AsyncCallRecorder()
+
+
 def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
-    votes = create_autospec(VoteService, instance=True, spec_set=True)
-    votes.get_session.return_value = snapshot
-    bot = AsyncMock()
-    bot.services = bot_services(votes=votes, builds=create_autospec(BuildService, instance=True, spec_set=True))
-    return bot
+    return make_layout_bot(services=bot_services(votes=VotesRecorder(snapshot), builds=BuildsRecorder()))
 
 
 @pytest.mark.parametrize(
@@ -108,9 +117,9 @@ async def test_a_delete_log_session_does_not_touch_builds() -> None:
 
 
 async def test_an_approved_delete_log_vote_deletes_its_target() -> None:
-    message = AsyncMock()
+    message = MessageHarness()
     bot = _bot(_snapshot(kind=VoteKind.DELETE_LOG, target=DELETE_TARGET))
-    bot.get_or_fetch_message = AsyncMock(return_value=message)
+    bot.get_or_fetch_message = AsyncCallRecorder(result=message)
 
     await DeleteVotedMessageHandler(bot).handle(_event())
 
@@ -120,17 +129,17 @@ async def test_an_approved_delete_log_vote_deletes_its_target() -> None:
 
 async def test_an_already_deleted_target_is_not_an_error() -> None:
     """Redelivery finds the message gone, which is the expected state."""
-    message = AsyncMock()
-    message.delete.side_effect = discord.NotFound(AsyncMock(status=404), "gone")
+    message = MessageHarness()
+    message.delete.side_effect = discord.NotFound(cast(Any, SimpleNamespace(status=404, reason="gone")), "gone")
     bot = _bot(_snapshot(kind=VoteKind.DELETE_LOG, target=DELETE_TARGET))
-    bot.get_or_fetch_message = AsyncMock(return_value=message)
+    bot.get_or_fetch_message = AsyncCallRecorder(result=message)
 
     await DeleteVotedMessageHandler(bot).handle(_event())
 
 
 async def test_a_denied_delete_log_vote_deletes_nothing() -> None:
     bot = _bot(_snapshot(kind=VoteKind.DELETE_LOG, result=VoteSessionResult.DENIED, target=DELETE_TARGET))
-    bot.get_or_fetch_message = AsyncMock()
+    bot.get_or_fetch_message = AsyncCallRecorder()
 
     await DeleteVotedMessageHandler(bot).handle(_event())
 
@@ -139,7 +148,7 @@ async def test_a_denied_delete_log_vote_deletes_nothing() -> None:
 
 async def test_a_build_session_is_not_deleted_by_the_delete_handler() -> None:
     bot = _bot(_snapshot(kind=VoteKind.BUILD, target=BuildVoteTarget(42)))
-    bot.get_or_fetch_message = AsyncMock()
+    bot.get_or_fetch_message = AsyncCallRecorder()
 
     await DeleteVotedMessageHandler(bot).handle(_event())
 
@@ -148,7 +157,7 @@ async def test_a_build_session_is_not_deleted_by_the_delete_handler() -> None:
 
 async def test_a_missing_session_is_skipped_by_both_handlers() -> None:
     bot = _bot(None)
-    bot.get_or_fetch_message = AsyncMock()
+    bot.get_or_fetch_message = AsyncCallRecorder()
 
     await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
     await DeleteVotedMessageHandler(bot).handle(_event())

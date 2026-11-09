@@ -4,7 +4,6 @@ import asyncio
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import anyio
@@ -41,6 +40,14 @@ from tests.support.voting import GENERIC_OPTIONS, poll_snapshot
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
+
+
+@dataclass
+class PartialChannel:
+    messages: dict[int, Any]
+
+    def get_partial_message(self, message_id: int) -> Any:
+        return self.messages[message_id]
 
 
 @dataclass
@@ -240,7 +247,7 @@ class ReactionHarness:
 
     def partial_messageable(self, channel_id: int) -> Any:
         """Partial messages resolve to the same fake messages, so removals are recorded on them."""
-        return SimpleNamespace(get_partial_message=lambda message_id: self.messages[message_id])
+        return PartialChannel(self.messages)
 
     async def refresh_posts(self, kind: str, key: str) -> None:
         self.refreshes.append((kind, key))
