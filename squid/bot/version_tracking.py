@@ -14,6 +14,7 @@ from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
+from squid.versions.errors import InvalidVersionError
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
 
@@ -141,11 +142,16 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
 
     @sd.Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message) -> None:
-        """Parse messages in the version-tracking channel and add them to the database."""
+        """Ingest version announcements, ignoring our own replies and non-version posts."""
         channel_id = message.channel.id
         if channel_id != self.bot.community_config.version_tracker_channel_id:
             return
-        version = await self.version_service.add(message.content.split("\n", 1)[0])
+        if message.author == self.bot.user:
+            return
+        try:
+            version = await self.version_service.add(message.content.split("\n", 1)[0])
+        except InvalidVersionError:
+            return
         locale = await resolve_locale(message, self.bot.services.settings)
         with localization_scope(localization_for(locale)):
             payload = render_payload([text_node(tr(t"Version added successfully: {version}"))])
