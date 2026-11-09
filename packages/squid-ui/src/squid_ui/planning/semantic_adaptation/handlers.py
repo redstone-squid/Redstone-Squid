@@ -21,7 +21,7 @@ from squid_ui.interactions import (
     SelectionEvent,
 )
 from squid_ui.planning.generated import GeneratedHandler
-from squid_ui.runtime.presentation_state import PresentationState
+from squid_ui.presentation import PresentationState
 from squid_ui.semantic import (
     ChoiceEvent,
     ChoiceOwnership,

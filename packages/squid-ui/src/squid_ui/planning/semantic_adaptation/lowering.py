@@ -69,6 +69,9 @@ from squid_ui.planning.structure import (
 from squid_ui.planning.structure import (
     scoped_palette as _scoped_palette,
 )
+from squid_ui.presentation import (
+    PresentationState,
+)
 from squid_ui.primitives.constraints import (
     Alt,
     Condense,
@@ -129,9 +132,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.nodes import (
     Section as PrimitiveSection,
-)
-from squid_ui.runtime.presentation_state import (
-    PresentationState,
 )
 from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (

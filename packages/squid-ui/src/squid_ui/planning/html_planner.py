@@ -12,7 +12,7 @@ before applying its own surface limits and producing Block Kit scene data.
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time
-from typing import Any, assert_never, cast
+from typing import TYPE_CHECKING, Any, assert_never, cast
 
 from squid_ui import forms as form_types
 from squid_ui import scene
@@ -59,8 +59,7 @@ from squid_ui.planning.structure import (
 )
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_allocation import truncate_text
-from squid_ui.runtime.histories import History
-from squid_ui.runtime.presentation_state import (
+from squid_ui.presentation import (
     ActivePagers,
     CursorState,
     CursorUpdate,
@@ -71,6 +70,9 @@ from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult,
 from squid_ui.sources import Direction, Position
 from squid_ui.target_types import HtmlTarget
 from squid_ui.text import Localization, TextLike, resolve_text
+
+if TYPE_CHECKING:
+    from squid_ui.runtime.histories import History
 
 type HtmlTargetT = Target[Any, scene.HtmlBody, HtmlTarget, Any]
 

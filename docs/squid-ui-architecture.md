@@ -134,6 +134,13 @@ The semantic `Document` is the portability seam. Everything above it expresses a
 the selected target and everything below it solve, draw, deliver, and route one frontend. The
 `Scene` is the process boundary, while ephemeral bindings remain with the live runtime.
 
+## Internal dependency boundaries
+
+`ContextKey` is defined in `squid_ui.context`; presentation state and updates live in
+`squid_ui.presentation`. Planning and runtime both consume these contracts. Their existing
+runtime import paths re-export the same objects for callers, but implementation modules use
+the defining modules so importing a shared value does not enter the runtime facade.
+
 ## End-to-end flow
 
     Component state

@@ -5,8 +5,10 @@ from typing import Any
 
 from squid_reactivity.resources import AsyncBinding, PendingMode
 from squid_reactivity.topics import Address
+from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.presentation import PresentationState
 from squid_ui.runtime.component import (
     AnyComponent,
     Component,
@@ -16,8 +18,6 @@ from squid_ui.runtime.component import (
     _ExpandedSubtree,
     render_component_tree,
 )
-from squid_ui.runtime.context import ContextKey
-from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _owns_current_activity, _ServiceLifecycle
 from squid_ui.target_types import RenderTarget
 

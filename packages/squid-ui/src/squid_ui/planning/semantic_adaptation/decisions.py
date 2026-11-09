@@ -16,6 +16,7 @@ from squid_ui.planning.structure import (
     indexed_children,
     item_state,
 )
+from squid_ui.presentation import PresentationState
 from squid_ui.primitives.nodes import (
     Boundary,
     Break,
@@ -59,7 +60,6 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.nodes import (
     Section as PrimitiveSection,
 )
-from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import (
     ActionControl,
     ActionControls,

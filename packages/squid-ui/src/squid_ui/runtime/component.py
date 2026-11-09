@@ -28,6 +28,7 @@ from squid_reactivity.internals import RENDER_OBSERVATION as _RENDER_OBSERVATION
 from squid_reactivity.internals import AtomicResourcePending
 from squid_reactivity.resources import AsyncBinding, observe_async_bindings, unique_async_bindings
 from squid_reactivity.topics import Address
+from squid_ui.context import ContextKey
 from squid_ui.document import Asset, Document, DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.constraints import Paginate
@@ -51,7 +52,6 @@ from squid_ui.runtime._tree import (
     _SequenceStep,
     map_layout_children,
 )
-from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.services import ManagedService, ServiceOwner
 from squid_ui.semantic import (
     ActionControl as SemanticActionControl,

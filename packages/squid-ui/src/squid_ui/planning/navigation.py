@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import override
 
 from squid_ui.chrome import Chrome
+from squid_ui.context import ContextKey
 from squid_ui.interactions import SelectionEvent
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.primitives.nodes import (
@@ -24,7 +25,6 @@ from squid_ui.primitives.nodes import (
     Sep,
     Thumbnail,
 )
-from squid_ui.runtime.context import ContextKey
 from squid_ui.sources import CountPrecision, Position
 from squid_ui.text import TextLike
 

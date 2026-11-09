@@ -9,8 +9,8 @@ from contextlib import contextmanager
 from typing import Any, Protocol
 
 from squid_ui.palette import Accent, AccentDefault, Palette
+from squid_ui.presentation import PresentationState
 from squid_ui.primitives.styles import Color
-from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import Controlled, Details, Items, Navigation, Toggle, Uncontrolled
 
 

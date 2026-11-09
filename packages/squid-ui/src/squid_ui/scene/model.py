@@ -22,8 +22,8 @@ from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
+from squid_ui.presentation import SessionUpdate
 from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.runtime.presentation_state import SessionUpdate
 from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
 from squid_ui.text import Markup
 

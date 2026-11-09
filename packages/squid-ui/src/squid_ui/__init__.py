@@ -12,17 +12,21 @@ reads so changes can trigger another render. Frontends, such as squid-ui-discord
 deliver the result and dispatch interactions to the bound handlers.
 """
 
-from importlib import import_module
-from typing import TYPE_CHECKING
-
+from squid_reactivity.core import computed, state
 from squid_reactivity.operations import operation
+from squid_reactivity.resources import resource
 from squid_ui import (
+    chrome,
+    document,
+    emoji,
+    entity,
     errors,
     forms,
     guards,
     html,
     interactions,
     operations,
+    palette,
     planning,
     primitives,
     profiling,
@@ -36,25 +40,7 @@ from squid_ui import (
     temporal,
     text,
 )
-
-# These deeper-tier namespaces are part of the root API, but importing chrome before runtime
-# completes resurrects a partial-initialization cycle. Bind them explicitly after the namespace
-# bundle is ready; the type-checking imports make their module surfaces visible statically.
-if TYPE_CHECKING:
-    import squid_ui.chrome as chrome
-    import squid_ui.document as document
-    import squid_ui.emoji as emoji
-    import squid_ui.entity as entity
-    import squid_ui.palette as palette
-else:
-    chrome = import_module("squid_ui.chrome")
-    document = import_module("squid_ui.document")
-    emoji = import_module("squid_ui.emoji")
-    entity = import_module("squid_ui.entity")
-    palette = import_module("squid_ui.palette")
-
-from squid_reactivity.core import computed, state
-from squid_reactivity.resources import resource
+from squid_ui.context import ContextKey
 from squid_ui.document import (
     Document,
     DocumentLike,
@@ -140,7 +126,6 @@ from squid_ui.interactions import (
 )
 from squid_ui.palette import Palette, PaletteRegistry
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.context import ContextKey
 from squid_ui.semantic import (
     ChoiceEvent,
     EntityEvent,

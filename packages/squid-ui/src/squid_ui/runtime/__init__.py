@@ -1,10 +1,5 @@
 """Frontend-neutral component runtime and presentation state."""
 
-from typing import TYPE_CHECKING, Literal, overload
-
-if TYPE_CHECKING:
-    from squid_ui.runtime.owner import ComponentRuntime
-
 from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
@@ -78,8 +73,22 @@ from squid_reactivity.topics import (
     TopicSnapshot,
     watch,
 )
+from squid_ui.context import ContextKey
+from squid_ui.presentation import (
+    ActivePagers,
+    CursorState,
+    CursorUpdate,
+    DisclosureState,
+    PresentationState,
+    SelectionState,
+    SessionUpdate,
+    StrategyState,
+    StrategyUpdate,
+    ToggleState,
+    ToggleUpdate,
+    apply_updates,
+)
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.continuations import ActionDiscardedError, Discarded, PostCommitOperation
 from squid_ui.runtime.histories import (
     CompensationClaim,
@@ -109,38 +118,8 @@ from squid_ui.runtime.histories import (
     history_actions,
     inspect_histories,
 )
-from squid_ui.runtime.presentation_state import (
-    ActivePagers,
-    CursorState,
-    CursorUpdate,
-    DisclosureState,
-    PresentationState,
-    SelectionState,
-    SessionUpdate,
-    StrategyState,
-    StrategyUpdate,
-    ToggleState,
-    ToggleUpdate,
-    apply_updates,
-)
+from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.services import ManagedService, ServiceOwner, ServiceRun, ServiceRunStatus, UIExecutionHost
-
-
-@overload
-def __getattr__(name: Literal["ComponentRuntime"]) -> type[ComponentRuntime]: ...
-
-
-@overload
-def __getattr__(name: str) -> object: ...
-
-
-def __getattr__(name: str) -> object:
-    if name == "ComponentRuntime":
-        from squid_ui.runtime.owner import ComponentRuntime
-
-        return ComponentRuntime
-    raise AttributeError(name)
-
 
 __all__ = [
     "ActionCommit",

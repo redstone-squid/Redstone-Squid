@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from math import ceil
 
-from squid_ui.runtime.context import ContextKey
+from squid_ui.context import ContextKey
 from squid_ui.text import Localization, TextLike, resolve_text
 
 

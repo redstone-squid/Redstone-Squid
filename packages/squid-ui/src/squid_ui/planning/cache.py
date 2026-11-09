@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from squid_ui import scene
-from squid_ui.runtime.presentation_state import PresentationState, SessionUpdate
+from squid_ui.presentation import PresentationState, SessionUpdate
 from squid_ui.scene.model import PlanReport, PlanResult, PlanReuse
 
 

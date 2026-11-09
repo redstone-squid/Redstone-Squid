@@ -69,6 +69,7 @@ from squid_ui.planning.semantic_adaptation.lowering import (
 )
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
 from squid_ui.planning.target import AnyTarget, Target
+from squid_ui.presentation import PresentationState
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Break,
@@ -89,7 +90,6 @@ from squid_ui.primitives.nodes import Code as PrimitiveCode
 from squid_ui.primitives.nodes import Footer as PrimitiveFooter
 from squid_ui.primitives.nodes import Heading as PrimitiveHeading
 from squid_ui.primitives.nodes import Text as PrimitiveText
-from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.semantic import Code as SemanticCode
 from squid_ui.semantic import Paragraph as SemanticParagraph

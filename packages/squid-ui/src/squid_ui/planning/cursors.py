@@ -15,15 +15,15 @@ from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
-from squid_ui.primitives.constraints import Never
-from squid_ui.primitives.nodes import Footer, Node
-from squid_ui.runtime.presentation_state import (
+from squid_ui.presentation import (
     ActivePagers,
     CursorState,
     CursorUpdate,
     PresentationState,
     SessionUpdate,
 )
+from squid_ui.primitives.constraints import Never
+from squid_ui.primitives.nodes import Footer, Node
 from squid_ui.sources import POSITION_RESOLVER, Direction, Position, PositionResolver
 
 
