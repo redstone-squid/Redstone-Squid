@@ -4,13 +4,14 @@ import re
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import CheckConstraint, Table
+from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects.postgresql import dialect
 
 from squid.notifications.domain import NotificationKind, SubscriptionKind
 from squid.notifications.infrastructure.repository import _exact_value
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.persistence.types import StrEnumText
+from tests.support.schema import model_table
 
 
 def test_exact_tag_matching_does_not_cross_boolean_and_numeric_types() -> None:
@@ -26,7 +27,7 @@ def test_persisted_kind_checks_are_total_over_domain_enums() -> None:
     constraints = {
         constraint.name: str(constraint.sqltext)
         for model in (InboxNotification, NotificationSubscription)
-        for constraint in cast(Table, model.__table__).constraints
+        for constraint in model_table(model).constraints
         if constraint.name is not None and isinstance(constraint, CheckConstraint)
     }
 

@@ -2,10 +2,9 @@
 
 from collections.abc import AsyncGenerator
 from functools import partial
-from typing import cast
 
 import pytest
-from sqlalchemy import Table, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
@@ -13,8 +12,9 @@ from squid.auth.application import ApiKeyService
 from squid.auth.models.entities import ApiKey
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from tests.support.schema import model_tables
 
-_TABLES = [cast(Table, Account.__table__), cast(Table, ApiKey.__table__)]
+_TABLES = model_tables(Account, ApiKey)
 
 
 @pytest.fixture

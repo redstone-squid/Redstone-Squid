@@ -7,12 +7,12 @@ from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast, override
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Table, func, select, update
 from sqlalchemy import delete as sql_delete
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -43,6 +43,7 @@ from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
 from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
@@ -51,15 +52,15 @@ DRAFT_ID = UUID("84ab2da9-c27e-4d37-98c6-973bcc92f5e4")
 OTHER_DRAFT_ID = UUID("95bc3eba-d38f-4e48-a9d7-a84cda03f6e5")
 UPLOAD_ID = UUID("75043a53-05ae-4097-bbf4-4eae1d6b088c")
 LIMITS = MediaLimits()
-_TABLES: tuple[Table, ...] = (
-    cast(Table, Account.__table__),
-    cast(Table, SubmissionDraft.__table__),
-    cast(Table, MediaUploadRecord.__table__),
-    cast(Table, MediaNormalizationJobRecord.__table__),
-    cast(Table, MediaDraftReference.__table__),
-    cast(Table, MediaArtifactRecord.__table__),
-    cast(Table, MediaArtifactObjectRecord.__table__),
-    cast(Table, MediaArtifactPublicationRecord.__table__),
+_TABLES = model_tables(
+    Account,
+    SubmissionDraft,
+    MediaUploadRecord,
+    MediaNormalizationJobRecord,
+    MediaDraftReference,
+    MediaArtifactRecord,
+    MediaArtifactObjectRecord,
+    MediaArtifactPublicationRecord,
 )
 
 

@@ -6,7 +6,7 @@ case requires PostgreSQL and is skipped with this SQLite fixture.
 
 import contextlib
 from collections.abc import Generator
-from typing import Any, cast
+from typing import Any
 
 import pytest
 import sqlalchemy
@@ -22,7 +22,6 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
-    Table,
     engine_from_config,
     text,
 )
@@ -33,6 +32,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 from sqlalchemy.sql.type_api import TypeEngine
 
 from squid.persistence.inspection import is_sane_database
+from tests.support.schema import model_table
 
 
 @pytest.fixture
@@ -270,7 +270,7 @@ def test_sanity_check_fails_with_column_type_mismatch(
     with contextlib.suppress(NoSuchTableError):
         Base.metadata.drop_all(db_engine)
 
-    Base.metadata.create_all(db_engine, tables=[cast(Table, TestModel.__table__)])
+    Base.metadata.create_all(db_engine, tables=[model_table(TestModel)])
     # Rebuild only this table; the original fixture model remains absent, so the
     # final failure does not isolate column-type checking.
     with db_engine.begin() as connection:
@@ -297,7 +297,7 @@ def test_sanity_check_fails_with_missing_many_to_many_relationship(
     Base.metadata.create_all(db_engine)
 
     # Re-create ManyToManyModel1 without the relationship to ManyToManyModel2
-    Base.metadata.remove(cast(Table, ManyToManyModel1.__table__))
+    Base.metadata.remove(model_table(ManyToManyModel1))
 
     class ManyToManyModel1_MissingRelationship(Base):
         __tablename__ = "many_to_many_test_1"
@@ -320,7 +320,7 @@ def test_sanity_check_fails_with_missing_one_to_many_relationship(
     Base.metadata.create_all(db_engine)
 
     # Create a new model without the one-to-many relationship
-    Base.metadata.remove(cast(Table, ManyToManyModel1.__table__))
+    Base.metadata.remove(model_table(ManyToManyModel1))
 
     class ManyToManyModel1_MissingRelationship(Base):
         __tablename__ = ManyToManyModel1.__tablename__

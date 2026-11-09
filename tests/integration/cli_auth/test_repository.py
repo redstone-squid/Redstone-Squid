@@ -2,13 +2,11 @@
 
 from collections.abc import AsyncGenerator
 from functools import partial
-from typing import cast
 from uuid import UUID
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from sqlalchemy import Table
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -25,17 +23,18 @@ from squid.cli_auth.models import (
 )
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from tests.support.schema import model_tables
 
 pytestmark = pytest.mark.asyncio
 
 NOW = Instant.parse_iso("2026-08-11T22:00:00Z")
 CLIENT_INSTANCE_ID = UUID("cafecafe-cafe-4afe-8afe-cafecafecafe")
-_TABLES: tuple[Table, ...] = (
-    cast(Table, Account.__table__),
-    cast(Table, CliDeviceEnrollment.__table__),
-    cast(Table, CliDevice.__table__),
-    cast(Table, CliSessionChallenge.__table__),
-    cast(Table, CliSession.__table__),
+_TABLES = model_tables(
+    Account,
+    CliDeviceEnrollment,
+    CliDevice,
+    CliSessionChallenge,
+    CliSession,
 )
 
 

@@ -1,10 +1,9 @@
 """Vote replacement and source matching using the starboard ORM tables without migration triggers."""
 
 from collections.abc import AsyncGenerator
-from typing import cast
 
 import pytest
-from sqlalchemy import Table, insert
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -24,20 +23,18 @@ from squid.starboard.models import (
 from squid.starboard.models import (
     StarboardEmoji as StarboardEmojiRow,
 )
+from tests.support.schema import model_tables
 
-TABLES = cast(
-    tuple[Table, ...],
-    (
-        ServerSetting.__table__,
-        Message.__table__,
-        StarboardConfig.__table__,
-        StarboardEmojiRow.__table__,
-        StarboardSource.__table__,
-        OriginMessage.__table__,
-        StarboardVote.__table__,
-        StarboardEntry.__table__,
-        StarboardRoleMultiplier.__table__,
-    ),
+TABLES = model_tables(
+    ServerSetting,
+    Message,
+    StarboardConfig,
+    StarboardEmojiRow,
+    StarboardSource,
+    OriginMessage,
+    StarboardVote,
+    StarboardEntry,
+    StarboardRoleMultiplier,
 )
 
 

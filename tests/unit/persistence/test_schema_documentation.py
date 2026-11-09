@@ -1,6 +1,6 @@
 """Model docstrings reach the database as table and column comments."""
 
-from typing import ClassVar, cast
+from typing import ClassVar
 
 from sqlalchemy import BigInteger, ForeignKey, Integer, MetaData, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 import squid.persistence.model_registry  # noqa: F401  # imported for its model registration side effect
 from squid.persistence.base import Base
 from squid.persistence.docs import extract_attribute_docstrings
+from tests.support.schema import model_table
 
 
 class SandboxBase(Base):
@@ -19,13 +20,6 @@ class SandboxBase(Base):
 
     __abstract__ = True
     metadata: ClassVar[MetaData] = MetaData()
-
-
-def table_of(model: type[Base]) -> Table:
-    """Return a mapped model's concrete table for comment assertions."""
-    table = model.__table__
-    assert isinstance(table, Table)
-    return cast(Table, table)
 
 
 def test_attribute_docstrings_become_column_comments() -> None:
@@ -44,8 +38,8 @@ def test_attribute_docstrings_become_column_comments() -> None:
         """This docstring loses to the explicit comment."""
         undocumented: Mapped[int] = mapped_column(Integer)
 
-    assert table_of(DocWidget).comment == "A widget."
-    comments = {column.name: column.comment for column in table_of(DocWidget).columns}
+    assert model_table(DocWidget).comment == "A widget."
+    comments = {column.name: column.comment for column in model_table(DocWidget).columns}
     assert comments == {
         "id": None,
         "name": "What the widget is called.",
@@ -80,10 +74,10 @@ def test_a_subclass_documents_its_own_table() -> None:
         )
         """Documented on the child's own table, not the parent's."""
 
-    assert table_of(DocParent).comment == "The parent table."
-    assert table_of(DocChild).comment == "The child table."
-    assert table_of(DocParent).c.id.comment is None
-    assert table_of(DocChild).c.id.comment == "Documented on the child's own table, not the parent's."
+    assert model_table(DocParent).comment == "The parent table."
+    assert model_table(DocChild).comment == "The child table."
+    assert model_table(DocParent).c.id.comment is None
+    assert model_table(DocChild).c.id.comment == "Documented on the child's own table, not the parent's."
 
 
 def test_every_attribute_docstring_in_the_schema_reached_its_column() -> None:

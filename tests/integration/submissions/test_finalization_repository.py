@@ -4,11 +4,10 @@ import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from functools import partial
-from typing import cast
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Table, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -55,23 +54,24 @@ from squid.submissions.models.finalization import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
+from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")
 NOW = Instant.parse_iso("2026-08-11T18:00:00Z")
-_TABLES: tuple[Table, ...] = (
-    cast(Table, Account.__table__),
-    cast(Table, SubmissionDraft.__table__),
-    cast(Table, SubmissionDraftAccess.__table__),
-    cast(Table, SubmissionDraftChange.__table__),
-    cast(Table, MediaUploadRecord.__table__),
-    cast(Table, MediaNormalizationJobRecord.__table__),
-    cast(Table, MediaDraftReference.__table__),
-    cast(Table, SubmissionFinalizationJob.__table__),
-    cast(Table, SubmissionFinalizationInput.__table__),
-    cast(Table, SubmissionFinalizationResult.__table__),
+_TABLES = model_tables(
+    Account,
+    SubmissionDraft,
+    SubmissionDraftAccess,
+    SubmissionDraftChange,
+    MediaUploadRecord,
+    MediaNormalizationJobRecord,
+    MediaDraftReference,
+    SubmissionFinalizationJob,
+    SubmissionFinalizationInput,
+    SubmissionFinalizationResult,
 )
 
 

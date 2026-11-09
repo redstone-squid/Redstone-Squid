@@ -10,7 +10,7 @@ while a database CHECK rejects visibly unfolded raw writes.
 from functools import partial
 
 import pytest
-from sqlalchemy import Table, select, text
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -19,6 +19,7 @@ from squid.accounts.domain import fold_creator_name
 from squid.accounts.models import CreatorAlias
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.schema import model_table
 from tests.support.unit_of_work import transact
 
 
@@ -58,8 +59,7 @@ async def test_core_on_conflict_insert_writes_the_fold(
 async def test_executemany_writes_the_fold(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    alias_table = CreatorAlias.__table__
-    assert isinstance(alias_table, Table)  # Declarative only promises the wider `FromClause`.
+    alias_table = model_table(CreatorAlias)
     async with migrated_session_factory.begin() as session:
         await session.execute(alias_table.insert(), [{"name": "ﬁx"}, {"name": " Bob "}])
 

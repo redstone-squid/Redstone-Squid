@@ -8,7 +8,7 @@ import hashlib
 from collections.abc import AsyncGenerator
 from functools import partial
 from pathlib import Path
-from typing import cast, override
+from typing import override
 
 import anyio
 import pytest
@@ -35,6 +35,7 @@ from squid.schematics.domain.models import (
     SchematicVisibility,
     SimulationResult,
 )
+from tests.support.schema import model_tables
 from tests.unit.schematics.fakes import make_analysis
 
 pytestmark = pytest.mark.asyncio
@@ -49,7 +50,7 @@ _SETUP = (
     "INSERT INTO builds (id) VALUES (1), (2) ON CONFLICT DO NOTHING",
 )
 _TABLES: tuple[Table, ...] = (
-    cast(Table, Account.__table__),
+    *model_tables(Account),
     Base.metadata.tables["schematic_files"],
     Base.metadata.tables["build_schematics"],
     Base.metadata.tables["schematic_render_queue"],

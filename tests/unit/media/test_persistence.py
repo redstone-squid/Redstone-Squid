@@ -10,6 +10,7 @@ from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.models import MediaArtifactRecord, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.types import StrEnumText
+from tests.support.schema import model_table
 
 
 def _checked_values(table: Table, constraint_name: str) -> set[str]:
@@ -22,9 +23,9 @@ def _checked_values(table: Table, constraint_name: str) -> set[str]:
 
 
 def test_media_enum_mappings_match_database_checks() -> None:
-    uploads = cast(Table, MediaUploadRecord.__table__)
-    artifacts = cast(Table, MediaArtifactRecord.__table__)
-    jobs = cast(Table, MediaNormalizationJobRecord.__table__)
+    uploads = model_table(MediaUploadRecord)
+    artifacts = model_table(MediaArtifactRecord)
+    jobs = model_table(MediaNormalizationJobRecord)
 
     assert _checked_values(uploads, "media_uploads_kind_check") == {kind.value for kind in MediaKind}
     assert _checked_values(artifacts, "media_artifacts_role_check") == {role.value for role in MediaArtifactRole}

@@ -1,7 +1,6 @@
 import uuid
-from typing import cast
 
-from sqlalchemy import CheckConstraint, Index, Table
+from sqlalchemy import CheckConstraint, Index
 
 from squid.records.application.models import CategoryIdentity
 from squid.records.domain import (
@@ -23,6 +22,7 @@ from squid.records.models import (
     TitleDefinition,
     TitleResult,
 )
+from tests.support.schema import model_table
 
 
 def test_requested_category_key_round_trips() -> None:
@@ -75,7 +75,7 @@ def test_title_definitions_persist_canonical_title_metadata() -> None:
 
 
 def test_title_definitions_allow_every_base_title() -> None:
-    table = cast(Table, RecordTitle.__table__)
+    table = model_table(RecordTitle)
     constraint = next(
         constraint
         for constraint in table.constraints

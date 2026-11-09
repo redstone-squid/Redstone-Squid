@@ -4,11 +4,10 @@ import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import replace
 from functools import partial
-from typing import cast
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Table, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -38,19 +37,20 @@ from squid.submissions.models.entities import (
     SubmissionDraftChange,
 )
 from squid.submissions.models.finalization import SubmissionFinalizationJob
+from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000201")
 NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
-_TABLES = (
-    cast(Table, Account.__table__),
-    cast(Table, SubmissionDraft.__table__),
-    cast(Table, SubmissionDraftAccess.__table__),
-    cast(Table, SubmissionDraftChange.__table__),
-    cast(Table, SubmissionFinalizationJob.__table__),
-    cast(Table, MediaUploadRecord.__table__),
-    cast(Table, MediaNormalizationJobRecord.__table__),
-    cast(Table, MediaDraftReference.__table__),
+_TABLES = model_tables(
+    Account,
+    SubmissionDraft,
+    SubmissionDraftAccess,
+    SubmissionDraftChange,
+    SubmissionFinalizationJob,
+    MediaUploadRecord,
+    MediaNormalizationJobRecord,
+    MediaDraftReference,
 )
 
 

@@ -4,12 +4,11 @@ import base64
 import hashlib
 from collections.abc import AsyncGenerator
 from functools import partial
-from typing import cast
 from uuid import UUID
 
 import pytest
 from anyio import Event, create_task_group, fail_after, sleep
-from sqlalchemy import Table, func, select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -33,6 +32,7 @@ from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
@@ -41,12 +41,12 @@ NOW = Instant.parse_iso("2026-08-11T12:00:00Z")
 JAVA_UUID = UUID("d8de679a-3de4-4cb9-9f11-c961c72a3531")
 PKCE_VERIFIER = "correct-verifier-" + "a" * 27
 PKCE_CHALLENGE = base64.urlsafe_b64encode(hashlib.sha256(PKCE_VERIFIER.encode()).digest()).rstrip(b"=").decode()
-_TABLES: tuple[Table, ...] = (
-    cast(Table, Account.__table__),
-    cast(Table, AccountIdentity.__table__),
-    cast(Table, PaperInstallation.__table__),
-    cast(Table, PlayerAuthorizationChallenge.__table__),
-    cast(Table, PlayerGrant.__table__),
+_TABLES = model_tables(
+    Account,
+    AccountIdentity,
+    PaperInstallation,
+    PlayerAuthorizationChallenge,
+    PlayerGrant,
 )
 
 
