@@ -125,7 +125,7 @@ from squid_ui.interactions import (
     SubmitEvent,
 )
 from squid_ui.palette import Palette, PaletteRegistry
-from squid_ui.runtime.component import Component
+from squid_ui.runtime.definition import Component
 from squid_ui.semantic import (
     ChoiceEvent,
     EntityEvent,

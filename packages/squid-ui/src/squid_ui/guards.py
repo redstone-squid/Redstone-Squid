@@ -25,7 +25,7 @@ from squid_ui.interactions import ActionEvent
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
-    from squid_ui.runtime.component import Component
+    from squid_ui.runtime.definition import Component
 
 
 def _monotonic() -> float:

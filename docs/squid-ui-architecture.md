@@ -147,6 +147,13 @@ these are exported by `squid_ui.planning`. Integrations previously importing the
 `scene` or `scene.model` should import them from planning instead. This changes Python import
 paths, not the scene protocol or when a host applies presentation updates.
 
+The component contract lives in `runtime.definition`. Tree snapshots and incremental-render
+inputs live in `runtime.tree`; expansion and subtree splicing live in `runtime.expansion`.
+Structural traversal and control-key rewriting share `runtime._tree`. These modules depend on
+the component contract, not on the owner or planner. `ComponentRuntime` retains ownership of
+cache dictionaries, invalidation, candidate and committed trees, and lifecycle transitions.
+The existing `runtime.component` import path is a facade over these definitions.
+
 ## End-to-end flow
 
     Component state

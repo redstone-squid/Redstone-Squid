@@ -9,16 +9,10 @@ from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.presentation import PresentationState
-from squid_ui.runtime.component import (
-    AnyComponent,
-    Component,
-    ComponentTree,
-    IncrementalRender,
-    _ComponentRender,
-    _ExpandedSubtree,
-    render_component_tree,
-)
+from squid_ui.runtime.definition import AnyComponent, Component
+from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _owns_current_activity, _ServiceLifecycle
+from squid_ui.runtime.tree import ComponentTree, IncrementalRender, _ComponentRender, _ExpandedSubtree
 from squid_ui.target_types import RenderTarget
 
 

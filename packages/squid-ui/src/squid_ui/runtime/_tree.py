@@ -2,10 +2,36 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
+from typing import cast
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.primitives.nodes import Break, Budget, Card, Extension, Panel, Variants
+from squid_ui.primitives.constraints import Paginate
+from squid_ui.primitives.nodes import (
+    Break,
+    Budget,
+    Button,
+    Card,
+    Code,
+    ControlGroup,
+    Extension,
+    Footer,
+    Heading,
+    Lines,
+    Panel,
+    Row,
+    SelectMenu,
+    Text,
+    Variants,
+)
+from squid_ui.primitives.nodes import Section as PrimitiveSection
 from squid_ui.semantic import (
+    ActionControl as SemanticActionControl,
+)
+from squid_ui.semantic import (
+    ActionControls as SemanticActionControls,
+)
+from squid_ui.semantic import (
+    AnyLayoutNode,
     Article,
     Aside,
     BestEffort,
@@ -27,6 +53,40 @@ from squid_ui.semantic import (
     Truncated,
     Unbreakable,
 )
+from squid_ui.semantic import (
+    Choices as SemanticChoices,
+)
+from squid_ui.semantic import ControlGroup as SemanticControlGroup
+from squid_ui.semantic import (
+    Details as SemanticDetails,
+)
+from squid_ui.semantic import Download as SemanticDownload
+from squid_ui.semantic import (
+    FormTrigger as SemanticFormTrigger,
+)
+from squid_ui.semantic import Grid as SemanticGrid
+from squid_ui.semantic import (
+    Items as SemanticItems,
+)
+from squid_ui.semantic import (
+    Link as SemanticLink,
+)
+from squid_ui.semantic import (
+    List as SemanticList,
+)
+from squid_ui.semantic import (
+    Media as SemanticMedia,
+)
+from squid_ui.semantic import (
+    Navigation as SemanticNavigation,
+)
+from squid_ui.semantic import Paged as SemanticPaged
+from squid_ui.semantic import Roster as SemanticRoster
+from squid_ui.semantic import RoutedActionControl as SemanticRoutedActionControl
+from squid_ui.semantic import (
+    Table as SemanticTable,
+)
+from squid_ui.semantic import Toggle as SemanticToggle
 from squid_ui.target_types import RenderTarget
 
 type LayoutTransform[RenderTargetT: RenderTarget, ContextT = object] = Callable[
@@ -208,3 +268,88 @@ def _map_many_at[RenderTargetT: RenderTarget, ContextT = object](
     for index, child in enumerate(children):
         transformed.extend(transform(child, f"{path}.{index}", (*route, _SequenceStep(field, len(transformed)))))
     return tuple(transformed)
+
+
+def _namespace[RenderTargetT: RenderTarget, ContextT = object](
+    nodes: list[LayoutNode[RenderTargetT, ContextT]], prefix: str
+) -> list[LayoutNode[RenderTargetT, ContextT]]:
+    """Rewrite an embedded subtree's control keys under ``prefix``.
+
+    Explicit control keys are scoped under the embed path, so inserting a sibling cannot
+    change the identity of any existing action.
+    """
+
+    def key_for(node: Button | SelectMenu) -> str:
+        return f"{prefix}.{node.key}"
+
+    def rewrite_text[T: Text | Heading | Footer | Code | Lines](node: T) -> T:
+        overflow = node.overflow
+        if isinstance(overflow, Paginate) and overflow.key is not None:
+            return replace(node, overflow=replace(overflow, key=f"{prefix}.{overflow.key}"))
+        return node
+
+    def rewrite_item[T](item: T) -> T:
+        return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
+
+    def rewrite_semantic_control(
+        item: SemanticActionControl | SemanticLink | SemanticRoutedActionControl,
+    ) -> SemanticActionControl | SemanticLink | SemanticRoutedActionControl:
+        return replace(item, key=f"{prefix}.{item.key}")
+
+    def rewrite_semantic_action(
+        item: SemanticActionControl | SemanticLink | SemanticRoutedActionControl | SemanticControlGroup,
+    ) -> SemanticActionControl | SemanticLink | SemanticRoutedActionControl | SemanticControlGroup:
+        if isinstance(item, SemanticControlGroup):
+            return replace(
+                item,
+                key=f"{prefix}.{item.key}",
+                controls=tuple(rewrite_semantic_control(control) for control in item.controls),
+            )
+        return rewrite_semantic_control(item)
+
+    def rewrite(node: AnyLayoutNode) -> AnyLayoutNode:
+        match node:
+            case SemanticActionControls(items=items, key=key):
+                return replace(
+                    node,
+                    key=f"{prefix}.{key}",
+                    items=tuple(rewrite_semantic_action(item) for item in items),
+                )
+            case SemanticDetails(key=key) | SemanticItems(key=key):
+                keyed = replace(node, key=f"{prefix}.{key}")
+                return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
+            case (
+                SemanticList(key=key)
+                | SemanticChoices(key=key)
+                | SemanticNavigation(key=key)
+                | SemanticTable(key=key)
+                | SemanticGrid(key=key)
+                | SemanticRoster(key=key)
+                | SemanticMedia(key=key)
+                | SemanticFormTrigger(key=key)
+                | SemanticToggle(key=key)
+                | SemanticDownload(key=key)
+            ):
+                return replace(node, key=f"{prefix}.{key}")
+            case SemanticPaged(key=key):
+                keyed = replace(node, key=f"{prefix}.{key}")
+                return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
+            case Text() | Heading() | Footer() | Code() | Lines():
+                return rewrite_text(node)
+            case Row(items=items):
+                return Row(items=tuple(rewrite_item(item) for item in items))
+            case ControlGroup(items=items):
+                return ControlGroup(items=tuple(rewrite_item(item) for item in items))
+            case PrimitiveSection(texts=texts, accessory=accessory):
+                return PrimitiveSection(
+                    texts=tuple(rewrite_text(text) for text in texts), accessory=rewrite_item(accessory)
+                )
+            case SelectMenu():
+                return replace(node, key=key_for(node))
+            case _:
+                return map_layout_children(node, "$", lambda child, _path: (rewrite(child),))
+
+    # `rewrite` is written over the erased union: it matches on primitive shapes, none of which
+    # carry a target, and returns the same nodes rekeyed. That costs the local walker's
+    # precision, not the caller's, so the target the caller passed in is what comes back.
+    return cast(list[LayoutNode[RenderTargetT, ContextT]], [rewrite(node) for node in nodes])

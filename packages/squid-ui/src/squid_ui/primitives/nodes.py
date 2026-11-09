@@ -32,7 +32,7 @@ from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
-    from squid_ui.runtime.component import Component
+    from squid_ui.runtime.definition import Component
     from squid_ui.runtime.histories import History
 
 

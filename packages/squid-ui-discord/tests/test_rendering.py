@@ -14,7 +14,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
-import squid_ui.runtime.component as component_module
+import squid_ui.runtime.expansion as expansion_module
 import squid_ui.runtime.owner as owner_module
 import squid_ui_discord as sd
 from squid_reactivity.shared_state import SharedState
@@ -328,14 +328,14 @@ class TestRenderCaching:
         initial = runtime.render()
         runtime.commit(initial, rendered_revision=runtime.revision)
         namespaces = 0
-        namespace = component_module._namespace
+        namespace = expansion_module._namespace
 
         def counted_namespace(*args, **kwargs):
             nonlocal namespaces
             namespaces += 1
             return namespace(*args, **kwargs)
 
-        monkeypatch.setattr(component_module, "_namespace", counted_namespace)
+        monkeypatch.setattr(expansion_module, "_namespace", counted_namespace)
         root.leaves[500].value = 1
 
         changed = runtime.render(reuse_committed=True)
@@ -468,14 +468,14 @@ class TestRenderCaching:
         initial = runtime.render()
         runtime.commit(initial, rendered_revision=runtime.revision)
         namespaces = 0
-        namespace = component_module._namespace
+        namespace = expansion_module._namespace
 
         def counted_namespace(*args, **kwargs):
             nonlocal namespaces
             namespaces += 1
             return namespace(*args, **kwargs)
 
-        monkeypatch.setattr(component_module, "_namespace", counted_namespace)
+        monkeypatch.setattr(expansion_module, "_namespace", counted_namespace)
         root.middle.leaf.value = 1
 
         changed = runtime.render(reuse_committed=True)

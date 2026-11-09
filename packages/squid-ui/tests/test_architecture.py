@@ -7,8 +7,11 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import testing
+from squid_ui.action_mode import ActionMode
 from squid_ui.context import ContextKey
+from squid_ui.planning.result import PlanResult
 from squid_ui.presentation import PresentationState, SessionUpdate
+from squid_ui.runtime import component, definition, expansion, tree
 from squid_ui.runtime.context import ContextKey as RuntimeContextKey
 from squid_ui.runtime.presentation_state import PresentationState as RuntimePresentationState
 from squid_ui.runtime.presentation_state import SessionUpdate as RuntimeSessionUpdate
@@ -27,6 +30,7 @@ def runtime_imports(path: Path) -> set[str]:
             return
         if isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module)
+            imports.update(f"{node.module}.{alias.name}" for alias in node.names)
         elif isinstance(node, ast.Import):
             imports.update(alias.name for alias in node.names)
         for child in ast.iter_child_nodes(node):
@@ -54,6 +58,7 @@ def test_existing_contract_imports_preserve_identity() -> None:
     assert sl.runtime.ContextKey is ContextKey
     assert sl.runtime.PresentationState is RuntimePresentationState is PresentationState
     assert sl.runtime.SessionUpdate is RuntimeSessionUpdate is SessionUpdate
+    assert "ComponentRuntime" in vars(sl.runtime)
 
 
 @pytest.mark.parametrize(
@@ -90,10 +95,39 @@ def test_scene_sources_do_not_depend_on_live_execution() -> None:
 
 
 def test_planning_owns_live_results_and_scene_preserves_action_modes() -> None:
-    from squid_ui.action_mode import ActionMode
-    from squid_ui.planning.result import PlanResult
-
     assert sl.planning.PlanResult is PlanResult
     assert not hasattr(sl.scene, "PlanResult")
     assert sl.interactions.ActionMode is ActionMode
     assert sl.scene.Button("Save", "save").mode is ActionMode.EXCLUSIVE
+
+
+@pytest.mark.parametrize(
+    ("module", "forbidden"),
+    (
+        (
+            "definition",
+            (
+                "squid_ui.runtime.component",
+                "squid_ui.runtime.tree",
+                "squid_ui.runtime.expansion",
+                "squid_ui.runtime.owner",
+                "squid_ui.planning",
+            ),
+        ),
+        (
+            "tree",
+            ("squid_ui.runtime.component", "squid_ui.runtime.expansion", "squid_ui.runtime.owner", "squid_ui.planning"),
+        ),
+        ("expansion", ("squid_ui.runtime.component", "squid_ui.runtime.owner", "squid_ui.planning")),
+    ),
+)
+def test_component_execution_dependencies_flow_toward_the_contract(module: str, forbidden: tuple[str, ...]) -> None:
+    imports = runtime_imports(SOURCE / "runtime" / f"{module}.py")
+    assert not {name for name in imports if name.startswith(forbidden)}
+
+
+def test_component_facade_preserves_existing_imports() -> None:
+    assert sl.Component is component.Component is definition.Component
+    assert component.ComponentTree is tree.ComponentTree
+    assert component.IncrementalRender is tree.IncrementalRender
+    assert component.render_component_tree is expansion.render_component_tree

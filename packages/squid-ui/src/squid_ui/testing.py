@@ -23,8 +23,9 @@ from squid_ui.interactions import (
     SubmitEvent,
     Visibility,
 )
-from squid_ui.runtime.component import AnyComponent, Component, render_component_tree
 from squid_ui.runtime.continuations import PostCommitOperation
+from squid_ui.runtime.definition import AnyComponent, Component
+from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
 from squid_ui.text import NEUTRAL, TextLike, resolve_text
 

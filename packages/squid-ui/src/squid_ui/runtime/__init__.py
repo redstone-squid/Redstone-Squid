@@ -88,8 +88,8 @@ from squid_ui.presentation import (
     ToggleUpdate,
     apply_updates,
 )
-from squid_ui.runtime.component import Component
 from squid_ui.runtime.continuations import ActionDiscardedError, Discarded, PostCommitOperation
+from squid_ui.runtime.definition import Component
 from squid_ui.runtime.histories import (
     CompensationClaim,
     CompensationExecution,

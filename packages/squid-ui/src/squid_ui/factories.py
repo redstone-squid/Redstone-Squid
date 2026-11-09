@@ -229,7 +229,7 @@ def _reject(value: object, origin: str, index: int) -> NoReturn:
 
 def _is_component(value: object) -> bool:
     # Imported on the error path only, so the sugar layer keeps depending on semantic + text.
-    from squid_ui.runtime.component import Component
+    from squid_ui.runtime.definition import Component
 
     return isinstance(value, Component)
 
