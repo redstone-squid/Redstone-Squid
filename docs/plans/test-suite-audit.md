@@ -76,121 +76,151 @@ use it too.
 
 Each batch is committed independently after its focused checks. The remaining-work lists stay open until reviewed.
 
-## Remaining work
+## Completed review
 
-State as of 2026-11-09: 5,920 tests collected. The original scan found `SimpleNamespace` in 69 modules and mocks in
-85; these lists are what remains. Treat them as a work queue, not acceptance criteria; the greps above decide when
-the audit is done.
+- Replaced namespace and autospecced service graphs with concrete service/cog subclasses and checked containers.
+  Inference, finalization, revision, purge, and diagnostics recorders expose the production method signatures.
+- Moved routine async callbacks to the public Discord recorder; process/worker registration records operations
+  without starting unrelated background jobs. The service-container helper no longer special-cases mocks.
+- Replaced mocked SQLAlchemy lock tests with two-session PostgreSQL exclusion and transaction-release checks.
+- Removed duplicated command inventories, field/dependency/version inventories already covered by consumers,
+  a constructor echo, and retired API absence guards. Kept import-isolation, rendering, wire, security,
+  architecture, concurrency, and command-taxonomy contracts.
+- Audited skips: all remain conditional on optional dependencies, platform support, or sandbox capabilities.
+  No unconditional skip or xfail was added.
+- Fixed failures exposed by validation: explicit relationship loading prevents nullable joins in tag locking;
+  voter account lookup now belongs to application services. Regenerated the ignored localization template with
+  just i18n-extract before architecture validation.
+- Fixed the extension-registration test's collection-order dependency with a typed subscription recorder.
+  Reaction dispatch remains covered by its owning tests.
 
-### Namespace service graphs to rewrite
-
-These pass a namespace in place of the bot, a cog, or an application service:
-
-```text
-tests/unit/bot/test_recount.py                                  bot, services, cogs
-tests/unit/bot/test_starboard.py                                cog.service, cog._debouncer, guild, members
-tests/unit/bot/submission/test_build_recalc.py                  bot graph and inference/proposal results
-tests/unit/bot/voting/test_vote_reactions.py                    channel
-tests/unit/bot/submission/test_ingestion.py                     attachments and message
-tests/support/discord.py                                        reaction user
-```
-
-### Mock-heavy modules to review
-
-Module and number of mock constructions. Most will become recorders or typed fakes. The likely retained boundaries
-are noted.
-
-```text
-packages/squid-ui-discord/tests/test_devtools_runtime.py          2
-packages/squid-ui-discord/tests/test_form_discord.py              2
-tests/unit/bot/test_app_main.py                                  19  process wiring; ProcessHealthServer patch may stay
-tests/unit/bot/test_components_v2_ui.py                          14  authorize/render/refresh -> typed fake
-tests/unit/bot/test_log.py                                       12  bot and context -> ContextHarness
-tests/unit/bot/test_extension_loading.py                          9  bot services -> tests.support.services
-tests/unit/bot/events/test_vote_outcome_handlers.py               9  bot and message -> MessageHarness
-tests/unit/bot/submission/test_consent_banner.py                  5
-tests/unit/bot/submission/test_ingestion.py                       4
-tests/unit/bot/submission/test_build_recalc.py                    3
-tests/unit/bot/test_diagnostics.py                                3
-tests/unit/bot/test_request_commands.py                           3
-tests/unit/bot/submission/test_message_context.py                 2
-tests/unit/bot/test_poll_wizard_panel.py                          2
-tests/unit/bot/test_errors.py                                     1
-tests/unit/bot/test_i18n.py                                       1
-tests/unit/bot/test_starboard.py                                  1
-tests/unit/bot/test_welcome_relay.py                              1
-tests/unit/bot/utils/test_permissions.py                          1
-tests/unit/bot/utils/test_web.py                                  1
-tests/unit/schematics/infrastructure/test_worker_logging.py      20  stdio, subprocess, rlimit: process boundary
-tests/unit/schematics/infrastructure/test_nucleation_adapter.py  11  Nucleation schematic object: third-party boundary
-tests/unit/test_observability.py                                 11  OpenTelemetry instruments: third-party boundary
-tests/unit/test_process_lifecycle.py                              4
-tests/unit/test_runtime.py                                        4
-tests/unit/accounts/test_mojang.py                                3  HTTP boundary
-tests/unit/artifacts/test_s3_store.py                             3  S3 client boundary
-tests/unit/persistence/test_advisory_locks.py                     2
-tests/unit/api/test_app.py                                        1
-tests/unit/media/test_ffmpeg_adapter.py                           1
-tests/unit/submissions/test_inference_recovery.py                 1
-```
-
-### Skips
-
-Every current skip is conditional: POSIX shell or rlimits, Linux `/proc`, symlink or loopback-socket permission in a
-sandbox, optional extras (`nucleation`, `loro`, `pycrdt`, OpenTelemetry SDK), `ffmpeg` availability, PostgreSQL-only
-types, and the development type checker. No action is needed unless a new unconditional skip appears.
-
-### Documentation
-
-Done: `tests/README.md` describes `tests/support`, the configured topology, and the standalone API fuzz campaign,
-and states that the removed in-process Schemathesis test is not part of `just test`.
+tests/README.md documents the configured topology, support helpers, and the separate API fuzz campaign.
+All service-graph and callback queues have been reviewed. The scan below is the remaining boundary inventory.
 
 ## Retained doubles
 
-List each deliberately retained namespace or mock here as `path:line — reason` when its module is finished.
+Each location below is deliberately retained. Interaction, message delivery, and context behavior use the shared
+harnesses. Narrow SDK member, attachment, and channel doubles remain for class checks or small external values;
+they do not manufacture bot or service graphs. Recorder calls are concrete test support, not mock constructors.
 
 ```text
-packages/squid-ui-discord/tests/test_roles.py:101 — Discord Member boundary for role-based access.
-tests/unit/bot/test_guild_state.py:51 — HTTP response status/reason for Discord exceptions.
-tests/unit/bot/test_guild_state.py:129 — raw thread deletion event identifiers.
-tests/unit/bot/test_guild_state.py:131 — deleted Discord channel identifiers.
-tests/unit/bot/test_message_lookup.py:21 — HTTP response status/reason for Discord exceptions.
-tests/unit/bot/test_message_lookup.py:31 — Discord TextChannel boundary with a failing fetch endpoint.
-tests/unit/bot/test_message_lookup.py:63 — fetched Discord message content and edit timestamp.
-tests/unit/notifications/test_delivery_worker.py:88 — Discord User send boundary.
-tests/unit/notifications/test_delivery_worker.py:121 — HTTP response for a forbidden Discord send.
+packages/squid-ui-discord/tests/test_form_discord.py:204 — Discord Attachment metadata/download boundary.
+packages/squid-ui-discord/tests/test_form_discord.py:209 — Discord Attachment metadata/download boundary.
+packages/squid-ui-discord/tests/test_roles.py:101 — Discord Member class/role boundary.
+tests/support/discord.py:331 — Discord reaction user/member identity, roles, or bot flag.
+tests/unit/accounts/test_mojang.py:43 — HTTP client session boundary.
+tests/unit/accounts/test_mojang.py:57 — HTTP client session boundary.
+tests/unit/accounts/test_mojang.py:66 — HTTP client session boundary.
+tests/unit/artifacts/test_s3_store.py:18 — Boto3 session/client boundary.
+tests/unit/artifacts/test_s3_store.py:19 — Boto3 session/client boundary.
+tests/unit/artifacts/test_s3_store.py:21 — Boto3 session/client boundary.
+tests/unit/bot/events/test_vote_outcome_handlers.py:133 — HTTP status/reason read by a Discord exception.
+tests/unit/bot/submission/test_build_recalc.py:159 — Discord TextChannel eligibility check.
+tests/unit/bot/submission/test_consent_banner.py:123 — Discord TextChannel identity and empty history iterator.
+tests/unit/bot/submission/test_consent_banner.py:125 — Discord TextChannel identity and empty history iterator.
+tests/unit/bot/test_app_main.py:70 — Process health-server context boundary.
+tests/unit/bot/test_app_main.py:93 — OpenTelemetry span/context boundary.
+tests/unit/bot/test_app_main.py:94 — OpenTelemetry span/context boundary.
+tests/unit/bot/test_app_main.py:121 — Discord command qualified name for tracing.
+tests/unit/bot/test_app_main.py:126 — OpenTelemetry span/context boundary.
+tests/unit/bot/test_app_main.py:127 — OpenTelemetry span/context boundary.
+tests/unit/bot/test_errors.py:143 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/bot/test_guild_state.py:51 — HTTP response used to construct a Discord exception.
+tests/unit/bot/test_guild_state.py:129 — Raw Discord gateway event identifiers.
+tests/unit/bot/test_guild_state.py:131 — Deleted Discord channel ID and guild.
+tests/unit/bot/test_i18n.py:87 — gettext catalog boundary.
+tests/unit/bot/test_message_lookup.py:21 — HTTP response used to construct a Discord exception.
+tests/unit/bot/test_message_lookup.py:31 — Discord TextChannel identity with an explicitly failing fetch endpoint.
+tests/unit/bot/test_message_lookup.py:63 — Fetched Discord message content and edit timestamp.
+tests/unit/bot/test_reactions.py:407 — Raw Discord gateway event identifiers.
+tests/unit/bot/test_reactions.py:409 — Raw Discord gateway event identifiers.
+tests/unit/bot/test_reactions.py:565 — Discord message author identity.
+tests/unit/bot/test_reactions.py:584 — Discord reaction user/member identity, roles, or bot flag.
+tests/unit/bot/test_reactions.py:614 — Raw Discord gateway event identifiers.
+tests/unit/bot/test_starboard.py:161 — Discord member ID and role identifiers for recount filtering.
+tests/unit/bot/test_starboard.py:162 — Discord member ID and role identifiers for recount filtering.
+tests/unit/bot/test_starboard.py:163 — HTTP response used to construct a Discord exception.
+tests/unit/bot/test_starboard.py:173 — Discord reaction user/member identity, roles, or bot flag.
+tests/unit/bot/test_starboard.py:178 — Discord reaction user/member identity, roles, or bot flag.
+tests/unit/bot/test_starboard.py:179 — Discord reaction user/member identity, roles, or bot flag.
+tests/unit/bot/test_starboard.py:180 — Discord reaction user/member identity, roles, or bot flag.
+tests/unit/bot/test_welcome_relay.py:71 — Discord TextChannel type/identity boundary.
+tests/unit/bot/utils/test_permissions.py:107 — Discord Member class/role boundary.
+tests/unit/bot/utils/test_sticky_message.py:160 — HTTP status/reason read by a Discord exception.
+tests/unit/bot/utils/test_web.py:33 — HTTP client session boundary.
+tests/unit/media/test_ffmpeg_adapter.py:182 — Explicit subprocess cancellation injection.
+tests/unit/notifications/test_delivery_worker.py:88 — Discord User cached by the real client; only its send endpoint is exercised.
+tests/unit/notifications/test_delivery_worker.py:121 — HTTP response used to construct a Discord exception.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:100 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:101 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:108 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:109 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:131 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:132 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:150 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:157 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:181 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:194 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_nucleation_adapter.py:206 — Native Nucleation schematic/value boundary, including malformed native results.
+tests/unit/schematics/infrastructure/test_worker_logging.py:87 — Worker OpenTelemetry context/shutdown boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:101 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:102 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:300 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:316 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:317 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:318 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:319 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:339 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:340 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:342 — Subprocess pipe, startup, or stdio boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:421 — Worker OpenTelemetry context/shutdown boundary.
+tests/unit/schematics/infrastructure/test_worker_logging.py:490 — Explicit worker protocol response injection.
+tests/unit/test_observability.py:53 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:93 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:96 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:97 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:223 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:224 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:225 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:226 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:227 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:228 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_observability.py:229 — OpenTelemetry instrumentation or shutdown boundary.
+tests/unit/test_process_lifecycle.py:59 — Process logging/telemetry cleanup boundary.
+tests/unit/test_process_lifecycle.py:66 — Process logging/telemetry cleanup boundary.
+tests/unit/test_process_lifecycle.py:82 — Process body fault injection.
 ```
 
 ## Results
 
-The audit remains incomplete. The first implementation batches replaced Discord callback mocks, checked bot service
-graphs in bot tests, and namespace records in authorization and inferred-draft tests. The remaining queues above
-still need review; this is not an acceptance sign-off.
+Completed on 2026-11-09. All acceptance checks pass, with the external capability skips listed below.
+The final scan matches all 85 retained source locations exactly and finds no create_autospec calls.
+All seven workspace src directories remain in Pyrefly's search path.
 
-The installed commit hooks passed Ruff checks and formatting for the committed batches. Pyrefly passed with zero
-errors. `alembic heads` reports `c9f4e7a2b5d8`. Sandbox runs need `UV_CACHE_DIR=/tmp/squid-uv-cache`;
-the package run stalled in SQLite durability tests under the sandbox but completed outside it. Docker also required
-running outside the sandbox.
+| Check | Outcome |
+|---|---|
+| Default suite | 5,902 passed, 1 skipped in 103.48 s |
+| PostgreSQL and other integration tests | 602 passed, 4 skipped in 404.29 s |
+| Pyrefly, via just typecheck | Zero errors |
+| Ruff check and format | Installed commit hooks passed on all changed Python files |
+| Migration heads | Single head: c9f4e7a2b5d8 |
+| Whitespace and retained-double inventory | git diff --check passed; every scan match is documented |
 
-The default run found five failures in unchanged architecture tests: missing recount strings in the localization
-template, a voting transport importing `squid.voting.infrastructure.accounts`, and joined loading on the `message`,
-`display_unit_definition`, and `canonical_unit_definition` relationships. These need resolution before acceptance.
+The unit skip is for PostgreSQL ARRAY support, which the integration suite exercises against PostgreSQL.
+The four integration skips require ffmpeg and ffprobe, which are unavailable in this environment. PostgreSQL,
+the disposable API stack, and the optional schematic checks ran successfully.
 
-PostgreSQL integration failed in
-`test_moderation_and_projection_request_share_a_transaction[False]`: the tag-definition query applies
-`FOR UPDATE` to nullable outer joins introduced by eager unit relationships. Four media tests skipped because
-ffmpeg/ffprobe are unavailable. The run stopped at the first failure, so subsequent integration tests remain unchecked.
-The final double scan still finds namespaces in 10 modules and mocks in 35 modules; some are retained boundaries
-and the rest are covered by the open queues above.
+Reproduction commands:
 
-Run `uv run --locked pytest --no-cov --durations=40 --basetemp=<writable dir>` so a sandboxed temp directory does
-not show up as setup errors.
+```sh
+UV_CACHE_DIR=/tmp/squid-uv-cache just i18n-extract
+UV_CACHE_DIR=/tmp/squid-uv-cache just typecheck
+UV_CACHE_DIR=/tmp/squid-uv-cache uv run --locked alembic heads
+UV_CACHE_DIR=/tmp/squid-uv-cache uv run --locked pytest --no-cov --durations=40 --basetemp=/tmp/audit-default-verified
+UV_CACHE_DIR=/tmp/squid-uv-cache uv run --locked pytest --no-cov tests/integration --durations=20 --basetemp=/tmp/audit-final-integration
+git diff --check
+```
 
-| Run | Collected | Outcome | Duration | Notes |
-|---|---:|---|---:|---|
-| Baseline, 2026-08-29 | 4,823 | 4,687 passed, 10 failed, 10 skipped, 118 setup errors | 276.22 s | Setup errors came from the sandbox-denied system temp directory. Nine failures were a since-fixed permission-node hashing regression; one was the UI literal localization guard. |
-| First callback batch, 2026-11-09 | 460 | Passed | 4.77 s | Focused Discord and bot tests. |
-| Final service batch, 2026-11-09 | 28 | Passed | 1.88 s | Includes schematic access with a real DoorBuild. |
-| Inferred draft options, 2026-11-09 | 2 | Passed | 0.88 s | Real FormOptionSet values. |
-| Default suite, 2026-11-09 | 5,920 | 5,914 passed, 5 failed, 1 skipped | 103.43 s | Architecture failures described above. |
-| PostgreSQL integration, 2026-11-09 | 604 | 533 passed, 1 failed, 4 skipped; stopped early | 356.79 s | First-failure run; outer 360-second timeout expired during shutdown. |
+SQLite/thread and Docker checks ran outside the sandbox. A sandboxed run stalled in SQLite durability tests
+and could not connect to Docker. The localization template is generated and ignored by Git; regenerate it
+before running the catalog architecture check.
