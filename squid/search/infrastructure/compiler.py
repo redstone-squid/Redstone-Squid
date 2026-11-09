@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast, override
 
-from sqlalchemy import and_, false, func, not_, or_, true
+from sqlalchemy import and_, false, func, not_, or_, select, true
 from sqlalchemy.sql.elements import ColumnElement
 from whenever import Instant
 
@@ -101,8 +101,7 @@ class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
         }[field_type]
         comparison = _comparison(cast(ColumnElement[object], value_column), expression, field_type)
         return (
-            facet.__table__.select()
-            .with_only_columns(facet.document_id)
+            select(facet.document_id)
             .where(
                 facet.document_id == SearchDocument.id,
                 facet.field_name == storage_field,
