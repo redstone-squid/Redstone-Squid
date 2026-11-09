@@ -3,6 +3,7 @@
 from squid.accounts import models as account_models
 from squid.auth.models import entities as auth_models
 from squid.auth.models import sessions as auth_session_models
+from squid.builds import history_models as build_history_models
 from squid.builds import models as build_models
 from squid.cli_auth import models as cli_auth_models
 from squid.diagnostics import models as diagnostic_models
@@ -33,6 +34,7 @@ __all__ = [
     "account_models",
     "auth_models",
     "auth_session_models",
+    "build_history_models",
     "build_models",
     "cli_auth_models",
     "diagnostic_models",

@@ -16,8 +16,8 @@ from alembic_utils.replaceable_entity import ReplaceableEntity
 ENTITY_SQL_PATH = Path(__file__).with_name("postgres_entities.sql")
 """Sole definition of the entities Alembic owns in the public schema."""
 
-EXPECTED_FUNCTIONS = 16
-EXPECTED_TRIGGERS = 54
+EXPECTED_FUNCTIONS = 18
+EXPECTED_TRIGGERS = 56
 
 
 def parse_entities(
