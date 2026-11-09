@@ -86,7 +86,7 @@ class TestPresentation:
     def test_the_committed_presentation_carries_the_embeds(self) -> None:
         message_root = message_root_for(DISCORD_V1_DPY27)
         message_root._stage_view()
-        candidate = message_root._pending
+        candidate = message_root._candidates.pending
         assert candidate is not None
 
         assert candidate.payload.mode is MessageMode.CLASSIC
@@ -95,7 +95,7 @@ class TestPresentation:
     def test_a_v2_message_root_delivers_a_layout_and_no_embeds(self) -> None:
         message_root = message_root_for(DISCORD_V2_DPY27)
         message_root._stage_view()
-        candidate = message_root._pending
+        candidate = message_root._candidates.pending
         assert candidate is not None
 
         assert candidate.payload.mode is MessageMode.COMPONENTS_V2
@@ -120,7 +120,7 @@ class TestSharedContracts:
     async def test_a_press_reaches_the_component(self, target) -> None:
         message_root = message_root_for(target)
         await message_root.send(delivered_to(message_for(target)))
-        key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
+        key = _control_ids(message_root._candidates.view)[0].rsplit(":", 1)[-1]
 
         await message_root.dispatch(key, interaction_for(target), generation=message_root.generation)
 
@@ -129,7 +129,7 @@ class TestSharedContracts:
     async def test_a_stale_generation_is_refused(self, target) -> None:
         message_root = message_root_for(target)
         await message_root.send(delivered_to(message_for(target)))
-        key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
+        key = _control_ids(message_root._candidates.view)[0].rsplit(":", 1)[-1]
 
         await message_root.dispatch(key, interaction_for(target), generation=message_root.generation - 1)
 
@@ -138,7 +138,7 @@ class TestSharedContracts:
     async def test_access_refuses_someone_elses_control(self, target) -> None:
         message_root = MessageRoot(Screen(), target=target, access=Owner(1))
         await message_root.send(delivered_to(message_for(target)))
-        key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
+        key = _control_ids(message_root._candidates.view)[0].rsplit(":", 1)[-1]
 
         await message_root.dispatch(key, interaction_for(target, user_id=2), generation=message_root.generation)
 

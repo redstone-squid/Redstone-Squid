@@ -113,8 +113,8 @@ def _result(name: str, components: int, samples: list[int]) -> ChangeScenarioRes
 
 
 def _commit_candidate(message_root: MessageRoot, candidate: Any) -> PresentationStatus:
-    if message_root._same_as_live(candidate):
-        message_root._suppress(candidate, None)
+    if message_root._candidates.same_as_live(candidate):
+        message_root._candidates.suppress(candidate, None)
         return PresentationStatus.UNCHANGED
     message_root._commit(candidate)
     return PresentationStatus.WRITTEN
@@ -199,8 +199,8 @@ def measure_case(
             started = time.perf_counter_ns()
             tree = message_root.runtime.render(reuse_committed=True)
             candidate = message_root._preflight(tree)
-            assert message_root._same_as_live(candidate)
-            message_root._suppress(candidate, None)
+            assert message_root._candidates.same_as_live(candidate)
+            message_root._candidates.suppress(candidate, None)
             unchanged.append(time.perf_counter_ns() - started)
     finally:
         if gc_enabled:
@@ -383,7 +383,7 @@ def _measure_text_crossing(components: int, samples: int) -> ChangeScenarioResul
         )
         assert root.renders == 1
         assert leaf.renders == samples + 1
-        assert message_root._plan is not None
+        assert message_root._candidates.plan is not None
         return result
     finally:
         message_root._teardown()

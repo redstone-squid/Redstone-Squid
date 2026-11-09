@@ -191,7 +191,7 @@ async def test_explicit_render_cache_shares_programs_without_sharing_frontend_ob
     await first.send(delivered_to(message_harness()))
     await second.send(delivered_to(message_harness()))
 
-    assert first._view is not second._view
+    assert first._candidates.view is not second._candidates.view
     assert cache.snapshot().hits == 1
     assert cache.snapshot().misses == 1
     await first.finish(disable=False)

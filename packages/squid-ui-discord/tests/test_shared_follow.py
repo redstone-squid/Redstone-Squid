@@ -175,7 +175,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
     message_root = MessageRoot(component, access=Everyone(), scheduler=scheduler, timeout=None)
     message: Any = message_harness()
     await message_root.send(delivered_to(message))
-    issued = message_root._issued
+    issued = message_root._candidates.issued
 
     def unexpected(*_args, **_kwargs):
         message = "a backdated scheduled refresh must reuse the committed owner plan"
@@ -189,7 +189,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
     await sd.drain(scheduler)
 
     assert component.renders == 1
-    assert message_root._issued == issued
+    assert message_root._candidates.issued == issued
     assert message.edit.await_count == 0
     assert scheduler.snapshot().unchanged == 1
 

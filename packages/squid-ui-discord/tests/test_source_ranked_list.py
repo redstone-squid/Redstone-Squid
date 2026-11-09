@@ -111,8 +111,8 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
 
     await message_root.send(delivered_to(message_harness()))
 
-    assert message_root._view is not None
-    numeric = [text for text in _texts(message_root._view) if text.startswith("-#")]
+    assert message_root._candidates.view is not None
+    numeric = [text for text in _texts(message_root._candidates.view) if text.startswith("-#")]
     assert numeric == ([] if expected is None else [expected])
 
 
@@ -130,8 +130,8 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
     await message_root.send(delivered_to(message_harness()))
 
-    assert message_root._view is not None
-    assert _labels(message_root._view) == ["Newer"]
+    assert message_root._candidates.view is not None
+    assert _labels(message_root._candidates.view) == ["Newer"]
     interaction = interaction_harness()
     await message_root.dispatch("stream.next", interaction)
 
@@ -226,8 +226,8 @@ async def test_a_sequential_source_offers_no_jump_control() -> None:
     await message_root.send(delivered_to(message_harness()))
 
     assert seen[-1].on_seek is None
-    assert message_root._view is not None
-    assert not [item for item in message_root._view.walk_children() if isinstance(item, discord.ui.Select)]
+    assert message_root._candidates.view is not None
+    assert not [item for item in message_root._candidates.view.walk_children() if isinstance(item, discord.ui.Select)]
 
 
 async def test_source_ranked_list_uses_the_message_root_navigation_factory() -> None:
@@ -252,4 +252,4 @@ async def test_source_ranked_list_uses_the_message_root_navigation_factory() -> 
     assert seen[-1].key == "leaderboard"
     assert seen[-1].visible_range == (1, 2)
     assert seen[-1].total == 3
-    assert message_root._view is not None and _labels(message_root._view) == ["More"]
+    assert message_root._candidates.view is not None and _labels(message_root._candidates.view) == ["More"]

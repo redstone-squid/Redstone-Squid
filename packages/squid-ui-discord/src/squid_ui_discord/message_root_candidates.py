@@ -168,6 +168,7 @@ class _LifecycleCandidate:
     rendered: RenderedMessage[Any, Any]
     handlers: dict[str, ActionBinding]
     generation: int
+    settled: bool = False
 
     @property
     def payload(self) -> MessagePayload:

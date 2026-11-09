@@ -482,7 +482,7 @@ def commit_classic_render(message_root: MessageRoot, *, disabled: bool = False) 
 
 def _commit(message_root: MessageRoot, *, disabled: bool) -> AnyMountedView:
     view = message_root._stage_view(disabled=disabled)
-    candidate = message_root._pending
+    candidate = message_root._candidates.pending
     assert candidate is not None and candidate.view is view
     message_root._commit(candidate)
     return view
@@ -766,7 +766,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
         assert_within_limits(self._view())
 
     def _view(self) -> discord.ui.LayoutView:
-        view = self.root._view  # pyrefly: ignore[missing-attribute]
+        view = self.root._candidates.view  # pyrefly: ignore[missing-attribute]
         if not isinstance(view, discord.ui.LayoutView):
             message = "the staged root has no current Components V2 view"
             raise TypeError(message)

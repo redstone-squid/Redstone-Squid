@@ -35,9 +35,9 @@ from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_supers
 from squid_reactivity.topics import Address, SubscriptionReconciler
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
-from squid_ui.document import Asset, Document
+from squid_ui.document import Document
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
+from squid_ui.forms import FormSpec, FormValidationMode, SubmitHandler
 from squid_ui.guards import Challenge, GuardLedger, approvals
 from squid_ui.interactions import (
     ActionBinding,
@@ -86,7 +86,7 @@ from squid_ui.profiling import (
 from squid_ui.runtime.component import Component, ComponentTree
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.runtime.presentation_state import PresentationState, apply_updates
+from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import Status
 from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
@@ -134,6 +134,7 @@ from squid_ui_discord.message_root_contracts import (
     RenewEphemeral,
     TopicScheduler,
 )
+from squid_ui_discord.message_root_lifecycle import _CandidateLifecycle
 from squid_ui_discord.message_root_wiring import (
     AnyMountedView,
     ClassicMountedView,
@@ -523,27 +524,13 @@ class MessageRoot[
         self._handle: deliver.EditHandle | None = None
         self._delete_handle: deliver.DeleteHandle | None = None
         self._ephemeral: bool | None = None
-        self._lifecycle = MessageRootStatus.ACTIVE
         self._unwatch_expiry: Callable[[], None] | None = None
         self._expiry_arm_requested: deliver.EditHandle | None = None
-        self._view: AnyMountedView | None = None
-        self._handlers: dict[str, ActionBinding] = {}
-        # What each render-declared form key presents right now. Separate from `_handlers`,
-        # which holds the button that *opens* the form under the very same key.
-        self._form_bindings: Mapping[str, FormBinding] = {}
         self._action_lock = asyncio.Lock()
         # Every operation that can replace what Discord shows shares this lock. Handler
         # execution stays outside it; only staged generations and terminal teardown serialize.
         self._render_lock = asyncio.Lock()
-        self._generation = 0
-        # Generations handed to staged renders: a candidate whose delivery failed must not
-        # hand its control ids to the next one.
-        self._issued = 0
-        self._pending: _Candidate[RenderTargetT] | None = None
-        self._dirty = False
         self._settlement_wake: asyncio.Event | None = None
-        # Renders committed without a Discord edit because the reader already had them.
-        self._suppressed = 0
         self._finished = False
         self._shutdown = Shutdown()
         self._finishing_hooks: list[Callable[[AnyMessageRoot], None]] = []
@@ -551,10 +538,16 @@ class MessageRoot[
         self._shutdown_dependencies: tuple[AnyMessageRoot, ...] = ()
         self._acceptance_errors: list[Exception] = []
         self._hooks = _LifecycleHooks()
-        self._assets: tuple[Asset, ...] = ()
-        self._plan: PlanResult | None = None
-        self._planned_tree: ComponentTree[RenderTargetT, Any] | None = None
-        self._planned_environment: _PlanEnvironment | None = None
+        self._candidates = _CandidateLifecycle(
+            self.id,
+            self.runtime,
+            self._subscriptions,
+            environment=self._plan_environment,
+            remaining_timeout=self._remaining_timeout,
+            committed=lambda: self._hooks.notify_committed(self),
+            presented=lambda: self._hooks.notify_presented(self),
+            track=lambda: live.track(self),
+        )
         self._document_tree: ComponentTree[RenderTargetT, Any] | None = None
         self._document_status: TextLike | None = None
         self._document: Document[RenderTargetT, Any] | None = None
@@ -596,25 +589,19 @@ class MessageRoot[
             self._handle = handle
             if handle.permanent:
                 self._ephemeral = False
-            if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
-                candidate: _Candidate[RenderTargetT] | None = None
-                try:
-                    candidate = await self._stage_loaded()
+            if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
+                candidate = await self._stage_loaded()
+                with self._candidates.attempt(candidate):
                     wrote = await self._deliver(candidate, through=handle)
-                except Exception:
-                    if candidate is not None:
-                        self._rollback(candidate)
-                    raise
-                if wrote is None:
-                    self._rollback(candidate)
-                    return
-                self._commit_presented(candidate)
-                await self._settle_visible(candidate, through=handle)
+                    if wrote is None:
+                        return
+                    self._candidates.commit_presented(candidate)
+                    await self._settle_visible(candidate, through=handle)
 
     @property
     def pending(self) -> bool:
         """Whether invalidated state still needs presentation; a candidate need not be staged yet."""
-        return self._dirty
+        return self._candidates.dirty
 
     @property
     def observed(self) -> tuple[Address, ...]:
@@ -643,7 +630,7 @@ class MessageRoot[
     @property
     def generation(self) -> int:
         """The live render generation used to reject stale interactions."""
-        return self._generation
+        return self._candidates.generation
 
     @property
     def finished(self) -> bool:
@@ -657,7 +644,7 @@ class MessageRoot[
         The resolved scene, the adaptation report and the planner metrics for what the reader
         is actually looking at — as opposed to what a fresh render would produce now.
         """
-        return self._plan
+        return self._candidates.plan
 
     def snapshot(self) -> MessageRootSnapshot:
         """Describe this mount for a diagnostics surface. See :class:`MessageRootSnapshot`."""
@@ -672,21 +659,21 @@ class MessageRoot[
             id=self.id,
             component=f"{component.__module__}.{component.__qualname__}",
             address=self.address,
-            generation=self._generation,
-            pending=self._dirty,
+            generation=self._candidates.generation,
+            pending=self._candidates.dirty,
             finished=self._finished,
             age=now - self._born,
             idle=idle,
             expires_in=None if self.timeout is None else max(0.0, self.timeout - idle),
-            lifecycle=self._lifecycle,
+            lifecycle=self._candidates.status,
             handle_expires_in=handle_expires_in,
             access=self.access,
-            handler_keys=tuple(sorted(self._handlers)),
-            suppressed=self._suppressed,
+            handler_keys=tuple(sorted(self._candidates.handlers)),
+            suppressed=self._candidates.suppressed,
             render_cache=self.render_cache.snapshot(),
-            scene=None if self._plan is None else self._plan.scene,
-            report=None if self._plan is None else self._plan.report,
-            metrics=None if self._plan is None else self._plan.metrics,
+            scene=None if self._candidates.plan is None else self._candidates.plan.scene,
+            report=None if self._candidates.plan is None else self._candidates.plan.report,
+            metrics=None if self._candidates.plan is None else self._candidates.plan.metrics,
         )
 
     def _remaining_timeout(self) -> float | None:
@@ -704,8 +691,8 @@ class MessageRoot[
         if (
             policy is None
             or self._finished
-            or self._lifecycle is not MessageRootStatus.ACTIVE
-            or self._plan is None
+            or self._candidates.status is not MessageRootStatus.ACTIVE
+            or self._candidates.plan is None
             or handle is not self._handle
             or handle.permanent
             or handle.expires_at is None
@@ -729,19 +716,13 @@ class MessageRoot[
         assert policy is not None
         if isinstance(policy, RenewEphemeral):
             candidate = self._draw_renewal(profile=profile)
-            try:
+            with self._candidates.attempt(candidate):
                 wrote = await self._deliver(candidate, files=False, profile=profile)
-            except Exception:
-                candidate.view.stop()
-                self._dirty = True
-                raise
-            if wrote is None:
-                candidate.view.stop()
-                self._dirty = True
-                logger.debug("mount %s could not arm renewal before its edit handle expired", self.id)
-                return PresentationStatus.ABANDONED
-            self._commit_renewal(candidate)
-            return PresentationStatus.WRITTEN
+                if wrote is None:
+                    logger.debug("mount %s could not arm renewal before its edit handle expired", self.id)
+                    return PresentationStatus.ABANDONED
+                self._candidates.commit_renewal(candidate)
+                return PresentationStatus.WRITTEN
         self.status = self.chrome.updates_paused
         self.invalidate()
         return None
@@ -774,12 +755,9 @@ class MessageRoot[
         :meth:`send` or :meth:`refresh`, which stage their own render and commit it; a view
         staged here and never delivered is superseded by the next one.
         """
-        pending = self._pending
-        if pending is not None:
-            pending.view.stop()
-            self._subscriptions.discard()
+        self._candidates.supersede()
         candidate = self._stage(disabled=disabled)
-        self._pending = candidate
+        self._candidates.stage_only(candidate)
         return candidate.view
 
     def _stage(self, *, disabled: bool = False) -> _Candidate[RenderTargetT]:
@@ -893,8 +871,7 @@ class MessageRoot[
         except BaseException:
             self._subscriptions.discard()
             raise
-        self._issued += 1
-        generation = self._issued
+        generation = self._candidates.issue_generation()
         handlers: dict[str, ActionBinding] = {}
 
         def draw() -> tuple[AnyMountedView, RenderedMessage[Any, Any]]:
@@ -968,20 +945,20 @@ class MessageRoot[
         """Plan first, returning an undrawn candidate only when the live scene already matches."""
         self._stage_observations(tree)
         if (
-            tree is self._planned_tree
-            and self._plan is not None
-            and self._lifecycle is MessageRootStatus.ACTIVE
-            and self._planned_environment == self._plan_environment()
+            tree is self._candidates.planned_tree
+            and self._candidates.plan is not None
+            and self._candidates.status is MessageRootStatus.ACTIVE
+            and self._candidates.planned_environment == self._plan_environment()
         ):
             if profile is not None:
                 profile.increment("planner.owner_hits")
             return _PlannedCandidate(
-                self._plan,
+                self._candidates.plan,
                 tree,
-                dict(self._handlers),
-                self._form_bindings,
+                dict(self._candidates.handlers),
+                self._candidates.form_bindings,
                 self.runtime.revision,
-                self._assets,
+                self._candidates.assets,
                 (),
             )
         try:
@@ -989,7 +966,7 @@ class MessageRoot[
         except BaseException:
             self._subscriptions.discard()
             raise
-        if self._same_as_live(planned):
+        if self._candidates.same_as_live(planned):
             return planned
         return self._draw(tree, profile=profile, planned=planned, subscriptions_staged=True)
 
@@ -999,10 +976,9 @@ class MessageRoot[
         if not isinstance(policy, RenewEphemeral):
             message = "a renewal screen requires RenewEphemeral policy"
             raise TypeError(message)
-        self._issued += 1
-        generation = self._issued
+        generation = self._candidates.issue_generation()
         # Declared as the base binding because that is what `_LifecycleCandidate` carries and
-        # what `_handlers` is; `dict` is invariant, so the narrower element type would not
+        # what the lifecycle's handlers mapping holds; `dict` is invariant, so a narrower type would not
         # assign even though every value written here is a `_RenewalBinding`.
         handlers: dict[str, ActionBinding] = {}
 
@@ -1081,7 +1057,7 @@ class MessageRoot[
     def _note_shared_writes(self, commit: ActionCommit, continuation: ActionContinuation) -> None:
         """Move the render-input revision if the action wrote a shared cell this mount reads.
 
-        Through `invalidate` rather than `_dirty` directly, because a candidate delivered
+        Through `invalidate` rather than the candidate owner's dirty flag, because a candidate delivered
         while the handler ran commits `runtime.dirty` over whatever this set: the revision is
         the only dirtiness a render in flight is measured against. The reconciler's watched
         addresses include a staged candidate's reads: a candidate that newly reads the
@@ -1118,12 +1094,12 @@ class MessageRoot[
         is mid-transaction and a re-render would observe half-written state.
         """
         async with self._rendering():
-            if self._finished or self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
+            if self._finished or self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
                 return None
-            plan = self._plan
+            plan = self._candidates.plan
             if plan is None:
                 return None
-            generation = self._generation
+            generation = self._candidates.generation
             busy = busy_key is not None
 
             def wire(
@@ -1153,116 +1129,10 @@ class MessageRoot[
             return await self._write(presentation, keep_attachments=True, through=through)
 
     def _commit(self, candidate: _Candidate[RenderTargetT]) -> None:
-        """Publish a delivered candidate — the one place a render becomes the mount's state."""
-        self._commit_render(candidate)
-        self._commit_delivery(candidate)
-
-    def _settle(self, candidate: _ApplicationCandidate[RenderTargetT], ending: str) -> None:
-        """Mark a candidate committed or discarded, rejecting a second settlement."""
-        if candidate.settled:
-            generation = candidate.generation if isinstance(candidate, _Candidate) else "undrawn"
-            message = f"mount {self.id}: candidate generation {generation} already settled, cannot {ending}"
-            raise LayoutInvariantError(message)
-        candidate.settled = True
-
-    def _commit_render(self, candidate: _ApplicationCandidate[RenderTargetT]) -> None:
-        """Commit the candidate's application runtime; what the reader sees is untouched.
-
-        `session_updates` apply here too: planning's clamps describe the scene that is on
-        screen, and a suppressed candidate is on screen by definition.
-        """
-        self._settle(candidate, "commit")
-        apply_updates(self.presentation, candidate.session_updates)
-        self.runtime.plan_memo.promote(self.presentation, self.presentation.revision)
-        self._subscriptions.commit()
-        self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
-        self._handlers = candidate.handlers
-        self._form_bindings = candidate.form_bindings
-        self._plan = candidate.plan
-        self._planned_tree = candidate.tree
-        self._planned_environment = self._plan_environment()
-        self._dirty = self.runtime.dirty
-        self._pending = None
-
-    def _commit_delivery(self, candidate: _Candidate[RenderTargetT]) -> None:
-        """Make the candidate's generation the live one: its control ids now answer clicks."""
-        self._generation = candidate.generation
-        self._assets = candidate.assets
-        self._lifecycle = MessageRootStatus.ACTIVE
-        candidate.view.timeout = self._remaining_timeout()
-        self._swap_view(candidate.view)
-        # The commit point is where a mount becomes something a reader can see and click, and
-        # so the first moment it is worth listing as live. Idempotent after the first.
-        live.track(self)
-
-    def _same_as_live(self, candidate: _ApplicationCandidate[RenderTargetT]) -> bool:
-        """Whether delivering `candidate` would show the reader exactly what is already there.
-
-        Decided at the scene, which is generation-free; control ids are minted at draw time,
-        so two presentations of one panel never compare equal. Asset *content* can change
-        under the same name, and the visible controls must retain the same logical key set.
-        Binding semantics are deliberately excluded: suppression publishes their latest
-        values through the mount's key indirection without replacing the live controls.
-        """
-        plan = self._plan
-        if plan is None or self._lifecycle is not MessageRootStatus.ACTIVE:
-            return False
-        if candidate.plan.report.scene_fingerprint != plan.report.scene_fingerprint:
-            return False
-        if candidate.assets != self._assets:
-            return False
-        return candidate.handlers.keys() == self._handlers.keys()
-
-    def _suppress(
-        self,
-        candidate: _ApplicationCandidate[RenderTargetT],
-        profile: OperationRecorder | None,
-    ) -> None:
-        """Commit a render the reader already has, without an edit and without a new generation.
-
-        The live generation keeps its control ids, so a click already in flight still lands.
-        Runtime observers are notified because component state and action semantics advanced;
-        presentation observers are not because nothing visible moved.
-        """
-        self._commit_render(candidate)
-        if isinstance(candidate, _Candidate):
-            candidate.view.stop()
-        self._hooks.notify_committed(self)
-        self._suppressed += 1
-        if profile is not None:
-            profile.increment("mount.suppressed", 1)
-        logger.debug("mount %s: render identical to the live generation, edit suppressed", self.id)
-
-    def _commit_presented(self, candidate: _Candidate[RenderTargetT]) -> None:
-        """Commit one successfully delivered candidate and notify both observer boundaries."""
-        self._commit(candidate)
-        self._hooks.notify_committed(self)
-        self._hooks.notify_presented(self)
-
-    def _commit_renewal(self, candidate: _LifecycleCandidate) -> None:
-        """Publish a renewal generation while retaining the hidden application runtime."""
-        self._handlers = candidate.handlers
-        self._form_bindings = {}
-        self._generation = candidate.generation
-        self._plan = candidate.rendered.plan
-        self._lifecycle = MessageRootStatus.RENEWAL_ARMED
-        candidate.view.timeout = self._remaining_timeout()
-        self._swap_view(candidate.view)
-        live.track(self)
-        self._hooks.notify_presented(self)
+        self._candidates.commit(candidate)
 
     def _rollback(self, candidate: _Candidate[RenderTargetT]) -> None:
-        """Discard an undelivered candidate; the message still shows the live generation.
-
-        Planning only proposed presentation-state updates, so dropping the candidate
-        drops those updates without changing the committed cursor and selection state.
-        """
-        self._settle(candidate, "roll back")
-        candidate.view.stop()
-        self._subscriptions.discard()
-        self._dirty = True
-        if self._pending is candidate:
-            self._pending = None
+        self._candidates.discard(candidate)
 
     @property
     def presentation(self) -> PresentationState:
@@ -1273,7 +1143,7 @@ class MessageRoot[
         self.runtime.presentation = value
 
     def _mark_dirty(self) -> None:
-        self._dirty = True
+        self._candidates.mark_dirty()
         if self._settlement_wake is not None:
             self._settlement_wake.set()
 
@@ -1323,7 +1193,9 @@ class MessageRoot[
         A staged render's assets win, so files fetched alongside a `_stage_view()` belong to
         that render rather than to the generation it will replace.
         """
-        return files_for(self._pending.assets if self._pending is not None else self._assets)
+        return files_for(
+            self._candidates.pending.assets if self._candidates.pending is not None else self._candidates.assets
+        )
 
     # --- Loading -----------------------------------------------------------------------
 
@@ -1474,7 +1346,7 @@ class MessageRoot[
         profile: OperationRecorder | None = None,
     ) -> None:
         """Advance explicit async bindings through progress and terminal paints."""
-        if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
+        if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
             return
         candidate = committed
         for pass_index in range(_MAX_LOAD_PASSES):
@@ -1487,7 +1359,7 @@ class MessageRoot[
             if not delivery_open:
                 bindings = tuple(binding for binding in bindings if binding.settle_without_delivery)
                 if not bindings:
-                    self._dirty = True
+                    self._candidates.mark_dirty()
                     return
 
             async def settle(
@@ -1540,7 +1412,7 @@ class MessageRoot[
                 self._settlement_wake = None
             if not delivery_open:
                 return
-        self._dirty = True
+        self._candidates.mark_dirty()
         logger.error(
             "mount %s: explicit async bindings did not settle in %s passes",
             self.id,
@@ -1558,27 +1430,27 @@ class MessageRoot[
         candidate: _ApplicationCandidate[RenderTargetT] | None = None
         try:
             candidate = await self._stage_loaded(profile=profile, preflight=True)
-            if self._same_as_live(candidate):
-                self._suppress(candidate, profile)
-                return candidate
-            candidate = _drawn(candidate)
-            wrote = await self._deliver(candidate, through=through, profile=profile)
         except Exception:
-            if isinstance(candidate, _Candidate):
-                self._rollback(candidate)
-            elif candidate is not None:
-                self._subscriptions.discard()
             logger.exception("mount %s could not deliver an async binding update", self.id)
             return None
-        if wrote is None:
-            self._rollback(candidate)
-            return None
-        if profile is None:
-            self._commit_presented(candidate)
-        else:
-            with profile.span("commit"):
-                self._commit_presented(candidate)
-        return candidate
+        with self._candidates.attempt(candidate):
+            try:
+                if self._candidates.same_as_live(candidate):
+                    self._candidates.suppress(candidate, profile)
+                    return candidate
+                candidate = _drawn(candidate)
+                wrote = await self._deliver(candidate, through=through, profile=profile)
+            except Exception:
+                logger.exception("mount %s could not deliver an async binding update", self.id)
+                return None
+            if wrote is None:
+                return None
+            if profile is None:
+                self._candidates.commit_presented(candidate)
+            else:
+                with profile.span("commit"):
+                    self._candidates.commit_presented(candidate)
+            return candidate
 
     async def _load_all(self, components: Sequence[Component[RenderTargetT, Any]]) -> None:
         """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
@@ -1616,49 +1488,45 @@ class MessageRoot[
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return deliver.Abandoned()
                 # A render staged by `_stage_view` and never delivered is superseded, not delivered.
-                if self._pending is not None:
+                if self._candidates.pending is not None:
                     with profile.span("supersede"):
-                        self._pending.view.stop()
-                        self._pending = None
-                        self._subscriptions.discard()
+                        self._candidates.supersede()
                 # Component on_load and atomic resources settle first. Visible resources
                 # deliberately make this the pending paint and settle after it commits.
                 candidate = await self._stage_loaded(profile=profile)
-                try:
-                    destination_type = (
-                        f"{type(message_destination).__module__}.{type(message_destination).__qualname__}"
-                    )
-                    with profile.span("discord_write", attributes={"message_destination": destination_type}):
-                        result = await message_destination(candidate.payload)
-                except deliver.DeliveryAbandoned:
-                    logger.debug("mount %s was not delivered: the message_destination abandoned it", self.id)
-                    with profile.span("rollback"):
-                        self._rollback(candidate)
-                    profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
-                    return deliver.Abandoned()
-                except Exception:
-                    with profile.span("rollback"):
-                        self._rollback(candidate)
-                    raise
-                self._handle = result.handle
-                self._delete_handle = result.delete_handle
-                self._ephemeral = result.ephemeral
-                if result.message is not None:
-                    self._note_address(result.message)
-                self._active = self.clock()
-                with profile.span("commit"):
-                    self._commit_presented(candidate)
-                if self._unwatch_expiry is None and isinstance(self.scheduler, ExpirySupervisor):
-                    self._unwatch_expiry = self.scheduler.watch(self)
-                await self._settle_visible(candidate, profile=profile)
-                profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
-                settled = all(not binding.pending for binding in candidate.tree.async_bindings)
-                return deliver.Delivered(result, settled=settled)
-
-    def _swap_view(self, view: AnyMountedView) -> None:
-        if self._view is not None and self._view is not view:
-            self._view.stop()
-        self._view = view
+                with self._candidates.attempt(candidate):
+                    try:
+                        destination_type = (
+                            f"{type(message_destination).__module__}.{type(message_destination).__qualname__}"
+                        )
+                        with profile.span("discord_write", attributes={"message_destination": destination_type}):
+                            result = await message_destination(candidate.payload)
+                    except deliver.DeliveryAbandoned:
+                        logger.debug("mount %s was not delivered: the message_destination abandoned it", self.id)
+                        with profile.span("rollback"):
+                            self._rollback(candidate)
+                        profile.set_result(
+                            TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED)
+                        )
+                        return deliver.Abandoned()
+                    except Exception:
+                        with profile.span("rollback"):
+                            self._rollback(candidate)
+                        raise
+                    self._handle = result.handle
+                    self._delete_handle = result.delete_handle
+                    self._ephemeral = result.ephemeral
+                    if result.message is not None:
+                        self._note_address(result.message)
+                    self._active = self.clock()
+                    with profile.span("commit"):
+                        self._candidates.commit_presented(candidate)
+                    if self._unwatch_expiry is None and isinstance(self.scheduler, ExpirySupervisor):
+                        self._unwatch_expiry = self.scheduler.watch(self)
+                    await self._settle_visible(candidate, profile=profile)
+                    profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
+                    settled = all(not binding.pending for binding in candidate.tree.async_bindings)
+                    return deliver.Delivered(result, settled=settled)
 
     async def _deliver(
         self,
@@ -1770,7 +1638,7 @@ class MessageRoot[
             profile = _DispatchProfile(
                 operation,
                 interaction,
-                GenerationDecision(generation, self._generation),
+                GenerationDecision(generation, self._candidates.generation),
                 operation.start_span("acknowledgement"),
                 resumed=resumed,
             )
@@ -1778,7 +1646,7 @@ class MessageRoot[
                 if not await self._begin_dispatch(interaction, profile):
                     return
                 with operation.span("binding"):
-                    binding = self._handlers.get(key)
+                    binding = self._candidates.handlers.get(key)
                 if binding is None:
                     # A click raced a re-render that removed the control; acknowledge and move on.
                     profile.presentation = await self.refresh(interaction, profile=profile)
@@ -1817,7 +1685,7 @@ class MessageRoot[
                     invoke,
                     profile,
                     values=values,
-                    rebase=lambda: self._handlers.get(key),
+                    rebase=lambda: self._candidates.handlers.get(key),
                 )
             except anyio.get_cancelled_exc_class():
                 profile.action = ActionStatus.CANCELLED
@@ -1845,36 +1713,39 @@ class MessageRoot[
                 source is None
                 or source.expired()
                 or self._finished
-                or self._lifecycle is not MessageRootStatus.RENEWAL_ARMED
-                or generation != self._generation
-                or self._handlers.get(key) is not binding
+                or self._candidates.status is not MessageRootStatus.RENEWAL_ARMED
+                or generation != self._candidates.generation
+                or self._candidates.handlers.get(key) is not binding
             ):
                 acknowledge = True
             else:
                 # Adopt before staging or responding. A failed restore remains armed but now
                 # has the authority needed for another attempt.
                 self._handle = source
-                candidate: _Candidate[RenderTargetT] | None = None
                 try:
                     candidate = await self._stage_loaded(profile=profile.operation)
-                    wrote = await self._deliver(candidate, through=source, profile=profile.operation)
                 except Exception as error:
-                    if candidate is not None:
-                        with profile.operation.span("rollback"):
-                            self._rollback(candidate)
                     failure = error
                 else:
-                    if wrote is None:
-                        self._rollback(candidate)
-                        acknowledge = True
-                    else:
-                        with profile.operation.span("commit"):
-                            self._commit_presented(candidate)
-                        await self._settle_visible(candidate, through=source, profile=profile.operation)
-                        profile.presentation = PresentationStatus.WRITTEN
-                        if wrote is source:
-                            profile.acknowledge("interaction_write")
-                        acknowledge = wrote is not source
+                    with self._candidates.attempt(candidate):
+                        try:
+                            wrote = await self._deliver(candidate, through=source, profile=profile.operation)
+                        except Exception as error:
+                            with profile.operation.span("rollback"):
+                                self._rollback(candidate)
+                            failure = error
+                        else:
+                            if wrote is None:
+                                self._rollback(candidate)
+                                acknowledge = True
+                            else:
+                                with profile.operation.span("commit"):
+                                    self._candidates.commit_presented(candidate)
+                                await self._settle_visible(candidate, through=source, profile=profile.operation)
+                                profile.presentation = PresentationStatus.WRITTEN
+                                if wrote is source:
+                                    profile.acknowledge("interaction_write")
+                                acknowledge = wrote is not source
         if failure is not None:
             profile.presentation = PresentationStatus.FAILED
             await self.handle_error(interaction, failure, "renewal")
@@ -1924,7 +1795,7 @@ class MessageRoot[
             profile = _DispatchProfile(
                 operation,
                 interaction,
-                GenerationDecision(generation, self._generation),
+                GenerationDecision(generation, self._candidates.generation),
                 operation.start_span("acknowledgement"),
             )
             try:
@@ -1933,7 +1804,7 @@ class MessageRoot[
                 binding = _SubmitBinding(key, handler, mode, label=label, record=record, spec=spec)
 
                 def rebase() -> ActionBinding | None:
-                    newest = self._form_bindings.get(key)
+                    newest = self._candidates.form_bindings.get(key)
                     if newest is None or newest.spec.field_keys != spec.field_keys:
                         return binding
                     return _SubmitBinding(
@@ -2120,7 +1991,7 @@ class MessageRoot[
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.GUARD_FAILED, error)
             return
-        if key in self._form_bindings:
+        if key in self._candidates.form_bindings:
             # The press that opens a modal cannot be challenged: asking spends the response,
             # and a resumed press has no fresh interaction to open the modal through.
             error = LayoutInvariantError(f"a form trigger cannot be challenged, and the guard on {key!r} did")
@@ -2200,7 +2071,7 @@ class MessageRoot[
                         PresentationStatus.WRITTEN
                         if challenge.on_decline is not None
                         else PresentationStatus.NOT_REQUIRED,
-                        GenerationDecision(None, self._generation),
+                        GenerationDecision(None, self._candidates.generation),
                     ),
                 )
             )
@@ -2219,7 +2090,7 @@ class MessageRoot[
     ) -> None:
         if binding.mode in {ActionMode.IMMEDIATE, ActionMode.PARALLEL_READ}:
             rebased = False
-            profile.decide_generation(self._generation)
+            profile.decide_generation(self._candidates.generation)
             # No lock to be inside for these two, so admission is simply the last gate
             # before the handler, exactly as it is under the other policies.
             admission = await self._admit(binding, key, interaction, values, profile)
@@ -2228,20 +2099,20 @@ class MessageRoot[
                 return
             if not admission.admitted:
                 return
-            await invoke(binding, rebased, self._generation)
+            await invoke(binding, rebased, self._candidates.generation)
             return
 
         with profile.operation.span("action_lock"):
             await self._action_lock.acquire()
         try:
-            profile.decide_generation(self._generation)
-            if binding.mode is ActionMode.EXCLUSIVE and generation not in {None, self._generation}:
+            profile.decide_generation(self._candidates.generation)
+            if binding.mode is ActionMode.EXCLUSIVE and generation not in {None, self._candidates.generation}:
                 await self._acknowledge(interaction, profile=profile, source="stale")
                 profile.presentation = PresentationStatus.ACKNOWLEDGED
                 profile.finish(DispatchDisposition.STALE)
                 return
-            rebased = binding.mode is ActionMode.REBASE and generation not in {None, self._generation}
-            profile.decide_generation(self._generation, rebased=rebased)
+            rebased = binding.mode is ActionMode.REBASE and generation not in {None, self._candidates.generation}
+            profile.decide_generation(self._candidates.generation, rebased=rebased)
             if binding.mode is ActionMode.REBASE and rebase is not None:
                 # Resolved inside the lock: outside it, "newest" is whatever happened to be
                 # committed before this action started waiting for its turn.
@@ -2259,7 +2130,7 @@ class MessageRoot[
             if admission.challenge is None:
                 if not admission.admitted:
                     return
-                await invoke(binding, rebased, self._generation)
+                await invoke(binding, rebased, self._candidates.generation)
                 return
             challenged = admission.challenge
         finally:
@@ -2450,7 +2321,7 @@ class MessageRoot[
                     key=key,
                     handler=submission_handler,
                     mode=binding.mode,
-                    generation=self._generation if generation is None else generation,
+                    generation=self._candidates.generation if generation is None else generation,
                     actor_id=interaction.user.id,
                     label=binding.label,
                     record=binding.record,
@@ -2670,47 +2541,48 @@ class MessageRoot[
         async with self._rendering(operation):
             if self._finished:
                 return PresentationStatus.ABANDONED
-            if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
+            if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
                 acknowledge = True
-            if not self._dirty:
+            if not self._candidates.dirty:
                 acknowledge = True
-            elif self._lifecycle is MessageRootStatus.ACTIVE:
+            elif self._candidates.status is MessageRootStatus.ACTIVE:
                 # A component cannot enter the tree without a state write, so a click that
                 # changed nothing never reaches this at all.
                 candidate = await self._stage_loaded(profile=operation, preflight=True)
-                source = self._source(interaction, resumed=dispatch is not None and dispatch.resumed)
-                if self._same_as_live(candidate):
-                    with operation.span("suppress"):
-                        self._suppress(candidate, operation)
-                    acknowledge = True
-                    presentation = PresentationStatus.UNCHANGED
-                    # Only visible resources could still move the panel; they settle through
-                    # their own comparison.
-                    await self._settle_visible(candidate, through=source, profile=operation)
-                else:
-                    candidate = _drawn(candidate)
-                    try:
-                        wrote = await self._deliver(candidate, through=source, profile=operation)
-                    except Exception:
-                        with operation.span("rollback"):
-                            self._rollback(candidate)
-                        raise
-                    if wrote is None:
-                        with operation.span("rollback"):
-                            self._rollback(candidate)
+                with self._candidates.attempt(candidate):
+                    source = self._source(interaction, resumed=dispatch is not None and dispatch.resumed)
+                    if self._candidates.same_as_live(candidate):
+                        with operation.span("suppress"):
+                            self._candidates.suppress(candidate, operation)
                         acknowledge = True
-                        presentation = PresentationStatus.ABANDONED
-                    else:
-                        with operation.span("commit"):
-                            self._commit_presented(candidate)
+                        presentation = PresentationStatus.UNCHANGED
+                        # Only visible resources could still move the panel; they settle through
+                        # their own comparison.
                         await self._settle_visible(candidate, through=source, profile=operation)
-                        presentation = PresentationStatus.WRITTEN
-                        if dispatch is not None and wrote is source:
-                            dispatch.acknowledge("interaction_write")
-                        # Only the interaction's own handle answers the click by editing through
-                        # it. Delivery through the standing handle leaves the click unanswered,
-                        # and Discord shows the user "This interaction failed" three seconds later.
-                        acknowledge = wrote is not source
+                    else:
+                        candidate = _drawn(candidate)
+                        try:
+                            wrote = await self._deliver(candidate, through=source, profile=operation)
+                        except Exception:
+                            with operation.span("rollback"):
+                                self._rollback(candidate)
+                            raise
+                        if wrote is None:
+                            with operation.span("rollback"):
+                                self._rollback(candidate)
+                            acknowledge = True
+                            presentation = PresentationStatus.ABANDONED
+                        else:
+                            with operation.span("commit"):
+                                self._candidates.commit_presented(candidate)
+                            await self._settle_visible(candidate, through=source, profile=operation)
+                            presentation = PresentationStatus.WRITTEN
+                            if dispatch is not None and wrote is source:
+                                dispatch.acknowledge("interaction_write")
+                            # Only the interaction's own handle answers the click by editing through
+                            # it. Delivery through the standing handle leaves the click unanswered,
+                            # and Discord shows the user "This interaction failed" three seconds later.
+                            acknowledge = wrote is not source
         if acknowledge:
             await self._acknowledge(interaction, profile=dispatch, source="flush")
             if presentation is PresentationStatus.NO_CHANGE:
@@ -2780,11 +2652,11 @@ class MessageRoot[
                     status = TraceStatus.ABANDONED if armed is PresentationStatus.ABANDONED else TraceStatus.COMPLETED
                     profile.set_result(TraceResult(status, presentation=armed))
                     return armed
-                if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
+                if self._candidates.status is MessageRootStatus.RENEWAL_ARMED:
                     profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.NO_CHANGE))
                     return PresentationStatus.NO_CHANGE
                 if self._handle is None or self._handle.expired():
-                    self._dirty = True
+                    self._candidates.mark_dirty()
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return PresentationStatus.ABANDONED
                 candidate = await self._stage_loaded(
@@ -2792,32 +2664,37 @@ class MessageRoot[
                     preflight=True,
                     reuse_committed=reuse_committed,
                 )
-                if self._same_as_live(candidate):
-                    with profile.span("suppress"):
-                        self._suppress(candidate, profile)
+                with self._candidates.attempt(candidate):
+                    if self._candidates.same_as_live(candidate):
+                        with profile.span("suppress"):
+                            self._candidates.suppress(candidate, profile)
+                        await self._settle_visible(candidate, profile=profile)
+                        profile.set_result(
+                            TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.UNCHANGED)
+                        )
+                        return PresentationStatus.UNCHANGED
+                    candidate = _drawn(candidate)
+                    try:
+                        delivered = await self._deliver(candidate, profile=profile) is not None
+                    except Exception:
+                        with profile.span("rollback"):
+                            self._rollback(candidate)
+                        profile.set_result(TraceResult(TraceStatus.FAILED, presentation=PresentationStatus.FAILED))
+                        raise
+                    if not delivered:
+                        # `_rollback` leaves the mount dirty, so the next interaction shows this render.
+                        with profile.span("rollback"):
+                            self._rollback(candidate)
+                        logger.debug("mount %s has no live edit handle; render deferred", self.id)
+                        profile.set_result(
+                            TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED)
+                        )
+                        return PresentationStatus.ABANDONED
+                    with profile.span("commit"):
+                        self._candidates.commit_presented(candidate)
                     await self._settle_visible(candidate, profile=profile)
-                    profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.UNCHANGED))
-                    return PresentationStatus.UNCHANGED
-                candidate = _drawn(candidate)
-                try:
-                    delivered = await self._deliver(candidate, profile=profile) is not None
-                except Exception:
-                    with profile.span("rollback"):
-                        self._rollback(candidate)
-                    profile.set_result(TraceResult(TraceStatus.FAILED, presentation=PresentationStatus.FAILED))
-                    raise
-                if not delivered:
-                    # `_rollback` leaves the mount dirty, so the next interaction shows this render.
-                    with profile.span("rollback"):
-                        self._rollback(candidate)
-                    logger.debug("mount %s has no live edit handle; render deferred", self.id)
-                    profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
-                    return PresentationStatus.ABANDONED
-                with profile.span("commit"):
-                    self._commit_presented(candidate)
-                await self._settle_visible(candidate, profile=profile)
-                profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
-                return PresentationStatus.WRITTEN
+                    profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
+                    return PresentationStatus.WRITTEN
 
     def on_presented(self, callback: PresentedHook) -> None:
         """Synchronously observe future generations after delivery and commit succeed.
@@ -2926,9 +2803,10 @@ class MessageRoot[
         self._finished = True
         if not delete and disable and (self._handle is not None or interaction is not None):
             try:
+                self._candidates.supersede()
                 candidate = (
                     self._draw_renewal(disabled=True)
-                    if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
+                    if self._candidates.status is MessageRootStatus.RENEWAL_ARMED
                     else self._stage(disabled=True)
                 )
             except Exception as error:
@@ -2948,44 +2826,35 @@ class MessageRoot[
         candidate: _Candidate[RenderTargetT] | _LifecycleCandidate | None,
     ) -> None:
         errors = self._acceptance_errors
-        if self._finish_children is not None:
-            try:
-                await self._finish_children(disable)
-            except Exception as error:
-                errors.append(error)
         try:
-            async with self._render_lock:
-                try:
-                    if delete:
-                        if self._delete_handle is not None:
-                            await self._delete_handle.delete()
-                    elif candidate is not None:
-                        if retain_routed:
-                            children = (
-                                candidate.view.walk_children()
-                                if isinstance(candidate.view, discord.ui.LayoutView)
-                                else candidate.view.children
-                            )
-                            for item in children:
-                                target = item.item if isinstance(item, discord.ui.DynamicItem) else item
-                                if isinstance(target, RoutedItem | RoutedSelectItem):
-                                    target.disabled = False
-                        source = None if interaction is None else deliver.handle_from(interaction)
-                        wrote = await self._deliver(candidate, through=source, files=False)
-                        if wrote is None and isinstance(candidate, _Candidate):
-                            self._rollback(candidate)
-                        if interaction is not None and (wrote is None or wrote is not source):
-                            await self._acknowledge(interaction)
-                except discord.NotFound:
-                    if isinstance(candidate, _Candidate):
-                        self._rollback(candidate)
-                except Exception:
-                    if isinstance(candidate, _Candidate):
-                        self._rollback(candidate)
-                    raise
-                finally:
-                    if candidate is not None:
-                        candidate.view.stop()
+            with self._candidates.attempt(candidate) if candidate is not None else nullcontext():
+                if self._finish_children is not None:
+                    try:
+                        await self._finish_children(disable)
+                    except Exception as error:
+                        errors.append(error)
+                async with self._render_lock:
+                    try:
+                        if delete:
+                            if self._delete_handle is not None:
+                                await self._delete_handle.delete()
+                        elif candidate is not None:
+                            if retain_routed:
+                                children = (
+                                    candidate.view.walk_children()
+                                    if isinstance(candidate.view, discord.ui.LayoutView)
+                                    else candidate.view.children
+                                )
+                                for item in children:
+                                    target = item.item if isinstance(item, discord.ui.DynamicItem) else item
+                                    if isinstance(target, RoutedItem | RoutedSelectItem):
+                                        target.disabled = False
+                            source = None if interaction is None else deliver.handle_from(interaction)
+                            wrote = await self._deliver(candidate, through=source, files=False)
+                            if interaction is not None and (wrote is None or wrote is not source):
+                                await self._acknowledge(interaction)
+                    except discord.NotFound:
+                        pass
         except Exception as error:
             errors.append(error)
         try:
@@ -3010,9 +2879,7 @@ class MessageRoot[
         if self._unwatch_expiry is not None:
             cleanup.append(self._unwatch_expiry)
             self._unwatch_expiry = None
-        if self._view is not None:
-            cleanup.append(self._view.stop)
-            self._view = None
+        cleanup.append(self._candidates.close)
         self._expiry_arm_requested = None
         cleanup.extend((self._subscriptions.close, self.runtime.finish))
         if self._owns_render_cache:

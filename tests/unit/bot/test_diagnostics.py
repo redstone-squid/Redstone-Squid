@@ -140,7 +140,7 @@ async def message_root_browser(
 
 async def open_report(message_root: MessageRoot, interaction: discord.Interaction, reference: str) -> None:
     """Use the Browser's semantic action whether the planner chose buttons or a select."""
-    key = next(key for key in message_root._handlers if "error-reports.open" in key)
+    key = next(key for key in message_root._candidates.handlers if "error-reports.open" in key)
     values = None if key.endswith(f".{reference}") else [reference]
     await message_root.dispatch(key, interaction, values)
 
@@ -285,7 +285,7 @@ async def test_going_back_removes_the_attachment() -> None:
         opened = interaction_harness()
         await open_report(message_root, opened, "aaa111")
         interaction = interaction_harness()
-        back_key = next(key for key in message_root._handlers if key.endswith("error-reports.back"))
+        back_key = next(key for key in message_root._candidates.handlers if key.endswith("error-reports.back"))
 
         await message_root.dispatch(back_key, interaction)
 
@@ -445,7 +445,7 @@ async def test_refresh_button_commits_a_new_report_window() -> None:
         old_updates = screen._updates
         assert isinstance(screen._operations, ErrorReportRecorder)
         screen._operations.reports = (make_report("bbb222"),)
-        key = next(key for key in root._handlers if key.endswith("refresh"))
+        key = next(key for key in root._candidates.handlers if key.endswith("refresh"))
         await root.dispatch(key, interaction_harness())
         assert tuple(report.reference for report in screen.reports) == ("bbb222",)
         assert screen._updates is not old_updates
@@ -511,7 +511,7 @@ async def test_initial_monitor_failure_keeps_report_and_refresh_controls_live() 
         await run.wait_ready()
         view = commit_render(root)
         assert "Could not check for updates" in "\n".join(_texts(view))
-        assert any(key.endswith("refresh") for key in root._handlers)
+        assert any(key.endswith("refresh") for key in root._candidates.handlers)
         assert tuple(report.reference for report in screen.reports) == ("abc123",)
         assert not root.finished
         await root.finish(disable=False)

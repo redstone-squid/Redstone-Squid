@@ -772,6 +772,15 @@ scopes action keys and pager keys, detects cycles and duplicate instances, and g
 runtime deterministic `on_mount`/`on_unmount` ownership. Components have no message-root reference;
 the Discord message root is one frontend consumer of the runtime.
 
+Within the Discord frontend, `_CandidateLifecycle` owns the published view, bindings,
+generation, and staged candidate. `MessageRoot` owns delivery, locking, and policy.
+Each delivery attempt commits or discards its candidate; cancellation also discards
+staged resources. Suppression commits application state while retaining the visible
+generation. Renewal publishes replacement controls without committing an application
+tree, and terminal paints are discarded after delivery so they cannot mount components.
+Application commit settles before component hooks run, so a hook failure cannot cause
+a second settlement of the same candidate.
+
 `async def on_load(self)` is where a component fetches what it cannot render without. The
 frontend awaits it before the first delivery that would show the component, once per instance,
 and **before `render()` is ever called on it**: expansion stops at an embedded component that

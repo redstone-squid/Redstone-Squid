@@ -1145,7 +1145,7 @@ class TestFinishHooks:
 
         assert seen == [message_root]
         assert message_root.finished
-        assert message_root._view is None
+        assert message_root._candidates.view is None
 
     async def test_a_hook_fires_even_when_the_disable_edit_raises(self):
         """Shutdown observers still run when the terminal Discord edit fails."""
@@ -1176,7 +1176,7 @@ class TestFinishHooks:
 
         assert seen == [message_root]
         assert message_root.finished
-        assert message_root._view is None
+        assert message_root._candidates.view is None
 
     async def test_finishing_from_inside_a_hook_does_not_recurse(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
@@ -1397,7 +1397,7 @@ class TestActionPolicy:
         editor = Editor()
         message_root = MessageRoot(editor, access=Everyone(), timeout=None)
         commit_render(message_root)
-        binding = message_root._form_bindings["rename"]
+        binding = message_root._candidates.form_bindings["rename"]
 
         await message_root.dispatch_submit(
             "rename",
@@ -1944,12 +1944,12 @@ class TestLifecycle:
         await message_root.send(delivered_to(message_harness()))
         component._loaded = False
         message_root._handle = delivery.handle_from(interaction_harness(expired=True))
-        issued = message_root._issued
+        issued = message_root._candidates.issued
 
         await message_root.refresh()
 
         assert component.loads == 1
-        assert message_root._issued == issued
+        assert message_root._candidates.issued == issued
         assert message_root.pending
 
     async def test_accepted_click_clears_status_and_flushes_without_it(self):
@@ -1991,7 +1991,7 @@ class TestDeliveryAtomicity:
 
         assert message_root.snapshot().handler_keys == ()
         assert message_root.generation == 0
-        assert message_root._assets == ()
+        assert message_root._candidates.assets == ()
 
     async def test_failed_edit_keeps_the_visible_generation_live(self, monkeypatch):
         mounted: list[str] = []
@@ -2003,7 +2003,7 @@ class TestDeliveryAtomicity:
 
         live_generation = message_root.generation
         # Compare mapping identity: snapshot handler keys would miss a premature replacement.
-        live_handlers = message_root._handlers
+        live_handlers = message_root._candidates.handlers
         live_strategies = dict(message_root.presentation.strategies)
         panel.entries = (*panel.entries, "entry 6")  # a new fingerprint: the staged render resets the cursor
         panel.show_child = True  # a component the failed generation must not mount
@@ -2013,7 +2013,7 @@ class TestDeliveryAtomicity:
             await message_root.refresh(interaction_harness())
 
         assert message_root.generation == live_generation
-        assert message_root._handlers is live_handlers
+        assert message_root._candidates.handlers is live_handlers
         assert message_root.pending
         assert mounted == []
         assert message_root.presentation.cursor("entries").position.offset == 1
@@ -2454,7 +2454,7 @@ class TestSend:
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(_Destination(message))
         generation = message_root.generation
-        view = message_root._view
+        view = message_root._candidates.view
         component.version = 1
         message_root.invalidate()
 
@@ -2463,7 +2463,7 @@ class TestSend:
         assert result is PresentationStatus.UNCHANGED
         message.edit.assert_not_awaited()
         assert message_root.generation == generation
-        assert message_root._view is view
+        assert message_root._candidates.view is view
 
         await message_root.dispatch("same", interaction_harness(), generation=generation)
 
@@ -2473,7 +2473,7 @@ class TestSend:
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         message: Any = message_harness()
         await message_root.send(_Destination(message))
-        issued = message_root._issued
+        issued = message_root._candidates.issued
 
         def unexpected_renderer(_timeout):
             message = "an identical refresh must not construct a renderer"
@@ -2482,7 +2482,7 @@ class TestSend:
         monkeypatch.setattr(message_root, "_renderer", unexpected_renderer)
 
         assert await message_root.refresh() is PresentationStatus.UNCHANGED
-        assert message_root._issued == issued
+        assert message_root._candidates.issued == issued
         assert message.edit.await_count == 0
 
     async def test_suppression_publishes_runtime_only_action_semantics(self) -> None:
@@ -2532,9 +2532,9 @@ class TestSend:
         delivered, _ = destination.calls[0]
         assert delivered is not staged
         assert staged.is_finished()
-        assert message_root._pending is None
+        assert message_root._candidates.pending is None
         # The message root now uses the view that was delivered.
-        assert message_root._view is delivered
+        assert message_root._candidates.view is delivered
 
     async def test_a_finished_message_root_does_not_send(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
@@ -3600,16 +3600,16 @@ class TestResourceLoading:
 
         assert isinstance(panel.value.status, Ready)
         assert message_root.pending
-        assert message_root._view is not None
-        assert "pending" in str(message_root._view.to_components())
+        assert message_root._candidates.view is not None
+        assert "pending" in str(message_root._candidates.view.to_components())
 
         message.edit.error = None
         message.edit.result = message
         await message_root.refresh()
 
         assert not message_root.pending
-        assert message_root._view is not None
-        assert "ready:loaded" in str(message_root._view.to_components())
+        assert message_root._candidates.view is not None
+        assert "ready:loaded" in str(message_root._candidates.view.to_components())
 
     async def test_a_load_superseded_mid_settle_is_abandoned(self) -> None:
         """The message root cancels a blocked loader when its resource is invalidated."""
