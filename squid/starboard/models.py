@@ -194,7 +194,7 @@ class OriginMessage(Base, kw_only=True):
     id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True, autoincrement=False
     )
-    message: Mapped[Message] = relationship(lazy="joined")
+    message: Mapped[Message] = relationship(lazy="raise")
     author_is_bot: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_nsfw: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     has_image: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)

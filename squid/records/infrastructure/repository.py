@@ -58,6 +58,7 @@ from squid.records.models import (
     TitleHolderHistory,
     TitleResult,
 )
+from squid.tags.infrastructure.loading import assignment_units
 from squid.tags.models import TagAssignment, TagDefinition, display_conversion_scale
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
@@ -557,7 +558,7 @@ class PostgresRecordRepository:
             select(DoorBuild)
             .where(DoorBuild.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(DoorBuild.tags).selectinload(TagAssignment.definition),
+                selectinload(DoorBuild.tags).options(*assignment_units()),
                 selectinload(DoorBuild.build_versions),
             )
         )
@@ -570,7 +571,7 @@ class PostgresRecordRepository:
             select(ExtenderBuild)
             .where(ExtenderBuild.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(ExtenderBuild.tags).selectinload(TagAssignment.definition),
+                selectinload(ExtenderBuild.tags).options(*assignment_units()),
                 selectinload(ExtenderBuild.build_versions),
             )
         )

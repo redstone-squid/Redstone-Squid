@@ -113,8 +113,8 @@ from squid.tags.application import TagService
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
+from squid.voting.application.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
 from squid.voting.application.recount import BallotRecounter
-from squid.voting.infrastructure.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
 from squid.voting.infrastructure.discord_rest import (
     DiscordRestActorResolver,
     DiscordRestSession,

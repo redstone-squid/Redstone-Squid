@@ -199,7 +199,7 @@ class PostgresStarboardRepository:
         """Load one entry with its board configuration and origin facts."""
         session = self._session()
         entry_row = await session.get(StarboardEntry, (starboard_id, origin_message_id))
-        origin_row = await session.get(OriginMessage, origin_message_id)
+        origin_row = await session.get(OriginMessage, origin_message_id, options=[selectinload(OriginMessage.message)])
         if entry_row is None or origin_row is None:
             return None
         starboard_row = await session.get(StarboardConfig, starboard_id)
@@ -322,7 +322,9 @@ class PostgresStarboardRepository:
             statement = statement.where(StarboardEntry.starboard_id.in_(starboard_ids))
         entries = (await session.scalars(statement.order_by(StarboardEntry.starboard_id))).all()
         if origin is None:
-            origin_row = await session.get(OriginMessage, origin_message_id)
+            origin_row = await session.get(
+                OriginMessage, origin_message_id, options=[selectinload(OriginMessage.message)]
+            )
             if origin_row is None:
                 return ()
             origin = origin_row

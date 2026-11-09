@@ -28,10 +28,10 @@ from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import tr
 from squid.core.locks import KeyedLock
 from squid.runtime import JobHandle
+from squid.voting.application.accounts import AccountConsentedVoterLookup
 from squid.voting.application.ports import VoteActorResolver
 from squid.voting.application.recount import BallotRecounter, CardReactions
 from squid.voting.domain import CastVoteResult, VoteActor, VoteMessage, VoteRejection, VoteSessionSnapshot
-from squid.voting.infrastructure.accounts import AccountConsentedVoterLookup
 from squid_ui.text import Message, localization_scope, raw_md
 from squid_ui_discord import send_to
 

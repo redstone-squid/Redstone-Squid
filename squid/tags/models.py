@@ -143,10 +143,10 @@ class TagDefinition(Base, kw_only=True):
         default=None,
     )
     canonical_unit_definition: Mapped[UnitDefinition | None] = relationship(
-        foreign_keys=[canonical_unit], lazy="joined", init=False
+        foreign_keys=[canonical_unit], lazy="raise", init=False
     )
     default_display_unit_definition: Mapped[UnitDefinition | None] = relationship(
-        foreign_keys=[default_display_unit], lazy="joined", init=False
+        foreign_keys=[default_display_unit], lazy="raise", init=False
     )
     numeric_step: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     render_template: Mapped[str] = mapped_column(Text, nullable=False, default="{name}")
@@ -287,7 +287,7 @@ class TagAssignment(Base, kw_only=True, init=False):
     )
     """Unit used for presentation; the stored numeric value uses the definition's canonical unit."""
     display_unit_definition: Mapped[UnitDefinition | None] = relationship(
-        foreign_keys=[display_unit], lazy="joined", init=False
+        foreign_keys=[display_unit], lazy="raise", init=False
     )
     display_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     evidence: Mapped[str | None] = mapped_column(Text, default=None)

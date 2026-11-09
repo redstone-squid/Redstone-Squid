@@ -38,6 +38,7 @@ from squid.messages.models import Message
 from squid.persistence.types import now
 from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
+from squid.tags.infrastructure.loading import assignment_units, definition_units
 from squid.tags.models import (
     TagAssignment,
     TagDefinition,
@@ -68,7 +69,7 @@ def _mapper_load_options() -> tuple[Any, ...]:
     accidental per-build queries through those relationships.
     """
     return (
-        selectinload(Build.tags).selectinload(TagAssignment.definition),
+        selectinload(Build.tags).options(*assignment_units()),
         selectinload(Build.links),
         raiseload(Build.build_creators),
         raiseload(Build.build_versions),
@@ -78,7 +79,7 @@ def _mapper_load_options() -> tuple[Any, ...]:
 def _write_load_options() -> tuple[Any, ...]:
     """Load every relationship that _setup_relationships replaces during an update."""
     return (
-        selectinload(Build.tags).selectinload(TagAssignment.definition),
+        selectinload(Build.tags).options(*assignment_units()),
         selectinload(Build.links),
         selectinload(Build.build_creators),
         selectinload(Build.build_versions),
@@ -304,7 +305,7 @@ class BuildRepository:
         )
         tag_rows = await session.execute(
             select(TagAssignment)
-            .options(selectinload(TagAssignment.definition))
+            .options(*assignment_units())
             .join(TagDefinition, TagDefinition.id == TagAssignment.tag_id)
             .where(TagAssignment.build_id.in_(public_ids))
             .order_by(
@@ -601,9 +602,9 @@ class BuildRepository:
             definition.id: definition
             for definition in (
                 await session.scalars(
-                    select(TagDefinition).where(
-                        TagDefinition.id.in_({assignment.definition.id for assignment in assignments})
-                    )
+                    select(TagDefinition)
+                    .options(*definition_units())
+                    .where(TagDefinition.id.in_({assignment.definition.id for assignment in assignments}))
                 )
             ).all()
         }
