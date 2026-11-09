@@ -1,18 +1,22 @@
 # Schema integrity hardening
 
-> **Status (2026-11-08).** Phases 1–6 are implemented except two items, marked below:
-> 1.3 (display units) waits on a decision, and Phase 4 (`messages`) is unblocked now that
-> `completed/discord-state-reconciliation.md` Phase 3 is done. The same operating assumptions as `docs/plans/completed/schema-audit.md`
-> apply: migrations run offline, existing data is not precious, and foreign keys are immediate
-> unless the write order cannot be fixed. Every phase must keep
-> `test_migrations_create_schema_without_drift` passing.
+> **Completed (2026-11-09).** All six phases are implemented. Display values now convert
+> from canonical units in every renderer, while record comparisons stay canonical.
+> Starboard origins reference `messages`; migration `c9f4e7a2b5d8` preserves existing
+> deletion notices and moves deletion-triggered refreshes to the shared table.
+> The same operating assumptions as `schema-audit.md` apply: migrations run offline,
+> existing data is not precious, and foreign keys are immediate unless the write
+> order cannot be fixed. Fresh migration, downgrade/re-upgrade, schema-drift,
+> display-unit round-trip, and shared-deletion regression tests pass.
 >
 > | Phase | Implementation |
 > |---|---|
 > | 1.1, 1.2 | `d1a4f7c2e9b5` |
+> | 1.3 | `squid/tags/models.py` conversion helpers and all five presentation paths |
 > | 1.4 | Starboard cog bulk-delete handler |
 > | 2 | `e2b5a8d3f0c6` |
 > | 3 | `f3c6b9e4a1d7`; queue checks come from `QueueColumns` |
+> | 4 | `c9f4e7a2b5d8`; origins reference `messages` |
 > | 5 | `squid/core/scores.py` (`round_score`) and `squid/persistence/types.py` (`database_now`) |
 > | 6 | `scripts/export_schema.sh` and `.github/workflows/schema-artifacts.yml` |
 
@@ -20,20 +24,20 @@
 
 An external review of the schema listed a long set of claimed defects, from "corrupts data today"
 to "nice to have". This plan keeps only the ones that are still true at HEAD and records a decision
-for each one. Several claims were already fixed, mostly by `completed/schema-audit.md`; they are listed so
+for each one. Several claims were already fixed, mostly by `schema-audit.md`; they are listed so
 nobody re-reviews them.
 
 ## Already resolved
 
 | Claim | Resolved by |
 |---|---|
-| `check_record_category` accepts any string | The column was dropped (`completed/schema-audit.md` Phase 6). |
+| `check_record_category` accepts any string | The column was dropped (`schema-audit.md` Phase 6). |
 | `vote_sessions` threshold CHECK has a NULL hole | The CHECK now requires `IS NOT NULL` (`squid/voting/models.py`, `THRESHOLD_CONSTRAINT`). |
-| Identity on FK-only columns; `build_edit_history` | `completed/schema-audit.md` Phase 0. |
+| Identity on FK-only columns; `build_edit_history` | `schema-audit.md` Phase 0. |
 | `votes` does not reference its option; no status or result | Phase 2 alias FK; `vote_sessions.status` and `result` have CHECKs. |
 | Vote-session subtypes not enforced | `enforce_vote_session_kind_subtype` constraint triggers. |
-| `title_definitions` duplicates record title fields | `completed/schema-audit.md` Phase 6. |
-| Role-inclusion cycles | `check_permission_role_include_cycle` (`completed/schema-audit.md` Phase 1). |
+| `title_definitions` duplicates record title fields | `schema-audit.md` Phase 6. |
+| Role-inclusion cycles | `check_permission_role_include_cycle` (`schema-audit.md` Phase 1). |
 | `schematic_uploads.uploaded_by_discord_id` | Replaced by `uploaded_by_account_id`, FK `ON DELETE SET NULL`. |
 | Schematic job tables use a bespoke queue | Both use `QueueColumns`, `QueueSpec` and `ClaimedRowQueue`. |
 | Missing FK indexes | Phase 0 added 37. Only `notifications.event_id` remains (Phase 3). |
@@ -76,19 +80,18 @@ role.guild_id`.
   counts don't change.
 - The migration deletes existing edges that break the rule.
 
-### 1.3 Display units are shown without converting the value — **waiting on a decision**
+### 1.3 Display units are shown without converting the value
 
-No write path sets a display unit today: no seeded tag has a default display unit, and submissions
-never set one. The bug is therefore latent, and the fix touches five renderers (including the two
-public-summary paths in `squid/builds`), each of which would need the unit definitions loaded.
-
+No seeded tag currently has a default display unit, and submissions do not select one.
+The latent bug is fixed in all five presentation paths, including both public-summary
+paths in `squid/builds`. Unit definitions load with tag definitions and assignments.
 
 Numeric tag values are stored in the tag's canonical unit, and `tag_units.scale_to_base` gives each
-unit's factor. All three renderers print the stored value next to the display unit's key without
+unit's factor. Before this fix, these renderers printed the stored value next to the display unit's key without
 converting it:
 
 - `_render_tag_assignment` in `squid/search/infrastructure/projection.py`
-- `RecordFacet.category_name` in `squid/records/application/models.py`
+- `CandidateFacet.category_name` in `squid/records/application/models.py`
 - `squid/api/v1/schemas/builds.py`
 
 Any display unit that differs from the canonical unit therefore shows a wrong number.
@@ -96,7 +99,8 @@ Any display unit that differs from the canonical unit therefore shows a wrong nu
 **Decision:** keep display units and convert.
 
 - Add one helper in `squid/tags` that converts a canonical value into a display unit
-  (`value * canonical.scale_to_base / display.scale_to_base`), and use it in all three renderers.
+  (`value * canonical.scale_to_base / display.scale_to_base`), and use it in all five presentation paths. Record facets retain a conversion factor
+  for rendering category thresholds without changing canonical comparison values.
 - Display units are written only by seeds and by build tag assignments
   (`squid/builds/infrastructure/repository.py`, where assignments are built). On that path, drop a
   display unit whose `dimension` differs from the canonical unit's instead of failing the
@@ -180,8 +184,8 @@ One migration. Every item is independent.
 
 ## Phase 4 — One source of truth
 
-- **`messages` vs `starboard_origin_messages`** — **not started; reconciliation Phase 3 is done, so it can start.** Both store the snowflake, guild, channel, author,
-  creation time and `deleted_at` for the same Discord message, and nothing links them. They already
+- **`messages` vs `starboard_origin_messages`** — Both previously stored the snowflake, guild, channel, author,
+  creation time and `deleted_at` for the same Discord message, and nothing links them. They could
   diverge: the starboard upsert resets `deleted_at` to NULL, and see 1.4 for bulk deletes.
   **Decision:**
   - Add an FK `starboard_origin_messages.id` → `messages.id`, and keep only the starboard-specific
@@ -189,6 +193,8 @@ One migration. Every item is independent.
     `messages`.
   - The starboard reaction path gets or creates the `messages` row in the same transaction, the
     ensure-on-write rule from `docs/plans/completed/discord-state-reconciliation.md`.
+  - Move the deletion refresh trigger to `messages`, firing only when deletion state changes.
+    Reactions and recounts preserve existing deletion notices and captured content.
   - That plan's Phase 3 changed the same write path: `record_votes` and `recount_votes` now also
     call `ensure_server_settings`.
 
@@ -252,4 +258,4 @@ when either output differs from the migrations.
   not a database invariant, because a merge can leave two Java identities on one account.
 - **Tag name and alias collisions.** Lookups resolve a name only when exactly one tag matches, so a
   collision makes the name unresolvable rather than wrong.
-- **`starboard_sources.channel_id = 0`.** See `completed/schema-audit.md` Phase 2.
+- **`starboard_sources.channel_id = 0`.** See `schema-audit.md` Phase 2.
