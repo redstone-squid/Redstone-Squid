@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-11-08 18:55+0100\n"
+"POT-Creation-Date: 2026-11-09 22:12+0100\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -429,7 +429,7 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: squid/bot/version_tracking.py:163
+#: squid/bot/version_tracking.py:169
 msgid "Add Minecraft version"
 msgstr ""
 
@@ -465,11 +465,11 @@ msgstr ""
 msgid "Add restriction alias"
 msgstr ""
 
-#: squid/bot/version_tracking.py:93
+#: squid/bot/version_tracking.py:94
 msgid "Add version"
 msgstr ""
 
-#: squid/bot/version_tracking.py:116
+#: squid/bot/version_tracking.py:117
 #, python-brace-format
 msgid "Added {version}."
 msgstr ""
@@ -685,7 +685,7 @@ msgstr "附件上传冲突"
 msgid "Attempt"
 msgstr ""
 
-#: squid/builds/domain/models.py:139
+#: squid/builds/domain/models.py:140
 #, python-brace-format
 msgid "Attribute `{name}` is immutable!"
 msgstr ""
@@ -715,7 +715,7 @@ msgstr ""
 msgid "Base title"
 msgstr ""
 
-#: squid/bot/version_tracking.py:170
+#: squid/bot/version_tracking.py:176
 msgid "Bedrock"
 msgstr ""
 
@@ -783,7 +783,7 @@ msgstr ""
 msgid "Build busy"
 msgstr "构造正忙"
 
-#: squid/builds/models.py:216
+#: squid/builds/models.py:221
 msgid ""
 "Build cannot be instantiated directly; construct a category subclass or a"
 " BuildDraft."
@@ -1153,12 +1153,16 @@ msgstr ""
 #: squid/bot/submission/build_browse.py:442 squid/bot/submission/records.py:148
 #: squid/bot/submission/search_view.py:228 squid/bot/submission/ui/views.py:393
 #: squid/bot/tags_view.py:200 squid/bot/ui.py:103
-#: squid/bot/version_tracking.py:101
+#: squid/bot/version_tracking.py:102
 msgid "Close"
 msgstr ""
 
 #: squid/permissions/domain/catalogue.py:455
 msgid "Close or refresh a poll you did not create."
+msgstr ""
+
+#: squid/bot/voting/controls.py:33
+msgid "Close poll"
 msgstr ""
 
 #: squid/bot/claims_view.py:186
@@ -1766,7 +1770,7 @@ msgstr ""
 msgid "Edit your own profile, visibility, linked identities, and merges."
 msgstr ""
 
-#: squid/bot/version_tracking.py:78 squid/bot/version_tracking.py:166
+#: squid/bot/version_tracking.py:79 squid/bot/version_tracking.py:172
 msgid "Edition"
 msgstr ""
 
@@ -2073,6 +2077,10 @@ msgstr ""
 msgid "Getting information..."
 msgstr "正在获取信息……"
 
+#: squid/bot/recount.py:73
+msgid "Give a link to a message in this server."
+msgstr ""
+
 #: squid/bot/layout_showcase.py:929
 msgid "Got it -- the panel behind the form is already showing it."
 msgstr ""
@@ -2148,11 +2156,15 @@ msgstr ""
 msgid "How this bot draws its messages"
 msgstr "这个机器人如何排版它的消息"
 
+#: squid/bot/recount.py:99
+msgid "I cannot read that message."
+msgstr ""
+
 #: squid/submissions/application/forms.py:263
 msgid "I have permission to distribute this schematic under the selected license."
 msgstr ""
 
-#: squid/bot/starboard/cog.py:179
+#: squid/bot/starboard/cog.py:219
 msgid "I need View Channel, Send Messages, and Read Message History there."
 msgstr ""
 
@@ -2317,7 +2329,7 @@ msgstr "验证码无效"
 msgid "Invite"
 msgstr ""
 
-#: squid/bot/version_tracking.py:169
+#: squid/bot/version_tracking.py:175
 msgid "Java"
 msgstr ""
 
@@ -2515,7 +2527,7 @@ msgstr ""
 msgid "Loading starboards."
 msgstr ""
 
-#: squid/bot/version_tracking.py:88
+#: squid/bot/version_tracking.py:89
 msgid "Loading versions."
 msgstr ""
 
@@ -2862,7 +2874,7 @@ msgstr "下一页"
 msgid "No Minecraft account linked"
 msgstr ""
 
-#: squid/bot/version_tracking.py:82
+#: squid/bot/version_tracking.py:83
 msgid "No Minecraft versions are recognized yet."
 msgstr ""
 
@@ -2948,6 +2960,10 @@ msgstr ""
 #: squid/bot/submission/search_view.py:158
 msgid "No results match this query."
 msgstr "没有匹配该查询的结果。"
+
+#: squid/bot/recount.py:108
+msgid "No starboard counts reactions on that message."
+msgstr ""
 
 #: squid/bot/starboard/screen.py:188 squid/bot/starboard/screen.py:252
 #: squid/bot/starboard/screen.py:257
@@ -3331,7 +3347,7 @@ msgstr "请稍后再试。"
 msgid "Poll cancelled."
 msgstr ""
 
-#: squid/bot/voting/controls.py:52
+#: squid/bot/voting/controls.py:59
 msgid "Poll closed."
 msgstr ""
 
@@ -3352,7 +3368,7 @@ msgstr ""
 msgid "Poll settings"
 msgstr ""
 
-#: squid/bot/voting/controls.py:67
+#: squid/bot/voting/controls.py:74
 msgid "Poll weights refreshed."
 msgstr ""
 
@@ -3582,7 +3598,7 @@ msgstr ""
 msgid "Recent errors"
 msgstr ""
 
-#: squid/bot/version_tracking.py:81
+#: squid/bot/version_tracking.py:82
 msgid "Recognized Minecraft versions"
 msgstr ""
 
@@ -3612,7 +3628,7 @@ msgstr ""
 msgid "Record category {definition_id} is a {actual} category, not {requested}."
 msgstr ""
 
-#: squid/records/infrastructure/repository.py:501
+#: squid/records/infrastructure/repository.py:502
 #, python-brace-format
 msgid ""
 "Record definition {definition_id} stores a category key that does not "
@@ -3752,6 +3768,10 @@ msgstr ""
 
 #: squid/bot/diagnostics_view.py:130
 msgid "Refresh reports"
+msgstr ""
+
+#: squid/bot/voting/controls.py:34
+msgid "Refresh weights"
 msgstr ""
 
 #: squid/permissions/domain/catalogue.py:257
@@ -4010,7 +4030,7 @@ msgid "Role is not yours to manage"
 msgstr ""
 
 #: squid/reactions/domain/models.py:47
-#: squid/starboard/application/services.py:214
+#: squid/starboard/application/services.py:215
 msgid "Role multiplier must be finite and greater than zero."
 msgstr ""
 
@@ -4310,7 +4330,7 @@ msgstr ""
 msgid "Staff multiplier must be finite and greater than zero."
 msgstr ""
 
-#: squid/starboard/models.py:122
+#: squid/starboard/models.py:123
 msgid "Starboard colour must be a valid RGB value."
 msgstr ""
 
@@ -4322,23 +4342,23 @@ msgstr ""
 msgid "Starboard deleted."
 msgstr ""
 
-#: squid/starboard/models.py:125
+#: squid/starboard/models.py:126
 msgid "Starboard display emoji cannot be empty."
 msgstr ""
 
-#: squid/starboard/models.py:162
+#: squid/starboard/models.py:163
 msgid "Starboard emoji cannot be empty."
 msgstr ""
 
-#: squid/starboard/models.py:165
+#: squid/starboard/models.py:166
 msgid "Starboard emoji multiplier must be finite and greater than zero."
 msgstr ""
 
-#: squid/starboard/models.py:168
+#: squid/starboard/models.py:169
 msgid "Starboard emoji position cannot be negative."
 msgstr ""
 
-#: squid/starboard/models.py:129
+#: squid/starboard/models.py:130
 msgid "Starboard emojis must be unique."
 msgstr ""
 
@@ -4346,7 +4366,7 @@ msgstr ""
 msgid "Starboard emojis updated."
 msgstr ""
 
-#: squid/starboard/models.py:116
+#: squid/starboard/models.py:117
 msgid "Starboard message ages cannot be negative."
 msgstr ""
 
@@ -4355,15 +4375,19 @@ msgstr ""
 msgid "Starboard name"
 msgstr ""
 
-#: squid/starboard/models.py:107
+#: squid/starboard/models.py:108
 msgid "Starboard name cannot be empty."
+msgstr ""
+
+#: squid/bot/recount.py:109
+msgid "Starboard reactions recounted."
 msgstr ""
 
 #: squid/bot/starboard/screen.py:222
 msgid "Starboard role weight updated."
 msgstr ""
 
-#: squid/starboard/models.py:110
+#: squid/starboard/models.py:111
 msgid "Starboard thresholds must be finite."
 msgstr ""
 
@@ -4519,7 +4543,7 @@ msgstr ""
 msgid "That creator page could not be found."
 msgstr ""
 
-#: squid/bot/starboard/cog.py:176
+#: squid/bot/starboard/cog.py:216
 msgid "That destination is not a text channel in this server."
 msgstr ""
 
@@ -4533,6 +4557,14 @@ msgstr ""
 
 #: squid/accounts/errors.py:110
 msgid "That merge code is invalid or expired."
+msgstr ""
+
+#: squid/bot/recount.py:96
+msgid "That message is already being recounted."
+msgstr ""
+
+#: squid/bot/recount.py:92
+msgid "That message is not a vote or a starboard message."
 msgstr ""
 
 #: squid/bot/voting/actors.py:21
@@ -4574,7 +4606,11 @@ msgstr "那个标题是别人写的文本。星号、@everyone 和假链接在�
 msgid "That vote belongs to a different server."
 msgstr ""
 
-#: squid/bot/voting/actors.py:22
+#: squid/bot/recount.py:83
+msgid "That vote is already being recounted."
+msgstr ""
+
+#: squid/bot/recount.py:81 squid/bot/voting/actors.py:22
 msgid "That vote is already closed."
 msgstr ""
 
@@ -4810,7 +4846,7 @@ msgstr "该消息不是来自此服务器。"
 msgid "The message, or the code behind it"
 msgstr ""
 
-#: squid/starboard/models.py:119
+#: squid/starboard/models.py:120
 msgid "The minimum message age cannot exceed the maximum."
 msgstr ""
 
@@ -4818,7 +4854,7 @@ msgstr ""
 msgid "The operation conflicts with the current state."
 msgstr "该操作与当前状态冲突。"
 
-#: squid/starboard/models.py:113
+#: squid/starboard/models.py:114
 msgid "The post threshold must exceed the removal threshold."
 msgstr ""
 
@@ -5056,6 +5092,11 @@ msgstr ""
 
 #: squid/bot/access_view.py:378 squid/bot/voting/poll_wizard.py:127
 msgid "This server"
+msgstr ""
+
+#: squid/bot/recount.py:134
+#, python-brace-format
+msgid "This server ran a recount recently. Try again in {whole} seconds."
 msgstr ""
 
 #: squid/bot/ui.py:87
@@ -5309,12 +5350,12 @@ msgstr ""
 msgid "Vault door"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:259 squid/bot/version_tracking.py:77
-#: squid/bot/version_tracking.py:173
+#: squid/bot/submission/search_view.py:259 squid/bot/version_tracking.py:78
+#: squid/bot/version_tracking.py:179
 msgid "Version"
 msgstr ""
 
-#: squid/bot/version_tracking.py:151
+#: squid/bot/version_tracking.py:157
 #, python-brace-format
 msgid "Version added successfully: {version}"
 msgstr "版本添加成功：{version}"
@@ -5402,6 +5443,14 @@ msgstr ""
 #: squid/bot/settings_view.py:332
 #, python-brace-format
 msgid "Vote weight for {role_name}"
+msgstr ""
+
+#: squid/bot/recount.py:87
+msgid "Votes recounted."
+msgstr ""
+
+#: squid/bot/recount.py:87
+msgid "Votes recounted; nothing had been missed."
 msgstr ""
 
 #: squid/bot/settings_view.py:226
@@ -5497,7 +5546,7 @@ msgstr ""
 msgid "You are in."
 msgstr ""
 
-#: squid/bot/version_tracking.py:109
+#: squid/bot/version_tracking.py:110
 msgid "You are no longer allowed to add versions."
 msgstr ""
 
@@ -6229,7 +6278,7 @@ msgstr ""
 msgid "{claimant} — opened {age}"
 msgstr ""
 
-#: squid/builds/domain/models.py:163
+#: squid/builds/domain/models.py:164
 #, python-brace-format
 msgid "{class_name} is not a dataclass"
 msgstr ""
@@ -6268,7 +6317,7 @@ msgstr[0] ""
 msgid "{count} reports share this reference; this is the newest."
 msgstr ""
 
-#: squid/bot/voting/controls.py:71
+#: squid/bot/voting/controls.py:78
 #, python-brace-format
 msgid "{count} voter(s) could not be resolved, so their cached weight was kept."
 msgstr ""
@@ -6504,7 +6553,7 @@ msgstr ""
 msgid "{user} doesn't have a creator page."
 msgstr ""
 
-#: squid/bot/voting/reactions.py:385
+#: squid/bot/voting/reactions.py:298
 #, python-brace-format
 msgid "{user}, voting stores your Discord user ID. Run `/account consent` first."
 msgstr ""

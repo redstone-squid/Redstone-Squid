@@ -30,8 +30,8 @@ poll_refresh = polls.define("refresh", aliases=("poll:refresh",))
 def poll_controls() -> sl.semantic.ActionControls:
     """The control row an open poll's card ends with."""
     return sl.action_controls(
-        sl.routed_action_control("Close poll", poll_close.id(), key="close", tone=sl.Tone.DANGER),
-        sl.routed_action_control("Refresh weights", poll_refresh.id(), key="refresh"),
+        sl.routed_action_control(tr("Close poll"), poll_close.id(), key="close", tone=sl.Tone.DANGER),
+        sl.routed_action_control(tr("Refresh weights"), poll_refresh.id(), key="refresh"),
         key="poll.controls",
     )
 
