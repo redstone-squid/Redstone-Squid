@@ -36,6 +36,8 @@ ALTER TABLE ONLY public.messages
 
 CREATE INDEX messages_guild_idx ON public.messages USING btree (guild_id);
 
+CREATE TRIGGER messages_enqueue_starboard_sync AFTER UPDATE OF deleted_at ON public.messages FOR EACH ROW WHEN ((old.deleted_at IS DISTINCT FROM new.deleted_at)) EXECUTE FUNCTION public.enqueue_starboard_sync();
+
 ALTER TABLE ONLY public.messages
     ADD CONSTRAINT public_messages_server_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE RESTRICT;
 

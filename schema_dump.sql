@@ -709,7 +709,7 @@ BEGIN
         RETURN NULL;
     END IF;
 
-    IF TG_TABLE_NAME = 'starboard_origin_messages' THEN
+    IF TG_TABLE_NAME = 'messages' THEN
         target_key := NULL;
         INSERT INTO public.discord_sync_queue
             (resource_kind, source_key, action, generation, enqueued_at, available_at,
@@ -4227,15 +4227,10 @@ COMMENT ON TABLE public.starboard_entries IS 'Current vote totals and rendering 
 
 CREATE TABLE public.starboard_origin_messages (
     id bigint NOT NULL,
-    guild_id bigint NOT NULL,
-    channel_id bigint NOT NULL,
-    author_id bigint NOT NULL,
     author_is_bot boolean NOT NULL,
     is_nsfw boolean DEFAULT false NOT NULL,
     has_image boolean DEFAULT false NOT NULL,
-    posted_at timestamp with time zone NOT NULL,
-    seen_at timestamp with time zone DEFAULT now() NOT NULL,
-    deleted_at timestamp with time zone
+    seen_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -7664,13 +7659,6 @@ CREATE INDEX starboard_entries_score_idx ON public.starboard_entries USING btree
 
 
 --
--- Name: starboard_origin_messages_guild_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX starboard_origin_messages_guild_idx ON public.starboard_origin_messages USING btree (guild_id);
-
-
---
 -- Name: starboard_sources_guild_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8210,6 +8198,13 @@ CREATE CONSTRAINT TRIGGER generic_vote_sessions_kind_subtype_check AFTER INSERT 
 
 
 --
+-- Name: messages messages_enqueue_starboard_sync; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER messages_enqueue_starboard_sync AFTER UPDATE OF deleted_at ON public.messages FOR EACH ROW WHEN ((old.deleted_at IS DISTINCT FROM new.deleted_at)) EXECUTE FUNCTION public.enqueue_starboard_sync();
+
+
+--
 -- Name: other_builds other_builds_category_subtype_check; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8270,13 +8265,6 @@ CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR 
 --
 
 CREATE TRIGGER starboard_entries_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE OF score ON public.starboard_entries FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
-
-
---
--- Name: starboard_origin_messages starboard_origin_messages_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER starboard_origin_messages_enqueue_discord_sync AFTER UPDATE OF deleted_at ON public.starboard_origin_messages FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
 
 
 --
@@ -9105,11 +9093,11 @@ ALTER TABLE ONLY public.starboard_entries
 
 
 --
--- Name: starboard_origin_messages starboard_origin_messages_guild_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: starboard_origin_messages starboard_origin_messages_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.starboard_origin_messages
-    ADD CONSTRAINT starboard_origin_messages_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE CASCADE;
+    ADD CONSTRAINT starboard_origin_messages_id_fkey FOREIGN KEY (id) REFERENCES public.messages(id) ON DELETE CASCADE;
 
 
 --

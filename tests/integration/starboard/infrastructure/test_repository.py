@@ -8,6 +8,7 @@ from sqlalchemy import Table, insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.messages.models import Message
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.models import ServerSetting
 from squid.starboard.application import PendingVote
@@ -28,6 +29,7 @@ TABLES = cast(
     tuple[Table, ...],
     (
         ServerSetting.__table__,
+        Message.__table__,
         StarboardConfig.__table__,
         StarboardEmojiRow.__table__,
         StarboardSource.__table__,
@@ -76,7 +78,9 @@ async def test_vote_overwrite_and_exact_emoji_withdrawal(
         )
         await uow.commit()
     origin = OriginMessage(
-        id=100, guild_id=10, channel_id=30, author_id=40, author_is_bot=False, posted_at=Instant.now()
+        id=100,
+        author_is_bot=False,
+        message=Message(id=100, guild_id=10, channel_id=30, author_id=40, created_at=Instant.now()),
     )
 
     async with SqlAlchemyUnitOfWork(async_session_factory) as uow:

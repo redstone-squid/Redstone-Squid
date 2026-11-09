@@ -15,6 +15,7 @@ from squid.bot.starboard.screen import StarboardScreen
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.messages.models import Message
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -170,13 +171,16 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         )
         return OriginMessage(
             id=message.id,
-            guild_id=guild.id,
-            channel_id=message.channel.id,
-            author_id=message.author.id,
             author_is_bot=message.author.bot,
-            posted_at=Instant(message.created_at),
             is_nsfw=channel_nsfw,
             has_image=has_image,
+            message=Message(
+                id=message.id,
+                guild_id=guild.id,
+                channel_id=message.channel.id,
+                author_id=message.author.id,
+                created_at=Instant(message.created_at),
+            ),
         )
 
     async def _refresh_key(self, key: EntryKey, force: bool) -> None:

@@ -4,6 +4,7 @@ from typing import Any
 
 from whenever import Instant
 
+from squid.messages.models import Message
 from squid.reactions.domain import ReactionActor
 from squid.starboard.application import PendingVote, StarboardService
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
@@ -63,11 +64,10 @@ def make_config(**settings: Any) -> StarboardConfig:
 def make_origin() -> OriginMessage:
     return OriginMessage(
         id=100,
-        guild_id=10,
-        channel_id=30,
-        author_id=40,
         author_is_bot=False,
-        posted_at=Instant.now().subtract(seconds=60),
+        message=Message(
+            id=100, guild_id=10, channel_id=30, author_id=40, created_at=Instant.now().subtract(seconds=60)
+        ),
     )
 
 

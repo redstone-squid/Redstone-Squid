@@ -5,6 +5,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from whenever import Instant
 
+from squid.messages.models import Message
 from squid.reactions.domain import ReactionActor
 from squid.starboard.domain import entry_should_be_posted, evaluate_vote
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
@@ -25,13 +26,18 @@ def config(**changes: object) -> StarboardConfig:
     )
 
 
-def origin(**changes: object) -> OriginMessage:
-    return replace(
+def origin(*, deleted_at: Instant | None = None, **changes: object) -> OriginMessage:
+    result = replace(
         OriginMessage(
-            id=100, guild_id=10, channel_id=30, author_id=40, author_is_bot=False, posted_at=NOW.subtract(seconds=60)
+            id=100,
+            author_is_bot=False,
+            message=Message(id=100, guild_id=10, channel_id=30, author_id=40, created_at=NOW.subtract(seconds=60)),
         ),
         **changes,  # pyrefly: ignore[bad-argument-type]
     )
+
+    result.message.deleted_at = deleted_at
+    return result
 
 
 @pytest.mark.parametrize(

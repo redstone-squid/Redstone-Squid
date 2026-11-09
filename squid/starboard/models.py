@@ -25,11 +25,12 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.messages.models import Message
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
 from squid.starboard.domain.models import StarboardDirection
@@ -190,25 +191,43 @@ class OriginMessage(Base, kw_only=True):
     """A source message that has been evaluated by at least one starboard."""
 
     __tablename__ = "starboard_origin_messages"
-    __table_args__ = (Index("starboard_origin_messages_guild_idx", "guild_id"),)
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
-    guild_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), nullable=False
+    id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True, autoincrement=False
     )
-    channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    message: Mapped[Message] = relationship(lazy="joined")
     author_is_bot: Mapped[bool] = mapped_column(Boolean, nullable=False)
     is_nsfw: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     has_image: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
-    posted_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     seen_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
-    deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
+
+    @property
+    def guild_id(self) -> int:
+        assert self.message.guild_id is not None
+        return self.message.guild_id
+
+    @property
+    def channel_id(self) -> int:
+        assert self.message.channel_id is not None
+        return self.message.channel_id
+
+    @property
+    def author_id(self) -> int:
+        return self.message.author_id
+
+    @property
+    def posted_at(self) -> Instant:
+        assert self.message.created_at is not None
+        return self.message.created_at
+
+    @property
+    def deleted_at(self) -> Instant | None:
+        return self.message.deleted_at
 
     @property
     def present(self) -> bool:
-        return self.deleted_at is None
+        return not self.message.is_deleted
 
 
 class StarboardVote(Base, kw_only=True):

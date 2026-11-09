@@ -364,7 +364,7 @@ BEGIN
         RETURN NULL;
     END IF;
 
-    IF TG_TABLE_NAME = 'starboard_origin_messages' THEN
+    IF TG_TABLE_NAME = 'messages' THEN
         target_key := NULL;
         INSERT INTO public.discord_sync_queue
             (resource_kind, source_key, action, generation, enqueued_at, available_at,
@@ -647,7 +647,7 @@ CREATE TRIGGER starboard_entries_enqueue_discord_sync AFTER INSERT OR DELETE OR 
 
 CREATE TRIGGER starboards_enqueue_discord_sync AFTER UPDATE ON public.starboards FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
 
-CREATE TRIGGER starboard_origin_messages_enqueue_discord_sync AFTER UPDATE OF deleted_at ON public.starboard_origin_messages FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
+CREATE TRIGGER messages_enqueue_starboard_sync AFTER UPDATE OF deleted_at ON public.messages FOR EACH ROW WHEN (OLD.deleted_at IS DISTINCT FROM NEW.deleted_at) EXECUTE FUNCTION public.enqueue_starboard_sync();
 
 CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 

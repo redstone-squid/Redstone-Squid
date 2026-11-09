@@ -21,7 +21,7 @@ BEGIN
         RETURN NULL;
     END IF;
 
-    IF TG_TABLE_NAME = 'starboard_origin_messages' THEN
+    IF TG_TABLE_NAME = 'messages' THEN
         target_key := NULL;
         INSERT INTO public.discord_sync_queue
             (resource_kind, source_key, action, generation, enqueued_at, available_at,

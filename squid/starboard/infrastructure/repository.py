@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.scores import round_score
+from squid.messages.models import Message
 from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.starboard.application.ports import EntryKey, EntryState, PendingVote
 from squid.starboard.models import (
@@ -75,35 +76,7 @@ class PostgresStarboardRepository:
         if not votes:
             return ()
         await self._lock(session, origin.id)
-        await ensure_server_settings(session, (origin.guild_id,))
-        await session.scalar(
-            pg_insert(OriginMessage)
-            .values(
-                id=origin.id,
-                guild_id=origin.guild_id,
-                channel_id=origin.channel_id,
-                author_id=origin.author_id,
-                author_is_bot=origin.author_is_bot,
-                is_nsfw=origin.is_nsfw,
-                has_image=origin.has_image,
-                posted_at=origin.posted_at,
-                deleted_at=None,
-            )
-            .on_conflict_do_update(
-                index_elements=[OriginMessage.id],
-                set_={
-                    "channel_id": origin.channel_id,
-                    "author_id": origin.author_id,
-                    "author_is_bot": origin.author_is_bot,
-                    "is_nsfw": origin.is_nsfw,
-                    "has_image": origin.has_image,
-                    "seen_at": func.now(),
-                    "deleted_at": None,
-                },
-            )
-            .returning(OriginMessage),
-            execution_options={"populate_existing": True},
-        )
+        await self._upsert_origin(session, origin)
         for vote in votes:
             await session.execute(
                 pg_insert(StarboardVote)
@@ -155,27 +128,7 @@ class PostgresStarboardRepository:
     ) -> Sequence[EntryKey]:
         session = self._session()
         await self._lock(session, origin.id)
-        await ensure_server_settings(session, (origin.guild_id,))
-        await session.scalar(
-            pg_insert(OriginMessage)
-            .values(
-                id=origin.id,
-                guild_id=origin.guild_id,
-                channel_id=origin.channel_id,
-                author_id=origin.author_id,
-                author_is_bot=origin.author_is_bot,
-                is_nsfw=origin.is_nsfw,
-                has_image=origin.has_image,
-                posted_at=origin.posted_at,
-                deleted_at=None,
-            )
-            .on_conflict_do_update(
-                index_elements=[OriginMessage.id],
-                set_={"seen_at": func.now(), "deleted_at": None, "has_image": origin.has_image},
-            )
-            .returning(OriginMessage),
-            execution_options={"populate_existing": True},
-        )
+        await self._upsert_origin(session, origin)
         starboard_ids = set(
             await session.scalars(
                 delete(StarboardVote)
@@ -221,10 +174,10 @@ class PostgresStarboardRepository:
         session = self._session()
         await self._lock(session, origin_message_id)
         changed = await session.execute(
-            update(OriginMessage)
-            .where(OriginMessage.id == origin_message_id)
-            .values(deleted_at=func.now())
-            .returning(OriginMessage.id)
+            update(Message)
+            .where(Message.id == origin_message_id)
+            .values(deleted_at=func.coalesce(Message.deleted_at, func.now()))
+            .returning(Message.id)
         )
         if changed.scalar_one_or_none() is None:
             return ()
@@ -397,6 +350,49 @@ class PostgresStarboardRepository:
             if force or entry_row.last_rendered_score != entry_row.score:
                 keys.append((entry_row.starboard_id, origin_message_id))
         return keys
+
+    @staticmethod
+    async def _upsert_origin(session: AsyncSession, origin: OriginMessage) -> None:
+        """Ensure canonical message facts before writing starboard metadata.
+
+        A later reaction must not erase a deletion or previously captured content.
+        """
+        await ensure_server_settings(session, (origin.guild_id,))
+        statement = pg_insert(Message).values(
+            id=origin.id,
+            guild_id=origin.guild_id,
+            channel_id=origin.channel_id,
+            author_id=origin.author_id,
+            created_at=origin.posted_at,
+        )
+        await session.execute(
+            statement.on_conflict_do_update(
+                index_elements=[Message.id],
+                set_={
+                    "guild_id": statement.excluded.guild_id,
+                    "channel_id": statement.excluded.channel_id,
+                    "author_id": statement.excluded.author_id,
+                    "created_at": statement.excluded.created_at,
+                },
+            )
+        )
+        statement = pg_insert(OriginMessage).values(
+            id=origin.id,
+            author_is_bot=origin.author_is_bot,
+            is_nsfw=origin.is_nsfw,
+            has_image=origin.has_image,
+        )
+        await session.execute(
+            statement.on_conflict_do_update(
+                index_elements=[OriginMessage.id],
+                set_={
+                    "author_is_bot": origin.author_is_bot,
+                    "is_nsfw": origin.is_nsfw,
+                    "has_image": origin.has_image,
+                    "seen_at": func.now(),
+                },
+            )
+        )
 
     @staticmethod
     async def _lock(session: AsyncSession, origin_message_id: int) -> None:

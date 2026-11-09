@@ -1948,3 +1948,48 @@ def test_build_notes_move_into_description_without_requeueing_unchanged_cards(
         command.upgrade(config, "head")
     finally:
         engine.dispose()
+
+
+def test_starboard_message_migration_preserves_deletions_and_content(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    revision = "c9f4e7a2b5d8"
+    command.upgrade(config, f"{revision}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("INSERT INTO server_settings (server_id) VALUES (10)"))
+            connection.execute(
+                text("""
+                INSERT INTO messages (id, guild_id, channel_id, author_id, content, created_at, deleted_at)
+                VALUES (100, 10, 20, 30, 'retained', now(), now()),
+                       (101, 10, 20, 30, 'also retained', now(), NULL)
+            """)
+            )
+            connection.execute(
+                text("""
+                INSERT INTO starboard_origin_messages
+                    (id, guild_id, channel_id, author_id, author_is_bot, posted_at, deleted_at)
+                VALUES (100, 10, 20, 30, false, now(), NULL),
+                       (101, 10, 20, 30, false, now(), now()),
+                       (102, 10, 20, 30, false, now(), NULL)
+            """)
+            )
+        command.upgrade(config, revision)
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text("SELECT id, content, deleted_at IS NOT NULL FROM messages ORDER BY id")
+            ).all()
+            assert rows == [(100, "retained", True), (101, "also retained", True), (102, None, False)]
+        command.downgrade(config, f"{revision}-1")
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT id, deleted_at IS NOT NULL FROM starboard_origin_messages ORDER BY id")
+            ).all() == [(100, True), (101, True), (102, False)]
+        command.upgrade(config, revision)
+        command.check(config)
+    finally:
+        engine.dispose()
