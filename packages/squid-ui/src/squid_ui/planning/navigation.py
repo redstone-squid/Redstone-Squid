@@ -8,10 +8,11 @@ are separate from cursor offsets: a source cursor may address items, not pages.
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import override
+from typing import Self, override
 
 from squid_ui.chrome import Chrome
 from squid_ui.context import ContextKey
+from squid_ui.handlers import _HandlerBinder
 from squid_ui.interactions import SelectionEvent
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.primitives.nodes import (
@@ -39,6 +40,11 @@ SEEK_OPTION_LIMIT = 25
 @dataclass(frozen=True, slots=True)
 class _SeekSelection(GeneratedHandler[SelectionEvent]):
     seek: Callable[[int], Awaitable[None]]
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        # seek receives an integer, not an action event or frontend registration.
+        return self
 
     @override
     async def __call__(self, event: SelectionEvent) -> None:

@@ -150,9 +150,10 @@ paths, not the scene protocol or when a host applies presentation updates.
 The component contract lives in `runtime.definition`. Tree snapshots and incremental-render
 inputs live in `runtime.tree`; expansion and subtree splicing live in `runtime.expansion`.
 Structural traversal and control-key rewriting share `runtime._tree`. These modules depend on
-the component contract, not on the owner or planner. `ComponentRuntime` owns a `RenderCache` for snapshot storage, invalidation causes, and
-component-path indexing. Expansion borrows its mutable view for one synchronous render;
-reconciliation prunes it after delivery without clearing writes made by lifecycle hooks.
+the component contract, not on the owner or planner. `ComponentRuntime` owns a `RenderCache`
+for snapshot storage, invalidation causes, and component-path indexing. Expansion borrows
+its mutable view for one synchronous render; reconciliation prunes it after delivery
+without clearing writes made by lifecycle hooks.
 Candidate and committed trees and lifecycle decisions remain with `ComponentRuntime`.
 The existing `runtime.component` import path is a facade over these definitions.
 
@@ -861,6 +862,13 @@ registrations, including generated semantic handlers and forms, before exposing 
 Duplicate registrations and missing implementations are errors. Function annotations are
 never inspected for dispatch. Other adapters can register their typed implementations using
 `FrontendHandler` from `squid_ui.handlers`.
+
+Binding follows explicit callback fields in action bindings, forms, and generated
+semantic handlers. Application callback objects and their data are opaque: the planner
+does not inspect arbitrary dataclass fields for nested registrations. A custom callback
+wrapper that stores a handler set can call it at dispatch time, or select its frontend
+implementation explicitly. Only registrations at supported binding locations are
+validated before controls are exposed.
 
 
 Components receive PressEvent or SelectionEvent, not discord.Interaction. Events expose

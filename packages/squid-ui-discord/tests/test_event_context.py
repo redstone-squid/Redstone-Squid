@@ -6,9 +6,11 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid_ui.handlers import FrontendHandler
+from squid_ui.handlers import FrontendHandler, HandlerSet
 from squid_ui.html.target import target as html_target
 from squid_ui.planning import plan
+from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
+from squid_ui.semantic import Controlled
 
 
 class ContextScreen(sd.Screen):
@@ -150,7 +152,7 @@ async def test_invalid_form_keeps_context_and_retry_authority() -> None:
                 sl.forms.FormSpec(
                     "Number",
                     (sl.forms.IntField(key="number", label="Number"),),
-                    on_invalid=invalid,
+                    on_invalid=sl.handlers(sd.on_invalid_submit(invalid)),
                 ),
                 key="number",
                 on_submit=valid,
@@ -162,3 +164,47 @@ async def test_invalid_form_keeps_context_and_retry_authority() -> None:
         await form.submit({"number": "invalid"})
         assert len(seen) == 1
         assert seen[0].owner is owner
+
+
+async def test_cached_generated_handlers_select_current_native_callbacks() -> None:
+    cache = sl.planning.PlanCache()
+    seen: list[str] = []
+
+    async def first(event: sd.ChoiceEvent) -> None:
+        seen.append("first")
+
+    async def second(event: sd.ChoiceEvent) -> None:
+        assert isinstance(event.context, sd.Request)
+        assert event.selected == ("a",)
+        seen.append("second")
+
+    def document(callback: HandlerSet[sl.ChoiceEvent]) -> sl.LayoutNode:
+        return sl.choices(
+            sl.choice("A", key="a"), sl.choice("B", key="b"), selection=sl.controlled((), callback), key="choices"
+        )
+
+    first_branch, second_branch = sd.on_choice(first), sd.on_choice(second)
+    old = plan(document(sl.handlers(first_branch)), target=sd.DISCORD_V2_DPY27, cache=cache)
+    current = plan(document(sl.handlers(second_branch)), target=sd.DISCORD_V2_DPY27, cache=cache)
+    assert current.metrics.cache_hit
+    old_handler = old.bindings["choices.a"].handler
+    current_handler = current.bindings["choices.a"].handler
+    assert isinstance(old_handler, ChooseChoice)
+    assert isinstance(current_handler, ChooseChoice)
+    assert isinstance(old_handler.commit.ownership, Controlled)
+    assert isinstance(current_handler.commit.ownership, Controlled)
+    old_callback = old_handler.commit.ownership.on_change
+    current_callback = current_handler.commit.ownership.on_change
+    assert isinstance(old_callback, FrontendHandler)
+    assert isinstance(current_callback, FrontendHandler)
+    assert old_callback is first_branch
+    assert current_callback is second_branch
+
+    class Panel(sd.Screen):
+        @override
+        def render(self) -> sl.LayoutNode:
+            return document(sl.handlers(second_branch))
+
+    async with sd.testing.stage(Panel(), owner=object()) as ui:
+        await ui.press("choices.a")
+    assert seen == ["second"]

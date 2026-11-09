@@ -80,8 +80,7 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     backend = request.target.dialect.planner
     result = backend.plan(rendered, request, cache=cache, memo=memo)
     frontend = request.target.adapter.frontend or request.target.adapter.name
-    bindings = bind_handlers(result.bindings, frontend)
-    forms = bind_handlers(result.form_bindings, frontend)
+    bindings, forms = bind_handlers(result.bindings, result.form_bindings, frontend)
     return (
         replace(result, bindings=bindings, form_bindings=forms)
         if bindings is not result.bindings or forms is not result.form_bindings

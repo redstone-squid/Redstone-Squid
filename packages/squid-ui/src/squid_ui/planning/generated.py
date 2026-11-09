@@ -4,10 +4,12 @@ The planner can keep the handler's structure in a cached plan while replacing
 its live callbacks with those from the current document.
 """
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+
+from squid_ui.handlers import _HandlerComposition
 
 
-class GeneratedHandler[EventT](ABC):
+class GeneratedHandler[EventT](_HandlerComposition):
     """A typed event adapter whose fields fully describe framework-generated behavior."""
 
     @abstractmethod

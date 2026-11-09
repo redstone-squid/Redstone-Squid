@@ -132,3 +132,8 @@ def test_component_facade_preserves_existing_imports() -> None:
     assert component.ComponentTree is tree.ComponentTree
     assert component.IncrementalRender is tree.IncrementalRender
     assert component.render_component_tree is expansion.render_component_tree
+
+
+def test_handler_composition_does_not_import_planning_or_runtime() -> None:
+    imports = runtime_imports(SOURCE / "handlers.py")
+    assert not {name for name in imports if name.startswith(("squid_ui.planning", "squid_ui.runtime"))}

@@ -1,10 +1,14 @@
 """Explicit frontend implementations selected when a control is bound."""
 
+from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, fields, is_dataclass, replace
-from typing import Any, cast
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Self, cast
 
-from squid_ui.interactions import ActionEvent
+from squid_ui.interactions import ActionBinding, ActionEvent
+
+if TYPE_CHECKING:
+    from squid_ui.forms import FormBinding, FormSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,50 +62,114 @@ def handlers[EventT: ActionEvent](
     return HandlerSet(branches, fallback)
 
 
-def bind_handlers[T](value: T, frontend: str) -> T:
-    """Resolve registrations inside bindings and generated semantic handlers before exposure.
+class _HandlerComposition(ABC):
+    """Framework-owned callback edges that participate in frontend selection.
 
-    Generated handlers carry other handlers in dataclass fields (choice commits, grouped
-    actions, and forms). Walking those records keeps registration independent of how a
-    planner represents the action. Unchanged records retain their identity for caching.
+    Implementations bind only declared callback children. Application values held
+    beside those children are opaque, even when they happen to be dataclasses.
     """
 
-    visited: dict[int, Any] = {}
+    @abstractmethod
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self: ...
 
-    def bind(item: Any) -> Any:
-        identity = id(item)
-        if identity in visited:
-            return visited[identity]
-        # A callable may carry cyclic application data; leave backreferences intact.
-        visited[identity] = item
-        result = resolve(item)
-        visited[identity] = result
+
+class _HandlerBinder:
+    """Select one frontend across a plan's explicit callback graph.
+
+    Unchanged objects retain identity. A shared child is resolved once across both
+    action and form bindings; backreferences retain the original object as before.
+    """
+
+    def __init__(self, frontend: str) -> None:
+        self.frontend = frontend
+        self._visited: dict[int, object] = {}
+
+    def cached[T](self, source: T, resolve: Callable[[], T]) -> T:
+        """Preserve sharing for one explicitly declared framework value."""
+        identity = id(source)
+        if identity in self._visited:
+            # Each entry is resolved by the same typed operation that first saw it.
+            return cast(T, self._visited[identity])
+        self._visited[identity] = source
+        result = resolve()
+        self._visited[identity] = result
         return result
 
-    def resolve(item: Any) -> Any:
-        if isinstance(item, HandlerSet):
-            return item.select(frontend)
-        if isinstance(item, FrontendHandler):
-            if item.frontend != frontend:
-                message = f"handler for {item.frontend!r} cannot be bound on {frontend!r}"
-                raise TypeError(message)
-            return item
-        if is_dataclass(item) and not isinstance(item, type):
-            changes = {}
-            for field in fields(item):
-                if not field.init:
-                    continue
-                old = getattr(item, field.name)
-                new = bind(old)
-                if new is not old:
-                    changes[field.name] = new
-            return replace(item, **changes) if changes else item
-        if isinstance(item, Mapping):
-            mapped = {key: bind(child) for key, child in item.items()}
-            return mapped if any(mapped[key] is not child for key, child in item.items()) else item
-        if isinstance(item, tuple):
-            mapped_tuple = tuple(bind(child) for child in item)
-            return mapped_tuple if any(a is not b for a, b in zip(mapped_tuple, item, strict=True)) else item
-        return item
+    def callback[EventT](self, callback: Callable[[EventT], Awaitable[None]]) -> Callable[[EventT], Awaitable[None]]:
+        def resolve() -> Callable[[EventT], Awaitable[None]]:
+            if isinstance(callback, HandlerSet):
+                return callback.select(self.frontend)
+            if isinstance(callback, FrontendHandler):
+                if callback.frontend != self.frontend:
+                    message = f"handler for {callback.frontend!r} cannot be bound on {self.frontend!r}"
+                    raise TypeError(message)
+                return callback
+            if isinstance(callback, _HandlerComposition):
+                # Self preserves the callable type; narrowing loses that intersection.
+                return cast(Callable[[EventT], Awaitable[None]], callback._bind_handlers(self))
+            return callback
 
-    return cast(T, bind(value))
+        return self.cached(callback, resolve)
+
+    def composition[CompositionT: _HandlerComposition](self, value: CompositionT) -> CompositionT:
+        return self.cached(value, lambda: value._bind_handlers(self))
+
+    def _mapping[ValueT](self, values: Mapping[str, ValueT], bind: Callable[[ValueT], ValueT]) -> Mapping[str, ValueT]:
+        def resolve() -> Mapping[str, ValueT]:
+            mapped = {key: bind(value) for key, value in values.items()}
+            return mapped if any(mapped[key] is not value for key, value in values.items()) else values
+
+        return self.cached(values, resolve)
+
+    def actions[EventT: ActionEvent](
+        self, bindings: Mapping[str, ActionBinding[EventT]]
+    ) -> Mapping[str, ActionBinding[EventT]]:
+        return self._mapping(bindings, self.action)
+
+    def action[EventT: ActionEvent](self, binding: ActionBinding[EventT]) -> ActionBinding[EventT]:
+        def resolve() -> ActionBinding[EventT]:
+            handler = self.callback(binding.handler)
+            routes = self.actions(binding.routes)
+            return (
+                replace(binding, handler=handler, routes=routes)
+                if handler is not binding.handler or routes is not binding.routes
+                else binding
+            )
+
+        return self.cached(binding, resolve)
+
+    def form_spec[ContextT](self, spec: FormSpec[ContextT]) -> FormSpec[ContextT]:
+        def resolve() -> FormSpec[ContextT]:
+            if spec.on_invalid is None:
+                return spec
+            invalid = self.callback(spec.on_invalid)
+            return replace(spec, on_invalid=invalid) if invalid is not spec.on_invalid else spec
+
+        return self.cached(spec, resolve)
+
+    def form[ContextT](self, binding: FormBinding[ContextT]) -> FormBinding[ContextT]:
+        def resolve() -> FormBinding[ContextT]:
+            submit = self.callback(binding.on_submit)
+            spec = self.form_spec(binding.spec)
+            return (
+                replace(binding, on_submit=submit, spec=spec)
+                if submit is not binding.on_submit or spec is not binding.spec
+                else binding
+            )
+
+        return self.cached(binding, resolve)
+
+    def forms[ContextT](self, bindings: Mapping[str, FormBinding[ContextT]]) -> Mapping[str, FormBinding[ContextT]]:
+        return self._mapping(bindings, self.form)
+
+
+def bind_handlers(
+    actions: Mapping[str, ActionBinding], forms: Mapping[str, FormBinding], frontend: str
+) -> tuple[Mapping[str, ActionBinding], Mapping[str, FormBinding]]:
+    """Resolve frontend registrations along framework-declared callback edges.
+
+    Application callback objects and their data remain opaque. Generated adapters
+    explicitly declare their children rather than exposing every dataclass field.
+    """
+    binder = _HandlerBinder(frontend)
+    return binder.actions(actions), binder.forms(forms)

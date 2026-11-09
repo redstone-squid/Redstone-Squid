@@ -7,11 +7,12 @@ adapters with the current render's callbacks and state.
 """
 
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, override
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Self, override
 
 from squid_ui.entity import EntityRef, encode_entity_ref
 from squid_ui.forms import FormSpec, SubmitHandler
+from squid_ui.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
@@ -33,6 +34,7 @@ from squid_ui.semantic import (
     NavigateEvent,
     NavOwnership,
     OpenEvent,
+    Ownership,
     Toggle,
     ToggleEvent,
     Uncontrolled,
@@ -53,6 +55,16 @@ class PresentForm(GeneratedHandler[PressEvent]):
     record: History | None
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        spec = binder.form_spec(self.spec)
+        submit = binder.callback(self.on_submit)
+        return (
+            replace(self, spec=spec, on_submit=submit)
+            if spec is not self.spec or submit is not self.on_submit
+            else self
+        )
+
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await event.present_form(
             self.spec,
@@ -65,11 +77,16 @@ class PresentForm(GeneratedHandler[PressEvent]):
 
 
 @dataclass(frozen=True, slots=True)
-class ChoiceCommit:
+class ChoiceCommit(_HandlerComposition):
     ownership: ChoiceOwnership
     key: str
     previous: tuple[str, ...]
     session: PresentationState
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        ownership = _bind_ownership(self.ownership, binder)
+        return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, selected: tuple[str, ...]) -> None:
         match self.ownership:
@@ -98,6 +115,11 @@ class ChooseChoice(GeneratedHandler[PressEvent]):
     key: str
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, (self.key,))
 
@@ -107,16 +129,26 @@ class SelectChoices(GeneratedHandler[SelectionEvent]):
     commit: ChoiceCommit
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         await self.commit.commit(event, event.values)
 
 
 @dataclass(frozen=True, slots=True)
-class EntityCommit:
+class EntityCommit(_HandlerComposition):
     ownership: EntityOwnership
     key: str
     previous: tuple[EntityRef, ...]
     session: PresentationState
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        ownership = _bind_ownership(self.ownership, binder)
+        return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
         match self.ownership:
@@ -144,6 +176,11 @@ class SelectEntities(GeneratedHandler[EntitySelectionEvent]):
     commit: EntityCommit
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: EntitySelectionEvent) -> None:
         await self.commit.commit(event, event.values)
 
@@ -154,15 +191,25 @@ class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
     by_key: Mapping[str, EntityRef]
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: ChoiceEvent) -> None:
         await self.commit.commit(event, tuple(self.by_key[key] for key in event.selected if key in self.by_key))
 
 
 @dataclass(frozen=True, slots=True)
-class ItemCommit:
+class ItemCommit(_HandlerComposition):
     ownership: ItemOwnership
     key: str
     session: PresentationState
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        ownership = _bind_ownership(self.ownership, binder)
+        return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, opened: str | None) -> None:
         match self.ownership:
@@ -183,6 +230,11 @@ class CloseItem(GeneratedHandler[PressEvent]):
     commit: ItemCommit
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, None)
 
@@ -192,15 +244,25 @@ class FocusItem(GeneratedHandler[SelectionEvent]):
     commit: ItemCommit
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         await self.commit.commit(event, event.values[0] if event.values else None)
 
 
 @dataclass(frozen=True, slots=True)
-class NavigationCommit:
+class NavigationCommit(_HandlerComposition):
     ownership: NavOwnership
     key: str
     session: PresentationState
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        ownership = _bind_ownership(self.ownership, binder)
+        return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, destination: str) -> None:
         match self.ownership:
@@ -221,6 +283,11 @@ class SelectDestination(GeneratedHandler[SelectionEvent]):
     commit: NavigationCommit
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         if event.values:
             await self.commit.commit(event, event.values[0])
@@ -232,6 +299,11 @@ class GoToDestination(GeneratedHandler[PressEvent]):
     key: str
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, self.key)
 
@@ -241,6 +313,15 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
     node: Details
     open: bool
     session: PresentationState
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        def bind_node() -> Details:
+            ownership = _bind_ownership(self.node.open, binder)
+            return replace(self.node, open=ownership) if ownership is not self.node.open else self.node
+
+        node = binder.cached(self.node, bind_node)
+        return replace(self, node=node) if node is not self.node else self
 
     @override
     async def __call__(self, event: PressEvent) -> None:
@@ -270,6 +351,15 @@ class FlipToggle(GeneratedHandler[PressEvent]):
     session: PresentationState
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        def bind_node() -> Toggle:
+            ownership = _bind_ownership(self.node.on, binder)
+            return replace(self.node, on=ownership) if ownership is not self.node.on else self.node
+
+        node = binder.cached(self.node, bind_node)
+        return replace(self, node=node) if node is not self.node else self
+
+    @override
     async def __call__(self, event: PressEvent) -> None:
         match self.node.on:
             case Controlled(on_change=on_change):
@@ -291,6 +381,11 @@ class ForwardSelection(GeneratedHandler[PressEvent]):
     key: str
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        handler = binder.callback(self.handler)
+        return replace(self, handler=handler) if handler is not self.handler else self
+
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.handler(
             SelectionEvent(
@@ -304,6 +399,11 @@ class RouteSelection(GeneratedHandler[SelectionEvent]):
     routes: Mapping[str, ActionBinding]
 
     @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        routes = binder.actions(self.routes)
+        return replace(self, routes=routes) if routes is not self.routes else self
+
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         binding = self.routes.get(event.values[0]) if len(event.values) == 1 else None
         if binding is not None:
@@ -312,3 +412,16 @@ class RouteSelection(GeneratedHandler[SelectionEvent]):
 
 def _entity_key(ref: EntityRef) -> str:
     return encode_entity_ref(ref)
+
+
+def _bind_ownership[ValueT, EventT](
+    ownership: Ownership[ValueT, EventT], binder: _HandlerBinder
+) -> Ownership[ValueT, EventT]:
+    def bind() -> Ownership[ValueT, EventT]:
+        if isinstance(ownership, Controlled):
+            callback = binder.callback(ownership.on_change)
+            if callback is not ownership.on_change:
+                return replace(ownership, on_change=callback)
+        return ownership
+
+    return binder.cached(ownership, bind)
