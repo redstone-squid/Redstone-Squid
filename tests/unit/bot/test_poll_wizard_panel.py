@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import discord
 
@@ -13,7 +12,7 @@ from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.testing import labels
-from squid_ui_discord.testing import interaction_harness
+from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
 from squid_ui_widgets import testing as wt
 from tests.support.discord import make_layout_bot
 from tests.support.voting import GENERIC_OPTIONS
@@ -27,8 +26,8 @@ class Guild:
 
 
 def make_screen(*, failure: Exception | None = None) -> PollScreen:
-    resolve = AsyncMock(side_effect=failure, return_value=GENERIC_OPTIONS)
-    publish = AsyncMock(return_value="https://discord.invalid/channels/1/2/3")
+    resolve = AsyncCallRecorder(error=failure, result=GENERIC_OPTIONS)
+    publish = AsyncCallRecorder(result="https://discord.invalid/channels/1/2/3")
     return PollScreen(resolve, publish, allow_network=True)
 
 
@@ -83,8 +82,8 @@ async def test_wizard_finishes_publication_once() -> None:
     await harness.press("poll.finish")
     await harness.press("poll.finish")
 
-    cast(AsyncMock, screen._resolve_options).assert_awaited_once_with(("One", "Two"))
-    cast(AsyncMock, screen._publish).assert_awaited_once_with(
+    cast(AsyncCallRecorder, screen._resolve_options).assert_awaited_once_with(("One", "Two"))
+    cast(AsyncCallRecorder, screen._publish).assert_awaited_once_with(
         PollDraft(
             question="Best door?",
             options_text="One\nTwo",
@@ -105,7 +104,7 @@ async def test_invalid_options_return_the_wizard_to_review() -> None:
 
     assert harness.state.current == sp.REVIEW_STEP
     assert harness.state.complete is False
-    cast(AsyncMock, screen._publish).assert_not_awaited()
+    cast(AsyncCallRecorder, screen._publish).assert_not_awaited()
 
 
 def test_settings_step_uses_typed_portable_fields() -> None:

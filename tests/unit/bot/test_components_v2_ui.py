@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, cast, override
-from unittest.mock import AsyncMock
 from uuid import UUID
 
 import discord
@@ -31,6 +30,7 @@ from squid.versions.domain import Edition
 from squid_ui.testing import RecordingResponder, press_event
 from squid_ui.text import source_text
 from squid_ui_discord.testing import (
+    AsyncCallRecorder,
     assert_within_limits,
     commit_render,
     delivered_to,
@@ -177,9 +177,9 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
         display_build,
         BuildRecorder(),
         [field],
-        authorize=AsyncMock(return_value=True),
-        render_build=AsyncMock(),
-        refresh_posts=AsyncMock(),
+        authorize=AsyncCallRecorder(result=True),
+        render_build=AsyncCallRecorder(),
+        refresh_posts=AsyncCallRecorder(),
     )
 
     # `projection` is an atomic resource, so reading its status aborts a discovery render
@@ -207,9 +207,9 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
     component = BuildEditScreen(
         display_build,
         BuildRecorder(),
-        authorize=AsyncMock(return_value=True),
-        render_build=AsyncMock(return_value=sl.status("card")),
-        refresh_posts=AsyncMock(),
+        authorize=AsyncCallRecorder(result=True),
+        render_build=AsyncCallRecorder(result=sl.status("card")),
+        refresh_posts=AsyncCallRecorder(),
     )
     bot = make_layout_bot()
     interaction = interaction_harness(user_id=7)
@@ -230,7 +230,7 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
 async def test_build_editor_commits_against_the_revision_it_presented(
     display_build: Build, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncMock(return_value=Subject(account_id=1)))
+    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncCallRecorder(result=Subject(account_id=1)))
     builds = EditRecorder(display_build)
     field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
@@ -238,9 +238,9 @@ async def test_build_editor_commits_against_the_revision_it_presented(
         display_build,
         builds,
         [field],
-        authorize=AsyncMock(return_value=True),
-        render_build=AsyncMock(return_value=sl.status("updated")),
-        refresh_posts=AsyncMock(),
+        authorize=AsyncCallRecorder(result=True),
+        render_build=AsyncCallRecorder(result=sl.status("updated")),
+        refresh_posts=AsyncCallRecorder(),
     )
 
     await component._apply(press_event(responder=RecordingResponder()))
@@ -252,7 +252,7 @@ async def test_build_editor_commits_against_the_revision_it_presented(
 async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
     display_build: Build, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncMock(return_value=Subject(account_id=1)))
+    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncCallRecorder(result=Subject(account_id=1)))
     builds = EditRecorder(display_build, conflict=True)
     field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
@@ -260,9 +260,9 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
         display_build,
         builds,
         [field],
-        authorize=AsyncMock(return_value=True),
-        render_build=AsyncMock(),
-        refresh_posts=AsyncMock(),
+        authorize=AsyncCallRecorder(result=True),
+        render_build=AsyncCallRecorder(),
+        refresh_posts=AsyncCallRecorder(),
     )
 
     await component._apply(press_event(responder=RecordingResponder()))

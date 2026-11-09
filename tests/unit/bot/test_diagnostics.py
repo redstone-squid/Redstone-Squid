@@ -21,7 +21,7 @@ from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui_discord import MessageRoot, Owner, Private
-from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
+from squid_ui_discord.testing import AsyncCallRecorder, assert_within_limits, commit_render, interaction_harness
 from tests.support.discord import make_layout_bot
 
 
@@ -425,12 +425,11 @@ async def test_manual_refresh_replaces_the_list_and_preserves_filter() -> None:
 
 
 async def test_update_check_failure_keeps_manual_refresh_available() -> None:
-    from unittest.mock import AsyncMock
 
     screen = make_screen((make_report(),))
     await screen.on_load()
     assert isinstance(screen._operations, ErrorReportRecorder)
-    screen._operations.recent = AsyncMock(side_effect=RuntimeError("database unavailable"))
+    screen._operations.recent = AsyncCallRecorder(error=RuntimeError("database unavailable"))
     updates = screen._updates
     assert updates is not None
     await updates.changed.reload()
@@ -457,7 +456,6 @@ async def test_refresh_button_commits_a_new_report_window() -> None:
 
 async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run() -> None:
     import asyncio
-    from unittest.mock import AsyncMock
 
     from squid_ui.runtime import ServiceRunStatus
 
@@ -475,7 +473,7 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
             await release.wait()
         return await original(limit=limit, work_lost_only=work_lost_only)
 
-    screen._operations.recent = AsyncMock(side_effect=recent)
+    screen._operations.recent = AsyncCallRecorder(callback=recent)
     async with running_execution_host() as host:
         root, _ = await message_root_browser(screen, execution_host=host)
         updates = screen._updates
@@ -500,13 +498,12 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
 
 
 async def test_initial_monitor_failure_keeps_report_and_refresh_controls_live() -> None:
-    from unittest.mock import AsyncMock
 
     screen = make_screen((make_report(),))
     async with running_execution_host() as host:
         root, _ = await message_root_browser(screen, execution_host=host)
         assert isinstance(screen._operations, ErrorReportRecorder)
-        screen._operations.recent = AsyncMock(side_effect=RuntimeError("database unavailable"))
+        screen._operations.recent = AsyncCallRecorder(error=RuntimeError("database unavailable"))
         updates = screen._updates
         assert updates is not None
         run = updates.monitor.current_run

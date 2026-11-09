@@ -166,11 +166,11 @@ class AsyncCallRecorder:
     error is configured, supplies the result and may be synchronous or asynchronous.
     """
 
-    def __init__(self, *, result: Any = None, error: BaseException | None = None) -> None:
+    def __init__(self, *, result: Any = None, error: BaseException | None = None, callback: Any = None) -> None:
         self.records: list[CallRecord] = []
         self.result = result
         self.error = error
-        self.callback: Any = None
+        self.callback: Any = callback
 
     async def __call__(self, *args: Any, **kwargs: Any) -> Any:
         self.records.append(CallRecord(args, kwargs))

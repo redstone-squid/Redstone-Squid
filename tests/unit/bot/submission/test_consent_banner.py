@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any, cast, override
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import discord
 import pytest
@@ -19,7 +19,7 @@ from squid.bot.submission.consent_banner import (
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.settings.application import SettingsService
 from squid.submissions.errors import DraftCapacityExceededError
-from squid_ui_discord.testing import InteractionHarness, MessageHarness
+from squid_ui_discord.testing import AsyncCallRecorder, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 
@@ -152,7 +152,7 @@ async def test_unconsented_message_triggers_sticky_and_skips_ingestion(
 ) -> None:
     cog = _make_cog(account=None)
     message = _make_message()
-    mock_ingest = AsyncMock()
+    mock_ingest = AsyncCallRecorder()
     monkeypatch.setattr("squid.bot.submission.submit.ingest_message_bundle", mock_ingest)
 
     await cog.infer_build_from_message(message)
@@ -168,7 +168,7 @@ async def test_consented_message_records_activity_and_proceeds_with_ingestion(
 ) -> None:
     cog = _make_cog(account=_discord_account(consented=True))
     message = _make_message()
-    mock_ingest = AsyncMock(return_value=[])
+    mock_ingest = AsyncCallRecorder(result=[])
     monkeypatch.setattr("squid.bot.submission.submit.ingest_message_bundle", mock_ingest)
 
     await cog.infer_build_from_message(message)
@@ -184,12 +184,12 @@ async def test_full_inference_intake_replies_with_recovery_instructions(
 ) -> None:
     cog = _make_cog(account=_discord_account(consented=True))
     message = _make_message()
-    mock_ingest = AsyncMock(side_effect=DraftCapacityExceededError(1_000))
+    mock_ingest = AsyncCallRecorder(error=DraftCapacityExceededError(1_000))
     monkeypatch.setattr("squid.bot.submission.submit.ingest_message_bundle", mock_ingest)
 
     await cog.infer_build_from_message(message)
 
-    send = cast(AsyncMock, message.channel.send)
+    send = cast(AsyncCallRecorder, message.channel.send)
     send.assert_awaited_once()
     assert send.await_args is not None
     response = send.await_args.args[0]
