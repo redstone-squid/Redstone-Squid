@@ -58,7 +58,7 @@ from squid.records.models import (
     TitleHolderHistory,
     TitleResult,
 )
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.tags.models import TagAssignment, TagDefinition, display_conversion_scale
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "3"
@@ -826,11 +826,8 @@ def _restriction_facets(assignments: Sequence[TagAssignment]) -> tuple[Candidate
             record_operator=assignment.definition.record_operator,
             render_template=assignment.definition.render_template,
             display_unit=assignment.presentation_unit.key if assignment.presentation_unit else None,
-            display_scale=(
-                assignment.definition.canonical_unit_definition.scale_to_base
-                / assignment.presentation_unit.scale_to_base
-                if assignment.definition.canonical_unit_definition and assignment.presentation_unit
-                else Decimal(1)
+            display_scale=display_conversion_scale(
+                assignment.definition.canonical_unit_definition, assignment.presentation_unit
             ),
         )
         for assignment in assignments
@@ -849,11 +846,8 @@ def _pattern_facets(assignments: Sequence[TagAssignment]) -> tuple[CandidateFace
             assigned_value=_assignment_value(assignment),
             render_template=assignment.definition.render_template,
             display_unit=assignment.presentation_unit.key if assignment.presentation_unit else None,
-            display_scale=(
-                assignment.definition.canonical_unit_definition.scale_to_base
-                / assignment.presentation_unit.scale_to_base
-                if assignment.definition.canonical_unit_definition and assignment.presentation_unit
-                else Decimal(1)
+            display_scale=display_conversion_scale(
+                assignment.definition.canonical_unit_definition, assignment.presentation_unit
             ),
         )
         for assignment in assignments

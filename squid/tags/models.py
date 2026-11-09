@@ -426,9 +426,16 @@ def convert_display_value(
     value: TagValue, canonical: UnitDefinition | None, display: UnitDefinition | None
 ) -> TagValue:
     """Convert a numeric canonical value to a compatible display unit."""
-    if not isinstance(value, Decimal) or canonical is None or display is None:
+    if not isinstance(value, Decimal):
         return value
+    return value * display_conversion_scale(canonical, display)
+
+
+def display_conversion_scale(canonical: UnitDefinition | None, display: UnitDefinition | None) -> Decimal:
+    """Return the factor for rendering a canonical value in a compatible display unit."""
+    if canonical is None or display is None:
+        return Decimal(1)
     if canonical.dimension != display.dimension:
         msg = "Display and canonical units must have the same dimension"
         raise ValueError(msg)
-    return value * canonical.scale_to_base / display.scale_to_base
+    return canonical.scale_to_base / display.scale_to_base
