@@ -5,6 +5,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from sqlalchemy import case, delete, func, or_, select, union, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from squid.core.scores import round_score
 from squid.messages.models import Message
@@ -365,7 +366,7 @@ class PostgresStarboardRepository:
             author_id=origin.author_id,
             created_at=origin.posted_at,
         )
-        await session.execute(
+        await session.scalar(
             statement.on_conflict_do_update(
                 index_elements=[Message.id],
                 set_={
@@ -374,7 +375,8 @@ class PostgresStarboardRepository:
                     "author_id": statement.excluded.author_id,
                     "created_at": statement.excluded.created_at,
                 },
-            )
+            ).returning(Message),
+            execution_options={"populate_existing": True},
         )
         statement = pg_insert(OriginMessage).values(
             id=origin.id,
@@ -382,7 +384,7 @@ class PostgresStarboardRepository:
             is_nsfw=origin.is_nsfw,
             has_image=origin.has_image,
         )
-        await session.execute(
+        await session.scalar(
             statement.on_conflict_do_update(
                 index_elements=[OriginMessage.id],
                 set_={
@@ -392,6 +394,9 @@ class PostgresStarboardRepository:
                     "seen_at": func.now(),
                 },
             )
+            .returning(OriginMessage)
+            .options(selectinload(OriginMessage.message)),
+            execution_options={"populate_existing": True},
         )
 
     @staticmethod

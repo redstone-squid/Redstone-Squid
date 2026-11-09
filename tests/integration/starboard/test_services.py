@@ -113,3 +113,14 @@ async def test_shared_deletion_survives_reactions_and_recounts(
         assert not state.origin.present
         assert state.origin.deleted_at == deleted_at
         assert state.origin.message.content == "retained"
+    async with factory() as uow:
+        before = await uow.starboards.entry_state(config.id, origin.id)
+        assert before is not None
+        assert not before.origin.has_image
+        origin.has_image = True
+        await uow.starboards.recount_votes(origin, [(50, vote)])
+        after = await uow.starboards.entry_state(config.id, origin.id)
+        assert after is not None
+        assert after.origin.has_image
+        assert not after.origin.present
+        await uow.commit()
