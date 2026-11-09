@@ -48,8 +48,6 @@ class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
 
     async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None: ...
 
-    async def aclose(self) -> None: ...
-
 
 class VoteRepository(Protocol):
     """Storage operations used by VoteService to manage voting sessions.

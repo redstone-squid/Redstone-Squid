@@ -115,7 +115,11 @@ from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.application.recount import BallotRecounter
 from squid.voting.infrastructure.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
-from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver, DiscordRestVoteCards
+from squid.voting.infrastructure.discord_rest import (
+    DiscordRestActorResolver,
+    DiscordRestSession,
+    DiscordRestVoteCards,
+)
 from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)
@@ -547,16 +551,27 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def vote_members(self) -> DiscordRestActorResolver | None:
+    def discord_rest_session(self) -> DiscordRestSession | None:
+        """The bot-token REST client shared by every adapter, so they share rate-limit accounting."""
         if self.config.discord_bot_token is None:
             return None
-        resolver = DiscordRestActorResolver(
+        session = DiscordRestSession(
             self.config.discord_bot_token.get_secret_value(),
-            capabilities=self.permissions,
-            discord_ids=AccountVoterDiscordIdLookup(self.accounts),
             api_url=str(self.config.upstream_http.discord_api_url),
         )
-        self.resources.push_async_callback(resolver.aclose)
+        self.resources.push_async_callback(session.aclose)
+        return session
+
+    @cached_property
+    def vote_members(self) -> DiscordRestActorResolver | None:
+        session = self.discord_rest_session
+        if session is None:
+            return None
+        resolver = DiscordRestActorResolver(
+            session,
+            capabilities=self.permissions,
+            discord_ids=AccountVoterDiscordIdLookup(self.accounts),
+        )
         self.votes.set_actor_resolver(resolver)
         return resolver
 
@@ -564,13 +579,10 @@ class _ServiceGraph:
     def rest_ballot_recounter(self) -> BallotRecounter | None:
         """Recount ballots through Discord's REST API, for processes without a gateway."""
         resolver = self.vote_members
-        if resolver is None or self.config.discord_bot_token is None:
+        session = self.discord_rest_session
+        if resolver is None or session is None:
             return None
-        cards = DiscordRestVoteCards(
-            self.config.discord_bot_token.get_secret_value(),
-            api_url=str(self.config.upstream_http.discord_api_url),
-        )
-        self.resources.push_async_callback(cards.aclose)
+        cards = DiscordRestVoteCards(session)
         return BallotRecounter(self.votes, cards, AccountConsentedVoterLookup(self.accounts), resolver)
 
     @cached_property

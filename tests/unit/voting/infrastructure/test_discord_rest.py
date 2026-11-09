@@ -14,7 +14,12 @@ from discord.http import Route
 
 from squid.voting.domain import VoteKind, VoteMessage
 from squid.voting.errors import DiscordMemberServiceUnavailableError
-from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver, DiscordRestVoteCards, rebased_url
+from squid.voting.infrastructure.discord_rest import (
+    DiscordRestActorResolver,
+    DiscordRestSession,
+    DiscordRestVoteCards,
+    rebased_url,
+)
 
 
 class StubResponse:
@@ -68,7 +73,7 @@ class FakeDiscordIds:
 
 def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestActorResolver:
     kwargs.setdefault("discord_ids", FakeDiscordIds())
-    return DiscordRestActorResolver("token", http=http, **kwargs)
+    return DiscordRestActorResolver(DiscordRestSession.wrapping(cast(Any, http)), **kwargs)
 
 
 async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
@@ -168,22 +173,22 @@ async def test_member_rejects_malformed_payload(payload: Any) -> None:
 
 async def test_shutdown_closes_an_owned_client_exactly_once() -> None:
     http = StubHTTPClient({"roles": []})
-    resolver = DiscordRestActorResolver("token", discord_ids=FakeDiscordIds())
-    resolver._http = http
-    resolver._owns_http = True
+    session = DiscordRestSession("token")
+    session._http = cast(Any, http)  # Stands in for the client a first request would log in.
+    resolver = DiscordRestActorResolver(session, discord_ids=FakeDiscordIds())
 
-    await resolver.aclose()
-    await resolver.aclose()
+    await session.aclose()
+    await session.aclose()
 
     assert http.closes == 1
     with pytest.raises(DiscordMemberServiceUnavailableError, match="shut down"):
         await resolver.member(1, 10, VoteKind.BUILD)
 
 
-async def test_an_injected_client_is_not_closed_by_the_resolver() -> None:
+async def test_a_wrapped_client_is_not_closed_by_the_session() -> None:
     http = StubHTTPClient({"roles": []})
 
-    await resolver_for(http).aclose()
+    await DiscordRestSession.wrapping(cast(Any, http)).aclose()
 
     assert http.closes == 0
 
@@ -291,7 +296,7 @@ async def test_vote_cards_page_through_human_voters_and_report_the_bots_own_reac
     }
     one = [{"id": "1", "bot": True}, *({"id": str(user_id)} for user_id in range(2, 152))]
     http = StubVoteCardHTTPClient(message, {"1️⃣": one, "yes:123456789012345678": [{"id": "7"}]})
-    cards = DiscordRestVoteCards("token", http=cast(Any, http))
+    cards = DiscordRestVoteCards(DiscordRestSession.wrapping(cast(Any, http)))
     card = VoteMessage(100, 200, 10)
 
     reactions = await cards.read(card, ("1️⃣", "<:yes:123456789012345678>", "2️⃣"))
@@ -309,6 +314,8 @@ async def test_vote_cards_page_through_human_voters_and_report_the_bots_own_reac
 
 @pytest.mark.parametrize(("kind", "status"), [(Forbidden, 403), (NotFound, 404)])
 async def test_an_unreadable_vote_card_reads_as_none(kind: type[HTTPException], status: int) -> None:
-    cards = DiscordRestVoteCards("token", http=cast(Any, StubVoteCardHTTPClient(discord_error(kind, status), {})))
+    cards = DiscordRestVoteCards(
+        DiscordRestSession.wrapping(cast(Any, StubVoteCardHTTPClient(discord_error(kind, status), {})))
+    )
 
     assert await cards.read(VoteMessage(100, 200, 10), ("1️⃣",)) is None
