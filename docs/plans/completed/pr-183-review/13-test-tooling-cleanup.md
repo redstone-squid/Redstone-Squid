@@ -2,7 +2,7 @@
 
 > **Superseded for test-suite cleanup.** The review-thread dispositions below remain the history
 > of PR #183, but the workspace-wide follow-up is now tracked in
-> [the test-suite audit](../../test-suite-audit.md). That audit includes every configured package and
+> [the test-suite audit](../test-suite-audit.md). That audit includes every configured package and
 > replaces the limited "only migrate duplicated setup" scope used here.
 
 ## Review findings

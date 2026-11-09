@@ -2,7 +2,7 @@
 
 > These dispositions close the original PR #183 threads. The broader namespace, mock, snapshot,
 > duplication, and quarantine cleanup is tracked in
-> [the workspace test-suite audit](../../test-suite-audit.md); its final disposition takes precedence
+> [the workspace test-suite audit](../test-suite-audit.md); its final disposition takes precedence
 > for tests retained here as historical follow-up.
 
 Every `tests/` comment `Glinte` left on [PR #183](https://github.com/redstone-squid/Redstone-Squid/pull/183)
