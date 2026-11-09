@@ -13,10 +13,10 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+from squid_ui.planning.result import PlanResult
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target
 from squid_ui.presentation import PresentationState
-from squid_ui.scene.model import PlanResult
 from squid_ui.sources import Position
 from squid_ui.text import NEUTRAL, Localization
 

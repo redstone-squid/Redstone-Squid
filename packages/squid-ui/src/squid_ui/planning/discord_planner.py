@@ -57,6 +57,7 @@ from squid_ui.planning.limits import Axis, MessageLimits
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.search import (
     CostVector,
     StrategyAxis,
@@ -90,7 +91,6 @@ from squid_ui.primitives.nodes import Code as PrimitiveCode
 from squid_ui.primitives.nodes import Footer as PrimitiveFooter
 from squid_ui.primitives.nodes import Heading as PrimitiveHeading
 from squid_ui.primitives.nodes import Text as PrimitiveText
-from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.semantic import Code as SemanticCode
 from squid_ui.semantic import Paragraph as SemanticParagraph
 from squid_ui.sources import Position

@@ -16,7 +16,7 @@ from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.limits import CLASSIC_LIMITS, ClassicLimits
-from squid_ui.scene.model import PlanResult
+from squid_ui.planning.result import PlanResult
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.attachments import attachment_assets

@@ -30,6 +30,7 @@ from squid_ui.forms import (
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.limits import Axis
+from squid_ui.planning.result import PlanResult
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.runtime.presentation_state import PresentationState, SelectionState
 from squid_ui.sources import Position
@@ -49,7 +50,7 @@ async def _submitted(_event: SubmitEvent) -> None:
     return None
 
 
-def _elements(result: scene.PlanResult[scene.HtmlBody]) -> tuple[scene.HtmlElement, ...]:
+def _elements(result: PlanResult[scene.HtmlBody]) -> tuple[scene.HtmlElement, ...]:
     return testing.find_all(result.scene.body.children, scene.HtmlElement)
 
 

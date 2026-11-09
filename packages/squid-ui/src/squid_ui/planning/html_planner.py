@@ -32,6 +32,7 @@ from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.request import PlanRequest
+from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.semantic_adaptation.handlers import (
     ChoiceCommit,
     EntityCommit,
@@ -66,7 +67,6 @@ from squid_ui.presentation import (
     PresentationState,
     SessionUpdate,
 )
-from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.sources import Direction, Position
 from squid_ui.target_types import HtmlTarget
 from squid_ui.text import Localization, TextLike, resolve_text

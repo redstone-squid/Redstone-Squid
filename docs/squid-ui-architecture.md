@@ -141,6 +141,12 @@ the selected target and everything below it solve, draw, deliver, and route one 
 runtime import paths re-export the same objects for callers, but implementation modules use
 the defining modules so importing a shared value does not enter the runtime facade.
 
+Scene payloads, their codec, and their schema do not import live bindings or presentation
+updates. `squid_ui.planning.result` owns `PlanResult`, reports, metrics, and diagnostic events;
+these are exported by `squid_ui.planning`. Integrations previously importing these types from
+`scene` or `scene.model` should import them from planning instead. This changes Python import
+paths, not the scene protocol or when a host applies presentation updates.
+
 ## End-to-end flow
 
     Component state

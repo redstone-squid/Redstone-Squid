@@ -12,6 +12,7 @@ from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.resources import Axis
+from squid_ui.planning.result import PlanReuse, PlanSeverity
 from squid_ui.runtime import PresentationState
 from squid_ui.target_types import SlackAdapter
 
@@ -222,7 +223,7 @@ def test_block_reservation_and_strict_degradation() -> None:
     result = sl.planning.plan(document, target=MESSAGE, reservation=ResourceCost({Axis.BLOCKS: 49}))
 
     assert len(result.scene.body.blocks) == 1
-    assert any(event.severity is scene.PlanSeverity.DEGRADATION for event in result.report.events)
+    assert any(event.severity is PlanSeverity.DEGRADATION for event in result.report.events)
     with pytest.raises(sl.LayoutDegradedError, match="omitted"):
         sl.planning.plan(
             document,
@@ -242,6 +243,6 @@ def test_slack_planner_reuses_exact_and_structural_caches() -> None:
     exact = sl.planning.plan(document, target=MESSAGE, session=session, cache=cache, memo=memo)
     structural = sl.planning.plan(sl.paragraph("Cached"), target=MESSAGE, session=session, cache=cache)
 
-    assert first.metrics.reuse is scene.PlanReuse.MISS
-    assert exact.metrics.reuse is scene.PlanReuse.EXACT
-    assert structural.metrics.reuse is scene.PlanReuse.STRUCTURAL
+    assert first.metrics.reuse is PlanReuse.MISS
+    assert exact.metrics.reuse is PlanReuse.EXACT
+    assert structural.metrics.reuse is PlanReuse.STRUCTURAL

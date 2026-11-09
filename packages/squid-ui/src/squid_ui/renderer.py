@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Protocol
 
 from squid_ui import scene
-from squid_ui.scene.model import PlanResult
+from squid_ui.planning.result import PlanResult
 
 type AssetResolver = Callable[[scene.Asset], str | None]
 """Resolve planned asset metadata to a frontend-consumable reference, if available."""

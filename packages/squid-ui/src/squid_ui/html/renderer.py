@@ -14,8 +14,8 @@ from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.html._safety import attribute as _attribute
 from squid_ui.html._safety import safe_url as _safe_url
+from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import AssetResolver
-from squid_ui.scene.model import PlanResult
 from squid_ui.text import Markup
 
 DEFAULT_CSS = """

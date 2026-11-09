@@ -9,8 +9,8 @@ Planning and schema validation check most target limits, rather than these const
 from dataclasses import dataclass
 from enum import StrEnum
 
+from squid_ui.action_mode import ActionMode
 from squid_ui.entity import ConversationType
-from squid_ui.interactions import ActionMode
 
 
 class SlackTextKind(StrEnum):

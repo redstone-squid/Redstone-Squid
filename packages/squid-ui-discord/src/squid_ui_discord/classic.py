@@ -25,6 +25,7 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+from squid_ui.planning.result import PlanReport, PlanResult
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Overflow
 from squid_ui.primitives.nodes import (
@@ -41,7 +42,6 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import Color
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
-from squid_ui.scene.model import PlanReport, PlanResult
 from squid_ui.sources import Position
 from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
 from squid_ui.temporal import ZonedDateTime

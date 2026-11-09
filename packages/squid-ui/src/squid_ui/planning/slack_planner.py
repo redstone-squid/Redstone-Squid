@@ -25,8 +25,8 @@ from squid_ui.planning.html_planner import HTML_PLANNER
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST
+from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.target import Target
-from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import SlackTarget
 from squid_ui.text import Markup, Message, ResolvedText, resolve_text

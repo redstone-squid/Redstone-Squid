@@ -20,8 +20,8 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.limits import LIMITS, V2Limits
+from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import Renderer
-from squid_ui.scene.model import PlanResult
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import discord_text

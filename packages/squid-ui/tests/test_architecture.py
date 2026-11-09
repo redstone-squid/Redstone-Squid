@@ -71,3 +71,29 @@ def test_existing_contract_imports_preserve_identity() -> None:
 )
 def test_entrypoints_import_in_fresh_processes(entrypoint: str) -> None:
     testing.assert_imports_without([entrypoint, "squid_ui"], "discord", "anyio", "squid_storage", "squid_ui_widgets")
+
+
+def test_scene_sources_do_not_depend_on_live_execution() -> None:
+    forbidden = (
+        "squid_ui.runtime",
+        "squid_ui.planning",
+        "squid_ui.presentation",
+        "squid_ui.forms",
+        "squid_ui.interactions",
+    )
+    violations = {
+        str(path.relative_to(SOURCE)): sorted(name for name in runtime_imports(path) if name.startswith(forbidden))
+        for path in (SOURCE / "scene").glob("*.py")
+        if any(name.startswith(forbidden) for name in runtime_imports(path))
+    }
+    assert not violations
+
+
+def test_planning_owns_live_results_and_scene_preserves_action_modes() -> None:
+    from squid_ui.action_mode import ActionMode
+    from squid_ui.planning.result import PlanResult
+
+    assert sl.planning.PlanResult is PlanResult
+    assert not hasattr(sl.scene, "PlanResult")
+    assert sl.interactions.ActionMode is ActionMode
+    assert sl.scene.Button("Save", "save").mode is ActionMode.EXCLUSIVE

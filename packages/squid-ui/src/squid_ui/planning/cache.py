@@ -12,8 +12,8 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from squid_ui import scene
+from squid_ui.planning.result import PlanReport, PlanResult, PlanReuse
 from squid_ui.presentation import PresentationState, SessionUpdate
-from squid_ui.scene.model import PlanReport, PlanResult, PlanReuse
 
 
 @dataclass(frozen=True, slots=True)

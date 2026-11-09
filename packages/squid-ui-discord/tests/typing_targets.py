@@ -24,8 +24,8 @@ from squid_ui.planning import (
     plan,
 )
 from squid_ui.planning.limits import ClassicLimits, V2Limits
+from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import Card, Panel, Text, Variants
-from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import FallbackContent, Paragraph
 from squid_ui_discord.target import classic, v2
 

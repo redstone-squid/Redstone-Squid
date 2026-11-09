@@ -22,10 +22,10 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+from squid_ui.planning.result import PlanResult
 from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
-from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization

@@ -19,6 +19,7 @@ from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cursors import CursorCoordinator
 from squid_ui.planning.discord_dialect import require_gallery_item
 from squid_ui.planning.limits import MessageLimits
+from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
@@ -133,7 +134,6 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.nodes import (
     Section as PrimitiveSection,
 )
-from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
     ActionControls,
     AnyLayoutNode,

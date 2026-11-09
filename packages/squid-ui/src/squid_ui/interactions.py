@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_reactivity.actions import ActionContext
+from squid_ui.action_mode import ActionMode as ActionMode
 from squid_ui.entity import EntityRef
 from squid_ui.text import TextLike
 
@@ -21,22 +22,6 @@ if TYPE_CHECKING:
     from squid_ui.guards import Guard
     from squid_ui.runtime.continuations import PostCommitOperation
     from squid_ui.runtime.histories import History
-
-
-class ActionMode(StrEnum):
-    """The dispatch policy requested by an interactive control.
-
-    Mounted frontends track a render generation so a press can be recognized as coming
-    from an older display. EXCLUSIVE serializes actions and rejects stale presses;
-    REBASE serializes them but resolves the current binding before invoking it.
-    IMMEDIATE skips that lock and generation check. PARALLEL_READ also skips them,
-    but runs the handler in a read-only state transaction.
-    """
-
-    EXCLUSIVE = "exclusive"
-    REBASE = "rebase"
-    PARALLEL_READ = "parallel_read"
-    IMMEDIATE = "immediate"
 
 
 @dataclass(frozen=True, slots=True)

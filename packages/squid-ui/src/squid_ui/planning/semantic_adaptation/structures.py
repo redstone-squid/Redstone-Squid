@@ -6,6 +6,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.grids import GridCell
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.planning.semantic_adaptation.common import (
     _button_style,
     _page_items,
@@ -62,7 +63,6 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.nodes import (
     Heading as PrimitiveHeading,
 )
-from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
     ActionControl,
     ActionControls,

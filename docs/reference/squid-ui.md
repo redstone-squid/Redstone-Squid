@@ -219,6 +219,19 @@ markers appear in component base classes when a component uses target-specific p
 
 ::: squid_ui.planning.plan
 
+::: squid_ui.planning.PlanResult
+
+::: squid_ui.planning.PlanReport
+
+::: squid_ui.planning.PlanEvent
+
+::: squid_ui.planning.PlanMetrics
+
+::: squid_ui.planning.PlanSeverity
+
+::: squid_ui.planning.PlanReuse
+
+
 ::: squid_ui.RenderTarget
 
 ::: squid_ui.Renderable

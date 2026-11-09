@@ -7,8 +7,8 @@ not invoke this schema.
 
 from typing import Any
 
+from squid_ui.action_mode import ActionMode
 from squid_ui.entity import ConversationType
-from squid_ui.interactions import ActionMode
 from squid_ui.scene.model import (
     Button,
     ClassicMessage,

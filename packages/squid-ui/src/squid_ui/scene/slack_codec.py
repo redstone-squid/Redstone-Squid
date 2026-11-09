@@ -7,9 +7,9 @@ frontend performs that final conversion after resolving actions and assets.
 from collections.abc import Callable, Iterable
 from typing import TypeIs
 
+from squid_ui.action_mode import ActionMode
 from squid_ui.entity import ConversationType
 from squid_ui.errors import SquidUiError
-from squid_ui.interactions import ActionMode
 from squid_ui.scene._json import (
     JsonArray,
     JsonObject,

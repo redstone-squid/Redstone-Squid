@@ -7,6 +7,7 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, PressEvent, Visibility
+from squid_ui.planning.result import PlanResult
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime import PresentationState
 from squid_ui.runtime.component import render_component_tree
@@ -51,7 +52,7 @@ def _event(responder: _Responder | None = None) -> PressEvent:
     return PressEvent(Actor("7"), responder or _Responder(), context=None)
 
 
-def _button(result: sl.scene.PlanResult[scene.ComponentsV2]) -> scene.Button:
+def _button(result: PlanResult[scene.ComponentsV2]) -> scene.Button:
     row = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Row))
     button = row.items[0]
     assert isinstance(button, scene.Button)

@@ -18,6 +18,7 @@ from squid_ui.planning.layout_measurement.costing import measure_nodes
 from squid_ui.planning.layout_measurement.text import split_text_node, text_total
 from squid_ui.planning.limits import Axis, MessageLimits
 from squid_ui.planning.resolved import text as resolved_text
+from squid_ui.planning.result import PlanEvent, PlanSeverity
 from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
 )
@@ -53,7 +54,6 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.nodes import (
     Heading as PrimitiveHeading,
 )
-from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
     BestEffort,
     LayoutNode,

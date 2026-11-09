@@ -6,6 +6,7 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.planning import measure
 from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import Paginate, Text
 from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui_discord.target import v2
@@ -105,7 +106,7 @@ class TestPaginateBreakPreferences:
 
 class TestRegionPagination:
     @staticmethod
-    def _texts(result: sl.scene.PlanResult[scene.ComponentsV2]) -> list[str]:
+    def _texts(result: PlanResult[scene.ComponentsV2]) -> list[str]:
         panel = result.scene.components_v2.children[0]
         assert isinstance(panel, scene.Panel)
         return [child.content for child in panel.children if isinstance(child, scene.Text)]

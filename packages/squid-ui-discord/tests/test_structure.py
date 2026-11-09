@@ -16,6 +16,7 @@ from squid_ui.planning import (
 )
 from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredText
 from squid_ui.planning.navigation import NavigationContext, default_nav
+from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import (
     Alt,
     ControlGroup,
@@ -32,7 +33,6 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
-from squid_ui.scene.model import PlanResult
 from squid_ui_discord import DISCORD_V2_DPY27, render_static
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,

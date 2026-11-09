@@ -12,6 +12,7 @@ from squid_ui.forms import FormSpec, TextField
 from squid_ui.planning import PlanCache, PlanMemo, plan
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import CachedPlan
+from squid_ui.planning.result import PlanMetrics, PlanReport, PlanReuse
 from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
 from squid_ui.primitives import (
     Button,
@@ -24,7 +25,6 @@ from squid_ui.primitives import (
     Variants,
 )
 from squid_ui.runtime import PresentationState
-from squid_ui.scene.model import PlanReport
 from squid_ui.semantic import (
     ActionControl,
     ActionControls,
@@ -146,7 +146,7 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
     hit = plan(document(_second), target=DISCORD_V2_DPY27, cache=cache)
 
     assert attempts == miss.metrics.states_explored == 2
-    assert hit.metrics == replace(miss.metrics, cache_hit=True, reuse=scene.PlanReuse.STRUCTURAL)
+    assert hit.metrics == replace(miss.metrics, cache_hit=True, reuse=PlanReuse.STRUCTURAL)
     assert hit.scene is miss.scene
     assert all(route.handler is _second for route in hit.bindings["tools.default.0"].routes.values())
 
@@ -307,7 +307,7 @@ def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch)
 
     assert exact.scene is first.scene
     assert exact.bindings is first.bindings
-    assert exact.metrics.reuse is scene.PlanReuse.EXACT
+    assert exact.metrics.reuse is PlanReuse.EXACT
 
 
 def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
@@ -326,10 +326,10 @@ def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch)
 
         assert incremental.scene == expected.scene
         assert incremental.report == expected.report
-        assert incremental.metrics == scene.PlanMetrics(
+        assert incremental.metrics == PlanMetrics(
             states_explored=1,
             cache_hit=True,
-            reuse=scene.PlanReuse.INCREMENTAL,
+            reuse=PlanReuse.INCREMENTAL,
         )
 
 
@@ -345,10 +345,10 @@ def test_classic_lossless_text_growth_replans_locally_without_global_search(monk
 
     assert incremental.scene == expected.scene
     assert incremental.report == expected.report
-    assert incremental.metrics == scene.PlanMetrics(
+    assert incremental.metrics == PlanMetrics(
         states_explored=1,
         cache_hit=True,
-        reuse=scene.PlanReuse.INCREMENTAL,
+        reuse=PlanReuse.INCREMENTAL,
     )
 
 
@@ -369,7 +369,7 @@ def test_incremental_text_growth_falls_back_when_it_crosses_headroom(monkeypatch
     result = plan(Text("x" * 4500), target=DISCORD_V2_DPY27, cache=cache)
 
     assert searches == 1
-    assert result.metrics.reuse is scene.PlanReuse.MISS
+    assert result.metrics.reuse is PlanReuse.MISS
     assert not result.metrics.cache_hit
 
 

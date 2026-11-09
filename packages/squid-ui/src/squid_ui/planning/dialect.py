@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from squid_ui.document import DocumentLike
     from squid_ui.planning.cache import PlanCache, PlanMemo
     from squid_ui.planning.request import PlanRequest
-    from squid_ui.scene.model import PlanResult
+    from squid_ui.planning.result import PlanResult
 
 
 class TargetPlanner[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT, AdapterT](Protocol):

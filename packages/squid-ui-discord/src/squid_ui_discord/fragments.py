@@ -24,8 +24,9 @@ from squid_ui.errors import ExistingLayoutError, LayoutError
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.limits import LIMITS, Axis, V2Limits
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+from squid_ui.planning.result import PlanReport, PlanResult
 from squid_ui.planning.target import Target
-from squid_ui.scene.model import ComponentsV2, PlanReport, PlanResult
+from squid_ui.scene.model import ComponentsV2
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.attachments import files_for

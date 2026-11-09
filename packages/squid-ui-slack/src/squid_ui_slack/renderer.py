@@ -55,8 +55,8 @@ from squid_ui.assets import Asset, StoredAsset
 from squid_ui.entity import ConversationType
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.result import PlanResult
 from squid_ui.renderer import AssetResolver, Renderer
-from squid_ui.scene.model import PlanResult
 from squid_ui.slack.target import SLACK_HOME_LIMITS, SLACK_MESSAGE_LIMITS, SLACK_MODAL_LIMITS, SlackLimits
 from squid_ui.target_types import SlackSdkAdapter
 from squid_ui_slack.adapter import SLACK_SDK_343_ADAPTER, require_slack_sdk_capability

@@ -14,8 +14,8 @@ from squid_ui.document import DocumentLike
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.planner import plan_request
 from squid_ui.planning.request import PlanRequest
+from squid_ui.planning.result import PlanResult
 from squid_ui.profiling import OperationRecorder, SpanRecorder
-from squid_ui.scene.model import PlanResult
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.renderer import MountedRenderer, Wire

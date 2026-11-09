@@ -6,10 +6,10 @@ import math
 from copy import deepcopy
 from typing import Any, cast
 
+from squid_ui.action_mode import ActionMode
 from squid_ui.emoji import Emoji
 from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.errors import SquidUiError
-from squid_ui.interactions import ActionMode
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.scene._json import (
     JsonObject,

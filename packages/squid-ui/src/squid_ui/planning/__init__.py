@@ -32,6 +32,7 @@ from squid_ui.planning.layout_measurement.solver import (
 )
 from squid_ui.planning.planner import plan
 from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.planning.search import (
     DEFAULT_SEARCH_BUDGET,
     StrategyAssignment,
@@ -79,7 +80,13 @@ __all__ = [
     "LayoutOverflowError",
     "MeasuredLayout",
     "PlanCache",
+    "PlanEvent",
     "PlanMemo",
+    "PlanMetrics",
+    "PlanReport",
+    "PlanResult",
+    "PlanReuse",
+    "PlanSeverity",
     "Position",
     "PositionResolver",
     "PreparedExtension",

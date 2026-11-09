@@ -21,6 +21,7 @@ from squid_ui.guards import Challenge
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.palette import Palette
 from squid_ui.planning.navigation import NavFactory
+from squid_ui.planning.result import PlanResult
 from squid_ui.planning.target import AnyTarget
 from squid_ui.profiling import (
     ActionStatus,
@@ -35,7 +36,6 @@ from squid_ui.profiling import (
 )
 from squid_ui.runtime.component import ComponentTree
 from squid_ui.runtime.presentation_state import SessionUpdate
-from squid_ui.scene.model import PlanResult
 from squid_ui.target_types import DiscordTarget
 from squid_ui.text import Localization, TextLike
 from squid_ui_discord.message_payload import MessagePayload
