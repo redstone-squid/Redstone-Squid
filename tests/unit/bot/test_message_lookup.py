@@ -4,13 +4,17 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import discord
 import pytest
 from whenever import Instant
 
 from squid.bot.app import MessageLookup, RedstoneSquid
+from squid.messages.application import MessageService
+from squid_ui_discord.testing import AsyncCallRecorder
+from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 def _error(status: int) -> discord.HTTPException:
@@ -19,13 +23,13 @@ def _error(status: int) -> discord.HTTPException:
 
 
 def _bot(*, cached: object | None = None, fetch_channel: Any = None) -> Any:
-    return SimpleNamespace(get_channel=lambda channel_id: cached, fetch_channel=fetch_channel)
+    return make_layout_bot(get_channel=lambda channel_id: cached, fetch_channel=fetch_channel)
 
 
 @pytest.mark.parametrize(("status", "gone"), [(404, True), (403, False)])
 async def test_a_missing_or_hidden_message_is_reported_as_gone_or_unknown(status: int, gone: bool) -> None:
     channel = MagicMock(spec=discord.TextChannel)
-    channel.fetch_message = AsyncMock(side_effect=_error(status))
+    channel.fetch_message = AsyncCallRecorder(error=_error(status))
 
     lookup = await RedstoneSquid.lookup_message(_bot(cached=channel), 1, 2)
 
@@ -34,13 +38,13 @@ async def test_a_missing_or_hidden_message_is_reported_as_gone_or_unknown(status
 
 @pytest.mark.parametrize(("status", "gone"), [(404, True), (403, False)])
 async def test_a_deleted_channel_means_its_messages_are_gone(status: int, gone: bool) -> None:
-    lookup = await RedstoneSquid.lookup_message(_bot(fetch_channel=AsyncMock(side_effect=_error(status))), 1, 2)
+    lookup = await RedstoneSquid.lookup_message(_bot(fetch_channel=AsyncCallRecorder(error=_error(status))), 1, 2)
 
     assert lookup == MessageLookup(None, gone=gone)
 
 
 @dataclass
-class Messages:
+class Messages(MessageService):
     refreshed: list[tuple[int, str | None, Instant | None]] = field(default_factory=list)
     deleted: list[int] = field(default_factory=list)
 
@@ -67,7 +71,7 @@ async def test_fetching_a_stored_message_refreshes_or_tombstones_its_copy(outcom
     async def lookup_message(channel_id: int, message_id: int) -> MessageLookup:
         return lookup
 
-    bot = SimpleNamespace(lookup_message=lookup_message, services=SimpleNamespace(messages=messages))
+    bot = make_layout_bot(lookup_message=lookup_message, services=bot_services(messages=messages))
 
     result = await RedstoneSquid.fetch_stored_message(cast(Any, bot), 1, 2)
 

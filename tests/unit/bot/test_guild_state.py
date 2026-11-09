@@ -10,28 +10,33 @@ import discord
 import pytest
 
 from squid.bot.guild_state import GuildStateCog
+from squid.settings.application import SettingsService
+from squid.settings.domain import Setting
+from squid.starboard.application import StarboardService
+from tests.support.discord import make_layout_bot
+from tests.support.services import bot_services
 
 
 @dataclass
-class FakeSettings:
+class FakeSettings(SettingsService):
     referenced: dict[int, frozenset[int]] = field(default_factory=dict)
     presence: list[frozenset[int]] = field(default_factory=list)
     forgotten: list[tuple[int, frozenset[int]]] = field(default_factory=list)
 
-    async def sync_presence(self, ids: Iterable[int]) -> tuple[list[int], list[int]]:
-        self.presence.append(frozenset(ids))
+    async def sync_presence(self, present_server_ids: Iterable[int]) -> tuple[list[int], list[int]]:
+        self.presence.append(frozenset(present_server_ids))
         return [], []
 
-    async def referenced_channels(self, guild_id: int) -> frozenset[int]:
-        return self.referenced.get(guild_id, frozenset())
+    async def referenced_channels(self, server_id: int) -> frozenset[int]:
+        return self.referenced.get(server_id, frozenset())
 
-    async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> tuple[str, ...]:
-        self.forgotten.append((guild_id, frozenset(channel_ids)))
+    async def forget_channels(self, server_id: int, channel_ids: Collection[int]) -> tuple[Setting, ...]:
+        self.forgotten.append((server_id, frozenset(channel_ids)))
         return ()
 
 
 @dataclass
-class FakeStarboards:
+class FakeStarboards(StarboardService):
     referenced: dict[int, frozenset[int]] = field(default_factory=dict)
     forgotten: list[tuple[int, frozenset[int]]] = field(default_factory=list)
 
@@ -76,8 +81,8 @@ def _cog(
             raise _http_error(status)
         return object()
 
-    bot = SimpleNamespace(
-        services=SimpleNamespace(settings=settings, starboards=starboards),
+    bot = make_layout_bot(
+        services=bot_services(settings=settings, starboards=starboards),
         guilds=guilds,
         fetch_channel=fetch_channel,
     )

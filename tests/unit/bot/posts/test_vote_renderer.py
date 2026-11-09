@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from types import SimpleNamespace
 from typing import Any, cast, override
 
 import pytest
@@ -11,6 +10,7 @@ from squid.accounts.application import AccountService
 from squid.accounts.models import Account
 from squid.bot.posts import vote_renderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
+from squid.messages.application import MessageService
 from squid.messages.models import Message
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
@@ -20,6 +20,7 @@ from squid.settings.application import SettingsService
 from squid.settings.domain import Setting
 from squid.voting.application import VoteService
 from squid.voting.domain import PollScope, VoteKind, VoteMessage, VoteSessionSnapshot, VoteStatus
+from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import DEFAULT_DELETE_LOG_TARGET, build_snapshot, poll_snapshot
 
@@ -165,16 +166,18 @@ async def test_a_deleted_vote_target_is_shown_from_its_stored_copy(monkeypatch: 
     async def fetch_stored_message(channel_id: int, message_id: int) -> None:
         fetched.append((channel_id, message_id))
 
-    async def get(message_id: int) -> Message:
-        return Message(id=message_id, channel_id=1, author_id=2, content="the stored text")
+    class StoredMessages(MessageService):
+        def __init__(self) -> None:
+            pass
+
+        async def get(self, message_id: int) -> Message:
+            return Message(id=message_id, channel_id=1, author_id=2, content="the stored text")
 
     def render(snapshot: VoteSessionSnapshot, content: str) -> object:
         rendered.append(content)
         return object()
 
-    bot = SimpleNamespace(
-        fetch_stored_message=fetch_stored_message, services=SimpleNamespace(messages=SimpleNamespace(get=get))
-    )
+    bot = make_layout_bot(fetch_stored_message=fetch_stored_message, services=bot_services(messages=StoredMessages()))
     renderer = VoteSessionRenderer(cast(Any, bot))
 
     async def no_channels(snapshot: VoteSessionSnapshot) -> dict[int, int]:

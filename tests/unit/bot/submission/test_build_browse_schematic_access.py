@@ -1,16 +1,16 @@
 """Check which actors the Discord build browser lets use a build's featured schematic."""
 
 from dataclasses import dataclass, field, replace
-from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from whenever import Instant
 
 from squid.bot.submission.build_browse import _BuildDetail  # pyright: ignore[reportPrivateUsage]
+from squid.builds.models import DoorBuild
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
-from squid.schematics.application import SchematicPublication, StoredSchematic
+from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
 from tests.unit.schematics.fakes import make_analysis
 
@@ -52,19 +52,28 @@ class _Event:
         self.notices.append(text)
 
 
-def _detail(stored: StoredSchematic | None, *, actor: int | None, held: set[str]) -> _BuildDetail:
-    async def featured_for_build(build_id: int) -> StoredSchematic | None:
-        return stored
+class FeaturedSchematics(SchematicService):
+    def __init__(self, stored: StoredSchematic | None) -> None:
+        self.stored = stored
 
+    @property
+    def available(self) -> bool:
+        return True
+
+    async def featured_for_build(self, build_id: int) -> StoredSchematic | None:
+        assert build_id == 7
+        return self.stored
+
+
+def _detail(stored: StoredSchematic | None, *, actor: int | None, held: set[str]) -> _BuildDetail:
     async def authorize(node: PermissionNode) -> bool:
         return node.name in held
 
-    schematics = SimpleNamespace(featured_for_build=featured_for_build, available=True)
     return _BuildDetail(
-        cast(Any, SimpleNamespace(id=7)),
+        DoorBuild(id=7),
         queries=cast(Any, None),
         builds=cast(Any, None),
-        schematics=cast(Any, schematics),
+        schematics=FeaturedSchematics(stored),
         render_build=cast(Any, None),
         capabilities=cast(Any, None),
         actor_account_id=actor,

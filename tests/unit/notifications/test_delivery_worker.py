@@ -2,7 +2,6 @@
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from types import SimpleNamespace
 from typing import Literal, cast
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -18,6 +17,7 @@ from squid.notifications import NotificationService, PendingNotificationDelivery
 from squid.notifications.application import NotificationRepository
 from squid.notifications.domain import NotificationKind
 from tests.support.delivery_uow import NotificationUnitOfWork
+from tests.support.services import bot_services
 
 
 @dataclass
@@ -90,7 +90,7 @@ async def worker(mocker: MockerFixture) -> AsyncIterator[DeliveryWorker]:
         mocker.patch.object(
             client,
             "services",
-            SimpleNamespace(
+            bot_services(
                 notifications=NotificationService(
                     uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository))
                 )
