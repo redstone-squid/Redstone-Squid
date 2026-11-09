@@ -1,8 +1,9 @@
 """Build application service tests."""
 
 from collections.abc import AsyncGenerator, Sequence
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from copy import copy
+from functools import partial
 from typing import Literal, cast, override
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from squid.builds.application.services import (
 from squid.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
 from squid.builds.domain import BuildCategory, Status, normalize_tag_name
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
+from squid.builds.history import BuildChange
 from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
@@ -31,19 +33,22 @@ from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 
 class FakeBuildRepository:
+    def changes(self, change: BuildChange) -> nullcontext[None]:
+        return nullcontext()
+
     def __init__(self, build: Build | None = None) -> None:
         self.build = build
         self.saved: list[Build] = []
         self.confirmed: list[Build] = []
         self.denied: list[Build] = []
 
-    async def save(self, build: Build) -> None:
+    async def save(self, build: Build, *, change: BuildChange) -> None:
         self.saved.append(build)
 
-    async def confirm(self, build: Build) -> None:
+    async def confirm(self, build: Build, *, change: BuildChange) -> None:
         self.confirmed.append(build)
 
-    async def deny(self, build: Build) -> None:
+    async def deny(self, build: Build, *, change: BuildChange) -> None:
         self.denied.append(build)
 
     async def get_for_update(self, build_id: int) -> Build | None:
@@ -265,7 +270,11 @@ async def test_edit_prepares_a_detached_patch_then_commits(existing_build: DoorB
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)
-    result = await service.edit(42, BuildEditPatch(dimensions=(10, 11, 12), extra_user_info="changed"))
+    result = await service.edit(
+        42,
+        BuildEditPatch(dimensions=(10, 11, 12), extra_user_info="changed"),
+        change=BuildChange(operation="edit", source="test", actor_system="test"),
+    )
     assert result.dimensions == (10, 11, 12)
     assert existing_build.dimensions == (None, None, None)
     assert repository.saved[0].description == "changed"
@@ -277,7 +286,11 @@ async def test_invalid_patch_does_not_acquire_a_write_lock(existing_build: DoorB
     locks = FakeBuildLocks()
     invalid_dimensions = cast(tuple[int | None, int | None, int | None], (1, 2))
     with pytest.raises(ValueError, match="not enough values to unpack"):
-        await build_service(repository, locks).edit(42, BuildEditPatch(dimensions=invalid_dimensions))
+        await build_service(repository, locks).edit(
+            42,
+            BuildEditPatch(dimensions=invalid_dimensions),
+            change=BuildChange(operation="edit", source="test", actor_system="test"),
+        )
     assert locks.acquisitions == []
     assert repository.saved == []
 
@@ -294,7 +307,11 @@ async def test_cancellation_during_preparation_holds_no_write_lock(existing_buil
     locks = FakeBuildLocks()
     service = build_service(BlockingRepository(existing_build), locks)
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(service.edit, 42, BuildEditPatch())
+        tasks.start_soon(
+            partial(service.edit, change=BuildChange(operation="edit", source="test", actor_system="test")),
+            42,
+            BuildEditPatch(),
+        )
         await loading.wait()
         tasks.cancel_scope.cancel()
     assert locks.acquisitions == []
@@ -302,11 +319,15 @@ async def test_cancellation_during_preparation_holds_no_write_lock(existing_buil
 
 async def test_edit_reports_missing_and_busy_builds(existing_build: DoorBuild) -> None:
     with pytest.raises(BuildNotFoundError):
-        await build_service(FakeBuildRepository()).edit(42, BuildEditPatch())
+        await build_service(FakeBuildRepository()).edit(
+            42, BuildEditPatch(), change=BuildChange(operation="edit", source="test", actor_system="test")
+        )
     locks = FakeBuildLocks()
     locks.acquire_result = False
     with pytest.raises(BuildBusyError):
-        await build_service(FakeBuildRepository(existing_build), locks).edit(42, BuildEditPatch())
+        await build_service(FakeBuildRepository(existing_build), locks).edit(
+            42, BuildEditPatch(), change=BuildChange(operation="edit", source="test", actor_system="test")
+        )
 
 
 async def test_edit_rechecks_revision_after_preparation(existing_build: DoorBuild) -> None:
@@ -319,7 +340,12 @@ async def test_edit_rechecks_revision_after_preparation(existing_build: DoorBuil
 
     service._embeddings = ConcurrentEdit()
     with pytest.raises(BuildRevisionMismatchError):
-        await service.edit(42, BuildEditPatch(extra_user_info="stale"), expected_revision=1)
+        await service.edit(
+            42,
+            BuildEditPatch(extra_user_info="stale"),
+            expected_revision=1,
+            change=BuildChange(operation="edit", source="test", actor_system="test"),
+        )
     assert repository.saved == []
 
 
@@ -327,7 +353,12 @@ async def test_edit_rejects_a_stale_expected_revision(existing_build: DoorBuild)
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     with pytest.raises(BuildRevisionMismatchError) as error:
-        await build_service(repository, locks).edit(42, BuildEditPatch(dimensions=(1, 2, 3)), expected_revision=2)
+        await build_service(repository, locks).edit(
+            42,
+            BuildEditPatch(dimensions=(1, 2, 3)),
+            expected_revision=2,
+            change=BuildChange(operation="edit", source="test", actor_system="test"),
+        )
     assert error.value.public_context == {"build_id": 42, "expected_revision": 2, "current_revision": 1}
     assert locks.acquisitions == []
     assert existing_build.dimensions == (None, None, None)
@@ -339,8 +370,8 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
     service = build_service(repository, locks)
     cutoff = Instant.from_utc(2026, 7, 29)
 
-    await service.confirm(42)
-    await service.deny(42)
+    await service.confirm(42, change=BuildChange(operation="edit", source="test", actor_system="test"))
+    await service.deny(42, change=BuildChange(operation="edit", source="test", actor_system="test"))
     await service.clean_stale_locks(older_than=cutoff)
 
     assert [build.id for build in repository.confirmed] == [existing_build.id]
@@ -411,7 +442,7 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     build = DoorBuild(id=42)
     repository.build = build.copy_for_edit()
 
-    await service.save(build)
+    await service.save(build, change=BuildChange(operation="edit", source="test", actor_system="test"))
 
     assert build.versions == ["Java 1.21.0"]
     assert build.embedding == [1.0, 2.0]

@@ -7,6 +7,8 @@ from typing import cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.app import RedstoneSquid
+from squid.bot.consent import with_consented_account
 from squid.bot.submission.schematics import (
     WRITABLE_EXTENSIONS,
     _describe,
@@ -19,6 +21,7 @@ from squid.bot.submission.ui.controls import build_edit
 from squid.bot.ui import tr
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
+from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -232,12 +235,25 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         node = BUILD_SUBMISSION_APPROVE if action == "approve" else BUILD_SUBMISSION_REJECT
         if not await self._may(event.source, node):
             return
-        if action == "approve":
-            await self._builds.confirm(self._build_id)
+
+        async def apply_review(source: sd.ActionEvent, account_id: int) -> None:
+            if not await self._may(source, node):
+                return
+            change = BuildChange(operation="moderation", source="discord_review", actor_account_id=account_id)
+            if action == "approve":
+                await self._builds.confirm(self._build_id, change=change)
+            else:
+                await self._builds.deny(self._build_id, change=change)
+            await self._refresh_posts(self._build_id)
+            await source.notice(tr("Build review state updated."))
+
+        source = cast(sd.ActionEvent, event.source)
+        if self._actor_account_id is not None:
+            await apply_review(source, self._actor_account_id)
         else:
-            await self._builds.deny(self._build_id)
-        await self._refresh_posts(self._build_id)
-        await event.source.notice(tr("Build review state updated."))
+            await with_consented_account(
+                source, cast(RedstoneSquid, source.context.client).services.accounts, apply_review
+            )
 
     async def _debug(self, event: sl.PressEvent) -> None:
         if not await self._may(event, BUILD_SUBMISSION_DEBUG):

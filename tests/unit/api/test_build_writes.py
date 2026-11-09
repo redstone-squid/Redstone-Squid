@@ -85,7 +85,7 @@ async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
     assert response.id == 42
     assert http_response.headers["etag"] == '"build-42-r1"'
     actor, build_id, patch, expected_revision = builds.edits[0]
-    assert actor == BuildEditor(subject=subject_for(ACCOUNT))
+    assert actor == BuildEditor(subject=subject_for(ACCOUNT), source="api")
     assert build_id == 42
     assert patch.extra_user_info == "changed"
     assert expected_revision == 1

@@ -9,6 +9,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir EXTENSIONS/pg_trgm.sql
 \ir EXTENSIONS/unaccent.sql
 \ir EXTENSIONS/vector.sql
+\ir public/FUNCTIONS/build_history_snapshot_v1.sql
 \ir public/TRIGGER_FUNCTIONS/bump_permission_epoch.sql
 \ir public/TRIGGER_FUNCTIONS/check_permission_role_include_cycle.sql
 \ir public/TRIGGER_FUNCTIONS/delete_vote_session_after_build_vote_session_delete.sql
@@ -24,6 +25,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/FUNCTIONS/get_quantified_version_names.sql
 \ir public/FUNCTIONS/power_set_max.sql
 \ir public/FUNCTIONS/publish_domain_event.sql
+\ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_submission_finalization_input_update.sql
 \ir public/TABLES/account_identities.sql
 \ir public/SEQUENCES/account_identities_id_seq.sql
@@ -36,6 +38,10 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/api_keys.sql
 \ir public/SEQUENCES/api_keys_id_seq.sql
 \ir public/TABLES/build_creators.sql
+\ir public/TABLES/build_edit_history.sql
+\ir public/SEQUENCES/build_edit_history_id_seq.sql
+\ir public/TABLES/build_history_states.sql
+\ir public/SEQUENCES/build_history_states_id_seq.sql
 \ir public/TABLES/build_links.sql
 \ir public/TABLES/build_schematics.sql
 \ir public/SEQUENCES/build_schematics_id_seq.sql

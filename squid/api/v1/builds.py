@@ -64,7 +64,7 @@ async def edit_build(
     """Edit an owned pending build, or any build with `build.submission.edit`."""
     require_consented_account(caller)
     build = await builds.apply_edit(
-        BuildEditor(subject=subject_for(caller)),
+        BuildEditor(subject=subject_for(caller), source="api"),
         build_id,
         BuildEditPatch.from_attributes(changes.edit_attributes()),
         expected_revision=_expected_revision(build_id, if_match),

@@ -4,6 +4,7 @@ import logging
 import uuid
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
@@ -21,6 +22,8 @@ from squid.accounts.models import Account, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain import BuildCategory, Info, Status, UnresolvedTaxonomy
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
+from squid.builds.history import BuildChange
+from squid.builds.infrastructure.history import record_build_changes
 from squid.builds.infrastructure.loading import BuildLoader
 from squid.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
@@ -435,7 +438,20 @@ class BuildRepository:
             )
         ).all()
 
-    async def save(self, build: Build) -> None:
+    def changes(self, change: BuildChange) -> AbstractAsyncContextManager[object]:
+        """Group nested build and schematic writes into one history operation."""
+        return record_build_changes(self._session(), change)
+
+    async def save(self, build: Build, *, change: BuildChange) -> None:
+        """Save and record the persisted aggregate in the caller's transaction."""
+        async with record_build_changes(self._session(), change, () if build.id is None else (build.id,)) as history:
+            created = build.id is None
+            await self._save(build)
+            if created:
+                assert build.id is not None
+                history.created(build.id)
+
+    async def _save(self, build: Build) -> None:
         """Insert a new build or update an existing build in the caller's transaction.
 
         A None ID selects insertion. A supplied ID must already exist; this is not
@@ -736,21 +752,23 @@ class BuildRepository:
             )
         )
 
-    async def confirm(self, build: Build) -> None:
+    async def confirm(self, build: Build, *, change: BuildChange) -> None:
         """Mark a persisted build confirmed, checking and advancing its revision."""
         if build.id is None:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "confirm"})
 
-        await self._set_status(build, Status.CONFIRMED, operation="confirm")
+        async with record_build_changes(self._session(), change, (build.id,)):
+            await self._set_status(build, Status.CONFIRMED, operation="confirm")
 
-    async def deny(self, build: Build) -> None:
+    async def deny(self, build: Build, *, change: BuildChange) -> None:
         """Mark a persisted build denied, checking and advancing its revision."""
         if build.id is None:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "deny"})
 
-        await self._set_status(build, Status.DENIED, operation="deny")
+        async with record_build_changes(self._session(), change, (build.id,)):
+            await self._set_status(build, Status.DENIED, operation="deny")
 
     async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
         assert build.id is not None

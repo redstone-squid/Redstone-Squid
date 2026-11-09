@@ -28,6 +28,7 @@ from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
+from squid.builds.history import BuildChange
 from squid.builds.models import Build, DoorBuild
 from squid.topics import resource_topic
 from squid_ui.text import Message
@@ -481,11 +482,17 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         build = self.build
         if build.id is None:
             patch.apply(build)
-            await self.builds.save(build)
+            actor = await subject_for_interaction(cast(sd.Request[Any], event.context))
+            await self.builds.save(
+                build,
+                change=BuildChange(operation="create", source="discord_editor", actor_account_id=actor.account_id),
+            )
             self._build_id = build.id
         else:
             try:
-                actor = BuildEditor(await subject_for_interaction(cast(sd.Request[Any], event.context)))
+                actor = BuildEditor(
+                    await subject_for_interaction(cast(sd.Request[Any], event.context)), source="discord_editor"
+                )
                 build = await self.builds.apply_edit(actor, build.id, patch, expected_revision=build.revision)
             except BuildRevisionMismatchError:
                 self.confirming = False

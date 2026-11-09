@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from squid.builds.domain import BuildCategory
+from squid.builds.history import BuildChange
 from squid.events.models import DomainEvent
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.records.application.models import (
@@ -94,7 +95,13 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
     build_ids: list[int] = []
     for _ in range(5):
         build = submission_build(BuildCategory.DOOR, owner)
-        await transact(builds, lambda uow, build=build: uow.builds.save(build), commit=True)
+        await transact(
+            builds,
+            lambda uow, build=build: uow.builds.save(
+                build, change=BuildChange(operation="edit", source="test", actor_system="test")
+            ),
+            commit=True,
+        )
         assert build.id is not None
         build_ids.append(build.id)
     records = partial(SqlAlchemyUnitOfWork, sessions)
@@ -173,7 +180,11 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
                 )
             )
     build = submission_build(BuildCategory.DOOR, owner)
-    await transact(partial(SqlAlchemyUnitOfWork, sessions), lambda uow: uow.builds.save(build), commit=True)
+    await transact(
+        partial(SqlAlchemyUnitOfWork, sessions),
+        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
+    )
     assert build.id is not None
     records = partial(SqlAlchemyUnitOfWork, sessions)
     seed = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), [build.id])

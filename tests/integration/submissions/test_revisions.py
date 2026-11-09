@@ -15,6 +15,7 @@ from squid.builds.application import BuildEditor, BuildService
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
+from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError
 from squid.permissions.application import PermissionService
@@ -47,7 +48,11 @@ async def prepared_proposal(
     owner = await seed_account_and_version(sessions)
     builds = partial(SqlAlchemyUnitOfWork, sessions)
     build = submission_build(BuildCategory.DOOR, owner)
-    await transact(builds, lambda uow: uow.builds.save(build), commit=True)
+    await transact(
+        builds,
+        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
+    )
     before = revision_values(build)
     facts = RevisionFacts(category=BuildCategory.DOOR, width=9)
     facts.patch(build).apply(build)
@@ -100,7 +105,9 @@ async def test_stale_approval_retains_the_unapplied_proposal(
 ) -> None:
     repository, proposal, build, actor, policy = await prepared_proposal(migrated_session_factory)
     await transact(
-        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
     )
     with pytest.raises(BuildRevisionMismatchError):
         await revision_service(repository, policy)._approve_prepared(proposal, build, actor)

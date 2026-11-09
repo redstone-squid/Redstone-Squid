@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import cast
 
@@ -208,7 +209,9 @@ def _decode(state: BuildHistoryState | None) -> BuildSnapshot | None:
     return (
         None
         if state is None
-        else BuildSnapshot(schema_version=state.schema_version, revision=state.build_revision, payload=state.snapshot)
+        else BuildSnapshot(
+            schema_version=state.schema_version, revision=state.build_revision, payload=deepcopy(state.snapshot)
+        )
     )
 
 

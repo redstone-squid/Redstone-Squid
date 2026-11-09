@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.models import Account
 from squid.builds.application.queries import BuildListSort
 from squid.builds.domain import Status
+from squid.builds.history import BuildChange
 from squid.builds.models import OtherBuild
 from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -36,7 +37,13 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) ->
             submitter_account_id=account_id,
             ai_generated=False,
         )
-        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
+        await transact(
+            repository,
+            lambda uow, build=build: uow.builds.save(
+                build, change=BuildChange(operation="edit", source="test", actor_system="test")
+            ),
+            commit=True,
+        )
         assert build.id is not None
         identifiers.append(build.id)
     return identifiers

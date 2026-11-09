@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
+from squid.builds.history import BuildChange
 from squid.builds.models import OtherBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.models import Version
@@ -46,7 +47,13 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -
             creators_ign=[f"Builder {index}"],
             ai_generated=False,
         )
-        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
+        await transact(
+            repository,
+            lambda uow, build=build: uow.builds.save(
+                build, change=BuildChange(operation="edit", source="test", actor_system="test")
+            ),
+            commit=True,
+        )
         assert build.id is not None
         build_ids.append(build.id)
     return account_id, build_ids

@@ -22,6 +22,7 @@ from squid.builds.application.restrictions import RestrictionService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
+from squid.builds.history import BuildChange
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
@@ -105,7 +106,13 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     ]
 
     for build in builds:
-        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
+        await transact(
+            repository,
+            lambda uow, build=build: uow.builds.save(
+                build, change=BuildChange(operation="edit", source="test", actor_system="test")
+            ),
+            commit=True,
+        )
         assert build.id is not None
         assert build.revision == 1
 
@@ -137,7 +144,13 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
         assert build.category is not None
         category = build.category
         build.description = f"Updated {category.value}"
-        await transact(repository, lambda uow, build=build: uow.builds.save(build), commit=True)
+        await transact(
+            repository,
+            lambda uow, build=build: uow.builds.save(
+                build, change=BuildChange(operation="edit", source="test", actor_system="test")
+            ),
+            commit=True,
+        )
         reloaded = await transact(repository, lambda uow, build=build: uow.builds.get_by_id(build.id))
         assert reloaded is not None
         assert reloaded.description == f"Updated {category.value}"
@@ -145,7 +158,13 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
 
     duplicate = submission_build(BuildCategory.OTHER, account_id, draft_id=draft_id)
     with pytest.raises(IntegrityError):
-        await transact(repository, lambda uow: uow.builds.save(duplicate), commit=True)
+        await transact(
+            repository,
+            lambda uow: uow.builds.save(
+                duplicate, change=BuildChange(operation="edit", source="test", actor_system="test")
+            ),
+            commit=True,
+        )
 
 
 async def test_repository_round_trips_immutable_public_sponsor_snapshot(
@@ -162,7 +181,11 @@ async def test_repository_round_trips_immutable_public_sponsor_snapshot(
     )
     build = submission_build(BuildCategory.OTHER, account_id, sponsor=sponsor)
 
-    await transact(repository, lambda uow: uow.builds.save(build), commit=True)
+    await transact(
+        repository,
+        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
+    )
     assert build.id is not None
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
 
@@ -197,8 +220,18 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
         BuildLink(url="https://cdn.example.test/evidence.mp4", media_type="video"),
     ]
     pending = submission_build(BuildCategory.OTHER, account_id)
-    await transact(repository, lambda uow: uow.builds.save(confirmed), commit=True)
-    await transact(repository, lambda uow: uow.builds.save(pending), commit=True)
+    await transact(
+        repository,
+        lambda uow: uow.builds.save(
+            confirmed, change=BuildChange(operation="edit", source="test", actor_system="test")
+        ),
+        commit=True,
+    )
+    await transact(
+        repository,
+        lambda uow: uow.builds.save(pending, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
+    )
     assert confirmed.id is not None
     assert pending.id is not None
 
@@ -294,7 +327,13 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     invalid_build = submission_build(BuildCategory.OTHER, account_id)
     invalid_build.versions = ["Java 1.21.99"]
     with pytest.raises(InvalidBuildError, match="Unknown canonical Minecraft versions"):
-        await transact(repository, lambda uow: uow.builds.save(invalid_build), commit=True)
+        await transact(
+            repository,
+            lambda uow: uow.builds.save(
+                invalid_build, change=BuildChange(operation="edit", source="test", actor_system="test")
+            ),
+            commit=True,
+        )
     assert invalid_build.id is None
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Build)) == 1
@@ -399,7 +438,9 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
     owner_id = await seed_account_and_version(migrated_session_factory)
     build = submission_build(BuildCategory.OTHER, owner_id)
     await transact(
-        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
     )
     assert build.id is not None
 
@@ -532,7 +573,9 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
     build = submission_build(BuildCategory.UTILITY, absorbed.id)
     build.versions = []
     await transact(
-        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
     )
     assert build.id is not None
     build_id = build.id
@@ -775,7 +818,9 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     build = submission_build(BuildCategory.OTHER, absorbed.id, draft_id=claimed_draft_id, sponsor=sponsor)
     build.versions = []
     await transact(
-        partial(SqlAlchemyUnitOfWork, migrated_session_factory), lambda uow: uow.builds.save(build), commit=True
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
     )
     assert build.id is not None
     build_id = build.id

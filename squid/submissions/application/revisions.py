@@ -11,6 +11,7 @@ from squid.builds.application import BuildEditor, BuildService
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildDraft
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
+from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.permissions.application import PermissionService
@@ -205,7 +206,16 @@ class RevisionProposalService:
             if actor.subject.account_id is None:
                 raise AuthorizationError
             build.edited_time = Instant.now()
-            await uow.builds.save(build)
+            await uow.builds.save(
+                build,
+                change=BuildChange(
+                    operation="recalculation",
+                    source="revision_proposal",
+                    actor_account_id=actor.subject.account_id,
+                    correlation_kind="revision_proposal",
+                    correlation_id=str(proposal.id),
+                ),
+            )
             result = await uow.revision_proposals.mark_approved(
                 proposal.id, account_id=actor.subject.account_id, revision=build.revision
             )

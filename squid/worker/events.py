@@ -3,6 +3,7 @@
 import logging
 from typing import Protocol
 
+from squid.builds.history import BuildChange
 from squid.diagnostics.log_capture import work_lost
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.notifications import NotificationService
@@ -27,9 +28,9 @@ class VoteOutcomeReader(Protocol):
 class BuildStatusWriter(Protocol):
     """Apply the final moderation status of a build."""
 
-    async def confirm(self, build_id: int) -> object: ...
+    async def confirm(self, build_id: int, *, change: BuildChange) -> object: ...
 
-    async def deny(self, build_id: int) -> object: ...
+    async def deny(self, build_id: int, *, change: BuildChange) -> object: ...
 
 
 class CoreEventHandler(Protocol):
@@ -50,9 +51,27 @@ class ApplyBuildVoteOutcomeHandler:
         if snapshot is None or snapshot.is_open or not isinstance(snapshot.target, BuildVoteTarget):
             return
         if snapshot.result is VoteSessionResult.APPROVED:
-            await self._builds.confirm(snapshot.target.build_id)
+            await self._builds.confirm(
+                snapshot.target.build_id,
+                change=BuildChange(
+                    operation="moderation",
+                    source="vote_outcome",
+                    actor_system="vote_worker",
+                    correlation_kind="domain_event",
+                    correlation_id=str(event.id),
+                ),
+            )
         elif snapshot.result is VoteSessionResult.DENIED:
-            await self._builds.deny(snapshot.target.build_id)
+            await self._builds.deny(
+                snapshot.target.build_id,
+                change=BuildChange(
+                    operation="moderation",
+                    source="vote_outcome",
+                    actor_system="vote_worker",
+                    correlation_kind="domain_event",
+                    correlation_id=str(event.id),
+                ),
+            )
 
 
 class MaterializeNotificationHandler:

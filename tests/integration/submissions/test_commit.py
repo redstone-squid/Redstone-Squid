@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.domain import BuildCategory
+from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
@@ -319,7 +320,11 @@ async def test_executor_recovers_a_loaded_source_build(
     claim = await claimed_submission(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     existing = await PreparedBuilds().prepare(claim.payload)
-    await transact(repository, lambda uow: uow.builds.save(existing), commit=True)
+    await transact(
+        repository,
+        lambda uow: uow.builds.save(existing, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        commit=True,
+    )
 
     class ExistingBuilds:
         async def prepare(self, submission: NormalizedSubmission) -> Build:

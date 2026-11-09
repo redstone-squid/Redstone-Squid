@@ -6,6 +6,8 @@ from sqlalchemy import ColumnElement, Select, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from squid.builds.history import BuildChange
+from squid.builds.infrastructure.history import record_build_changes
 from squid.builds.models import Build
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
@@ -57,6 +59,7 @@ class PostgresSchematicRepository:
         analysis: SchematicAnalysis,
         *,
         primary: bool,
+        change: BuildChange,
         original_filename: str | None = None,
         uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
@@ -67,49 +70,50 @@ class PostgresSchematicRepository:
         the previous generated preview and queues a replacement. publication=None preserves existing
         publication metadata when updating an attachment.
         """
-        values = {
-            "build_id": build_id,
-            "file_sha256": sha256,
-            "is_primary": primary,
-            "original_filename": original_filename,
-            "uploaded_by_account_id": uploaded_by_account_id,
-            **to_row_values(analysis),
-        }
-        if publication is not None:
-            values.update(
-                visibility=publication.visibility.value,
-                license_code=publication.license.value if publication.license is not None else None,
-                rights_attested_at=publication.rights_attested_at,
-                rights_attested_by_account_id=publication.rights_attested_by_account_id,
-                published_at=publication.published_at,
-                withdrawn_at=publication.withdrawn_at,
+        async with record_build_changes(self._session(), change, (build_id,)):
+            values = {
+                "build_id": build_id,
+                "file_sha256": sha256,
+                "is_primary": primary,
+                "original_filename": original_filename,
+                "uploaded_by_account_id": uploaded_by_account_id,
+                **to_row_values(analysis),
+            }
+            if publication is not None:
+                values.update(
+                    visibility=publication.visibility.value,
+                    license_code=publication.license.value if publication.license is not None else None,
+                    rights_attested_at=publication.rights_attested_at,
+                    rights_attested_by_account_id=publication.rights_attested_by_account_id,
+                    published_at=publication.published_at,
+                    withdrawn_at=publication.withdrawn_at,
+                )
+            updatable = {key: value for key, value in values.items() if key not in ("build_id", "file_sha256")}
+            statement = (
+                insert(BuildSchematic)
+                .values(**values)
+                .on_conflict_do_update(
+                    index_elements=[BuildSchematic.build_id, BuildSchematic.file_sha256],
+                    set_=updatable,
+                )
+                .returning(BuildSchematic.id)
             )
-        updatable = {key: value for key, value in values.items() if key not in ("build_id", "file_sha256")}
-        statement = (
-            insert(BuildSchematic)
-            .values(**values)
-            .on_conflict_do_update(
-                index_elements=[BuildSchematic.build_id, BuildSchematic.file_sha256],
-                set_=updatable,
-            )
-            .returning(BuildSchematic.id)
-        )
-        session = self._session()
-        if primary:
-            await session.scalar(select(Build.id).where(Build.id == build_id).with_for_update())
-            # The partial unique index allows only one primary per build, so the previous
-            # holder must be demoted in the same transaction as the new one is promoted.
-            await session.execute(
-                update(BuildSchematic)
-                .where(and_(BuildSchematic.build_id == build_id, BuildSchematic.file_sha256 != sha256))
-                .values(is_primary=False)
-            )
-        schematic_id = await session.scalar(statement)
-        if primary:
-            await self._previews.featured_attachment_changed(build_id)
-        await session.flush()
-        assert schematic_id is not None
-        return schematic_id
+            session = self._session()
+            if primary:
+                await session.scalar(select(Build.id).where(Build.id == build_id).with_for_update())
+                # The partial unique index allows only one primary per build, so the previous
+                # holder must be demoted in the same transaction as the new one is promoted.
+                await session.execute(
+                    update(BuildSchematic)
+                    .where(and_(BuildSchematic.build_id == build_id, BuildSchematic.file_sha256 != sha256))
+                    .values(is_primary=False)
+                )
+            schematic_id = await session.scalar(statement)
+            if primary:
+                await self._previews.featured_attachment_changed(build_id)
+            await session.flush()
+            assert schematic_id is not None
+            return schematic_id
 
     async def list_for_build(self, build_id: int) -> list[StoredSchematic]:
         return await self._fetch(self._joined().where(BuildSchematic.build_id == build_id))

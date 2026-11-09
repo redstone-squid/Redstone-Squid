@@ -10,6 +10,7 @@ from squid.accounts.infrastructure.repository import AccountRepository
 from squid.auth.infrastructure.repository import PostgresApiKeyRepository
 from squid.auth.infrastructure.sessions import PostgresWebSessionRepository
 from squid.builds.infrastructure.embeddings import PostgresBuildIndex
+from squid.builds.infrastructure.history import BuildHistoryQueries
 from squid.builds.infrastructure.locks import PostgresBuildLockRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
@@ -80,6 +81,7 @@ class SqlAlchemyUnitOfWork:
         self._records = PostgresRecordRepository(self._active_session)
         self._idempotency = PostgresIdempotencyRepository(self._active_session, idempotency_cipher)
         self._builds = BuildRepository(self._active_session)
+        self._build_history = BuildHistoryQueries(self._active_session)
         self._build_locks = PostgresBuildLockRepository(self._active_session)
         self._submission_drafts = PostgresDraftRepository(self._active_session)
         self._finalization_jobs = PostgresFinalizationJobRepository(self._active_session)
@@ -226,6 +228,11 @@ class SqlAlchemyUnitOfWork:
     def idempotency(self) -> PostgresIdempotencyRepository:
         self._active_session()
         return self._idempotency
+
+    @property
+    def build_history(self) -> BuildHistoryQueries:
+        self._active_session()
+        return self._build_history
 
     @property
     def builds(self) -> BuildRepository:

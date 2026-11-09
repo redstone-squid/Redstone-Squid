@@ -5,14 +5,13 @@ fingerprint lookups, and coordination between preview publication and storage cl
 """
 
 import hashlib
-from collections.abc import AsyncGenerator
 from functools import partial
 from pathlib import Path
 from typing import override
 
 import anyio
 import pytest
-from sqlalchemy import Table, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -22,7 +21,6 @@ from squid.accounts.models import Account
 from squid.artifacts import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import DataIntegrityError
-from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.application import SchematicPublication
 from squid.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
@@ -35,43 +33,33 @@ from squid.schematics.domain.models import (
     SchematicVisibility,
     SimulationResult,
 )
-from tests.support.schema import model_tables
 from tests.unit.schematics.fakes import make_analysis
 
 pytestmark = pytest.mark.asyncio
 
-# `build_schematics` has a foreign key onto `builds`, so a stand-in table is created rather
-# than dragging the entire build schema into a storage test.
-_SETUP = (
-    "CREATE TABLE IF NOT EXISTS builds (id BIGINT PRIMARY KEY, revision BIGINT NOT NULL DEFAULT 1)",
-    "CREATE TABLE IF NOT EXISTS build_links ("
-    "build_id BIGINT REFERENCES builds(id) ON DELETE CASCADE, url TEXT NOT NULL, media_type TEXT, "
-    "PRIMARY KEY (build_id, url))",
-    "INSERT INTO builds (id) VALUES (1), (2) ON CONFLICT DO NOTHING",
-)
-_TABLES: tuple[Table, ...] = (
-    *model_tables(Account),
-    Base.metadata.tables["schematic_files"],
-    Base.metadata.tables["build_schematics"],
-    Base.metadata.tables["schematic_render_queue"],
-    Base.metadata.tables["schematic_preview_objects"],
-    Base.metadata.tables["schematic_renders"],
-)
+
+@pytest.fixture
+async def async_session_factory(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> async_sessionmaker[AsyncSession]:
+    return migrated_session_factory
 
 
 @pytest.fixture
-async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngine]:
-    async with async_engine.begin() as connection:
-        for statement in _SETUP:
-            await connection.execute(text(statement))
-        await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
-    try:
-        yield async_engine
-    finally:
-        async with async_engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all, tables=tuple(reversed(_TABLES)))
-            await connection.execute(text("DROP TABLE IF EXISTS build_links"))
-            await connection.execute(text("DROP TABLE IF EXISTS builds"))
+async def schematic_tables(async_session_factory: async_sessionmaker[AsyncSession]) -> AsyncEngine:
+    async with async_session_factory.begin() as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        await session.execute(
+            text("""
+            INSERT INTO builds (id, submitter_account_id, category, submission_status, ai_generated)
+            VALUES (1, :account, 'Other', 0, false), (2, :account, 'Other', 0, false)
+        """),
+            {"account": account.id},
+        )
+        await session.execute(text("INSERT INTO other_builds (build_id) VALUES (1), (2)"))
+    return async_session_factory.kw["bind"]
 
 
 @pytest.fixture

@@ -17,6 +17,7 @@ from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
 from squid.builds.domain import BuildDraft, RestrictionTypeLiteral, Status, sort_restrictions
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
+from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application.services import PermissionService
@@ -30,6 +31,7 @@ class BuildEditor:
     """The permission subject requesting a build edit."""
 
     subject: Subject
+    source: str = "build_edit"
 
 
 class BuildService:
@@ -78,13 +80,13 @@ class BuildService:
         async with self._uow_factory() as uow:
             return await uow.builds.list_ids_for_source_message(message_id)
 
-    async def save(self, build: Build) -> Build:
+    async def save(self, build: Build, *, change: BuildChange) -> Build:
         """Prepare and persist a build, then update its embedding index.
 
         This trusted entry point does not check permissions. Indexing happens after
         the database commit, so an indexing failure does not undo the saved build.
         """
-        await self._persist(build)
+        await self._persist(build, change=change)
         return build
 
     async def clean_stale_locks(self, *, older_than: Instant) -> None:
@@ -122,10 +124,12 @@ class BuildService:
         await self._prepare_for_persistence(build)
         return build
 
-    async def edit(self, build_id: int, patch: BuildEditPatch, *, expected_revision: int | None = None) -> Build:
+    async def edit(
+        self, build_id: int, patch: BuildEditPatch, *, change: BuildChange, expected_revision: int | None = None
+    ) -> Build:
         """Apply a trusted caller's patch using a short, revision-checked write."""
         build = await self._prepare_edit(build_id, patch, expected_revision=expected_revision)
-        await self._persist_prepared(build)
+        await self._persist_prepared(build, change=change)
         return build
 
     async def apply_edit(
@@ -137,12 +141,18 @@ class BuildService:
         expected_revision: int | None = None,
     ) -> Build:
         """Prepare an edit, then recheck current authority and revision before writing."""
+        if actor.subject.account_id is None:
+            raise AuthorizationError
         build = await self._get_required(build_id)
         await self.authorize_edit(actor, build)
         self._check_revision(build, expected_revision)
         patch.apply(build)
         await self._prepare_for_persistence(build)
-        await self._persist_prepared(build, actor=actor)
+        await self._persist_prepared(
+            build,
+            actor=actor,
+            change=BuildChange(operation="edit", source=actor.source, actor_account_id=actor.subject.account_id),
+        )
         return build
 
     async def _prepare_edit(self, build_id: int, patch: BuildEditPatch, *, expected_revision: int | None) -> Build:
@@ -199,19 +209,19 @@ class BuildService:
         await self._prepare_for_persistence(build)
         return build
 
-    async def confirm(self, build_id: int) -> Build:
+    async def confirm(self, build_id: int, *, change: BuildChange) -> Build:
         """Confirm a build under its lease and commit the new status."""
         async with self._locks.locked(build_id), self._uow_factory() as uow:
             build = await self._get_for_update(uow, build_id)
-            await uow.builds.confirm(build)
+            await uow.builds.confirm(build, change=change)
             await uow.commit()
         return build
 
-    async def deny(self, build_id: int) -> Build:
+    async def deny(self, build_id: int, *, change: BuildChange) -> Build:
         """Deny a build under its lease and commit the new status."""
         async with self._locks.locked(build_id), self._uow_factory() as uow:
             build = await self._get_for_update(uow, build_id)
-            await uow.builds.deny(build)
+            await uow.builds.deny(build, change=change)
             await uow.commit()
         return build
 
@@ -228,11 +238,11 @@ class BuildService:
             raise BuildNotFoundError(build_id)
         return build
 
-    async def _persist(self, build: Build) -> None:
+    async def _persist(self, build: Build, *, change: BuildChange) -> None:
         await self._prepare_for_persistence(build)
-        await self._persist_prepared(build)
+        await self._persist_prepared(build, change=change)
 
-    async def _persist_prepared(self, build: Build, *, actor: BuildEditor | None = None) -> None:
+    async def _persist_prepared(self, build: Build, *, change: BuildChange, actor: BuildEditor | None = None) -> None:
         """Save prepared values within a short write scope.
 
         For existing builds, the application lease covers this scope, and
@@ -241,7 +251,7 @@ class BuildService:
         """
         if build.id is None:
             async with self._uow_factory() as uow:
-                await uow.builds.save(build)
+                await uow.builds.save(build, change=change)
                 await uow.commit()
         else:
             async with self._locks.locked(build.id), self._uow_factory() as uow:
@@ -249,7 +259,7 @@ class BuildService:
                 self._check_revision(current, build.revision)
                 if actor is not None:
                     await self.authorize_edit_in(uow, actor, current)
-                await uow.builds.save(build)
+                await uow.builds.save(build, change=change)
                 await uow.commit()
         await self._embeddings.index(build)
 

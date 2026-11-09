@@ -6,6 +6,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.builds.application.ports import BuildUnitOfWork
+from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.core.errors import InvalidStateError
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
@@ -104,7 +105,16 @@ class BuildSubmissionExecutor:
                     raise InvalidStateError(message)
                 candidate = existing
             else:
-                await uow.builds.save(candidate)
+                await uow.builds.save(
+                    candidate,
+                    change=BuildChange(
+                        operation="create",
+                        source="submission_finalization",
+                        actor_account_id=job.requested_by_account_id or job.payload.owner_account_id,
+                        correlation_kind="submission_draft",
+                        correlation_id=str(job.draft_id),
+                    ),
+                )
             assert candidate.id is not None
             result = FinalizedBuild(candidate.id)
             if not await uow.finalization_jobs.complete(job, result, now=now):

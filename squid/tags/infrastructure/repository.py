@@ -9,6 +9,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.builds.history import BuildChange
+from squid.builds.infrastructure.history import record_build_changes
 from squid.builds.models import Build
 from squid.tags.application import TagDefinitionRepository
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
@@ -131,39 +133,41 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         is missing. The application service checks tag approval and showcase kind.
         """
         session = self._session()
-        owned_build_id = await session.scalar(
-            select(Build.id).where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
-        )
-        if owned_build_id is None:
-            return False
-        definition = await session.get(TagDefinition, tag_id)
-        if definition is None:
-            return False
-        value_type = definition.value_type
-        numeric_value, text_value, boolean_value = _split_value(value_type, value)
-        statement = insert(TagAssignment).values(
-            build_id=build_id,
-            tag_id=tag_id,
-            value_type=definition.value_type,
-            numeric_value=numeric_value,
-            text_value=text_value,
-            boolean_value=boolean_value,
-            provenance="submitted",
-            created_by_account_id=actor_account_id,
-        )
-        await session.execute(
-            statement.on_conflict_do_update(
-                index_elements=[TagAssignment.build_id, TagAssignment.tag_id],
-                set_={
-                    "numeric_value": statement.excluded.numeric_value,
-                    "text_value": statement.excluded.text_value,
-                    "boolean_value": statement.excluded.boolean_value,
-                    # InstantUTC converts the Instant when binding this value to SQL.
-                    "updated_at": Instant.now(),
-                },
+        change = BuildChange(operation="edit", source="showcase_assignment", actor_account_id=actor_account_id)
+        async with record_build_changes(session, change, (build_id,)):
+            owned_build_id = await session.scalar(
+                select(Build.id).where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
             )
-        )
-        return True
+            if owned_build_id is None:
+                return False
+            definition = await session.get(TagDefinition, tag_id)
+            if definition is None:
+                return False
+            value_type = definition.value_type
+            numeric_value, text_value, boolean_value = _split_value(value_type, value)
+            statement = insert(TagAssignment).values(
+                build_id=build_id,
+                tag_id=tag_id,
+                value_type=definition.value_type,
+                numeric_value=numeric_value,
+                text_value=text_value,
+                boolean_value=boolean_value,
+                provenance="submitted",
+                created_by_account_id=actor_account_id,
+            )
+            await session.execute(
+                statement.on_conflict_do_update(
+                    index_elements=[TagAssignment.build_id, TagAssignment.tag_id],
+                    set_={
+                        "numeric_value": statement.excluded.numeric_value,
+                        "text_value": statement.excluded.text_value,
+                        "boolean_value": statement.excluded.boolean_value,
+                        # InstantUTC converts the Instant when binding this value to SQL.
+                        "updated_at": Instant.now(),
+                    },
+                )
+            )
+            return True
 
 
 def _split_value(

@@ -4,6 +4,7 @@ import hashlib
 from typing import Protocol
 
 from squid.artifacts import ArtifactStore
+from squid.builds.history import BuildChange
 from squid.core.errors import DataIntegrityError
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
@@ -29,6 +30,7 @@ class SchematicMetadataRepository(Protocol):
         analysis: SchematicAnalysis,
         *,
         primary: bool,
+        change: BuildChange,
         original_filename: str | None = None,
         uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
@@ -121,6 +123,12 @@ class SchematicStorageService:
                 sha256,
                 analysis,
                 primary=primary,
+                change=BuildChange(
+                    operation="schematic",
+                    source="schematic_attachment",
+                    actor_account_id=uploaded_by_account_id,
+                    actor_system="schematic_worker" if uploaded_by_account_id is None else None,
+                ),
                 original_filename=original_filename,
                 uploaded_by_account_id=uploaded_by_account_id,
                 publication=publication,

@@ -54,7 +54,11 @@ class BuildHistorySummary:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BuildSnapshot:
-    """A detached, versioned historical state, never a live ORM build."""
+    """A detached, versioned historical state, never a live ORM build.
+
+    Decimal tag values are strings so JSON decoding cannot round their precision.
+    Timestamps use UTC. Attachment metadata excludes recomputable analysis data.
+    """
 
     schema_version: int
     revision: int
