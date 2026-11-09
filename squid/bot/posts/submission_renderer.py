@@ -7,7 +7,7 @@ from uuid import UUID
 import discord
 
 import squid_ui as sl
-from squid.bot.posts.renderer import DesiredPost
+from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.ui.controls import inference_reopen
 from squid.bot.ui import render_payload
 from squid.posts.domain import ResourceKind
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 
-class SubmissionStatusRenderer:
+class SubmissionStatusRenderer(PostRenderer):
     """Keep one source-channel status post current until its inference run expires."""
 
     resource_kind: ResourceKind = "inference_run"

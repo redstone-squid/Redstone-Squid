@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, final
 import discord
 
 from squid.accounts.domain import IdentityProvider
-from squid.bot.posts.renderer import DesiredPost
+from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.bot.voting.sessions import configured_vote_channels
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @final
-class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
+class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"](PostRenderer):
     """Keep a vote session's cards current wherever they were published.
 
     While open, build reviews and network polls request cards in configured vote

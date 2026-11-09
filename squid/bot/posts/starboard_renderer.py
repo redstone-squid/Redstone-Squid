@@ -9,7 +9,7 @@ import discord
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale
-from squid.bot.posts.renderer import DesiredPost
+from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.starboard.render import starboard_layout
 from squid.posts.domain import ResourceKind
 from squid.starboard.domain import entry_should_be_posted
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @final
-class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
+class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"](PostRenderer):
     """Mirror a message into a starboard channel while its score warrants it."""
 
     resource_kind: ResourceKind = "starboard_entry"

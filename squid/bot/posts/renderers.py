@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, final
 
 import discord
 
-from squid.bot.posts.renderer import DesiredPost
+from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.builds.domain import Status
 from squid.posts.domain import ResourceKind
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 @final
-class BuildCardRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
+class BuildCardRenderer[BotT: "squid.bot.app.RedstoneSquid"](PostRenderer):
     """Publish a confirmed build's card to every guild's builds channel.
 
     Only confirmed builds are published here. A pending build is shown by its review
