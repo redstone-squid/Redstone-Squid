@@ -6,7 +6,7 @@ The plan originally left one item open: producing sanitized schematics once Nucl
 determinism release gate. On 2026-10-31 the project dropped schematic sanitization and now
 publishes the original uploads (`0ca64e3d9`, `0b6287ce9`, `f262a9fee`), so that item no longer
 applies. Remaining schematic upload and publication work is tracked in
-[schematic-release-readiness.md](schematic-release-readiness.md).
+[schematic-release-readiness.md](../schematic-release-readiness.md).
 
 The commit hashes in the execution record below predate a history rewrite and no longer resolve.
 Search by commit subject instead.
