@@ -28,6 +28,7 @@ from squid.notifications.models import (
 )
 from squid.persistence.types import now
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.settings.models import ServerSetting
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
 from squid.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
@@ -344,6 +345,8 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
     resolved_at = now()
     record_filter: dict[str, object] = {"build_kinds": ["door"]}
     async with migrated_session_factory.begin() as session:
+        # Ballots record the guild they were cast in, which must have a settings row.
+        session.add(ServerSetting(server_id=1))
         alias = CreatorAlias(name="Merge Builder")
         vote_session = VoteSession(
             status=VoteStatus.OPEN,
