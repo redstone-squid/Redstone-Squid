@@ -7,7 +7,6 @@ membership. Attachments here are child message roots, such as dialogs.
 
 from dataclasses import fields
 from typing import Any, cast, override
-from unittest.mock import AsyncMock
 
 import anyio
 import pytest
@@ -33,7 +32,7 @@ from squid_ui_discord.sessions import (
     Session,
     Unprotected,
 )
-from squid_ui_discord.testing import message_harness
+from squid_ui_discord.testing import AsyncCallRecorder, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -154,7 +153,7 @@ class TestResults:
     async def test_rejected_carries_occupants_and_reason_without_delivering(self) -> None:
         manager = SessionManager()
         first = await manager.open(a_root(), to_message(), key=KEY)
-        destination = AsyncMock()
+        destination = AsyncCallRecorder()
 
         result = await manager.open(
             a_root(),
@@ -435,7 +434,7 @@ class TestAttachments:
         doomed, sibling = a_root(), a_root()
         await opened.session.attach(doomed, to_message())
         await opened.session.attach(sibling, to_message())
-        doomed.finish = AsyncMock(side_effect=RuntimeError("message is gone"))  # type: ignore[method-assign]
+        doomed.finish = AsyncCallRecorder(error=RuntimeError("message is gone"))  # type: ignore[method-assign]
 
         with pytest.raises(ExceptionGroup):
             await opened.session.finish()

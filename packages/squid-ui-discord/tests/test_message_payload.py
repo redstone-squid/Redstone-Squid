@@ -6,7 +6,6 @@ combination against the message's current mode, even when no Discord message obj
 
 import io
 from typing import Any, override
-from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -23,7 +22,7 @@ from squid_ui_discord import testing as sd
 from squid_ui_discord.durability import FrontendAddress
 from squid_ui_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
 from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload, message_mode
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
+from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 
 CLASSIC = MessageMode.CLASSIC
 V2 = MessageMode.COMPONENTS_V2
@@ -387,7 +386,7 @@ class _Channel:
 class _Client:
     def __init__(self, message: Any) -> None:
         self.channel = _Channel(message)
-        self.fetch_channel = AsyncMock()
+        self.fetch_channel = AsyncCallRecorder()
 
     def get_channel(self, _channel_id: int) -> _Channel:
         return self.channel

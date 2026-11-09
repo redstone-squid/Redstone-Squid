@@ -3,7 +3,7 @@
 import asyncio
 from dataclasses import dataclass, field
 from typing import Any, cast
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import anyio
 import discord
@@ -128,7 +128,7 @@ def test_models_validate_panel_wide_invariants() -> None:
 
     group = squid_ui_discord.routing.RouteGroup("roles")
     existing = group.define("existing")
-    group.add(existing, AsyncMock())
+    group.add(existing, AsyncCallRecorder())
     with pytest.raises(ValueError, match="dedicated"):
         squid_ui_discord.RolePanel(
             group,
@@ -140,7 +140,7 @@ def test_models_validate_panel_wide_invariants() -> None:
 
 def test_routes_and_rendering_are_stable_and_unselected() -> None:
     panel, group = panel_for(cardinality=squid_ui_discord.EXACTLY_ONE)
-    descriptions = Router(namespace=group, on_gone=AsyncMock()).describe()
+    descriptions = Router(namespace=group, on_gone=AsyncCallRecorder()).describe()
     assert [description.format for description in descriptions] == [
         "roles:toggle:{category}:{role_id:int}",
         "roles:set:{category}",

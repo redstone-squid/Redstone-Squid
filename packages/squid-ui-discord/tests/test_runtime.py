@@ -2,7 +2,6 @@
 
 import asyncio
 from typing import Any, cast, override
-from unittest.mock import AsyncMock
 
 import anyio
 import discord
@@ -15,7 +14,13 @@ from squid_reactivity.topics import Topic
 from squid_ui.primitives import Heading
 from squid_ui_discord import DiscordUIRuntime, install
 from squid_ui_discord.runtime import _INSTALLED, DiscordUIRuntimeMissing
-from squid_ui_discord.testing import ContextHarness, delivered_to, interaction_harness, message_harness
+from squid_ui_discord.testing import (
+    AsyncCallRecorder,
+    ContextHarness,
+    delivered_to,
+    interaction_harness,
+    message_harness,
+)
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -137,7 +142,7 @@ async def test_close_finishes_every_session_and_stops_answering_of() -> None:
 async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None:
     client = fake_client()
     runtime = install(cast(discord.Client, client))
-    runtime.sessions.close_all = AsyncMock(side_effect=RuntimeError("gateway is gone"))
+    runtime.sessions.close_all = AsyncCallRecorder(error=RuntimeError("gateway is gone"))
 
     with pytest.raises(ExceptionGroup):
         await runtime.close()
@@ -164,7 +169,7 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     runtime = install(cast(discord.Client, fake_client()), sd.Config(bus=bus))
     assert runtime.scheduler is not None
     message_root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
-    message_root.refresh = AsyncMock()  # pyrefly: ignore
+    message_root.refresh = AsyncCallRecorder()  # pyrefly: ignore
     runtime.scheduler.follow(message_root, Topic("build", "42"))
 
     task = asyncio.create_task(runtime.run())
@@ -176,14 +181,14 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
                 break
     finally:
         task.cancel()
-    message_root.refresh.assert_awaited()
+    assert message_root.refresh.records
 
 
 async def test_close_drops_installation_when_execution_host_cleanup_fails() -> None:
     client = fake_client()
     runtime = install(cast(discord.Client, client))
     assert runtime.execution_host is not None
-    runtime.execution_host.close = AsyncMock(side_effect=RuntimeError("service host cleanup failed"))
+    runtime.execution_host.close = AsyncCallRecorder(error=RuntimeError("service host cleanup failed"))
 
     with pytest.raises(RuntimeError, match="service host cleanup failed"):
         await runtime.close()

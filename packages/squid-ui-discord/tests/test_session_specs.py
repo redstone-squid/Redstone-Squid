@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from typing import Any, cast, override
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -21,7 +20,7 @@ from squid_ui_discord import (
     SessionSpec,
 )
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected, RejectionReason
-from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
+from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, interaction_harness, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -125,7 +124,7 @@ def test_session_spec_options_are_defensively_copied_and_read_only() -> None:
 
 
 async def test_session_spec_applies_options_overrides_and_access() -> None:
-    on_error = AsyncMock()
+    on_error = AsyncCallRecorder()
     manager = SessionManager(MessageRootDefaults(timeout=30, strict=True, on_error=on_error))
     spec = SessionSpec("panel", access=lambda open_context: Everyone(), options={"timeout": 20})
 
@@ -172,7 +171,7 @@ async def test_session_spec_resolves_options_once_between_static_options_and_ove
 
 
 async def test_session_spec_resolver_failure_does_not_construct_or_deliver_a_root() -> None:
-    destination = AsyncMock()
+    destination = AsyncCallRecorder()
 
     async def fail(_open_context: OpenContext) -> squid_ui_discord.MessageRootOptions:
         raise RuntimeError("cannot resolve spec")
@@ -253,7 +252,7 @@ async def test_session_spec_rejects_an_unknown_parent_without_delivery() -> None
     unknown_parent = MessageRootDefaults(timeout=None).mount(Panel(), access=Owner(7))
     spec = SessionSpec("child", options={"timeout": None})
 
-    destination = AsyncMock()
+    destination = AsyncCallRecorder()
     opened = await spec.attach(
         Panel(), destination, sessions=manager, open_context=OpenContext(7), parent=unknown_parent
     )
@@ -270,7 +269,7 @@ async def test_session_spec_rejects_a_finished_parent_without_delivery() -> None
     root = await manager.open(root_root, to_message())
     assert isinstance(root, Opened)
     await root.session.finish()
-    destination = AsyncMock()
+    destination = AsyncCallRecorder()
 
     opened = await SessionSpec("child").attach(
         Panel(), destination, sessions=manager, open_context=OpenContext(7), parent=root_root
@@ -290,7 +289,7 @@ async def test_session_spec_rejects_a_detached_parent_without_delivery() -> None
     child = await root.session.attach(child_root, to_message())
     assert isinstance(child, Opened)
     await child_root.finish()
-    destination = AsyncMock()
+    destination = AsyncCallRecorder()
 
     opened = await SessionSpec("grandchild").attach(
         Panel(), destination, sessions=manager, open_context=OpenContext(7), parent=child_root

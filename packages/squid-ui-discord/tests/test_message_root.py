@@ -12,7 +12,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast, override
-from unittest.mock import AsyncMock
 
 import anyio
 import discord
@@ -363,7 +362,7 @@ class TestEphemeralRenewal:
         assert message_root.snapshot().lifecycle is MessageRootStatus.RENEWAL_ARMED
 
     async def test_failed_renewal_keeps_fresh_authority_and_is_retryable(self) -> None:
-        errors = AsyncMock()
+        errors = AsyncCallRecorder()
         message_root, _, _ = await _armed_root(on_error=errors)
         generation = message_root.generation
         failed = interaction_harness()
@@ -719,7 +718,7 @@ class TestDispatchProfiling:
             Broken(),
             access=Everyone(),
             profiler=action_profiler,
-            on_error=AsyncMock(),
+            on_error=AsyncCallRecorder(),
             timeout=None,
         )
         commit_render(failed_action)
@@ -1029,7 +1028,7 @@ class TestAccessPolicy:
         assert MessageRoot(Counter(), access=Users({42, 43}), timeout=None).snapshot().access == Users({42, 43})
 
     async def test_async_check_can_admit_an_interaction(self) -> None:
-        check = AsyncMock(return_value=Allowed())
+        check = AsyncCallRecorder(result=Allowed())
         component = Counter()
         message_root = MessageRoot(component, access=Check(check), timeout=None)
         commit_render(message_root)
@@ -1056,8 +1055,8 @@ class TestAccessPolicy:
 
     async def test_policy_errors_use_the_message_root_error_funnel_without_admitting(self) -> None:
         error = RuntimeError("authorization service unavailable")
-        check = AsyncMock(side_effect=error)
-        hook = AsyncMock()
+        check = AsyncCallRecorder(error=error)
+        hook = AsyncCallRecorder()
         component = Counter()
         message_root = MessageRoot(component, access=Check(check), timeout=None, on_error=hook)
         commit_render(message_root)
@@ -1069,7 +1068,7 @@ class TestAccessPolicy:
         hook.assert_awaited_once_with(interaction, error, "access")
 
     async def test_modal_submissions_pass_through_the_same_policy(self) -> None:
-        submitted = AsyncMock()
+        submitted = AsyncCallRecorder()
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
         message_root = MessageRoot(Counter(), access=Owner(42), timeout=None)
         interaction = interaction_harness(user_id=99)
@@ -1538,7 +1537,7 @@ class TestActionPolicy:
                 self.count += 1
 
         component = Reader()
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         message_root = MessageRoot(component, access=Everyone(), timeout=None, on_error=hook)
         commit_render(message_root)
 
@@ -1624,7 +1623,7 @@ class TestActionMiddleware:
                     seen.append("caught")
 
         component = Broken()
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         message_root = MessageRoot(component, access=Everyone(), middleware=(Catch(),), on_error=hook, timeout=None)
         commit_render(message_root)
 
@@ -1642,7 +1641,7 @@ class TestActionMiddleware:
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 raise error
 
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         message_root = MessageRoot(Counter(), access=Everyone(), middleware=(Fail(),), on_error=hook, timeout=None)
         commit_render(message_root)
         interaction = interaction_harness()
@@ -1661,7 +1660,7 @@ class TestActionMiddleware:
                 await proceed()
                 await proceed()
 
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         component = Counter()
         message_root = MessageRoot(
             component, access=Everyone(), middleware=(SaveAndRepeat(),), on_error=hook, timeout=None
@@ -1760,7 +1759,7 @@ class TestActionMiddleware:
         commit_render(picker)
         await picker.dispatch("pick", interaction_harness(), ["a"])
 
-        submit = AsyncMock()
+        submit = AsyncCallRecorder()
         form_root = MessageRoot(text_component(), access=Everyone(), middleware=(middleware,), timeout=None)
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
         await form_root.dispatch_submit("rename", interaction_harness(), spec, {"name": "Ada"}, submit)
@@ -1779,14 +1778,14 @@ class TestErrors:
                 message = "boom"
                 raise RuntimeError(message)
 
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         message_root = MessageRoot(Boom(), access=Everyone(), timeout=None, on_error=hook)
         commit_render(message_root)
 
         await message_root.dispatch("x", interaction_harness())
 
         assert hook.await_args is not None
-        (_interaction, error, source), _ = hook.await_args
+        _interaction, error, source = hook.await_args.args
         assert isinstance(error, RuntimeError)
         assert source == "action:x"
 
@@ -1800,13 +1799,13 @@ class TestErrors:
                 return raw.no_such_attribute  # type: ignore[attr-defined]
 
         spec = FormSpec("Broken", (Broken(key="broken", label="Broken"),))
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         message_root = MessageRoot(text_component(), access=Everyone(), timeout=None, on_error=hook)
 
-        await message_root.dispatch_submit("f", interaction_harness(), spec, {"broken": "x"}, AsyncMock())
+        await message_root.dispatch_submit("f", interaction_harness(), spec, {"broken": "x"}, AsyncCallRecorder())
 
         assert hook.await_args is not None
-        (_interaction, error, source), _ = hook.await_args
+        _interaction, error, source = hook.await_args.args
         assert isinstance(error, AttributeError)
         assert source == "form:f"
 
@@ -1826,7 +1825,7 @@ class TestErrors:
                 raise RuntimeError(message)
 
         component = Boom()
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         message_root = MessageRoot(component, access=Everyone(), timeout=None, on_error=hook)
         commit_render(message_root)
 
@@ -1921,7 +1920,7 @@ class TestLifecycle:
     async def test_reactor_coalesces_double_schedule(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message_root.refresh = AsyncMock()  # pyrefly: ignore
+        message_root.refresh = AsyncCallRecorder()  # pyrefly: ignore
         scheduler = MessageRootScheduler()
         scheduler.schedule(message_root)
         scheduler.schedule(message_root)
@@ -4123,7 +4122,7 @@ class TestGuards:
         async def broken(event) -> bool:
             raise error
 
-        hook = AsyncMock()
+        hook = AsyncCallRecorder()
         profiler = MemoryProfiler()
         panel = _GuardedPanel(guard=sl.guards.permission(broken))
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, on_error=hook, profiler=profiler)
@@ -4207,7 +4206,7 @@ class TestGuards:
         assert crowd.pressed == 2
 
     async def test_a_form_trigger_guards_the_press_and_not_the_submission(self):
-        submitted = AsyncMock()
+        submitted = AsyncCallRecorder()
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
         class Panel(Component[sl.ComponentsV2Target]):
@@ -4389,7 +4388,9 @@ class TestBusyFeedback:
             raise RuntimeError("render failed")
 
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(restore_on_error=False), run=fail)
-        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
+        message_root = MessageRoot(
+            panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncCallRecorder()
+        )
         commit_render(message_root)
         interaction = interaction_harness()
 

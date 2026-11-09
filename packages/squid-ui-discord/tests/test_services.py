@@ -4,7 +4,6 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import override
-from unittest.mock import AsyncMock
 
 import anyio
 import pytest
@@ -15,7 +14,7 @@ from squid_ui.primitives import Text
 from squid_ui.runtime import ManagedService, UIExecutionHost
 from squid_ui_discord import Everyone, MessageRoot, SessionManager
 from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
+from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 
 
 @asynccontextmanager
@@ -85,7 +84,7 @@ async def test_failed_delivery_never_activates_and_retry_then_finish_cleans_up()
         root = MessageRoot(panel, access=Everyone(), execution_host=host)
         panel.service.root = root
         with pytest.raises(ValueError, match="delivery failed"):
-            await root.send(AsyncMock(side_effect=ValueError("delivery failed")))
+            await root.send(AsyncCallRecorder(error=ValueError("delivery failed")))
         assert not panel.service.started.is_set()
         await root.send(delivered_to(message_harness()))
         await panel.service.started.wait()
@@ -135,13 +134,12 @@ async def test_failed_replacement_keeps_visible_owner_active_until_successful_de
         await root.send(delivered_to(message))
         await root.runtime.wait_services_ready()
         component.replaced = True
-        edit = message.edit
-        message.edit = AsyncMock(side_effect=ValueError("replacement delivery failed"))
+        message.edit.error = ValueError("replacement delivery failed")
         with pytest.raises(ValueError, match="replacement delivery failed"):
             await root.refresh()
         assert not first.service.stopped.is_set()
         assert not replacement.service.started.is_set()
-        message.edit = edit
+        message.edit.error = None
         await root.refresh()
         await root.runtime.wait_services_ready()
         assert first.service.stopped.is_set()
@@ -193,7 +191,7 @@ async def test_failed_disable_edit_still_completes_service_cleanup() -> None:
         message = message_harness()
         await root.send(delivered_to(message))
         await panel.service.started.wait()
-        message.edit = AsyncMock(side_effect=ValueError("edit failed"))
+        message.edit.error = ValueError("edit failed")
         with pytest.raises(ExceptionGroup) as failure:
             await root.finish()
         assert failure.value.subgroup(ValueError) is not None

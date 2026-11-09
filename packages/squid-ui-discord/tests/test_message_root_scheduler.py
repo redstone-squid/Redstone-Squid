@@ -5,7 +5,6 @@ import gc
 import weakref
 from datetime import UTC, datetime, timedelta
 from typing import Any, override
-from unittest.mock import AsyncMock
 
 import anyio
 import pytest
@@ -16,7 +15,7 @@ from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
 from squid_ui.runtime import LocalTopicBus, Topic
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
 from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
+from squid_ui_discord.testing import AsyncCallRecorder, delivered_to, interaction_harness, message_harness
 
 
 class Empty(Component[sl.ComponentsV2Target]):
@@ -136,7 +135,7 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
     message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
-    message_root.refresh = AsyncMock()  # pyrefly: ignore
+    message_root.refresh = AsyncCallRecorder()  # pyrefly: ignore
     scheduler.follow(message_root, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
 
     bus.publish(Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))

@@ -6,7 +6,6 @@ Discord edit. Tests also cover calls the proxy must refuse to keep that single w
 """
 
 from typing import Any, cast, override
-from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -809,7 +808,7 @@ def _record(errors: list[BaseException]) -> Any:
     async def hook(interaction: Any, error: BaseException, context: str) -> None:
         errors.append(error)
 
-    return AsyncMock(side_effect=hook)
+    return hook
 
 
 def test_adoption_error_is_a_layout_error() -> None:
