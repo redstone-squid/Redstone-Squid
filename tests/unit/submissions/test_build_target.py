@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import cast, override
+from typing import cast
 from uuid import UUID
 
 import pytest
