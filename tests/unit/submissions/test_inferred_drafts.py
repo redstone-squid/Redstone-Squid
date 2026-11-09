@@ -1,7 +1,6 @@
 """Retained candidate conversion preserves identity, missing facts, and user corrections."""
 
 from dataclasses import replace
-from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
 
@@ -12,7 +11,7 @@ from squid.builds.domain import BuildCategory, BuildDraft
 from squid.core.errors import ValidationError
 from squid.messages.domain import MessageSnapshot
 from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
-from squid.submissions.application.forms import SubmissionFormService, build_submission_manifest
+from squid.submissions.application.forms import FormOptionSet, SubmissionFormService, build_submission_manifest
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid.submissions.domain import DraftChange, DraftSnapshot, SubmissionOrigin
@@ -54,8 +53,8 @@ class Forms:
     async def manifest(self, *, locale: str | None) -> object:
         return build_submission_manifest()
 
-    async def options(self, *args: object, **kwargs: object) -> object:
-        return SimpleNamespace(options=())
+    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+        return FormOptionSet(source, category, revision=1, options=())
 
 
 async def test_materialization_reuses_identity_without_overwriting_corrections() -> None:
