@@ -16,7 +16,7 @@ import squid_ui_discord as sd
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
 from squid.messages.application import MessageService
-from squid.messages.domain import MessageFact
+from squid.messages.domain import MessageSnapshot
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind, Surface
 from squid.posts.models import DiscordPost
@@ -191,8 +191,8 @@ class FakeMessages(MessageService):
         self.deleted: list[int] = []
 
     @override
-    async def observe(self, fact: MessageFact) -> None:
-        self.observed.append(fact.id)
+    async def observe(self, snapshot: MessageSnapshot) -> None:
+        self.observed.append(snapshot.id)
 
     @override
     async def mark_deleted(self, message_id: int) -> bool:

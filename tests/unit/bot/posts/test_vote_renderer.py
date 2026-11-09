@@ -11,7 +11,7 @@ from squid.accounts.application import AccountService
 from squid.accounts.models import Account
 from squid.bot.posts import vote_renderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
-from squid.messages.models import MessageRecord
+from squid.messages.models import Message
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
 from squid.posts.models import DiscordPost
@@ -165,8 +165,8 @@ async def test_a_deleted_vote_target_is_shown_from_its_stored_copy(monkeypatch: 
     async def fetch_stored_message(channel_id: int, message_id: int) -> None:
         fetched.append((channel_id, message_id))
 
-    async def get(message_id: int) -> MessageRecord:
-        return MessageRecord(id=message_id, channel_id=1, author_id=2, content="the stored text")
+    async def get(message_id: int) -> Message:
+        return Message(id=message_id, channel_id=1, author_id=2, content="the stored text")
 
     def render(snapshot: VoteSessionSnapshot, content: str) -> object:
         rendered.append(content)

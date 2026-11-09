@@ -1,4 +1,4 @@
-"""Load and persist builds, their relationships, and source-message facts."""
+"""Load and persist builds, their relationships, and source-message details."""
 
 import logging
 import uuid
@@ -33,7 +33,7 @@ from squid.builds.models import (
     ExtenderBuild,
 )
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
-from squid.messages.models import MessageRecord
+from squid.messages.models import Message
 from squid.persistence.types import now
 from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
@@ -698,9 +698,9 @@ class BuildRepository:
 
     @staticmethod
     async def _sync_source_messages(build: Build, session: AsyncSession) -> None:
-        """Save source-message facts and replace the build's ordered links to them.
+        """Save source-message details and replace the build's ordered links to them.
 
-        Several builds can share a source message, so message facts are upserted.
+        Several builds can share a source message, so stored messages are upserted.
         Write them here instead of through MessageService so the message and its
         build link commit together; the link's foreign key requires the message
         to exist before the link is inserted.
@@ -714,7 +714,7 @@ class BuildRepository:
         for source in build.source_messages:
             assert source.author_id is not None, "A source message must record its author."
             await session.execute(
-                pg_insert(MessageRecord)
+                pg_insert(Message)
                 .values(
                     id=source.message_id,
                     guild_id=source.guild_id,
@@ -724,7 +724,7 @@ class BuildRepository:
                     observed_at=Instant.now(),
                 )
                 .on_conflict_do_update(
-                    index_elements=[MessageRecord.id],
+                    index_elements=[Message.id],
                     set_={
                         "guild_id": source.guild_id,
                         "channel_id": source.channel_id,

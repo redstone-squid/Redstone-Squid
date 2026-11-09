@@ -105,7 +105,7 @@ Any display unit that differs from the canonical unit therefore shows a wrong nu
 
 ### 1.4 The starboard ignores bulk deletes
 
-`MessageFactCog` handles `on_raw_bulk_message_delete` (`squid/bot/messages.py`), but the starboard cog
+`MessageTrackingCog` handles `on_raw_bulk_message_delete` (`squid/bot/messages.py`), but the starboard cog
 only handles `on_raw_message_delete` (`squid/bot/starboard/cog.py`). A channel purge leaves the
 starboard's origin rows looking alive. **Decision:** add the bulk handler to the starboard cog,
 reusing the single-delete logic. Phase 4 later removes the duplicated deletion state altogether.

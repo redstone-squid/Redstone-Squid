@@ -6,8 +6,8 @@ from whenever import Instant
 
 
 @dataclass(frozen=True, slots=True)
-class MessageFact:
-    """Details observed on a Discord message.
+class MessageSnapshot:
+    """An immutable snapshot of details observed on a Discord message.
 
     The message ID identifies one stored record even when several features use
     it, such as a build source and a starboard entry.

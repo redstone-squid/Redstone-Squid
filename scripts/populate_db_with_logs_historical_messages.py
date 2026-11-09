@@ -49,7 +49,7 @@ class _GroupingMessage:
 
     @classmethod
     def from_discord(cls, message: Message) -> _GroupingMessage:
-        """Expose Discord message facts to the framework-neutral grouper."""
+        """Expose Discord message details to the framework-neutral grouper."""
         reference_id = message.reference.message_id if message.reference is not None else None
         return cls(message, message.id, message.author.id, message.created_at, reference_id)
 

@@ -15,7 +15,7 @@ from whenever import Instant
 
 from squid.bot.voting.publisher import DiscordPollPublisher, PollPublication, PollPublicationError
 from squid.messages.application.services import MessageService
-from squid.messages.domain import MessageFact
+from squid.messages.domain import MessageSnapshot
 from squid.voting.application import VoteService
 from squid.voting.domain import PollScope, VoteOption, VoteVisibility
 from tests.support.services import bot_services
@@ -54,11 +54,11 @@ class VoteRecorder(VoteService):
 
 class MessageRecorder(MessageService):
     def __init__(self) -> None:
-        self.facts: list[MessageFact] = []
+        self.snapshots: list[MessageSnapshot] = []
 
     @override
-    async def observe(self, fact: MessageFact) -> None:
-        self.facts.append(fact)
+    async def observe(self, snapshot: MessageSnapshot) -> None:
+        self.snapshots.append(snapshot)
 
 
 class Bot:
@@ -135,7 +135,7 @@ async def test_live_publication_retries_attachment_without_recreating_or_resendi
     assert votes.create_calls == 1
     assert publisher.send_calls == 1
     assert votes.attach_calls == [(41, 30), (41, 30)]
-    assert [fact.id for fact in messages.facts] == [30, 30]
+    assert [snapshot.id for snapshot in messages.snapshots] == [30, 30]
     assert bot.refresh_calls == [("vote_session", "41")]
 
 

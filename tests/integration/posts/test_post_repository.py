@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import InvalidStateError
 from squid.messages.application.services import MessageService
-from squid.messages.domain import MessageFact
+from squid.messages.domain import MessageSnapshot
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.posts.application.services import PostService
 from tests.support.database import assert_loaded_detached
@@ -24,11 +24,11 @@ async def _seed_guild(session_factory: async_sessionmaker[AsyncSession]) -> None
 
 
 async def _observe(session_factory: async_sessionmaker[AsyncSession], *message_ids: int) -> None:
-    """Record the message facts the posts will point at."""
+    """Record the message snapshots the posts will point at."""
     messages = MessageService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory))
     for message_id in message_ids:
         await messages.observe(
-            MessageFact(id=message_id, channel_id=CHANNEL, author_id=7000, guild_id=4000, content=None)
+            MessageSnapshot(id=message_id, channel_id=CHANNEL, author_id=7000, guild_id=4000, content=None)
         )
 
 
@@ -188,7 +188,7 @@ async def test_pending_generation_reads_desired_state_from_the_queue(
     assert await posts.pending_generation("build", "42") is None
 
 
-async def test_a_post_cannot_outlive_its_message_fact(
+async def test_a_post_cannot_outlive_its_message_snapshot(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_guild(migrated_session_factory)
@@ -216,7 +216,7 @@ async def test_settings_messages_and_posts_share_one_transaction(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     async with factory() as uow:
         await uow.settings.get_or_create_for_update(4000)
-        await uow.messages.upsert_fact(MessageFact(id=100, channel_id=CHANNEL, author_id=7000, guild_id=4000))
+        await uow.messages.upsert_snapshot(MessageSnapshot(id=100, channel_id=CHANNEL, author_id=7000, guild_id=4000))
         await uow.posts.record(
             message_id=100,
             channel_id=CHANNEL,

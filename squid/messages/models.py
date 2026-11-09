@@ -8,7 +8,7 @@ from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
 
 
-class MessageRecord(Base):
+class Message(Base):
     """A Discord message the bot has seen.
 
     One row per Discord message, holding only what is true about the message itself.

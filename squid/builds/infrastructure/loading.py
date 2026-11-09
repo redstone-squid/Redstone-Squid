@@ -1,4 +1,4 @@
-"""Batch loading of creator, version, and source-message facts for builds."""
+"""Batch loading of creator, version, and source-message details for builds."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -17,7 +17,7 @@ from squid.builds.models import (
     BuildVersion,
 )
 from squid.core.errors import DataIntegrityError
-from squid.messages.models import MessageRecord
+from squid.messages.models import Message
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAuthority, TagSemanticKind
 from squid.versions.models import Version
@@ -25,7 +25,7 @@ from squid.versions.models import Version
 
 @dataclass(frozen=True, slots=True)
 class _CrossContextValues:
-    """Creator, account, version, and source-message facts indexed for a batch of builds."""
+    """Creator, account, version, and source-message details indexed for a batch of builds."""
 
     creators: Mapping[int, list[str]]
     submitter_discord_ids: Mapping[int, int]
@@ -92,8 +92,8 @@ class BuildLoader:
         # Join source links to messages so the whole page needs one provenance query.
         source_messages: dict[int, list[SourceMessage]] = {build_id: [] for build_id in build_ids}
         for build_id, message in await session.execute(
-            select(BuildSourceMessage.build_id, MessageRecord)
-            .join(MessageRecord, BuildSourceMessage.message_id == MessageRecord.id)
+            select(BuildSourceMessage.build_id, Message)
+            .join(Message, BuildSourceMessage.message_id == Message.id)
             .where(BuildSourceMessage.build_id.in_(build_ids))
             .order_by(BuildSourceMessage.build_id, BuildSourceMessage.position)
         ):
@@ -151,8 +151,8 @@ class BuildLoader:
         return sql_build
 
 
-def _source_message(message: MessageRecord) -> SourceMessage:
-    """Map one message fact reached through a build's source-message link."""
+def _source_message(message: Message) -> SourceMessage:
+    """Map one stored message reached through a build's source-message link."""
     return SourceMessage(
         message_id=message.id,
         guild_id=message.guild_id,

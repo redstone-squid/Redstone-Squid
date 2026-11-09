@@ -163,7 +163,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
     @staticmethod
     def _origin(message: discord.Message, guild: discord.Guild) -> OriginMessage:
-        """Read the source-message facts starboard policy is decided from."""
+        """Read the source-message details starboard policy is decided from."""
         channel_nsfw = bool(getattr(message.channel, "is_nsfw", lambda: False)())
         has_image = any((item.content_type or "").startswith("image/") for item in message.attachments) or any(
             embed.image.url or embed.thumbnail.url for embed in message.embeds

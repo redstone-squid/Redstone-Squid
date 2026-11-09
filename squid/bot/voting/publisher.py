@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Protocol
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.bot.message_adapter import to_message_fact
+from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
 from squid.bot.utils.permissions import build_subject
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
@@ -161,7 +161,7 @@ class DiscordPollPublisher:
     async def attach_message(self, vote_session_id: int, message: discord.Message) -> PollPublication:
         """Attach an already sent message, safe to repeat after a partial failure."""
         try:
-            await self._bot.services.messages.observe(to_message_fact(message))
+            await self._bot.services.messages.observe(to_message_snapshot(message))
             await self._bot.services.votes.attach_message(vote_session_id, message.id)
             await self._bot.refresh_posts("vote_session", str(vote_session_id))
         except Exception as error:

@@ -3,8 +3,8 @@
 from whenever import Instant
 
 from squid.messages.application.ports import MessageUnitOfWork
-from squid.messages.domain import MessageFact
-from squid.messages.models import MessageRecord
+from squid.messages.domain import MessageSnapshot
+from squid.messages.models import Message
 from squid.unit_of_work import UnitOfWorkFactory
 
 
@@ -18,14 +18,14 @@ class MessageService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[MessageUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
-    async def observe(self, fact: MessageFact) -> None:
+    async def observe(self, snapshot: MessageSnapshot) -> None:
         """Insert a message or replace its observed details if it is already known.
 
         Keep the first observation time and any recorded edit or deletion times.
         A later observation can replace stored content with None.
         """
         async with self._uow_factory() as uow:
-            await uow.messages.upsert_fact(fact)
+            await uow.messages.upsert_snapshot(snapshot)
             await uow.commit()
 
     async def record_edit(self, message_id: int, content: str | None) -> bool:
@@ -61,7 +61,7 @@ class MessageService:
             await uow.commit()
             return changed
 
-    async def get(self, message_id: int) -> MessageRecord | None:
+    async def get(self, message_id: int) -> Message | None:
         """Return a stored message, including deleted ones, or None if unknown."""
         async with self._uow_factory() as uow:
             return await uow.messages.get_by_id(message_id)

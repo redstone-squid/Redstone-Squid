@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 import discord
 
 import squid_ui_discord as sd
-from squid.bot.message_adapter import to_message_fact
+from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.posts.domain import ResourceKind, Surface
@@ -57,7 +57,7 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         Callers use this for cards whose destination a person chose, such as a
         delete-log vote. The initial applied revision is zero.
         """
-        await self.bot.services.messages.observe(to_message_fact(message))
+        await self.bot.services.messages.observe(to_message_snapshot(message))
         await self.bot.services.posts.record(
             message_id=message.id,
             channel_id=message.channel.id,
@@ -123,7 +123,7 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
             raise RuntimeError(detail)
         # The fact has to land before the post: `discord_posts.message_id` is RESTRICT,
         # so a post row cannot reference a message the database has not recorded yet.
-        await self.bot.services.messages.observe(to_message_fact(message))
+        await self.bot.services.messages.observe(to_message_snapshot(message))
         await self.bot.services.posts.record(
             message_id=message.id,
             channel_id=want.channel_id,

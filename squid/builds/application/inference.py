@@ -84,7 +84,7 @@ class InlineImage:
 
 @dataclass(frozen=True, slots=True)
 class BuildInferenceInput:
-    """Contextual message facts required to infer builds, independent of Discord objects."""
+    """Contextual message details required to infer builds, independent of Discord objects."""
 
     primary: tuple[ContextMessage, ...]
     context: tuple[ContextMessage, ...]

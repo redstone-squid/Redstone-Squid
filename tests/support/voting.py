@@ -8,7 +8,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.messages.models import MessageRecord
+from squid.messages.models import Message
 from squid.posts.models import DiscordPost
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -161,9 +161,9 @@ async def record_vote_message(
     guild_id: int = GUILD_ID,
     channel_id: int = CHANNEL_ID,
 ) -> None:
-    """Record the Discord message fact that the attachment operation consumes."""
+    """Record the Discord message that the attachment operation consumes."""
     await session.execute(
-        insert(MessageRecord).values(
+        insert(Message).values(
             id=message_id,
             guild_id=guild_id,
             channel_id=channel_id,

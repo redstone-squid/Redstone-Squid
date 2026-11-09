@@ -25,7 +25,7 @@ type EntryKey = tuple[int, int]
 
 @dataclass(frozen=True, slots=True)
 class EntryState:
-    """A board's configuration, source-message facts, and current score.
+    """A board's configuration, source-message details, and current score.
 
     Post existence is read separately from the posts service when deciding whether
     the entry crosses a publication threshold.

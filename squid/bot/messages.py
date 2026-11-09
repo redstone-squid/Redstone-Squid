@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MessageFactCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
+class MessageTrackingCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     """Refresh stored message content and tombstone deleted messages."""
 
     def __init__(self, bot: BotT) -> None:
@@ -37,4 +37,4 @@ class MessageFactCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    await bot.add_cog(MessageFactCog(bot))
+    await bot.add_cog(MessageTrackingCog(bot))

@@ -54,7 +54,7 @@ Not every miscount needs automatic repair. Where a missed event only makes a num
 
 - `ensure_server_settings(session, guild_ids)` inserts missing `server_settings` rows in the
   caller's transaction (`INSERT … ON CONFLICT DO NOTHING`). It is called from every write path of
-  the tables that reference `server_settings`: message facts (`MessageRepository.upsert_fact` and
+  the tables that reference `server_settings`: stored messages (`MessageRepository.upsert_snapshot` and
   build source messages), generic polls, guild vote emojis and role weights, votes, starboards and
   starboard origin messages. `SettingsRepository.get_or_create_for_update` uses it too.
 - `votes.guild_id` has a foreign key to `server_settings.server_id` with `ON DELETE RESTRICT`
@@ -143,7 +143,7 @@ leaves that voter's reactions in place, since in an anonymous poll they are the 
 
 - **Ensure-on-write lives in the repositories, not in each service.** The foreign key is a storage
   rule, so one helper at the storage layer covers every caller, including future ones. It also
-  fixed a live bug the plan did not list: message facts and polls in a guild joined while offline
+  fixed a live bug the plan did not list: stored messages and polls in a guild joined while offline
   failed their existing foreign keys.
 - **Presence and channel repair are one cog.** `GuildStateCog` replaces the guild listeners in
   `SettingsCog` and the channel listener in `StarboardCog`. Channel checks run on
