@@ -342,7 +342,7 @@ class DoorBuild(Build, kw_only=True):
 
     __tablename__ = "doors"
     __mapper_args__ = {
-        "polymorphic_load": "inline",
+        "polymorphic_load": "selectin",
         "polymorphic_identity": BuildCategory.DOOR,
     }
 
@@ -374,7 +374,7 @@ class ExtenderBuild(Build, kw_only=True):
 
     __tablename__ = "extenders"
     __mapper_args__ = {
-        "polymorphic_load": "inline",
+        "polymorphic_load": "selectin",
         "polymorphic_identity": BuildCategory.EXTENDER,
     }
 
@@ -395,7 +395,7 @@ class UtilityBuild(Build, kw_only=True):
 
     __tablename__ = "utilities"
     __mapper_args__ = {
-        "polymorphic_load": "inline",
+        "polymorphic_load": "selectin",
         "polymorphic_identity": BuildCategory.UTILITY,
     }
 
@@ -413,7 +413,7 @@ class EntranceBuild(Build, kw_only=True):
 
     __tablename__ = "entrances"
     __mapper_args__ = {
-        "polymorphic_load": "inline",
+        "polymorphic_load": "selectin",
         "polymorphic_identity": BuildCategory.ENTRANCE,
     }
 
@@ -431,7 +431,7 @@ class OtherBuild(Build, kw_only=True):
 
     __tablename__ = "other_builds"
     __mapper_args__ = {
-        "polymorphic_load": "inline",
+        "polymorphic_load": "selectin",
         "polymorphic_identity": BuildCategory.OTHER,
     }
 

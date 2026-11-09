@@ -15,7 +15,8 @@ from tests.support.database import record_queries
 from tests.support.unit_of_work import transact
 
 # Keep the budget independent of page size; fixture data exercises related creator and version loads.
-_EXPECTED_PAGE_QUERIES = 7
+# Category columns load in one extra query per category on the page; the fixtures use only `OtherBuild`.
+_EXPECTED_PAGE_QUERIES = 8
 
 
 async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -> tuple[int, list[int]]:
