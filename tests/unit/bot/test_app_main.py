@@ -1,16 +1,21 @@
 """Discord process entry-point lifecycle tests."""
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from types import TracebackType
+from typing import Any, Self, cast
 
 import discord
 from discord.ext.commands import Bot, Context
+from pydantic import SecretStr
 from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
 from squid.bot import app as bot_app
+from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, DiscordConfig, VerificationConfig
+from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
 from squid_ui.text import Localization, current_localization
 from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
+from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services
 
 
@@ -27,17 +32,39 @@ class UIRuntimeRecorder:
         return self.job
 
 
+class ProcessBot(bot_app.RedstoneSquid):
+    def __init__(self) -> None:
+        self.background_tasks = BackgroundTaskSupervisor()
+        self.starts: list[str] = []
+
+    async def start(self, token: str, *, reconnect: bool = True) -> None:
+        self.starts.append(token)
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None
+    ) -> None:
+        pass
+
+
+@dataclass
+class ClosingResource:
+    close: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+    aclose: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+
+
 async def test_run_bot_starts_log_capture(mocker: MockerFixture) -> None:
     """Background jobs can log an exception and continue; log capture turns those failures into reports."""
-    config = mocker.Mock()
-    config.discord.token.get_secret_value.return_value = "discord-token"
-    config.diagnostics.capture_logged_errors = True
-    config.diagnostics.log_capture_queue = 16
-    runtime = mocker.MagicMock()
-    runtime.__aenter__.return_value = runtime
-    bot = mocker.MagicMock()
-    bot.start = mocker.AsyncMock()
-    bot.__aenter__.return_value = bot
+    config = BotProcessConfig.model_construct(
+        discord=DiscordConfig(token=SecretStr("discord-token")),
+        database=DatabaseConfig(url=SecretStr("postgresql+asyncpg://localhost/test")),
+        verification=VerificationConfig(code_pepper=SecretStr("test-pepper")),
+        diagnostics=DiagnosticsConfig(capture_logged_errors=True, log_capture_queue=16),
+    )
+    runtime = ApplicationRuntime(bot_services(), AsyncCallRecorder(), AsyncCallRecorder())
+    bot = ProcessBot()
     mocker.patch.object(bot_app, "create_bot_runtime", return_value=runtime)
     mocker.patch.object(bot_app, "RedstoneSquid", return_value=bot)
     mocker.patch.object(bot_app, "ProcessHealthServer", return_value=mocker.MagicMock())
@@ -95,7 +122,7 @@ async def test_failed_prefix_command_marks_its_invocation_span(mocker: MockerFix
     context.guild = None
     context.channel = None  # type: ignore[assignment]
     context.command_failed = True
-    mocker.patch.object(Bot, "invoke", new=mocker.AsyncMock())
+    mocker.patch.object(Bot, "invoke", new=AsyncCallRecorder())
     span = mocker.Mock()
     span_context = mocker.MagicMock()
     span_context.__enter__.return_value = span
@@ -112,9 +139,17 @@ async def _localization(locale: str) -> Localization:
     return Localization(locale=locale)
 
 
+@dataclass
+class ControlRouterRecorder:
+    clients: list[object] = field(default_factory=list)
+
+    def register(self, client: object) -> None:
+        self.clients.append(client)
+
+
 async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
-    bot.background_tasks = mocker.Mock()
+    bot.background_tasks = SchedulingRecorder()
     bot.__dict__["services"] = bot_services()
     bot.__dict__["_BotBase__tree"] = TreeRecorder()
     bot.database_config = None
@@ -125,7 +160,7 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     run = AsyncCallRecorder()
     layout_job = run()
     bot.__dict__["ui"] = UIRuntimeRecorder(layout_job)
-    router = mocker.Mock()
+    router = ControlRouterRecorder()
     mocker.patch.object(bot_app, "EXTENSIONS", ())
     mocker.patch.object(bot_app, "control_router", router)
     mocker.patch.object(bot_app, "start_permission_epoch_watch")
@@ -133,21 +168,23 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     try:
         await bot_app.RedstoneSquid.setup_hook(bot)
 
-        bot.background_tasks.start.assert_called_once_with(layout_job, name="layout-runtime")
-        router.register.assert_called_once_with(bot)
+        assert cast(SchedulingRecorder, bot.background_tasks).starts == [(layout_job, "layout-runtime")]
+        assert router.clients == [bot]
     finally:
         layout_job.close()
 
 
 async def test_ui_cleanup_failure_still_closes_application_resources(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
-    bot.reactions = mocker.Mock(close=mocker.AsyncMock())
-    bot.ui = mocker.Mock(close=mocker.AsyncMock(side_effect=ExceptionGroup("UI shutdown", [ValueError("cleanup")])))
-    bot.background_tasks = mocker.Mock(close=mocker.AsyncMock())
+    bot.reactions = cast(Any, ClosingResource())
+    bot.ui = cast(
+        Any, ClosingResource(close=AsyncCallRecorder(error=ExceptionGroup("UI shutdown", [ValueError("cleanup")])))
+    )
+    bot.background_tasks = cast(Any, ClosingResource())
     bot.topic_bridge = None
-    bot.catbox = mocker.Mock(aclose=mocker.AsyncMock())
-    bot.media_previews = mocker.Mock(aclose=mocker.AsyncMock())
-    close_gateway = mocker.patch.object(Bot, "close", new=mocker.AsyncMock())
+    bot.catbox = cast(Any, ClosingResource())
+    bot.media_previews = cast(Any, ClosingResource())
+    close_gateway = mocker.patch.object(Bot, "close", new=AsyncCallRecorder())
 
     await bot.close()
 

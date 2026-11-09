@@ -11,6 +11,7 @@ from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
+from squid.config import ApiConfig, ApiProcessConfig
 from squid.core.errors import ErrorCode, InternalError
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,
@@ -24,9 +25,9 @@ from tests.unit.api.fakes import (
 
 
 def test_run_api_configures_proxy_headers(mocker: MockerFixture) -> None:
-    config = mocker.Mock()
-    config.api.port = 8123
-    config.api.trusted_proxy_ips = ("127.0.0.1", "10.0.0.0/8")
+    config = ApiProcessConfig.model_construct(
+        api=ApiConfig.model_construct(port=8123, trusted_proxy_ips=("127.0.0.1", "10.0.0.0/8"))
+    )
     run = mocker.patch("uvicorn.run")
 
     api_app._run_api(config)

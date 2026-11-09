@@ -3,7 +3,6 @@
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
 from typing import cast, override
-from unittest.mock import create_autospec
 
 from squid.config import WorkerConfig
 from squid.diagnostics.application import ErrorReportService
@@ -15,6 +14,7 @@ from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.worker.app import DatabaseWorker
 from squid.worker.rendering import SchematicPreviewWorker
+from tests.support.services import unconfigured
 from tests.support.services import worker_services as checked_worker_services
 
 
@@ -35,10 +35,8 @@ def make_worker(
         services,
         keep_database_active,
         config or WorkerConfig(),
-        cast(SchematicJobRunner, create_autospec(SchematicJobRunner, instance=True, spec_set=True)),
-        schematic_renders
-        if schematic_renders is not None
-        else cast(SchematicPreviewWorker, create_autospec(SchematicPreviewWorker, instance=True, spec_set=True)),
+        unconfigured(SchematicJobRunner),
+        schematic_renders if schematic_renders is not None else unconfigured(SchematicPreviewWorker),
         supervisor=supervisor,
         schematic_pool=schematic_pool,
     )

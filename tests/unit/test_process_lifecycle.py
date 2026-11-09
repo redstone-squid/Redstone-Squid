@@ -10,6 +10,7 @@ from pytest_mock import MockerFixture
 
 from squid.api import app as api_app
 from squid.bot import app as bot_app
+from squid.config import BotProcessConfig
 from squid.worker import app as worker_app
 
 
@@ -54,7 +55,7 @@ async def test_process_entry_points_own_telemetry_and_logging_cleanup(
     mocker: MockerFixture,
 ) -> None:
     events: list[str] = []
-    config = mocker.Mock()
+    config = BotProcessConfig.model_construct()
     listener = mocker.Mock()
     listener.stop.side_effect = lambda: events.append("listener")
     logging_configure = mocker.patch.object(

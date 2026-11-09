@@ -11,14 +11,17 @@ import sys
 from collections.abc import AsyncIterator, Callable, Coroutine
 from pathlib import Path
 from typing import Any, NoReturn, Protocol, cast
+from uuid import uuid4
 
 import anyio
 import pytest
 from pytest_mock import MockerFixture
 from pythonjsonlogger.json import JsonFormatter
 
-from squid.config import LoggingConfig, SchematicConfig
+from squid.artifacts import ArtifactStore
+from squid.config import LogConfig, LoggingConfig, ObservabilityConfig, SchematicConfig
 from squid.logging_config import build_logging_config
+from squid.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
 from squid.schematics.domain.models import AnalyzerCapabilities
 from squid.schematics.errors import InvalidSchematicError
 from squid.schematics.infrastructure import worker as worker_module
@@ -33,6 +36,8 @@ from squid.schematics.infrastructure.worker import (
     _worker_log_record,
     current_schematic_job_id,
 )
+from squid_ui_discord.testing import AsyncCallRecorder
+from tests.support.services import unconfigured
 
 
 def unowned_worker(config: SchematicConfig | None = None) -> _Worker:
@@ -82,9 +87,9 @@ def test_worker_main_owns_observability_after_guardrails(mocker: MockerFixture) 
     handle = mocker.Mock()
 
     mocker.patch.object(worker_main, "configure_worker_logging", side_effect=lambda **_: events.append("logging"))
-    mocker.patch.object(worker_main, "load_worker_log_config", return_value=mocker.Mock(level="INFO", root_level=None))
+    mocker.patch.object(worker_main, "load_worker_log_config", return_value=LogConfig(level="INFO"))
     mocker.patch.object(worker_main, "apply_guardrails", side_effect=lambda limits: events.append("guardrails"))
-    config = mocker.Mock()
+    config = ObservabilityConfig()
     mocker.patch.object(worker_main, "load_worker_observability_config", return_value=config)
     configure = mocker.patch.object(
         worker_main,
@@ -378,12 +383,24 @@ async def test_job_runner_publishes_the_job_id_to_the_worker(mocker: MockerFixtu
         seen.append(current_schematic_job_id.get())
         return AnalyzerCapabilities(available=True)
 
-    analyzer = mocker.Mock()
-    analyzer.capabilities = _capture
-    jobs = mocker.Mock()
-    jobs.complete = mocker.AsyncMock(return_value=True)
-    runner = SchematicJobRunner(jobs, mocker.Mock(), analyzer, SchematicConfig())
-    job = mocker.Mock(id=4242, operation="capabilities", input_keys=(), params={})
+    class Analyzer(SchematicWorkerPool):
+        def __init__(self) -> None:
+            pass
+
+        async def capabilities(self) -> AnalyzerCapabilities:
+            return await _capture()
+
+    class Jobs(SchematicJobService):
+        def __init__(self) -> None:
+            self.completed = AsyncCallRecorder(result=True)
+
+        async def complete(self, *args: Any, **kwargs: Any) -> bool:
+            return await self.completed(*args, **kwargs)
+
+    runner = SchematicJobRunner(Jobs(), unconfigured(ArtifactStore), Analyzer(), SchematicConfig())
+    job = ClaimedSchematicJob(
+        id=4242, operation="capabilities", input_keys=(), params={}, attempts=1, claim_token=uuid4()
+    )
 
     await runner._process(job)
 

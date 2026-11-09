@@ -1,13 +1,46 @@
 """Contracts for the bot's global logging listeners."""
 
 import logging
-from unittest.mock import Mock
+from dataclasses import dataclass
+from typing import Any
 
+import discord
 import pytest
 from discord.ext import commands
 from pytest_mock import MockerFixture
 
 from squid.bot.log import LoggingCog
+from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness
+from tests.support.discord import make_layout_bot
+
+
+@dataclass
+class Command:
+    qualified_name: str = "build submit"
+    owns_errors: bool = False
+
+    def has_error_handler(self) -> bool:
+        return self.owns_errors
+
+
+@dataclass
+class Identity:
+    id: int
+
+    def __str__(self) -> str:
+        return "SquidBot#0000"
+
+
+class ErrorCog(commands.Cog):
+    async def cog_command_error(self, ctx: commands.Context[Any], error: Exception) -> None:
+        pass
+
+
+def context() -> Any:
+    source = ContextHarness().source
+    source.command = Command()
+    source.cog = commands.Cog()
+    return source
 
 
 def _squid_fields(record: logging.LogRecord) -> dict[str, object]:
@@ -27,12 +60,12 @@ async def test_command_log_carries_only_low_cardinality_fields(
 
     Checking rendered text alone cannot detect arguments leaked through those fields.
     """
-    cog = LoggingCog(Mock())
-    ctx = Mock()
+    cog = LoggingCog(make_layout_bot())
+    ctx = context()
     ctx.command.qualified_name = "build submit"
     ctx.args = (object(), ctx, "super-secret-argument")
     ctx.kwargs = {"notes": "private-content"}
-    ctx.guild = None if guild_id is None else Mock(id=guild_id)
+    ctx.guild = None if guild_id is None else discord.Object(guild_id)
     ctx.author.id = 789
     ctx.interaction = interaction
 
@@ -49,10 +82,7 @@ async def test_command_log_carries_only_low_cardinality_fields(
 
 
 async def test_ready_log_reports_bot_identity_and_guild_count(caplog: pytest.LogCaptureFixture) -> None:
-    bot = Mock()
-    bot.user.id = 111
-    bot.user.__str__ = Mock(return_value="SquidBot#0000")
-    bot.guilds = [Mock(), Mock()]
+    bot = make_layout_bot(user=Identity(111), guilds=[discord.Object(1), discord.Object(2)])
     cog = LoggingCog(bot)
 
     with caplog.at_level(logging.INFO, logger="squid.bot.log"):
@@ -69,28 +99,27 @@ async def test_command_errors_reach_the_shared_handler_only_when_unowned(mocker:
     Presenting twice is the failure this guards: the shared handler renders a user-facing
     message, so running it alongside a command's own handler double-replies.
     """
-    handle = mocker.patch("squid.bot.log.handle_context_error", new=mocker.AsyncMock())
-    cog = LoggingCog(Mock())
+    handle = mocker.patch("squid.bot.log.handle_context_error", new=AsyncCallRecorder())
+    cog = LoggingCog(make_layout_bot())
 
-    command_owned = Mock()
-    command_owned.command.has_error_handler.return_value = True
+    command_owned = context()
+    command_owned.command.owns_errors = True
     await cog.log_command_error(command_owned, commands.CommandError("boom"))
 
-    cog_owned = Mock()
-    cog_owned.command.has_error_handler.return_value = False
-    cog_owned.cog.has_error_handler.return_value = True
+    cog_owned = context()
+    cog_owned.command.owns_errors = False
+    cog_owned.cog = ErrorCog()
     await cog.log_command_error(cog_owned, commands.CommandError("boom"))
 
-    unknown = Mock()
+    unknown = context()
     unknown.command = None
     unknown.cog = None
     await cog.log_command_error(unknown, commands.CommandNotFound("nope"))
 
     handle.assert_not_awaited()
 
-    unowned = Mock()
-    unowned.command.has_error_handler.return_value = False
-    unowned.cog.has_error_handler.return_value = False
+    unowned = context()
+    unowned.command.owns_errors = False
     error = commands.CommandError("boom")
     await cog.log_command_error(unowned, error)
 

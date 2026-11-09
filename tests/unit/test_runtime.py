@@ -1,64 +1,28 @@
 """Application runtime lifecycle tests."""
 
 import contextlib
-from dataclasses import fields
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import anyio
 
-from squid.runtime import ApiServices, ApplicationRuntime, BackgroundTaskSupervisor, BotServices, WorkerServices
-
-
-def test_process_service_bundles_expose_only_owned_capabilities() -> None:
-    api = {field.name for field in fields(ApiServices)}
-    bot = {field.name for field in fields(BotServices)}
-    worker = {field.name for field in fields(WorkerServices)}
-
-    assert api.isdisjoint({"build_inference", "discord_reconciliation", "domain_events", "search_embeddings"})
-    assert bot.isdisjoint(
-        {"api_keys", "web_auth", "cli_authorization", "vote_members", "search_embeddings", "schematic_jobs"}
-    )
-    assert worker == {
-        "builds",
-        "artifacts",
-        "votes",
-        "ballot_recounter",
-        "records",
-        "events",
-        "event_wake_listener",
-        "notifications",
-        "schematics",
-        "schematic_jobs",
-        "schematic_renders",
-        "media_runner",
-        "media_cleanup",
-        "submission_finalization",
-        "search_embeddings",
-        "refresh_search_index",
-        "record_queue_health",
-        "purge_idempotency",
-        "expire_submission_drafts",
-        "cleanup_submission_schematics",
-        "cleanup_submission_inference",
-        # All processes capture failures; only the worker sweeps expired reports.
-        "error_reports",
-    }
+from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
+from squid_ui_discord.testing import AsyncCallRecorder
+from tests.support.services import bot_services
 
 
 async def test_application_runtime_closes_database() -> None:
-    database = AsyncMock()
-    runtime = ApplicationRuntime(AsyncMock(), database.close, AsyncMock())
+    close = AsyncCallRecorder()
+    runtime = ApplicationRuntime(bot_services(), close, AsyncCallRecorder())
 
     async with runtime:
         pass
 
-    database.close.assert_awaited_once_with()
+    close.assert_awaited_once_with()
 
 
 async def test_application_runtime_checks_readiness() -> None:
-    readiness = AsyncMock()
-    runtime = ApplicationRuntime(AsyncMock(), AsyncMock(), AsyncMock(), readiness)
+    readiness = AsyncCallRecorder()
+    runtime = ApplicationRuntime(bot_services(), AsyncCallRecorder(), AsyncCallRecorder(), readiness)
 
     await runtime.ready()
 

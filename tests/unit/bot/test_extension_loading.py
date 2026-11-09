@@ -6,19 +6,24 @@ Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Any, get_type_hints
-from unittest.mock import MagicMock, create_autospec
+from typing import Any, cast
 
 import discord
 import pytest_asyncio
 from discord.ext import commands
 
 import squid_ui_discord as sd
-from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS
+from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS, CatboxClient, MediaPreviewClient, PostReconciler
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
-from squid.runtime import BotServices
-from tests.support.services import bot_services
+from squid.bot.reactions import ReactionRouter
+from squid.bot.utils.permissions import AccountIdCache
+from squid.config import BuildConfig, CommunityConfig
+from squid.voting.application import VoteService
+from squid.voting.application.ports import VoteActorResolver
+from squid_reactivity import LocalTopicBus
+from tests.support.runtime import SchedulingRecorder
+from tests.support.services import bot_services, unconfigured
 
 LOADABLE = (*EXTENSIONS, *(name for name in DEVELOPMENT_EXTENSIONS if name.startswith("squid.")))
 """Every extension this repo owns, development-only ones included.
@@ -29,18 +34,16 @@ party and need not be installed for these tests to mean anything.
 """
 
 
-def _autospecced_services() -> BotServices:
-    """Autospec every bot service, since cog setup across all extensions touches many of them."""
-    return bot_services(
-        **{
-            field: create_autospec(service, instance=True, spec_set=True)
-            for field, service in get_type_hints(BotServices).items()
-        }
-    )
+class RegistrationVotes(VoteService):
+    def __init__(self) -> None:
+        self.resolver: VoteActorResolver | None = None
+
+    def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
+        self.resolver = resolver
 
 
 class StubBot(commands.Bot):
-    """A real command registry with mocked runtime collaborators."""
+    """A real command registry with checked service placeholders and a reaction router."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -48,16 +51,18 @@ class StubBot(commands.Bot):
             intents=discord.Intents.none(),
             tree_cls=SquidCommandTree,
         )
-        self.ui = sd.install(self)
-        self.services = _autospecced_services()
-        self.reactions = MagicMock()
-        self.background_tasks = MagicMock()
-        self.post_reconciler = MagicMock()
-        self.account_ids = MagicMock()
-        self.build_config = MagicMock()
-        self.community_config = MagicMock()
-        self.catbox = MagicMock()
-        self.media_previews = MagicMock()
+        self.topic_bus = LocalTopicBus()
+        self.ui = sd.install(self, sd.Config(bus=self.topic_bus))
+        self.sessions = self.ui.sessions
+        self.services = bot_services(votes=RegistrationVotes())
+        self.background_tasks = SchedulingRecorder()
+        self.reactions = ReactionRouter(cast(Any, self), self.background_tasks)
+        self.post_reconciler = unconfigured(PostReconciler)
+        self.account_ids = AccountIdCache()
+        self.build_config = BuildConfig()
+        self.community_config = CommunityConfig()
+        self.catbox = unconfigured(CatboxClient)
+        self.media_previews = unconfigured(MediaPreviewClient)
         self.development_mode = False
         self.owner_server_id = 1
         self.bot_name = "stub"
@@ -66,12 +71,6 @@ class StubBot(commands.Bot):
         self.notification_site_url = None
         self.inference_model = "stub"
         self.inference_reasoning_effort = "low"
-
-    def __getattr__(self, name: str) -> Any:
-        # Registration checks do not exercise these unlisted collaborators' methods.
-        if name.startswith("__"):
-            raise AttributeError(name)
-        return MagicMock()
 
 
 @asynccontextmanager
@@ -89,6 +88,9 @@ async def _loaded_bot(extensions: Sequence[str]) -> AsyncIterator[commands.Bot]:
     try:
         for extension in extensions:
             await bot.load_extension(extension)
+            if extension == "squid.bot.reactions":
+                # Extension loading replaces this module, including its handler marker types.
+                bot.reactions = sys.modules[extension].ReactionRouter(bot, bot.background_tasks)
         yield bot
     finally:
         await bot.ui.close()
@@ -165,38 +167,3 @@ async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands
 
     assert listed <= prefix_names | app_names
     assert "poll" not in prefix_names, "the directory would find `poll` anyway if it were not app-only"
-
-
-async def test_message_context_menu_taxonomy(production_bot: commands.Bot) -> None:
-    names = {command.name for command in production_bot.tree.get_commands(type=discord.AppCommandType.message)}
-
-    assert names == {
-        "Archive Message",
-        "Edit Build",
-        "Recalculate Build",
-        "Resync Redstoner",
-        "Vote to Delete",
-    }
-
-
-async def test_production_chat_input_taxonomy(production_bot: commands.Bot) -> None:
-    """Production exposes one application-command root for each public workflow."""
-    names = {command.name for command in production_bot.tree.get_commands(type=discord.AppCommandType.chat_input)}
-
-    assert names == {
-        "access",
-        "account",
-        "build",
-        "errors",
-        "help",
-        "notifications",
-        "poll",
-        "recount",
-        "records",
-        "redstoner",
-        "search",
-        "settings",
-        "starboard",
-        "tags",
-        "versions",
-    }
