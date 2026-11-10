@@ -1,10 +1,16 @@
 """Transaction outcomes remain accessible independently of diagnostic observers."""
 
+import json
+from typing import Literal
+
 import pytest
 
 from squid_reactivity import (
     ActionCommit,
     ActionPurpose,
+    ActionRelation,
+    ActionResultCodec,
+    ActionResultSnapshot,
     ActionRollback,
     ActorRef,
     FrameworkIntegrityError,
@@ -136,3 +142,31 @@ def test_rollback_notifies_each_owner_once_and_preserves_the_original_error() ->
     assert (model.first, model.second) == (0, 0)
     assert isinstance(tx.result, ActionRollback)
     assert len(tx.result.cleanup_errors) == 1
+
+
+@pytest.mark.parametrize("kind", ["reverses", "reapplies", "compensates"])
+def test_history_relation_survives_snapshot_encoding(kind: Literal["reverses", "reapplies", "compensates"]) -> None:
+    with transaction("original") as original:
+        pass
+    relation = ActionRelation(kind, original.context.action_id)
+    with transaction("history", relation=relation) as tx:
+        pass
+    assert isinstance(tx.result, ActionCommit)
+    snapshot = ActionResultSnapshot.from_result(tx.result)
+    codec = ActionResultCodec()
+    assert codec.decode(codec.encode(snapshot)).relation == relation
+
+
+def test_decoding_rejects_multiple_history_relations() -> None:
+    with transaction() as tx:
+        pass
+    assert isinstance(tx.result, ActionCommit)
+    codec = ActionResultCodec()
+    payload = json.loads(codec.encode(ActionResultSnapshot.from_result(tx.result)))
+    payload["relations"] = {
+        "reverses": str(tx.context.action_id),
+        "reapplies": str(tx.context.action_id),
+        "compensates": None,
+    }
+    with pytest.raises(ValueError, match="corrupt schema"):
+        codec.decode(json.dumps(payload).encode())

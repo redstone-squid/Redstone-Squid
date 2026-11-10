@@ -29,6 +29,7 @@ from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
     ActionPurpose,
+    ActionRelation,
     ActionResult,
     ActionRollback,
     ActorRef,
@@ -1118,6 +1119,7 @@ def transaction(
     actor: ActorRef | None = None,
     caused_by: ActionContext | None = None,
     kind: ActionPurpose = ActionPurpose.NORMAL,
+    relation: ActionRelation | None = None,
     action_context: ActionContext | None = None,
 ) -> Iterator[Transaction]:
     """Stage state changes and publish them together when the context exits.
@@ -1142,7 +1144,11 @@ def transaction(
         yield outer.handle
         return
     explicit_identity = (
-        name is not None or actor is not None or caused_by is not None or kind is not ActionPurpose.NORMAL
+        name is not None
+        or actor is not None
+        or caused_by is not None
+        or kind is not ActionPurpose.NORMAL
+        or relation is not None
     )
     if action_context is not None and explicit_identity:
         message = "supply either action_context or transaction identity arguments"
@@ -1154,6 +1160,7 @@ def transaction(
         or ActionContext.create(
             "action" if name is None else name,
             actor=actor,
+            relation=relation,
             kind=kind,
             cause=None if causality is None else causality[0],
             root_action_id=None if causality is None else causality[1],
