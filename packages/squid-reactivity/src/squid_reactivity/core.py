@@ -1781,18 +1781,10 @@ class Observation:
     Held by strong reference for the same reason as `_Transaction.born`: an id must not be
     recycled onto something else while this render is still using it as a key.
     """
-    constructed: dict[int, object] = field(default_factory=dict)
-    """Objects whose construction began during this observation, including initialized ones.
-
-    ``born`` is the temporary write-guard exemption and therefore forgets an object when its
-    constructor returns. This set answers a different question: whether memoizing a render would
-    retain an object that the render contract currently reconstructs on every pass.
-    """
 
     def note_born(self, owner: object) -> None:
         """Allow construction writes until the owner finishes initialization or starts rendering."""
         self.born[id(owner)] = owner
-        self.constructed[id(owner)] = owner
 
     def entering_own_render(self, owner: object) -> None:
         """End the construction exemption for this owner."""

@@ -36,6 +36,7 @@ class Probe:
 
     def __init__(self, *, embed: bool = False) -> None:
         self.embed = embed
+        self.child = Echo() if embed else None
 
     @property
     def initial_state(self) -> sp.TabsState:
@@ -46,7 +47,9 @@ class Probe:
         state: sp.TabsState,
         controls: sp.MachineControls[sp.TabsState, sl.ComponentsV2Target],
     ) -> sl.DocumentLike[sl.ComponentsV2Target]:
-        content = controls.content([Echo()] if self.embed else [sl.paragraph(state.selected)], prefix="body")
+        content = controls.content(
+            [self.child] if self.child is not None else [sl.paragraph(state.selected)], prefix="body"
+        )
         # Mounted forms are layout nodes; routed forms belong inside action controls.
         trigger = controls.form(_form(), "edit", key="probe.edit", label="Edit")
         return sl.stack(

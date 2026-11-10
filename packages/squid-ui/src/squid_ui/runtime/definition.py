@@ -6,11 +6,12 @@ Tree expansion and caching live in the runtime's execution modules.
 
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
-from typing import Any, ClassVar, Generic, Protocol, TypeVar, cast, overload, override
+from typing import Any, ClassVar, Generic, Protocol, Self, TypeVar, cast, overload, override
 
 from squid_reactivity.core import Reactive
 from squid_ui.context import ContextKey
 from squid_ui.document import DocumentLike
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime.services import ManagedService, ServiceOwner
 from squid_ui.target_types import RenderTarget
@@ -59,7 +60,9 @@ class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
 
     render describes the current layout without changing state. State changes
     request another render, but planning and delivery belong to the frontend.
-    Place child components with boundary and keep their keys stable across renders.
+    Create and retain child components during setup or actions, then place them with
+    boundary during rendering. Component construction during rendering is forbidden.
+    Keep boundary keys stable across renders.
     Each boundary prefixes its child's control and presentation keys, so two child
     components can both use a local key such as "save" without colliding.
 
@@ -68,6 +71,15 @@ class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
     owned services run for that mounted lifetime. Calling render_component_tree
     directly only expands the layout and does not run these lifecycle steps.
     """
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+        if _CURRENT_CONTEXT.get() is not None:
+            message = (
+                f"{cls.__name__} was constructed during rendering. "
+                "Create and retain child components during setup or an action; render only places them."
+            )
+            raise LayoutInvariantError(message)
+        return super().__new__(cls, *args, **kwargs)
 
     _runtime: RuntimeOwner | None = None
     _parent: AnyComponent | None = None

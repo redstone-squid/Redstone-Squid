@@ -214,10 +214,7 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         self.observed_addresses.extend(snapshot.addresses)
         self.observed_bindings.extend(snapshot.async_bindings)
         self.assets.extend(own_assets)
-        if not any(isinstance(value, Component) for value in observation.constructed.values()):
-            render_cache[component] = snapshot
-        else:
-            render_cache.pop(component, None)
+        render_cache[component] = snapshot
         return snapshot
 
     def _reuse_subtree(

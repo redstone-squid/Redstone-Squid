@@ -699,7 +699,7 @@ class TestRenderCaching:
         assert component.renders == 2
         assert changed.nodes == (Text("second"),)
 
-    def test_inline_component_construction_keeps_replacement_semantics(self) -> None:
+    def test_retained_component_keeps_identity_across_cached_and_forced_renders(self) -> None:
         events: list[str] = []
 
         class Inline(Tracked):
@@ -715,11 +715,12 @@ class TestRenderCaching:
         class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.stable = Stable()
+                self.inline = Inline("inline", events)
 
             @override
             def render(self):
                 return (
-                    self.boundary(Inline("inline", events), key="inline"),
+                    self.boundary(self.inline, key="inline"),
                     self.boundary(self.stable, key="stable"),
                 )
 
@@ -733,8 +734,11 @@ class TestRenderCaching:
         changed = runtime.render(reuse_committed=True)
         runtime.commit(changed)
 
-        assert runtime.components["inline"] is not original
-        assert events[-2:] == ["unmount:inline", "mount:inline"]
+        assert runtime.components["inline"] is original
+        runtime.invalidate()
+        runtime.commit(runtime.render(reuse_committed=True))
+        assert runtime.components["inline"] is original
+        assert events == ["mount:inline"]
 
 
 @pytest.mark.parametrize(
@@ -834,9 +838,13 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
 
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
     class Duplicate(Component[sl.ComponentsV2Target]):
+        def __init__(self) -> None:
+            self.one = Counter("one")
+            self.two = Counter("two")
+
         @override
         def render(self):
-            return [self.boundary(Counter("one"), key="same"), self.boundary(Counter("two"), key="same")]
+            return [self.boundary(self.one, key="same"), self.boundary(self.two, key="same")]
 
     with pytest.raises(LayoutInvariantError, match="duplicate Boundary key"):
         commit_render(MessageRoot(Duplicate(), access=Everyone(), timeout=None))

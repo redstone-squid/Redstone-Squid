@@ -7,6 +7,7 @@ import pytest
 
 from squid_reactivity.topics import LocalTopicBus, SubscriptionReconciler, Topic
 from squid_ui import Component, DiscordTarget, Reactive, computed, state
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives import Boundary, Text
 from squid_ui.runtime import CellAddress, ReactiveWriteError, addresses, transaction
 from squid_ui.runtime.component import render_component_tree
@@ -155,8 +156,8 @@ def test_an_unaddressed_write_during_a_render_raises_and_tears_no_further() -> N
     assert torn.n == 0
 
 
-def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> None:
-    """Construction is not mutation: a child's __init__ runs while the parent is rendering."""
+def test_component_construction_during_render_is_rejected() -> None:
+    """Component lifetimes cannot depend on whether a render is cached."""
 
     class Child(Component[DiscordTarget]):
         label: str = state("")
@@ -173,14 +174,12 @@ def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> 
         def render(self) -> Boundary[DiscordTarget]:
             return self.boundary(Child("hi"), key="child")
 
-    tree = render_component_tree(Parent())
-    child = tree.components["child"]
-    assert isinstance(child, Child)
-    assert child.label == "hi"
+    with pytest.raises(LayoutInvariantError, match="constructed during rendering"):
+        render_component_tree(Parent())
 
 
-def test_a_component_born_this_render_still_raises_once_its_own_render_runs() -> None:
-    """The exemption ends at construction: a child tearing its own tree is not excused."""
+def test_retained_child_cannot_write_during_its_render() -> None:
+    """Child rendering has the same write protection as parent rendering."""
 
     class TornChild(Component[DiscordTarget]):
         n: int = state(0)
@@ -191,9 +190,12 @@ def test_a_component_born_this_render_still_raises_once_its_own_render_runs() ->
             return Text(str(self.n))
 
     class Parent(Component[DiscordTarget]):
+        def __init__(self) -> None:
+            self.child = TornChild()
+
         @override
         def render(self) -> Boundary[DiscordTarget]:
-            return self.boundary(TornChild(), key="child")
+            return self.boundary(self.child, key="child")
 
     with pytest.raises(ReactiveWriteError, match="factory="):
         render_component_tree(Parent())

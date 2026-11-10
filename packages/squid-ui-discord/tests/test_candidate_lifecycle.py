@@ -238,9 +238,12 @@ async def test_terminal_application_view_is_discarded_without_mounting_children(
     class Parent(Component[ComponentsV2Target]):
         show_child: bool = state(default=False)
 
+        def __init__(self) -> None:
+            self.child = Child()
+
         @override
         def render(self) -> Any:
-            return self.boundary(Child(), key="child") if self.show_child else Text("parent")
+            return self.boundary(self.child, key="child") if self.show_child else Text("parent")
 
     parent = Parent()
     root = MessageRoot(parent, access=Everyone(), timeout=None)
