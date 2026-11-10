@@ -3,8 +3,8 @@
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.accounts.application.presentation import claimant_label
 from squid.accounts.models import AliasClaim
-from squid.bot.profile_render import present_claimant
 from squid.suggestions.application import Candidate
 from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 
@@ -92,11 +92,6 @@ class PendingAliasClaims(Protocol):
     async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]: ...
 
 
-def _claimant_description(claim: AliasClaim) -> str:
-    """Present a claimant canonically within Discord's autocomplete limit."""
-    return present_claimant(claim, mention=False)[:100]
-
-
 class AliasClaimProvider:
     """Suggest the creator credit claims a reviewer can act on."""
 
@@ -111,10 +106,7 @@ class AliasClaimProvider:
             Candidate.create(
                 str(claim.id),
                 label=f"#{claim.id} · {claim.alias_name}",
-                # Discord truncates a description at 100 characters, and a mention renders as raw
-                # `<@id>` here rather than as a chip, so this asks for claimants and then prefers a
-                # readable name over the snowflake.
-                description=_claimant_description(claim),
+                description=claimant_label(claim),
                 kind="claim",
                 terms=(claim.alias_name, str(claim.id)),
             )

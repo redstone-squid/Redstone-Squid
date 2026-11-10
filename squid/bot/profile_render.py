@@ -4,10 +4,11 @@ Public rendering accepts the account service's already-filtered view. Private
 rendering can include the caller's hidden identities and avatar.
 """
 
+from squid.accounts.application.presentation import claimant_label
 from squid.accounts.domain import IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity, avatar_url_for
 from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
-from squid_ui.text import Message, raw_md
+from squid_ui.text import Message
 
 _PROVIDER_LABELS = {
     IdentityProvider.DISCORD: tr("Discord"),
@@ -102,29 +103,9 @@ def _alias_credit_label(name: str, count: int) -> Message:
 
 
 def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
-    """Choose a readable claimant label from the identities loaded with the claim.
-
-    Prefer a Discord mention when allowed, then a Java name, public creator ID,
-    Discord ID, and finally the internal account ID. Disable mentions for select
-    descriptions, where Discord would display the raw mention syntax.
-
-    Returns a string because autocomplete and select descriptions truncate it.
-    """
-    claimant = claim.claimant
-    if claimant is not None:
-        discord = claimant.most_recent_identity_for(IdentityProvider.DISCORD)
-        if mention and discord is not None and discord.discord_id is not None:
-            return f"<@{discord.discord_id}>"
-        java = claimant.most_recent_identity_for(IdentityProvider.JAVA)
-        if java is not None and java.display_name is not None:
-            return java.display_name
-        if claimant.public_creator_id is not None:
-            creator_id = raw_md(claimant.public_creator_id)
-            return tr(t"creator `{creator_id}`").resolve()
+    """Prefer a clickable Discord mention, otherwise use the shared plain label."""
+    if mention and claim.claimant is not None:
+        discord = claim.claimant.most_recent_identity_for(IdentityProvider.DISCORD)
         if discord is not None and discord.discord_id is not None:
-            # Reached only without a mention: the snowflake is the last handle left, and it is a
-            # diagnostic here rather than a name.
-            discord_id = raw_md(discord.discord_id)
-            return tr(t"Discord user `{discord_id}`").resolve()
-    account_id = raw_md(claim.account_id)
-    return tr(t"unidentified account (internal ID `{account_id}`)").resolve()
+            return f"<@{discord.discord_id}>"
+    return claimant_label(claim)

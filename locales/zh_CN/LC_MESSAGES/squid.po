@@ -1597,9 +1597,9 @@ msgstr ""
 msgid "Discord rejected a DM, so DMs are suspended until you re-enable them."
 msgstr ""
 
-#: squid/bot/profile_render.py:128
+#: squid/accounts/application/presentation.py:30
 #, python-brace-format
-msgid "Discord user `{discord_id}`"
+msgid "Discord user {discord_id}"
 msgstr ""
 
 #: squid/bot/help.py:28
@@ -5804,9 +5804,9 @@ msgstr ""
 msgid "consumer must be a non-empty name"
 msgstr ""
 
-#: squid/bot/profile_render.py:123
+#: squid/accounts/application/presentation.py:27
 #, python-brace-format
-msgid "creator `{creator_id}`"
+msgid "creator {creator_id}"
 msgstr ""
 
 #: squid/notifications/application.py:135
@@ -6195,9 +6195,9 @@ msgstr ""
 msgid "to the current guild"
 msgstr "向当前服务器"
 
-#: squid/bot/profile_render.py:130
+#: squid/accounts/application/presentation.py:18
 #, python-brace-format
-msgid "unidentified account (internal ID `{account_id}`)"
+msgid "unidentified account (internal ID {account_id})"
 msgstr ""
 
 #: squid/bot/account_view.py:441

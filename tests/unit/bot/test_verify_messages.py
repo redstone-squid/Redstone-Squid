@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
+from squid.accounts.application.presentation import claimant_label
 from squid.accounts.domain import ClaimStatus, IdentityRefresh, LinkPreview
 from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.bot.account_presentation import (
@@ -18,7 +19,7 @@ from squid.bot.account_presentation import (
 )
 from squid.bot.profile_render import present_claimant
 from squid.suggestions.domain import SuggestionRequest
-from squid.suggestions.infrastructure.providers.records import AliasClaimProvider, _claimant_description
+from squid.suggestions.infrastructure.providers.records import AliasClaimProvider
 from squid_ui.text import source_text
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -232,22 +233,26 @@ def test_the_autocomplete_prefers_a_readable_name_over_a_snowflake() -> None:
         )
     )
 
-    assert _claimant_description(java_only) == "Notch"
-    assert _claimant_description(with_discord) == "Notch"
-    assert _claimant_description(_claim(None)) == present_claimant(_claim(None), mention=False)
+    assert claimant_label(java_only) == "Notch"
+    assert claimant_label(with_discord) == "Notch"
+    assert claimant_label(_claim(None)) == present_claimant(_claim(None), mention=False)
 
 
-def test_the_autocomplete_description_respects_discords_limit() -> None:
+def test_shared_claimant_labels_preserve_long_names() -> None:
     long_name = "N" * 250
     claim = _claim(
         Account(identities=(AccountIdentity.java(JAVA_UUID, username=long_name),), consent=None, id=42, created_at=NOW)
     )
 
-    assert len(_claimant_description(claim)) <= 100
+    assert claimant_label(claim) == long_name
 
 
-async def test_registered_claim_provider_uses_the_canonical_presentation() -> None:
-    claim = _claim(Account(identities=(AccountIdentity.discord(555),), consent=None, id=42, created_at=NOW))
+@pytest.mark.parametrize("java_name", [None, "N" * 250])
+async def test_registered_claim_provider_uses_full_plain_labels(java_name: str | None) -> None:
+    identity = (
+        AccountIdentity.discord(555) if java_name is None else AccountIdentity.java(JAVA_UUID, username=java_name)
+    )
+    claim = _claim(Account(identities=(identity,), consent=None, id=42, created_at=NOW, public_creator_id=None))
 
     class Claims:
         async def pending_alias_claims(self, *, with_claimants: bool = False) -> tuple[AliasClaim, ...]:
@@ -256,7 +261,7 @@ async def test_registered_claim_provider_uses_the_canonical_presentation() -> No
 
     (candidate,) = await AliasClaimProvider(Claims()).candidates(SuggestionRequest(source="alias_claims_pending"))
 
-    assert candidate.suggestion.description == present_claimant(claim, mention=False)
+    assert candidate.suggestion.description == ("Discord user 555" if java_name is None else java_name)
 
 
 # Account-panel unlink interactions are covered in ``test_account_panel.py``.
