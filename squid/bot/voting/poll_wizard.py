@@ -253,7 +253,7 @@ class PollScreen(sd.Screen):
     policy = sd.ResponseSpec(
         timeout=900,
         expiry=sd.RenewEphemeral(),
-        follow_topics=True,
+        live_updates=True,
         session=sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD),
     )
 

@@ -30,7 +30,7 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         editor = await request.respond(
             Workbench(draft),
             access=sd.Owner(ctx.author.id),
-            follow_topics=True,
+            live_updates=True,
             session=sd.SessionSpec("layout-workbench"),
             session_key=uuid.uuid4(),
         )
@@ -38,7 +38,7 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             await request.respond(
                 BuildPreview(draft),
                 access=sd.Owner(ctx.author.id),
-                follow_topics=True,
+                live_updates=True,
                 parent=editor.root,
                 session=sd.SessionSpec("layout-preview"),
             )
@@ -53,7 +53,7 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         summary = await request.respond(
             ReviewSummary(room, ctx.author.id, mode),
             access=sd.Everyone(),
-            follow_topics=True,
+            live_updates=True,
             session=sd.SessionSpec("layout-review"),
             session_key=uuid.uuid4(),
         )
@@ -62,7 +62,7 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 await request.respond(
                     ReviewerPanel(room, seat, simulated=True),
                     access=sd.Owner(ctx.author.id),
-                    follow_topics=True,
+                    live_updates=True,
                     parent=summary.root,
                     session=sd.SessionSpec("layout-reviewer"),
                 )

@@ -61,7 +61,11 @@ Retain one model per factory key; no scope metadata is required on the model.
 
 ## Topics
 
-Addressed publish/subscribe that lets a write in one process repaint a mount in another.
+Optional invalidation for external dependencies, such as database records or files.
+A resource calls `watch(Topic("build", "42"))`; after a committed database change, the
+application publishes that topic so consumers know to reload. Reactive objects notify
+readers directly and need no topic bus. `LocalTopicBus` operates in one process; a host-owned
+bridge can publish events received from another process.
 
 ::: squid_reactivity.Topic
 

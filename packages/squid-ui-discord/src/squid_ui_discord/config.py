@@ -41,6 +41,7 @@ class Config:
     responses: ResponseSpec = field(default_factory=ResponseSpec)
     localization: LocalizationResolver | None = None
     bus: TopicBus | None = None
+    """Optional notifications for external dependencies; reactive objects need no bus."""
     profiler: Profiler | None = None
     errors: ErrorPolicy = field(default_factory=ErrorPolicy)
 

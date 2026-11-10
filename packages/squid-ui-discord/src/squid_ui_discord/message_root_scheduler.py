@@ -71,8 +71,8 @@ class MessageRootScheduler:
     so the latest state is not lost while different roots can refresh concurrently.
 
     Args:
-        bus: Process-local topic bus used by :meth:`follow`. Without one, the scheduler remains
-            a standalone out-of-band refresh scheduler.
+        bus: Optional process-local bus for external topic dependencies. Reactive objects
+            notify their consumers directly and need no bus.
         concurrency: Maximum number of different message roots refreshed concurrently.
         sweep_interval: Seconds between interaction-token expiry checks.
         clock: UTC wall clock used to compare interaction-token deadlines.

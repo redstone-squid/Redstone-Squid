@@ -92,7 +92,10 @@ class KindKeyCodec:
 
 @runtime_checkable
 class TopicBus(Protocol):
-    """Small synchronous bus contract used by reactive publication and hosts.
+    """Publish notifications that external dependencies may have changed.
+
+    Reactive objects notify their consumers directly, without this bus. Hosts publish
+    named topics after database changes, file changes, or incoming remote events.
 
     Implementations must advance a :class:`Topic`'s tracked version before notifying
     subscribers, even when there are no subscribers. Delivery scheduling, coalescing,

@@ -200,7 +200,7 @@ def test_build_editor_declares_keyed_topic_following_policy() -> None:
     assert isinstance(BuildEditScreen.__response_spec__.session, SessionSpec)
     assert BuildEditScreen.__response_spec__.session.name == "build-edit"
     assert BuildEditScreen.__response_spec__.timeout == 900
-    assert BuildEditScreen.__response_spec__.follow_topics is True
+    assert BuildEditScreen.__response_spec__.live_updates is True
     assert BuildEditScreen.__response_spec__.retain_routed_on_timeout is True
 
 

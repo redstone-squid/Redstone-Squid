@@ -187,11 +187,12 @@ async def test_renew_ephemeral_degrades_without_scheduler() -> None:
     assert outcome.root.expiry == sd.PauseUpdates(45)
 
 
-async def test_follow_topics_selects_installed_scheduler() -> None:
-    ui, client = _ui(bus=LocalTopicBus())
+@pytest.mark.parametrize("bus", [None, LocalTopicBus()])
+async def test_live_updates_selects_installed_scheduler(bus: LocalTopicBus | None) -> None:
+    ui, client = _ui(bus=bus)
 
     class Following(sd.Screen[None, Owner]):
-        policy = sd.ResponseSpec(session=sd.SessionSpec("following"), follow_topics=True)
+        policy = sd.ResponseSpec(session=sd.SessionSpec("following"), live_updates=True)
 
         @override
         def render(self):
@@ -376,7 +377,7 @@ def test_unspecified_operational_policy_inherits_runtime_defaults() -> None:
     client = FakeClient()
     runtime = sd.install(
         cast(discord.Client, client),
-        sd.Config(responses=sd.ResponseSpec(timeout=75, follow_topics=True, retain_routed_on_timeout=True)),
+        sd.Config(responses=sd.ResponseSpec(timeout=75, live_updates=True, retain_routed_on_timeout=True)),
     )
     ui = runtime.scope(Owner())
 
@@ -387,7 +388,7 @@ def test_unspecified_operational_policy_inherits_runtime_defaults() -> None:
 
     effective = ui._policy(Plain(), {})
     assert effective.timeout == 75
-    assert effective.follow_topics is True
+    assert effective.live_updates is True
     assert effective.retain_routed_on_timeout is True
     assert effective.audience == "personal"
     assert effective.access is sd.invoker_only

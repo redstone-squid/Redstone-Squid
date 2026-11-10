@@ -127,8 +127,8 @@ def address(workspace: Workspace, name: str) -> CellAddress:
     return CellAddress(workspace, name)
 
 
-async def test_two_mounts_react_once_each_to_one_commit() -> None:
-    bus = LocalTopicBus()
+@pytest.mark.parametrize("bus", [None, LocalTopicBus()])
+async def test_two_mounts_react_once_each_to_one_commit(bus: LocalTopicBus | None) -> None:
     scheduler = MessageRootScheduler(bus)
     workspace = Workspace()
     message_roots = [MessageRoot(Panel(workspace), access=Everyone(), scheduler=scheduler) for _ in range(2)]

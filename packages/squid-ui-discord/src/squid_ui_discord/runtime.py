@@ -285,9 +285,9 @@ def install[ClientT: discord.Client](
 ) -> DiscordUIRuntime[ClientT]:
     """Assemble and register the UI runtime for a client without starting its tasks.
 
-    A configured bus supplies a default scheduler for topic and shared-state updates.
-    Without one, callers can still refresh roots explicitly or use a scheduler supplied
-    in mount defaults. The localization callback resolves the locale for each new Request.
+    The scheduler delivers live reactive updates with or without a topic bus. Supply
+    a bus only for external dependencies declared with watch(Topic(...)). The localization
+    callback resolves the locale for each new Request.
 
     Raises:
         ValueError: A runtime is already installed on the client.
@@ -302,9 +302,8 @@ def install[ClientT: discord.Client](
     if _INSTALLED.get(client) is not None:
         message = "client already has a layout host installed"
         raise ValueError(message)
-    scheduler = None if bus is None else MessageRootScheduler(bus, profiler=profiler)
-    if scheduler is not None:
-        defaults = defaults.replace(scheduler=scheduler)
+    scheduler = MessageRootScheduler(bus, profiler=profiler)
+    defaults = defaults.replace(scheduler=scheduler)
     sessions = SessionManager(defaults=defaults)
     challenges = ChallengeRunner()
     # The knot install exists to tie: the presenter needs the registry and the runner, and

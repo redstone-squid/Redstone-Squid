@@ -51,12 +51,13 @@ def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -
     assert runtime.defaults is runtime.sessions.defaults
 
 
-def test_install_makes_a_reactor_only_when_given_a_bus() -> None:
+def test_install_makes_a_scheduler_without_requiring_a_bus() -> None:
     without = install(cast(discord.Client, fake_client()))
     with_bus = install(cast(discord.Client, fake_client()), sd.Config(bus=LocalTopicBus()))
 
-    assert without.scheduler is None
-    assert without.defaults.scheduler is None
+    assert without.scheduler is not None
+    assert without.scheduler.bus is None
+    assert without.defaults.scheduler is without.scheduler
     assert with_bus.scheduler is not None
     assert with_bus.defaults.scheduler is with_bus.scheduler
 

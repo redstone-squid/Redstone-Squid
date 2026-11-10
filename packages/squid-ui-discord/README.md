@@ -53,6 +53,12 @@ to infer the command's cog; component callbacks use typed events such as `sd.Pre
 command binding use `await self.ui.request(source)`. Both resolvers share one request and ledger;
 a missing or closed command-owner scope raises instead of extending the panel's lifetime.
 
+Use `sd.ResponseSpec(live_updates=True)` on a screen, or pass `live_updates=True` when
+presenting it, to schedule refreshes when its observed values change. The installed scheduler
+works without a topic bus. `sd.Config(bus=...)` is optional: supply it when resources watch
+external changes such as `Topic("build", "42")`. The application publishes that topic after
+updating the database; incoming remote events need a host-owned bridge.
+
 `sd.install()` starts no tasks. Run the installed runtime before opening panels, even when
 using neither scheduled refreshes nor challenges: ordinary panel shutdown also needs its execution
 host. Await startup readiness, then finish the runtime before cancelling its runner:

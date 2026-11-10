@@ -253,7 +253,7 @@ class BuildEditScreen(sd.Screen):
     """
 
     policy = sd.ResponseSpec(
-        timeout=900, follow_topics=True, retain_routed_on_timeout=True, session=sd.SessionSpec("build-edit")
+        timeout=900, live_updates=True, retain_routed_on_timeout=True, session=sd.SessionSpec("build-edit")
     )
 
     page: int = sl.state(1)

@@ -208,7 +208,7 @@ class ReviewSummary(InspectablePanel):
             ReviewerPanel(self.room, seat, simulated=False),
             access=sd.Owner(user_id),
             audience="public",
-            follow_topics=True,
+            live_updates=True,
             parent=event.context.root,
             session=sd.SessionSpec("layout-reviewer"),
         )

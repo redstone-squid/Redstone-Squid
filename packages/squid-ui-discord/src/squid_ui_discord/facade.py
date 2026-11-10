@@ -339,7 +339,7 @@ class Scope[OwnerT = Any]:
         options["retain_routed_on_timeout"] = self._setting(policy.retain_routed_on_timeout, default=False)
         options["timeout"] = self._setting(policy.timeout, default=180)
         options["localization"] = localization
-        scheduler = self._runtime.scheduler if self._setting(policy.follow_topics, default=False) else None
+        scheduler = self._runtime.scheduler if self._setting(policy.live_updates, default=False) else None
         options["scheduler"] = scheduler
         expiry = self._setting(policy.expiry, default=None)
         if expiry is not None:

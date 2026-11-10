@@ -58,7 +58,7 @@ class ResponseOverrides(TypedDict, total=False):
     access: AccessSetting
     timeout: float | None
     expiry: ExpiryPolicy | None
-    follow_topics: bool
+    live_updates: bool
     retain_routed_on_timeout: bool
     session: SessionSpec | None
     allowed_mentions: discord.AllowedMentions | None
@@ -73,7 +73,8 @@ class ResponseSpec:
     access: Setting[AccessSetting] = UNSET
     timeout: Setting[float | None] = UNSET
     expiry: Setting[ExpiryPolicy | None] = UNSET
-    follow_topics: Setting[bool] = UNSET
+    live_updates: Setting[bool] = UNSET
+    """Schedule background refreshes for observed reactive fields and external topics."""
     retain_routed_on_timeout: Setting[bool] = UNSET
     session: Setting[SessionSpec | None] = UNSET
     allowed_mentions: Setting[discord.AllowedMentions | None] = UNSET
@@ -95,7 +96,7 @@ DEFAULT_RESPONSE_SPEC = ResponseSpec(
     access=None,
     timeout=180,
     expiry=None,
-    follow_topics=False,
+    live_updates=False,
     retain_routed_on_timeout=False,
     session=None,
     allowed_mentions=None,
