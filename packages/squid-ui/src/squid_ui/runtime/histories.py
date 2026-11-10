@@ -31,11 +31,8 @@ from squid_reactivity.actions import (
     ChangeToken,
     ConflictDetail,
     ExceptionReport,
-    OperationEventSnapshot,
     TransactionContribution,
     current_action,
-    emit_causal_event,
-    has_event_observers,
 )
 from squid_reactivity.core import (
     CellPatchSet,
@@ -51,6 +48,11 @@ from squid_reactivity.core import (
     fresh_action_transaction,
     has_action_hook,
     on_action_commit,
+)
+from squid_reactivity.diagnostics import (
+    OperationEventSnapshot,
+    emit_causal_event,
+    has_event_observers,
 )
 from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_reactivity.operations import OperationContext

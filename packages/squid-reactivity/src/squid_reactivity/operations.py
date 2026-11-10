@@ -21,14 +21,16 @@ from squid_reactivity.actions import (
     ActionPurpose,
     CausalRef,
     ExceptionReport,
-    OperationEventSnapshot,
     causal_scope,
     current_action,
-    emit_causal_event,
-    has_event_observers,
 )
 from squid_reactivity.completion import Completion
 from squid_reactivity.core import _Signal, fresh_action_transaction
+from squid_reactivity.diagnostics import (
+    OperationEventSnapshot,
+    emit_causal_event,
+    has_event_observers,
+)
 from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
 
 

@@ -17,7 +17,7 @@ from discord.ext import commands
 from discord.ext.commands import Context
 
 import squid_ui as sl
-from squid_reactivity.actions import (
+from squid_reactivity.diagnostics import (
     ActionResultSnapshot,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,

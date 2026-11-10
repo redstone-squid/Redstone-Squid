@@ -18,7 +18,9 @@ from contextvars import Context, copy_context
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
-from squid_reactivity.actions import copy_event_observers
+from squid_reactivity.diagnostics import (
+    copy_event_observers,
+)
 from squid_ui.runtime.tasks import anyio, task_is_within
 
 if TYPE_CHECKING:

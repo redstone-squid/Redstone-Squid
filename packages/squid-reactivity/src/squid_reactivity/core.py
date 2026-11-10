@@ -44,12 +44,14 @@ from squid_reactivity.actions import (
     continuation_callback,
     current_action,
     current_causality,
-    emit_continuation_failure,
-    emit_result,
     in_continuation,
     next_commit_sequence,
 )
 from squid_reactivity.addresses import CellAddress, publish
+from squid_reactivity.diagnostics import (
+    emit_continuation_failure,
+    emit_result,
+)
 
 _log = logging.getLogger(__name__)
 

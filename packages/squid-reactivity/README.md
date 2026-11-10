@@ -44,7 +44,9 @@ For restoration and saving across restarts, use `squid_storage.PersistentStatePo
 The package is layered:
 
 - `squid_reactivity.actions` provides sortable action IDs, causal contexts, immutable terminal
-  outcomes, scoped diagnostic observers, and portable event encoding.
+  outcomes, and the current causal context.
+- `squid_reactivity.diagnostics` provides scoped diagnostic observers, redaction, event
+  ledgers, and portable event encoding.
 - `squid_reactivity.core` provides state cells, computed values, full strong-read OCC,
   version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
 - Every `Reactive` field has an identity address. Consumers subscribe directly without a host-supplied bus.

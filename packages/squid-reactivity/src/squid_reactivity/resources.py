@@ -25,10 +25,7 @@ from squid_reactivity.actions import (
     ActionId,
     CausalRef,
     ExceptionReport,
-    ResourceEventSnapshot,
     current_causality,
-    emit_causal_event,
-    has_event_observers,
 )
 from squid_reactivity.addresses import CellAddress, publish
 from squid_reactivity.completion import Completion
@@ -45,6 +42,11 @@ from squid_reactivity.core import (
     declared_cells,
     enlist,
     settling,
+)
+from squid_reactivity.diagnostics import (
+    ResourceEventSnapshot,
+    emit_causal_event,
+    has_event_observers,
 )
 
 

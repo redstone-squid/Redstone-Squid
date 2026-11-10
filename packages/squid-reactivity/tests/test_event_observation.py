@@ -27,7 +27,10 @@ from squid_reactivity import (
     observe_events,
     transaction,
 )
-from squid_reactivity.actions import CausalEventSnapshot, emit_causal_event
+from squid_reactivity.diagnostics import (
+    CausalEventSnapshot,
+    emit_causal_event,
+)
 from squid_reactivity.operations import ProgressReporter, operation
 from squid_reactivity.resources import resource
 

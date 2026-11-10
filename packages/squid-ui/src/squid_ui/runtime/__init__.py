@@ -7,7 +7,6 @@ from squid_reactivity.actions import (
     ActionRelation,
     ActionResult,
     ActionRollback,
-    EventLedger,
     RollbackReason,
 )
 from squid_reactivity.core import (
@@ -44,6 +43,9 @@ from squid_reactivity.core import (
     strong_read,
     transaction,
     untracked,
+)
+from squid_reactivity.diagnostics import (
+    EventLedger,
 )
 from squid_reactivity.resources import (
     AtomicResource,

@@ -11,7 +11,11 @@ from typing import override
 import anyio
 import pytest
 
-from squid_reactivity.actions import EventLedger, OperationEventSnapshot, observe_events
+from squid_reactivity.diagnostics import (
+    EventLedger,
+    OperationEventSnapshot,
+    observe_events,
+)
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.operations import Failed, Pending, Succeeded
 from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, Reactive, state
