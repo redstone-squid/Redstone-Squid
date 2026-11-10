@@ -47,7 +47,7 @@ def commit(runtime: ComponentRuntime, *, incremental: bool = True) -> None:
     if not incremental:
         runtime.invalidate()
     tree = runtime.render(reuse_committed=True)
-    runtime.commit(tree, rendered_revision=runtime.revision)
+    runtime.commit(tree)
 
 
 @pytest.mark.parametrize("incremental", [False, True])
@@ -64,7 +64,7 @@ def test_new_child_mount_writes_survive_cache_reconciliation(incremental: bool) 
     assert child.value == 1
     refreshed = runtime.render(reuse_committed=True)
     assert testing.texts(refreshed.nodes) == ["1", "0"]
-    runtime.commit(refreshed, rendered_revision=runtime.revision)
+    runtime.commit(refreshed)
     assert not runtime.dirty
 
 

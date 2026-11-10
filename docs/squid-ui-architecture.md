@@ -700,7 +700,11 @@ and need no component owner. Reactive models do not acquire component lifecycle 
 tasks: use a `ManagedService` with an explicit owner for ongoing activity.
 
 `ComponentRuntime` keeps subscriptions for the delivered tree while it observes a prospective
-replacement. Commit retires unused reads; discard releases only prospective reads. Sources hold
+replacement. `runtime.stage(tree)` returns a `RenderCandidate` holding the tree, its captured
+revision, and its prospective subscriptions. Retain it across delivery and call `candidate.commit()`
+or `candidate.discard()` exactly once. Commit retires unused reads; discard releases only prospective
+reads. Changes during delivery leave the runtime dirty for its next render. Staging a different tree
+or finishing the runtime discards the outstanding candidate. Sources hold
 weak subscription handles, so a long-lived model cannot keep an abandoned runtime alive. A Discord
 scheduler arranges delivery of automatic updates; it needs no topic bus for reactive models.
 `TopicBus` remains the integration mechanism for explicit external `watch(Topic(...))` dependencies.

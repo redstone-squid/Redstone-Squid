@@ -112,7 +112,8 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
             generation = "undrawn" if isinstance(candidate, _PlannedCandidate) else candidate.generation
             message = f"mount {self._mount_id}: candidate generation {generation} already settled, cannot {ending}"
             raise LayoutInvariantError(message)
-        candidate.settled = True
+        if isinstance(candidate, _LifecycleCandidate):
+            candidate.settled = True
         if self.pending is candidate:
             self.pending = None
 
@@ -124,7 +125,7 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self._runtime.plan_memo.promote(presentation, presentation.revision)
         # Component hooks can invalidate or raise after reconciling the delivered tree.
         # Settlement precedes them so cleanup never rolls back that committed work.
-        self._runtime.commit(candidate.tree, rendered_revision=candidate.revision)
+        candidate.render.commit()
         self.handlers = candidate.handlers
         self.form_bindings = candidate.form_bindings
         self.plan = candidate.plan
@@ -192,7 +193,7 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         if not isinstance(candidate, _PlannedCandidate):
             candidate.view.stop()
         if not isinstance(candidate, _LifecycleCandidate):
-            self._runtime.discard()
+            candidate.render.discard()
         self.mark_dirty()
 
     def _swap_view(self, view: AnyMountedView) -> None:

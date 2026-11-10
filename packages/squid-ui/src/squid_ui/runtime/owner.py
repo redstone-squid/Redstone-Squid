@@ -1,6 +1,7 @@
 """Frontend-neutral owner of a reactive component tree."""
 
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from squid_reactivity.resources import AsyncBinding
@@ -15,6 +16,46 @@ from squid_ui.runtime.render_cache import RenderCache
 from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _owns_current_activity, _ServiceLifecycle
 from squid_ui.runtime.tree import ComponentTree
 from squid_ui.target_types import RenderTarget
+
+
+@dataclass(slots=True)
+class RenderCandidate[RenderTargetT: RenderTarget = RenderTarget]:
+    """A prospective tree and its subscriptions, settled once after delivery.
+
+    Obtain one with runtime.stage(tree). Its revision is captured when the tree
+    is first staged, so changes during delivery remain pending after commit.
+    Superseding or finishing the runtime discards outstanding candidates.
+    """
+
+    _runtime: ComponentRuntime[RenderTargetT]
+    tree: ComponentTree[RenderTargetT]
+    revision: int
+    settled: bool = False
+
+    def _require_pending(self) -> None:
+        if self.settled or self._runtime._staged is not self:
+            message = "render candidate already settled or superseded"
+            raise LayoutInvariantError(message)
+
+    def commit(self) -> None:
+        """Adopt a delivered tree before running its mount and unmount hooks."""
+        self._require_pending()
+        if self.tree.deferred:
+            message = "a discovery render cannot be committed"
+            raise LayoutInvariantError(message)
+        self.settled = True
+        self._runtime._staged = None
+        self._runtime.subscriptions.commit()
+        self._runtime._commit_tree(self.tree, rendered_revision=self.revision)
+
+    def discard(self) -> None:
+        """Release prospective reads while retaining the delivered tree's reads."""
+        self._require_pending()
+        self.settled = True
+        self._runtime._staged = None
+        self._runtime.subscriptions.discard()
+        if self._runtime._cached_tree is self.tree:
+            self._runtime._cached_tree = None
 
 
 class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
@@ -61,8 +102,9 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.plan_memo = PlanMemo()
         self.components: dict[str, AnyComponent] = {}
         self._cache = RenderCache[RenderTargetT]()
-        self._candidate_tree: ComponentTree[RenderTargetT] | None = None
-        self._candidate_revision = -1
+        self._cached_tree: ComponentTree[RenderTargetT] | None = None
+        self._cached_revision = -1
+        self._staged: RenderCandidate[RenderTargetT] | None = None
         self._committed_tree: ComponentTree[RenderTargetT] | None = None
         self.revision = 0
         """Which render inputs the next render would see; a render captures it and `commit`
@@ -76,19 +118,26 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if self.on_reactive_invalidate is not None:
             self.on_reactive_invalidate(address)
 
-    def stage(self, tree: ComponentTree[RenderTargetT]) -> None:
-        """Observe a candidate while preserving the delivered tree's dependencies."""
-        # Loading can discover several successive candidates before one is delivered.
-        # Keep the committed dependencies throughout each discovery pass.
-        if self.subscriptions.staged is not None:
-            self.subscriptions.discard()
+    def stage(self, tree: ComponentTree[RenderTargetT]) -> RenderCandidate[RenderTargetT]:
+        """Return the candidate for this tree, replacing any earlier prospective tree.
+
+        Repeated staging returns the same candidate and preserves its captured
+        revision. Loading can replace discovery trees while the delivered tree's
+        dependencies remain subscribed throughout.
+        """
+        if self._staged is not None:
+            if self._staged.tree is tree:
+                return self._staged
+            self._staged.discard()
         self.subscriptions.stage(tree.observations)
+        self._staged = RenderCandidate(self, tree, self.revision)
+        return self._staged
 
     def discard(self) -> None:
-        """Release prospective dependencies without changing the delivered tree."""
-        if self.subscriptions.staged is not None:
-            self.subscriptions.discard()
-        self._candidate_tree = None
+        """Discard the outstanding candidate, if any."""
+        if self._staged is not None:
+            self._staged.discard()
+        self._cached_tree = None
 
     def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None:
         """Declare the render inputs moved, so anything rendered before now is stale."""
@@ -106,8 +155,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         active: set[Address] = set(self.subscriptions.watched)
         if self._committed_tree is not None:
             active.update(self._committed_tree.observations)
-        if self._candidate_tree is not None:
-            active.update(self._candidate_tree.observations)
+        if self._cached_tree is not None:
+            active.update(self._cached_tree.observations)
         relevant = requested & active
         if not relevant:
             return
@@ -129,7 +178,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         """Record one invalidation revision for a component set."""
         self.revision += 1
         self.dirty = True
-        self._candidate_tree = None
+        self._cached_tree = None
         self._cache.invalidate(components, force_all=force_all, check_dependencies=check_dependencies)
         if self.on_invalidate is not None:
             self.on_invalidate()
@@ -162,14 +211,16 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self.revision += 1
             self.dirty = True
             self._cache.require_full_render()
-            self._candidate_tree = None
-        if reuse_committed and self._candidate_tree is not None and self._candidate_revision == self.revision:
+            self._cached_tree = None
+        if reuse_committed and self._cached_tree is not None and self._cached_revision == self.revision:
             if not terminal:
-                self._validate_execution_host(self._candidate_tree)
-            return self._candidate_tree
+                self._validate_execution_host(self._cached_tree)
+                self.stage(self._cached_tree)
+            return self._cached_tree
         if reuse_committed and not self.dirty and self._committed_tree is not None:
             if not terminal:
                 self._validate_execution_host(self._committed_tree)
+                self.stage(self._committed_tree)
             return self._committed_tree
         if reuse_committed and self._backdated_to_committed():
             committed = self._committed_tree
@@ -178,6 +229,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 raise AssertionError(message)
             if not terminal:
                 self._validate_execution_host(committed)
+                self.stage(committed)
             return committed
         tree = render_component_tree(
             self.root,
@@ -194,8 +246,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if not terminal:
             self.stage(tree)
         if not tree.deferred:
-            self._candidate_tree = tree
-            self._candidate_revision = self.revision
+            self._cached_tree = tree
+            self._cached_revision = self.revision
         return tree
 
     def _validate_execution_host(self, tree: ComponentTree[RenderTargetT]) -> None:
@@ -208,8 +260,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if self._committed_tree is None or not self._cache.can_backdate():
             return False
         self._cache.rendered()
-        self._candidate_tree = self._committed_tree
-        self._candidate_revision = self.revision
+        self._cached_tree = self._committed_tree
+        self._cached_revision = self.revision
         return True
 
     def pending_cached_atomic_resources(self) -> tuple[AsyncBinding, ...]:
@@ -223,32 +275,25 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             return ()
         return self._cache.pending_atomic_resources()
 
-    def commit(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int | None = None) -> None:
-        """Reconcile a delivered tree, unmounting children first and mounting parents first.
+    def commit(self, tree: ComponentTree[RenderTargetT]) -> None:
+        """Commit a delivered tree using its staged candidate.
 
-        Pass the revision captured at render time so changes during delivery leave the
-        runtime dirty. Lifecycle errors are collected and raised as an ExceptionGroup
-        after reconciliation; they do not roll back an already delivered tree. Discovery
-        trees with deferred components cannot be committed.
+        Frontends can retain the candidate returned by stage and call its commit
+        directly. Lifecycle errors do not roll back an already delivered tree.
         """
-        if tree.deferred:
-            # A discovery tree is missing subtrees; committing one would unmount live
-            # components that are only absent because expansion stopped early.
-            message = "a discovery render cannot be committed"
-            raise LayoutInvariantError(message)
+        self.stage(tree).commit()
+
+    def _commit_tree(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int) -> None:
+        """Reconcile lifecycle after the candidate has adopted its subscriptions."""
 
         def depth(path: str) -> int:
             return 0 if path == "$" else path.count(".") + 1
 
-        if self.subscriptions.staged != tree.observations:
-            self.stage(tree)
-        self.subscriptions.commit()
-
         if tree is self._committed_tree:
-            if rendered_revision is None or self.revision == rendered_revision:
-                self._candidate_tree = tree
-                self._candidate_revision = self.revision
-            self.dirty = rendered_revision is not None and self.revision != rendered_revision
+            if self.revision == rendered_revision:
+                self._cached_tree = tree
+                self._cached_revision = self.revision
+            self.dirty = self.revision != rendered_revision
             return
 
         if self._committed_tree is not None and tree._topology_base is self._committed_tree._topology:
@@ -270,10 +315,10 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 self._mount(component, path)
             self._cache.discard_removed(tree._removed_components)
             self._committed_tree = tree
-            if rendered_revision is None or self.revision == rendered_revision:
-                self._candidate_tree = tree
-                self._candidate_revision = self.revision
-            self.dirty = rendered_revision is not None and self.revision != rendered_revision
+            if self.revision == rendered_revision:
+                self._cached_tree = tree
+                self._cached_revision = self.revision
+            self.dirty = self.revision != rendered_revision
             self._raise_hook_errors()
             return
 
@@ -296,11 +341,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self._mount(component, path)
         self.components = dict(tree.components)
         self._committed_tree = tree
-        if rendered_revision is None or self.revision == rendered_revision:
-            self._candidate_tree = tree
-            self._candidate_revision = self.revision
+        if self.revision == rendered_revision:
+            self._cached_tree = tree
+            self._cached_revision = self.revision
         self._cache.retain(tree.components)
-        self.dirty = rendered_revision is not None and self.revision != rendered_revision
+        self.dirty = self.revision != rendered_revision
         self._raise_hook_errors()
 
     def _mount(self, component: AnyComponent, path: str) -> None:
@@ -365,6 +410,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
         Call ``await runtime.wait_services()`` afterwards to wait for cleanup.
         """
+        self.discard()
         self.subscriptions.clear()
         for _path, component in sorted(
             self.components.items(),
@@ -376,7 +422,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             component._parent = None
         self.components.clear()
         self._cache.clear()
-        self._candidate_tree = None
+        self._cached_tree = None
         self._committed_tree = None
         self.plan_memo.clear()
         self.root._runtime = None

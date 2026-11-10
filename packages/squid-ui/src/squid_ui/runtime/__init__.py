@@ -114,7 +114,7 @@ from squid_ui.runtime.histories import (
     history_actions,
     inspect_histories,
 )
-from squid_ui.runtime.owner import ComponentRuntime
+from squid_ui.runtime.owner import ComponentRuntime, RenderCandidate
 from squid_ui.runtime.services import ManagedService, ServiceOwner, ServiceRun, ServiceRunStatus, UIExecutionHost
 
 __all__ = [
@@ -178,6 +178,7 @@ __all__ = [
     "ReactiveWriteError",
     "Ready",
     "RedoResult",
+    "RenderCandidate",
     "Resource",
     "ResourceNotReadyError",
     "ResourceStatus",

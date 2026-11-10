@@ -760,9 +760,7 @@ class MessageRoot[
         staged here and never delivered is superseded by the next one.
         """
         self._candidates.supersede()
-        candidate = self._stage(disabled=disabled)
-        self._candidates.stage_only(candidate)
-        return candidate.view
+        return self._stage(disabled=disabled).view
 
     def _stage(self, *, disabled: bool = False) -> _Candidate[RenderTargetT]:
         """Render and draw one candidate generation, publishing none of it.
@@ -844,15 +842,14 @@ class MessageRoot[
             handlers[key] = binding
         return _PlannedCandidate(
             result,
-            tree,
+            self.runtime.stage(tree),
             handlers,
             result.form_bindings,
-            self.runtime.revision,
             attachment_assets(result),
             result.session_updates,
         )
 
-    def _stage_observations(self, tree: ComponentTree[RenderTargetT, Any]) -> None:
+    def _warn_unwatched_topics(self, tree: ComponentTree[RenderTargetT, Any]) -> None:
         observed = tree.observations
         if (
             any(isinstance(address, Topic) for address in observed)
@@ -865,7 +862,6 @@ class MessageRoot[
                 "topic bus, so changes made elsewhere will not refresh it",
                 self.id,
             )
-        self.runtime.stage(tree)
 
     def _draw(
         self,
@@ -874,11 +870,9 @@ class MessageRoot[
         disabled: bool = False,
         profile: OperationRecorder | None = None,
         planned: _PlannedCandidate[RenderTargetT] | None = None,
-        subscriptions_staged: bool = False,
     ) -> _Candidate[RenderTargetT]:
         """Plan and draw one rendered tree into a candidate generation."""
-        if not subscriptions_staged:
-            self._stage_observations(tree)
+        self._warn_unwatched_topics(tree)
         try:
             staged = planned if planned is not None else self._plan_tree(tree, profile)
         except BaseException:
@@ -940,11 +934,10 @@ class MessageRoot[
         return _Candidate(
             view,
             rendered,
-            tree,
+            staged.render,
             handlers,
             rendered.plan.form_bindings,
             generation,
-            self.runtime.revision,
             assets,
             rendered.plan.session_updates,
         )
@@ -956,7 +949,7 @@ class MessageRoot[
         profile: OperationRecorder | None = None,
     ) -> _ApplicationCandidate[RenderTargetT]:
         """Plan first, returning an undrawn candidate only when the live scene already matches."""
-        self._stage_observations(tree)
+        self._warn_unwatched_topics(tree)
         if (
             tree is self._candidates.planned_tree
             and self._candidates.plan is not None
@@ -967,10 +960,9 @@ class MessageRoot[
                 profile.increment("planner.owner_hits")
             return _PlannedCandidate(
                 self._candidates.plan,
-                tree,
+                self.runtime.stage(tree),
                 dict(self._candidates.handlers),
                 self._candidates.form_bindings,
-                self.runtime.revision,
                 self._candidates.assets,
                 (),
             )
@@ -981,7 +973,7 @@ class MessageRoot[
             raise
         if self._candidates.same_as_live(planned):
             return planned
-        return self._draw(tree, profile=profile, planned=planned, subscriptions_staged=True)
+        return self._draw(tree, profile=profile, planned=planned)
 
     def _draw_renewal(self, *, disabled: bool = False, profile: OperationRecorder | None = None) -> _LifecycleCandidate:
         """Plan the compact framework-owned renewal generation without rendering the component."""
@@ -1270,7 +1262,6 @@ class MessageRoot[
                 else:
                     with profile.span("runtime_render", attributes={"pass": pass_index}):
                         tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
-                self.runtime.stage(tree)
                 if tree.deferred:
                     if profile is None:
                         await self._load_all(tree.deferred)

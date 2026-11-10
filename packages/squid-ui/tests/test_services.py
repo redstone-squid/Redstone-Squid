@@ -489,7 +489,7 @@ async def test_cached_tree_requires_running_execution_host(cached: str) -> None:
             await runtime.wait_services_ready()
         if cached == "committed":
             # Keep only the committed cache to exercise reuse between candidate renders.
-            runtime._candidate_tree = None
+            runtime._cached_tree = None
         elif cached == "backdated":
             # A delayed notification for a value the committed tree already read.
             runtime.invalidate_addresses(tree.observations)

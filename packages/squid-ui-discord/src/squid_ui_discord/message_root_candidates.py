@@ -35,6 +35,7 @@ from squid_ui.profiling import (
     TraceStatus,
 )
 from squid_ui.runtime.component import ComponentTree
+from squid_ui.runtime.owner import RenderCandidate
 from squid_ui.runtime.presentation_state import SessionUpdate
 from squid_ui.target_types import DiscordTarget
 from squid_ui.text import Localization, TextLike
@@ -64,22 +65,21 @@ class _Candidate[RenderTargetT: DiscordTarget]:
 
     view: AnyMountedView
     rendered: RenderedMessage[Any, Any]
-    tree: ComponentTree[RenderTargetT, Any]
+    render: RenderCandidate[RenderTargetT]
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
     generation: int
-    revision: int
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
     session_updates: tuple[SessionUpdate, ...]
-    settled: bool = False
-    """Whether this candidate has already been committed or rolled back.
 
-    Every path that draws a candidate owes it exactly one of those two endings. Which
-    candidate is outstanding is already unambiguous -- `_draw` stages subscriptions, and
-    the reconciler refuses a second staged set -- so what is left to get wrong is settling
-    the same one twice, and that is what this refuses.
-    """
+    @property
+    def tree(self) -> ComponentTree[RenderTargetT, Any]:
+        return self.render.tree
+
+    @property
+    def settled(self) -> bool:
+        return self.render.settled
 
     @property
     def payload(self) -> MessagePayload:
@@ -101,13 +101,19 @@ class _PlannedCandidate[RenderTargetT: DiscordTarget]:
     """A staged application render whose visible identity was checked before drawing."""
 
     plan: PlanResult
-    tree: ComponentTree[RenderTargetT, Any]
+    render: RenderCandidate[RenderTargetT]
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
-    revision: int
     assets: tuple[Asset, ...]
     session_updates: tuple[SessionUpdate, ...]
-    settled: bool = False
+
+    @property
+    def tree(self) -> ComponentTree[RenderTargetT, Any]:
+        return self.render.tree
+
+    @property
+    def settled(self) -> bool:
+        return self.render.settled
 
 
 type _ApplicationCandidate[RenderTargetT: DiscordTarget] = _Candidate[RenderTargetT] | _PlannedCandidate[RenderTargetT]

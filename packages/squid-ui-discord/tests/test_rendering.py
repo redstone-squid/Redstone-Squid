@@ -171,7 +171,7 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         first_service = root.child.services[-1]
 
         root.value = 1
@@ -213,11 +213,11 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
 
         root.unrelated = 1
         equivalent = runtime.render(reuse_committed=True)
-        runtime.commit(equivalent, rendered_revision=runtime.revision)
+        runtime.commit(equivalent)
 
         assert root.child.renders == 1
         assert equivalent.nodes == (Text("0"),)
@@ -281,7 +281,7 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
 
         for index, value, wrapped, child_visible in changes:
             leaf = root.leaves[index]
@@ -305,7 +305,7 @@ class TestRenderCaching:
             assert optimized_plan.bindings.keys() == cold_plan.bindings.keys()
             assert optimized_plan.form_bindings.keys() == cold_plan.form_bindings.keys()
             assert optimized_plan.resources.keys() == cold_plan.resources.keys()
-            runtime.commit(optimized, rendered_revision=runtime.revision)
+            runtime.commit(optimized)
 
     def test_dirty_leaf_splices_without_visiting_clean_siblings(self, monkeypatch) -> None:
         class Leaf(Component[sl.ComponentsV2Target]):
@@ -326,7 +326,7 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         namespaces = 0
         namespace = expansion_module._namespace
 
@@ -362,13 +362,13 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         components = runtime.components
         component_paths = runtime._cache.expansion().component_paths
 
         root.leaves[50].value = 1
         changed = runtime.render(reuse_committed=True)
-        runtime.commit(changed, rendered_revision=runtime.revision)
+        runtime.commit(changed)
 
         assert runtime.components is components
         assert runtime._cache.expansion().component_paths is component_paths
@@ -413,13 +413,13 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         components = runtime.components
         component_paths = runtime._cache.expansion().component_paths
 
         root.leaves[50].visible = True
         mounted = runtime.render(reuse_committed=True)
-        runtime.commit(mounted, rendered_revision=runtime.revision)
+        runtime.commit(mounted)
 
         child = root.leaves[50].child
         assert runtime.components is components
@@ -430,7 +430,7 @@ class TestRenderCaching:
 
         root.leaves[50].visible = False
         unmounted = runtime.render(reuse_committed=True)
-        runtime.commit(unmounted, rendered_revision=runtime.revision)
+        runtime.commit(unmounted)
 
         assert runtime.components is components
         assert runtime._cache.expansion().component_paths is component_paths
@@ -466,7 +466,7 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         namespaces = 0
         namespace = expansion_module._namespace
 
@@ -510,7 +510,7 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
 
         root.left.value = 1
         changed = runtime.render(reuse_committed=True)
@@ -539,7 +539,7 @@ class TestRenderCaching:
         component = Parity()
         runtime = ComponentRuntime(component)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
 
         component.source = 2
         unchanged = runtime.render(reuse_committed=True)
@@ -569,7 +569,7 @@ class TestRenderCaching:
         component = Parity()
         runtime = ComponentRuntime(component)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         committed_components = runtime.components
         values.value = 2
 
@@ -584,7 +584,7 @@ class TestRenderCaching:
 
         assert component.renders == 1
         assert unchanged is initial
-        runtime.commit(unchanged, rendered_revision=runtime.revision)
+        runtime.commit(unchanged)
         assert runtime.components is committed_components
 
     def test_equal_computed_value_refreshes_changed_dependency_addresses(self) -> None:
@@ -611,7 +611,7 @@ class TestRenderCaching:
         component = Panel()
         runtime = ComponentRuntime(component)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         use_b = CellAddress(values, "use_b")
         a = CellAddress(values, "a")
         b = CellAddress(values, "b")
@@ -625,7 +625,7 @@ class TestRenderCaching:
         assert metadata_only is not initial
         assert metadata_only.nodes == initial.nodes
         assert metadata_only.observations == (use_b, b)
-        runtime.commit(metadata_only, rendered_revision=runtime.revision)
+        runtime.commit(metadata_only)
 
         values.b = 2
         runtime.invalidate_address(b)
@@ -665,7 +665,7 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         values.left = 1
 
         runtime.invalidate_address(CellAddress(values, "left"))
@@ -690,7 +690,7 @@ class TestRenderCaching:
         component = Opaque()
         runtime = ComponentRuntime(component)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         component.value = "second"
         component.invalidate()
 
@@ -726,12 +726,12 @@ class TestRenderCaching:
         root = Root()
         runtime = ComponentRuntime(root)
         initial = runtime.render()
-        runtime.commit(initial, rendered_revision=runtime.revision)
+        runtime.commit(initial)
         original = runtime.components["inline"]
 
         root.stable.value = 1
         changed = runtime.render(reuse_committed=True)
-        runtime.commit(changed, rendered_revision=runtime.revision)
+        runtime.commit(changed)
 
         assert runtime.components["inline"] is not original
         assert events[-2:] == ["unmount:inline", "mount:inline"]
