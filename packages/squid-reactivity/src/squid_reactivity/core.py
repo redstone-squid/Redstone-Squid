@@ -684,6 +684,8 @@ class _Transaction:
     """
     owner_task: object | None = None
     """The task that opened this transaction, or `None` outside a running loop."""
+    read_view: object = field(default_factory=object)
+    """Cache identity without retaining the transaction and its owners."""
     writes: dict[_Cell, _Staged] = field(default_factory=dict)
     observed: dict[_Cell, int] = field(default_factory=dict)
     """Committed versions this action read out of addressed cells, first read per cell.
@@ -1692,7 +1694,7 @@ class _Derived:
     alive; a version comparison at read time answers the same question with no back-edge.
     """
 
-    __slots__ = ("_epoch", "_function", "_label", "_settled", "owner", "sources", "value", "version")
+    __slots__ = ("_epoch", "_function", "_label", "_settled", "_view", "owner", "sources", "value", "version")
 
     def __init__(self, function: Callable[[Any], Any], owner: ReactiveOwner, label: str) -> None:
         self._function = function
@@ -1703,6 +1705,7 @@ class _Derived:
         self.version = 0
         self._settled = False
         self._epoch = -1
+        self._view: object = _MISSING
 
     @property
     def address(self) -> None:
@@ -1712,15 +1715,17 @@ class _Derived:
         return self.sources
 
     def settle(self) -> int:
-        """Return this node's current version, recomputing only if a source moved."""
-        # An active transaction may expose staged versions instead of committed versions.
-        # Check those dependencies even when this node has already seen the current epoch.
+        """Return the version after validating this read view and its dependencies."""
         current = _active()
-        if self._epoch == _EPOCH and (current is None or not current.writes):
-            return self.version
-        if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
-            self._epoch = _EPOCH
-            return self.version
+        view = None if current is None else (current.read_view, _RELAXED_READS.get() > 0, _STRONG_READS.get() > 0)
+        # A cache belongs to one read view. Re-evaluate on entry to an action or
+        # a different read policy so cache hits cannot bypass conflict observations.
+        if self._view == view:
+            if self._epoch == _EPOCH:
+                return self.version
+            if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
+                self._epoch = _EPOCH
+                return self.version
         # Cleared before the run, not after: a body that raises must leave the node asking to
         # be recomputed rather than holding a value nothing verified.
         self._settled = False
@@ -1733,6 +1738,7 @@ class _Derived:
         finally:
             _CONSUMER.reset(token)
         self._settled = True
+        self._view = view
         # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
         # from it, and bumping would make every settled node in the process walk its sources.
         self._epoch = _EPOCH
@@ -1782,10 +1788,13 @@ class _Computed:
 def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
     """Cache a derived value and track the reactive fields its function reads.
 
-    The function runs on first access and again when a dependency version
-    changes. Each run replaces the dependency set, so conditional branches can
-    change what is tracked. If recomputation produces an equal value, dependents
-    keep seeing the same computed version. The function runs read-only.
+    The function runs on first access, when dependencies change, and when the
+    transaction or its read consistency policy changes. One cache serves the
+    current read view; switching views recomputes so staged values stay isolated
+    and action reads are recorded even if another view already evaluated it.
+
+    Each run replaces the dependencies, including conditional branches. Equal
+    results preserve the computed version. The function runs read-only.
     """
     # The declared return type describes what reading the attribute yields, not what the
     # decorator hands back: the descriptor below is what actually gets bound to the class.
