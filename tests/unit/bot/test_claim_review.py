@@ -4,9 +4,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
 
+import discord
 import pytest
 from whenever import Instant
 
+import squid.bot.claims_view as claims_view
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
@@ -14,9 +16,10 @@ from squid.accounts.domain import ClaimStatus
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.accounts.models import Account, AccountIdentity, AliasClaim
 from squid.bot.claims_view import ClaimReviewComponent
+from squid.bot.consent import ConsentedAccountWork
 from squid.permissions.domain import PermissionNode
 from squid_ui.testing import RecordingResponder, choose, press_event
-from squid_ui_discord.testing import commit_render
+from squid_ui_discord.testing import commit_render, delivered_to, http_error, interaction_harness, message_harness
 from tests.support.discord import make_layout_bot
 
 AUTHOR_ID = 11
@@ -150,3 +153,35 @@ async def test_a_held_name_explains_the_conflict_then_requires_deliberate_reassi
         ("approve", 7, AUTHOR_ID, True),
     ]
     assert second.notices == [("Credited **Notch** to <@555>.", sl.interactions.Visibility.PUBLIC)]
+
+
+async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reader never saw "Take the name", so their next Approve must not reassign it."""
+
+    async def consented(event: sd.ActionEvent, accounts: AccountService, work: ConsentedAccountWork) -> None:
+        del accounts
+        await work(event, AUTHOR_ID)
+
+    monkeypatch.setattr(claims_view, "with_consented_account", consented)
+    harness = make_component((make_claim(7),), conflict=True)
+    message_root = make_layout_bot().ui.mount(harness.component, access=sd.Owner(AUTHOR_ID), timeout=300)
+    with sl.runtime.transaction():
+        harness.component.selected_id = 7
+    message = message_harness()
+    await message_root.send(delivered_to(message))
+    approve = next(key for key in message_root.snapshot().handler_keys if key.endswith("approve"))
+    generation = message_root.generation
+
+    # The conflict notice answers the press, so the panel repaints through the sent message.
+    message.edit.error = http_error(message="edit refused")
+    with pytest.raises(discord.HTTPException):
+        await message_root.dispatch(approve, interaction_harness(AUTHOR_ID), generation=generation)
+    assert message_root.generation == generation
+    message.edit.error = None
+    retry = interaction_harness(AUTHOR_ID)
+    await message_root.dispatch(approve, retry, generation=generation)
+
+    assert harness.accounts.decisions == [("approve", 7, AUTHOR_ID, False)]
+    assert "Take the name" in str(retry.response.edit_message.await_args.kwargs["view"].to_components())

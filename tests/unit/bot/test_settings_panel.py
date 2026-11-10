@@ -17,7 +17,7 @@ from squid.voting.application import VoteService
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid_reactivity.core import readonly_transaction
 from squid_ui.testing import submit_event
-from squid_ui_discord.testing import commit_render
+from squid_ui_discord.testing import commit_render, http_error, interaction_harness
 from tests.support.discord import make_layout_bot
 
 GUILD_ID = 7
@@ -360,3 +360,25 @@ async def test_clearing_the_weight_form_removes_the_existing_role_weight() -> No
     assert panel.weight_for(42) is None
     await panel.open_voting()
     assert panel.weight_for(42) is None
+
+
+async def test_a_reset_press_after_an_undelivered_arm_only_arms_again() -> None:
+    """The reader never saw "Confirm reset", so their next press must not reset voting."""
+    panel, _, message_root = make_component_panel()
+    votes = cast(FakeVoteService, panel._votes)
+    weight = RoleWeight(GUILD_ID, VoteKind.BUILD, 101, 2)
+    votes.role_weights = (weight,)
+    with sl.runtime.transaction():
+        await panel.open_voting(VoteKind.BUILD)
+    commit_render(message_root)
+    reset = next(key for key in message_root.snapshot().handler_keys if key.endswith("reset"))
+    generation = message_root.generation
+
+    refused = interaction_harness(user_id=1)
+    refused.response.edit_message.side_effect = http_error(message="edit refused")
+    with pytest.raises(discord.HTTPException):
+        await message_root.dispatch(reset, refused, generation=generation)
+    await message_root.dispatch(reset, interaction_harness(user_id=1), generation=generation)
+
+    assert votes.role_weights == (weight,)
+    assert panel.confirming_reset
