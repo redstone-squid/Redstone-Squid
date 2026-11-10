@@ -26,7 +26,7 @@ UNGATED_COMMANDS = frozenset(
     {
         # Public: anyone may run these.
         "layout",
-        "layout demo",
+        "layout workbench",
         "layout lobby",
         "layout shared",
     }

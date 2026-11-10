@@ -342,12 +342,12 @@ async def test_demo_command_and_controls_are_public() -> None:
         ContextHarness(message=MessageHarness(message_id=1), bot=bot, user_id=7).source,
     )
 
-    await LayoutShowcaseCog.demo.callback(cog, ctx, "pagination", 20)  # type: ignore[arg-type]
+    await LayoutShowcaseCog.workbench.callback(cog, ctx)  # type: ignore[arg-type]
 
     sent = cast(Any, ctx).send.await_args.kwargs
     assert sent["ephemeral"] is False
     assert isinstance(sent["view"], discord.ui.LayoutView)
-    demo = next(command for command in cog.__cog_commands__ if command.qualified_name == "layout demo")
+    demo = next(command for command in cog.__cog_commands__ if command.qualified_name == "layout workbench")
     assert demo.checks == []
 
 

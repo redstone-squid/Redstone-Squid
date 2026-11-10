@@ -7,19 +7,20 @@ external channel service and local replicas rather than production resources.
 """
 
 import asyncio
+import uuid
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from functools import partial
 from typing import TYPE_CHECKING, Literal, Never, override
 
-from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, guild_only
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import localization_for, resolve_locale
+from squid.bot.i18n import localization_for
+from squid.bot.layout_workbench import BuildDraft, BuildPreview, Workbench
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, tr
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
 from squid_ui_discord.session_specs import OpenContext
@@ -1338,24 +1339,26 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         """See how the bot decides what its messages look like."""
         await ctx.send_help("layout")
 
-    @layout_group.command(name="demo")
-    @app_commands.describe(
-        section=app_commands.locale_str("Which one to open first."),
-        entries=app_commands.locale_str("How many sample builds the long-list demo should hold."),
-    )
-    async def demo(
-        self,
-        ctx: Context[BotT],
-        section: DemoSection = "pagination",
-        entries: app_commands.Range[int, 12, 120] = 30,
-    ) -> None:
-        """Open an interactive tour of how this bot lays out its messages."""
+    @layout_group.command(name="workbench")
+    async def workbench(self, ctx: Context[BotT]) -> None:
+        """Edit a sample build and watch a second message update live."""
         request = await self.ui.request(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await request.respond(
-            LayoutShowcase(section=section, entries=entries, locale=locale),
-            access=sd.Everyone(),
+        draft = BuildDraft(self.bot.topic_bus, UserScope(ctx.author.id))
+        editor = await request.respond(
+            Workbench(draft),
+            access=sd.Owner(ctx.author.id),
+            follow_topics=True,
+            session=sd.SessionSpec("layout-workbench"),
+            session_key=uuid.uuid4(),
         )
+        if isinstance(editor, sd.Presented):
+            await request.respond(
+                BuildPreview(draft),
+                access=sd.Owner(ctx.author.id),
+                follow_topics=True,
+                parent=editor.root,
+                session=sd.SessionSpec("layout-preview"),
+            )
 
     @layout_group.command(name="shared")
     async def shared(self, ctx: Context[BotT]) -> None:
