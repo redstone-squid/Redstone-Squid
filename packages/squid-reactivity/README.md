@@ -31,6 +31,13 @@ observes model fields read during rendering, including reads through nested mode
 values. Explicit `observe_reads()` users can follow the resulting addresses with
 `SubscriptionReconciler(None, callback)`; retain the reconciler and close it when finished.
 Sources hold weak subscription handles and cannot keep abandoned consumers alive.
+
+`observe_reads()` combines `capture_reads()` with `read_only()`. Capture records direct sources
+and their versions; it does not restrict writes. A read-only scope rejects changes to existing
+state but permits initializing a new reactive object until its constructor returns. Computed
+functions also run read-only. `Dependencies.current()` checks result validity, while
+`Dependencies.addresses()` follows the current upstream graph for subscriptions: a computed
+can change its dependencies without changing its value.
 Retain models in application-owned attributes or dictionaries when they should outlive a consumer.
 For restoration and saving across restarts, use `squid_storage.PersistentStatePool`.
 

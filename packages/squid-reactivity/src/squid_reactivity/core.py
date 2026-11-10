@@ -17,7 +17,7 @@ import logging
 import threading
 import uuid
 import weakref
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -247,6 +247,9 @@ class _Cell:
         self.version = version
         self.address = address
 
+    def dependencies(self) -> tuple[_ReactiveSource, ...]:
+        return ()
+
     def settle(self) -> int:
         """Return the version a reader should compare against. A cell is always settled."""
         current = _active()
@@ -309,7 +312,16 @@ def _staged_value(cell: _Cell) -> Any:
 
 
 class _ReactiveSource(Protocol):
-    """A versioned value that can settle before a dependency comparison."""
+    """A versioned value with explicit upstream dependencies and a notification address.
+
+    Settling may change the upstream graph without changing the value's version.
+    Address traversal therefore follows the live graph after validation.
+    """
+
+    @property
+    def address(self) -> Any: ...
+
+    def dependencies(self) -> Iterable[_ReactiveSource]: ...
 
     def settle(self) -> int: ...
 
@@ -339,6 +351,9 @@ class _Signal:
         consumer = _CONSUMER.get()
         if consumer is not None:
             consumer.sources[self] = self.version
+
+    def dependencies(self) -> tuple[_ReactiveSource, ...]:
+        return ()
 
     def settle(self) -> int:
         return self.version
@@ -390,37 +405,32 @@ def settling(node: _SettlingNode) -> Iterator[None]:
         _SETTLING.reset(token)
 
 
-_OBSERVING: ContextVar[bool] = ContextVar("squid_reactivity_observing_reads", default=False)
-
-_RENDER_OBSERVATION: ContextVar[Observation | None] = ContextVar("squid_reactivity_read_observation", default=None)
-"""The `Observation` for the render in progress on this task, set only while `rendering()` is.
-
-A separate var from `_CONSUMER`: a computed evaluated mid-render points `_CONSUMER` at its own
-node, not the render, so the born-set below needs its own line back to the render itself.
-"""
+_READ_ONLY: ContextVar[object | None] = ContextVar("squid_reactivity_read_only", default=None)
 
 
-def rendering() -> bool:
-    """Whether a render is in progress on this task.
+@contextmanager
+def read_only() -> Iterator[None]:
+    """Reject reactive writes, except initialization of objects created in this scope.
 
-    A render produces a tree from state and must not change the state it is reading, so a
-    shared write here would publish halfway through building the thing that reads it.
+    Nested scopes cannot initialize objects belonging to an outer scope. Dependency
+    capture is independent: use capture_reads() to collect reads as well.
     """
-    return _OBSERVING.get()
+    token = _READ_ONLY.set(object())
+    try:
+        yield
+    finally:
+        _READ_ONLY.reset(token)
 
 
-def note_born(owner: object) -> None:
-    """Record an object whose construction began in the active transactional contexts."""
-    if current := _CURRENT.get():
-        current.note_born(owner)
-    if observation := _RENDER_OBSERVATION.get():
-        observation.note_born(owner)
-
-
-def note_initialized(owner: object) -> None:
-    """End an object's construction exemption in the active render observation."""
-    if observation := _RENDER_OBSERVATION.get():
-        observation.entering_own_render(owner)
+def _check_write(owner: ReactiveOwner, name: str) -> None:
+    scope = _READ_ONLY.get()
+    if scope is not None and owner.__dict__.get("_reactive_initialization") is not scope:
+        message = (
+            f"{type(owner).__name__}.{name} was written during a read-only computation. "
+            "Initialize defaults with state(factory=...), derive values with computed, "
+            "and update existing state outside the computation."
+        )
+        raise ReactiveWriteError(message)
 
 
 _EPOCH = 0
@@ -622,6 +632,7 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     signal read directly. A component built during the action is not protected by it, so
     its construction lands immediately too.
     """
+    _check_write(owner, name)
     current = _CURRENT.get()
     if current is None and in_continuation():
         message = "direct reactive mutation in an continuation hook is forbidden; use continuation.start_action(...)"
@@ -1427,19 +1438,7 @@ class _State:
         return self._initial(instance)
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
-        if rendering():
-            observation = _RENDER_OBSERVATION.get()
-            if observation is None or not observation.exempts(instance):
-                # Construction may initialize a new object. Existing objects must stay
-                # unchanged so every reader in this projection sees one consistent state.
-                message = (
-                    f"{type(instance).__name__}.{self.public_name} was written while a render "
-                    f"was reading it. A render must produce one tree from the state it reads, "
-                    f"so a write here tears: use state(factory=...) for a lazy-initialized "
-                    f"default, computed for a value derived from state, a resource or "
-                    f"on_load for something fetched, and on_mount to react to having been drawn."
-                )
-                raise ReactiveWriteError(message)
+        _check_write(instance, self.public_name)
         cell = instance.__dict__.get(self._name)
         if cell is not None:
             held = _staged_value(cell)
@@ -1682,6 +1681,13 @@ class _Derived:
         self._settled = False
         self._epoch = -1
 
+    @property
+    def address(self) -> None:
+        return None
+
+    def dependencies(self) -> Iterable[_ReactiveSource]:
+        return self.sources
+
     def settle(self) -> int:
         """Return this node's current version, recomputing only if a source moved."""
         # An active transaction may expose staged versions instead of committed versions.
@@ -1699,7 +1705,7 @@ class _Derived:
         self.sources = {}
         token = _CONSUMER.set(self)
         try:
-            with settling(self):
+            with settling(self), read_only():
                 value = self._function(self.owner)
         finally:
             _CONSUMER.reset(token)
@@ -1756,7 +1762,7 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
     The function runs on first access and again when a dependency version
     changes. Each run replaces the dependency set, so conditional branches can
     change what is tracked. If recomputation produces an equal value, dependents
-    keep seeing the same computed version.
+    keep seeing the same computed version. The function runs read-only.
     """
     # The declared return type describes what reading the attribute yields, not what the
     # decorator hands back: the descriptor below is what actually gets bound to the class.
@@ -1764,7 +1770,7 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
 
 
 @dataclass(slots=True)
-class Observation:
+class Dependencies:
     """Record dependencies read by one render or computation.
 
     Addresses are collected through computed values and resources as well as
@@ -1773,26 +1779,6 @@ class Observation:
     """
 
     sources: dict[_ReactiveSource, int] = field(default_factory=dict)
-    born: dict[int, object] = field(default_factory=dict)
-    """Components constructed during this render, by id, while their own render() has not yet
-    run. Assigning declared state in __init__ is construction, not the mutation the write guard
-    exists to catch -- the same rule `_Transaction.protects` applies to an action.
-
-    Held by strong reference for the same reason as `_Transaction.born`: an id must not be
-    recycled onto something else while this render is still using it as a key.
-    """
-
-    def note_born(self, owner: object) -> None:
-        """Allow construction writes until the owner finishes initialization or starts rendering."""
-        self.born[id(owner)] = owner
-
-    def entering_own_render(self, owner: object) -> None:
-        """End the construction exemption for this owner."""
-        self.born.pop(id(owner), None)
-
-    def exempts(self, owner: object) -> bool:
-        """Whether `owner` is still within the construction window this render excuses."""
-        return id(owner) in self.born
 
     def current(self) -> bool:
         """Whether every directly observed reactive source still yields the seen version.
@@ -1814,43 +1800,41 @@ class Observation:
         found: list[Any] = []
         seen: set[int] = set()
 
-        def walk(sources: dict[_ReactiveSource, int]) -> None:
+        def walk(sources: Iterable[_ReactiveSource]) -> None:
             for source in sources:
                 identity = id(source)
                 if identity in seen:
                     continue
                 seen.add(identity)
-                address = getattr(source, "address", None)
+                address = source.address
                 if address is not None:
                     found.append(address)
-                if (nested := getattr(source, "sources", None)) is not None:
-                    # A resource publishes its own status and also depends on its loader's reads.
-                    walk(nested)
+                walk(source.dependencies())
 
         walk(self.sources)
         return tuple(found)
 
 
 @contextmanager
-def observe_render() -> Iterator[Observation]:
-    """Collect the shared cells one component render read, and forbid writing them."""
-    observation = Observation()
-    consumer = _CONSUMER.set(observation)
-    observing = _OBSERVING.set(True)
-    render = _RENDER_OBSERVATION.set(observation)
+def capture_reads() -> Iterator[Dependencies]:
+    """Collect direct reactive dependencies without changing write permissions.
+
+    Nested captures record their own reads. Computed values and resources remain
+    direct dependencies; their upstream notification addresses are resolved on demand.
+    """
+    dependencies = Dependencies()
+    token = _CONSUMER.set(dependencies)
     try:
-        yield observation
+        yield dependencies
     finally:
-        _RENDER_OBSERVATION.reset(render)
-        _OBSERVING.reset(observing)
-        _CONSUMER.reset(consumer)
+        _CONSUMER.reset(token)
 
 
 @contextmanager
-def observe_reads() -> Iterator[Observation]:
-    """Collect addressed reactive sources read by one pure projection."""
-    with observe_render() as observation:
-        yield observation
+def observe_reads() -> Iterator[Dependencies]:
+    """Collect dependencies of a read-only computation."""
+    with read_only(), capture_reads() as dependencies:
+        yield dependencies
 
 
 def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
@@ -1858,9 +1842,9 @@ def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
 
     For example, ``addresses(lambda: preferences.theme)`` returns the address
     of that field. Reads through computed values include their source
-    addresses. The callable runs as a read-only render observation.
+    addresses. The callable runs as a read-only computation.
     """
-    with observe_render() as observation:
+    with observe_reads() as observation:
         read()
     found = observation.addresses()
     if not found:
@@ -1890,7 +1874,7 @@ def _checked_init(
                 raise TypeError(message)
         finally:
             if type(self).__init__ is __init__:
-                note_initialized(self)
+                vars(self).pop("_reactive_initialization", None)
 
     return __init__
 
@@ -1941,7 +1925,9 @@ class Reactive:
         instance = super().__new__(cls)
         # Subclasses can initialize their own inputs without calling a base initializer.
         object.__setattr__(instance, "_reactive_commit_listeners", set())
-        note_born(instance)
+        object.__setattr__(instance, "_reactive_initialization", _READ_ONLY.get())
+        if current := _CURRENT.get():
+            current.note_born(instance)
         return instance
 
     @override

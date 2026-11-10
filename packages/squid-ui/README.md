@@ -76,6 +76,14 @@ without a listener or delivery runtime.
 - [Architecture and ownership](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/)
 - [Scene protocol 1 schema](https://redstone-squid.github.io/Redstone-Squid/schema/scene-v1.schema.json)
 
+## Component lifetime
+
+Create and retain child components during setup or actions. Rendering places those instances
+with `self.boundary(child, key=...)`; it cannot construct components or write reactive state.
+Keep dynamic children by an application key and update the collection in an action. The runtime
+mounts and unmounts children when the delivered tree changes. Reusing a cached render therefore
+preserves the same component identities and lifetimes as running it again.
+
 ## Package boundaries
 
 The suite is deliberately split so portable code does not acquire transport or storage imports:

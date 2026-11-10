@@ -35,7 +35,6 @@ class Probe:
     """Request a button, picker, and form from either driver."""
 
     def __init__(self, *, embed: bool = False) -> None:
-        self.embed = embed
         self.child = Echo() if embed else None
 
     @property

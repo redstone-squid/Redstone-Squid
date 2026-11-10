@@ -12,7 +12,7 @@ is current, preventing an older request from overwriting newer data.
 
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable, Generator, Iterator
+from collections.abc import Awaitable, Callable, Generator, Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -331,6 +331,9 @@ class Resource[ValueT](AsyncBinding):
             # install invalidate the value it just installed.
             return
         consumer.sources[self] = self.version
+
+    def dependencies(self) -> Iterable[_ReactiveSource]:
+        return self.sources
 
     def settle(self) -> int:
         """Recheck dependencies and return the resulting version without starting a load."""

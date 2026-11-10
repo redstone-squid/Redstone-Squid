@@ -47,7 +47,11 @@ and publish together on success; failure discards them.
 
 ::: squid_reactivity.observe_reads
 
-::: squid_reactivity.Observation
+::: squid_reactivity.capture_reads
+
+::: squid_reactivity.read_only
+
+::: squid_reactivity.Dependencies
 
 ::: squid_reactivity.ObservedRead
 

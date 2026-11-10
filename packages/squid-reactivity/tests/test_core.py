@@ -59,7 +59,7 @@ def test_transaction_rollback_discards_staged_state() -> None:
 def test_observed_state_cannot_be_written() -> None:
     counter = Counter()
 
-    with pytest.raises(ReactiveWriteError, match="while a render was reading"), observe_reads():
+    with pytest.raises(ReactiveWriteError, match="during a read-only computation"), observe_reads():
         counter.value = 1
 
 

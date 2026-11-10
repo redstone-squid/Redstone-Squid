@@ -7,7 +7,7 @@ lifetime and reconciles candidate trees only after successful delivery.
 from dataclasses import dataclass, field
 from typing import Any, Generic
 
-from squid_reactivity.core import Observation
+from squid_reactivity.core import Dependencies
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import Address
 from squid_ui.context import ContextKey
@@ -60,7 +60,7 @@ class _ComponentRender[RenderTargetT: RenderTarget, ContextT = object]:
     nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     assets: tuple[Asset, ...]
     document_key: str | None
-    observation: Observation
+    observation: Dependencies
     addresses: tuple[Address, ...]
     async_bindings: tuple[AsyncBinding, ...]
 
