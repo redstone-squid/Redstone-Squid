@@ -1,6 +1,7 @@
 """HTTP credential callers and declarative permission-node checks."""
 
 import hmac
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Annotated, Literal
 from uuid import UUID
@@ -45,6 +46,52 @@ class Caller:
     cli_device_id: UUID | None = None
     cli_session_id: UUID | None = None
 
+    async def allows(
+        self,
+        permissions: PermissionService,
+        node: PermissionNode,
+    ) -> bool:
+        """Return whether the credential and its account permit the operation.
+
+        Ownerless service credentials need only a matching credential pattern.
+        Every other caller, including anonymous callers, also passes through the
+        permission service. Changing an account's permissions therefore affects its
+        existing keys without editing each key.
+        """
+        if not self.credential_allows(node):
+            return False
+        if self.kind == "service" and self.account_id is None:
+            return True
+        return await permissions.allows(self.permission_subject(), node)
+
+    def credential_allows(self, node: PermissionNode) -> bool:
+        """Whether the credential itself carries `node`, before its owner is consulted."""
+        return any(pattern.matches(node) for pattern in self.nodes)
+
+    def permission_subject(self) -> Subject:
+        """Return the account subject used for HTTP permission checks.
+
+        No guild is supplied: a permission granted in one Discord server must not
+        authorize an HTTP request outside that server.
+        """
+        return Subject(account_id=self.account_id, guild_id=None)
+
+    def require_consented_account(self) -> int:
+        """Return the caller's account ID after checking privacy consent.
+
+        Accept any credential with an account ID, including CLI and Minecraft
+        credentials. Raise AuthenticationError without an account, or
+        ConsentRequiredError with consent-page links when acceptance is pending.
+        """
+        if self.account_id is None:
+            raise AuthenticationError
+        if self.consent_pending:
+            raise ConsentRequiredError(account_id=self.account_id).with_context(
+                public_context={"consent_url": "/v1/users/me/consent", "notice_url": "/v1/consent/notice"},
+                end_user_action="Accept the current privacy notice and retry.",
+            )
+        return self.account_id
+
 
 UNBOUNDED = frozenset({Pattern.parse("**")})
 """A credential that is not itself narrowed; its holder's own authority decides."""
@@ -54,55 +101,22 @@ ANONYMOUS = Caller(kind="anonymous", subject="anonymous", nodes=UNBOUNDED)
 _authorization = APIKeyHeader(name="Authorization", scheme_name="ApiCredential", auto_error=False)
 
 
-def requires(node: PermissionNode | str):
+def requires(node: PermissionNode | str) -> Callable[[Request, Caller], Awaitable[Caller]]:
     """Build a FastAPI dependency requiring one permission node.
 
     Check both credential restrictions and account permissions through
-    `caller_allows`. Denial raises AuthenticationError for an anonymous caller
+    `Caller.allows`. Denial raises AuthenticationError for an anonymous caller
     and AuthorizationError for an authenticated caller.
     """
     required = CATALOGUE[node] if isinstance(node, str) else node
 
     async def check(request: Request, caller: Annotated[Caller, Depends(current_caller)]) -> Caller:
         permissions = request.app.state.runtime.services.permissions
-        if not await caller_allows(permissions, caller, required):
+        if not await caller.allows(permissions, required):
             raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
         return caller
 
     return check
-
-
-async def caller_allows(
-    permissions: PermissionService,
-    caller: Caller,
-    node: PermissionNode,
-) -> bool:
-    """Return whether the credential and its account permit the operation.
-
-    Ownerless service credentials need only a matching credential pattern.
-    Every other caller, including anonymous callers, also passes through the
-    permission service. Changing an account's permissions therefore affects its
-    existing keys without editing each key.
-    """
-    if not credential_allows(caller, node):
-        return False
-    if caller.kind == "service" and caller.account_id is None:
-        return True
-    return await permissions.allows(subject_for(caller), node)
-
-
-def credential_allows(caller: Caller, node: PermissionNode) -> bool:
-    """Whether the credential itself carries `node`, before its owner is consulted."""
-    return any(pattern.matches(node) for pattern in caller.nodes)
-
-
-def subject_for(caller: Caller) -> Subject:
-    """Return the account subject used for HTTP permission checks.
-
-    No guild is supplied: a permission granted in one Discord server must not
-    authorize an HTTP request outside that server.
-    """
-    return Subject(account_id=caller.account_id, guild_id=None)
 
 
 async def current_caller(
@@ -207,28 +221,11 @@ async def current_caller(
     )
 
 
-def require_consented_account(caller: Caller) -> int:
-    """Return the caller's account ID after checking privacy consent.
-
-    Accept any credential with an account ID, including CLI and Minecraft
-    credentials. Raise AuthenticationError without an account, or
-    ConsentRequiredError with consent-page links when acceptance is pending.
-    """
-    if caller.account_id is None:
-        raise AuthenticationError
-    if caller.consent_pending:
-        raise ConsentRequiredError(account_id=caller.account_id).with_context(
-            public_context={"consent_url": "/v1/users/me/consent", "notice_url": "/v1/consent/notice"},
-            end_user_action="Accept the current privacy notice and retry.",
-        )
-    return caller.account_id
-
-
 async def current_browser_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
     """Require a signed-in browser account with current privacy consent."""
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    return require_consented_account(caller)
+    return caller.require_consented_account()
 
 
 BrowserAccountId = Annotated[int, Depends(current_browser_account_id)]
@@ -242,7 +239,7 @@ async def prevent_credential_storage(response: Response) -> None:
 
 async def consented_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
     """Dependency form, for routes whose only precondition is a consented account."""
-    return require_consented_account(caller)
+    return caller.require_consented_account()
 
 
 ConsentedAccountId = Annotated[int, Depends(consented_account_id)]

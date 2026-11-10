@@ -17,7 +17,7 @@ from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import reserve_idempotent_request
-from squid.api.security import Caller, current_caller, require_consented_account
+from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
@@ -213,7 +213,7 @@ def _submission_actor(caller: Caller) -> AuthenticatedSubmissionActor:
     """
     if caller.account_id is None or caller.kind not in {"account", "cli", "minecraft_player"}:
         raise AuthenticationError
-    require_consented_account(caller)
+    caller.require_consented_account()
     if caller.kind == "account":
         origin = SubmissionOrigin.WEB
     elif caller.kind == "cli":

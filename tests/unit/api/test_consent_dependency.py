@@ -7,7 +7,7 @@ from typing import Literal
 import pytest
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.security import Caller, current_browser_account_id, require_consented_account
+from squid.api.security import Caller, current_browser_account_id
 from squid.api.v1.submissions import _submission_actor
 from squid.core.errors import AuthenticationError
 from tests.unit.api.fakes import credential_nodes
@@ -26,7 +26,7 @@ def account(*, consent_pending: bool) -> Caller:
 
 
 GATES: list[tuple[str, Callable[[Caller], object]]] = [
-    ("security", require_consented_account),
+    ("security", Caller.require_consented_account),
     ("submissions", _submission_actor),
     ("browser_auth", current_browser_account_id),
 ]
@@ -61,8 +61,17 @@ async def test_an_anonymous_caller_is_refused_before_consent_is_considered(
         await call(gate, ANONYMOUS)
 
 
-def test_a_consented_caller_passes_the_gate() -> None:
-    assert require_consented_account(account(consent_pending=False)) == 1
+@pytest.mark.parametrize("kind", ["service", "account", "cli", "minecraft_player"])
+@pytest.mark.parametrize("consent_pending", [False, True])
+def test_every_owned_credential_requires_current_consent(
+    kind: Literal["service", "account", "cli", "minecraft_player"], consent_pending: bool
+) -> None:
+    caller = Caller(kind=kind, subject="owned", account_id=1, consent_pending=consent_pending)
+    if consent_pending:
+        with pytest.raises(ConsentRequiredError):
+            caller.require_consented_account()
+    else:
+        assert caller.require_consented_account() == 1
 
 
 @pytest.mark.parametrize("kind", ["service", "cli", "minecraft_player"])

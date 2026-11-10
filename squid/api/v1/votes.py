@@ -9,7 +9,7 @@ from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, brows
 from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
-from squid.api.security import Caller, require_consented_account, requires
+from squid.api.security import Caller, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthorizationError, ConflictError, ValidationError
 from squid.permissions.domain.catalogue import VOTE_POLL_CAST
@@ -64,7 +64,7 @@ async def cast_vote(
     caller: UserVoter,
 ) -> VoteSessionDetail:
     """Cast the authenticated Discord member's weighted vote."""
-    account_id = require_consented_account(caller)
+    account_id = caller.require_consented_account()
     session = await votes.get_session(vote_session_id)
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)

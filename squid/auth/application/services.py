@@ -45,7 +45,7 @@ class ApiKeyService:
     key, including its owner and permission-pattern scopes.
 
     Scopes limit which operations the credential may perform. The API's
-    caller_allows also checks the owner's current permissions on each request;
+    Caller.allows also checks the owner's current permissions on each request;
     authentication here establishes the credential, not permission for an action.
     """
 

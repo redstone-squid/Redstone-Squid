@@ -8,7 +8,7 @@ from squid.api.contract import DEVICE, MINECRAFT, PAPER, SERVICE, WEB, WEB_WRITE
 from squid.api.dependencies import Services
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
-from squid.api.security import Caller, require_consented_account, requires
+from squid.api.security import Caller, requires
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
 
@@ -51,6 +51,6 @@ async def update_runtime_settings(
     caller: EditCaller,
 ) -> RuntimeSettingsDetail:
     """Patch settings and audit the internal account. New vote defaults affect new sessions only."""
-    account_id = require_consented_account(caller)
+    account_id = caller.require_consented_account()
     updated = await services.settings.update_runtime(body.model_dump(exclude_unset=True), actor_account_id=account_id)
     return RuntimeSettingsDetail.from_domain(updated)

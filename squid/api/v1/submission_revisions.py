@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services
 from squid.api.idempotency import reserve_idempotent_request
-from squid.api.security import require_consented_account, subject_for
 from squid.core.errors import JSONValue
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
 from squid.submissions.application.revisions import RevisionProposalService
@@ -67,18 +66,18 @@ _WRITE = contract(security=[WEB_WRITE, DEVICE], cli=transport_only())
 @router.get("/source/{message_id}", operation_id="submission_revision_history", openapi_extra=_READ)
 async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) -> list[RevisionProposalResponse]:
     """List revision proposals for a source message after checking the caller's access."""
-    require_consented_account(caller)
+    caller.require_consented_account()
     return [
         RevisionProposalResponse.from_domain(item)
-        for item in await proposals.list_for_source(message_id, subject_for(caller))
+        for item in await proposals.list_for_source(message_id, caller.permission_subject())
     ]
 
 
 @router.get("/{proposal_id}", operation_id="submission_revision_get", openapi_extra=_READ)
 async def get_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RevisionProposalResponse:
     """Return a revision proposal after checking the caller's access."""
-    require_consented_account(caller)
-    return RevisionProposalResponse.from_domain(await proposals.get(proposal_id, subject_for(caller)))
+    caller.require_consented_account()
+    return RevisionProposalResponse.from_domain(await proposals.get(proposal_id, caller.permission_subject()))
 
 
 @router.post("/{proposal_id}/match", operation_id="submission_revision_match", openapi_extra=_WRITE)
@@ -89,9 +88,9 @@ async def match_proposal(
 
     With renew set, create a new proposal and retain the previous review.
     """
-    require_consented_account(caller)
+    caller.require_consented_account()
     return RevisionProposalResponse.from_domain(
-        await proposals.match(proposal_id, payload.build_id, subject_for(caller), renew=payload.renew)
+        await proposals.match(proposal_id, payload.build_id, caller.permission_subject(), renew=payload.renew)
     )
 
 
@@ -101,5 +100,5 @@ async def approve_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: 
 
     An already applied proposal returns its existing approval result.
     """
-    require_consented_account(caller)
-    return RevisionProposalResponse.from_domain(await proposals.approve(proposal_id, subject_for(caller)))
+    caller.require_consented_account()
+    return RevisionProposalResponse.from_domain(await proposals.approve(proposal_id, caller.permission_subject()))

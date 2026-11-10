@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query, Request, Response
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Suggestions
 from squid.api.errors import responses
-from squid.api.security import Caller, caller_allows
+from squid.api.security import Caller
 from squid.api.v1.schemas.suggest import SuggestionPage, SuggestionSourceInfo
 from squid.core.i18n import negotiate_locale
 from squid.permissions.domain.catalogue import CATALOGUE
@@ -90,7 +90,7 @@ class _CallerAuthorizer:
 
     async def allows(self, node: str) -> bool:
         permissions = self._request.app.state.runtime.services.permissions
-        return await caller_allows(permissions, self._caller, CATALOGUE[node])
+        return await self._caller.allows(permissions, CATALOGUE[node])
 
 
 __all__ = ["SuggestionService", "router"]

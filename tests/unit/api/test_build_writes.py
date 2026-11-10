@@ -6,7 +6,7 @@ import pytest
 from fastapi import Response
 from pydantic import ValidationError
 
-from squid.api.security import Caller, subject_for
+from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch
 from squid.builds.application import BuildEditor, BuildService
@@ -85,7 +85,7 @@ async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
     assert response.id == 42
     assert http_response.headers["etag"] == '"build-42-r1"'
     actor, build_id, patch, expected_revision = builds.edits[0]
-    assert actor == BuildEditor(subject=subject_for(ACCOUNT), source="api")
+    assert actor == BuildEditor(subject=ACCOUNT.permission_subject(), source="api")
     assert build_id == 42
     assert patch.extra_user_info == "changed"
     assert expected_revision == 1

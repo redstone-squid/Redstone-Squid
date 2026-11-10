@@ -17,7 +17,7 @@ from squid.api.pagination import (
     render_page,
     resolve_selector,
 )
-from squid.api.security import Caller, caller_allows, requires
+from squid.api.security import Caller, requires
 from squid.api.v1.schemas.notifications import (
     InboxNotificationDetail,
     NotificationPreferencesDetail,
@@ -36,7 +36,7 @@ UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
 async def resolve_inbox_visibility(permissions: Permissions, caller: UserCaller) -> InboxVisibility:
     """Resolve notification visibility once for one authenticated request."""
     return InboxVisibility(
-        include_staff=await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING),
+        include_staff=await caller.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING),
     )
 
 

@@ -20,7 +20,7 @@ from squid.api.pagination import (
     render_page,
     resolve_selector,
 )
-from squid.api.security import Caller, caller_allows, require_consented_account, requires, subject_for
+from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.builds.application import (
@@ -62,9 +62,9 @@ async def edit_build(
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
     """Edit an owned pending build, or any build with `build.submission.edit`."""
-    require_consented_account(caller)
+    caller.require_consented_account()
     build = await builds.apply_edit(
-        BuildEditor(subject=subject_for(caller), source="api"),
+        BuildEditor(subject=caller.permission_subject(), source="api"),
         build_id,
         BuildEditPatch.from_attributes(changes.edit_attributes()),
         expected_revision=_expected_revision(build_id, if_match),
@@ -169,7 +169,7 @@ async def list_builds(
 
 async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:
     """Require permission to view unpublished submissions, including credential restrictions."""
-    if not await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING):
+    if not await caller.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING):
         raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
 
 
