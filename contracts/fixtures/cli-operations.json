@@ -431,6 +431,76 @@
           "code": "NOT_FOUND"
         }
       }
+    },
+    "runtime_settings_get": {
+      "success": {
+        "status": 200,
+        "body": {
+          "welcome_forward_chance": 0.1,
+          "welcome_enabled": true,
+          "redstoner_enabled": true,
+          "build_vote_pass_threshold": 3,
+          "build_vote_fail_threshold": -3,
+          "delete_vote_pass_threshold": 3,
+          "delete_vote_fail_threshold": -3,
+          "notification_retention_days": 90,
+          "redstoner_starboard_author_id": "700796664276844612",
+          "redstoner_starboard_channel_id": "1332630008270684241",
+          "redstoner_role_id": "433670432420397060",
+          "redstoner_corner_channel_id": "534945678850523138",
+          "redstoner_announcement_channel_id": "433643026204852224",
+          "welcome_channel_id": "1356094722531393680",
+          "welcome_relay_channel_id": "433618741528625155",
+          "version_tracker_channel_id": "1334168723170263122",
+          "build_log_channel_ids": [
+            "726156829629087814",
+            "667401499554611210"
+          ]
+        }
+      },
+      "problem": {
+        "status": 403,
+        "body": {
+          "title": "Forbidden",
+          "status": 403,
+          "code": "FORBIDDEN"
+        }
+      }
+    },
+    "runtime_settings_update": {
+      "success": {
+        "status": 200,
+        "body": {
+          "welcome_forward_chance": 0.1,
+          "welcome_enabled": true,
+          "redstoner_enabled": true,
+          "build_vote_pass_threshold": 3,
+          "build_vote_fail_threshold": -3,
+          "delete_vote_pass_threshold": 3,
+          "delete_vote_fail_threshold": -3,
+          "notification_retention_days": 90,
+          "redstoner_starboard_author_id": "700796664276844612",
+          "redstoner_starboard_channel_id": "1332630008270684241",
+          "redstoner_role_id": "433670432420397060",
+          "redstoner_corner_channel_id": "534945678850523138",
+          "redstoner_announcement_channel_id": "433643026204852224",
+          "welcome_channel_id": "1356094722531393680",
+          "welcome_relay_channel_id": "433618741528625155",
+          "version_tracker_channel_id": "1334168723170263122",
+          "build_log_channel_ids": [
+            "726156829629087814",
+            "667401499554611210"
+          ]
+        }
+      },
+      "problem": {
+        "status": 403,
+        "body": {
+          "title": "Forbidden",
+          "status": 403,
+          "code": "FORBIDDEN"
+        }
+      }
     }
   }
 }

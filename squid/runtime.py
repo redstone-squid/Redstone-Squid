@@ -83,6 +83,8 @@ PERMISSION_EPOCH_JOB = "permission-epoch"
 class ApiServices:
     """Capabilities exposed by the HTTP API process."""
 
+    settings: SettingsService
+
     builds: BuildService
     error_reports: ErrorReportService
     api_keys: ApiKeyService | None

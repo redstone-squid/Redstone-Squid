@@ -689,6 +689,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         msg = "The API runtime requires an idempotency response-encryption keyring."
         raise RuntimeError(msg)
     return ApiServices(
+        settings=graph.settings,
         builds=graph.builds,
         error_reports=graph.error_reports,
         api_keys=graph.api_keys,

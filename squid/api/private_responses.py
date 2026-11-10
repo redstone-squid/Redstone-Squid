@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 PRIVATE_API_PATH_PREFIXES = (
+    "/v1/settings/runtime",
     "/v1/auth/csrf",
     "/v1/cli/auth",
     "/v1/minecraft/auth",

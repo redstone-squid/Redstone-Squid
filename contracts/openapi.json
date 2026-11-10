@@ -11561,6 +11561,328 @@
         }
       }
     },
+    "/v1/settings/runtime": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Runtime Settings",
+        "description": "Read current global settings. Discord IDs are returned as decimal strings.",
+        "operationId": "runtime_settings_get",
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          },
+          {
+            "MinecraftPlayer": [],
+            "PaperInstallationId": [],
+            "PaperInstallationSecret": []
+          },
+          {
+            "ApiCredential": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeSettingsDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "settings.show",
+          "required_api_features": [],
+          "interaction": "direct"
+        },
+        "x-required-api-scopes": [
+          "settings.runtime.view"
+        ]
+      },
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Runtime Settings",
+        "description": "Patch settings and audit the internal account. New vote defaults affect new sessions only.",
+        "operationId": "runtime_settings_update",
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          },
+          {
+            "MinecraftPlayer": [],
+            "PaperInstallationId": [],
+            "PaperInstallationSecret": []
+          },
+          {
+            "ApiCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuntimeSettingsPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeSettingsDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "settings.set",
+          "required_api_features": [],
+          "interaction": "direct"
+        },
+        "x-required-api-scopes": [
+          "settings.runtime.edit"
+        ]
+      }
+    },
     "/v1/submissions/inbox": {
       "get": {
         "tags": [
@@ -23558,6 +23880,302 @@
         "title": "RevisionProposalResponse",
         "description": "A private candidate, its retained diff, and any committed approval receipt."
       },
+      "RuntimeSettingsDetail": {
+        "properties": {
+          "welcome_forward_chance": {
+            "type": "number",
+            "title": "Welcome Forward Chance"
+          },
+          "welcome_enabled": {
+            "type": "boolean",
+            "title": "Welcome Enabled"
+          },
+          "redstoner_enabled": {
+            "type": "boolean",
+            "title": "Redstoner Enabled"
+          },
+          "build_vote_pass_threshold": {
+            "type": "integer",
+            "title": "Build Vote Pass Threshold"
+          },
+          "build_vote_fail_threshold": {
+            "type": "integer",
+            "title": "Build Vote Fail Threshold"
+          },
+          "delete_vote_pass_threshold": {
+            "type": "integer",
+            "title": "Delete Vote Pass Threshold"
+          },
+          "delete_vote_fail_threshold": {
+            "type": "integer",
+            "title": "Delete Vote Fail Threshold"
+          },
+          "notification_retention_days": {
+            "type": "integer",
+            "title": "Notification Retention Days"
+          },
+          "redstoner_starboard_author_id": {
+            "type": "string",
+            "title": "Redstoner Starboard Author Id"
+          },
+          "redstoner_starboard_channel_id": {
+            "type": "string",
+            "title": "Redstoner Starboard Channel Id"
+          },
+          "redstoner_role_id": {
+            "type": "string",
+            "title": "Redstoner Role Id"
+          },
+          "redstoner_corner_channel_id": {
+            "type": "string",
+            "title": "Redstoner Corner Channel Id"
+          },
+          "redstoner_announcement_channel_id": {
+            "type": "string",
+            "title": "Redstoner Announcement Channel Id"
+          },
+          "welcome_channel_id": {
+            "type": "string",
+            "title": "Welcome Channel Id"
+          },
+          "welcome_relay_channel_id": {
+            "type": "string",
+            "title": "Welcome Relay Channel Id"
+          },
+          "version_tracker_channel_id": {
+            "type": "string",
+            "title": "Version Tracker Channel Id"
+          },
+          "build_log_channel_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Build Log Channel Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "welcome_forward_chance",
+          "welcome_enabled",
+          "redstoner_enabled",
+          "build_vote_pass_threshold",
+          "build_vote_fail_threshold",
+          "delete_vote_pass_threshold",
+          "delete_vote_fail_threshold",
+          "notification_retention_days",
+          "redstoner_starboard_author_id",
+          "redstoner_starboard_channel_id",
+          "redstoner_role_id",
+          "redstoner_corner_channel_id",
+          "redstoner_announcement_channel_id",
+          "welcome_channel_id",
+          "welcome_relay_channel_id",
+          "version_tracker_channel_id",
+          "build_log_channel_ids"
+        ],
+        "title": "RuntimeSettingsDetail",
+        "description": "Current global defaults and owner-guild routing."
+      },
+      "RuntimeSettingsPatch": {
+        "properties": {
+          "welcome_forward_chance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Forward Chance"
+          },
+          "welcome_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Enabled"
+          },
+          "redstoner_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redstoner Enabled"
+          },
+          "build_vote_pass_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Vote Pass Threshold"
+          },
+          "build_vote_fail_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Vote Fail Threshold"
+          },
+          "delete_vote_pass_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Vote Pass Threshold"
+          },
+          "delete_vote_fail_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delete Vote Fail Threshold"
+          },
+          "notification_retention_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Retention Days"
+          },
+          "redstoner_starboard_author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redstoner Starboard Author Id"
+          },
+          "redstoner_starboard_channel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redstoner Starboard Channel Id"
+          },
+          "redstoner_role_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redstoner Role Id"
+          },
+          "redstoner_corner_channel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redstoner Corner Channel Id"
+          },
+          "redstoner_announcement_channel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redstoner Announcement Channel Id"
+          },
+          "welcome_channel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Channel Id"
+          },
+          "welcome_relay_channel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Welcome Relay Channel Id"
+          },
+          "version_tracker_channel_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Tracker Channel Id"
+          },
+          "build_log_channel_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Log Channel Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RuntimeSettingsPatch",
+        "description": "Only supplied fields change. Null is not a reset operation."
+      },
       "SanitizationCapabilities": {
         "properties": {
           "media": {
@@ -25020,6 +25638,10 @@
     }
   },
   "tags": [
+    {
+      "name": "settings",
+      "description": "Global runtime configuration for application administrators."
+    },
     {
       "name": "capabilities",
       "description": "API, protocol, renderer, and upload compatibility."

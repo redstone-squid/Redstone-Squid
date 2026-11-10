@@ -351,6 +351,18 @@ BOT_RUNTIME_DEBUG = _b.node(
     tags=(Tag.DESTRUCTIVE, Tag.DIAGNOSTIC),
 )
 
+SETTINGS_RUNTIME_VIEW = _b.node(
+    "settings.runtime.view",
+    NodeScope.GLOBAL,
+    tr("View application-wide runtime settings."),
+    tags=(Tag.READONLY,),
+)
+SETTINGS_RUNTIME_EDIT = _b.node(
+    "settings.runtime.edit",
+    NodeScope.GLOBAL,
+    tr("Change application-wide runtime settings."),
+)
+
 # --------------------------------------------------------------------------- #
 # Guild nodes.
 #
@@ -568,7 +580,7 @@ GUILD_ADMIN = RoleDefinition(
         "perm.subject.inspect",
         "role.definition.manage_guild",
     ),
-    excludes=("@destructive",),
+    excludes=("@destructive", "settings.runtime.**"),
 )
 TRUSTED = RoleDefinition(
     key="trusted",

@@ -101,6 +101,7 @@ from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.domain.models import VoteSessionSnapshot
 from tests.support.permissions import permission_uow_factory
+from tests.support.settings import RuntimeSettingsStub
 
 
 def credential_nodes(*raw: str) -> frozenset[Pattern]:
@@ -809,6 +810,7 @@ def build_services(
     rejects unknown sources. Other services use the transport fakes above.
     """
     return ApiServices(
+        settings=RuntimeSettingsStub(),
         api_keys=None,
         web_auth=web_auth,
         cli_authorization=cli_authorization or MockCliAuthorization(),

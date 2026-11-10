@@ -126,3 +126,11 @@ class TestBuiltinRoles:
 
     def test_all_builtins_are_protected(self) -> None:
         assert all(role.protected for role in BUILTIN_ROLES)
+
+
+def test_runtime_settings_belong_to_global_administrators() -> None:
+    names = {"settings.runtime.view", "settings.runtime.edit"}
+    assert names <= builtin_leaves("global-admin")
+    assert names.isdisjoint(builtin_leaves("guild-admin"))
+    assert names.isdisjoint(builtin_leaves("trusted"))
+    assert all(CATALOGUE[name].scope is NodeScope.GLOBAL for name in names)
