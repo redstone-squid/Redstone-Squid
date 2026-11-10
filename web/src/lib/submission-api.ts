@@ -8,6 +8,8 @@
  */
 import {
   accountConsentGrant,
+  runtimeSettingsGet,
+  runtimeSettingsUpdate,
   browserCsrfGet,
   cliEnrollmentApprove,
   consentNoticeGet,
@@ -509,4 +511,31 @@ export function withConsentRetry<T extends object>(
       };
     },
   });
+}
+
+export type RuntimeSettingsApi = {
+  get: () => Promise<import("../generated/types.gen").RuntimeSettingsDetail>;
+  update: (
+    patch: import("../generated/types.gen").RuntimeSettingsPatch,
+  ) => Promise<import("../generated/types.gen").RuntimeSettingsDetail>;
+  signInUrl: (returnTo: string) => string;
+};
+
+/** Global settings use the same browser session, CSRF, and retry handling as private drafts. */
+export function createRuntimeSettingsApi(
+  locale: Locale,
+  config: RuntimeConfig,
+): RuntimeSettingsApi {
+  const client = createSubmissionClient(locale, config);
+  const mutations = createMutationSession(client);
+  return {
+    get: async () => unwrap(await runtimeSettingsGet({ client })),
+    update: async (body) => {
+      const key = requestId();
+      return mutations.execute(key, async (headers) =>
+        unwrap(await runtimeSettingsUpdate({ client, body, headers })),
+      );
+    },
+    signInUrl: (returnTo) => signInUrl(config, returnTo),
+  };
 }

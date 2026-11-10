@@ -1239,3 +1239,45 @@ textarea:disabled {
     background: #fff;
   }
 }
+
+.runtime-settings form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 40rem;
+  margin-block: 1.5rem;
+}
+
+.runtime-settings input,
+.runtime-settings select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: var(--deepslate-900);
+}
+
+.runtime-settings button {
+  justify-self: start;
+}
+
+.runtime-settings dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.runtime-settings dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 40rem) {
+  .runtime-settings dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}

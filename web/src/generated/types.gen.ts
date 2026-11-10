@@ -2909,6 +2909,158 @@ export type RevisionProposalResponse = {
 };
 
 /**
+ * RuntimeSettingsDetail
+ *
+ * Current global defaults and owner-guild routing.
+ */
+export type RuntimeSettingsDetail = {
+    /**
+     * Welcome Forward Chance
+     */
+    welcome_forward_chance: number;
+    /**
+     * Welcome Enabled
+     */
+    welcome_enabled: boolean;
+    /**
+     * Redstoner Enabled
+     */
+    redstoner_enabled: boolean;
+    /**
+     * Build Vote Pass Threshold
+     */
+    build_vote_pass_threshold: number;
+    /**
+     * Build Vote Fail Threshold
+     */
+    build_vote_fail_threshold: number;
+    /**
+     * Delete Vote Pass Threshold
+     */
+    delete_vote_pass_threshold: number;
+    /**
+     * Delete Vote Fail Threshold
+     */
+    delete_vote_fail_threshold: number;
+    /**
+     * Notification Retention Days
+     */
+    notification_retention_days: number;
+    /**
+     * Redstoner Starboard Author Id
+     */
+    redstoner_starboard_author_id: string;
+    /**
+     * Redstoner Starboard Channel Id
+     */
+    redstoner_starboard_channel_id: string;
+    /**
+     * Redstoner Role Id
+     */
+    redstoner_role_id: string;
+    /**
+     * Redstoner Corner Channel Id
+     */
+    redstoner_corner_channel_id: string;
+    /**
+     * Redstoner Announcement Channel Id
+     */
+    redstoner_announcement_channel_id: string;
+    /**
+     * Welcome Channel Id
+     */
+    welcome_channel_id: string;
+    /**
+     * Welcome Relay Channel Id
+     */
+    welcome_relay_channel_id: string;
+    /**
+     * Version Tracker Channel Id
+     */
+    version_tracker_channel_id: string;
+    /**
+     * Build Log Channel Ids
+     */
+    build_log_channel_ids: Array<string>;
+};
+
+/**
+ * RuntimeSettingsPatch
+ *
+ * Only supplied fields change. Null is not a reset operation.
+ */
+export type RuntimeSettingsPatch = {
+    /**
+     * Welcome Forward Chance
+     */
+    welcome_forward_chance?: number | null;
+    /**
+     * Welcome Enabled
+     */
+    welcome_enabled?: boolean | null;
+    /**
+     * Redstoner Enabled
+     */
+    redstoner_enabled?: boolean | null;
+    /**
+     * Build Vote Pass Threshold
+     */
+    build_vote_pass_threshold?: number | null;
+    /**
+     * Build Vote Fail Threshold
+     */
+    build_vote_fail_threshold?: number | null;
+    /**
+     * Delete Vote Pass Threshold
+     */
+    delete_vote_pass_threshold?: number | null;
+    /**
+     * Delete Vote Fail Threshold
+     */
+    delete_vote_fail_threshold?: number | null;
+    /**
+     * Notification Retention Days
+     */
+    notification_retention_days?: number | null;
+    /**
+     * Redstoner Starboard Author Id
+     */
+    redstoner_starboard_author_id?: string | null;
+    /**
+     * Redstoner Starboard Channel Id
+     */
+    redstoner_starboard_channel_id?: string | null;
+    /**
+     * Redstoner Role Id
+     */
+    redstoner_role_id?: string | null;
+    /**
+     * Redstoner Corner Channel Id
+     */
+    redstoner_corner_channel_id?: string | null;
+    /**
+     * Redstoner Announcement Channel Id
+     */
+    redstoner_announcement_channel_id?: string | null;
+    /**
+     * Welcome Channel Id
+     */
+    welcome_channel_id?: string | null;
+    /**
+     * Welcome Relay Channel Id
+     */
+    welcome_relay_channel_id?: string | null;
+    /**
+     * Version Tracker Channel Id
+     */
+    version_tracker_channel_id?: string | null;
+    /**
+     * Build Log Channel Ids
+     */
+    build_log_channel_ids?: Array<string> | null;
+};
+
+/**
  * SanitizationCapabilities
  *
  * Supported artifact transformations advertised to clients.
@@ -7239,6 +7391,92 @@ export type SearchExecuteResponses = {
 };
 
 export type SearchExecuteResponse = SearchExecuteResponses[keyof SearchExecuteResponses];
+
+export type RuntimeSettingsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/settings/runtime';
+};
+
+export type RuntimeSettingsGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RuntimeSettingsGetError = RuntimeSettingsGetErrors[keyof RuntimeSettingsGetErrors];
+
+export type RuntimeSettingsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RuntimeSettingsDetail;
+};
+
+export type RuntimeSettingsGetResponse = RuntimeSettingsGetResponses[keyof RuntimeSettingsGetResponses];
+
+export type RuntimeSettingsUpdateData = {
+    body: RuntimeSettingsPatch;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/settings/runtime';
+};
+
+export type RuntimeSettingsUpdateErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RuntimeSettingsUpdateError = RuntimeSettingsUpdateErrors[keyof RuntimeSettingsUpdateErrors];
+
+export type RuntimeSettingsUpdateResponses = {
+    /**
+     * Successful Response
+     */
+    200: RuntimeSettingsDetail;
+};
+
+export type RuntimeSettingsUpdateResponse = RuntimeSettingsUpdateResponses[keyof RuntimeSettingsUpdateResponses];
 
 export type SubmissionCorrectionInboxData = {
     body?: never;

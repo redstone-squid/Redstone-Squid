@@ -1,0 +1,23 @@
+---
+import RuntimeSettings from "../components/RuntimeSettings";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getRuntimeConfig } from "../lib/config";
+import type { Locale } from "../lib/i18n";
+
+type Props = { locale: Locale };
+const { locale } = Astro.props;
+const title = locale === "zh-CN" ? "全局设置" : "Global settings";
+---
+
+<BaseLayout
+  title={title}
+  description={title}
+  locale={locale}
+  canonicalPath={locale === "zh-CN" ? "/zh-cn/admin/settings" : "/admin/settings"}
+  noindex
+>
+  <section class="page-shell">
+    <header class="page-heading"><h1>{title}</h1></header>
+    <RuntimeSettings client:load locale={locale} config={getRuntimeConfig()} />
+  </section>
+</BaseLayout>

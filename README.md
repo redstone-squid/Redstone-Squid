@@ -65,7 +65,8 @@ Community routing, welcome forwarding, automation switches, vote threshold defau
 retention live in `runtime_settings`. After applying migrations (`uv run --locked alembic upgrade head`),
 the first settings read seeds this singleton from the deployment configuration. Keep initial community
 and retention configuration consistent across processes; later environment edits do not override the row.
-The bot owner can inspect or edit settings without restarting:
+Global administrators can inspect or edit settings without restarting. Discord supports both
+`/runtime-settings` and the prefix command:
 
 ```text
 !runtime-settings
@@ -75,7 +76,16 @@ The bot owner can inspect or edit settings without restarting:
 !runtime-settings build_log_channel_ids [726156829629087814, 667401499554611210]
 ```
 
-Use your configured command prefix if it differs from `!`. Values use JSON syntax. Changes are validated
+The same settings are available in the website's **Administration** page (`/admin/settings`),
+`squid settings show` / `squid settings set <name> <JSON value>` in the CLI, and
+`/squid settings [name] [JSON value]` in Paper and Fabric. HTTP clients use
+`GET` / `PATCH /v1/settings/runtime`. HTTP and CLI/Minecraft JSON encode Discord IDs as quoted decimal
+strings, including each item in `build_log_channel_ids`, so clients do not round them.
+
+`settings.runtime.view` and `settings.runtime.edit` are global permissions included in the global
+administrator role. Server administrators and Minecraft operators do not receive them automatically.
+Writes require a linked internal account with current consent. Use your configured Discord prefix
+if it differs from `!`. Values use JSON syntax. Changes are validated
 and recorded with the internal account, timestamp, and before/after values in `runtime_setting_changes`.
 Each operation reads fresh settings. Vote threshold changes affect new sessions; existing sessions keep
 their thresholds. Welcome probability changes affect new messages; disabling relaying or changing its

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import fixtures from "../../../contracts/fixtures/cli-operations.json";
+
 import type {
   DraftMediaListResponse,
   DraftMediaResponse,
@@ -10,6 +12,7 @@ import type {
 import {
   asSubmissionError,
   createCliLinkApi,
+  createRuntimeSettingsApi,
   createMinecraftLinkApi,
   createSubmissionApi,
   SubmissionApiError,
@@ -348,4 +351,21 @@ describe("CLI user-code approval transport", () => {
       /device_code|private_key|token/i,
     );
   });
+});
+
+it("runtime settings use account cookies, CSRF, idempotency, and exact string IDs", async () => {
+  const current = fixtures.operations.runtime_settings_get.success.body;
+  fetchMock.mockResolvedValueOnce(jsonResponse(current));
+  const api = createRuntimeSettingsApi("en", config);
+  expect(await api.get()).toEqual(current);
+  expect(capturedRequest().credentials).toBe("include");
+  expect(capturedRequest().cache).toBe("no-store");
+  fetchMock.mockResolvedValueOnce(jsonResponse(current));
+  await api.update({ welcome_channel_id: "1356094722531393681" });
+  const request = capturedRequest();
+  expect(request.method).toBe("PATCH");
+  expect(request.headers.get("CSRF-Token")).toBe("csrf-token");
+  expect(request.headers.get("Idempotency-Key")).toBeTruthy();
+  expect(await request.json()).toEqual({ welcome_channel_id: "1356094722531393681" });
+  expect(api.signInUrl("https://catalogue.test/admin/settings")).toContain("redirect_to=");
 });
