@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-11-09 22:12+0100\n"
+"POT-Creation-Date: 2026-11-10 09:48+0100\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -84,7 +84,7 @@ msgstr ""
 msgid "### Simulation input not resolved"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:284
+#: squid/bot/submission/search_view.py:280
 #, python-brace-format
 msgid ""
 "**Build**\n"
@@ -107,7 +107,7 @@ msgstr ""
 msgid "**Inputs found in this schematic**:"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:300
+#: squid/bot/submission/search_view.py:296
 #, python-brace-format
 msgid ""
 "**Kind**\n"
@@ -136,7 +136,7 @@ msgstr ""
 msgid "**Simulated piston activity**: {ticks} gt (moderator evidence only)"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:295
+#: squid/bot/submission/search_view.py:291
 #, python-brace-format
 msgid ""
 "**Status**\n"
@@ -152,12 +152,12 @@ msgid ""
 "{detail}"
 msgstr ""
 
-#: squid/bot/consent.py:178
+#: squid/bot/consent.py:169
 #, python-brace-format
 msgid "**{name}** ({builds}) becomes attributed to your account."
 msgstr ""
 
-#: squid/bot/consent.py:174
+#: squid/bot/consent.py:165
 #, python-brace-format
 msgid ""
 "**{name}** ({builds}) is already credited to another creator, so agreeing"
@@ -182,7 +182,7 @@ msgid "**{name}** — {count} build"
 msgid_plural "**{name}** — {count} builds"
 msgstr[0] ""
 
-#: squid/bot/consent.py:261
+#: squid/bot/consent.py:252
 #, python-brace-format
 msgid ""
 "**{username}**\n"
@@ -248,7 +248,7 @@ msgstr ""
 msgid "7 days"
 msgstr ""
 
-#: squid/bot/consent.py:238 squid/bot/consent.py:265
+#: squid/bot/consent.py:229 squid/bot/consent.py:256
 #, python-brace-format
 msgid "<@{user_id}> (`{user_id}`)"
 msgstr ""
@@ -325,7 +325,7 @@ msgstr ""
 msgid "A normalized video must have a poster artifact."
 msgstr ""
 
-#: squid/core/errors.py:274
+#: squid/core/errors.py:270
 msgid "A persistence operation failed."
 msgstr "持久化操作失败。"
 
@@ -333,7 +333,7 @@ msgstr "持久化操作失败。"
 msgid "A pop-up that checks its own answers"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:167
+#: squid/accounts/domain/profiles.py:155
 #, python-brace-format
 msgid "A profile may have at most {limit} links, got {count}."
 msgstr ""
@@ -346,7 +346,7 @@ msgstr ""
 msgid "A request with this idempotency key is still in progress."
 msgstr ""
 
-#: squid/core/errors.py:289
+#: squid/core/errors.py:285
 msgid "A required service is temporarily unavailable."
 msgstr "所需的服务暂时不可用。"
 
@@ -372,7 +372,7 @@ msgstr ""
 msgid "A title someone typed"
 msgstr "别人输入的标题"
 
-#: squid/catalogue/domain/titles.py:66
+#: squid/catalogue/domain/titles.py:67
 msgid "A title token cannot be blank."
 msgstr ""
 
@@ -478,7 +478,7 @@ msgstr ""
 msgid "Administration & setup"
 msgstr ""
 
-#: squid/bot/consent.py:245
+#: squid/bot/consent.py:236
 msgid "Agree"
 msgstr ""
 
@@ -486,17 +486,17 @@ msgstr ""
 msgid "Agree & Enable Ingestion"
 msgstr ""
 
-#: squid/bot/consent.py:273
+#: squid/bot/consent.py:264
 msgid "Agree and link"
 msgstr ""
 
-#: squid/bot/consent.py:232
+#: squid/bot/consent.py:223
 msgid ""
 "Agreeing stores your Discord user ID and records this consent, so the bot"
 " can recognise you and attribute your builds. Cancelling stores nothing."
 msgstr ""
 
-#: squid/bot/consent.py:255
+#: squid/bot/consent.py:246
 msgid ""
 "Agreeing stores your Discord user ID, your Minecraft UUID and your "
 "current Minecraft username, and records this consent. Cancelling stores "
@@ -529,11 +529,11 @@ msgid ""
 "think that is a mistake."
 msgstr ""
 
-#: squid/core/errors.py:98
+#: squid/core/errors.py:94
 msgid "An application error occurred."
 msgstr "发生了应用程序错误。"
 
-#: squid/tags/application/services.py:153
+#: squid/tags/application/services.py:157
 msgid "An approved user showcase tag is required."
 msgstr ""
 
@@ -546,11 +546,11 @@ msgstr ""
 msgid "An image, video, or schematic; sorted out automatically."
 msgstr ""
 
-#: squid/core/errors.py:267
+#: squid/core/errors.py:263
 msgid "An infrastructure dependency failed."
 msgstr "基础设施依赖项发生故障。"
 
-#: squid/core/errors.py:244
+#: squid/core/errors.py:240
 msgid "An internal application error occurred."
 msgstr "发生了内部应用程序错误。"
 
@@ -575,15 +575,15 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
-#: squid/core/errors.py:253
+#: squid/core/errors.py:249
 msgid "Application configuration is invalid."
 msgstr "应用程序配置无效。"
 
-#: squid/core/errors.py:99
+#: squid/core/errors.py:95
 msgid "Application error"
 msgstr "应用程序错误"
 
-#: squid/core/errors.py:260
+#: squid/core/errors.py:256
 msgid "Application state is invalid for this operation."
 msgstr "应用程序状态对此操作无效。"
 
@@ -591,7 +591,7 @@ msgstr "应用程序状态对此操作无效。"
 msgid "Apply"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:374
+#: squid/bot/submission/ui/views.py:375
 msgid "Apply changes"
 msgstr ""
 
@@ -603,7 +603,7 @@ msgstr ""
 msgid "Apply tag to build"
 msgstr ""
 
-#: squid/bot/claims_view.py:103 squid/bot/submission/build_browse.py:168
+#: squid/bot/claims_view.py:103 squid/bot/submission/build_browse.py:170
 #: squid/bot/tags_view.py:351
 msgid "Approve"
 msgstr ""
@@ -648,7 +648,7 @@ msgstr ""
 msgid "Artifact sources must be regular files."
 msgstr ""
 
-#: squid/artifacts/infrastructure.py:438
+#: squid/artifacts/infrastructure.py:434
 msgid "Artifact transfer budgets must be positive."
 msgstr ""
 
@@ -702,12 +702,12 @@ msgstr ""
 msgid "Author has not consented"
 msgstr ""
 
-#: squid/bot/settings_view.py:282 squid/bot/submission/ui/views.py:379
+#: squid/bot/settings_view.py:282 squid/bot/submission/ui/views.py:380
 #: squid/bot/ui.py:101
 msgid "Back"
 msgstr "返回"
 
-#: squid/bot/submission/build_browse.py:433
+#: squid/bot/submission/build_browse.py:447
 msgid "Back to builds"
 msgstr ""
 
@@ -724,11 +724,11 @@ msgstr ""
 msgid "Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}."
 msgstr ""
 
-#: squid/bot/consent.py:230
+#: squid/bot/consent.py:221
 msgid "Before Redstone Squid stores anything about you"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:159 squid/bot/account_view.py:278
+#: squid/accounts/domain/profiles.py:147 squid/bot/account_view.py:278
 msgid "Bio"
 msgstr ""
 
@@ -759,7 +759,7 @@ msgstr ""
 msgid "Bridge door"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:420
+#: squid/bot/submission/build_browse.py:434
 msgid "Browse"
 msgstr ""
 
@@ -771,7 +771,7 @@ msgstr ""
 msgid "Build"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:524 squid/bot/tags_view.py:376
+#: squid/bot/submission/build_browse.py:538 squid/bot/tags_view.py:376
 msgid "Build ID"
 msgstr ""
 
@@ -789,7 +789,7 @@ msgid ""
 " BuildDraft."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:408
+#: squid/bot/submission/build_browse.py:422
 msgid "Build catalogue"
 msgstr ""
 
@@ -797,7 +797,7 @@ msgstr ""
 msgid "Build confirmed"
 msgstr ""
 
-#: squid/bot/consent.py:267
+#: squid/bot/consent.py:258
 msgid "Build credit"
 msgstr ""
 
@@ -834,7 +834,7 @@ msgstr "找不到该构造。"
 msgid "Build notification"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:240
+#: squid/bot/submission/build_browse.py:246
 msgid "Build review state updated."
 msgstr ""
 
@@ -868,12 +868,12 @@ msgstr ""
 msgid "Build width"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:273
+#: squid/bot/submission/search_view.py:269
 #, python-brace-format
 msgid "Build · {status}"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:424 squid/bot/submission/records.py:105
+#: squid/bot/submission/build_browse.py:438 squid/bot/submission/records.py:105
 msgid "Builds"
 msgstr ""
 
@@ -930,14 +930,14 @@ msgid "CLI device label must contain 1 to 80 characters."
 msgstr ""
 
 #: squid/bot/access_view.py:322 squid/bot/account_view.py:134
-#: squid/bot/account_workspace.py:333 squid/bot/consent.py:126
-#: squid/bot/starboard/screen.py:233 squid/bot/submission/build_browse.py:221
+#: squid/bot/account_workspace.py:333 squid/bot/consent.py:117
+#: squid/bot/starboard/screen.py:233 squid/bot/submission/build_browse.py:223
 #: squid/bot/tags_view.py:297 squid/bot/ui.py:108
-#: squid/bot/voting/poll_wizard.py:288
+#: squid/bot/voting/poll_wizard.py:289
 msgid "Cancel"
 msgstr "取消"
 
-#: squid/bot/consent.py:400
+#: squid/bot/consent.py:391
 msgid "Cancelled. No account information was stored."
 msgstr ""
 
@@ -1028,7 +1028,7 @@ msgstr ""
 msgid "Changed {setting_label}"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:350
+#: squid/bot/submission/ui/views.py:351
 msgid "Changes saved"
 msgstr ""
 
@@ -1149,9 +1149,9 @@ msgstr ""
 #: squid/bot/diagnostics_view.py:287 squid/bot/give_redstoner.py:122
 #: squid/bot/help.py:138 squid/bot/notifications_view.py:244
 #: squid/bot/settings_view.py:229 squid/bot/settings_view.py:285
-#: squid/bot/starboard/screen.py:112 squid/bot/submission/build_browse.py:434
-#: squid/bot/submission/build_browse.py:442 squid/bot/submission/records.py:148
-#: squid/bot/submission/search_view.py:228 squid/bot/submission/ui/views.py:393
+#: squid/bot/starboard/screen.py:112 squid/bot/submission/build_browse.py:448
+#: squid/bot/submission/build_browse.py:456 squid/bot/submission/records.py:148
+#: squid/bot/submission/search_view.py:228 squid/bot/submission/ui/views.py:394
 #: squid/bot/tags_view.py:200 squid/bot/ui.py:103
 #: squid/bot/version_tracking.py:102
 msgid "Close"
@@ -1182,11 +1182,11 @@ msgstr ""
 msgid "Comma separated, e.g. `Seamless, Observerless`. See `/help`."
 msgstr ""
 
-#: squid/bot/help.py:299 squid/bot/help.py:312
+#: squid/bot/help.py:288 squid/bot/help.py:301
 msgid "Command Help"
 msgstr "命令帮助"
 
-#: squid/bot/help.py:266
+#: squid/bot/help.py:255
 #, python-brace-format
 msgid "Command Help - `{name}`"
 msgstr "命令帮助 - `{name}`"
@@ -1219,7 +1219,7 @@ msgstr ""
 msgid "Composed roles"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:220 squid/bot/tags_view.py:296
+#: squid/bot/submission/build_browse.py:222 squid/bot/tags_view.py:296
 #: squid/bot/ui.py:107
 msgid "Confirm"
 msgstr "确认"
@@ -1228,7 +1228,7 @@ msgstr "确认"
 msgid "Confirm reset"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:205
+#: squid/bot/submission/build_browse.py:207
 msgid "Confirm review decision"
 msgstr ""
 
@@ -1244,7 +1244,7 @@ msgstr ""
 msgid "Confusing"
 msgstr ""
 
-#: squid/bot/consent.py:241 squid/bot/consent.py:269
+#: squid/bot/consent.py:232 squid/bot/consent.py:260
 #: squid/bot/submission/consent_banner.py:67
 msgid "Consent recorded"
 msgstr ""
@@ -1257,13 +1257,13 @@ msgstr ""
 msgid "Continue Session"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:318
+#: squid/bot/submission/build_browse.py:332
 #, python-brace-format
 msgid "Conversion report: {loss_summary}"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:188
-#: squid/bot/submission/build_browse.py:501
+#: squid/bot/submission/build_browse.py:190
+#: squid/bot/submission/build_browse.py:515
 msgid "Convert schematic"
 msgstr ""
 
@@ -1349,7 +1349,7 @@ msgid ""
 "pretending."
 msgstr ""
 
-#: squid/bot/notifications_view.py:34 squid/bot/submission/search_view.py:257
+#: squid/bot/notifications_view.py:34 squid/bot/submission/search_view.py:253
 msgid "Creator"
 msgstr ""
 
@@ -1426,7 +1426,7 @@ msgstr ""
 msgid "Database"
 msgstr "数据库"
 
-#: squid/bot/submission/build_browse.py:172
+#: squid/bot/submission/build_browse.py:174
 msgid "Debug download"
 msgstr ""
 
@@ -1533,7 +1533,7 @@ msgstr ""
 msgid "Description"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:530
+#: squid/bot/submission/build_browse.py:544
 msgid "Description or title"
 msgstr ""
 
@@ -1545,7 +1545,7 @@ msgstr ""
 msgid "Detect a schematic's lattice structure."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:184
+#: squid/bot/submission/build_browse.py:186
 msgid "Detect lattice"
 msgstr ""
 
@@ -1573,7 +1573,7 @@ msgstr ""
 msgid "Discord DMs"
 msgstr ""
 
-#: squid/bot/consent.py:237 squid/bot/consent.py:264
+#: squid/bot/consent.py:228 squid/bot/consent.py:255
 #: squid/bot/submission/consent_banner.py:63
 msgid "Discord account"
 msgstr ""
@@ -1606,7 +1606,7 @@ msgstr ""
 msgid "Discover"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:156 squid/bot/access_view.py:487
+#: squid/accounts/domain/profiles.py:144 squid/bot/access_view.py:487
 #: squid/bot/account_view.py:266 squid/bot/tags_view.py:357
 #: squid/submissions/application/forms.py:154
 msgid "Display name"
@@ -1647,11 +1647,11 @@ msgid ""
 "builds you did not upload them to."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:156
+#: squid/bot/submission/build_browse.py:158
 msgid "Download result"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:180
+#: squid/bot/submission/build_browse.py:182
 msgid "Download schematic"
 msgstr ""
 
@@ -1705,15 +1705,15 @@ msgstr ""
 msgid "Earlier"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:166 squid/bot/ui.py:116
+#: squid/bot/submission/build_browse.py:168 squid/bot/ui.py:116
 msgid "Edit"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:404
+#: squid/bot/submission/ui/views.py:405
 msgid "Edit build"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:242
+#: squid/bot/submission/ui/views.py:243
 #, python-brace-format
 msgid "Edit build, section {page}"
 msgstr ""
@@ -1758,7 +1758,7 @@ msgstr ""
 msgid "Edit starboard setting"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:366
+#: squid/bot/submission/ui/views.py:367
 msgid "Edit this section"
 msgstr ""
 
@@ -1836,7 +1836,7 @@ msgstr ""
 msgid "Error {reference}"
 msgstr ""
 
-#: squid/bot/help.py:323
+#: squid/bot/help.py:312
 msgid "Error."
 msgstr "错误。"
 
@@ -1844,11 +1844,11 @@ msgstr "错误。"
 msgid "Errors cleared"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:94
+#: squid/accounts/domain/profiles.py:95
 msgid "Every link needs a URL."
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:91
+#: squid/accounts/domain/profiles.py:92
 msgid "Every link needs a label."
 msgstr ""
 
@@ -1933,12 +1933,12 @@ msgstr ""
 msgid "Fetch the latest build, merge the changes, and try again."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:406
+#: squid/bot/submission/ui/views.py:407
 msgid "Fields in this section"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:421
-#: squid/bot/submission/build_browse.py:528
+#: squid/bot/submission/build_browse.py:435
+#: squid/bot/submission/build_browse.py:542
 msgid "Find build"
 msgstr ""
 
@@ -1954,14 +1954,14 @@ msgstr ""
 msgid "First-of-a-kind builds"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:450
+#: squid/bot/submission/ui/views.py:451
 #, python-brace-format
 msgid ""
 "Fix these values before review:\n"
 "{error_text}"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:363
+#: squid/bot/submission/ui/views.py:364
 #, python-brace-format
 msgid ""
 "Fix these values before review:\n"
@@ -2028,7 +2028,7 @@ msgstr ""
 msgid "Forbid"
 msgstr ""
 
-#: squid/core/errors.py:226
+#: squid/core/errors.py:222
 msgid "Forbidden"
 msgstr "禁止访问"
 
@@ -2044,7 +2044,7 @@ msgstr ""
 msgid "Forms"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:398
+#: squid/bot/submission/ui/views.py:399
 msgid ""
 "Fresh editor loaded. Unsaved changes from the previous editor were "
 "discarded."
@@ -2105,7 +2105,7 @@ msgstr ""
 msgid "Have your votes counted at the staff weight."
 msgstr ""
 
-#: squid/bot/help.py:256
+#: squid/bot/help.py:245
 msgid "Help"
 msgstr "帮助"
 
@@ -2229,11 +2229,11 @@ msgstr ""
 msgid "Information"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:518
+#: squid/bot/submission/build_browse.py:532
 msgid "Input position (x y z)"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:330
+#: squid/bot/submission/build_browse.py:344
 msgid "Input position must contain three integers, for example `12 5 -3`."
 msgstr ""
 
@@ -2259,7 +2259,7 @@ msgstr ""
 msgid "Installation label must contain 1 to 80 characters."
 msgstr ""
 
-#: squid/core/errors.py:245
+#: squid/core/errors.py:241
 msgid "Internal error"
 msgstr "内部错误"
 
@@ -2316,8 +2316,8 @@ msgstr ""
 msgid "Invalid request"
 msgstr "请求无效"
 
-#: squid/bot/submission/ui/fields.py:101 squid/bot/submission/ui/views.py:239
-#: squid/core/errors.py:195
+#: squid/bot/submission/ui/fields.py:101 squid/bot/submission/ui/views.py:240
+#: squid/core/errors.py:191
 msgid "Invalid value"
 msgstr "值无效"
 
@@ -2407,11 +2407,11 @@ msgstr ""
 msgid "Link Minecraft account"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:98
+#: squid/accounts/domain/profiles.py:99
 msgid "Link URL"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:97
+#: squid/accounts/domain/profiles.py:98
 #, python-brace-format
 msgid "Link URLs may be at most {limit} characters."
 msgstr ""
@@ -2434,11 +2434,11 @@ msgstr ""
 msgid "Link another identity first, then unlink this one."
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:89
+#: squid/accounts/domain/profiles.py:90
 msgid "Link label"
 msgstr ""
 
-#: squid/bot/consent.py:253
+#: squid/bot/consent.py:244
 #, python-brace-format
 msgid "Link {username} to your Discord account"
 msgstr ""
@@ -2453,16 +2453,16 @@ msgstr ""
 msgid "Links"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:108
+#: squid/accounts/domain/profiles.py:109
 msgid "Links may not carry credentials."
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:102
+#: squid/accounts/domain/profiles.py:103
 #, python-brace-format
 msgid "Links must be https URLs, got {scheme!r}."
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:104
+#: squid/accounts/domain/profiles.py:105
 msgid "Links must include a hostname."
 msgstr ""
 
@@ -2502,12 +2502,12 @@ msgstr ""
 msgid "Loading build tags."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:140
-#: squid/bot/submission/ui/views.py:356
+#: squid/bot/submission/build_browse.py:142
+#: squid/bot/submission/ui/views.py:357
 msgid "Loading build."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:439
+#: squid/bot/submission/build_browse.py:453
 msgid "Loading builds."
 msgstr ""
 
@@ -2608,11 +2608,11 @@ msgstr ""
 msgid "Measure a schematic's timing."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:516
+#: squid/bot/submission/build_browse.py:530
 msgid "Measure schematic timing"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:190
+#: squid/bot/submission/build_browse.py:192
 msgid "Measure timing"
 msgstr ""
 
@@ -2783,7 +2783,7 @@ msgstr ""
 msgid "Minecraft (Java)"
 msgstr ""
 
-#: squid/bot/consent.py:260
+#: squid/bot/consent.py:251
 msgid "Minecraft account"
 msgstr ""
 
@@ -2799,11 +2799,11 @@ msgstr ""
 msgid "Minecraft authorization pepper must not be empty."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:511
+#: squid/bot/submission/build_browse.py:525
 msgid "Minecraft data version"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:512
+#: squid/bot/submission/build_browse.py:526
 msgid "Minecraft version name"
 msgstr ""
 
@@ -2866,7 +2866,7 @@ msgstr ""
 msgid "New alias"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:368 squid/bot/ui.py:100
+#: squid/bot/submission/ui/views.py:369 squid/bot/ui.py:100
 msgid "Next"
 msgstr "下一页"
 
@@ -2882,7 +2882,7 @@ msgstr ""
 msgid "No active record titles require taxonomy review."
 msgstr "没有需要分类审核的活跃记录标题。"
 
-#: squid/bot/consent.py:169
+#: squid/bot/consent.py:160
 #, python-brace-format
 msgid "No build credits **{username}** yet, so nothing is reattributed."
 msgstr ""
@@ -2895,11 +2895,11 @@ msgstr ""
 msgid "No build with that ID."
 msgstr "没有该 ID 对应的构造。"
 
-#: squid/bot/submission/build_browse.py:409
+#: squid/bot/submission/build_browse.py:423
 msgid "No builds are available."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:467
+#: squid/bot/submission/ui/views.py:468
 msgid "No changes to review yet."
 msgstr ""
 
@@ -2920,8 +2920,8 @@ msgstr ""
 msgid "No creator credit claims are awaiting review."
 msgstr ""
 
-#: squid/bot/help.py:91 squid/bot/help.py:148 squid/bot/help.py:267
-#: squid/bot/help.py:276
+#: squid/bot/help.py:91 squid/bot/help.py:148 squid/bot/help.py:256
+#: squid/bot/help.py:265
 msgid "No details provided"
 msgstr "未提供详细信息"
 
@@ -2949,7 +2949,7 @@ msgstr ""
 msgid "No public build tags are available."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:347
+#: squid/bot/submission/build_browse.py:361
 msgid "No repeating lattice was detected in this schematic."
 msgstr ""
 
@@ -2998,15 +2998,15 @@ msgstr ""
 msgid "No unresolved active record categories."
 msgstr "没有未解决的活跃记录类别。"
 
-#: squid/bot/submission/build_browse.py:485
+#: squid/bot/submission/build_browse.py:499
 msgid "No visible build has that ID."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:491
+#: squid/bot/submission/build_browse.py:505
 msgid "No visible build matches that search."
 msgstr ""
 
-#: squid/bot/help.py:296 squid/bot/help.py:309
+#: squid/bot/help.py:285 squid/bot/help.py:298
 msgid "None"
 msgstr "无"
 
@@ -3078,7 +3078,7 @@ msgstr ""
 msgid "Nothing to recalculate"
 msgstr ""
 
-#: squid/bot/consent.py:242 squid/bot/consent.py:270
+#: squid/bot/consent.py:233 squid/bot/consent.py:261
 #: squid/bot/submission/consent_banner.py:68
 #, python-brace-format
 msgid "Notice {version}, timed at the moment you agree."
@@ -3140,7 +3140,7 @@ msgstr ""
 msgid "Only the bot owner can use this command."
 msgstr "只有机器人所有者才能使用此命令。"
 
-#: squid/bot/submission/ui/opening.py:70 squid/bot/submission/ui/views.py:521
+#: squid/bot/submission/ui/opening.py:70 squid/bot/submission/ui/views.py:532
 msgid "Only the pending build's submitter or a trusted staff member can edit it."
 msgstr ""
 
@@ -3148,11 +3148,11 @@ msgstr ""
 msgid "Only the poll creator or staff can do that."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:522
+#: squid/bot/submission/build_browse.py:536
 msgid "Open build"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:448
+#: squid/bot/submission/build_browse.py:462
 msgid "Open by ID"
 msgstr ""
 
@@ -3197,7 +3197,7 @@ msgstr ""
 msgid "Operation"
 msgstr ""
 
-#: squid/core/errors.py:211
+#: squid/core/errors.py:207
 msgid "Operation conflict"
 msgstr "操作冲突"
 
@@ -3239,7 +3239,7 @@ msgstr "其他语言"
 msgid "Out of five"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:504
+#: squid/bot/submission/build_browse.py:518
 msgid "Output format"
 msgstr ""
 
@@ -3279,7 +3279,7 @@ msgid "Parameterized record restriction is missing a category value."
 msgstr ""
 
 #: squid/bot/access_view.py:402 squid/bot/access_view.py:434
-#: squid/bot/submission/search_view.py:253
+#: squid/bot/submission/search_view.py:249
 msgid "Pattern"
 msgstr ""
 
@@ -3311,7 +3311,7 @@ msgstr ""
 msgid "Persisted CLI session does not belong to its device."
 msgstr ""
 
-#: squid/core/errors.py:282
+#: squid/core/errors.py:278
 msgid "Persisted data is inconsistent with application expectations."
 msgstr "持久化数据与应用程序预期不一致。"
 
@@ -3331,7 +3331,7 @@ msgstr "挑一个来看看"
 msgid "Pinned version ID"
 msgstr ""
 
-#: squid/catalogue/domain/titles.py:129
+#: squid/catalogue/domain/titles.py:147
 msgid "Piston extender length must be positive."
 msgstr ""
 
@@ -3339,11 +3339,11 @@ msgstr ""
 msgid "Players"
 msgstr ""
 
-#: squid/core/errors.py:247
+#: squid/core/errors.py:243
 msgid "Please try again later."
 msgstr "请稍后再试。"
 
-#: squid/bot/voting/poll_wizard.py:284
+#: squid/bot/voting/poll_wizard.py:285
 msgid "Poll cancelled."
 msgstr ""
 
@@ -3359,7 +3359,7 @@ msgstr ""
 msgid "Poll option emojis must be unique."
 msgstr ""
 
-#: squid/bot/voting/poll_wizard.py:282
+#: squid/bot/voting/poll_wizard.py:283
 #, python-brace-format
 msgid "Poll published: {published_url}"
 msgstr ""
@@ -3421,11 +3421,11 @@ msgstr ""
 msgid "Preview account merge"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:367 squid/bot/ui.py:99
+#: squid/bot/submission/ui/views.py:368 squid/bot/ui.py:99
 msgid "Previous"
 msgstr "上一页"
 
-#: squid/accounts/domain/consent.py:17 squid/bot/consent.py:127
+#: squid/accounts/domain/consent.py:17 squid/bot/consent.py:118
 msgid "Privacy notice"
 msgstr ""
 
@@ -3453,7 +3453,7 @@ msgstr ""
 msgid "Prompt expired"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:161 squid/bot/account_view.py:272
+#: squid/accounts/domain/profiles.py:149 squid/bot/account_view.py:272
 #: squid/bot/account_view.py:430 squid/bot/profile_render.py:47
 #: squid/bot/profile_render.py:74
 msgid "Pronouns"
@@ -3628,7 +3628,7 @@ msgstr ""
 msgid "Record category {definition_id} is a {actual} category, not {requested}."
 msgstr ""
 
-#: squid/records/infrastructure/repository.py:502
+#: squid/records/infrastructure/repository.py:504
 #, python-brace-format
 msgid ""
 "Record definition {definition_id} stores a category key that does not "
@@ -3663,7 +3663,7 @@ msgstr ""
 msgid "Record title diagnostics"
 msgstr "记录标题诊断"
 
-#: squid/bot/submission/search_view.py:270
+#: squid/bot/submission/search_view.py:266
 #, python-brace-format
 msgid "Record · {base_title} · {build_title}"
 msgstr ""
@@ -3782,7 +3782,7 @@ msgstr ""
 msgid "Regulations"
 msgstr "规章"
 
-#: squid/bot/claims_view.py:113 squid/bot/submission/build_browse.py:170
+#: squid/bot/claims_view.py:113 squid/bot/submission/build_browse.py:172
 #: squid/bot/tags_view.py:351
 msgid "Reject"
 msgstr ""
@@ -3803,11 +3803,11 @@ msgstr ""
 msgid "Relay account verification on another user's behalf."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:420
+#: squid/bot/submission/ui/views.py:421
 msgid "Reload fresh editor"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:392
+#: squid/bot/submission/ui/views.py:393
 msgid "Reload latest"
 msgstr ""
 
@@ -3827,8 +3827,8 @@ msgstr "请重新加载草稿，然后重试。"
 msgid "Reload your drafts before uploading the attachment again."
 msgstr "请重新加载草稿，然后重新上传附件。"
 
-#: squid/bot/submission/ui/views.py:407
-msgid "Reloading a fresh editor discards every staged change in this one."
+#: squid/bot/submission/ui/views.py:408
+msgid "Reloading a fresh editor discards every staged context in this one."
 msgstr ""
 
 #: squid/bot/starboard/screen.py:275
@@ -3886,7 +3886,7 @@ msgstr ""
 msgid "Render max_attempts must be positive."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:181
+#: squid/bot/submission/build_browse.py:183
 msgid "Render schematic"
 msgstr ""
 
@@ -3899,7 +3899,7 @@ msgstr ""
 msgid "Render {axis} must be between {minimum} and {maximum} pixels."
 msgstr ""
 
-#: squid/core/errors.py:187
+#: squid/core/errors.py:183
 msgid "Request failed"
 msgstr "请求失败"
 
@@ -3907,7 +3907,7 @@ msgstr "请求失败"
 msgid "Reset"
 msgstr ""
 
-#: squid/core/errors.py:203
+#: squid/core/errors.py:199
 msgid "Resource not found"
 msgstr "找不到资源"
 
@@ -3924,7 +3924,7 @@ msgstr ""
 msgid "Resource-pack data must be immutable bytes."
 msgstr ""
 
-#: squid/bot/submission/search_view.py:251
+#: squid/bot/submission/search_view.py:247
 msgid "Restriction"
 msgstr ""
 
@@ -3985,7 +3985,7 @@ msgstr ""
 msgid "Review and accept the current privacy notice, then try again."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:385
+#: squid/bot/submission/ui/views.py:386
 msgid "Review changes"
 msgstr ""
 
@@ -4090,7 +4090,7 @@ msgstr ""
 msgid "Save profile"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:179
+#: squid/bot/submission/build_browse.py:181
 msgid "Schematic info"
 msgstr ""
 
@@ -4145,7 +4145,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:454
+#: squid/bot/submission/build_browse.py:468
 msgid "Search by meaning"
 msgstr ""
 
@@ -4174,7 +4174,7 @@ msgstr "搜索文本和过滤条件，例如 `width:5`。"
 msgid "Second switch"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:361
+#: squid/bot/submission/ui/views.py:362
 #, python-brace-format
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
 msgstr ""
@@ -4210,7 +4210,7 @@ msgstr ""
 msgid "Server settings"
 msgstr ""
 
-#: squid/api/errors.py:198 squid/core/errors.py:290
+#: squid/api/errors.py:198 squid/core/errors.py:286
 msgid "Service unavailable"
 msgstr "服务不可用"
 
@@ -4246,7 +4246,7 @@ msgstr ""
 msgid "Show work lost only"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:255
+#: squid/bot/submission/search_view.py:251
 msgid "Showcase tag"
 msgstr ""
 
@@ -4463,7 +4463,7 @@ msgstr "已{scope}同步 {count} 个命令。"
 msgid "Synchronise the application command tree with Discord."
 msgstr ""
 
-#: squid/bot/submission/search_view.py:261
+#: squid/bot/submission/search_view.py:257
 msgid "Tag"
 msgstr ""
 
@@ -4476,7 +4476,7 @@ msgstr ""
 msgid "Tag ID"
 msgstr ""
 
-#: squid/tags/application/services.py:84
+#: squid/tags/application/services.py:85
 msgid "Tag names must contain between 1 and 80 characters."
 msgstr ""
 
@@ -4512,7 +4512,7 @@ msgstr "该别名已存在于此限制中。"
 msgid "That alias is already used by another restriction."
 msgstr "该别名已被另一个限制使用。"
 
-#: squid/bot/submission/build_browse.py:249
+#: squid/bot/submission/build_browse.py:263
 #: squid/bot/submission/search_view.py:119
 #: squid/bot/submission/search_view.py:123
 msgid "That build is no longer available."
@@ -4717,7 +4717,7 @@ msgstr ""
 msgid "The authorization challenge was already exchanged."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:351
+#: squid/bot/submission/ui/views.py:352
 msgid "The build card has been refreshed."
 msgstr ""
 
@@ -4729,7 +4729,7 @@ msgstr ""
 msgid "The build data is invalid."
 msgstr "构造数据无效。"
 
-#: squid/tags/application/services.py:163
+#: squid/tags/application/services.py:167
 msgid "The build does not exist or was not submitted by you."
 msgstr ""
 
@@ -4745,7 +4745,7 @@ msgstr ""
 msgid "The channel out there"
 msgstr ""
 
-#: squid/bot/help.py:171
+#: squid/bot/help.py:160
 msgid "The command to get help for."
 msgstr "要获取帮助的命令。"
 
@@ -4850,7 +4850,7 @@ msgstr ""
 msgid "The minimum message age cannot exceed the maximum."
 msgstr ""
 
-#: squid/core/errors.py:210
+#: squid/core/errors.py:206
 msgid "The operation conflicts with the current state."
 msgstr "该操作与当前状态冲突。"
 
@@ -4878,11 +4878,11 @@ msgstr ""
 msgid "The request did not pass validation."
 msgstr "请求未通过验证。"
 
-#: squid/core/errors.py:186
+#: squid/core/errors.py:182
 msgid "The requested operation could not be completed."
 msgstr "请求的操作无法完成。"
 
-#: squid/core/errors.py:202
+#: squid/core/errors.py:198
 msgid "The requested resource was not found."
 msgstr "找不到请求的资源。"
 
@@ -4915,7 +4915,7 @@ msgstr ""
 msgid "The submission draft changed while its attachment was uploading."
 msgstr "附件上传期间，提交草稿已发生更改。"
 
-#: squid/core/errors.py:194
+#: squid/core/errors.py:190
 msgid "The supplied value is invalid."
 msgstr "提供的值无效。"
 
@@ -4947,7 +4947,7 @@ msgstr ""
 msgid "This account cannot approve the requested Java identity."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:493
+#: squid/bot/submission/ui/views.py:504
 msgid ""
 "This build changed while you were editing. Reload the latest version; "
 "your staged changes will be discarded."
@@ -4957,7 +4957,7 @@ msgstr ""
 msgid "This build has no primary schematic to preview."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:267
+#: squid/bot/submission/build_browse.py:281
 msgid "This build has no schematic attached."
 msgstr ""
 
@@ -4974,7 +4974,7 @@ msgstr "该构造目前正被其他人编辑。"
 msgid "This build's schematic cannot be previewed."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:218
+#: squid/bot/submission/build_browse.py:220
 msgid "This changes the build's review state."
 msgstr ""
 
@@ -5078,7 +5078,7 @@ msgstr ""
 msgid "This schematic has too many blocks to preview."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:271
+#: squid/bot/submission/build_browse.py:285
 msgid "This schematic is not publicly available."
 msgstr ""
 
@@ -5143,11 +5143,11 @@ msgstr ""
 msgid "Too many incorrect verification codes."
 msgstr ""
 
-#: squid/core/errors.py:233
+#: squid/core/errors.py:229
 msgid "Too many requests"
 msgstr ""
 
-#: squid/core/errors.py:232
+#: squid/core/errors.py:228
 msgid "Too many requests. Please try again later."
 msgstr ""
 
@@ -5217,7 +5217,7 @@ msgstr ""
 msgid "Two switches that remember in different places"
 msgstr ""
 
-#: squid/bot/help.py:318
+#: squid/bot/help.py:307
 #, python-brace-format
 msgid ""
 "Unable to find command `{name}`. Use /help to get a list of available "
@@ -5228,11 +5228,11 @@ msgstr "找不到命令 `{name}`。请使用 /help 获取可用命令列表。"
 msgid "Unassign"
 msgstr ""
 
-#: squid/core/errors.py:218
+#: squid/core/errors.py:214
 msgid "Unauthorized"
 msgstr "未授权"
 
-#: squid/core/errors.py:217
+#: squid/core/errors.py:213
 msgid "Unauthorized."
 msgstr "未授权。"
 
@@ -5350,7 +5350,7 @@ msgstr ""
 msgid "Vault door"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:259 squid/bot/version_tracking.py:78
+#: squid/bot/submission/search_view.py:255 squid/bot/version_tracking.py:78
 #: squid/bot/version_tracking.py:179
 msgid "Version"
 msgstr ""
@@ -5534,7 +5534,7 @@ msgstr "处理中"
 msgid "Working…"
 msgstr ""
 
-#: squid/bot/consent.py:74
+#: squid/bot/consent.py:65
 msgid "You already have a consent prompt open. Please answer that one."
 msgstr ""
 
@@ -5566,7 +5566,7 @@ msgstr ""
 msgid "You are no longer allowed to deploy Redstoner controls."
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:363
+#: squid/bot/submission/build_browse.py:377
 msgid "You are no longer allowed to perform this build operation."
 msgstr ""
 
@@ -5624,7 +5624,7 @@ msgstr ""
 msgid "You do not have a trusted role."
 msgstr "你没有受信任的身份组。"
 
-#: squid/core/errors.py:225
+#: squid/core/errors.py:221
 msgid "You do not have permission to perform this action."
 msgstr "你没有权限执行此操作。"
 
@@ -6100,7 +6100,7 @@ msgstr ""
 msgid "public schematics require a license and rights attestation"
 msgstr ""
 
-#: squid/tags/application/services.py:91
+#: squid/tags/application/services.py:92
 msgid ""
 "query names must start with a letter and contain only lowercase letters, "
 "digits, or underscores"
@@ -6263,7 +6263,7 @@ msgstr ""
 msgid "{action_label} **{tag_name}**?"
 msgstr ""
 
-#: squid/bot/submission/build_browse.py:206
+#: squid/bot/submission/build_browse.py:208
 #, python-brace-format
 msgid "{action} build #{build_id}?"
 msgstr ""
@@ -6283,7 +6283,7 @@ msgstr ""
 msgid "{class_name} is not a dataclass"
 msgstr ""
 
-#: squid/bot/consent.py:171
+#: squid/bot/consent.py:162
 #, python-brace-format
 msgid "{count} build"
 msgid_plural "{count} builds"
@@ -6322,7 +6322,7 @@ msgstr ""
 msgid "{count} voter(s) could not be resolved, so their cached weight was kept."
 msgstr ""
 
-#: squid/bot/help.py:247
+#: squid/bot/help.py:236
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -6337,7 +6337,7 @@ msgstr ""
 "\n"
 "{more_information}\n"
 
-#: squid/bot/help.py:298
+#: squid/bot/help.py:287
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -6352,7 +6352,7 @@ msgstr ""
 "\n"
 "{more_information}"
 
-#: squid/bot/help.py:311
+#: squid/bot/help.py:300
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -6367,34 +6367,34 @@ msgstr ""
 "\n"
 "{more_information}"
 
-#: squid/bot/submission/search_view.py:305
+#: squid/bot/submission/search_view.py:301
 #, python-brace-format
 msgid ""
 "{description}\n"
 "{fields}"
 msgstr ""
 
-#: squid/tags/application/services.py:186
+#: squid/tags/application/services.py:190
 #, python-brace-format
 msgid "{display_name} does not accept a value."
 msgstr ""
 
-#: squid/tags/application/services.py:206
+#: squid/tags/application/services.py:210
 #, python-brace-format
 msgid "{display_name} expects a finite number."
 msgstr ""
 
-#: squid/tags/application/services.py:204
+#: squid/tags/application/services.py:208
 #, python-brace-format
 msgid "{display_name} expects a number in its canonical unit."
 msgstr ""
 
-#: squid/tags/application/services.py:200
+#: squid/tags/application/services.py:204
 #, python-brace-format
 msgid "{display_name} expects true or false."
 msgstr ""
 
-#: squid/tags/application/services.py:190
+#: squid/tags/application/services.py:194
 #, python-brace-format
 msgid "{display_name} requires a {value_type} value."
 msgstr ""
@@ -6419,7 +6419,7 @@ msgstr ""
 msgid "{field_name} must align to increments of {step}"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:290
+#: squid/bot/submission/search_view.py:286
 #, python-brace-format
 msgid ""
 "{fields}\n"
@@ -6427,7 +6427,7 @@ msgid ""
 "{metrics}"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:304
+#: squid/bot/submission/search_view.py:300
 #, python-brace-format
 msgid ""
 "{fields}\n"
@@ -6435,12 +6435,12 @@ msgid ""
 "{tags}"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:74
+#: squid/accounts/domain/profiles.py:75
 #, python-brace-format
 msgid "{field} may be at most {limit} characters, got {length}."
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:59
+#: squid/accounts/domain/profiles.py:60
 #, python-brace-format
 msgid "{field} may not contain control characters."
 msgstr ""
@@ -8786,5 +8786,8 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "{message} {action}"
+#~ msgstr ""
+
+#~ msgid "Reloading a fresh editor discards every staged change in this one."
 #~ msgstr ""
 

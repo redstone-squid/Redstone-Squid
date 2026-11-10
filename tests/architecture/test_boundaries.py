@@ -452,8 +452,9 @@ def test_tr_is_the_only_direct_translation_entry_point() -> None:
     assert violations == []
 
 
-def test_localized_messages_are_present_in_the_catalog_template() -> None:
-    with Path("locales/squid.pot").open(encoding="utf-8") as fileobj:
+def test_localized_messages_are_present_in_the_english_catalog() -> None:
+    # Check a committed catalogue so a stale or absent generated POT cannot affect the result.
+    with Path("locales/en/LC_MESSAGES/squid.po").open(encoding="utf-8") as fileobj:
         catalog = read_po(fileobj)
     msgids = {
         extracted
