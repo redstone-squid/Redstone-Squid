@@ -46,7 +46,12 @@ class CursorGrant:
 
 def content_fingerprint(parts: Sequence[str]) -> str:
     """Hash the identity of all content owned by a materialized slicer."""
-    return blake2s("\0".join(parts).encode(), digest_size=16).hexdigest()
+    digest = blake2s(digest_size=16)
+    for part in parts:
+        encoded = part.encode()
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    return digest.hexdigest()
 
 
 @dataclass(slots=True)
