@@ -29,8 +29,10 @@ from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
     ActionContinuation,
+    ActionPurpose,
     ActionResult,
     ActionRollback,
+    ActorRef,
     ChangeReport,
     ConflictDetail,
     ExceptionReport,
@@ -646,6 +648,44 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     current.stage(owner, name, cell, value)
 
 
+class Transaction:
+    """The identity and eventual outcome of one transaction.
+
+    Nested blocks share this handle. Result is None until the outer block finishes,
+    then remains available even if it raised. Hooks run after the outcome is fixed.
+    """
+
+    def __init__(self, context: ActionContext) -> None:
+        self._context = context
+        self._result: ActionResult | None = None
+
+    @property
+    def context(self) -> ActionContext:
+        return self._context
+
+    @property
+    def result(self) -> ActionResult | None:
+        return self._result
+
+    def after_commit(self, callback: Callable[[ActionCommit], None], *, key: object | None = None) -> None:
+        self._check_current()
+        on_action_commit(lambda result, continuation: callback(result), key=key)
+
+    def after_rollback(self, callback: Callable[[ActionRollback], None], *, key: object | None = None) -> None:
+        self._check_current()
+        on_action_rollback(lambda result, continuation: callback(result), key=key)
+
+    def after_result(self, callback: Callable[[ActionResult], None], *, key: object | None = None) -> None:
+        self._check_current()
+        on_action_result(lambda result, continuation: callback(result), key=key)
+
+    def _check_current(self) -> None:
+        current = _CURRENT.get()
+        if current is None or current.handle is not self:
+            message = "callbacks must be registered inside their transaction"
+            raise StaleReactiveContextError(message)
+
+
 @dataclass(slots=True)
 class _Transaction:
     readonly: bool = False
@@ -698,6 +738,10 @@ class _Transaction:
     cleanup_errors: list[ExceptionReport] = field(default_factory=list)
     prepared_participants: tuple[tuple[TransactionParticipant[Any], Any], ...] = ()
     commit_record: ActionCommit | None = None
+    handle: Transaction = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.handle = Transaction(self.context)
 
     def note_born(self, owner: object) -> None:
         """Record an object created after this transaction began."""
@@ -1084,6 +1128,7 @@ def _notify_hooks(
 
 
 def _emit_commit(current: _Transaction, commit: ActionCommit) -> None:
+    current.handle._result = commit
     emit_result(commit)
     _notify_hooks(commit, current.commit_hooks)
     _notify_hooks(commit, current.result_hooks)
@@ -1103,6 +1148,7 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
         ChangeReport(len(current.writes), len(current.participants)),
         cleanup_errors,
     )
+    current.handle._result = rollback
     emit_result(rollback)
     _notify_hooks(rollback, current.rollback_hooks)
     _notify_hooks(rollback, current.result_hooks)
@@ -1110,12 +1156,22 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
 
 
 @contextmanager
-def transaction(*, action_context: ActionContext | None = None) -> Iterator[None]:
+def transaction(
+    name: str | None = None,
+    *,
+    actor: ActorRef | None = None,
+    caused_by: ActionContext | None = None,
+    kind: ActionPurpose = ActionPurpose.NORMAL,
+    action_context: ActionContext | None = None,
+) -> Iterator[Transaction]:
     """Stage state changes and publish them together when the context exits.
 
     An exception in the body or preparation discards staged changes. Nested
     calls share the outer transaction; they are not independent savepoints.
-    Only the task that opened the transaction may write through it.
+    Only the task that opened the transaction may write through it. The yielded
+    handle exposes the final result and registers outcome callbacks. Supply
+    caused_by to link a new action to an earlier one. Identity arguments apply
+    only when opening an outer transaction.
 
     Participants must not fail during apply, which runs after the commit point.
     Such a failure raises FrameworkIntegrityError and is recorded as a damaged
@@ -1127,13 +1183,22 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
         # someone else's transaction is told where it went wrong rather than where it showed.
         if not outer.writable():
             outer.reject_stale("a nested transaction")
-        yield
+        yield outer.handle
         return
-    causality = current_causality()
+    explicit_identity = (
+        name is not None or actor is not None or caused_by is not None or kind is not ActionPurpose.NORMAL
+    )
+    if action_context is not None and explicit_identity:
+        message = "supply either action_context or transaction identity arguments"
+        raise ValueError(message)
+    causality = current_causality() if caused_by is None else (caused_by.causal_ref(), caused_by.root_action_id)
     context = (
         action_context
-        or current_action()
+        or (current_action() if not explicit_identity and not in_continuation() else None)
         or ActionContext.create(
+            "action" if name is None else name,
+            actor=actor,
+            kind=kind,
             cause=None if causality is None else causality[0],
             root_action_id=None if causality is None else causality[1],
         )
@@ -1143,7 +1208,7 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
         token = _CURRENT.set(current)
         try:
             _checkpoint("transaction.enter_body")
-            yield
+            yield current.handle
         except BaseException as error:
             _CURRENT.reset(token)
             current.closed = True
@@ -1164,6 +1229,7 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
                     current.commit_record,
                     tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
                 )
+                current.handle._result = integrity_commit
                 emit_result(integrity_commit)
                 message = f"an infallible transaction adapter failed after the commit point: {error}"
                 raise FrameworkIntegrityError(message) from error
@@ -1177,7 +1243,7 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
 
 
 @contextmanager
-def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[None]:
+def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[Transaction]:
     """Start a distinct causal transaction while an empty admitting transaction is open.
 
     Mounted undo/redo handlers are admitted inside the dispatch transaction. Suspending that
@@ -1191,8 +1257,8 @@ def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[None]
         raise FreshActionError(message)
     token = _CURRENT.set(None)
     try:
-        with transaction(action_context=action_context):
-            yield
+        with transaction(action_context=action_context) as handle:
+            yield handle
     finally:
         _CURRENT.reset(token)
 
@@ -1205,7 +1271,7 @@ def batch() -> Iterator[None]:
 
 
 @contextmanager
-def readonly_transaction(*, action_context: ActionContext | None = None) -> Iterator[None]:
+def readonly_transaction(*, action_context: ActionContext | None = None) -> Iterator[Transaction]:
     """Run an identified read-only action and reject any state mutation."""
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
@@ -1225,7 +1291,7 @@ def readonly_transaction(*, action_context: ActionContext | None = None) -> Iter
         token = _CURRENT.set(current)
         try:
             _checkpoint("transaction.enter_body")
-            yield
+            yield current.handle
         except BaseException as error:
             _CURRENT.reset(token)
             current.closed = True
