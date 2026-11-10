@@ -202,7 +202,7 @@ class BuildSummary(FromDomain[Build]):
             revision=build.revision,
             title=build.title,
             display_name=build.display_name,
-            status=_status_name(build.submission_status),
+            status=build.submission_status.name.casefold() if build.submission_status is not None else "unknown",
             category=build.category.value,
             dimensions=Dimensions(width=build.width, height=build.height, depth=build.depth),
             creators=list(build.creators_ign),
@@ -397,7 +397,3 @@ def _preview(build: Build) -> BuildPreview | None:
             if url.scheme == "https":
                 return BuildPreview(kind=kind, url=str(url))
     return None
-
-
-def _status_name(status: Status | None) -> str:
-    return status.name.casefold() if status is not None else "unknown"

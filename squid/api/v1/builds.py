@@ -69,7 +69,7 @@ async def edit_build(
         BuildEditPatch.from_attributes(changes.edit_attributes()),
         expected_revision=_expected_revision(build_id, if_match),
     )
-    _set_build_etag(response, build)
+    response.headers["ETag"] = build_etag(build)
     return BuildDetail.from_domain(build)
 
 
@@ -92,7 +92,7 @@ async def get_build(build_id: int, response: Response, build_queries: BuildQueri
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id)
-    _set_build_etag(response, build)
+    response.headers["ETag"] = build_etag(build)
     return BuildDetail.from_domain(build)
 
 
@@ -179,10 +179,6 @@ def build_etag(build: Build) -> str:
         msg = "Cannot create an ETag for an unpersisted build."
         raise ValueError(msg)
     return f'"build-{build.id}-r{build.revision}"'
-
-
-def _set_build_etag(response: Response, build: Build) -> None:
-    response.headers["ETag"] = build_etag(build)
 
 
 def _expected_revision(build_id: int, if_match: str | None) -> int:

@@ -36,7 +36,9 @@ class SearchFieldProvider:
             candidate(
                 value=field.name,
                 label=field.name,
-                description=_field_hint(field.value_type.value, field.supports_range),
+                description=f"{field.value_type.value}, ranges supported"
+                if field.supports_range
+                else field.value_type.value,
                 kind="field",
                 terms=(field.name, *field.aliases),
             )
@@ -70,7 +72,3 @@ class SearchSortProvider:
             results.append(candidate(field.name, f"{field.name} (ascending)", kind="sort"))
             results.append(candidate(f"-{field.name}", f"{field.name} (descending)", kind="sort"))
         return tuple(results)
-
-
-def _field_hint(value_type: str, supports_range: bool) -> str:
-    return f"{value_type}, ranges supported" if supports_range else value_type

@@ -381,7 +381,3 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
 def _list_line(report: ErrorReport) -> str:
     marker = ":warning: " if report.work_lost else ""
     return f"{marker}`{report.reference}` — {report.exception_type} in {report.origin or report.surface}"
-
-
-def _list_description(report: ErrorReport) -> str:
-    return f"{report.exception_type} · {report.origin or report.surface}"

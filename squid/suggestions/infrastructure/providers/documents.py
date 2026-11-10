@@ -57,15 +57,11 @@ class DocumentProvider:
                     # A free-text search box wants words to search for; a command parameter that
                     # names one build wants its identifier. Same rows, different answer.
                     value=entry.title if self._by_title else entry.source_key,
-                    label=entry.title if self._by_title else _label(entry),
+                    # Lead with the identifier users read from an embed and paste back.
+                    label=entry.title if self._by_title else f"#{entry.source_key} — {entry.title}",
                     description=entry.subtitle,
                     kind=self._kind_label,
                 )
                 for entry in entries
             )
         )
-
-
-def _label(entry: DocumentEntry) -> str:
-    """Lead with the identifier, because that is what a user reads off an embed and pastes back."""
-    return f"#{entry.source_key} — {entry.title}"

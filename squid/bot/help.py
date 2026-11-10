@@ -11,7 +11,7 @@ from discord.ext.commands import Cog, Command, Group
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import CardField, CardSection, card_node, error_node, render_payload, tr
+from squid.bot.ui import card_node, error_node, render_payload, tr
 from squid.config import BuildConfig
 from squid.suggestions.application import candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
@@ -146,17 +146,6 @@ def _summary(command: AnyCommand) -> TextLike:
     """Return a prefix command's short documentation or an app command's description."""
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
     return text or tr("No details provided")
-
-
-def _command_section(
-    title: str,
-    commands_: Sequence[AnyCommand],
-) -> CardSection:
-    """Render a compact command category for the slash-help directory."""
-    return CardSection(
-        title,
-        tuple(CardField(f"/{command.qualified_name}", _summary(command)) for command in commands_),
-    )
 
 
 class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):

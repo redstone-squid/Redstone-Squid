@@ -12,7 +12,7 @@ from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId
 from squid.core.errors import ValidationError
 from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.submissions.domain.schematics import DraftSchematicState
 
 
 class DraftSchematicResponse(BaseModel):
@@ -51,16 +51,12 @@ def _check_size(size: int, maximum: int) -> None:
         raise ValidationError(message)
 
 
-def _response(source: DraftSchematic) -> DraftSchematicResponse:
-    return DraftSchematicResponse.model_validate(source)
-
-
 @router.get("", operation_id="submission_schematic_list", openapi_extra=_READ)
 async def list_schematics(
     draft_id: UUID, account_id: AccountId, schematics: Schematics
 ) -> list[DraftSchematicResponse]:
     """List retained sources, including failures and explicit discards."""
-    return [_response(source) for source in await schematics.list(draft_id, account_id)]
+    return [DraftSchematicResponse.model_validate(source) for source in await schematics.list(draft_id, account_id)]
 
 
 @router.put(
@@ -95,7 +91,7 @@ async def upload_schematic(
     except Exception:
         await schematics.fail(draft_id, account_id, upload_id)
         raise
-    return _response(source)
+    return DraftSchematicResponse.model_validate(source)
 
 
 @router.post(

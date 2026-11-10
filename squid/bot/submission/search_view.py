@@ -94,7 +94,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         detail = self._build_node or sl.section(
-            sl.heading(_detail_title(self.hit)),
+            sl.heading(self.hit.title),
             sl.truncate(sl.paragraph(_detail_text(self.hit))),
             accent=DISCORD_GREEN,
         )
@@ -239,10 +239,6 @@ def _build_id(hit: SearchHit) -> int | None:
     if isinstance(hit, BuildSearchHit) and hit.source_id.isdigit():
         return int(hit.source_id)
     return None
-
-
-def _detail_title(hit: SearchHit) -> str:
-    return hit.title
 
 
 def _metadata_label(kind: str) -> sl.TextLike:
