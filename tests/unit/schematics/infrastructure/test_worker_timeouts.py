@@ -22,10 +22,6 @@ class CallObserved(Exception):
     """Stop a public operation after its selected deadline has been observed."""
 
 
-def _worker() -> _Worker:
-    return _Worker(SchematicConfig(), lambda _pump: None)
-
-
 @asynccontextmanager
 async def running_child(script: str) -> AsyncIterator[tuple[SchematicWorkerPool, asyncio.subprocess.Process]]:
     """Own a Python child's worker and stderr pump until the context exits."""
@@ -58,7 +54,7 @@ async def running_child(script: str) -> AsyncIterator[tuple[SchematicWorkerPool,
 
 
 async def test_cold_start_and_hung_cleanup_have_separate_bounded_deadlines(monkeypatch: pytest.MonkeyPatch) -> None:
-    worker = _worker()
+    worker = _Worker(SchematicConfig(), lambda _pump: None)
     cleanup_started = anyio.Event()
 
     async def hung_cleanup() -> None:

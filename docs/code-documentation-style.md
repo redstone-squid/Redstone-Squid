@@ -206,6 +206,34 @@ Documentation changes should not accidentally change executable expressions or u
 Run the relevant repository checks; passing tests support the review but cannot
 prove that an explanation is true.
 
+## Small helpers
+
+A helper should make an operation easier to understand where it is used. Its
+length and leading underscore do not determine whether it deserves a function.
+When reviewing a helper, read its callers and choose by purpose:
+
+- Put alternate constructors on the type they construct when the conversion
+  belongs to that type. Keep application policy and transport dependencies out
+  of shared types.
+- Inline a single-use accessor or forwarding wrapper when the expression is as
+  clear as the call. Use a local variable if it helps name the result. Preserve
+  evaluation order and avoid evaluating an argument more than once.
+- Keep repeated transformations and named domain rules when they reduce
+  duplication or explain a decision. Similar-looking operations in different
+  layers need not share a helper.
+- Keep callbacks, default factories, decorators, and type guards when callers
+  need a callable or the function establishes a useful type boundary. Replacing
+  them with lambdas or casts is not a readability improvement.
+- Keep cohesive parsing, validation, serialization, and resource management
+  operations. A short function can still hide meaningful complexity; remove
+  forwarding layers rather than spreading that complexity through callers.
+- In tests, keep reusable setup, fixtures, and assertions that explain the
+  scenario. Inline trivial one-off setup when it makes the test self-contained.
+
+Check imports, callback registrations, and test patch targets before removing a
+private function. Module-local reference counts alone do not establish that it
+is unused. Avoid changing historical migrations just to apply current style.
+
 ## Sources
 
 This guide adapts [PEP 257](https://peps.python.org/pep-0257/) for docstring

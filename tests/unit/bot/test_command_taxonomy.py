@@ -71,10 +71,6 @@ def _default_permissions(command: AnyCommand) -> frozenset[str] | None:
     return frozenset(name for name, enabled in permissions if enabled)
 
 
-def _command(commands: Iterable[AnyCommand], qualified_name: str) -> AnyCommand:
-    return next(command for command in commands if command.qualified_name == qualified_name)
-
-
 def _commands_of(cog: type) -> list[AnyCommand]:
     """Read a cog's command tree without constructing it.
 
@@ -86,11 +82,8 @@ def _commands_of(cog: type) -> list[AnyCommand]:
 
 def _nodes(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
     """The permission nodes a command declares, read off its check predicates."""
-    return {
-        node
-        for predicate in _command(commands, qualified_name).checks
-        for node in getattr(predicate, "__squid_nodes__", ())
-    }
+    command = next(command for command in commands if command.qualified_name == qualified_name)
+    return {node for predicate in command.checks for node in getattr(predicate, "__squid_nodes__", ())}
 
 
 def test_build_slash_group_includes_the_app_only_workspaces() -> None:

@@ -22,10 +22,6 @@ from tests.support.delivery_uow import ReconciliationUnitOfWork
 CLAIM_TOKEN = uuid.UUID("00000000-0000-4000-8000-000000000001")
 
 
-def _job() -> ReconciliationJob:
-    return ReconciliationJob(1, ReconciliationResource.BUILD, "42", ReconciliationAction.REFRESH, 1, 0, CLAIM_TOKEN)
-
-
 @dataclass(slots=True)
 class QueueRecorder(ReconciliationQueue):
     failures: list[tuple[ReconciliationJob, str, int]] = field(default_factory=list)
@@ -46,7 +42,7 @@ class QueueRecorder(ReconciliationQueue):
 
 async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
     queue = QueueRecorder()
-    job = _job()
+    job = ReconciliationJob(1, ReconciliationResource.BUILD, "42", ReconciliationAction.REFRESH, 1, 0, CLAIM_TOKEN)
 
     assert (
         await DiscordReconciliationService(max_attempts=3, uow_factory=lambda: ReconciliationUnitOfWork(queue)).fail(
