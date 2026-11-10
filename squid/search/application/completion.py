@@ -88,7 +88,7 @@ def analyze(
 
 
 def completes_values(field: FieldDefinition) -> bool:
-    """Return whether the field offers indexed text values as completions.
+    """Return whether the field supports fixed or indexed text completions.
 
     Other types use `range_hint` to explain their accepted syntax.
     """

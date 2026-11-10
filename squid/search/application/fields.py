@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
+from squid.records.domain.models import BaseTitle, VersionScope
 from squid.search.domain.query import ScalarValue
 
 
@@ -35,6 +36,11 @@ class FieldDefinition:
     unit_scales: tuple[tuple[str, Decimal], ...] = ()
     """Accepted suffixes and multipliers that convert values to the canonical unit."""
     numeric_step: Decimal | None = None
+    suggested_values: tuple[str, ...] | None = None
+    """Fixed text completions; None reads indexed values, and an empty tuple disables suggestions.
+
+    These are completion hints, not a restriction on accepted query values.
+    """
 
 
 class FieldRegistry:
@@ -125,8 +131,8 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("version", FieldType.TEXT),
         FieldDefinition("status", FieldType.TEXT),
         FieldDefinition("kind", FieldType.TEXT),
-        FieldDefinition("base_title", FieldType.TEXT),
-        FieldDefinition("version_scope", FieldType.TEXT),
+        FieldDefinition("base_title", FieldType.TEXT, suggested_values=tuple(title.value for title in BaseTitle)),
+        FieldDefinition("version_scope", FieldType.TEXT, suggested_values=tuple(scope.value for scope in VersionScope)),
         FieldDefinition("record_state", FieldType.TEXT),
         FieldDefinition("volume", FieldType.NUMBER, supports_range=True),
         FieldDefinition("width", FieldType.NUMBER, supports_range=True, supports_sort=True),

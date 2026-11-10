@@ -2,14 +2,19 @@
 
 from collections.abc import Sequence
 
-from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
+import pytest
+
+from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 
 class StaticFields:
+    def __init__(self, registry: FieldRegistry = DEFAULT_FIELD_REGISTRY) -> None:
+        self.registry = registry
+
     async def fields(self) -> FieldRegistry:
-        return DEFAULT_FIELD_REGISTRY
+        return self.registry
 
 
 class FakeFacets:
@@ -60,6 +65,50 @@ async def test_facet_values_match_on_prefix_only() -> None:
     """Facet completion uses the reader's prefix matches rather than the taxonomy fuzzy matcher."""
     result, _ = await suggest("restriction:seam", restriction=["Semi-Seamless"])
     assert result.items == ()
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("base_title:", ["fastest", "fastest_smallest", "first", "smallest", "smallest_fastest"]),
+        ("base_title:FAST", ["fastest", "fastest_smallest"]),
+        ('base_title:"small', ['"smallest"', '"smallest_fastest"']),
+        ("base_title:unknown", []),
+    ],
+)
+async def test_base_titles_are_suggested_without_indexed_records(query: str, expected: list[str]) -> None:
+    result, facets = await suggest(query)
+
+    assert [item.value for item in result.items] == expected
+    assert facets.calls == []
+    assert result.replacement is not None
+    assert (result.replacement.start, result.replacement.end) == (11, len(query))
+
+
+async def test_base_title_suggestions_respect_the_limit() -> None:
+    instance, _ = provider()
+    result = await instance.suggest(SuggestionRequest(source="search_query", query="base_title:", limit=2))
+
+    assert [item.value for item in result.items] == ["fastest", "fastest_smallest"]
+
+
+async def test_version_scopes_are_suggested_without_indexed_records() -> None:
+    result, facets = await suggest("version_scope:")
+
+    assert [item.value for item in result.items] == ["all_time", "up_to_date"]
+    assert facets.calls == []
+
+
+@pytest.mark.parametrize("values", [("Full Lamp", "Flush", "Seamless"), ()])
+async def test_any_field_can_declare_fixed_suggestions(values: tuple[str, ...]) -> None:
+    registry = FieldRegistry((FieldDefinition("custom", FieldType.TEXT, suggested_values=values),))
+    facets = FakeFacets({"custom": ["From index"]})
+    instance = SearchQueryProvider(StaticFields(registry), facets)
+
+    result = await instance.suggest(SuggestionRequest(source="search_query", query="custom:F", limit=10))
+
+    assert [item.value for item in result.items] == (["Flush", '"Full Lamp"'] if values else [])
+    assert facets.calls == []
 
 
 async def test_the_replacement_span_covers_only_the_value() -> None:

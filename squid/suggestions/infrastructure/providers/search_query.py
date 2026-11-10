@@ -1,4 +1,4 @@
-"""Complete field names and indexed values within a search query.
+"""Complete field names and fixed or indexed values within a search query.
 
 Results include the character range to replace, preserving the rest of the query.
 """
@@ -67,8 +67,14 @@ class SearchQueryProvider:
         assert context.field is not None
         if not completes_values(context.field):
             return ()
-        values = await self._facets.facet_values(context.field.name, context.prefix, limit=limit)
-        # Preserve the database's prefix matching and ordering when quoting the values.
+        if context.field.suggested_values is not None:
+            prefix = context.prefix.strip().casefold()
+            values = sorted(value for value in context.field.suggested_values if value.casefold().startswith(prefix))[
+                :limit
+            ]
+        else:
+            values = await self._facets.facet_values(context.field.name, context.prefix, limit=limit)
+        # Preserve prefix matching and ordering when quoting the values.
         return tuple(
             Suggestion(
                 value=render_value(value, quoted=context.quoted),
