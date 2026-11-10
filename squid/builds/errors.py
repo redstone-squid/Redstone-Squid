@@ -7,7 +7,7 @@ from squid.core.i18n import tr
 class InvalidBuildError(ValidationError):
     """Build data is invalid."""
 
-    default_message = tr("The build data is invalid.")
+    default_message = tr(t"builds-build-data-invalid = The build data is invalid.")
     default_code = ErrorCode.INVALID_BUILD
     default_resource = "build"
 
@@ -15,10 +15,10 @@ class InvalidBuildError(ValidationError):
 class BuildNotFoundError(NotFoundError):
     """A build could not be found."""
 
-    default_message = tr("Build not found.")
+    default_message = tr(t"builds-errors-build-not-found = Build not found.")
     default_code = ErrorCode.BUILD_NOT_FOUND
     default_resource = "build"
-    default_end_user_action = tr("Check the build ID and try again.")
+    default_end_user_action = tr(t"builds-check-id-action = Check the build ID and try again.")
 
     def __init__(self, build_id: int, message: str | None = None) -> None:
         super().__init__(
@@ -32,11 +32,13 @@ class BuildNotFoundError(NotFoundError):
 class BuildBusyError(ConflictError):
     """A build is already being edited."""
 
-    default_message = tr("This build is currently being edited by someone else.")
-    default_title = tr("Build busy")
+    default_message = tr(t"builds-edit-in-progress = This build is currently being edited by someone else.")
+    default_title = tr(t"builds-errors-build-busy = Build busy")
     default_code = ErrorCode.BUILD_BUSY
     default_resource = "build"
-    default_end_user_action = tr("Wait for the other edit to finish and try again.")
+    default_end_user_action = tr(
+        t"builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to finish and try again."
+    )
 
     def __init__(self, build_id: int) -> None:
         super().__init__(
@@ -49,11 +51,13 @@ class BuildBusyError(ConflictError):
 class BuildRevisionRequiredError(DomainError):
     """A caller attempted an optimistic write without a revision precondition."""
 
-    default_message = tr("An If-Match build revision is required for this operation.")
-    default_title = tr("Build revision required")
+    default_message = tr(t"builds-if-match-build = An If-Match build revision is required for this operation.")
+    default_title = tr(t"builds-errors-build-revision-required = Build revision required")
     default_code = ErrorCode.BUILD_REVISION_REQUIRED
     default_resource = "build"
-    default_end_user_action = tr("Fetch the build again and retry with its ETag.")
+    default_end_user_action = tr(
+        t"builds-errors-fetch-the-build-again-and-retry-with = Fetch the build again and retry with its ETag."
+    )
 
     def __init__(self, build_id: int) -> None:
         super().__init__(
@@ -65,11 +69,13 @@ class BuildRevisionRequiredError(DomainError):
 class BuildRevisionMismatchError(DomainError):
     """A caller's expected build revision is no longer current."""
 
-    default_message = tr("The build changed after it was read.")
-    default_title = tr("Build revision mismatch")
+    default_message = tr(t"builds-revision-conflict = The build changed after it was read.")
+    default_title = tr(t"builds-errors-build-revision-mismatch = Build revision mismatch")
     default_code = ErrorCode.BUILD_REVISION_MISMATCH
     default_resource = "build"
-    default_end_user_action = tr("Fetch the latest build, merge the changes, and try again.")
+    default_end_user_action = tr(
+        t"builds-revision-conflict-action = Fetch the latest build, merge the changes, and try again."
+    )
 
     def __init__(self, build_id: int, *, expected_revision: int | None, current_revision: int | None = None) -> None:
         context = {"build_id": build_id}
@@ -83,13 +89,13 @@ class BuildRevisionMismatchError(DomainError):
 class RestrictionNotFoundError(NotFoundError):
     """A restriction name or alias could not be found."""
 
-    default_message = tr("Restriction not found.")
+    default_message = tr(t"builds-errors-restriction-not-found = Restriction not found.")
     default_code = ErrorCode.RESTRICTION_NOT_FOUND
     default_resource = "restriction"
 
     def __init__(self, name: str) -> None:
         super().__init__(
-            tr(t"Restriction '{name}' does not exist."),
+            tr(t"builds-restriction-does-not-exist = Restriction '{name}' does not exist."),
             context={"name": name},
             public_context={"name": name},
         )
@@ -99,8 +105,8 @@ class RestrictionNotFoundError(NotFoundError):
 class AliasAlreadyAddedError(ConflictError):
     """An alias is already attached to the requested restriction."""
 
-    default_message = tr("That alias is already on this restriction.")
-    default_title = tr("Alias already added")
+    default_message = tr(t"builds-alias-restriction = That alias is already on this restriction.")
+    default_title = tr(t"builds-errors-alias-already-added = Alias already added")
     default_code = ErrorCode.ALIAS_ALREADY_ADDED
     default_resource = "restriction_alias"
 
@@ -116,8 +122,8 @@ class AliasAlreadyAddedError(ConflictError):
 class AliasInUseError(ConflictError):
     """An alias belongs to a different restriction."""
 
-    default_message = tr("That alias is already used by another restriction.")
-    default_title = tr("Alias in use")
+    default_message = tr(t"builds-alias-used = That alias is already used by another restriction.")
+    default_title = tr(t"builds-errors-alias-in-use = Alias in use")
     default_code = ErrorCode.ALIAS_IN_USE
     default_resource = "restriction_alias"
 

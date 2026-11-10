@@ -13,8 +13,8 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 import squid_ui_discord.message_root_contracts
+from squid_i18n import tr
 from squid_ui.primitives import Button, Heading, Row
-from squid_ui.text import Message
 from squid_ui_discord import Everyone, MessageRootDefaults, SessionKey, SessionManager
 from squid_ui_discord.delivery import Abandoned
 from squid_ui_discord.sessions import (
@@ -162,7 +162,7 @@ class TestResults:
     async def test_reject_threads_a_deferred_notice_into_the_result(self) -> None:
         manager = SessionManager()
         first = await manager.open(a_root(), to_message(), key=KEY)
-        notice = Message("You already have this panel open.")
+        notice = tr(t"test-you-already-have-this-panel-open = You already have this panel open.")
 
         result = await manager.open(
             a_root(),

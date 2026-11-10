@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from squid.core.i18n import tr
-from squid_ui.text import Message
+from squid_i18n import Message
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,12 +46,24 @@ class RenderSkipReason(StrEnum):
 
 
 _RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, Message] = {
-    RenderSkipReason.RENDERING_DISABLED: tr("Schematic previews are not enabled on this instance."),
-    RenderSkipReason.NO_PRIMARY_SCHEMATIC: tr("This build has no primary schematic to preview."),
-    RenderSkipReason.POISONED_FILE: tr("This schematic file already crashed the engine on this instance."),
-    RenderSkipReason.OVER_BLOCK_BUDGET: tr("This schematic has too many blocks to preview."),
-    RenderSkipReason.OVER_VOLUME_BUDGET: tr("This schematic is too large to preview."),
-    RenderSkipReason.MISSING_FILE: tr("The stored schematic file is missing, so it cannot be previewed."),
+    RenderSkipReason.RENDERING_DISABLED: tr(
+        t"schematics-schematic-not-enabled = Schematic previews are not enabled on this instance."
+    ),
+    RenderSkipReason.NO_PRIMARY_SCHEMATIC: tr(
+        t"schematics-build-no-primary = This build has no primary schematic to preview."
+    ),
+    RenderSkipReason.POISONED_FILE: tr(
+        t"schematics-schematic-file-crashed = This schematic file already crashed the engine on this instance."
+    ),
+    RenderSkipReason.OVER_BLOCK_BUDGET: tr(
+        t"schematics-schematic-too-many = This schematic has too many blocks to preview."
+    ),
+    RenderSkipReason.OVER_VOLUME_BUDGET: tr(
+        t"schematics-schematic-too-large = This schematic is too large to preview."
+    ),
+    RenderSkipReason.MISSING_FILE: tr(
+        t"schematics-stored-schematic-file = The stored schematic file is missing, so it cannot be previewed."
+    ),
 }
 
 

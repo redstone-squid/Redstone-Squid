@@ -49,19 +49,19 @@ MAX_ROLE_RANK = 999
 class PermissionAuthorityError(AuthorizationError):
     """The actor does not hold everything they are trying to give away."""
 
-    default_title = tr("Outside your authority")
+    default_title = tr(t"permissions-outside-authority = Outside your authority")
 
 
 class PermissionRankError(AuthorizationError):
     """The target role is at or above the actor's own highest role."""
 
-    default_title = tr("Role is not yours to manage")
+    default_title = tr(t"permissions-role-not-yours = Role is not yours to manage")
 
 
 class ProtectedRoleError(AuthorizationError):
     """A built-in role cannot be restructured by anyone but the owner."""
 
-    default_title = tr("Built-in role")
+    default_title = tr(t"permissions-built-role = Built-in role")
 
 
 class Actor:

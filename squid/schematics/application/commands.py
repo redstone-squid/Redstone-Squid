@@ -54,9 +54,11 @@ class RenderRequest:
             if not MIN_RENDER_EXTENT <= extent <= MAX_RENDER_EXTENT:
                 minimum = MIN_RENDER_EXTENT
                 maximum = MAX_RENDER_EXTENT
-                raise ValidationError(tr(t"Render {axis} must be between {minimum} and {maximum} pixels."))
+                raise ValidationError(
+                    tr(t"schematics-pixels = Render {axis} must be between {minimum} and {maximum} pixels.")
+                )
         if self.zoom is not None and self.zoom <= 0:
-            msg = tr("Render zoom must be positive.")
+            msg = tr(t"schematics-zoom-positive = Render zoom must be positive.")
             raise ValidationError(msg)
 
     def recipe_fields(self) -> tuple[object, ...]:

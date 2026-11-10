@@ -13,6 +13,7 @@ from squid.accounts.models import Account
 from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
+from squid.bot.i18n import command_text
 from squid.bot.profile_render import (
     public_profile_fields,
 )
@@ -38,7 +39,11 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         self.account_service = bot.services.accounts
 
     @sd.command(name="account", description="Manage your account or view a creator page")
-    @app_commands.describe(user=app_commands.locale_str("Whose creator page to show. Defaults to your own account."))
+    @app_commands.describe(
+        user=command_text(
+            tr(t"verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.")
+        )
+    )
     async def account(
         self, request: sd.Request[Self], user: discord.Member | discord.User | None = None
     ) -> sd.CommandResult:
@@ -107,11 +112,16 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
-            return text_node(tr("That creator page could not be found."))
+            return text_node(
+                tr(t"bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.")
+            )
         if public.hidden:
             return card_node(
-                tr("Hidden creator page"),
-                tr("This creator has hidden their page. Their build credit is still listed."),
+                tr(t"bot-verify-hidden-creator-page = Hidden creator page"),
+                tr(
+                    t"verify-creator-page-hidden = This creator has hidden their "
+                    t"page. Their build credit is still listed."
+                ),
                 fields=public_profile_fields(public),
             )
         return card_node(
@@ -136,7 +146,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
 
 
 def _missing_creator_page(user: str) -> Message:
-    return tr(t"{user} doesn't have a creator page.")
+    return tr(t"bot-verify-doesn-t-have-a-creator-page = {user} doesn't have a creator page.")
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

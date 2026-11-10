@@ -30,8 +30,12 @@ poll_refresh = polls.define("refresh", aliases=("poll:refresh",))
 def poll_controls() -> sl.semantic.ActionControls:
     """The control row an open poll's card ends with."""
     return sl.action_controls(
-        sl.routed_action_control(tr("Close poll"), poll_close.id(), key="close", tone=sl.Tone.DANGER),
-        sl.routed_action_control(tr("Refresh weights"), poll_refresh.id(), key="refresh"),
+        sl.routed_action_control(
+            tr(t"bot-voting-controls-close-poll = Close poll"), poll_close.id(), key="close", tone=sl.Tone.DANGER
+        ),
+        sl.routed_action_control(
+            tr(t"bot-voting-controls-refresh-weights = Refresh weights"), poll_refresh.id(), key="refresh"
+        ),
         key="poll.controls",
     )
 
@@ -56,7 +60,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
         await _refuse(request, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
-    await request.respond(text_node(tr("Poll closed.")), audience="personal")
+    await request.respond(text_node(tr(t"bot-voting-controls-poll-closed = Poll closed.")), audience="personal")
 
 
 @polls.route(poll_refresh)
@@ -71,11 +75,14 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
     result = await bot.services.votes.refresh(snapshot.id)
     if result.session is not None:
         await bot.refresh_posts("vote_session", str(result.session.id))
-    text = tr("Poll weights refreshed.")
+    text = tr(t"bot-voting-controls-poll-weights-refreshed = Poll weights refreshed.")
     if not result.complete:
         # Report unresolved voters as a count without exposing their account IDs.
         count = len(result.unresolved_account_ids)
-        text += " " + tr(t"{count} voter(s) could not be resolved, so their cached weight was kept.")
+        text += " " + tr(
+            t"vote-unresolved-voter-cache-retained = {count} voter(s) could not be resolved, "
+            t"so their cached weight was kept."
+        )
     await request.respond(text_node(text), audience="personal")
 
 

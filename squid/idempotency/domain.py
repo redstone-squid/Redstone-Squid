@@ -55,14 +55,18 @@ type Reservation = PendingRequest | ExistingRequest
 class IdempotencyConflictError(ConflictError):
     """A caller reused one idempotency key for a different request."""
 
-    default_message = tr("The idempotency key was already used for a different request.")
-    default_title = tr("Idempotency key conflict")
+    default_message = tr(
+        t"idempotency-idempotency-key-used = The idempotency key was already used for a different request."
+    )
+    default_title = tr(t"idempotency-domain-idempotency-key-conflict = Idempotency key conflict")
     default_code = ErrorCode.IDEMPOTENCY_CONFLICT
 
 
 class IdempotencyInProgressError(ConflictError):
     """An equivalent request with this caller key has not completed yet."""
 
-    default_message = tr("A request with this idempotency key is still in progress.")
-    default_title = tr("Idempotent request in progress")
+    default_message = tr(
+        t"idempotency-request-idempotency-key = A request with this idempotency key is still in progress."
+    )
+    default_title = tr(t"idempotency-request-in-progress = Idempotent request in progress")
     default_code = ErrorCode.IDEMPOTENCY_IN_PROGRESS

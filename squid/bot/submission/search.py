@@ -10,6 +10,7 @@ from discord.ext import commands
 from discord.ext.commands import Context, when_mentioned
 
 import squid_ui_discord as sd
+from squid.bot.i18n import command_text
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
@@ -30,6 +31,7 @@ from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid_i18n import tr
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -116,10 +118,17 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
     @autocompletes(sort="search_sorts", query="search_query")
     @sd.command(name="search", description="Search builds, records, and taxonomy metadata", defer="public")
     @app_commands.describe(
-        query=app_commands.locale_str("Search text and filters, e.g. `width:5`."),
-        scope=app_commands.locale_str("What to look through: records, builds, patterns, restrictions, or all."),
-        sort=app_commands.locale_str("Order results by a field, ascending or descending."),
-        mode=app_commands.locale_str("Use keyword matching or smart meaning-based matching."),
+        query=command_text(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
+        scope=command_text(
+            tr(
+                t"build-search-target-types-help = What to look through: "
+                t"records, builds, patterns, restrictions, or all."
+            )
+        ),
+        sort=command_text(tr(t"build-search-sort-help = Order results by a field, ascending or descending.")),
+        mode=command_text(
+            tr(t"build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.")
+        ),
     )
     async def search_records(
         self,
@@ -160,7 +169,9 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_group.command(name="browse")
     @app_commands.rename(build_id="id")
-    @app_commands.describe(build_id=app_commands.locale_str("Open this build directly."))
+    @app_commands.describe(
+        build_id=command_text(tr(t"bot-submission-search-open-this-build-directly = Open this build directly."))
+    )
     async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
         """Browse searchable build details, review actions, and schematic tools."""
         subject = await subject_for_interaction(request)

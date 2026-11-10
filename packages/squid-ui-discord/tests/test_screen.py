@@ -7,9 +7,9 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid_i18n import tr
 from squid_reactivity import LocalTopicBus
 from squid_ui.chrome import Chrome
-from squid_ui.text import Message
 from squid_ui_discord.response import UNSET
 from squid_ui_discord.sessions import AdmissionSpec, Reject
 from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
@@ -46,7 +46,7 @@ class BasicScreen(sd.Screen[None, Owner]):
 
 
 def test_screen_compiles_its_class_policy_once() -> None:
-    admission = AdmissionSpec(limit=2, collision=Reject(notice=Message("Full")))
+    admission = AdmissionSpec(limit=2, collision=Reject(notice=tr(t"test-full = Full")))
 
     class Declared(sd.Screen[None, Owner]):
         policy = sd.ResponseSpec(
@@ -121,7 +121,7 @@ async def test_rejected_session_delivers_notice_without_loading_component() -> N
     class Exclusive(sd.Screen[None, Owner]):
         policy = sd.ResponseSpec(
             session=sd.SessionSpec(
-                "exclusive", admission=AdmissionSpec(collision=Reject(notice=Message("Already open")))
+                "exclusive", admission=AdmissionSpec(collision=Reject(notice=tr(t"test-already-open = Already open")))
             )
         )
 

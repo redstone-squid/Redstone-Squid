@@ -249,7 +249,9 @@ class PlayerAuthorizationService:
         max_active_challenges: int = MAX_ACTIVE_CHALLENGES,
     ) -> None:
         if min(challenge_lifetime_seconds, grant_lifetime_seconds, max_active_challenges) <= 0:
-            msg = tr("Minecraft authorization limits must be positive.")
+            msg = tr(
+                t"minecraft-auth-minecraft-authorization-limits = Minecraft authorization limits must be positive."
+            )
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._codec = codec
@@ -538,6 +540,6 @@ class PlayerAuthorizationService:
 def _installation_label(label: str) -> str:
     normalized = label.strip()
     if not normalized or len(normalized) > 80:
-        msg = tr("Installation label must contain 1 to 80 characters.")
+        msg = tr(t"minecraft-auth-installation-label-length = Installation label must contain 1 to 80 characters.")
         raise ValidationError(msg)
     return normalized

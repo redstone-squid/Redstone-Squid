@@ -75,23 +75,25 @@ class VersionScreen(sd.Screen):
             label=lambda item: item.value,
             summary=lambda item: f"{item.value} · {item.edition}",
             detail=lambda item: sl.fields(
-                sl.field(tr("Version"), item.value),
-                sl.field(tr("Edition"), item.edition),
+                sl.field(tr(t"bot-version-tracking-version = Version"), item.value),
+                sl.field(tr(t"bot-version-tracking-edition = Edition"), item.edition),
             ),
             page_size=15,
-            title=tr("Recognized Minecraft versions"),
-            empty=tr("No Minecraft versions are recognized yet."),
+            title=tr(t"versions-recognized-list-title = Recognized Minecraft versions"),
+            empty=tr(t"versions-none-recognized = No Minecraft versions are recognized yet."),
         )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sl.status(tr("Loading versions.")) if self._browser is None else self.boundary(self._browser, key="browser")
+            sl.status(tr(t"bot-version-tracking-loading-versions = Loading versions."))
+            if self._browser is None
+            else self.boundary(self._browser, key="browser")
         ]
         if self._can_create:
             nodes.append(
                 sl.form(
-                    tr("Add version"),
+                    tr(t"bot-version-tracking-add-version = Add version"),
                     _AddVersionForm().spec(),
                     key="add-version",
                     on_submit=self._add,
@@ -101,14 +103,14 @@ class VersionScreen(sd.Screen):
 
     async def _add(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_create():
-            await event.notice(tr("You are no longer allowed to add versions."))
+            await event.notice(tr(t"versions-add-permission-denied = You are no longer allowed to add versions."))
             return
         form = _AddVersionForm.from_submission(event)
         edition = form.edition
         version_text = form.version
         version = str(await self._versions.add(version_text, edition=edition))
         await self._refresh()
-        await event.notice(tr(t"Added {version}."))
+        await event.notice(tr(t"bot-version-tracking-added = Added {version}."))
 
 
 class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="VersionTracker"):
@@ -148,7 +150,13 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
             return
         locale = await resolve_locale(message, self.bot.services.settings)
         with localization_scope(localization_for(locale)):
-            payload = render_payload([text_node(tr(t"Version added successfully: {version}"))])
+            payload = render_payload(
+                [
+                    text_node(
+                        tr(t"bot-version-tracking-version-added-successfully = Version added successfully: {version}")
+                    )
+                ]
+            )
         await send_to(self.bot.get_channel(channel_id))(  # type: ignore[arg-type]
             payload
         )
@@ -160,14 +168,14 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
 
 
 class _AddVersionForm(sl.forms.Form):
-    title = tr("Add Minecraft version")
+    title = tr(t"bot-version-tracking-add-minecraft-version = Add Minecraft version")
 
     edition = sl.forms.ChoiceField[Edition](
-        label=tr("Edition"),
+        label=tr(t"bot-version-tracking-edition = Edition"),
         default="Java",
         options=(
-            sl.forms.ChoiceOption("java", tr("Java"), "Java"),
-            sl.forms.ChoiceOption("bedrock", tr("Bedrock"), "Bedrock"),
+            sl.forms.ChoiceOption("java", tr(t"bot-version-tracking-java = Java"), "Java"),
+            sl.forms.ChoiceOption("bedrock", tr(t"bot-version-tracking-bedrock = Bedrock"), "Bedrock"),
         ),
     )
-    version = sl.forms.TextField(label=tr("Version"), maximum=100)
+    version = sl.forms.TextField(label=tr(t"bot-version-tracking-version = Version"), maximum=100)

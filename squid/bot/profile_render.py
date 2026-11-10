@@ -11,9 +11,9 @@ from squid.bot.ui import CardField, tr
 from squid_ui.text import Message
 
 _PROVIDER_LABELS = {
-    IdentityProvider.DISCORD: tr("Discord"),
-    IdentityProvider.JAVA: tr("Minecraft (Java)"),
-    IdentityProvider.BEDROCK: tr("Minecraft (Bedrock)"),
+    IdentityProvider.DISCORD: tr(t"bot-profile-render-discord = Discord"),
+    IdentityProvider.JAVA: tr(t"bot-profile-render-minecraft-java = Minecraft (Java)"),
+    IdentityProvider.BEDROCK: tr(t"bot-profile-render-minecraft-bedrock = Minecraft (Bedrock)"),
 }
 
 
@@ -30,10 +30,10 @@ def identity_label(identity: AccountIdentity) -> Message:
     """
     provider = provider_label(identity.provider)
     if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
-        subject = identity.discord_id
-        return tr(t"{provider} — <@{subject}>")
+        subject = str(identity.discord_id)
+        return tr(t"bot-profile-render-value-2 = {provider} — <@{subject}>")
     name = identity.display_name or identity.subject
-    return tr(t"{provider} — {name}")
+    return tr(t"bot-profile-render-value = {provider} — {name}")
 
 
 def render_links(links: tuple[ProfileLink, ...]) -> str:
@@ -45,9 +45,9 @@ def own_profile_fields(profile: AccountProfile) -> list[CardField]:
     """Render pronouns and links; the account panel renders identity visibility separately."""
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr("Pronouns"), profile.pronouns))
+        fields.append(CardField(tr(t"bot-profile-render-pronouns = Pronouns"), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr("Links"), render_links(profile.links)))
+        fields.append(CardField(tr(t"bot-profile-render-links = Links"), render_links(profile.links)))
     return fields
 
 
@@ -72,20 +72,20 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
     """
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr("Pronouns"), profile.pronouns))
+        fields.append(CardField(tr(t"bot-profile-render-pronouns = Pronouns"), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr("Links"), render_links(profile.links)))
+        fields.append(CardField(tr(t"bot-profile-render-links = Links"), render_links(profile.links)))
     if profile.identities:
         fields.append(
             CardField(
-                tr("Linked accounts"),
+                tr(t"bot-profile-render-linked-accounts = Linked accounts"),
                 Message.join("\n", (_public_identity_label(identity) for identity in profile.identities)),
             )
         )
     if profile.aliases:
         fields.append(
             CardField(
-                tr("Creator credit"),
+                tr(t"bot-profile-render-creator-credit = Creator credit"),
                 Message.join("\n", (_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases)),
             )
         )
@@ -95,11 +95,16 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
 def _public_identity_label(identity: PublicIdentity) -> Message:
     provider = provider_label(identity.provider)
     name = identity.display_name or identity.subject
-    return tr(t"{provider} — {name}")
+    return tr(t"bot-profile-render-value = {provider} — {name}")
 
 
 def _alias_credit_label(name: str, count: int) -> Message:
-    return tr(t"**{name}** — {count} build", plural=t"**{name}** — {count} builds")
+    return tr(t"""
+        bot-profile-render-build = {{ $count ->
+            [one] {{ "*" }}*{name}** — {count} build
+           *[other] {{ "*" }}*{name}** — {count} builds
+        }}
+        """)
 
 
 def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:

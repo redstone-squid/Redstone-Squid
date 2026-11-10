@@ -149,13 +149,19 @@ class TagPredicate:
 
     def __post_init__(self) -> None:
         if self.tag_id < 1:
-            raise ValidationError(tr("tag_id must be positive"))
+            raise ValidationError(tr(t"notifications-tag-id-positive = tag_id must be positive"))
         if self.operator not in {"present", "exact"}:
-            raise ValidationError(tr("tag predicate operator must be 'present' or 'exact'"))
+            raise ValidationError(
+                tr(t"notifications-tag-predicate-operator = tag predicate operator must be 'present' or 'exact'")
+            )
         if self.operator == "present" and self.value is not None:
-            raise ValidationError(tr("presence predicates cannot include a value"))
+            raise ValidationError(
+                tr(t"notifications-presence-predicates-include = presence predicates cannot include a value")
+            )
         if self.operator == "exact" and self.value is None:
-            raise ValidationError(tr("exact predicates require a value"))
+            raise ValidationError(
+                tr(t"notifications-exact-predicate-value-required = exact predicates require a value")
+            )
 
     def as_dict(self) -> dict[str, object]:
         """Return the tag ID, operator, and optional value for persistence."""
@@ -180,12 +186,19 @@ class RecordSubscriptionFilter:
 
     def __post_init__(self) -> None:
         if not any((self.build_kinds, self.base_titles, self.version_scopes, self.tags)):
-            raise ValidationError(tr("a record filter must contain at least one predicate"))
+            raise ValidationError(
+                tr(t"notifications-record-filter-predicate-limit = a record filter must contain at least one predicate")
+            )
         _validate_values(self.build_kinds, _BUILD_KINDS, "build kind")
         _validate_values(self.base_titles, _BASE_TITLES, "base title")
         _validate_values(self.version_scopes, _VERSION_SCOPES, "version scope")
         if len({predicate.tag_id for predicate in self.tags}) != len(self.tags):
-            raise ValidationError(tr("record filters may contain only one predicate per tag"))
+            raise ValidationError(
+                tr(
+                    t"notifications-record-filter-single-predicate = record filters may "
+                    t"contain only one predicate per tag"
+                )
+            )
 
     def as_dict(self) -> dict[str, object]:
         """Serialize the filter into a stable JSON shape."""
@@ -201,24 +214,29 @@ class RecordSubscriptionFilter:
         """Parse stored JSON, raising DataIntegrityError for invalid filter data."""
         raw_tags_value = value.get("tags", [])
         if not isinstance(raw_tags_value, list):
-            raise DataIntegrityError(tr("tags must be a list"))
+            raise DataIntegrityError(tr(t"notifications-tags-list = tags must be a list"))
         raw_tags = cast(list[object], raw_tags_value)
         tags: list[TagPredicate] = []
         for raw in raw_tags:
             if not isinstance(raw, dict):
-                raise DataIntegrityError(tr("tag predicates must be objects"))
+                raise DataIntegrityError(tr(t"notifications-tag-predicates-objects = tag predicates must be objects"))
             raw_predicate = cast(dict[str, object], raw)
             tag_id = raw_predicate.get("tag_id")
             operator = raw_predicate.get("operator", "present")
             predicate_value = raw_predicate.get("value")
             if isinstance(tag_id, bool) or not isinstance(tag_id, int) or not isinstance(operator, str):
-                raise DataIntegrityError(tr("invalid tag predicate"))
+                raise DataIntegrityError(tr(t"notifications-domain-invalid-tag-predicate = invalid tag predicate"))
             if predicate_value is not None and not isinstance(predicate_value, (str, int, float, bool)):
-                raise DataIntegrityError(tr("invalid exact tag value"))
+                raise DataIntegrityError(tr(t"notifications-invalid-exact-tag-value = invalid exact tag value"))
             try:
                 tags.append(TagPredicate(tag_id=tag_id, operator=operator, value=predicate_value))
             except ValidationError as error:
-                raise DataIntegrityError(tr("persisted tag predicate violates the notification contract")) from error
+                raise DataIntegrityError(
+                    tr(
+                        t"notifications-persisted-tag-predicate = "
+                        t"persisted tag predicate violates the notification contract"
+                    )
+                ) from error
         try:
             return cls(
                 build_kinds=_string_set(value.get("build_kinds", []), "build_kinds"),
@@ -227,7 +245,12 @@ class RecordSubscriptionFilter:
                 tags=tuple(tags),
             )
         except ValidationError as error:
-            raise DataIntegrityError(tr("persisted record filter violates the notification contract")) from error
+            raise DataIntegrityError(
+                tr(
+                    t"notifications-persisted-record-filter = "
+                    t"persisted record filter violates the notification contract"
+                )
+            ) from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,10 +278,14 @@ class PendingNotificationDelivery:
 
 def _string_set(value: object, name: str) -> frozenset[str]:
     if not isinstance(value, list):
-        raise DataIntegrityError(tr(t"{name} must be a list of non-empty strings"))
+        raise DataIntegrityError(
+            tr(t"notifications-list-nonempty-strings = {name} must be a list of non-empty strings")
+        )
     items = cast(list[object], value)
     if not all(isinstance(item, str) and item for item in items):
-        raise DataIntegrityError(tr(t"{name} must be a list of non-empty strings"))
+        raise DataIntegrityError(
+            tr(t"notifications-list-nonempty-strings = {name} must be a list of non-empty strings")
+        )
     return frozenset(cast(str, item) for item in items)
 
 
@@ -266,4 +293,4 @@ def _validate_values(values: frozenset[str], allowed: frozenset[str], name: str)
     invalid = values - allowed
     if invalid:
         value = sorted(invalid)[0]
-        raise ValidationError(tr(t"unsupported {name}: {value}"))
+        raise ValidationError(tr(t"notifications-domain-unsupported = unsupported {name}: {value}"))

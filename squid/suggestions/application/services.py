@@ -115,7 +115,9 @@ class SuggestionService:
         """
         source = self._registry.resolve(source_id)
         if source.kind is not SourceKind.ENUMERABLE:
-            raise ValidationError(tr(t"{source_id} cannot be enumerated"))
+            raise ValidationError(
+                tr(t"suggestions-enumerated = {(source_id_text := str(source_id))} cannot be enumerated")  # noqa: F841
+            )
         request = SuggestionRequest(
             source=source_id,
             limit=0,

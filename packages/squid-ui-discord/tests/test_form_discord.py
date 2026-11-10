@@ -374,7 +374,7 @@ async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
     (error,) = panel.events[0].errors
     assert isinstance(error, sl.forms.FieldError)
     assert tuple(field.key for field in error.fields) == ("duration",)
-    assert error.message == "Enter a duration such as 30m, 12h, or 7d."
+    assert sl.text.source_text(error.message) == "Enter a duration such as 30m, 12h, or 7d."
 
 
 def test_scale_field_renders_a_radio_group_within_the_radio_span() -> None:

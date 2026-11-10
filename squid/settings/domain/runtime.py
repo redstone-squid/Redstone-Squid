@@ -6,6 +6,9 @@ existing voting sessions retain their own thresholds.
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from squid.core.errors import ValidationError
+from squid_i18n import tr
+
 
 class RuntimeSettings(BaseModel):
     """Behavior administrators can change without restarting a process."""
@@ -34,6 +37,7 @@ class RuntimeSettings(BaseModel):
     @classmethod
     def _validate_channels(cls, value: tuple[int, ...]) -> tuple[int, ...]:
         if any(channel <= 0 or channel > 9223372036854775807 for channel in value):
-            msg = "Channel IDs must be positive signed 64-bit integers"
-            raise ValueError(msg)
+            raise ValidationError(
+                tr(t"settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bit integers")
+            )
         return tuple(dict.fromkeys(value))

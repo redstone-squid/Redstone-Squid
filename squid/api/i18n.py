@@ -5,7 +5,7 @@ from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale_candidates
-from squid_ui.text import localization_scope
+from squid_i18n import localization_scope
 
 
 def _parse_accept_language(header: str) -> list[str]:

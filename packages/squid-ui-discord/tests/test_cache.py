@@ -7,6 +7,7 @@ grows within the available space. They also cover eviction and representative la
 from dataclasses import replace
 from time import perf_counter
 
+from squid_i18n import tr
 from squid_ui import Palette, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.planning import PlanCache, PlanMemo, plan
@@ -38,7 +39,7 @@ from squid_ui.semantic import (
     Stack,
     Uncontrolled,
 )
-from squid_ui.text import Localization, Message
+from squid_ui.text import Localization
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
 from squid_ui_discord import testing as sd
 
@@ -375,9 +376,9 @@ def test_incremental_text_growth_falls_back_when_it_crosses_headroom(monkeypatch
 
 def test_plan_cache_separates_locales() -> None:
     cache = PlanCache()
-    document = Paragraph(Message("Hello"))
-    english = Localization("en", gettext=lambda message: message)
-    translated = Localization("xx", gettext=lambda _message: "Bonjour")
+    document = Paragraph(tr(t"test-hello = Hello"))
+    english = Localization("en")
+    translated = Localization("fr", ("test-hello = Bonjour",))
 
     first = plan(document, target=DISCORD_V2_DPY27, localization=english, cache=cache)
     second = plan(document, target=DISCORD_V2_DPY27, localization=translated, cache=cache)

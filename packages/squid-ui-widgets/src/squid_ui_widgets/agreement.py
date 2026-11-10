@@ -12,7 +12,7 @@ from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Message, TextLike
+from squid_ui.text import TextLike, tr
 from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 
 
@@ -85,12 +85,8 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](C
         approved = frozenset(self.approved)
         participant_rows = tuple(
             bullet(
-                Message(
-                    "{mark} {display}",
-                    {
-                        "mark": "✓" if participant.actor_id in approved else "○",
-                        "display": participant.display,
-                    },
+                tr(
+                    t"widgets-agreement-participant = {(mark := '✓' if participant.actor_id in approved else '○')} {(display := participant.display)}"  # noqa: F841 - captured Fluent bindings
                 ),
                 key=participant.actor_id,
             )

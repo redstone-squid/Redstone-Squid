@@ -370,7 +370,12 @@ class RecordService:
         if kind is not None and kind is not identity.kind:
             actual = identity.kind.value
             requested = kind.value
-            raise ValidationError(tr(t"Record category {definition_id} is a {actual} category, not {requested}."))
+            raise ValidationError(
+                tr(
+                    t"records-record-category-category = Record category {(definition_id_text := str(definition_id))} is "  # noqa: F841 - captured text identifier
+                    t"a {actual} category, not {requested}."
+                )
+            )
         return await self.lookup_or_materialize(
             RecordLookupRequest(
                 kind=identity.kind,
@@ -546,7 +551,9 @@ def _serialize_category_value(value: Decimal | str | bool | None) -> str:
         return str(value).lower()
     if isinstance(value, str):
         return value
-    msg = tr("Parameterized record restriction is missing a category value.")
+    msg = tr(
+        t"records-parameterized-record-restriction = Parameterized record restriction is missing a category value."
+    )
     raise DataIntegrityError(msg)
 
 
@@ -555,7 +562,11 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
         return Decimal(value)
     if facet.value_type == "boolean":
         if value not in {"true", "false"}:
-            raise InvalidStateError(tr(t"Invalid boolean category value {value!r}."))
+            raise InvalidStateError(
+                tr(
+                    t"records-invalid-boolean-category = Invalid boolean category value {(value_text := repr(value))}."  # noqa: F841 - captured Fluent binding
+                )
+            )
         return value == "true"
     return value
 
@@ -576,7 +587,9 @@ def _base_key(source: CandidateBuild) -> str:
             )
         )
     build_id = source.candidate.build_id
-    raise DataIntegrityError(tr(t"Candidate {build_id} has no typed category facts."))
+    raise DataIntegrityError(
+        tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
+    )
 
 
 def _category_with_restrictions(
@@ -603,7 +616,9 @@ def _category_with_restrictions(
             miscellaneous_restrictions=miscellaneous,
         )
     build_id = source.candidate.build_id
-    raise DataIntegrityError(tr(t"Candidate {build_id} has no typed category facts."))
+    raise DataIntegrityError(
+        tr(t"records-candidate-no-typed = Candidate {(build_id_text := str(build_id))} has no typed category facts.")  # noqa: F841
+    )
 
 
 def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
@@ -612,7 +627,9 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
     if kind is BuildKind.EXTENDER:
         return tuple(EXTENDER_TIMING_METHODS)
     kind_name = kind.value
-    raise InvalidStateError(tr(t"Fastest records are not supported for {kind_name}."))
+    raise InvalidStateError(
+        tr(t"records-fastest-records-unsupported = Fastest records are not supported for {kind_name}.")
+    )
 
 
 def _base_titles(kind: BuildKind) -> tuple[BaseTitle, ...]:
@@ -627,7 +644,7 @@ def _base_titles(kind: BuildKind) -> tuple[BaseTitle, ...]:
     if kind is BuildKind.EXTENDER:
         return shared
     kind_name = kind.value
-    raise InvalidStateError(tr(t"Records are not supported for {kind_name}."))
+    raise InvalidStateError(tr(t"records-records-not-supported = Records are not supported for {kind_name}."))
 
 
 def _resolve_record(

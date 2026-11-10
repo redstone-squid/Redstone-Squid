@@ -87,7 +87,7 @@ def artifacts(found: Iterable[LocatedDeclaration], supplemental: tuple[str, ...]
     source = "".join(
         "# " + ", ".join(sorted(locations[key])) + "\n" + value.source + "\n" for key, value in sorted(entries.items())
     )
-    source = source.rstrip() + "\n" if source else ""
+    source = "\n".join(line if line.strip() else "" for line in source.splitlines()).rstrip() + "\n" if source else ""
     metadata = {
         key: {
             "fingerprint": value.fingerprint,

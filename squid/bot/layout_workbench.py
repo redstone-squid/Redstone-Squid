@@ -110,11 +110,18 @@ class BuildDraft(sl.Reactive):
 class BuildForm(sl.forms.Form):
     """Keep the whole build edit in one validated action and history entry."""
 
-    title = tr("Edit sample build")
-    name = sl.forms.TextField(label=tr("Build title"), minimum=3, maximum=80)
-    dimensions = sl.forms.TextField(label=tr("Dimensions (width x height x depth)"), maximum=24)
-    ticks = sl.forms.IntField(label=tr("Opening time in ticks"), minimum=1, maximum=1200)
-    description = sl.forms.TextAreaField(label=tr("Description"), minimum=10, maximum=2000)
+    title = tr(t"layout-workbench-edit-sample-build = Edit sample build")
+    name = sl.forms.TextField(label=tr(t"layout-workbench-build-title = Build title"), minimum=3, maximum=80)
+    dimensions = sl.forms.TextField(
+        label=tr(t"layout-workbench-dimensions-hint = Dimensions (width x height x depth)"),
+        maximum=24,
+    )
+    ticks = sl.forms.IntField(
+        label=tr(t"layout-workbench-opening-time-in-ticks = Opening time in ticks"), minimum=1, maximum=1200
+    )
+    description = sl.forms.TextAreaField(
+        label=tr(t"layout-workbench-description = Description"), minimum=10, maximum=2000
+    )
 
     def __init__(self, draft: BuildDraft, history: sl.runtime.History) -> None:
         build = draft.build
@@ -127,7 +134,12 @@ class BuildForm(sl.forms.Form):
     @override
     def validate(self) -> tuple[sl.forms.FormIssue, ...]:
         if re.fullmatch(r"[1-9]\d{0,2}\s*[x\u00d7]\s*[1-9]\d{0,2}\s*[x\u00d7]\s*[1-9]\d{0,2}", self.dimensions) is None:
-            return (sl.forms.FieldError(BuildForm.dimensions, message=tr("Use three positive sizes, such as 4x4x3.")),)
+            return (
+                sl.forms.FieldError(
+                    BuildForm.dimensions,
+                    message=tr(t"layout-workbench-dimensions-validation = Use three positive sizes, such as 4x4x3."),
+                ),
+            )
         return ()
 
     @override
@@ -139,7 +151,7 @@ class BuildForm(sl.forms.Form):
             ticks=self.ticks,
             description=self.description,
         )
-        self.history.record(tr("Edit build"))
+        self.history.record(tr(t"layout-workbench-edit-build = Edit build"))
 
 
 class Workbench(InspectablePanel):
@@ -153,24 +165,56 @@ class Workbench(InspectablePanel):
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         draft = self.draft
-        heading = sl.heading(tr("Build workbench"))
+        heading = sl.heading(tr(t"layout-workbench-build-workbench = Build workbench"))
         children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(
-                tr("A form, an undo stack, and a live preview in another message. All data here is disposable.")
+                tr(
+                    t"layout-workbench-demo-description = A form, an undo stack, and a live "
+                    t"preview in another message. All data here is disposable."
+                )
             ),
-            sl.fields(sl.field(tr("Draft"), draft.build.title), sl.field(tr("Publication"), draft.publication_text())),
-            sl.form(tr("Edit build"), BuildForm(draft, self.history), key="edit", tone=sl.Tone.SUCCESS),
+            sl.fields(
+                sl.field(tr(t"layout-workbench-draft = Draft"), draft.build.title),
+                sl.field(tr(t"layout-workbench-publication = Publication"), draft.publication_text()),
+            ),
+            sl.form(
+                tr(t"layout-workbench-edit-build = Edit build"),
+                BuildForm(draft, self.history),
+                key="edit",
+                tone=sl.Tone.SUCCESS,
+            ),
             sl.action_controls(
-                sl.action_control(tr("Small sample"), self._small, key="small", record=self.history),
-                sl.action_control(tr("Oversized sample"), self._large, key="large", record=self.history),
-                sl.action_control(tr("Undo"), self._undo, key="undo", available=self.history.can_undo),
-                sl.action_control(tr("Redo"), self._redo, key="redo", available=self.history.can_redo),
+                sl.action_control(
+                    tr(t"layout-workbench-small-sample = Small sample"),
+                    self._small,
+                    key="small",
+                    record=self.history,
+                ),
+                sl.action_control(
+                    tr(t"layout-workbench-oversized-sample = Oversized sample"),
+                    self._large,
+                    key="large",
+                    record=self.history,
+                ),
+                sl.action_control(
+                    tr(t"layout-workbench-undo = Undo"), self._undo, key="undo", available=self.history.can_undo
+                ),
+                sl.action_control(
+                    tr(t"layout-workbench-redo = Redo"), self._redo, key="redo", available=self.history.can_redo
+                ),
                 key="editing",
             ),
             sl.action_controls(
-                sl.action_control(tr("Publish sample"), self._publish, key="publish", available=not draft.publishing),
                 sl.action_control(
-                    tr("Failure armed") if self.fail_next else tr("Fail next publish"),
+                    tr(t"layout-workbench-publish-sample = Publish sample"),
+                    self._publish,
+                    key="publish",
+                    available=not draft.publishing,
+                ),
+                sl.action_control(
+                    tr(t"layout-workbench-failure-armed = Failure armed")
+                    if self.fail_next
+                    else tr(t"layout-workbench-fail-next-publish = Fail next publish"),
                     self._fail,
                     key="fail",
                     available=not draft.publishing,
@@ -240,13 +284,13 @@ class BuildPreview(InspectablePanel):
         heading = sl.heading(build.title)
         children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
             sl.fields(
-                sl.field(tr("Dimensions"), build.dimensions),
-                sl.field(tr("Opening time"), f"{build.ticks} ticks"),
-                sl.field(tr("Tag"), build.tag),
+                sl.field(tr(t"layout-workbench-dimensions = Dimensions"), build.dimensions),
+                sl.field(tr(t"layout-workbench-opening-time = Opening time"), f"{build.ticks} ticks"),
+                sl.field(tr(t"layout-workbench-tag = Tag"), build.tag),
             ),
             sl.budget(sl.truncate(sl.paragraph(build.description)), min=100, prefer=350),
             sl.note(self.draft.publication_text()),
-            sl.heading(tr("Related sample records")),
+            sl.heading(tr(t"layout-workbench-related-sample-records = Related sample records")),
             sd.v2.lines(
                 *(
                     f"#{i + 1:03} · {_BUILD_KINDS[i % len(_BUILD_KINDS)]} · {2 + i // 6}x{2 + i // 6} · {8 + i} ticks"
@@ -254,7 +298,7 @@ class BuildPreview(InspectablePanel):
                 ),
                 overflow=sl.primitives.Paginate(key="records", per=4),
             ),
-            sl.heading(tr("Choose a tag")),
+            sl.heading(tr(t"layout-workbench-choose-a-tag = Choose a tag")),
             sl.action_controls(
                 *(
                     sl.action_control(tag, partial(self._tag, tag=tag), key=f"tag-{i}")
@@ -262,7 +306,12 @@ class BuildPreview(InspectablePanel):
                 ),
                 key="tags",
             ),
-            sl.note(tr("Try the oversized sample: records paginate, text shortens, and tag buttons become pickers.")),
+            sl.note(
+                tr(
+                    t"layout-workbench-pagination-hint = Try the oversized "
+                    t"sample: records paginate, text shortens, and tag buttons become pickers."
+                )
+            ),
             self.inspector(),
         )
         return sl.section(heading, *children, accent=DISCORD_GREEN)

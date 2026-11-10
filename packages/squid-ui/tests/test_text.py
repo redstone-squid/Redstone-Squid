@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from squid_i18n import tr
 from squid_ui.text import (
     Localization,
     Markup,
@@ -73,39 +74,6 @@ def test_plain_text_is_escaped_only_when_drawn_for_discord() -> None:
     assert discord_text(text) == "\\*\\*literal\\*\\*"
 
 
-def test_message_translates_at_resolution_and_escapes_params() -> None:
-    localization = Localization("xx", gettext=lambda message: {"Build {title}": "Obra {title}"}[message])
-
-    text = resolve_text(Message("Build {title}", {"title": "[x](bad) @here"}), localization)
-
-    assert text.content == "Obra \\[x\\]\\(bad\\) @\u200bhere"
-
-
-def test_plural_message_uses_catalog_plural_lookup() -> None:
-    localization = Localization(
-        "xx",
-        ngettext=lambda singular, plural, count: singular if count == 1 else f"translated {plural}",
-    )
-
-    text = resolve_text(Message("{count} item", {"count": 2}, plural="{count} items"), localization)
-
-    assert text.content == "translated 2 items"
-
-
-def test_plural_message_requires_integer_count() -> None:
-    with pytest.raises(ValueError, match="integer 'count'"):
-        resolve_text(Message("one", {"count": "many"}, plural="many"), Localization())
-
-
-def test_message_can_interpolate_another_deferred_message() -> None:
-    translations = {"Section": "Sektion", "{section} page": "{section} Seite"}
-    localization = Localization("de", gettext=lambda message: translations[message])
-
-    text = resolve_text(Message("{section} page", {"section": Message("Section")}), localization)
-
-    assert text.content == "Sektion Seite"
-
-
 def test_timestamp_interpolation_uses_discord_tokens_and_plain_iso() -> None:
     import squid_ui as sl
 
@@ -119,21 +87,20 @@ def test_timestamp_interpolation_uses_discord_tokens_and_plain_iso() -> None:
 
 
 def french() -> Localization:
-    catalogue = {"Hello": "Bonjour", "Bye {name}": "Au revoir {name}"}
-    return Localization("fr", lambda key: catalogue.get(key, key))
+    return Localization("fr", ("test-hello = Bonjour\ntest-bye = Au revoir { $name }",))
 
 
 def test_a_message_cannot_become_a_string_by_accident() -> None:
-    message = Message("Hello")
+    message = tr(t"test-hello = Hello")
 
-    with pytest.raises(TypeError, match="no text until it is resolved"):
+    with pytest.raises(TypeError, match="no text until resolved"):
         str(message)
-    with pytest.raises(TypeError, match="no text until it is resolved"):
+    with pytest.raises(TypeError, match="no text until resolved"):
         _ = f"{message}!"
 
 
 def test_joined_text_stays_deferred_until_the_render_locale() -> None:
-    joined = Message.join("\n", [Message("Hello"), "**trusted**", Message("Bye {name}", {"name": "*Ann*"})])
+    joined = Message.join("\n", [tr(t"test-hello = Hello"), "**trusted**", tr(t"test-bye = Bye {(name := '*Ann*')}")])
 
     assert resolve_text(joined, french()).content == "Bonjour\n**trusted**\nAu revoir \\*Ann\\*"
     assert source_text(joined) == "Hello\n**trusted**\nBye \\*Ann\\*"
@@ -146,7 +113,7 @@ def test_joined_plain_text_is_escaped_inside_markdown() -> None:
 
 
 def test_adding_text_keeps_messages_deferred() -> None:
-    greeting = "> " + Message("Hello") + " " + plain("*Ann*")
+    greeting = "> " + tr(t"test-hello = Hello") + " " + plain("*Ann*")
 
     assert isinstance(greeting, Message)
     assert resolve_text(greeting, french()).content == "> Bonjour \\*Ann\\*"
@@ -161,46 +128,5 @@ def test_adding_resolved_text_stays_resolved() -> None:
 
 def test_resolve_uses_the_current_localization() -> None:
     with localization_scope(french()):
-        assert Message("Hello").resolve() == "Bonjour"
+        assert tr(t"test-hello = Hello").resolve() == "Bonjour"
         assert plain("*a*").resolve() == "\\*a\\*"
-
-
-def test_message_from_template_preserves_formatting_until_resolution() -> None:
-    seconds = 2.5
-    label = "done"
-
-    message = Message.from_template(t"Took {seconds:.1f}s: {label!r}")
-
-    assert message.template == "Took {seconds:.1f}s: {label!r}"
-    assert message.params == {"seconds": seconds, "label": label}
-    assert message.resolve() == "Took 2\\.5s: 'done'"
-
-
-def test_message_from_template_rejects_expression_placeholders() -> None:
-    label = "done"
-
-    with pytest.raises(ValueError, match="not a placeholder name"):
-        Message.from_template(t"{label.upper()}")
-
-
-def test_message_from_template_accepts_literal_text() -> None:
-    message = Message.from_template(t"Saved.")
-
-    assert message.template == "Saved."
-    assert message.params == {}
-    assert message.resolve() == "Saved."
-
-
-@pytest.mark.parametrize(
-    ("template", "value", "expected"),
-    [
-        ("{value}", "creator abc-def *literal* @here", "creator abc-def *literal* @here"),
-        ("{value:.1f}", 2.54, "2.5"),
-        ("{value!r}", "x_y", "'x_y'"),
-    ],
-)
-def test_plain_message_interpolation_preserves_literal_values(template: str, value: object, expected: str) -> None:
-    text = resolve_text(Message(template, {"value": value}, markup=Markup.PLAIN), Localization())
-
-    assert text.content == expected
-    assert text.markup is Markup.PLAIN

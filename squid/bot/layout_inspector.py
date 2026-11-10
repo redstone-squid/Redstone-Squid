@@ -17,10 +17,20 @@ class InspectablePanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def inspector(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         controls = sl.action_controls(
             sl.action_control(
-                tr("Refresh inspector") if self.inspection else tr("Inspect"), self._inspect, key="inspect"
+                tr(t"layout-inspector-refresh-inspector = Refresh inspector")
+                if self.inspection
+                else tr(t"layout-inspector-inspect = Inspect"),
+                self._inspect,
+                key="inspect",
             ),
             *(
-                (sl.action_control(tr("Hide inspector"), self._hide_inspector, key="hide-inspector"),)
+                (
+                    sl.action_control(
+                        tr(t"layout-inspector-hide-inspector = Hide inspector"),
+                        self._hide_inspector,
+                        key="hide-inspector",
+                    ),
+                )
                 if self.inspection
                 else ()
             ),
@@ -28,7 +38,11 @@ class InspectablePanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         if not self.inspection:
             return controls
-        return sl.section(sl.heading(tr("Developer snapshot")), sl.paragraph(self.inspection), controls)
+        return sl.section(
+            sl.heading(tr(t"layout-inspector-developer-snapshot = Developer snapshot")),
+            sl.paragraph(self.inspection),
+            controls,
+        )
 
     async def _inspect(self, event: sl.PressEvent[sd.Request]) -> None:
         root = event.context.root

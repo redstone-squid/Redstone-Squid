@@ -139,9 +139,11 @@ def test_edit_form_pages_preserve_field_metadata_and_fit_discord_limits() -> Non
             if isinstance(item, sl.forms.TextField | sl.forms.TextAreaField)
         ]
         assert [control.key for control in controls] == [item.spec.key for item in expected]
-        assert [source_text(control.label or "") for control in controls] == [item.spec.label for item in expected]
+        assert [source_text(control.label or "") for control in controls] == [
+            source_text(item.spec.label) for item in expected
+        ]
         assert [source_text(control.placeholder or "") for control in controls] == [
-            item.spec.placeholder for item in expected
+            source_text(item.spec.placeholder) for item in expected
         ]
         assert [control.maximum for control in controls] == [item.spec.maximum for item in expected]
         assert [control.required for control in controls] == [item.spec.required for item in expected]

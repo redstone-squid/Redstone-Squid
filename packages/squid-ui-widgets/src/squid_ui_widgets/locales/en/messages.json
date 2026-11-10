@@ -1,0 +1,22 @@
+{
+  "widgets-agreement-participant": {
+    "fingerprint": "c3508def8cd42b11f0cb7c79dbd56b9fe01b3940314fa964e3d4df2849f14e95",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "mark",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "display",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui-widgets/src/squid_ui_widgets/agreement.py:88"
+    ]
+  }
+}

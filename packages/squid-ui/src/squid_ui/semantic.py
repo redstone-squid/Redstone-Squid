@@ -28,7 +28,7 @@ from squid_ui.primitives.nodes import Node
 from squid_ui.rosters import RosterPlacement
 from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import TextLike
+from squid_ui.text import Markup, ResolvedText, TextLike
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
@@ -453,6 +453,18 @@ class Timestamp(Renderable[RenderTarget]):
     instant: datetime
     style: TimeStyle = TimeStyle.SHORT_DATETIME
     label: TextLike | None = None
+
+    def as_text(self, markup: Markup) -> ResolvedText:
+        """Preserve Discord timestamp tokens when captured by a text template."""
+        if self.instant.tzinfo is None or self.instant.utcoffset() is None:
+            message = "timestamp interpolation requires an aware datetime"
+            raise ValueError(message)
+        content = (
+            self.instant.isoformat()
+            if markup is Markup.PLAIN
+            else (f"<t:{int(self.instant.timestamp())}:{self.style.value}>")
+        )
+        return ResolvedText(content, markup)
 
 
 @dataclass(frozen=True, slots=True)

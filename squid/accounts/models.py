@@ -199,12 +199,20 @@ class AccountIdentity(Base, kw_only=True):
             case IdentityProvider.DISCORD:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**63:
                     raise ValidationError(
-                        tr(t"Discord identity subjects must be positive signed 64-bit integers, got {subject!r}.")
+                        tr(
+                            t"accounts-discord-identity-subjects = Discord "
+                            t"identity subjects must be positive signed 64-bit integers, got {(subject_text := repr(subject))}."
+                        )
                     )
                 return cls(provider=provider, subject=subject, display_name=display_name, verified_at=verified_at)
             case IdentityProvider.BEDROCK:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**64:
-                    raise ValidationError(tr(t"Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}."))
+                    raise ValidationError(
+                        tr(
+                            t"accounts-bedrock-xuids-unsigned = Bedrock XUIDs must "
+                            t"be unsigned 64-bit integers, got {(subject_text := repr(subject))}."
+                        )
+                    )
                 return cls(provider=provider, subject=subject, display_name=display_name, verified_at=verified_at)
             case IdentityProvider.JAVA:
                 # `UUID` also lowercases and hyphenates, so an uppercase or bare-hex
@@ -212,7 +220,12 @@ class AccountIdentity(Base, kw_only=True):
                 try:
                     canonical = str(uuid.UUID(subject))
                 except ValueError as error:
-                    raise ValidationError(tr(t"Java identity subjects must be UUIDs, got {subject!r}.")) from error
+                    raise ValidationError(
+                        tr(
+                            t"accounts-java-identity-subjects = Java identity "
+                            t"subjects must be UUIDs, got {(subject_text := repr(subject))}."  # noqa: F841 - captured Fluent binding
+                        )
+                    ) from error
                 return cls(provider=provider, subject=canonical, display_name=display_name, verified_at=verified_at)
 
     @classmethod

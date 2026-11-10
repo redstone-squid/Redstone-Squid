@@ -1,0 +1,23 @@
+{
+  "reason": "Translations from removed showcase screens, retained for reuse.",
+  "messages": {
+    "A title someone typed": "别人输入的标题",
+    "Change colour": "换个颜色",
+    "Each entry below is one problem a Discord message runs into. They are all live.": "下面每一项都是 Discord 消息会遇到的一个问题。它们全都是实时的。",
+    "How this bot draws its messages": "这个机器人如何排版它的消息",
+    "Language": "语言",
+    "None of this was translated when it was written down. Each line keeps its dictionary entry and its values until the moment the message is drawn, so pressing the button redraws this same message in Chinese rather than replacing it.": "这些文字在写下时都还没有被翻译。每一行都保留着自己的词条和取值，直到消息真正被绘制的那一刻，所以按下按钮是把这条消息重新绘制成中文，而不是换成另一条。",
+    "Other languages": "其他语言",
+    "Pick something to look at": "挑一个来看看",
+    "Press Switch language, twice.": "按两次“切换语言”。",
+    "Redraw": "重绘",
+    "Redrawn {clicks} times, and each press rebuilt this whole message.": "已重绘 {clicks} 次，每一次按下都重建了整条消息。",
+    "Show the code behind this exhibit": "显示这一项背后的代码",
+    "Shown safely: {unsafe}": "安全显示：{unsafe}",
+    "Switch language": "切换语言",
+    "Switch this message to Chinese, in place": "就地把这条消息切换成中文",
+    "Switching language without redoing the message": "换语言，但不用重做这条消息",
+    "That title is somebody else's text. Asterisks, @everyone and fake links are escaped on the way in, so a build title cannot reformat the message or ping the server.": "那个标题是别人写的文本。星号、@everyone 和假链接在进入时就已转义，所以一个建筑标题无法改变消息的排版，也无法提及整个服务器。",
+    "This is what the author wrote. Everything above is what planning made of it.": "这是作者写下的内容。上面看到的一切，都是排版规划据此生成的。"
+  }
+}

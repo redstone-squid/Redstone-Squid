@@ -74,16 +74,16 @@ def reciprocal_rank_fusion(
             is negative.
     """
     if k <= 0:
-        raise ValidationError(tr("k must be positive"))
+        raise ValidationError(tr(t"search-k-positive = k must be positive"))
     if branch_limit <= 0:
-        raise ValidationError(tr("branch_limit must be positive"))
+        raise ValidationError(tr(t"search-branch-limit-positive = branch_limit must be positive"))
     scores: defaultdict[tuple[str, str], float] = defaultdict(float)
     documents: dict[tuple[str, str], RankedCandidate] = {}
     for branch, candidates in branches.items():
         weight = weights.get(branch, 0)
         if weight < 0:
             branch_name = branch.value
-            raise ValidationError(tr(t"weight for {branch_name} cannot be negative"))
+            raise ValidationError(tr(t"search-weight-negative = weight for {branch_name} cannot be negative"))
         seen: set[tuple[str, str]] = set()
         rank = 0
         for candidate in candidates[:branch_limit]:

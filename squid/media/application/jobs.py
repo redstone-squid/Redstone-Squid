@@ -89,7 +89,7 @@ class MediaDraftUploadAuthorization:
 
     def __post_init__(self) -> None:
         if self.owner_account_id < 1 or self.draft_revision < 0:
-            msg = tr("Media draft upload authorization is invalid.")
+            msg = tr(t"media-media-draft-upload = Media draft upload authorization is invalid.")
             raise ValidationError(msg)
 
 
@@ -106,14 +106,14 @@ class MediaUploadSubmission:
 
     def __post_init__(self) -> None:
         if self.draft_id.int == 0 or (self.upload_id is not None and self.upload_id.int == 0):
-            msg = tr("Media upload and draft identifiers cannot be nil UUIDs.")
+            msg = tr(t"media-media-upload-draft = Media upload and draft identifiers cannot be nil UUIDs.")
             raise ValidationError(msg)
         if not self.source:
-            msg = tr("Media uploads cannot be empty.")
+            msg = tr(t"media-media-uploads-empty = Media uploads cannot be empty.")
             raise ValidationError(msg)
         _require_content_type(self.source_content_type)
         if self.kind is MediaKind.IMAGE and self.strip_audio:
-            msg = tr("Image uploads cannot request audio removal.")
+            msg = tr(t"media-image-uploads-request = Image uploads cannot request audio removal.")
             raise ValidationError(msg)
 
 
@@ -130,11 +130,11 @@ class StagedMediaUploadSubmission:
 
     def __post_init__(self) -> None:
         if self.draft_id.int == 0 or (self.upload_id is not None and self.upload_id.int == 0):
-            msg = tr("Media upload and draft identifiers cannot be nil UUIDs.")
+            msg = tr(t"media-media-upload-draft = Media upload and draft identifiers cannot be nil UUIDs.")
             raise ValidationError(msg)
         _require_content_type(self.source_content_type)
         if self.kind is MediaKind.IMAGE and self.strip_audio:
-            msg = tr("Image uploads cannot request audio removal.")
+            msg = tr(t"media-image-uploads-request = Image uploads cannot request audio removal.")
             raise ValidationError(msg)
 
 
@@ -155,16 +155,16 @@ class MediaUploadMetadata:
 
     def __post_init__(self) -> None:
         if self.id.int == 0 or self.draft_id.int == 0:
-            msg = tr("Media upload identifiers cannot be nil UUIDs.")
+            msg = tr(t"media-media-upload-identifiers = Media upload identifiers cannot be nil UUIDs.")
             raise ValidationError(msg)
         if self.source_byte_size <= 0:
-            msg = tr("Media source byte size must be positive.")
+            msg = tr(t"media-media-source-byte = Media source byte size must be positive.")
             raise ValidationError(msg)
         _require_content_type(self.source_content_type)
         _require_sha256(self.source_sha256)
         _require_object_key(self.source_object_key)
         if self.kind is MediaKind.IMAGE and self.strip_audio:
-            msg = tr("Image uploads cannot request audio removal.")
+            msg = tr(t"media-image-uploads-request = Image uploads cannot request audio removal.")
             raise ValidationError(msg)
 
 
@@ -185,19 +185,22 @@ class StoredMediaArtifact:
         _require_sha256(self.sha256)
         _require_content_type(self.content_type)
         if self.byte_size <= 0:
-            msg = tr("Media artifact byte size must be positive.")
+            msg = tr(t"media-media-artifact-byte = Media artifact byte size must be positive.")
             raise ValidationError(msg)
         if (self.width is None) != (self.height is None):
-            msg = tr("Media artifact dimensions must either both be present or both be absent.")
+            msg = tr(
+                t"media-artifact-dimensions-either = Media artifact "
+                t"dimensions must either both be present or both be absent."
+            )
             raise ValidationError(msg)
         if self.width is not None and (self.width <= 0 or self.height is None or self.height <= 0):
-            msg = tr("Media artifact dimensions must be positive.")
+            msg = tr(t"media-media-artifact-dimensions = Media artifact dimensions must be positive.")
             raise ValidationError(msg)
         if self.role is MediaArtifactRole.REPORT and self.width is not None:
-            msg = tr("Normalization reports do not have pixel dimensions.")
+            msg = tr(t"media-reports-not-pixel = Normalization reports do not have pixel dimensions.")
             raise ValidationError(msg)
         if self.role is not MediaArtifactRole.REPORT and self.width is None:
-            msg = tr("Visual media artifacts require pixel dimensions.")
+            msg = tr(t"media-visual-media-artifacts = Visual media artifacts require pixel dimensions.")
             raise ValidationError(msg)
 
 
@@ -216,7 +219,7 @@ class ClaimedMediaJob:
 
     def __post_init__(self) -> None:
         if self.attempts < 0 or self.claim_token.int == 0:
-            msg = tr("Claimed media job metadata is invalid.")
+            msg = tr(t"media-claimed-media-job = Claimed media job metadata is invalid.")
             raise ValidationError(msg)
 
 
@@ -364,7 +367,7 @@ class MediaNormalizationJobService:
         max_attempts: int = DEFAULT_MEDIA_JOB_ATTEMPTS,
     ) -> None:
         if max_attempts < 1:
-            msg = tr("Media normalization attempts must be positive.")
+            msg = tr(t"media-media-attempts-positive = Media normalization attempts must be positive.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._artifacts = artifacts
@@ -411,7 +414,9 @@ class MediaNormalizationJobService:
             byte_size = len(submission.source)
             if byte_size > self._limits.max_source_bytes:
                 limit = self._limits.max_source_bytes
-                raise ValidationError(tr(t"Media upload exceeds the {limit}-byte source limit."))
+                raise ValidationError(
+                    tr(t"media-media-upload-exceeds = Media upload exceeds the {limit}-byte source limit.")
+                )
             digest = hashlib.sha256(submission.source).hexdigest()
         upload_id = submission.upload_id or uuid4()
         object_key = f"media/raw/{upload_id}/{digest}"
@@ -502,7 +507,9 @@ class MediaNormalizationJobService:
         async with self._uow_factory() as uow:
             if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
                 maximum = MAX_MEDIA_JOB_CLAIM
-                raise InvalidStateError(tr(t"Media job claim limit must be between 1 and {maximum}."))
+                raise InvalidStateError(
+                    tr(t"media-media-job-claim = Media job claim limit must be between 1 and {maximum}.")
+                )
             result = await uow.media_jobs.claim(limit=limit)
             await uow.commit()
             return result
@@ -550,7 +557,9 @@ class MediaNormalizationJobService:
         async with self._uow_factory() as uow:
             if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
                 maximum = MAX_MEDIA_JOB_CLEANUP
-                raise InvalidStateError(tr(t"Media source cleanup limit must be between 1 and {maximum}."))
+                raise InvalidStateError(
+                    tr(t"media-media-source-cleanup = Media source cleanup limit must be between 1 and {maximum}.")
+                )
             return await uow.media_jobs.terminal_sources(limit=limit)
 
     async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
@@ -584,7 +593,9 @@ class MediaNormalizationJobService:
         """Claim unreferenced objects for deletion, then record each storage result."""
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
             maximum = MAX_MEDIA_JOB_CLEANUP
-            raise InvalidStateError(tr(t"Media artifact cleanup limit must be between 1 and {maximum}."))
+            raise InvalidStateError(
+                tr(t"media-media-artifact-cleanup = Media artifact cleanup limit must be between 1 and {maximum}.")
+            )
         async with self._uow_factory() as uow:
             claims = await uow.media_jobs.claim_artifact_cleanup(limit=limit)
             await uow.commit()
@@ -656,10 +667,10 @@ class MediaNormalizationJobRunner:
         heartbeat_interval_seconds: float = MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
     ) -> None:
         if jobs.limits != normalization.limits:
-            msg = tr("Media queue and normalizer limits must match.")
+            msg = tr(t"media-media-queue-normalizer = Media queue and normalizer limits must match.")
             raise InvalidStateError(msg)
         if heartbeat_interval_seconds <= 0:
-            msg = tr("Media job heartbeat interval must be positive.")
+            msg = tr(t"media-media-job-heartbeat = Media job heartbeat interval must be positive.")
             raise InvalidStateError(msg)
         self._jobs = jobs
         self._artifacts = artifacts
@@ -869,14 +880,16 @@ def _staged_source_metadata(path: Path, max_bytes: int) -> tuple[int, str]:
     try:
         initial = os.fstat(descriptor)
         if not stat.S_ISREG(initial.st_mode):
-            msg = tr("Media uploads must be staged as regular files.")
+            msg = tr(t"media-media-uploads-staged = Media uploads must be staged as regular files.")
             raise ValidationError(msg)
         if initial.st_size <= 0:
-            msg = tr("Media uploads cannot be empty.")
+            msg = tr(t"media-media-uploads-empty = Media uploads cannot be empty.")
             raise ValidationError(msg)
         if initial.st_size > max_bytes:
             limit = max_bytes
-            raise ValidationError(tr(t"Media upload exceeds the {limit}-byte source limit."))
+            raise ValidationError(
+                tr(t"media-media-upload-exceeds = Media upload exceeds the {limit}-byte source limit.")
+            )
         digest = hashlib.sha256()
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
@@ -894,7 +907,7 @@ def _staged_source_metadata(path: Path, max_bytes: int) -> tuple[int, str]:
             initial.st_size,
             initial.st_mtime_ns,
         ):
-            msg = tr("Media upload changed while it was being staged.")
+            msg = tr(t"media-media-upload-changed = Media upload changed while it was being staged.")
             raise ValidationError(msg)
         return initial.st_size, digest.hexdigest()
     finally:
@@ -959,20 +972,23 @@ def _artifact_payload(artifact: MediaArtifact) -> dict[str, object]:
 
 def _require_sha256(value: str) -> None:
     if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
-        msg = tr("Media SHA-256 values must be lowercase hexadecimal.")
+        msg = tr(t"media-media-sha-lowercase = Media SHA-256 values must be lowercase hexadecimal.")
         raise ValidationError(msg)
 
 
 def _require_object_key(value: str) -> None:
     normalized = PurePosixPath(value)
     if normalized.is_absolute() or not normalized.parts or any(part in {"", ".", ".."} for part in normalized.parts):
-        msg = tr("Media object keys must be non-empty relative paths without traversal.")
+        msg = tr(t"media-media-object-keys = Media object keys must be non-empty relative paths without traversal.")
         raise ValidationError(msg)
 
 
 def _require_content_type(value: str) -> None:
     if value != value.strip() or not value or len(value) > 255 or any(ord(character) < 32 for character in value):
-        msg = tr("Media content types must be 1-255 printable characters without surrounding whitespace.")
+        msg = tr(
+            t"media-media-content-types = Media content "
+            t"types must be 1-255 printable characters without surrounding whitespace."
+        )
         raise ValidationError(msg)
 
 

@@ -15,6 +15,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "squid-i18n==0.1.0a1",
     "squid-ui[services]==0.1.0a1",
     # Imported directly by message roots, managed operations, and devtools. Do not rely on
     # squid-ui's transitive dependency to make this available.

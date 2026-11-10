@@ -452,3 +452,12 @@ async def test_failed_parent_work_does_not_publish_consent_and_can_retry() -> No
         assert panel.granted
         assert prompt.finished
         assert isinstance(await prompt.component.wait(), sd.Completed)
+
+
+def test_consent_prompt_preserves_large_discord_mentions() -> None:
+    user_id = 123456789012345678
+    prompt = _consent_prompt(user_id=user_id, preview=None)
+    root = sd.MessageRoot(prompt, access=sd.Owner(user_id), timeout=120)
+    content = str(commit_render(root).to_components())
+    assert f"<@{user_id}>" in content
+    assert f"`{user_id}`" in content

@@ -44,5 +44,5 @@ class RoleMultiplier:
 
     def __post_init__(self) -> None:
         if not isfinite(self.multiplier) or self.multiplier <= 0:
-            msg = tr("Role multiplier must be finite and greater than zero.")
+            msg = tr(t"reactions-role-multiplier-finite = Role multiplier must be finite and greater than zero.")
             raise ValidationError(msg)

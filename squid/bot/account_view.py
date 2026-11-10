@@ -57,7 +57,7 @@ class ConsentRequest(Protocol):
 
 
 def _link_count(count: int) -> sl.text.Message:
-    return tr(t"{count} links")
+    return tr(t"account-view-links = {count} links")
 
 
 class AccountScreen(sd.Screen):
@@ -128,7 +128,7 @@ class AccountScreen(sd.Screen):
                 self.boundary(self._profile_editor, key="profile-editor"),
                 sl.action_controls(
                     sl.action_control(
-                        tr("Cancel"),
+                        tr(t"account-view-cancel = Cancel"),
                         self._cancel_profile_edit,
                         key="cancel-profile-edit",
                     ),
@@ -141,7 +141,7 @@ class AccountScreen(sd.Screen):
         extra_media = media[1:]
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
-                sl.heading(self._profile.display_name or tr("Your account")),
+                sl.heading(self._profile.display_name or tr(t"account-view-your-account = Your account")),
                 # Shorten the bio before reducing the identity fields or footer.
                 self._profile.bio and sl.truncate(sl.paragraph(self._profile.bio)),
                 sl.fields(*fields),
@@ -172,26 +172,26 @@ class AccountScreen(sd.Screen):
         nodes.extend(
             (
                 sl.toggle(
-                    tr("Selected identity"),
+                    tr(t"account-view-selected-identity = Selected identity"),
                     key="identity_visibility",
                     on=sl.controlled(identity is not None and identity.is_public, self._toggle_identity),
-                    on_label=tr("Shown on page"),
-                    off_label=tr("Hidden from page"),
+                    on_label=tr(t"account-view-shown-on-page = Shown on page"),
+                    off_label=tr(t"account-view-hidden-from-page = Hidden from page"),
                     available=identity is not None,
                 ),
                 sl.toggle(
-                    tr("Creator page"),
+                    tr(t"account-view-creator-page = Creator page"),
                     key="page_visibility",
                     on=sl.controlled(not self.page_hidden, self._toggle_page),
-                    on_label=tr("Shown"),
-                    off_label=tr("Hidden"),
+                    on_label=tr(t"account-view-shown = Shown"),
+                    off_label=tr(t"account-view-hidden-2 = Hidden"),
                 ),
             )
         )
         nodes.append(
             sl.action_controls(
                 sl.action_control(
-                    tr("Unlink"),
+                    tr(t"account-view-unlink = Unlink"),
                     self._unlink,
                     key="unlink",
                     tone=sl.Tone.DANGER,
@@ -199,7 +199,7 @@ class AccountScreen(sd.Screen):
                     guard=sp.guards.confirm(self._unlink_warning()),
                 ),
                 sl.action_control(
-                    tr("Edit page"),
+                    tr(t"account-view-edit-page = Edit page"),
                     self._edit_page,
                     key="edit_page",
                     emphasis=sl.semantic.Emphasis.STRONG,
@@ -242,7 +242,9 @@ class AccountScreen(sd.Screen):
         removed = await self._accounts.unlink_identity(self._account_id, identity.id)
         await self._reload()
         removed_label = _identity_label(removed)
-        await event.notice(tr(t"Unlinked {removed_label}. Any build credit you hold is unaffected."))
+        await event.notice(
+            tr(t"account-identity-unlinked = Unlinked {removed_label}. Any build credit you hold is unaffected.")
+        )
 
     async def _edit_page(self, event: sd.PressEvent) -> None:
         async def apply() -> None:
@@ -253,25 +255,25 @@ class AccountScreen(sd.Screen):
     def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target, sd.Request]:
         profile_section = sp.EditorSection.from_form(
             "profile",
-            tr("Profile"),
+            tr(t"account-view-profile = Profile"),
             sl.forms.FormSpec(
-                tr("Edit profile"),
+                tr(t"account-view-edit-profile = Edit profile"),
                 (
                     sl.forms.TextField(
                         key="display_name",
-                        label=tr("Display name"),
+                        label=tr(t"account-view-display-name = Display name"),
                         required=False,
                         maximum=MAX_DISPLAY_NAME_LENGTH,
                     ),
                     sl.forms.TextField(
                         key="pronouns",
-                        label=tr("Pronouns"),
+                        label=tr(t"account-view-pronouns = Pronouns"),
                         required=False,
                         maximum=MAX_PRONOUNS_LENGTH,
                     ),
                     sl.forms.TextAreaField(
                         key="bio",
-                        label=tr("Bio"),
+                        label=tr(t"account-view-bio = Bio"),
                         required=False,
                         maximum=MAX_BIO_LENGTH,
                     ),
@@ -279,18 +281,18 @@ class AccountScreen(sd.Screen):
             ),
         )
         links = sp.CollectionEditor(
-            tr("Links"),
+            tr(t"account-view-links-2 = Links"),
             create=sl.forms.FormSpec(
-                tr("Profile link"),
+                tr(t"account-view-profile-link = Profile link"),
                 (
                     sl.forms.TextField(
                         key="label",
-                        label=tr("Label"),
+                        label=tr(t"account-view-label = Label"),
                         maximum=MAX_LINK_LABEL_LENGTH,
                     ),
                     sl.forms.TextField(
                         key="url",
-                        label=tr("HTTPS URL"),
+                        label=tr(t"account-view-https-url = HTTPS URL"),
                         maximum=MAX_LINK_URL_LENGTH,
                     ),
                 ),
@@ -302,7 +304,7 @@ class AccountScreen(sd.Screen):
         )
         links_section = sp.EditorSection.from_pattern(
             "links",
-            tr("Links"),
+            tr(t"account-view-links-2 = Links"),
             links,
             load=lambda value: links.initial_from(cast(Iterable[Mapping[str, object]], value)),
             dump=links.values,
@@ -310,10 +312,10 @@ class AccountScreen(sd.Screen):
             issues=lambda state: (sl.forms.FormError(message) for message in links.errors(state)),
         )
         editor = sp.Editor[sl.ComponentsV2Target, sd.Request](
-            tr("Edit your creator page"),
+            tr(t"account-view-edit-your-creator-page = Edit your creator page"),
             (profile_section, links_section),
             preview=self._profile_preview,
-            commit_label=tr("Save profile"),
+            commit_label=tr(t"account-view-save-profile = Save profile"),
             validate=self._validate_profile_editor,
         )
         initial: sp.EditorValues = {
@@ -357,7 +359,7 @@ class AccountScreen(sd.Screen):
         draft = self._raw_profile_update(values).apply(self._profile)
         fields = tuple(sl.field(field.name, field.value) for field in self._profile_fields(draft))
         return sl.section(
-            sl.heading(draft.display_name or tr("Your account")),
+            sl.heading(draft.display_name or tr(t"account-view-your-account = Your account")),
             draft.bio and sl.truncate(sl.paragraph(draft.bio)),
             sl.fields(*fields) if fields else None,
         )
@@ -371,7 +373,7 @@ class AccountScreen(sd.Screen):
         await self._accounts.update_profile(self._account_id, self._profile_update(values))
         await self._refresh()
         self._profile_editor = None
-        await event.source.notice(tr("Profile saved."))
+        await event.source.notice(tr(t"account-view-profile-saved = Profile saved."))
 
     async def _cancel_profile_edit(self, _event: sd.PressEvent) -> None:
         self._profile_editor = None
@@ -406,11 +408,16 @@ class AccountScreen(sd.Screen):
         fields = self._profile_fields(self._profile)
         fields += [CardField(_identity_label(identity), self.identity_detail(identity)) for identity in self.identities]
         if not fields:
-            fields.append(CardField(tr("Linked accounts"), tr("_None yet._")))
+            fields.append(
+                CardField(
+                    tr(t"account-view-linked-accounts = Linked accounts"),
+                    tr(t"account-view-none-yet = _None yet._"),
+                )
+            )
         fields.append(
             CardField(
-                tr("Creator page"),
-                tr("Hidden") if self.page_hidden else tr("Public"),
+                tr(t"account-view-creator-page = Creator page"),
+                tr(t"account-view-hidden-2 = Hidden") if self.page_hidden else tr(t"account-view-public = Public"),
             )
         )
         return fields
@@ -419,36 +426,47 @@ class AccountScreen(sd.Screen):
     def _profile_fields(profile: AccountProfile) -> list[CardField]:
         fields: list[CardField] = []
         if profile.pronouns:
-            fields.append(CardField(tr("Pronouns"), profile.pronouns))
+            fields.append(CardField(tr(t"account-view-pronouns = Pronouns"), profile.pronouns))
         if profile.links:
             links = "\n".join(f"[{link.label}]({link.url})" for link in profile.links)
-            fields.append(CardField(tr("Links"), links))
+            fields.append(CardField(tr(t"account-view-links-2 = Links"), links))
         return fields
 
     def identity_detail(self, identity: AccountIdentity) -> sl.TextLike:
-        visibility = tr("shown publicly") if identity.is_public else tr("hidden")
+        visibility = (
+            tr(t"account-view-shown-publicly = shown publicly")
+            if identity.is_public
+            else tr(t"account-view-hidden = hidden")
+        )
         age = (
             sl.md(discord.utils.format_dt(identity.verified_at.to_stdlib(), style="R"))
             if identity.verified_at is not None
-            else tr("unknown")
+            else tr(t"account-view-unknown = unknown")
         )
-        return tr(t"{visibility} · verified {age}")
+        return tr(t"account-view-verified = {visibility} · verified {age}")
 
     def _unlink_warning(self) -> sl.TextLike:
         """What the reader is agreeing to, asked before the press rather than after it."""
         identity = self.selected
         if identity is None:
-            return tr("Remove this linked account?")
+            return tr(t"account-view-remove-this-linked-account = Remove this linked account?")
         identity_label = _identity_label(identity)
-        warning = tr(t"Remove {identity_label}? Any build credit you hold is unaffected.")
+        warning = tr(
+            t"account-linked-identity-remove-warning = Remove {identity_label}? Any build credit you hold "
+            t"is unaffected."
+        )
         if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._actor_id:
-            consequence = tr("This is the Discord account you are using now. The bot will stop recognising you here.")
-            return tr(t"{warning} {consequence}")
+            consequence = tr(
+                t"account-discord-unlink-warning = This is the Discord account you "
+                t"are using now. The bot will stop recognising you here."
+            )
+            return tr(t"account-view-value = {warning} {consequence}")
         return warning
 
     def _footer(self) -> sl.TextLike | None:
         if self.page_hidden:
             return tr(
-                "A hidden page still lists the creator names you hold, because that credit is what attributes your builds.",
+                t"account-hidden-page-credit-note = A hidden page still lists the "
+                t"creator names you hold, because that credit is what attributes your builds."
             )
         return None

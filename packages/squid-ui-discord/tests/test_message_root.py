@@ -20,6 +20,7 @@ from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 import squid_ui as sl
 import squid_ui_discord
 import squid_ui_discord.message_root_contracts
+from squid_i18n import tr
 from squid_reactivity import ActionLedger, add_action_result_sink
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui import (
@@ -71,7 +72,7 @@ from squid_ui.runtime import (
 )
 from squid_ui.semantic import Paragraph
 from squid_ui.testing import text_component
-from squid_ui.text import Localization, Message
+from squid_ui.text import Localization
 from squid_ui_discord import (
     Everyone,
     MessageRoot,
@@ -868,18 +869,18 @@ class TestRenderAndWire:
             @override
             def render(self):
                 return [
-                    Paragraph(Message("Hello")),
+                    Paragraph(tr(t"test-hello = Hello")),
                     Lines(("a", "b"), overflow=Paginate(key="lines", per=1)),
                 ]
 
         translated = {"Hello": "Bonjour", "Previous": "Précédent", "Next": "Suivant"}
-        chrome = Chrome(previous=Message("Previous"), next=Message("Next"))
+        chrome = Chrome(previous=tr(t"test-previous = Previous"), next=tr(t"test-next = Next"))
         message_root = MessageRoot(
             Localized(), access=Everyone(), chrome=chrome, localization=Localization("en"), timeout=None
         )
         commit_render(message_root)
 
-        localization = Localization("fr", gettext=lambda message: translated.get(message, message))
+        localization = Localization("fr", ("test-hello = Bonjour\ntest-previous = Précédent\ntest-next = Suivant",))
         message_root.localize(localization)
         view = commit_render(message_root)
 
@@ -896,9 +897,9 @@ class TestRenderAndWire:
                 return Row((Button(label="notify", on_click=self.notify, key="notify"),))
 
             async def notify(self, event: PressEvent) -> None:
-                await event.notice(Message("Notice"))
+                await event.notice(tr(t"test-notice = Notice"))
 
-        localization = Localization("fr", gettext=lambda message: "Avis" if message == "Notice" else message)
+        localization = Localization("fr", ("test-notice = Avis",))
         message_root = MessageRoot(Notify(), access=Everyone(), localization=localization, timeout=None)
         commit_render(message_root)
         interaction = interaction_harness()
@@ -1037,9 +1038,9 @@ class TestAccessPolicy:
 
     async def test_explicit_denial_reason_is_localized(self) -> None:
         async def deny(interaction: discord.Interaction):
-            return Denied(Message("Policy denied"))
+            return Denied(tr(t"test-policy-denied = Policy denied"))
 
-        localization = Localization("fr", gettext=lambda text: "Refusé" if text == "Policy denied" else text)
+        localization = Localization("fr", ("test-policy-denied = Refusé",))
         message_root = MessageRoot(Counter(), access=Check(deny), localization=localization, timeout=None)
         commit_render(message_root)
         interaction = interaction_harness()
@@ -4218,7 +4219,7 @@ class TestGuards:
         interaction = interaction_harness()
         await message_root.dispatch("go", interaction)
 
-        assert _notice_text(interaction) == [Chrome().not_now]
+        assert _notice_text(interaction) == [sl.text.source_text(Chrome().not_now)]
 
     async def test_a_delay_bearing_denial_says_how_long_to_wait(self):
         message_root = MessageRoot(_GuardedPanel(guard=sl.guards.cooldown(30)), access=Everyone(), timeout=None)
@@ -4486,7 +4487,7 @@ class TestBusyFeedback:
         await self._press(message_root, interaction, release)
 
         interim = interaction.response.edit_message.await_args.kwargs["view"]
-        assert self._labels(interim) == [(Chrome().working, True)]
+        assert self._labels(interim) == [(sl.text.source_text(Chrome().working), True)]
 
     async def test_a_handler_error_puts_the_live_panel_back_before_the_error_hook(self):
         order: list[str] = []

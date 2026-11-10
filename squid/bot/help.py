@@ -11,6 +11,7 @@ from discord.ext.commands import Cog, Command, Group
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.i18n import command_text
 from squid.bot.ui import card_node, error_node, render_payload, tr
 from squid.config import BuildConfig
 from squid.suggestions.application import Candidate, rank
@@ -21,20 +22,20 @@ from squid_ui_discord import send_to
 if TYPE_CHECKING:
     import squid.bot.app
 
-MORE_INFORMATION = tr("Use `/help <command>` to get more information.")
+MORE_INFORMATION = tr(t"help-details-hint = Use `/help <command>` to get more information.")
 
 DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
-    (tr("Build"), frozenset({"build"})),
-    (tr("Discover"), frozenset({"search", "tags"})),
-    (tr("Account"), frozenset({"account", "notifications"})),
-    (tr("Community"), frozenset({"poll", "recount"})),
+    (tr(t"help-build = Build"), frozenset({"build"})),
+    (tr(t"help-discover = Discover"), frozenset({"search", "tags"})),
+    (tr(t"help-account = Account"), frozenset({"account", "notifications"})),
+    (tr(t"help-community = Community"), frozenset({"poll", "recount"})),
     (
-        tr("Administration & setup"),
+        tr(t"help-administration-setup = Administration & setup"),
         frozenset(
             {"access", "errors", "records", "redstoner", "runtime-settings", "settings", "starboard", "versions"}
         ),
     ),
-    (tr("Information"), frozenset({"help"})),
+    (tr(t"help-information = Information"), frozenset({"help"})),
 )
 """Top-level command categories, kept separate so tests can check registered command names."""
 
@@ -74,8 +75,8 @@ class HelpScreen(sd.Screen):
             summary=lambda item: f"`/{item.qualified_name}` — " + _summary(item),
             detail=self._detail,
             page_size=10,
-            title=tr("Redstone Squid help"),
-            empty=tr("No commands are available."),
+            title=tr(t"help-redstone-squid-help = Redstone Squid help"),
+            empty=tr(t"help-no-commands-are-available = No commands are available."),
         )
 
     def _find(self, needle: str | None) -> AnyCommand | None:
@@ -89,7 +90,9 @@ class HelpScreen(sd.Screen):
         qualified_name = command.qualified_name
         heading = f"/{qualified_name}{f' {signature}' if signature else ''}"
         description = (
-            getattr(command, "help", None) or getattr(command, "description", None) or tr("No details provided")
+            getattr(command, "help", None)
+            or getattr(command, "description", None)
+            or tr(t"help-no-details-provided = No details provided")
         )
         # Only the group variants of this union carry subcommands; the annotation keeps the
         # duck-typed lookup from collapsing to an empty tuple type.
@@ -110,8 +113,8 @@ class HelpScreen(sd.Screen):
         if self._needle is not None and self._focused is None:
             needle = self._needle
             body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = sl.section(
-                sl.heading(tr("Command not found")),
-                sl.paragraph(tr(t"No command named `{needle}` is available.")),
+                sl.heading(tr(t"help-command-not-found = Command not found")),
+                sl.paragraph(tr(t"help-command-unavailable = No command named `{needle}` is available.")),
             )
         elif self._focused is not None:
             body = self._detail(self._focused)
@@ -119,16 +122,16 @@ class HelpScreen(sd.Screen):
             body = self.boundary(self._browser, key="browser")
         project_url = self._bot.source_code_url or PROJECT_URL
         links: list[sl.semantic.Link] = [
-            sl.link(tr("Source"), project_url, key="source"),
-            sl.link(tr("Submission form"), SUBMISSION_FORM_URL, key="form"),
-            sl.link(tr("Documentation"), f"{project_url}/tree/master/docs", key="docs"),
-            sl.link(tr("Regulations"), REGULATIONS_URL, key="regulations"),
+            sl.link(tr(t"help-source = Source"), project_url, key="source"),
+            sl.link(tr(t"help-submission-form = Submission form"), SUBMISSION_FORM_URL, key="form"),
+            sl.link(tr(t"help-documentation = Documentation"), f"{project_url}/tree/master/docs", key="docs"),
+            sl.link(tr(t"help-regulations = Regulations"), REGULATIONS_URL, key="regulations"),
         ]
         if self._bot.user is not None:
             links.insert(
                 0,
                 sl.link(
-                    tr("Invite"),
+                    tr(t"help-invite = Invite"),
                     f"https://discordapp.com/oauth2/authorize?client_id={self._bot.user.id}&scope=bot&permissions=8",
                     key="invite",
                 ),
@@ -142,7 +145,7 @@ class HelpScreen(sd.Screen):
 def _summary(command: AnyCommand) -> TextLike:
     """Return a prefix command's short documentation or an app command's description."""
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
-    return text or tr("No details provided")
+    return text or tr(t"help-no-details-provided = No details provided")
 
 
 class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
@@ -154,7 +157,7 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     # /help [command]
     @sd.command()
-    @app_commands.describe(command=app_commands.locale_str("The command to get help for."))
+    @app_commands.describe(command=command_text(tr(t"help-the-command-to-get-help-for = The command to get help for.")))
     async def help(self, request: sd.Request[Self], command: str | None) -> HelpScreen:
         """Show a grouped command directory or focused command details."""
         return HelpScreen(self.bot, self._all_commands(), command)
@@ -219,7 +222,14 @@ class Help(commands.MinimalHelpCommand):
         description = sl.raw_md(self.context.bot.description)
         commands = self.get_commands_brief_details(commands_)
         more_information = MORE_INFORMATION
-        desc = tr(t"{description}\n\nCommands:{commands}\n\n{more_information}\n")
+        desc = tr(t"""
+            bot-help-commands =
+                {description}
+
+                Commands:{commands}
+
+                {more_information}{{ "\\u000A" }}
+            """)
         footer: str | None = None
         build_config = getattr(self.context.bot, "build_config", None)
         if (
@@ -228,7 +238,7 @@ class Help(commands.MinimalHelpCommand):
             and build_config.commit_message is not None
         ):
             footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await send_to(self.get_destination())(render_payload([card_node(tr("Help"), desc, footer=footer)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr(t"help-help = Help"), desc, footer=footer)]))
 
     # !help <command>
     @override
@@ -238,8 +248,8 @@ class Help(commands.MinimalHelpCommand):
             render_payload(
                 [
                     card_node(
-                        tr(t"Command Help - `{name}`"),
-                        command.help or tr("No details provided"),
+                        tr(t"help-command-help = Command Help - `{name}`"),
+                        command.help or tr(t"help-no-details-provided = No details provided"),
                     )
                 ]
             )
@@ -248,7 +258,7 @@ class Help(commands.MinimalHelpCommand):
     @staticmethod
     def get_commands_brief_details(commands_: Sequence[Command[Any, Any, Any]]) -> Message:
         """Format names, signatures, and short descriptions in input order, each on a new line."""
-        no_details = tr("No details provided")
+        no_details = tr(t"help-no-details-provided = No details provided")
         details: list[TextLike] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
@@ -268,10 +278,19 @@ class Help(commands.MinimalHelpCommand):
 
         listed = list(commands_)
         description = sl.raw_md(group.cog.description)
-        commands = self.get_commands_brief_details(listed) if listed else tr("None")
+        commands = self.get_commands_brief_details(listed) if listed else tr(t"help-none = None")
         more_information = MORE_INFORMATION
-        desc = tr(t"{description}\n\nUsable Subcommands: {commands}\n\n{more_information}")
-        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
+        desc = tr(t"""
+            bot-help-usable-subcommands =
+                {description}
+
+                Usable Subcommands: {commands}
+
+                {more_information}
+            """)
+        await send_to(self.get_destination())(
+            render_payload([card_node(tr(t"help-command-help-2 = Command Help"), desc)])
+        )
         return None
 
     # !help <cog>
@@ -281,21 +300,33 @@ class Help(commands.MinimalHelpCommand):
         commands_ = cog.walk_commands()
         listed = list(commands_)
         description = sl.raw_md(cog.description)
-        commands = self.get_commands_brief_details(listed) if listed else tr("None")
+        commands = self.get_commands_brief_details(listed) if listed else tr(t"help-none = None")
         more_information = MORE_INFORMATION
-        desc = tr(t"{description}\n\nUsable Subcommands:{commands}\n\n{more_information}")
-        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
+        desc = tr(t"""
+            bot-help-usable-subcommands-2 =
+                {description}
+
+                Usable Subcommands:{commands}
+
+                {more_information}
+            """)
+        await send_to(self.get_destination())(
+            render_payload([card_node(tr(t"help-command-help-2 = Command Help"), desc)])
+        )
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
         name = string
         # discord.py passes this string straight to send_error_message.
-        return tr(t"Unable to find command `{name}`. Use /help to get a list of available commands.").resolve()
+        return tr(
+            t"help-command-lookup-failed = Unable to find command `{name}`. Use /help to get "
+            t"a list of available commands."
+        ).resolve()
 
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
-        await send_to(self.get_destination())(render_payload([error_node(tr("Error."), error)]))
+        await send_to(self.get_destination())(render_payload([error_node(tr(t"help-error = Error."), error)]))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

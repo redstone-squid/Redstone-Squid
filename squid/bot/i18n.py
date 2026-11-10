@@ -6,9 +6,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.bot.command_texts import AUTOMATIC_MESSAGES
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.settings.application import SettingsService
-from squid_ui.text import Localization, Message, localization_scope
+from squid_i18n import Localization, Markup, Message, localization_scope, source_text
 from squid_ui_discord.contracts import LocalizationSource
 from squid_ui_discord.runtime import DiscordUIRuntime
 
@@ -52,6 +53,47 @@ async def localization_resolver(source: LocalizationSource) -> Localization:
     return localization_for(locale)
 
 
+def command_text(message: Message) -> app_commands.locale_str:
+    """Attach a parameter-free Fluent declaration to Discord command metadata."""
+    if message.declaration is None or message.bindings:
+        detail = "Discord command metadata requires a parameter-free Fluent declaration"
+        raise ValueError(detail)
+    return app_commands.locale_str(source_text(message, markup=Markup.PLAIN), fluent_message=message)
+
+
+def bind_command_messages(
+    command: app_commands.Command[Any, ..., Any] | app_commands.Group | app_commands.ContextMenu,
+) -> None:
+    """Attach declarations to metadata discord.py derived from signatures and docstrings.
+
+    New or changed automatic metadata needs a declaration in command_texts.py. This
+    check runs after extensions load, before any command tree can be synchronized.
+    Explicit command_text() declarations already carry their message.
+    """
+
+    def bind(kind: str, value: str | app_commands.locale_str | None) -> None:
+        if not isinstance(value, app_commands.locale_str) or "fluent_message" in value.extras:
+            return
+        message = AUTOMATIC_MESSAGES.get((command.qualified_name, kind))
+        if message is None or source_text(message, markup=Markup.PLAIN) != value.message:
+            detail = f"Missing or stale command declaration: {command.qualified_name} {kind}"
+            raise ValueError(detail)
+        value.extras["fluent_message"] = message
+
+    bind("name", command._locale_name)
+    if isinstance(command, app_commands.Command | app_commands.Group):
+        bind("description", command._locale_description)
+    if isinstance(command, app_commands.Command):
+        for parameter in command._params.values():
+            bind(f"parameter-{parameter.name}-name", parameter._rename)
+            bind(f"parameter-{parameter.name}-description", parameter.description)
+            for choice in parameter.choices or []:
+                bind(f"choice-{parameter.name}-{choice.value}", choice._locale_name)
+    if isinstance(command, app_commands.Group):
+        for child in command.commands:
+            bind_command_messages(child)
+
+
 class SquidAppCommandTranslator(app_commands.Translator):
     """Translates slash command names, descriptions, and choices via `squid.core.i18n`."""
 
@@ -66,5 +108,7 @@ class SquidAppCommandTranslator(app_commands.Translator):
         if resolved == DEFAULT_LOCALE:
             return None  # Let discord.py fall back to the source string.
         with localization_scope(localization_for(resolved)):
-            # Command keys are extracted from locale_str declarations, not this adapter.
-            return Message(string.message).resolve()
+            message = string.extras.get("fluent_message")
+            if not isinstance(message, Message):
+                return None
+            return message.resolve()

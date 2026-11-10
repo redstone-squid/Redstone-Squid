@@ -34,6 +34,7 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
+from squid_i18n import NUMBER
 from squid_ui.text import NEUTRAL, Message, TextLike, localization_scope
 
 logger = logging.getLogger(__name__)
@@ -160,17 +161,20 @@ def _present_missing_nodes(error: PermissionNodeRequired) -> _NoticeDraft:
     )
     if error.forbidden:
         return _NoticeDraft(
-            tr("Permission withheld"),
-            tr("An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.")
+            tr(t"errors-permission-withheld = Permission withheld"),
+            tr(
+                t"errors-permission-withheld-warning = An administrator has "
+                t"explicitly withheld this from you. Ask them if you think that is a mistake."
+            )
             + "\n\n"
             + described,
         )
     lead = (
-        tr("You need any one of these permissions to use this command:")
+        tr(t"errors-any-permission-required = You need any one of these permissions to use this command:")
         if error.mode == "any"
-        else tr("You need these permissions to use this command:")
+        else tr(t"errors-all-permissions-required = You need these permissions to use this command:")
     )
-    return _NoticeDraft(tr("Missing permission"), lead + "\n" + described)
+    return _NoticeDraft(tr(t"errors-missing-permission = Missing permission"), lead + "\n" + described)
 
 
 def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
@@ -189,64 +193,66 @@ def _build_error_notice(error: BaseException) -> _NoticeDraft:
     if isinstance(error, ConsentRequiredError):
         # Give Discord users an in-bot recovery path when an operation requires consent.
         return _NoticeDraft(
-            tr("Consent required"),
-            tr("Run `/account consent` to read the privacy notice and accept it."),
+            tr(t"errors-consent-required = Consent required"),
+            tr(t"errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it."),
         )
     if isinstance(error, (DomainError, ServiceUnavailableError)):
         return _NoticeDraft(error.title, error.public_text())
     if isinstance(error, commands.NoPrivateMessage):
         return _NoticeDraft(
-            tr("Server only"),
-            tr("This command cannot be used in a private message."),
+            tr(t"errors-server-only = Server only"),
+            tr(t"errors-context-unavailable = This command cannot be used in a private message."),
         )
     if isinstance(error, (commands.MissingRole, commands.MissingAnyRole, commands.MissingPermissions)):
         return _NoticeDraft(
-            tr("Missing permission"),
-            tr("You do not have permission to use this command."),
+            tr(t"errors-missing-permission = Missing permission"),
+            tr(t"errors-permission-required = You do not have permission to use this command."),
         )
     if isinstance(error, commands.NotOwner):
         return _NoticeDraft(
-            tr("Owner only"),
-            tr("Only the bot owner can use this command."),
+            tr(t"errors-owner-only = Owner only"),
+            tr(t"errors-owner-only-hint = Only the bot owner can use this command."),
         )
     if isinstance(error, PermissionNodeRequired):
         return _present_missing_nodes(error)
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
         seconds = error.retry_after
         return _NoticeDraft(
-            tr("Command on cooldown"),
-            tr(t"Try again in {seconds:.1f} seconds."),
+            tr(t"errors-command-on-cooldown = Command on cooldown"),
+            tr(
+                t"errors-try-again-in-seconds = Try again in {NUMBER(seconds, minimum_fraction_digits=1, maximum_fraction_digits=1)} seconds."
+            ),
         )
     if isinstance(error, commands.MaxConcurrencyReached):
         return _NoticeDraft(
-            tr("Command already running"),
-            tr("Wait for the current operation to finish and try again."),
+            tr(t"errors-command-already-running = Command already running"),
+            tr(t"errors-operation-in-progress = Wait for the current operation to finish and try again."),
         )
     if isinstance(error, commands.CheckFailure):
         return _NoticeDraft(
-            tr("Command unavailable"),
-            str(error) or tr("You cannot use this command here."),
+            tr(t"errors-command-unavailable = Command unavailable"),
+            str(error) or tr(t"errors-context-forbidden = You cannot use this command here."),
         )
     if isinstance(error, commands.UserInputError):
         return _NoticeDraft(
-            tr("Invalid command input"),
-            str(error) or tr("Check the command arguments and try again."),
+            tr(t"errors-invalid-command-input = Invalid command input"),
+            str(error) or tr(t"errors-invalid-arguments-hint = Check the command arguments and try again."),
         )
     if isinstance(error, app_commands.TransformerError):
         return _NoticeDraft(
-            tr("Invalid command input"),
-            tr("One of the command options is invalid."),
+            tr(t"errors-invalid-command-input = Invalid command input"),
+            tr(t"errors-one-of-the-command-options-is-invalid = One of the command options is invalid."),
         )
     if isinstance(error, app_commands.CheckFailure):
         return _NoticeDraft(
-            tr("Command unavailable"),
-            tr("You cannot use this command here."),
+            tr(t"errors-command-unavailable = Command unavailable"),
+            tr(t"errors-context-forbidden = You cannot use this command here."),
         )
 
     error_id = correlation_id()
     reference = correlation_reference(error_id)
     return _NoticeDraft(
-        tr("Something went wrong"),
+        tr(t"errors-something-went-wrong = Something went wrong"),
         _unexpected_error_detail(reference),
         error_id,
         reference,
@@ -258,7 +264,9 @@ def _resolved(text: TextLike) -> str:
 
 
 def _unexpected_error_detail(error_id: str) -> Message:
-    return tr(t"An unexpected error occurred. Reference: `{error_id}`")
+    return tr(
+        t"errors-unexpected-reference = An unexpected error occurred. Reference: `{(error_id_text := str(error_id))}`"  # noqa: F841
+    )
 
 
 async def _capture(

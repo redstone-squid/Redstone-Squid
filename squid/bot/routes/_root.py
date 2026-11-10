@@ -60,7 +60,7 @@ class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
 async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
     request = await sd.request(interaction)
     await request.respond(
-        text_node(tr("This control is no longer available.")),
+        text_node(tr(t"ui-control-expired = This control is no longer available.")),
         audience="personal",
     )
 

@@ -145,7 +145,9 @@ async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None
 async def test_manifest_localization_is_isolated_between_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
     def prefixed_localization(locale: str | None) -> Localization:
         prefix = locale or "default"
-        return Localization(locale=locale, gettext=lambda message: f"{prefix}:{message}")
+        return Localization(
+            locale="fr", resources=(f"submissions-application-forms-build-identity = {prefix}:Build identity",)
+        )
 
     monkeypatch.setattr("squid.submissions.application.forms.localization_for", prefixed_localization)
     titles: dict[str, str] = {}

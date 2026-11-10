@@ -78,51 +78,54 @@ class CardSection:
 def _try_again_in(seconds: float) -> ui.text.Message:
     """Round a guard's remaining cooldown up to whole seconds before wording it."""
     whole = max(1, ceil(seconds))
-    return tr(t"Try again in {whole} seconds.")
+    return tr(t"bot-ui-try-again-in-seconds = Try again in {whole} seconds.")
 
 
 CHROME = ui.chrome.Chrome(
-    and_n_more=lambda count: tr(t"…and {count} more."),
-    not_yours=tr("These list controls belong to someone else."),
-    session_ended=tr("This session has ended."),
-    not_now=tr("You can't do that right now."),
+    and_n_more=lambda count: tr(t"bot-ui-and-more = …and {count} more."),
+    not_yours=tr(t"ui-list-controls-not-owned = These list controls belong to someone else."),
+    session_ended=tr(t"bot-ui-this-session-has-ended = This session has ended."),
+    not_now=tr(t"bot-ui-you-can-t-do-that-right-now = You can't do that right now."),
     try_again_in=_try_again_in,
-    working=tr("Working…"),
-    updates_paused=tr("Live updates paused — press any control to resume."),
-    session_expiring=tr("This session is about to expire."),
-    continue_session=tr("Continue Session"),
-    sent_privately=tr("Sent by direct message."),
-    dm_unavailable=tr(
-        """This reply is too private for a channel, and your direct messages are closed. \
-Run the command in a direct message, or allow direct messages and retry."""
+    working=tr(t"bot-ui-working = Working…"),
+    updates_paused=tr(
+        t"bot-ui-live-updates-paused-press-any-control-to = Live updates paused — press any control to resume."
     ),
-    previous=tr("Previous"),
-    next=tr("Next"),
-    back=tr("Back"),
-    home=tr("Home"),
-    close=tr("Close"),
-    on=tr("On"),
-    off=tr("Off"),
-    download=tr("Download"),
-    confirm=tr("Confirm"),
-    cancel=tr("Cancel"),
-    apply=tr("Apply"),
-    save=tr("Save"),
-    unsaved=tr("Unsaved changes"),
-    search=tr("Search"),
-    no_results=tr("No results"),
-    decided=lambda label: tr(t"You chose {label}."),
-    add=tr("Add"),
-    edit=tr("Edit"),
-    remove=tr("Remove"),
-    move_up=tr("Move up"),
-    move_down=tr("Move down"),
-    review=tr("Review"),
-    finish=tr("Finish"),
-    unanswered=tr("Not answered yet"),
-    page_footer=lambda page, pages: tr(t"Page {page} of {pages}"),
+    session_expiring=tr(t"bot-ui-this-session-is-about-to-expire = This session is about to expire."),
+    continue_session=tr(t"bot-ui-continue-session = Continue Session"),
+    sent_privately=tr(t"bot-ui-sent-by-direct-message = Sent by direct message."),
+    dm_unavailable=tr(
+        t"bot-ui-this-reply-is-too-private-for-a = This reply is too private for a channel, and your "
+        t"direct messages are closed. Run the command in a direct message, or allow direct messages and "
+        t"retry."
+    ),
+    previous=tr(t"bot-ui-previous = Previous"),
+    next=tr(t"bot-ui-next = Next"),
+    back=tr(t"bot-ui-back = Back"),
+    home=tr(t"bot-ui-home = Home"),
+    close=tr(t"bot-ui-close = Close"),
+    on=tr(t"bot-ui-on = On"),
+    off=tr(t"bot-ui-off = Off"),
+    download=tr(t"bot-ui-download = Download"),
+    confirm=tr(t"bot-ui-confirm = Confirm"),
+    cancel=tr(t"bot-ui-cancel = Cancel"),
+    apply=tr(t"bot-ui-apply = Apply"),
+    save=tr(t"bot-ui-save = Save"),
+    unsaved=tr(t"bot-ui-unsaved-changes = Unsaved changes"),
+    search=tr(t"bot-ui-search = Search"),
+    no_results=tr(t"bot-ui-no-results = No results"),
+    decided=lambda label: tr(t"bot-ui-you-chose = You chose {label}."),
+    add=tr(t"bot-ui-add = Add"),
+    edit=tr(t"bot-ui-edit = Edit"),
+    remove=tr(t"bot-ui-remove = Remove"),
+    move_up=tr(t"bot-ui-move-up = Move up"),
+    move_down=tr(t"bot-ui-move-down = Move down"),
+    review=tr(t"bot-ui-review = Review"),
+    finish=tr(t"bot-ui-finish = Finish"),
+    unanswered=tr(t"bot-ui-not-answered-yet = Not answered yet"),
+    page_footer=lambda page, pages: tr(t"bot-ui-page-of = Page {page} of {pages}"),
 )
-_OPEN_LINK = tr("Open link")
+_OPEN_LINK = tr(t"bot-ui-open-link = Open link")
 
 PALETTES = ui.PaletteRegistry(
     {
@@ -236,11 +239,6 @@ def text_node(
 
 def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
     """Prefix text while preserving deferred translation, plural forms, and markup metadata."""
-    if isinstance(value, ui.text.Message):
-        plural = None if value.plural is None else prefix + value.plural
-        return ui.text.Message(prefix + value.template, value.params, value.markup, plural)
-    if isinstance(value, ui.text.ResolvedText):
-        return ui.text.ResolvedText(prefix + value.content, value.markup)
     return prefix + value
 
 

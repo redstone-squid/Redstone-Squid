@@ -12,7 +12,7 @@ from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.v1.schemas.consent import PrivacyNoticeDetail
 from squid.core.i18n import localization_for
-from squid_ui.text import localization_scope
+from squid_i18n import localization_scope
 
 router = APIRouter(prefix="/consent", tags=["users"])
 

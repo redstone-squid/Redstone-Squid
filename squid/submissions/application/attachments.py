@@ -69,13 +69,16 @@ class DraftUploadAuthority:
 
     def __post_init__(self) -> None:
         if self.draft_id.int == 0 or self.account_id < 1 or self.draft_revision < 0:
-            msg = tr("Draft attachment upload authority is invalid.")
+            msg = tr(t"submissions-draft-attachment-upload = Draft attachment upload authority is invalid.")
             raise ValidationError(msg)
 
     def consume(self) -> MediaDraftUploadAuthorization:
         """End this authority and return its persistence authorization exactly once."""
         if not self._available:
-            msg = tr("The draft attachment upload authority is no longer available.")
+            msg = tr(
+                t"submissions-attachment-upload-authority = The "
+                t"draft attachment upload authority is no longer available."
+            )
             raise InvalidStateError(msg)
         self._available = False
         return MediaDraftUploadAuthorization(
@@ -95,7 +98,7 @@ class StagedUpload:
     def consume(self) -> Path:
         """Return the temporary file's path once, transferring it to registration."""
         if not self._available:
-            msg = tr("The staged attachment is no longer available.")
+            msg = tr(t"submissions-staged-attachment-unavailable = The staged attachment is no longer available.")
             raise InvalidStateError(msg)
         self._available = False
         return self.source_path

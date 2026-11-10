@@ -15,6 +15,7 @@ from discord import Message, app_commands
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
+from squid.bot.i18n import command_text
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.input import optional_text, split_values
@@ -60,18 +61,39 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     )
     @BuildCommandGroup.build_group.command(name="submit", defer="private")
     @app_commands.describe(
-        door_size=app_commands.locale_str("The door opening, e.g. `2x2`. Width x height (x depth)."),
-        door_type=app_commands.locale_str("Door, Skydoor, or Trapdoor."),
-        pattern=app_commands.locale_str("Pattern types, comma separated. For example: full lamp, funnel."),
-        build_size=app_commands.locale_str("The whole build, e.g. `5x7x4`. Width x height (x depth)."),
-        versions=app_commands.locale_str("Versions the build works in, like `1.17 - 1.18.1, 1.20+`."),
-        restrictions=app_commands.locale_str("Comma separated, e.g. `Seamless, Observerless`. See `/help`."),
-        creators=app_commands.locale_str("In-game names of the creator(s), comma separated."),
-        notes=app_commands.locale_str("Anything staff should know about the build."),
-        first_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
-        second_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
-        third_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
-        fourth_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
+        door_size=command_text(
+            tr(t"submit-door-dimensions-help = The door opening, e.g. `2x2`. Width x height (x depth).")
+        ),
+        door_type=command_text(tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, Skydoor, or Trapdoor.")),
+        pattern=command_text(
+            tr(t"submit-pattern-type-examples-help = Pattern types, comma separated. For example: full lamp, funnel.")
+        ),
+        build_size=command_text(
+            tr(
+                t"bot-submission-submit-the-whole-build-e-g-x-x = The whole build, e.g. `5x7x4`. Width x "
+                t"height (x depth)."
+            )
+        ),
+        versions=command_text(
+            tr(t"submit-supported-versions-prompt = Versions the build works in, like `1.17 - 1.18.1, 1.20+`.")
+        ),
+        restrictions=command_text(
+            tr(t"submit-comma-separated-examples-help = Comma separated, e.g. `Seamless, Observerless`. See `/help`.")
+        ),
+        creators=command_text(tr(t"submit-creator-ign-prompt = In-game names of the creator(s), comma separated.")),
+        notes=command_text(tr(t"submit-staff-notes-prompt = Anything staff should know about the build.")),
+        first_attachment=command_text(
+            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
+        ),
+        second_attachment=command_text(
+            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
+        ),
+        third_attachment=command_text(
+            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
+        ),
+        fourth_attachment=command_text(
+            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
+        ),
     )
     async def submit_form(
         self,
@@ -103,7 +125,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            return error_node(tr("Check the dimensions"), str(error))
+            return error_node(tr(t"bot-submission-submit-check-the-dimensions = Check the dimensions"), str(error))
 
         if door_type is not None:
             draft.door_orientation = door_type
@@ -269,8 +291,11 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         await enforce(request, BUILD_SUBMISSION_RECALC)
         if not await self._is_build_log_message(message):
             return error_node(
-                tr("Nothing to recalculate"),
-                tr("Builds are only read out of messages posted in a build log channel."),
+                tr(t"bot-submission-submit-nothing-to-recalculate = Nothing to recalculate"),
+                tr(
+                    t"submit-build-log-channel-required = Builds are only read "
+                    t"out of messages posted in a build log channel."
+                ),
             )
 
         account = await self.bot.services.accounts.get_account_by_identity(
@@ -281,10 +306,11 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
             return error_node(
-                tr("Author has not consented"),
+                tr(t"bot-submission-submit-author-has-not-consented = Author has not consented"),
                 tr(
-                    t"The author of this message (<@{user_id}>) has not consented to data storage. "
-                    t"They must grant consent before this build can be ingested."
+                    t"submit-author-consent-required = The author of this "
+                    t"message (<@{(user_id_text := str(user_id))}>) has not consented to data storage. They must grant consent before "  # noqa: F841 - captured text identifier
+                    t"this build can be ingested."
                 ),
             )
 

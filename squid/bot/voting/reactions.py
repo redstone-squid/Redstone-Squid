@@ -291,4 +291,4 @@ class VoteReactionHandler:
 
 def _unconsented_vote_message(user: object) -> Message:
     user = raw_md(user)
-    return tr(t"{user}, voting stores your Discord user ID. Run `/account consent` first.")
+    return tr(t"vote-consent-required = {user}, voting stores your Discord user ID. Run `/account consent` first.")

@@ -361,6 +361,7 @@ addopts = [
     "--cov=squid_reactivity",
     "--cov=squid_storage",
     "--cov=squid_ui",
+    "--cov=squid_i18n",
     "--cov=squid_replication",
     "--cov=squid_ui_discord",
     "--cov=squid_ui_slack",

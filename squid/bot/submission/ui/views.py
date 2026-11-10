@@ -51,7 +51,16 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "dimensions",
         DIMENSIONS_FORMAT,
-        "Width x Height x Depth",
+        tr(t"""
+            bot-build-field-dimensions =
+                .label = Dimensions
+                .placeholder = Width x Height x Depth
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-dimensions =
+                .label = Dimensions
+                .placeholder = Width x Height x Depth
+            """).attribute("label"),
         reader=lambda build: build.dimensions,
         patch=lambda value: BuildEditPatch(dimensions=value),
         required=True,
@@ -59,7 +68,16 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "door_dimensions",
         DIMENSIONS_FORMAT,
-        "2x2",
+        tr(t"""
+            bot-build-field-door-dimensions =
+                .label = Door Dimensions
+                .placeholder = 2x2
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-door-dimensions =
+                .label = Door Dimensions
+                .placeholder = 2x2
+            """).attribute("label"),
         reader=lambda build: _door(build).door_dimensions,
         patch=lambda value: BuildEditPatch(door_dimensions=value),
         required=True,
@@ -68,21 +86,48 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "version_spec",
         OPTIONAL_TEXT_FORMAT,
-        "1.16 - 1.17.3",
+        tr(t"""
+            bot-build-field-version-spec =
+                .label = Version Spec
+                .placeholder = 1.16 - 1.17.3
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-version-spec =
+                .label = Version Spec
+                .placeholder = 1.16 - 1.17.3
+            """).attribute("label"),
         reader=lambda build: build.version_spec,
         patch=lambda value: BuildEditPatch(version_spec=value),
     ),
     field_spec(
         "door_type",
         STRING_LIST_FORMAT,
-        "Full lamp, Funnel",
+        tr(t"""
+            bot-build-field-door-type =
+                .label = Door Type
+                .placeholder = Full lamp, Funnel
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-door-type =
+                .label = Door Type
+                .placeholder = Full lamp, Funnel
+            """).attribute("label"),
         reader=lambda build: list(build.patterns),
         patch=lambda value: BuildEditPatch(door_type=value),
     ),
     field_spec(
         "door_orientation_type",
         OPTIONAL_TEXT_FORMAT,
-        "Door, Trapdoor, Skydoor",
+        tr(t"""
+            bot-build-field-door-orientation-type =
+                .label = Door Orientation Type
+                .placeholder = Door, Trapdoor, Skydoor
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-door-orientation-type =
+                .label = Door Orientation Type
+                .placeholder = Door, Trapdoor, Skydoor
+            """).attribute("label"),
         reader=lambda build: _door(build).orientation,
         patch=lambda value: BuildEditPatch(door_orientation_type=value),
         categories=_DOOR_ONLY,
@@ -90,35 +135,80 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "wiring_placement_restrictions",
         STRING_LIST_FORMAT,
-        "Seamless, Full Flush",
+        tr(t"""
+            bot-build-field-wiring-placement-restrictions =
+                .label = Wiring Placement Restrictions
+                .placeholder = Seamless, Full Flush
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-wiring-placement-restrictions =
+                .label = Wiring Placement Restrictions
+                .placeholder = Seamless, Full Flush
+            """).attribute("label"),
         reader=lambda build: list(build.wiring_placement_restrictions),
         patch=lambda value: BuildEditPatch(wiring_placement_restrictions=value),
     ),
     field_spec(
         "animated_restrictions",
         STRING_LIST_FORMAT,
-        "Symmetrical, Full Sync",
+        tr(t"""
+            bot-build-field-animated-restrictions =
+                .label = Animated Restrictions
+                .placeholder = Symmetrical, Full Sync
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-animated-restrictions =
+                .label = Animated Restrictions
+                .placeholder = Symmetrical, Full Sync
+            """).attribute("label"),
         reader=lambda build: list(build.animated_restrictions),
         patch=lambda value: BuildEditPatch(animated_restrictions=value),
     ),
     field_spec(
         "component_restrictions",
         STRING_LIST_FORMAT,
-        "Observerless",
+        tr(t"""
+            bot-build-field-component-restrictions =
+                .label = Component Restrictions
+                .placeholder = Observerless
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-component-restrictions =
+                .label = Component Restrictions
+                .placeholder = Observerless
+            """).attribute("label"),
         reader=lambda build: list(build.component_restrictions),
         patch=lambda value: BuildEditPatch(component_restrictions=value),
     ),
     field_spec(
         "miscellaneous_restrictions",
         STRING_LIST_FORMAT,
-        "Directional, Locational",
+        tr(t"""
+            bot-build-field-miscellaneous-restrictions =
+                .label = Miscellaneous Restrictions
+                .placeholder = Directional, Locational
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-miscellaneous-restrictions =
+                .label = Miscellaneous Restrictions
+                .placeholder = Directional, Locational
+            """).attribute("label"),
         reader=lambda build: list(build.miscellaneous_restrictions),
         patch=lambda value: BuildEditPatch(miscellaneous_restrictions=value),
     ),
     field_spec(
         "normal_closing_time",
         OPTIONAL_INT_FORMAT,
-        "in gameticks",
+        tr(t"""
+            bot-build-field-normal-closing-time =
+                .label = Normal Closing Time
+                .placeholder = in gameticks
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-normal-closing-time =
+                .label = Normal Closing Time
+                .placeholder = in gameticks
+            """).attribute("label"),
         reader=lambda build: _door(build).normal_closing_time,
         patch=lambda value: BuildEditPatch(normal_closing_time=value),
         categories=_DOOR_ONLY,
@@ -126,7 +216,16 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "normal_opening_time",
         OPTIONAL_INT_FORMAT,
-        "in gameticks",
+        tr(t"""
+            bot-build-field-normal-opening-time =
+                .label = Normal Opening Time
+                .placeholder = in gameticks
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-normal-opening-time =
+                .label = Normal Opening Time
+                .placeholder = in gameticks
+            """).attribute("label"),
         reader=lambda build: _door(build).normal_opening_time,
         patch=lambda value: BuildEditPatch(normal_opening_time=value),
         categories=_DOOR_ONLY,
@@ -134,14 +233,32 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "creators_ign",
         STRING_LIST_FORMAT,
-        "Me, My Dog",
+        tr(t"""
+            bot-build-field-creators-ign =
+                .label = Creators Ign
+                .placeholder = Me, My Dog
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-creators-ign =
+                .label = Creators Ign
+                .placeholder = Me, My Dog
+            """).attribute("label"),
         reader=lambda build: list(build.creators_ign),
         patch=lambda value: BuildEditPatch(creators_ign=value),
     ),
     field_spec(
         "image_urls",
         STRING_LIST_FORMAT,
-        "any urls, comma separated",
+        tr(t"""
+            bot-build-field-image-urls =
+                .label = Image Urls
+                .placeholder = any urls, comma separated
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-image-urls =
+                .label = Image Urls
+                .placeholder = any urls, comma separated
+            """).attribute("label"),
         reader=lambda build: list(build.image_urls),
         patch=lambda value: BuildEditPatch(image_urls=value),
         parser=parse_web_urls,
@@ -149,7 +266,16 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "video_urls",
         STRING_LIST_FORMAT,
-        "any urls, comma separated",
+        tr(t"""
+            bot-build-field-video-urls =
+                .label = Video Urls
+                .placeholder = any urls, comma separated
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-video-urls =
+                .label = Video Urls
+                .placeholder = any urls, comma separated
+            """).attribute("label"),
         reader=lambda build: list(build.video_urls),
         patch=lambda value: BuildEditPatch(video_urls=value),
         parser=parse_web_urls,
@@ -157,7 +283,16 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "world_download_urls",
         STRING_LIST_FORMAT,
-        "any urls, comma separated",
+        tr(t"""
+            bot-build-field-world-download-urls =
+                .label = World Download Urls
+                .placeholder = any urls, comma separated
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-world-download-urls =
+                .label = World Download Urls
+                .placeholder = any urls, comma separated
+            """).attribute("label"),
         reader=lambda build: list(build.world_download_urls),
         patch=lambda value: BuildEditPatch(world_download_urls=value),
         parser=parse_web_urls,
@@ -165,14 +300,32 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "completion_time",
         OPTIONAL_TEXT_FORMAT,
-        "Any time format works",
+        tr(t"""
+            bot-build-field-completion-time =
+                .label = Completion Time
+                .placeholder = Any time format works
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-completion-time =
+                .label = Completion Time
+                .placeholder = Any time format works
+            """).attribute("label"),
         reader=lambda build: build.completion_time,
         patch=lambda value: BuildEditPatch(completion_time=value),
     ),
     field_spec(
         "extra_user_info",
         OPTIONAL_TEXT_FORMAT,
-        "Anything a reader should know",
+        tr(t"""
+            bot-build-field-extra-user-info =
+                .label = Extra User Info
+                .placeholder = Anything a reader should know
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-extra-user-info =
+                .label = Extra User Info
+                .placeholder = Anything a reader should know
+            """).attribute("label"),
         reader=lambda build: build.description,
         patch=lambda value: BuildEditPatch(extra_user_info=value),
         display=FieldDisplay.PARAGRAPH,
@@ -180,21 +333,48 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     field_spec(
         "server_ip",
         OPTIONAL_TEXT_FORMAT,
-        "play.example.com",
+        tr(t"""
+            bot-build-field-server-ip =
+                .label = Server Ip
+                .placeholder = play.example.com
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-server-ip =
+                .label = Server Ip
+                .placeholder = play.example.com
+            """).attribute("label"),
         reader=lambda build: _server_info_value(build, "server_ip"),
         patch=lambda value: BuildEditPatch(server_ip=value),
     ),
     field_spec(
         "coordinates",
         OPTIONAL_TEXT_FORMAT,
-        "x y z",
+        tr(t"""
+            bot-build-field-coordinates =
+                .label = Coordinates
+                .placeholder = x y z
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-coordinates =
+                .label = Coordinates
+                .placeholder = x y z
+            """).attribute("label"),
         reader=lambda build: _server_info_value(build, "coordinates"),
         patch=lambda value: BuildEditPatch(coordinates=value),
     ),
     field_spec(
         "command_to_get_to_build",
         OPTIONAL_TEXT_FORMAT,
-        "/warp door",
+        tr(t"""
+            bot-build-field-command-to-get-to-build =
+                .label = Command To Get To Build
+                .placeholder = /warp door
+            """).attribute("placeholder"),
+        label=tr(t"""
+            bot-build-field-command-to-get-to-build =
+                .label = Command To Get To Build
+                .placeholder = /warp door
+            """).attribute("label"),
         reader=lambda build: _server_info_value(build, "command_to_build"),
         patch=lambda value: BuildEditPatch(command_to_get_to_build=value),
     ),
@@ -222,9 +402,8 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
         fields.append(
             field_type(
                 key=item.key,
-                # Field metadata includes generated labels, so these are dynamic catalog keys.
-                label=Message(spec.label),
-                placeholder=Message(spec.placeholder),
+                label=spec.label,
+                placeholder=spec.placeholder,
                 default=item.current_text,
                 required=spec.required,
                 minimum=spec.minimum,
@@ -238,10 +417,18 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
             try:
                 item.spec.parser(_submitted_text(values, item.key))
             except ValueError as error:
-                errors.append(sl.forms.FieldError(field, message=str(error) or tr("Invalid value")))
+                errors.append(
+                    sl.forms.FieldError(
+                        field, message=str(error) or tr(t"bot-submission-ui-views-invalid-value = Invalid value")
+                    )
+                )
         return tuple(errors)
 
-    return sl.forms.FormSpec(tr(t"Edit build, section {page}"), tuple(fields), validator=validate)
+    return sl.forms.FormSpec(
+        tr(t"bot-submission-ui-views-edit-build-section = Edit build, section {page}"),
+        tuple(fields),
+        validator=validate,
+    )
 
 
 class BuildEditScreen(sd.Screen):
@@ -349,64 +536,97 @@ class BuildEditScreen(sd.Screen):
         if self.saved:
             return (
                 sl.section(
-                    sl.heading(tr("Changes saved")),
-                    sl.paragraph(tr("The build card has been refreshed.")),
+                    sl.heading(tr(t"bot-submission-ui-views-changes-saved = Changes saved")),
+                    sl.paragraph(tr(t"build-editor-card-refreshed = The build card has been refreshed.")),
                 ),
             )
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
-            return (sl.status(tr("Loading build.")),)
+            return (sl.status(tr(t"bot-submission-ui-views-loading-build = Loading build.")),)
         page = self.page
         pages = self.max_pages
         validation_error = self.validation_error
         description = (
-            tr(t"Section {page} of {pages}. Filled dots have unsaved changes.")
+            tr(t"build-editor-section-unsaved-indicator = Section {page} of {pages}. Filled dots have unsaved changes.")
             if not validation_error
-            else tr(t"Fix these values before review:\n{validation_error}")
+            else tr(t"""
+                build-editor-validation-errors =
+                    Fix these values before review:
+                    {validation_error}
+                """)
         )
         controls: list[sl.semantic.ActionControl] = [
-            sl.action_control(tr("Edit this section"), self._open, key="open"),
-            sl.action_control(tr("Previous"), self._previous, key="previous", available=self.page != 1),
-            sl.action_control(tr("Next"), self._next, key="next", available=self.page != self.max_pages),
+            sl.action_control(
+                tr(t"bot-submission-ui-views-edit-this-section = Edit this section"), self._open, key="open"
+            ),
+            sl.action_control(
+                tr(t"bot-submission-ui-views-previous = Previous"),
+                self._previous,
+                key="previous",
+                available=self.page != 1,
+            ),
+            sl.action_control(
+                tr(t"bot-submission-ui-views-next = Next"),
+                self._next,
+                key="next",
+                available=self.page != self.max_pages,
+            ),
         ]
         if self.confirming:
             controls.extend(
                 (
                     sl.action_control(
-                        tr("Apply changes"),
+                        tr(t"bot-submission-ui-views-apply-changes = Apply changes"),
                         self._apply,
                         key="apply",
                         tone=sl.Tone.SUCCESS,
                     ),
-                    sl.action_control(tr("Back"), self._unconfirm, key="unconfirm"),
+                    sl.action_control(tr(t"bot-submission-ui-views-back = Back"), self._unconfirm, key="unconfirm"),
                 )
             )
         else:
             controls.append(
                 sl.action_control(
-                    tr("Review changes"),
+                    tr(t"bot-submission-ui-views-review-changes = Review changes"),
                     self._review,
                     key="review",
                     tone=sl.Tone.SUCCESS,
                 )
             )
         if self.validation_error:
-            controls.append(sl.action_control(tr("Reload latest"), self._reload, key="reload"))
-        controls.append(sl.action_control(tr("Close"), self._close, key="close"))
+            controls.append(
+                sl.action_control(
+                    tr(t"bot-submission-ui-views-reload-latest = Reload latest"), self._reload, key="reload"
+                )
+            )
+        controls.append(sl.action_control(tr(t"bot-submission-ui-views-close = Close"), self._close, key="close"))
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._recovered:
             nodes.append(
                 sl.status(
-                    tr("Fresh editor loaded. Unsaved changes from the previous editor were discarded."),
+                    tr(
+                        t"build-editor-reloaded-discarded-changes = Fresh "
+                        t"editor loaded. Unsaved changes from the previous editor were discarded."
+                    ),
                     tone=sl.Tone.WARNING,
                 )
             )
         nodes.append(
             sl.section(
-                sl.heading(tr("Edit build")),
+                sl.heading(tr(t"bot-submission-ui-views-edit-build = Edit build")),
                 sl.truncate(sl.paragraph(description)),
-                sl.fields(sl.field(tr("Fields in this section"), self.summary_text())),
-                sl.note(tr("Reloading a fresh editor discards every staged context in this one.")),
+                sl.fields(
+                    sl.field(
+                        tr(t"bot-submission-ui-views-fields-in-this-section = Fields in this section"),
+                        self.summary_text(),
+                    )
+                ),
+                sl.note(
+                    tr(
+                        t"build-editor-reload-discards-staged-context = Reloading a "
+                        t"fresh editor discards every staged context in this one."
+                    )
+                ),
                 accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         )
@@ -419,7 +639,7 @@ class BuildEditScreen(sd.Screen):
             nodes.append(
                 sl.action_controls(
                     sl.routed_action_control(
-                        tr("Reload fresh editor"),
+                        tr(t"bot-submission-ui-views-reload-fresh-editor = Reload fresh editor"),
                         build_edit_recovery.id(build_id=self._build_id),
                         key="restart",
                     ),
@@ -428,9 +648,9 @@ class BuildEditScreen(sd.Screen):
             )
         return tuple(nodes)
 
-    def summary_text(self) -> str:
+    def summary_text(self) -> sl.TextLike:
         page_items = self.items[5 * (self.page - 1) : 5 * self.page]
-        return "\n".join(f"{'●' if item.modified else '○'} {item.summary}" for item in page_items)
+        return Message.join("\n", (("● " if item.modified else "○ ") + item.summary for item in page_items))
 
     async def _open(self, event: sl.PressEvent) -> None:
         if await self._may_event(event):
@@ -445,11 +665,19 @@ class BuildEditScreen(sd.Screen):
         for item in self.items[5 * (self.page - 1) : 5 * self.page]:
             item.stage(_submitted_text(event.values, item.key))
             if item.validation_error:
-                errors.append(f"**{item.spec.label}:** " + item.validation_error)
+                label = item.spec.label
+                detail = item.validation_error
+                errors.append(tr(t"bot-build-field-error = **{label}:** {detail}"))
         self.validation_error = Message.join("\n", errors) if errors else None
         if errors:
             error_text = Message.join("\n", errors)
-            await event.notice(tr(t"Fix these values before review:\n{error_text}"))
+            await event.notice(
+                tr(t"""
+                build-editor-submit-validation-errors =
+                    Fix these values before review:
+                    {error_text}
+                """)
+            )
         self.invalidate()
 
     async def _previous(self, event: sl.PressEvent) -> None:
@@ -466,7 +694,7 @@ class BuildEditScreen(sd.Screen):
         if self.validation_error:
             return
         if not any(item.modified for item in self.items):
-            self.validation_error = tr("No changes to review yet.")
+            self.validation_error = tr(t"bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.")
             return
         self.confirming = True
 
@@ -502,7 +730,9 @@ class BuildEditScreen(sd.Screen):
             except BuildRevisionMismatchError:
                 self.confirming = False
                 self.validation_error = tr(
-                    "This build changed while you were editing. Reload the latest version; your staged changes will be discarded."
+                    t"build-editor-concurrent-change = This build "
+                    t"changed while you were editing. Reload the latest version; your staged changes will "
+                    t"be discarded."
                 )
                 self.invalidate()
                 return
@@ -530,6 +760,11 @@ class BuildEditScreen(sd.Screen):
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
         if not await self.may_edit():
-            await event.notice(tr("Only the pending build's submitter or a trusted staff member can edit it."))
+            await event.notice(
+                tr(
+                    t"build-editor-edit-access-required-views = Only the pending build's "
+                    t"submitter or a trusted staff member can edit it."
+                )
+            )
             return False
         return True

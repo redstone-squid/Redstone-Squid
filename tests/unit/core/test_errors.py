@@ -48,7 +48,9 @@ def test_with_context_can_restate_the_message() -> None:
     error = BuildNotFoundError(42)
     build_id = 42
 
-    updated = error.with_context(message=tr(t"Build {build_id} was deleted while you were editing it."))
+    updated = error.with_context(
+        message=tr(t"test-deleted-build = Build {build_id} was deleted while you were editing it.")
+    )
 
     assert "Build 42 was deleted" in updated.public_detail()
     assert "Build 42 was deleted" in str(updated)
@@ -60,7 +62,7 @@ def test_with_context_replaces_the_complete_deferred_message() -> None:
     holder = "someone else"
     error = BuildNotFoundError(build_id)
 
-    updated = error.with_context(message=tr(t"Build {build_id} is held by {holder}."))
+    updated = error.with_context(message=tr(t"test-held-build = Build {build_id} is held by {holder}."))
 
     assert "Build 42 is held by someone else." in updated.public_detail()
 

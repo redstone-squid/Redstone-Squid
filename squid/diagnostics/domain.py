@@ -19,6 +19,6 @@ class ErrorReportNotFoundError(NotFoundError):
     telling a caller that a reference *used* to exist reveals that an error happened.
     """
 
-    default_message = tr("No stored error matches that reference.")
-    default_title = tr("Error report not found")
+    default_message = tr(t"diagnostics-no-stored-error = No stored error matches that reference.")
+    default_title = tr(t"diagnostics-error-report-not-found = Error report not found")
     default_resource = "error_report"

@@ -23,19 +23,19 @@ class RgbaColor:
 
     def __post_init__(self) -> None:
         if not all(math.isfinite(channel) and 0.0 <= channel <= 1.0 for channel in self):
-            msg = tr("RGBA channels must be finite numbers between 0 and 1.")
+            msg = tr(t"schematics-rgba-channels-finite = RGBA channels must be finite numbers between 0 and 1.")
             raise ValidationError(msg)
 
     @classmethod
     def from_channels(cls, channels: Sequence[object]) -> Self:
         """Decode exactly four numeric channels from a configuration or wire array."""
         if len(channels) != 4:
-            msg = tr("RGBA colours require exactly four channels.")
+            msg = tr(t"schematics-rgba-four-channels-required = RGBA colours require exactly four channels.")
             raise ValidationError(msg)
         try:
             return cls(*(float(cast(str | SupportsFloat, channel)) for channel in channels))
         except (TypeError, ValueError) as error:
-            msg = tr("RGBA channels must be numbers.")
+            msg = tr(t"schematics-rgba-channels-numbers = RGBA channels must be numbers.")
             raise ValidationError(msg) from error
 
     def __iter__(self) -> Iterator[float]:
@@ -60,15 +60,15 @@ class VerifiedResourcePack:
 
     def __post_init__(self) -> None:
         if not isinstance(self.data, bytes):
-            msg = tr("Resource-pack data must be immutable bytes.")
+            msg = tr(t"schematics-resource-pack-data = Resource-pack data must be immutable bytes.")
             raise ValidationError(msg)
         if self.media_type != RESOURCE_PACK_MEDIA_TYPE:
             media_type = RESOURCE_PACK_MEDIA_TYPE
-            msg = tr(t"Resource packs must use {media_type}.")
+            msg = tr(t"schematics-resource-packs-use = Resource packs must use {media_type}.")
             raise ValidationError(msg)
         actual = hashlib.sha256(self.data).hexdigest()
         if self.sha256 != actual:
-            msg = tr("Resource-pack bytes do not match their SHA-256 digest.")
+            msg = tr(t"schematics-resource-pack-bytes = Resource-pack bytes do not match their SHA-256 digest.")
             raise ValidationError(msg)
 
     @classmethod

@@ -23,30 +23,30 @@ _DURATION = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 _DURATION_UNITS = {"m": 60, "h": 3600, "d": 86400}
 
 DURATION_PRESETS: tuple[tuple[sl.TextLike, int], ...] = (
-    (tr("1 hour"), 3600),
-    (tr("6 hours"), 6 * 3600),
-    (tr("12 hours"), 12 * 3600),
-    (tr("24 hours"), 24 * 3600),
-    (tr("3 days"), 3 * 86400),
-    (tr("7 days"), 7 * 86400),
+    (tr(t"bot-voting-poll-wizard-hour = 1 hour"), 3600),
+    (tr(t"bot-voting-poll-wizard-hours = 6 hours"), 6 * 3600),
+    (tr(t"bot-voting-poll-wizard-hours-2 = 12 hours"), 12 * 3600),
+    (tr(t"bot-voting-poll-wizard-hours-3 = 24 hours"), 24 * 3600),
+    (tr(t"bot-voting-poll-wizard-days = 3 days"), 3 * 86400),
+    (tr(t"bot-voting-poll-wizard-days-2 = 7 days"), 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
 
 VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, sl.TextLike, sl.TextLike], ...] = (
     (
         VoteVisibility.ANONYMOUS_LIVE,
-        tr("Live Anonymous"),
-        tr("Running totals are public; who voted for what is not."),
+        tr(t"bot-voting-poll-wizard-live-anonymous = Live Anonymous"),
+        tr(t"poll-setup-vote-privacy-notice = Running totals are public; who voted for what is not."),
     ),
     (
         VoteVisibility.VISIBLE_LIVE,
-        tr("Live Public"),
-        tr("Reactions stay on the message, so every ballot is attributable."),
+        tr(t"bot-voting-poll-wizard-live-public = Live Public"),
+        tr(t"poll-setup-ballot-attribution-notice = Reactions stay on the message, so every ballot is attributable."),
     ),
     (
         VoteVisibility.ANONYMOUS_HIDDEN,
-        tr("Hidden until Close"),
-        tr("No totals at all until the poll closes."),
+        tr(t"bot-voting-poll-wizard-hidden-until-close = Hidden until Close"),
+        tr(t"poll-setup-results-hidden-until-close = No totals at all until the poll closes."),
     ),
 )
 
@@ -55,10 +55,14 @@ def parse_poll_duration(value: str) -> int:
     """Parse a compact duration and return seconds within the supported range."""
     match = _DURATION.fullmatch(value.strip())
     if match is None:
-        raise InvalidVoteConfigurationError(tr("Duration must look like `30m`, `12h`, or `7d`."))
+        raise InvalidVoteConfigurationError(
+            tr(t"poll-setup-duration-format-help = Duration must look like `30m`, `12h`, or `7d`.")
+        )
     seconds = int(match.group(1)) * _DURATION_UNITS[match.group(2).lower()]
     if not MIN_POLL_DURATION_SECONDS <= seconds <= MAX_POLL_DURATION_SECONDS:
-        raise InvalidVoteConfigurationError(tr("Poll duration must be between 1 minute and 30 days."))
+        raise InvalidVoteConfigurationError(
+            tr(t"poll-setup-duration-out-of-range = Poll duration must be between 1 minute and 30 days.")
+        )
     return seconds
 
 
@@ -69,12 +73,27 @@ def format_duration(seconds: int) -> sl.TextLike:
             return label
     if seconds % 86400 == 0:
         count = seconds // 86400
-        return tr(t"{count} day", plural=t"{count} days")
+        return tr(t"""
+            bot-voting-poll-wizard-day = {{ $count ->
+                [one] {count} day
+               *[other] {count} days
+            }}
+            """)
     if seconds % 3600 == 0:
         count = seconds // 3600
-        return tr(t"{count} hour", plural=t"{count} hours")
+        return tr(t"""
+            bot-voting-poll-wizard-hour-2 = {{ $count ->
+                [one] {count} hour
+               *[other] {count} hours
+            }}
+            """)
     count = seconds // 60
-    return tr(t"{count} minute", plural=t"{count} minutes")
+    return tr(t"""
+        bot-voting-poll-wizard-minute = {{ $count ->
+            [one] {count} minute
+           *[other] {count} minutes
+        }}
+        """)
 
 
 def parse_option_lines(
@@ -93,7 +112,9 @@ def parse_option_lines(
     """
     cleaned = [line.strip() for line in lines if line.strip()]
     if not 2 <= len(cleaned) <= 10:
-        raise InvalidVoteConfigurationError(tr("Enter between 2 and 10 option lines."))
+        raise InvalidVoteConfigurationError(
+            tr(t"poll-setup-option-count-invalid = Enter between 2 and 10 option lines.")
+        )
     options: list[VoteOption] = []
     for index, line in enumerate(cleaned):
         if "|" in line:
@@ -101,13 +122,20 @@ def parse_option_lines(
         else:
             if index >= len(palette):
                 raise InvalidVoteConfigurationError(
-                    tr("The configured generic emoji palette does not have enough entries for these options.")
+                    tr(
+                        t"poll-setup-emoji-palette-too-small = The "
+                        t"configured generic emoji palette does not have enough entries for these options."
+                    )
                 )
             emoji, label = palette[index].emoji, line
         if not emoji or not label:
-            raise InvalidVoteConfigurationError(tr("Each option needs a non-empty emoji and label."))
+            raise InvalidVoteConfigurationError(
+                tr(t"poll-setup-option-emoji-required = Each option needs a non-empty emoji and label.")
+            )
         if not emoji_is_usable(emoji):
-            raise InvalidVoteConfigurationError(tr(t"The custom emoji {emoji} is not accessible to this bot."))
+            raise InvalidVoteConfigurationError(
+                tr(t"poll-setup-custom-emoji-unavailable = The custom emoji {emoji} is not accessible to this bot.")
+            )
         options.append(
             VoteOption(
                 emoji,
@@ -119,13 +147,21 @@ def parse_option_lines(
             )
         )
     if len({option.emoji for option in options}) != len(options):
-        raise InvalidVoteConfigurationError(tr("Poll option emojis must be unique."))
+        raise InvalidVoteConfigurationError(tr(t"poll-setup-option-emojis-unique = Poll option emojis must be unique."))
     return tuple(options)
 
 
 SCOPE_CHOICES: tuple[tuple[PollScope, sl.TextLike, sl.TextLike], ...] = (
-    (PollScope.GUILD, tr("This server"), tr("Card the poll in this channel only.")),
-    (PollScope.NETWORK, tr("Every server"), tr("Card the poll in every server's vote channel.")),
+    (
+        PollScope.GUILD,
+        tr(t"bot-voting-poll-wizard-this-server = This server"),
+        tr(t"poll-setup-distribution-channel-only = Card the poll in this channel only."),
+    ),
+    (
+        PollScope.NETWORK,
+        tr(t"bot-voting-poll-wizard-every-server = Every server"),
+        tr(t"poll-setup-distribution-all-servers = Card the poll in every server's vote channel."),
+    ),
 )
 
 
@@ -147,19 +183,19 @@ class PollDraft:
 def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
     """Describe the poll's free-text input through the portable form API."""
     return sl.forms.FormSpec(
-        tr("Create a poll"),
+        tr(t"bot-voting-poll-wizard-create-a-poll = Create a poll"),
         (
             sl.forms.TextField(
                 key="question",
-                label=tr("Question"),
+                label=tr(t"bot-voting-poll-wizard-question = Question"),
                 default="" if draft is None else draft.question,
                 maximum=300,
             ),
             sl.forms.TextAreaField(
                 key="options",
-                label=tr("Options (one per line)"),
+                label=tr(t"bot-voting-poll-wizard-options-one-per-line = Options (one per line)"),
                 default="" if draft is None else draft.options_text,
-                placeholder=tr("emoji | label (emoji may be omitted)"),
+                placeholder=tr(t"poll-setup-option-format-help = emoji | label (emoji may be omitted)"),
                 minimum=3,
                 maximum=1000,
             ),
@@ -177,7 +213,7 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
             sl.forms.FormField[object],
             sl.forms.ChoiceField(
                 key="visibility",
-                label=tr("Visibility"),
+                label=tr(t"bot-voting-poll-wizard-visibility = Visibility"),
                 default=VoteVisibility.ANONYMOUS_LIVE,
                 options=tuple(
                     sl.forms.ChoiceOption(value.value, label, value, description)
@@ -189,9 +225,9 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
             sl.forms.FormField[object],
             sl.forms.DurationField(
                 key="duration",
-                label=tr("Duration"),
+                label=tr(t"bot-voting-poll-wizard-duration = Duration"),
                 default=24 * 3600,
-                placeholder=tr("30m, 12h, 7d"),
+                placeholder=tr(t"bot-voting-poll-wizard-m-h-d = 30m, 12h, 7d"),
                 maximum=MAX_POLL_DURATION_SECONDS,
                 minimum=MIN_POLL_DURATION_SECONDS,
                 parser=parse_poll_duration,
@@ -204,7 +240,7 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
                 sl.forms.FormField[object],
                 sl.forms.ChoiceField(
                     key="scope",
-                    label=tr("Reach"),
+                    label=tr(t"bot-voting-poll-wizard-reach = Reach"),
                     default=PollScope.GUILD,
                     options=tuple(
                         sl.forms.ChoiceOption(value.value, label, value, description)
@@ -213,13 +249,19 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
                 ),
             )
         )
-    return sl.forms.FormSpec(tr("Poll settings"), tuple(fields))
+    return sl.forms.FormSpec(tr(t"bot-voting-poll-wizard-poll-settings = Poll settings"), tuple(fields))
 
 
 def _poll_steps(allow_network: bool) -> tuple[sp.WizardStep[sl.ComponentsV2Target, sd.Request], ...]:
     return (
-        sp.WizardStep("content", tr("Question and options"), poll_form()),
-        sp.WizardStep("settings", tr("Visibility and duration"), _settings_form(allow_network)),
+        sp.WizardStep(
+            "content", tr(t"bot-voting-poll-wizard-question-and-options = Question and options"), poll_form()
+        ),
+        sp.WizardStep(
+            "settings",
+            tr(t"bot-voting-poll-wizard-visibility-and-duration = Visibility and duration"),
+            _settings_form(allow_network),
+        ),
     )
 
 
@@ -239,11 +281,19 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, s
     draft = _draft(answers)
     options = "\n".join(f"- {line}" for line in draft.option_lines)
     fields = [
-        sl.field(tr("Visibility"), next(label for value, label, _ in VISIBILITY_CHOICES if value is draft.visibility)),
-        sl.field(tr("Closes after"), format_duration(draft.duration_seconds)),
+        sl.field(
+            tr(t"bot-voting-poll-wizard-visibility = Visibility"),
+            next(label for value, label, _ in VISIBILITY_CHOICES if value is draft.visibility),
+        ),
+        sl.field(tr(t"bot-voting-poll-wizard-closes-after = Closes after"), format_duration(draft.duration_seconds)),
     ]
     if draft.scope is PollScope.NETWORK:
-        fields.append(sl.field(tr("Reaches"), tr("Every server")))
+        fields.append(
+            sl.field(
+                tr(t"bot-voting-poll-wizard-reaches = Reaches"),
+                tr(t"bot-voting-poll-wizard-every-server = Every server"),
+            )
+        )
     return sl.section(sl.heading(draft.question), sl.paragraph(options), sl.fields(*fields))
 
 
@@ -270,10 +320,10 @@ class PollScreen(sd.Screen):
         self._resolve_options = resolve_options
         self._publish = publish
         wizard = sp.Wizard[sl.ComponentsV2Target, sd.Request](
-            tr("Create a poll"),
+            tr(t"bot-voting-poll-wizard-create-a-poll = Create a poll"),
             _poll_steps(allow_network),
             key="poll",
-            review=sp.WizardReview(label=tr("Review poll"), summarize=_review),
+            review=sp.WizardReview(label=tr(t"bot-voting-poll-wizard-review-poll = Review poll"), summarize=_review),
             on_finish=self._finish,
         )
         self.wizard = wizard.machine
@@ -283,13 +333,19 @@ class PollScreen(sd.Screen):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.published_url is not None:
             published_url = self.published_url
-            return (sl.status(tr(t"Poll published: {published_url}"), tone=sl.Tone.SUCCESS),)
+            return (
+                sl.status(
+                    tr(t"bot-voting-poll-wizard-poll-published = Poll published: {published_url}"), tone=sl.Tone.SUCCESS
+                ),
+            )
         if self.cancelled:
-            return (sl.status(tr("Poll cancelled.")),)
+            return (sl.status(tr(t"bot-voting-poll-wizard-poll-cancelled = Poll cancelled.")),)
         return (
             self.boundary(self.driver, key="wizard"),
             sl.action_controls(
-                sl.action_control(tr("Cancel"), self._cancel, key="cancel", tone=sl.Tone.DANGER),
+                sl.action_control(
+                    tr(t"bot-voting-poll-wizard-cancel = Cancel"), self._cancel, key="cancel", tone=sl.Tone.DANGER
+                ),
                 key="poll-actions",
             ),
         )

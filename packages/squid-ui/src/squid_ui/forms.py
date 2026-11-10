@@ -24,6 +24,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast, overload, override
 
+from squid_i18n import Markup, source_text, tr
 from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.errors import LayoutInvariantError, SquidUiError
 from squid_ui.interactions import ActionMode, InvalidSubmitEvent, SubmitEvent
@@ -89,6 +90,10 @@ class FormValueError(SquidUiError, ValueError):
     the reader as if they had typed something wrong.
     """
 
+    def __init__(self, message: TextLike) -> None:
+        self.message = message
+        super().__init__(source_text(message, markup=Markup.PLAIN))
+
 
 @dataclass(frozen=True, slots=True)
 class FormText:
@@ -97,7 +102,7 @@ class FormText:
     content: TextLike
 
 
-def _invalid(message: str) -> NoReturn:
+def _invalid(message: TextLike) -> NoReturn:
     raise FormValueError(message)
 
 
@@ -189,7 +194,7 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
         if not self._missing(raw):
             return False
         if self.required:
-            _invalid("This field is required.")
+            _invalid(tr(t"ui-form-required = This field is required."))
         return True
 
 
@@ -210,11 +215,15 @@ class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         if self.strip:
             value = value.strip()
         if self.required and not value:
-            _invalid("This field is required.")
+            _invalid(tr(t"ui-form-required = This field is required."))
         if self.minimum is not None and len(value) < self.minimum:
-            _invalid(f"Enter at least {self.minimum} characters.")
+            _invalid(tr(t"ui-form-text-minimum = Enter at least {(minimum := self.minimum)} characters."))  # noqa: F841 - captured Fluent binding
         if self.maximum is not None and len(value) > self.maximum:
-            _invalid(f"Enter no more than {self.maximum} characters.")
+            _invalid(
+                tr(
+                    t"ui-form-text-maximum = Enter no more than {(maximum := self.maximum)} characters."  # noqa: F841 - captured Fluent binding
+                )
+            )
         return value
 
 
@@ -238,11 +247,15 @@ class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormF
         try:
             value = int(str(raw).strip())
         except ValueError:
-            _invalid("Enter a whole number.")
+            _invalid(tr(t"ui-form-integer-format = Enter a whole number."))
         if self.minimum is not None and value < self.minimum:
-            _invalid(f"Enter a value of at least {self.minimum}.")
+            _invalid(tr(t"ui-form-number-minimum = Enter a value of at least {(minimum := self.minimum)}."))  # noqa: F841 - captured Fluent binding
         if self.maximum is not None and value > self.maximum:
-            _invalid(f"Enter a value no greater than {self.maximum}.")
+            _invalid(
+                tr(
+                    t"ui-form-number-maximum = Enter a value no greater than {(maximum := self.maximum)}."  # noqa: F841 - captured Fluent binding
+                )
+            )
         return value
 
 
@@ -261,13 +274,17 @@ class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         try:
             value = float(str(raw).strip())
         except ValueError:
-            _invalid("Enter a number.")
+            _invalid(tr(t"ui-form-number-format = Enter a number."))
         if not math.isfinite(value):
-            _invalid("Enter a finite number.")
+            _invalid(tr(t"ui-form-number-finite = Enter a finite number."))
         if self.minimum is not None and value < self.minimum:
-            _invalid(f"Enter a value of at least {self.minimum}.")
+            _invalid(tr(t"ui-form-number-minimum = Enter a value of at least {(minimum := self.minimum)}."))  # noqa: F841 - captured Fluent binding
         if self.maximum is not None and value > self.maximum:
-            _invalid(f"Enter a value no greater than {self.maximum}.")
+            _invalid(
+                tr(
+                    t"ui-form-number-maximum = Enter a value no greater than {(maximum := self.maximum)}."  # noqa: F841 - captured Fluent binding
+                )
+            )
         return value
 
 
@@ -305,12 +322,21 @@ class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         else:
             match = _DURATION.fullmatch(source)
             if match is None:
-                _invalid("Enter a duration such as 30m, 12h, or 7d.")
+                _invalid(tr(t"ui-form-duration-format = Enter a duration such as 30m, 12h, or 7d."))
             value = round(float(match.group(1)) * _DURATION_UNITS[match.group(2).lower()])
         if self.minimum is not None and value < self.minimum:
-            _invalid(f"Enter a duration of at least {self.minimum} seconds.")
+            _invalid(
+                tr(
+                    t"ui-form-duration-minimum = Enter a duration of at least {(minimum := self.minimum)} seconds."  # noqa: F841 - captured Fluent binding
+                )
+            )
         if self.maximum is not None and value > self.maximum:
-            _invalid(f"Enter a duration no longer than {self.maximum} seconds.")
+            _invalid(
+                tr(
+                    t"ui-form-duration-maximum = Enter a duration no longer than {(maximum := self.maximum)} "  # noqa: F841 - captured Fluent binding
+                    t"seconds."
+                )
+            )
         return value
 
     @override
@@ -338,11 +364,11 @@ class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         try:
             value = date.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid("Enter a date as YYYY-MM-DD.")
+            _invalid(tr(t"ui-form-date-format = Enter a date as YYYY-MM-DD."))
         if self.minimum is not None and value < self.minimum:
-            _invalid(f"Enter a date on or after {self.minimum.isoformat()}.")
+            _invalid(tr(t"ui-form-date-minimum = Enter a date on or after {(value := self.minimum.isoformat())}."))
         if self.maximum is not None and value > self.maximum:
-            _invalid(f"Enter a date on or before {self.maximum.isoformat()}.")
+            _invalid(tr(t"ui-form-date-maximum = Enter a date on or before {(value := self.maximum.isoformat())}."))
         return value
 
     @override
@@ -365,11 +391,11 @@ class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
         try:
             value = TimeValue.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid("Enter a time as HH:MM.")
+            _invalid(tr(t"ui-form-time-format = Enter a time as HH:MM."))
         if self.minimum is not None and value < self.minimum:
-            _invalid(f"Enter a time at or after {self.minimum.isoformat()}.")
+            _invalid(tr(t"ui-form-time-minimum = Enter a time at or after {(value := self.minimum.isoformat())}."))
         if self.maximum is not None and value > self.maximum:
-            _invalid(f"Enter a time at or before {self.maximum.isoformat()}.")
+            _invalid(tr(t"ui-form-time-maximum = Enter a time at or before {(value := self.maximum.isoformat())}."))
         return value
 
     @override
@@ -411,22 +437,33 @@ class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
         try:
             value = DateTimeValue.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid("Enter a date and time as YYYY-MM-DD HH:MM.")
+            _invalid(tr(t"ui-form-datetime-format = Enter a date and time as YYYY-MM-DD HH:MM."))
         if value.tzinfo is None or value.utcoffset() is None:
             try:
                 value = resolve_local_datetime(value, self.timezone, self.ambiguous, self.nonexistent)
             except AmbiguousLocalTimeError:
                 _invalid(
-                    "This local time occurs twice in the selected timezone. "
-                    "Enter a date and time with an explicit UTC offset."
+                    tr(
+                        t"ui-form-time-ambiguous = This local time occurs "
+                        t"twice in the selected timezone. Enter a date and time with an explicit UTC "
+                        t"offset."
+                    )
                 )
             except NonexistentLocalTimeError:
-                _invalid("This local time does not exist in the selected timezone.")
+                _invalid(tr(t"ui-form-time-nonexistent = This local time does not exist in the selected timezone."))
         instant = value.astimezone(UTC)
         if self.minimum is not None and instant < self.minimum.astimezone(UTC):
-            _invalid(f"Enter a date and time on or after {self.minimum.isoformat()}.")
+            _invalid(
+                tr(
+                    t"ui-form-datetime-minimum = Enter a date and time on or after {(value := self.minimum.isoformat())}."
+                )
+            )
         if self.maximum is not None and instant > self.maximum.astimezone(UTC):
-            _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
+            _invalid(
+                tr(
+                    t"ui-form-datetime-maximum = Enter a date and time on or before {(value := self.maximum.isoformat())}."
+                )
+            )
         return value
 
     @override
@@ -472,7 +509,7 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
         try:
             submitted = DateTimeValue.fromisoformat(str(raw).strip())
         except ValueError:
-            _invalid("Enter a date and time as YYYY-MM-DD HH:MM.")
+            _invalid(tr(t"ui-form-datetime-format = Enter a date and time as YYYY-MM-DD HH:MM."))
         timezone = timezone_from_name(self.timezone)
         try:
             if submitted.tzinfo is None or submitted.utcoffset() is None:
@@ -481,19 +518,34 @@ class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[Tr
                 resolved = resolve_offset_datetime(submitted, timezone)
         except AmbiguousLocalTimeError:
             _invalid(
-                "This local time occurs twice in the selected timezone. "
-                "Enter a date and time with an explicit UTC offset."
+                tr(
+                    t"ui-form-time-ambiguous = This local time occurs twice "
+                    t"in the selected timezone. Enter a date and time with an explicit UTC offset."
+                )
             )
         except NonexistentLocalTimeError:
-            _invalid("This local time does not exist in the selected timezone.")
+            _invalid(tr(t"ui-form-time-nonexistent = This local time does not exist in the selected timezone."))
         except InvalidTimezoneOffsetError:
-            _invalid("The UTC offset does not match this local time in the selected timezone.")
+            _invalid(
+                tr(
+                    t"ui-form-timezone-offset-mismatch = The UTC offset does not match this "
+                    t"local time in the selected timezone."
+                )
+            )
 
         value = ZonedDateTime(resolved, self.timezone)
         if self.minimum is not None and value.instant < self.minimum.astimezone(UTC):
-            _invalid(f"Enter a date and time on or after {self.minimum.isoformat()}.")
+            _invalid(
+                tr(
+                    t"ui-form-datetime-minimum = Enter a date and time on or after {(value := self.minimum.isoformat())}."
+                )
+            )
         if self.maximum is not None and value.instant > self.maximum.astimezone(UTC):
-            _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
+            _invalid(
+                tr(
+                    t"ui-form-datetime-maximum = Enter a date and time on or before {(value := self.maximum.isoformat())}."
+                )
+            )
         return value
 
     @override
@@ -538,9 +590,17 @@ class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](For
         try:
             value = int(str(raw).strip())
         except ValueError:
-            _invalid(f"Choose a whole number from {self.minimum} to {self.maximum}.")
+            _invalid(
+                tr(
+                    t"ui-form-scale-integer = Choose a whole number from {(minimum := self.minimum)} to {(maximum := self.maximum)}."
+                )
+            )
         if not self.minimum <= value <= self.maximum:
-            _invalid(f"Choose a value from {self.minimum} to {self.maximum}.")
+            _invalid(
+                tr(
+                    t"ui-form-scale-range = Choose a value from {(minimum := self.minimum)} to {(maximum := self.maximum)}."  # noqa: F841 - captured Fluent binding
+                )
+            )
         return value
 
     @override
@@ -582,7 +642,7 @@ class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[T
         key = str(raw)
         option = next((option for option in self.options if option.key == key), None)
         if option is None:
-            _invalid("Choose one of the available options.")
+            _invalid(tr(t"ui-form-invalid-choice = Choose one of the available options."))
         return option.value
 
     @override
@@ -619,19 +679,19 @@ class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Lite
     def parse(self, raw: object) -> tuple[ValueT, ...]:
         if self._missing(raw):
             if self.required:
-                _invalid("This field is required.")
+                _invalid(tr(t"ui-form-required = This field is required."))
             return ()
         submitted = tuple(str(value) for value in raw) if isinstance(raw, list | tuple) else (str(raw),)
         by_key = {option.key: option for option in self.options}
         if any(key not in by_key for key in submitted):
-            _invalid("Choose only from the available options.")
+            _invalid(tr(t"ui-form-invalid-choices = Choose only from the available options."))
         selected = set(submitted)
         values = tuple(option.value for option in self.options if option.key in selected)
         if len(values) < self.minimum:
-            _invalid(f"Choose at least {self.minimum} options.")
+            _invalid(tr(t"ui-form-selection-minimum = Choose at least {(minimum := self.minimum)} options."))  # noqa: F841 - captured Fluent binding
         maximum = len(self.options) if self.maximum is None else self.maximum
         if len(values) > maximum:
-            _invalid(f"Choose no more than {maximum} options.")
+            _invalid(tr(t"ui-form-selection-maximum = Choose no more than {maximum} options."))
         return values
 
     @override
@@ -670,7 +730,7 @@ class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](Form
             return True
         if normalized in {"0", "false", "no", "off"}:
             return False
-        _invalid("Choose yes or no.")
+        _invalid(tr(t"ui-form-invalid-boolean = Choose yes or no."))
 
 
 @dataclass(frozen=True, slots=True)
@@ -764,7 +824,7 @@ class FormSpec[ContextT = object]:
             try:
                 values[field.key] = field.parse(raw.get(field.key))
             except FormValueError as error:
-                errors.append(FieldError(field, message=str(error)))
+                errors.append(FieldError(field, message=error.message))
         if not errors and self.validator is not None:
             validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated

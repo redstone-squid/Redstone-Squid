@@ -5,6 +5,7 @@ import subprocess
 import pytest
 
 import squid_ui as sl
+from squid_i18n import tr
 from squid_ui import testing as st
 from squid_ui.interactions import Visibility
 from squid_ui.semantic import ActionControl, ActionControls, Choices, Paragraph
@@ -43,7 +44,7 @@ class TestWalk:
 
 class TestQueries:
     def test_texts_resolves_a_message_to_its_untranslated_template(self) -> None:
-        tree = sl.paragraph(sl.text.Message("Hello {name}", {"name": "Ada"}))
+        tree = sl.paragraph(tr(t"test-hello-name = Hello {(name := 'Ada')}"))
 
         assert st.texts(tree) == ["Hello Ada"]
 

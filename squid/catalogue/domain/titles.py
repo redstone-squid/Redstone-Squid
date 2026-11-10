@@ -64,7 +64,7 @@ class TitleToken:
 
     def __post_init__(self) -> None:
         if not self.value.strip():
-            msg = tr("A title token cannot be blank.")
+            msg = tr(t"catalogue-title-token-blank = A title token cannot be blank.")
             raise ValidationError(msg)
         if not self.source_value:
             object.__setattr__(self, "source_value", self.value)
@@ -144,7 +144,7 @@ class ExtenderCategory:
 
     def __post_init__(self) -> None:
         if self.length <= 0:
-            msg = tr("Piston extender length must be positive.")
+            msg = tr(t"catalogue-piston-extender-length = Piston extender length must be positive.")
             raise ValidationError(msg)
 
 

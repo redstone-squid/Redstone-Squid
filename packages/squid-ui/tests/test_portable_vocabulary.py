@@ -1,10 +1,10 @@
 """The portable union stays closed, derived, and distinct from the primitive escape."""
 
 import squid_ui as sl
+from squid_i18n import tr
 from squid_ui.factories import is_builtin_layout_node, is_layout_node, is_portable_node
 from squid_ui.primitives import Text
 from squid_ui.target_types import Renderable, RenderTarget
-from squid_ui.text import Message
 
 
 def test_portable_nodes_are_portable():
@@ -39,8 +39,8 @@ def test_a_caller_s_own_renderable_is_a_layout_node_but_not_a_builtin_one():
 
 def test_a_message_child_is_promoted_rather_than_rejected():
     """`ChildLike` admits every `TextLike`, and `Message` is one."""
-    stack = sl.stack(Message("hello"))
-    assert stack.children == (sl.paragraph(Message("hello")),)
+    stack = sl.stack(tr(t"test-hello = hello"))
+    assert stack.children == (sl.paragraph(tr(t"test-hello = hello")),)
 
 
 def test_non_nodes_are_neither():

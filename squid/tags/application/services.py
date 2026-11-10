@@ -82,14 +82,15 @@ class TagService:
         async with self._uow_factory() as uow:
             normalized_name = " ".join(display_name.casefold().split())
             if not 1 <= len(normalized_name) <= 80:
-                msg = tr("Tag names must contain between 1 and 80 characters.")
+                msg = tr(t"tags-tag-name-length = Tag names must contain between 1 and 80 characters.")
                 raise ValidationError(msg)
             normalized_query = query_name.casefold().strip() if query_name is not None else None
             if normalized_query == "":
                 normalized_query = None
             if normalized_query is not None and _QUERY_NAME.fullmatch(normalized_query) is None:
                 msg = tr(
-                    "query names must start with a letter and contain only lowercase letters, digits, or underscores"
+                    t"tags-names-start-letter = query names must "
+                    t"start with a letter and contain only lowercase letters, digits, or underscores"
                 )
                 raise ValidationError(msg)
             result = await uow.tags.create_showcase(
@@ -154,7 +155,7 @@ class TagService:
                 or definition.semantic_kind.value != "showcase"
                 or definition.moderation_status is not TagModerationStatus.APPROVED
             ):
-                msg = tr("An approved user showcase tag is required.")
+                msg = tr(t"tags-approved-user-showcase = An approved user showcase tag is required.")
                 raise ValidationError(msg)
             value = _coerce_assignment_value(definition, raw_value)
             assigned = await uow.tags.assign_showcase(
@@ -164,7 +165,7 @@ class TagService:
                 actor_account_id=actor_account_id,
             )
             if not assigned:
-                msg = tr("The build does not exist or was not submitted by you.")
+                msg = tr(t"tags-build-not-exist = The build does not exist or was not submitted by you.")
                 raise ValidationError(msg)
             await uow.commit()
             return definition
@@ -187,11 +188,11 @@ def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -
     display_name = definition.display_name
     if definition.value_type is TagValueType.NONE:
         if raw_value not in {None, ""}:
-            raise ValidationError(tr(t"{display_name} does not accept a value."))
+            raise ValidationError(tr(t"tags-does-not-accept-value = {display_name} does not accept a value."))
         return None
     if raw_value is None or not raw_value.strip():
         value_type = definition.value_type.value
-        raise ValidationError(tr(t"{display_name} requires a {value_type} value."))
+        raise ValidationError(tr(t"tags-requires-value = {display_name} requires a {value_type} value."))
     value = raw_value.strip()
     if definition.value_type is TagValueType.TEXT:
         return value
@@ -201,11 +202,13 @@ def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -
             return True
         if normalized in {"false", "no", "0"}:
             return False
-        raise ValidationError(tr(t"{display_name} expects true or false."))
+        raise ValidationError(tr(t"tags-expects-true-false = {display_name} expects true or false."))
     try:
         numeric = Decimal(value)
     except InvalidOperation as error:
-        raise ValidationError(tr(t"{display_name} expects a number in its canonical unit.")) from error
+        raise ValidationError(
+            tr(t"tags-expects-number-canonical = {display_name} expects a number in its canonical unit.")
+        ) from error
     if not numeric.is_finite():
-        raise ValidationError(tr(t"{display_name} expects a finite number."))
+        raise ValidationError(tr(t"tags-expects-finite-number = {display_name} expects a finite number."))
     return numeric

@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import pytest
 
+from squid_i18n import tr
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.limits import LIMITS
@@ -65,7 +66,7 @@ def _deferred_text_in(node: object) -> list[str]:
 
 
 def test_lowering_leaves_no_deferred_text_behind() -> None:
-    deferred = Message(template="hello")
+    deferred = tr(t"test-hello = hello")
     authored = [
         Text(content=deferred),
         Heading(content=deferred),

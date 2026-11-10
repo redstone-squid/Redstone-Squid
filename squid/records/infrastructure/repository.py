@@ -501,7 +501,10 @@ class PostgresRecordRepository:
         identity = parse_category_key(key)
         if identity is None:
             raise DataIntegrityError(
-                tr(t"Record definition {definition_id} stores a category key that does not parse.")
+                tr(
+                    t"records-record-definition-stores = "
+                    t"Record definition {(definition_id_text := str(definition_id))} stores a category key that does not parse."  # noqa: F841 - captured text identifier
+                )
             )
         return identity
 

@@ -6,7 +6,6 @@ from typing import Any, cast
 
 import discord
 import pytest
-from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
@@ -83,16 +82,11 @@ def _make_interaction(
     )
 
 
-def test_localization_for_builds_the_negotiated_catalogue(mocker: MockerFixture) -> None:
-    catalog = mocker.Mock()
-    catalog.gettext.return_value = "translated"
-    mocker.patch("squid.core.i18n.catalog_for", return_value=catalog)
-
+def test_localization_for_builds_the_negotiated_catalogue() -> None:
     localization = localization_for("zh-CN")
-
     assert localization.locale == "zh-CN"
-    assert localization.gettext("Cancel") == "translated"
-    catalog.gettext.assert_called_once_with("Cancel")
+    assert any("取消" in resource for resource in localization.resources)
+    assert localization.source_resources
 
 
 @pytest.mark.asyncio

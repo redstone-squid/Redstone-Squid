@@ -58,6 +58,6 @@ class PermissionEpochWatcher:
     async def listen(self) -> None:
         """Follow the notification channel, refreshing on every hint."""
         if self._listener is None:
-            msg = tr("This watcher was built without a wake listener.")
+            msg = tr(t"permissions-epoch-watcher-built = This watcher was built without a wake listener.")
             raise InvalidStateError(msg)
         await self._listener.run(self.refresh)

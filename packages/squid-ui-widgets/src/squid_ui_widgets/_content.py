@@ -7,7 +7,7 @@ from squid_ui.factories import is_layout_node, paragraph
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
-from squid_ui.text import Message, ResolvedText, TextLike
+from squid_ui.text import Message, ResolvedText, TextLike, source_text
 
 type ContentItem[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
     LayoutNode[RenderTargetT, ContextT] | Component[RenderTargetT, ContextT]
@@ -83,7 +83,7 @@ def slug(value: TextLike) -> str:
     elif isinstance(value, ResolvedText):
         source = value.content
     else:
-        source = value.template
+        source = value.declaration.identifier if value.declaration is not None else source_text(value)
     result = re.sub(r"[^a-z0-9]+", "-", source.casefold()).strip("-")
     return result or "entry"
 
@@ -95,5 +95,5 @@ def display_text(value: object) -> str:
     if isinstance(value, ResolvedText):
         return value.content
     if isinstance(value, Message):
-        return value.template
+        return source_text(value)
     return str(value)

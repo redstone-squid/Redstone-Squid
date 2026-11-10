@@ -91,10 +91,14 @@ async def test_parse_errors_are_field_errors_and_gate_cross_field_validation() -
 
     assert isinstance(spec.items[0], sl.forms.FormField)
     assert isinstance(spec.items[1], sl.forms.FormField)
-    assert failed.errors == (
-        sl.forms.FieldError(spec.items[0], message="Enter at least 2 characters."),
-        sl.forms.FieldError(spec.items[1], message="Enter a whole number."),
+    assert tuple(error.fields for error in failed.errors if isinstance(error, sl.forms.FieldError)) == (
+        (spec.items[0],),
+        (spec.items[1],),
     )
+    assert [sl.text.source_text(error.message) for error in failed.errors] == [
+        "Enter at least 2 characters.",
+        "Enter a whole number.",
+    ]
     assert form.validations == 0
 
     valid = await spec.evaluate({"name": "Ada", "age": "36", "public": True})
@@ -172,7 +176,7 @@ async def test_temporal_fields_parse_portable_values(field, raw, expected) -> No
 async def test_temporal_fields_report_parse_and_bound_errors(field, raw, message) -> None:
     result = await sl.forms.FormSpec("Temporal", (field,)).evaluate({"value": raw})
 
-    assert message in str(result.errors[0].message)
+    assert message in sl.text.source_text(result.errors[0].message)
 
 
 async def test_datetime_field_rejects_ambiguous_local_time_by_default() -> None:
@@ -180,7 +184,7 @@ async def test_datetime_field_rejects_ambiguous_local_time_by_default() -> None:
 
     result = await sl.forms.FormSpec("Temporal", (field,)).evaluate({"value": "2026-11-01 01:30"})
 
-    assert "occurs twice" in str(result.errors[0].message)
+    assert "occurs twice" in sl.text.source_text(result.errors[0].message)
 
 
 def test_datetime_field_interprets_ordinary_local_time_in_iana_zone() -> None:
@@ -212,7 +216,7 @@ async def test_datetime_field_rejects_nonexistent_local_time_by_default() -> Non
 
     result = await sl.forms.FormSpec("Temporal", (field,)).evaluate({"value": "2026-03-08 02:30"})
 
-    assert "does not exist" in str(result.errors[0].message)
+    assert "does not exist" in sl.text.source_text(result.errors[0].message)
 
 
 @pytest.mark.parametrize(
@@ -273,8 +277,8 @@ async def test_zoned_datetime_field_rejects_ambiguous_and_nonexistent_input_by_d
     ambiguous = await spec.evaluate({"value": "2026-11-01 01:30"})
     nonexistent = await spec.evaluate({"value": "2026-03-08 02:30"})
 
-    assert "occurs twice" in str(ambiguous.errors[0].message)
-    assert "does not exist" in str(nonexistent.errors[0].message)
+    assert "occurs twice" in sl.text.source_text(ambiguous.errors[0].message)
+    assert "does not exist" in sl.text.source_text(nonexistent.errors[0].message)
 
 
 def test_zoned_datetime_field_resolves_local_time_with_policies() -> None:
@@ -380,7 +384,7 @@ async def test_multi_choice_reports_unknown_cardinality_and_required_errors(fiel
     result = await sl.forms.FormSpec("Many", (field,)).evaluate({"values": raw})
 
     assert len(result.errors) == 1
-    assert message in str(result.errors[0].message)
+    assert message in sl.text.source_text(result.errors[0].message)
 
 
 def test_multi_choice_prefill_round_trips_typed_values_and_keys() -> None:

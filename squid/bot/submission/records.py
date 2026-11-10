@@ -101,13 +101,13 @@ class RecordsScreen(sd.Screen):
             label=lambda gap: gap.title,
             summary=lambda gap: f"{gap.title} · missing {', '.join(gap.fields)}",
             detail=lambda gap: sl.fields(
-                sl.field(tr("Definition"), str(gap.definition_id)),
-                sl.field(tr("Builds"), ", ".join(map(str, gap.build_ids))),
-                sl.field(tr("Missing evidence"), ", ".join(gap.fields)),
+                sl.field(tr(t"bot-submission-records-definition = Definition"), str(gap.definition_id)),
+                sl.field(tr(t"bot-submission-records-builds = Builds"), ", ".join(map(str, gap.build_ids))),
+                sl.field(tr(t"bot-submission-records-missing-evidence = Missing evidence"), ", ".join(gap.fields)),
             ),
             page_size=15,
-            title=tr("Record evidence gaps"),
-            empty=tr("No unresolved active record categories."),
+            title=tr(t"bot-submission-records-record-evidence-gaps = Record evidence gaps"),
+            empty=tr(t"records-no-unresolved-categories = No unresolved active record categories."),
         )
         self._titles = sp.Browser(
             sl.sources.list_source(titles),
@@ -116,15 +116,15 @@ class RecordsScreen(sd.Screen):
             label=lambda gap: gap.title,
             summary=lambda gap: gap.title,
             detail=lambda gap: sl.fields(
-                sl.field(tr("Definition"), str(gap.definition_id)),
+                sl.field(tr(t"bot-submission-records-definition = Definition"), str(gap.definition_id)),
                 sl.field(
-                    tr("Diagnostics"),
+                    tr(t"bot-submission-records-diagnostics = Diagnostics"),
                     ", ".join(str(item.get("code", "unknown")) for item in gap.diagnostics),
                 ),
             ),
             page_size=15,
-            title=tr("Record title diagnostics"),
-            empty=tr("No active record titles require taxonomy review."),
+            title=tr(t"bot-submission-records-record-title-diagnostics = Record title diagnostics"),
+            empty=tr(t"records-no-titles-need-review = No active record titles require taxonomy review."),
         )
 
     def _build_tabs(self) -> None:
@@ -132,26 +132,46 @@ class RecordsScreen(sd.Screen):
         if self._gaps is not None and self._titles is not None:
             tabs.extend(
                 (
-                    sp.Tab("gaps", tr("Evidence gaps"), self._gaps),
-                    sp.Tab("titles", tr("Title issues"), self._titles),
+                    sp.Tab("gaps", tr(t"bot-submission-records-evidence-gaps = Evidence gaps"), self._gaps),
+                    sp.Tab("titles", tr(t"bot-submission-records-title-issues = Title issues"), self._titles),
                 )
             )
-        tabs.append(sp.Tab("maintenance", tr("Lookup and rebuild"), self._maintenance_nodes()))
-        self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr("Records"))
+        tabs.append(
+            sp.Tab(
+                "maintenance",
+                tr(t"bot-submission-records-lookup-and-rebuild = Lookup and rebuild"),
+                self._maintenance_nodes(),
+            )
+        )
+        self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr(t"bot-submission-records-records = Records"))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._tabs is None:
-            return (sl.status(tr("Loading record diagnostics.")),)
+            return (sl.status(tr(t"records-diagnostics-loading = Loading record diagnostics.")),)
         return (self.boundary(self._tabs, key="tabs"),)
 
     def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._can_inspect:
-            nodes.append(sl.form(tr("Lookup category"), self._lookup_form(), key="lookup", on_submit=self._lookup))
+            nodes.append(
+                sl.form(
+                    tr(t"bot-submission-records-lookup-category = Lookup category"),
+                    self._lookup_form(),
+                    key="lookup",
+                    on_submit=self._lookup,
+                )
+            )
         if self._can_rebuild:
-            nodes.append(sl.form(tr("Rebuild records"), self._rebuild_form(), key="rebuild", on_submit=self._rebuild))
-        return tuple(nodes) or (sl.note(tr("No maintenance actions are available.")),)
+            nodes.append(
+                sl.form(
+                    tr(t"bot-submission-records-rebuild-records = Rebuild records"),
+                    self._rebuild_form(),
+                    key="rebuild",
+                    on_submit=self._rebuild,
+                )
+            )
+        return tuple(nodes) or (sl.note(tr(t"records-no-maintenance-actions = No maintenance actions are available.")),)
 
     @staticmethod
     def _kind_field[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
@@ -159,7 +179,7 @@ class RecordsScreen(sd.Screen):
     ) -> sl.forms.ChoiceField[BuildKind, RequiredT]:
         return sl.forms.ChoiceField(
             key="kind",
-            label=tr("Build kind"),
+            label=tr(t"bot-submission-records-build-kind = Build kind"),
             required=required,
             options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in BuildKind),
         )
@@ -183,11 +203,18 @@ class RecordsScreen(sd.Screen):
         try:
             restrictions = frozenset(int(value.strip()) for value in raw_restrictions.split(",") if value.strip())
         except ValueError:
-            await event.notice(tr("Restriction IDs must be whole numbers separated by commas."))
+            await event.notice(
+                tr(t"records-restriction-ids-invalid = Restriction IDs must be whole numbers separated by commas.")
+            )
             return
         if selected.isdigit():
             if restrictions:
-                await event.notice(tr("Restrictions can only be combined with a hand-typed base key."))
+                await event.notice(
+                    tr(
+                        t"records-restriction-base-key-required = Restrictions can "
+                        t"only be combined with a hand-typed base key."
+                    )
+                )
                 return
             summary = await self._records.materialize_definition(int(selected), kind=kind, version_id=version_id)
         else:
@@ -198,7 +225,9 @@ class RecordsScreen(sd.Screen):
         self._build_tabs()
         definitions = summary.definitions
         resolved = summary.resolved
-        await event.notice(tr(t"Recomputed {definitions} definitions; {resolved} resolved."))
+        await event.notice(
+            tr(t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.")
+        )
 
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_REBUILD):
@@ -215,13 +244,18 @@ class RecordsScreen(sd.Screen):
         resolved = summary.resolved
         unresolved = summary.unresolved
         await event.notice(
-            tr(t"Rebuilt {definitions} definitions; {resolved} resolved; {unresolved} awaiting evidence.")
+            tr(
+                t"records-rebuild-summary = Rebuilt {definitions} "
+                t"definitions; {resolved} resolved; {unresolved} awaiting evidence."
+            )
         )
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
-        await event.notice(tr("You are no longer allowed to perform this records operation."))
+        await event.notice(
+            tr(t"records-operation-permission-denied = You are no longer allowed to perform this records operation.")
+        )
         return False
 
 
@@ -258,16 +292,26 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
 
 
 class _LookupForm(sl.forms.Form):
-    title = tr("Lookup record category")
+    title = tr(t"bot-submission-records-lookup-record-category = Lookup record category")
 
     kind = RecordsScreen._kind_field()
-    base_key = sl.forms.TextField(label=tr("Definition ID or base key"), maximum=300)
-    restrictions = sl.forms.TextField(label=tr("Restriction IDs, comma separated"), required=False, maximum=300)
-    version_id = sl.forms.IntField(label=tr("Pinned version ID"), required=False, minimum=1)
+    base_key = sl.forms.TextField(
+        label=tr(t"bot-submission-records-definition-id-or-base-key = Definition ID or base key"), maximum=300
+    )
+    restrictions = sl.forms.TextField(
+        label=tr(t"records-restriction-ids-help = Restriction IDs, comma separated"),
+        required=False,
+        maximum=300,
+    )
+    version_id = sl.forms.IntField(
+        label=tr(t"bot-submission-records-pinned-version-id = Pinned version ID"), required=False, minimum=1
+    )
 
 
 class _RebuildForm(sl.forms.Form):
-    title = tr("Rebuild records")
+    title = tr(t"bot-submission-records-rebuild-records = Rebuild records")
 
     kind = RecordsScreen._kind_field(required=False)
-    version_id = sl.forms.IntField(label=tr("Current version ID"), required=False, minimum=1)
+    version_id = sl.forms.IntField(
+        label=tr(t"bot-submission-records-current-version-id = Current version ID"), required=False, minimum=1
+    )

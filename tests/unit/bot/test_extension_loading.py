@@ -15,6 +15,7 @@ import squid_ui_discord as sd
 from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS, CatboxClient, MediaPreviewClient, PostReconciler
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
+from squid.bot.i18n import bind_command_messages
 from squid.bot.reactions import ReactionRouter, ReactionSubscription
 from squid.bot.utils.permissions import AccountIdCache
 from squid.config import BuildConfig, CommunityConfig
@@ -182,3 +183,8 @@ async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands
 
     assert listed <= prefix_names | app_names
     assert "poll" not in prefix_names, "the directory would find `poll` anyway if it were not app-only"
+
+
+async def test_generated_command_metadata_has_fluent_declarations(loaded_bot: commands.Bot) -> None:
+    for command in loaded_bot.tree.get_commands():
+        bind_command_messages(command)

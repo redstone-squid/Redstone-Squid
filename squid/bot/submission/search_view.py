@@ -104,7 +104,11 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             *(
                 (
                     sl.action_controls(
-                        sl.action_control(tr("View build"), self._open_build, key="open-build"),
+                        sl.action_control(
+                            tr(t"bot-submission-search-view-view-build = View build"),
+                            self._open_build,
+                            key="open-build",
+                        ),
                         key="build-actions",
                     ),
                 )
@@ -116,11 +120,11 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _open_build(self, event: sl.ActionEvent) -> None:
         build_id = _build_id(self.hit)
         if build_id is None or self._load_build is None or self._render_build is None:
-            await event.notice(tr("That build is no longer available."))
+            await event.notice(tr(t"build-search-build-unavailable = That build is no longer available."))
             return
         build = await self._load_build(build_id)
         if build is None:
-            await event.notice(tr("That build is no longer available."))
+            await event.notice(tr(t"build-search-build-unavailable = That build is no longer available."))
             return
         self._build_node = await self._render_build(build)
 
@@ -151,12 +155,12 @@ class SearchScreen(sd.Screen):
             detail=self._detail,
             overview=self._overview,
             page_size=request.page_size,
-            title=tr("Search results"),
-            empty=tr("No results match this query."),
+            title=tr(t"bot-submission-search-view-search-results = Search results"),
+            empty=tr(t"build-search-no-results = No results match this query."),
             copy=sp.LoadingCopy(
-                loading=tr("Loading search results…"),
-                failed=tr("Could not load search results."),
-                retry=tr("Retry"),
+                loading=tr(t"build-search-loading = Loading search results…"),
+                failed=tr(t"build-search-load-failed = Could not load search results."),
+                retry=tr(t"bot-submission-search-view-retry = Retry"),
             ),
         )
         self._browser.window.replace(self._source.initial_loaded())
@@ -227,17 +231,17 @@ def _build_id(hit: SearchHit) -> int | None:
 def _metadata_label(kind: str) -> sl.TextLike:
     match kind:
         case "restriction":
-            return tr("Restriction")
+            return tr(t"bot-submission-search-view-restriction = Restriction")
         case "pattern":
-            return tr("Pattern")
+            return tr(t"bot-submission-search-view-pattern = Pattern")
         case "showcase":
-            return tr("Showcase tag")
+            return tr(t"bot-submission-search-view-showcase-tag = Showcase tag")
         case "creator":
-            return tr("Creator")
+            return tr(t"bot-submission-search-view-creator = Creator")
         case "version":
-            return tr("Version")
+            return tr(t"bot-submission-search-view-version = Version")
         case "tag":
-            return tr("Tag")
+            return tr(t"bot-submission-search-view-tag = Tag")
         case _:
             return kind
 
@@ -246,10 +250,10 @@ def _result_description(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
         base_title = hit.base_title
         build_title = hit.build_title
-        return tr(t"Record · {base_title} · {build_title}")
+        return tr(t"bot-submission-search-view-record = Record · {base_title} · {build_title}")
     if isinstance(hit, BuildSearchHit):
         status = hit.status
-        return tr(t"Build · {status}")
+        return tr(t"bot-submission-search-view-build = Build · {status}")
     return _metadata_label(hit.metadata_kind)
 
 
@@ -260,25 +264,53 @@ def _detail_text(hit: SearchHit) -> sl.TextLike:
         build_id = hit.build_id
         base_title = hit.base_title
         version_scope = hit.version_scope
-        fields = tr(t"**Build**\n{build_title} ({build_id})\n**Base title**\n{base_title} · {version_scope}")
+        fields = tr(t"""
+            bot-submission-search-view-build-base-title =
+                {{ "*" }}*Build**
+                {build_title} ({(build_id_text := str(build_id))})
+                {{ "*" }}*Base title**
+                {base_title} · {version_scope}
+            """)  # noqa: F841 - captured text identifier
         if hit.metrics:
             metrics = ", ".join(
                 f"{escape_markdown(key)}: {escape_markdown(str(value))}" for key, value in hit.metrics.items()
             )
             metrics = sl.md(metrics)
-            fields = tr(t"{fields}\n**Metrics**\n{metrics}")
+            fields = tr(t"""
+                bot-submission-search-view-metrics =
+                    {fields}
+                    {{ "*" }}*Metrics**
+                    {metrics}
+                """)
         description = hit.subtitle or ""
     elif isinstance(hit, BuildSearchHit):
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
         status = hit.status
-        fields = tr(t"**Status**\n{status}")
+        fields = tr(t"""
+            bot-submission-search-view-status =
+                {{ "*" }}*Status**
+                {status}
+            """)
         description = hit.description or ""
     else:
         tags = ", ".join(escape_markdown(alias) for alias in hit.aliases)
         kind = _metadata_label(hit.metadata_kind)
-        fields = tr(t"**Kind**\n{kind}")
+        fields = tr(t"""
+            bot-submission-search-view-kind =
+                {{ "*" }}*Kind**
+                {kind}
+            """)
         description = hit.description or ""
     if tags:
         tags = sl.md(tags)
-        fields = tr(t"{fields}\n**Tags**\n{tags}")
-    return tr(t"{description}\n{fields}")
+        fields = tr(t"""
+            bot-submission-search-view-tags =
+                {fields}
+                {{ "*" }}*Tags**
+                {tags}
+            """)
+    return tr(t"""
+        bot-submission-search-view-value =
+            {description}
+            {fields}
+        """)

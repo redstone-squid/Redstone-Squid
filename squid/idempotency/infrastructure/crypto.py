@@ -58,10 +58,13 @@ class IdempotencyResponseCipher:
 
     def __init__(self, *, active_key_id: str, keys: Mapping[str, bytes]) -> None:
         if active_key_id not in keys:
-            msg = tr("The active idempotency encryption key is absent from the keyring.")
+            msg = tr(
+                t"idempotency-active-idempotency-encryption = The "
+                t"active idempotency encryption key is absent from the keyring."
+            )
             raise IdempotencyEncryptionUnavailableError(msg)
         if any(len(key) != 32 for key in keys.values()):
-            msg = tr("Idempotency encryption keys must be exactly 32 bytes.")
+            msg = tr(t"idempotency-idempotency-encryption-keys = Idempotency encryption keys must be exactly 32 bytes.")
             raise IdempotencyEncryptionUnavailableError(msg)
         self._active_key_id = active_key_id
         self._keys = dict(keys)

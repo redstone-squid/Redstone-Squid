@@ -137,7 +137,7 @@ class FrozenField[T]:
     def __set__(self, instance: object, value: T) -> None:
         if hasattr(instance, self._private_name):
             name = self._private_name[1:]
-            raise InvalidStateError(tr(t"Attribute `{name}` is immutable!")) from None
+            raise InvalidStateError(tr(t"builds-attribute-immutable = Attribute `{name}` is immutable!")) from None
 
         setattr(instance, self._private_name, value)
 
@@ -161,7 +161,7 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
     cls_fields = getattr(cls, "__dataclass_fields__", None)
     if cls_fields is None:
         class_name = cls.__name__
-        raise InvalidStateError(tr(t"{class_name} is not a dataclass"))
+        raise InvalidStateError(tr(t"builds-not-dataclass = {class_name} is not a dataclass"))
 
     params = cls.__dataclass_params__  # type: ignore
     if params.frozen:

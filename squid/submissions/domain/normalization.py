@@ -120,7 +120,9 @@ def normalize_submission(
 def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:
     value = answers.get(field_id)
     if not isinstance(value, str):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
+        raise InvalidStateError(
+            tr(t"submissions-field-not-string = validated field {(field_id_text := str(field_id))} is not a string")  # noqa: F841
+        )
     return value
 
 
@@ -129,7 +131,9 @@ def _optional_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None
     if value is None:
         return None
     if not isinstance(value, str):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
+        raise InvalidStateError(
+            tr(t"submissions-field-not-string = validated field {(field_id_text := str(field_id))} is not a string")  # noqa: F841
+        )
     return value
 
 
@@ -144,7 +148,9 @@ def _optional_nonblank_str(answers: Mapping[str, JSONValue], field_id: str) -> s
 def _required_int(answers: Mapping[str, JSONValue], field_id: str) -> int:
     value = answers.get(field_id)
     if not isinstance(value, int) or isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
+        raise InvalidStateError(
+            tr(t"submissions-field-not-integer = validated field {(field_id_text := str(field_id))} is not an integer")  # noqa: F841
+        )
     return value
 
 
@@ -153,14 +159,18 @@ def _optional_int(answers: Mapping[str, JSONValue], field_id: str) -> int | None
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
+        raise InvalidStateError(
+            tr(t"submissions-field-not-integer = validated field {(field_id_text := str(field_id))} is not an integer")  # noqa: F841
+        )
     return value
 
 
 def _required_bool(answers: Mapping[str, JSONValue], field_id: str) -> bool:
     value = answers.get(field_id)
     if not isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a boolean"))
+        raise InvalidStateError(
+            tr(t"submissions-validated-field-not = validated field {(field_id_text := str(field_id))} is not a boolean")  # noqa: F841
+        )
     return value
 
 
@@ -171,5 +181,7 @@ def _string_tuple(answers: Mapping[str, JSONValue], field_id: str) -> tuple[str,
         or isinstance(value, str | bytes)
         or not all(isinstance(item, str) for item in value)
     ):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string list"))
+        raise InvalidStateError(
+            tr(t"submissions-not-string-list = validated field {(field_id_text := str(field_id))} is not a string list")  # noqa: F841
+        )
     return tuple(cast(Sequence[str], value))

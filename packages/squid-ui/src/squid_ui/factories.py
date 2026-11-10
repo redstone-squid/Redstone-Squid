@@ -24,6 +24,7 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
+from squid_i18n import NUMBER, plain, tr
 from squid_ui.assets import Asset
 from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
@@ -580,12 +581,10 @@ def grid[ContextT = object](
 
 
 def _tally_label(option: TallyOption) -> Message:
-    prefix = "{emoji} " if option.emoji is not None else ""
-    label = "**{label}**" if option.mine else "{label}"
-    return Message(
-        f"{prefix}{label} — {{count}}",
-        {"emoji": option.emoji, "label": option.label, "count": option.count},
-    )
+    label = Message.join("", ("**", option.label, "**")) if option.mine else option.label
+    count = option.count
+    result = tr(t"ui-tally-option = {label} — {NUMBER(count)}")
+    return Message.join(" ", (plain(option.emoji), result)) if option.emoji is not None else result
 
 
 def tally[ContextT = object](

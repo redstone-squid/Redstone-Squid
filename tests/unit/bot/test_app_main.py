@@ -21,6 +21,9 @@ from tests.support.services import bot_services
 
 @dataclass
 class TreeRecorder:
+    def get_commands(self) -> list[Any]:
+        return []
+
     set_translator: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
 
 

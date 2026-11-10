@@ -20,8 +20,8 @@ SOURCE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 class UnknownSuggestionSourceError(NotFoundError):
     """The requested suggestion source is not registered."""
 
-    default_message = tr("No such suggestion source.")
-    default_title = tr("Unknown suggestion source")
+    default_message = tr(t"suggestions-no-such-suggestion = No such suggestion source.")
+    default_title = tr(t"suggestions-unknown-suggestion-source = Unknown suggestion source")
     default_code = ErrorCode.NOT_FOUND
     default_resource = "suggestion_source"
 
@@ -50,10 +50,18 @@ class SuggestionSource:
     def __post_init__(self) -> None:
         source_id = self.id
         if not SOURCE_ID_PATTERN.match(self.id):
-            raise InvalidStateError(tr(t"invalid suggestion source id: {source_id!r}"))
+            raise InvalidStateError(
+                tr(
+                    t"suggestions-invalid-suggestion-source = invalid suggestion "
+                    t"source id: {(source_id_text := repr(source_id))}"
+                )
+            )
         if (self.visibility is Visibility.REQUIRES_NODE) != (self.required_node is not None):
             raise InvalidStateError(
-                tr(t"{source_id}: required_node must be set exactly when visibility is requires_node")
+                tr(
+                    t"suggestions-required-node-set = {(source_id_text := str(source_id))}: "  # noqa: F841 - captured text identifier
+                    t"required_node must be set exactly when visibility is requires_node"
+                )
             )
 
 
@@ -70,7 +78,11 @@ class SuggestionRegistry:
         for source in sources:
             if source.id in registered:
                 source_id = source.id
-                raise InvalidStateError(tr(t"duplicate suggestion source: {source_id}"))
+                raise InvalidStateError(
+                    tr(
+                        t"suggestions-duplicate-suggestion-source = duplicate suggestion source: {(source_id_text := str(source_id))}"  # noqa: F841
+                    )
+                )
             registered[source.id] = source
         return cls(registered)
 

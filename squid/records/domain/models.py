@@ -86,7 +86,10 @@ class TimingVariant:
 
     def __post_init__(self) -> None:
         if not self.values:
-            msg = tr("A timing variant must contain at least its primary timing method.")
+            msg = tr(
+                t"records-timing-variant-minimum-items = A timing variant must "
+                t"contain at least its primary timing method."
+            )
             raise ValidationError(msg)
 
 
@@ -109,7 +112,7 @@ class Candidate:
 
     def __post_init__(self) -> None:
         if self.fixed_volume is not None and self.fixed_volume <= 0:
-            msg = tr("Fixed volume must be positive.")
+            msg = tr(t"records-fixed-volume-positive = Fixed volume must be positive.")
             raise ValidationError(msg)
 
 
@@ -136,10 +139,10 @@ class TitleResolution:
 
     def __post_init__(self) -> None:
         if self.status is ResolutionStatus.RESOLVED and not self.holder_ids:
-            msg = tr("A resolved record title must have at least one holder.")
+            msg = tr(t"records-title-holder-required = A resolved record title must have at least one holder.")
             raise ValidationError(msg)
         if self.status is not ResolutionStatus.RESOLVED and self.holder_ids:
-            msg = tr("Only a resolved record title can have official holders.")
+            msg = tr(t"records-title-holders-forbidden = Only a resolved record title can have official holders.")
             raise ValidationError(msg)
 
 

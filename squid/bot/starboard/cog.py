@@ -213,10 +213,17 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         async def create_board(channel_id: int, name: str, required: float) -> StarboardConfig:
             channel = guild.get_channel(channel_id)
             if not isinstance(channel, discord.TextChannel):
-                raise ValidationError(tr("That destination is not a text channel in this server."))
+                raise ValidationError(
+                    tr(t"starboard-destination-must-be-text = That destination is not a text channel in this server.")
+                )
             permissions = channel.permissions_for(guild.me)
             if not (permissions.view_channel and permissions.send_messages and permissions.read_message_history):
-                raise ValidationError(tr("I need View Channel, Send Messages, and Read Message History there."))
+                raise ValidationError(
+                    tr(
+                        t"starboard-channel-permissions-required = I need View Channel, Send "
+                        t"Messages, and Read Message History there."
+                    )
+                )
             return await self.service.create_starboard(guild.id, channel.id, name, required=required)
 
         return StarboardScreen(

@@ -70,7 +70,7 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         """
         match = _MESSAGE_LINK.fullmatch(link.strip())
         if match is None or int(match["guild"]) != guild_id:
-            return tr("Give a link to a message in this server.")
+            return tr(t"bot-recount-give-a-link-to-a-message-in = Give a link to a message in this server.")
         channel_id, message_id = int(match["channel"]), int(match["message"])
 
         # A vote card, recognized by its session.
@@ -78,25 +78,29 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if snapshot is not None:
             vote_cog = cast("VoteCog[BotT] | None", self.bot.get_cog("VoteCog"))
             if not snapshot.is_open or vote_cog is None:
-                return tr("That vote is already closed.")
+                return tr(t"bot-recount-that-vote-is-already-closed = That vote is already closed.")
             if vote_cog.reactions.is_recounting(snapshot.id):
-                return tr("That vote is already being recounted.")
+                return tr(t"bot-recount-that-vote-is-already-being-recounted = That vote is already being recounted.")
             if (wait := self._start(guild_id)) is not None:
                 return _cooldown(wait)
             changed = await vote_cog.reactions.recount(snapshot.id)
-            return tr("Votes recounted.") if changed else tr("Votes recounted; nothing had been missed.")
+            return (
+                tr(t"bot-recount-votes-recounted = Votes recounted.")
+                if changed
+                else tr(t"recount-votes-already-current = Votes recounted; nothing had been missed.")
+            )
 
         # A starboard post or the source message it mirrors.
         starboard_cog = cast("StarboardCog[BotT] | None", self.bot.get_cog("StarboardCog"))
         if starboard_cog is None:
-            return tr("That message is not a vote or a starboard message.")
+            return tr(t"bot-recount-that-message-is-not-a-vote-or = That message is not a vote or a starboard message.")
         await authorize_starboard()
         origin_channel_id, origin_id = await self._starboard_origin(channel_id, message_id)
         if origin_id in self._origins_in_progress:
-            return tr("That message is already being recounted.")
+            return tr(t"recount-already-running = That message is already being recounted.")
         origin = await self.bot.get_or_fetch_message(origin_channel_id, origin_id)
         if origin is None:
-            return tr("I cannot read that message.")
+            return tr(t"bot-recount-i-cannot-read-that-message = I cannot read that message.")
         if (wait := self._start(guild_id)) is not None:
             return _cooldown(wait)
         self._origins_in_progress.add(origin_id)
@@ -105,8 +109,8 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         finally:
             self._origins_in_progress.discard(origin_id)
         if not keys:
-            return tr("No starboard counts reactions on that message.")
-        return tr("Starboard reactions recounted.")
+            return tr(t"recount-message-has-no-starboard = No starboard counts reactions on that message.")
+        return tr(t"bot-recount-starboard-reactions-recounted = Starboard reactions recounted.")
 
     async def _starboard_origin(self, channel_id: int, message_id: int) -> tuple[int, int]:
         """Return the source message a starboard post mirrors, or the given message itself."""
@@ -131,7 +135,7 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
 def _cooldown(seconds: float) -> Message:
     whole = max(1, ceil(seconds))
-    return tr(t"This server ran a recount recently. Try again in {whole} seconds.")
+    return tr(t"recount-server-rate-limited = This server ran a recount recently. Try again in {whole} seconds.")
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

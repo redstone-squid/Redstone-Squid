@@ -95,7 +95,7 @@ def _answer(wizard: WizardMachine, state: sp.WizardState, step: str, value: str)
 
 def _labels(rendered) -> list[object]:
     return [
-        node.label
+        sl.text.source_text(node.label)
         for node in engine.walk(rendered)
         if isinstance(node, sl.semantic.ActionControl | sl.semantic.FormTrigger)
     ]

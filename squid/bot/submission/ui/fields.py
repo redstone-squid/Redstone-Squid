@@ -10,7 +10,7 @@ from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import BuildCategory
 from squid.builds.models import Build
 from squid.core.i18n import tr
-from squid_ui.text import TextLike
+from squid_i18n import TextLike
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,12 +45,12 @@ class BuildFieldSpec[ValueT]:
     """Describe one typed patch field independently of a Discord form implementation."""
 
     key: str
-    label: str
+    label: TextLike
     parser: Callable[[str], ValueT]
     formatter: Callable[[ValueT], str]
     reader: Callable[[Build], ValueT]
     patch: Callable[[ValueT], BuildEditPatch]
-    placeholder: str
+    placeholder: TextLike
     required: bool = False
     minimum: int | None = None
     maximum: int | None = None
@@ -87,8 +87,10 @@ class BoundBuildField[ValueT]:
         return self.spec.key
 
     @property
-    def summary(self) -> str:
-        return f"{self.spec.label}: {self.current_text}"
+    def summary(self) -> TextLike:
+        label = self.spec.label
+        value = self.current_text
+        return tr(t"bot-build-field-summary = {label}: {value}")
 
     def stage(self, text: str) -> None:
         """Parse and retain a proposed form value without mutating the build."""
@@ -98,7 +100,7 @@ class BoundBuildField[ValueT]:
         try:
             value = self.spec.parser(text)
         except ValueError as error:
-            self.validation_error = str(error) or tr("Invalid value")
+            self.validation_error = str(error) or tr(t"bot-submission-ui-fields-invalid-value = Invalid value")
             return
         self.value = value
         self.current_text = text
@@ -112,11 +114,11 @@ class BoundBuildField[ValueT]:
 def field_spec[ValueT](
     key: str,
     format: FieldFormat[ValueT],
-    placeholder: str,
+    placeholder: TextLike,
     *,
     reader: Callable[[Build], ValueT],
     patch: Callable[[ValueT], BuildEditPatch],
-    label: str | None = None,
+    label: TextLike,
     required: bool | None = None,
     minimum: int | None = None,
     maximum: int | None = None,
@@ -127,7 +129,7 @@ def field_spec[ValueT](
     """Describe a patch field with explicit typed read and patch operations."""
     return BuildFieldSpec(
         key=key,
-        label=label or key.replace("_", " ").title(),
+        label=label,
         parser=format.parser if parser is None else parser,
         formatter=format.formatter,
         reader=reader,

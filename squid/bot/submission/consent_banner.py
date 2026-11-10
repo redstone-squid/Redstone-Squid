@@ -35,13 +35,13 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await request.respond(
             text_node(
-                tr(
-                    "### Consent Already Granted\n"
-                    "Your account has already accepted the current privacy notice. Redstone Squid automatically "
-                    "indexes your submissions in build log channels.\n\n"
-                    "*Tip:* If you posted a build before your consent was recorded, right-click that message and "
-                    "select **Apps > Recalculate Build** to index it now."
-                )
+                tr(t"""
+                    ingestion-consent-already-granted =
+                        ### Consent Already Granted
+                        Your account has already accepted the current privacy notice. Redstone Squid automatically indexes your submissions in build log channels.
+
+                        {{ "*" }}Tip:* If you posted a build before your consent was recorded, right-click that message and select **Apps > Recalculate Build** to index it now.
+                    """)
             ),
             audience="personal",
         )
@@ -51,24 +51,27 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     version = CURRENT_CONSENT_VERSION
     component = ConsentPrompt(
         user_id=user_id,
-        title=tr("Enable Automatic Build Ingestion"),
+        title=tr(t"ingestion-enable-automatic-action = Enable Automatic Build Ingestion"),
         summary=tr(
-            "Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
-            "Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
-            "your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
-            "your posts ignored by automated ingestion."
+            t"ingestion-consent-data-use-notice = "
+            t"Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
+            t"Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
+            t"your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and "
+            t"leaves your posts ignored by automated ingestion."
         ),
         fields=(
             CardField(
-                tr("Discord account"),
-                tr(t"<@{user_id}> ({user_id})"),
+                tr(t"bot-submission-consent-banner-discord-account = Discord account"),
+                tr(
+                    t"bot-submission-consent-banner-value = <@{(user_id_text := str(user_id))}> ({(user_id_text := str(user_id))})"  # noqa: F841
+                ),
             ),
             CardField(
-                tr("Consent recorded"),
-                tr(t"Notice {version}, timed at the moment you agree."),
+                tr(t"bot-submission-consent-banner-consent-recorded = Consent recorded"),
+                tr(t"ingestion-consent-timestamp-notice = Notice {version}, timed at the moment you agree."),
             ),
         ),
-        accept_label=tr("Agree & Enable Ingestion"),
+        accept_label=tr(t"ingestion-consent-accept-action = Agree & Enable Ingestion"),
     )
     outcome = await request.respond(component)
     if not isinstance(outcome, sd.Presented):
@@ -79,13 +82,13 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(interaction.user.id), consent=result.value)
         await request.respond(
             text_node(
-                tr(
-                    t"### Consent Recorded!\n"
-                    t"Thank you! Your consent has been recorded under notice `{version}`. Your future builds "
-                    t"posted in build-log channels will now be automatically ingested and submitted for voting.\n\n"
-                    t"*Tip:* To ingest a build you posted recently, right-click your message and select "
-                    t"**Apps > Recalculate Build**.",
-                )
+                tr(t"""
+                    ingestion-consent-recorded-confirmation =
+                        ### Consent Recorded!
+                        Thank you! Your consent has been recorded under notice `{version}`. Your future builds posted in build-log channels will now be automatically ingested and submitted for voting.
+
+                        {{ "*" }}Tip:* To ingest a build you posted recently, right-click your message and select **Apps > Recalculate Build**.
+                    """)
             ),
             audience="personal",
         )

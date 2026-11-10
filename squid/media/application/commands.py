@@ -28,11 +28,13 @@ class MediaNormalizationRequest:
         if self.poster_path is not None:
             paths.append(self.poster_path)
         if len(set(paths)) != len(paths):
-            msg = tr("Media source, normalized output, and poster paths must be distinct.")
+            msg = tr(
+                t"media-media-source-normalized = Media source, normalized output, and poster paths must be distinct."
+            )
             raise ValidationError(msg)
         if self.kind is MediaKind.IMAGE and (self.poster_path is not None or self.strip_audio):
-            msg = tr("Image normalization does not accept a poster path or audio option.")
+            msg = tr(t"media-image-not-accept = Image normalization does not accept a poster path or audio option.")
             raise ValidationError(msg)
         if self.kind is MediaKind.VIDEO and self.poster_path is None:
-            msg = tr("Video normalization requires a poster destination.")
+            msg = tr(t"media-video-requires-poster = Video normalization requires a poster destination.")
             raise ValidationError(msg)

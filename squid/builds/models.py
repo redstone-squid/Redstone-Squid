@@ -218,7 +218,10 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     def __post_init__(self) -> None:
         if type(self) is Build:
             raise InvalidStateError(
-                tr("Build cannot be instantiated directly; construct a category subclass or a BuildDraft.")
+                tr(
+                    t"builds-build-instantiated-directly = Build cannot be "
+                    t"instantiated directly; construct a category subclass or a BuildDraft."
+                )
             )
 
     @property

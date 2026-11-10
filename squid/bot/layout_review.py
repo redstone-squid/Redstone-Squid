@@ -42,15 +42,17 @@ class ReviewRoom(sl.Reactive):
 
 
 class ReviewForm(sl.forms.Form):
-    title = tr("Review sample build")
+    title = tr(t"layout-review-review-sample-build = Review sample build")
     decision = sl.forms.ChoiceField(
-        label=tr("Decision"),
+        label=tr(t"layout-review-decision = Decision"),
         options=(
-            sl.forms.ChoiceOption("approve", tr("Approve"), "Approved"),
-            sl.forms.ChoiceOption("changes", tr("Request changes"), "Changes requested"),
+            sl.forms.ChoiceOption("approve", tr(t"layout-review-approve = Approve"), "Approved"),
+            sl.forms.ChoiceOption(
+                "changes", tr(t"layout-review-request-changes = Request changes"), "Changes requested"
+            ),
         ),
     )
-    comment = sl.forms.TextAreaField(label=tr("Comment"), required=False, maximum=400)
+    comment = sl.forms.TextAreaField(label=tr(t"layout-review-comment = Comment"), required=False, maximum=400)
 
     def __init__(self, panel: ReviewerPanel) -> None:
         review = panel.seat.review
@@ -62,17 +64,22 @@ class ReviewForm(sl.forms.Form):
     @override
     def validate(self) -> tuple[sl.forms.FormIssue, ...]:
         if self.decision == "Changes requested" and not self.comment:
-            return (sl.forms.FieldError(ReviewForm.comment, message=tr("Describe the change you want.")),)
+            return (
+                sl.forms.FieldError(
+                    ReviewForm.comment,
+                    message=tr(t"layout-review-describe-the-change-you-want = Describe the change you want."),
+                ),
+            )
         return ()
 
     @override
     async def on_submit(self, event: sl.SubmitEvent) -> None:
         # The room can close while a modal is open, after the opening guard ran.
         if self.panel.room.closed:
-            await event.notice(tr("This review room has closed."))
+            await event.notice(tr(t"layout-review-this-review-room-has-closed = This review room has closed."))
             return
         self.panel.seat.review = Review(self.decision, self.comment or "")
-        self.panel.history.record(tr("Edit review"))
+        self.panel.history.record(tr(t"layout-review-edit-review = Edit review"))
         self.panel.record_activity(f"{self.panel.seat.name}: {self.decision}")
 
 
@@ -92,16 +99,28 @@ class ReviewerPanel(InspectablePanel):
         children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(self.room.totals()),
             sl.fields(
-                sl.field(tr("Your decision"), review.decision), sl.field(tr("Your comment"), review.comment or "—")
+                sl.field(tr(t"layout-review-your-decision = Your decision"), review.decision),
+                sl.field(tr(t"layout-review-your-comment = Your comment"), review.comment or "—"),
             ),
-            sl.form(tr("Write review"), ReviewForm(self), key="review"),
+            sl.form(tr(t"layout-review-write-review = Write review"), ReviewForm(self), key="review"),
             sl.action_controls(
-                sl.action_control(tr("Approve"), self._approve, key="approve", available=not self.room.closed),
                 sl.action_control(
-                    tr("Undo mine"), self._undo, key="undo", available=self.history.can_undo and not self.room.closed
+                    tr(t"layout-review-approve = Approve"),
+                    self._approve,
+                    key="approve",
+                    available=not self.room.closed,
                 ),
                 sl.action_control(
-                    tr("Redo mine"), self._redo, key="redo", available=self.history.can_redo and not self.room.closed
+                    tr(t"layout-review-undo-mine = Undo mine"),
+                    self._undo,
+                    key="undo",
+                    available=self.history.can_undo and not self.room.closed,
+                ),
+                sl.action_control(
+                    tr(t"layout-review-redo-mine = Redo mine"),
+                    self._redo,
+                    key="redo",
+                    available=self.history.can_redo and not self.room.closed,
                 ),
                 key="review-actions",
             ),
@@ -131,7 +150,7 @@ class ReviewerPanel(InspectablePanel):
         if self.room.closed:
             return
         self.seat.review = replace(self.seat.review, decision="Approved")
-        self.history.record(tr("Approve build"))
+        self.history.record(tr(t"layout-review-approve-build = Approve build"))
         self.record_activity(f"{self.seat.name}: Approved")
 
     async def _undo(self, event: sl.PressEvent[sd.Request]) -> None:
@@ -154,15 +173,21 @@ class ReviewSummary(InspectablePanel):
 
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
-        heading = sl.heading(tr("Review room · Flush piston door"))
+        heading = sl.heading(tr(t"layout-review-review-room-flush-piston-door = Review room · Flush piston door"))
         children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(
-                tr("Disposable reviews of a 4x4x3 door opening in 16 ticks. This does not create a production vote.")
+                tr(
+                    t"layout-review-demo-description = Disposable reviews of a 4x4x3 "
+                    t"door opening in 16 ticks. This does not create a production vote."
+                )
             ),
             sl.note(
-                tr("Approve as Alice and Bob, then undo Alice. Bob's approval stays.")
+                tr(t"layout-review-undo-example = Approve as Alice and Bob, then undo Alice. Bob's approval stays.")
                 if self.mode == "simulated"
-                else tr("Join to open your own reviewer panel. Invite someone else to review too.")
+                else tr(
+                    t"layout-review-join-hint = Join to open your own "
+                    t"reviewer panel. Invite someone else to review too."
+                )
             ),
             sl.paragraph(self.room.totals()),
             sd.v2.lines(
@@ -170,15 +195,21 @@ class ReviewSummary(InspectablePanel):
                 overflow=sl.primitives.Paginate(key="reviewers", per=5),
             )
             if self.room.seats
-            else sl.note(tr("Waiting for reviewers.")),
-            sl.heading(tr("Recent activity")),
+            else sl.note(tr(t"layout-review-waiting-for-reviewers = Waiting for reviewers.")),
+            sl.heading(tr(t"layout-review-recent-activity = Recent activity")),
             sl.paragraph("\n".join(self.room.activity) or "No reviews yet."),
             sl.action_controls(
                 sl.action_control(
-                    tr("Join review"), self._join, key="join", available=self.mode == "live" and not self.room.closed
+                    tr(t"layout-review-join-review = Join review"),
+                    self._join,
+                    key="join",
+                    available=self.mode == "live" and not self.room.closed,
                 ),
                 sl.action_control(
-                    tr("Close room · host only"), self._close, key="close", available=not self.room.closed
+                    tr(t"layout-review-close-room-host-only = Close room · host only"),
+                    self._close,
+                    key="close",
+                    available=not self.room.closed,
                 ),
                 key="room-actions",
             ),
@@ -199,7 +230,7 @@ class ReviewSummary(InspectablePanel):
         user_id = int(event.actor.id)
         existing = self.panels.get(user_id)
         if existing is not None and not existing.finished:
-            await event.notice(tr("You already have a reviewer panel in this room."))
+            await event.notice(tr(t"layout-review-panel-exists = You already have a reviewer panel in this room."))
             return
         seat = next((seat for seat in self.room.seats if seat.user_id == user_id), None)
         if seat is None:
@@ -219,7 +250,7 @@ class ReviewSummary(InspectablePanel):
 
     async def _close(self, event: sl.PressEvent[sd.Request]) -> None:
         if int(event.actor.id) != self.host_id:
-            await event.notice(tr("Only the host can close this room."))
+            await event.notice(tr(t"layout-review-close-forbidden = Only the host can close this room."))
             return
         self.room.closed = True
         event.finish_on_success()

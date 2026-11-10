@@ -22,6 +22,7 @@ CONTROL_FLOW_SIGNALS = {
 # squid-ui-widgets raises squid-ui and stdlib errors only, so it has no root of its own;
 # the scan still runs over it to catch a locally defined exception appearing later.
 HIERARCHIES = {
+    "squid_i18n": ("squid_i18n", "LocalizationError"),
     "squid_reactivity": ("squid_reactivity", "ReactivityError"),
     "squid_ui": ("squid_ui", "SquidUiError"),
     "squid_ui_widgets": ("squid_ui", "SquidUiError"),

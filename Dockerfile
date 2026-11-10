@@ -83,8 +83,8 @@ RUN adduser \
 COPY --from=builder --chown=root:root /app/.venv /app/.venv
 COPY --chown=root:root . .
 
-# .po translation catalogs are tracked; compiled .mo binaries are gitignored build artifacts.
-RUN pybabel compile -d locales -D squid
+# Validate shipped Fluent resources and generated binding manifests.
+RUN squid-i18n check
 
 USER appuser
 

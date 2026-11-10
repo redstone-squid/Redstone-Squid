@@ -6,7 +6,7 @@ from typing import Self, override
 
 from squid.core.errors import ConfigurationError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
-from squid_ui.text import Message
+from squid_i18n import Message
 
 
 class NodeScope(StrEnum):
@@ -80,8 +80,8 @@ class PermissionNode:
 class InvalidPatternError(ValidationError):
     """A permission pattern is not well-formed."""
 
-    default_message = tr("That is not a valid permission pattern.")
-    default_title = tr("Invalid permission pattern")
+    default_message = tr(t"permissions-not-valid-permission = That is not a valid permission pattern.")
+    default_title = tr(t"permissions-invalid-permission-pattern = Invalid permission pattern")
 
 
 class UnknownPermissionNodeError(InvalidStateError):

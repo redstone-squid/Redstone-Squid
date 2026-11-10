@@ -1,0 +1,990 @@
+{
+  "ui-chrome-add": {
+    "fingerprint": "510078ac1069b4abe90883c526cdc5c5cfeb2c75d22805fa6c3907dd1f8cd474",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:120"
+    ]
+  },
+  "ui-chrome-and-n-more": {
+    "fingerprint": "123ce5e418c729e669022cce88ef68d388d9c659b97ae0facab4aa4583fc413b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "count",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:18"
+    ]
+  },
+  "ui-chrome-apply": {
+    "fingerprint": "8b5e7fe9d637637bac43a92eddfbccb46de9ba0762ed95f4bdea62cbaf3ded32",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:114"
+    ]
+  },
+  "ui-chrome-approve": {
+    "fingerprint": "04ae3b16cd57d46ea40ee5b96c38676b01392a871177a73cc0715e044349e5b6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:143"
+    ]
+  },
+  "ui-chrome-approved-count": {
+    "fingerprint": "5c0a556c0d5f2fdd00abd1de60724ace78151e1cd9d701a59dae528041c686f7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "count",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "total",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:64"
+    ]
+  },
+  "ui-chrome-approximate-total-footer": {
+    "fingerprint": "682ccfef7441b8f2313ec781711f220cbae172c097c39c824fc66845be87b64f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "first",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "last",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "total",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:30"
+    ]
+  },
+  "ui-chrome-back": {
+    "fingerprint": "05ce7ec49c696b261ec880c72e60d8e1cdcacdda73ca0cf0e898706c852729ed",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:104"
+    ]
+  },
+  "ui-chrome-cancel": {
+    "fingerprint": "ce2890c8cdfe0559f603e7ec09f749cc71b18142a015082411c5e16b8e0d1065",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:113"
+    ]
+  },
+  "ui-chrome-changed-elsewhere": {
+    "fingerprint": "06fccea98570ceb22c436f669ee4947c841e5491d4f03f39d7aa8c468ef90ee6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:89"
+    ]
+  },
+  "ui-chrome-close": {
+    "fingerprint": "73465a90115c77ee4749e5bfbd5ebcb1e157bd2cfed69c3d9035e306b2967a20",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:106"
+    ]
+  },
+  "ui-chrome-confirm": {
+    "fingerprint": "469e0d43cfd02998802f59acc24863e0697a54f7581bb87220737d171de17173",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:112"
+    ]
+  },
+  "ui-chrome-continue-session": {
+    "fingerprint": "b202d7f93d4c051db1c7331c2aa0482c80b96eb2fe63af432cff05c717e0689c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:87"
+    ]
+  },
+  "ui-chrome-decided": {
+    "fingerprint": "49c229e2b14ba31351a772ffcd90c1ff03efa559815cfd0c0adf6fb5994a8dd2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "label",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:42"
+    ]
+  },
+  "ui-chrome-dm-unavailable": {
+    "fingerprint": "180168327684c6b973b43cc24d44646ea7382465704b214473ed842a907007cb",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:95"
+    ]
+  },
+  "ui-chrome-download": {
+    "fingerprint": "a9180b9c9170d7c805fa3733b067bb238341ae7ea5782dd3e5062950d979d1a6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:111"
+    ]
+  },
+  "ui-chrome-edit": {
+    "fingerprint": "77b2c81e37112b7e1029b2e642b170f7dab72a4a344d56061cca05ca29afa094",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:121"
+    ]
+  },
+  "ui-chrome-finish": {
+    "fingerprint": "272cc407cb1d5d45d5519f0a9a5006e479d410930820839d7c85e81c90d89872",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:126"
+    ]
+  },
+  "ui-chrome-full": {
+    "fingerprint": "68610ee25188bc7f18d277989832261b9af0f0b85c98407f0d69f5a2d3813508",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:141"
+    ]
+  },
+  "ui-chrome-home": {
+    "fingerprint": "50a4451bac4985038f613208c6218e4f59803010719492475dbcbb93a216f3c9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:105"
+    ]
+  },
+  "ui-chrome-jump-to-page": {
+    "fingerprint": "036b3c8e20bd0a26ac2c4fadb3fbdd27245d3335cdb8ec8f66dde1b1b702368d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:136"
+    ]
+  },
+  "ui-chrome-move-down": {
+    "fingerprint": "a74e3d01dac215423e95b108db9b7b3ae70557bfec5f47e9c8e0360225039bd4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:124"
+    ]
+  },
+  "ui-chrome-move-up": {
+    "fingerprint": "1efdb0595bce130b373da7352fd8cd04ebff82394e31db4529cdd07244f72876",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:123"
+    ]
+  },
+  "ui-chrome-newer": {
+    "fingerprint": "797b08269090b8cec45f6348dc3094a7d45db467bac3006022f02b8446374891",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:103"
+    ]
+  },
+  "ui-chrome-next": {
+    "fingerprint": "f55bd10668d5949859e4292ac2dc05f4a64070838eb87de401bab79ec5ffe3d4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:101"
+    ]
+  },
+  "ui-chrome-no-results": {
+    "fingerprint": "fe4f2da7902d20ba429c08104af2a4191065de4fa2fce8d36ed6fd50eff096ab",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:118"
+    ]
+  },
+  "ui-chrome-not-now": {
+    "fingerprint": "5b31d532ef1bd82139ea0d24dfc03675c66a5297a095cb51aea97391a592e5b6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:77"
+    ]
+  },
+  "ui-chrome-not-yours": {
+    "fingerprint": "55b8f9b55386153cde5a9dd1fbdd60ba3ab5a19947d1efee3846039db4209898",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:73"
+    ]
+  },
+  "ui-chrome-off": {
+    "fingerprint": "f26853894b995fe77c973813258a250ffd801417930e5531d09612e4211fe9e1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:110"
+    ]
+  },
+  "ui-chrome-older": {
+    "fingerprint": "2af032a76386f1fa60d04285920bd3c152dfe497df0118da93a4fb0fa5c50407",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:102"
+    ]
+  },
+  "ui-chrome-on": {
+    "fingerprint": "4c65beefcf4a07a27a73dcdecb17d2cd9f85b62b50295ccce622f0d7a111b603",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:109"
+    ]
+  },
+  "ui-chrome-page-footer": {
+    "fingerprint": "b83da8708351ef9205180773ba7c1e595dd9f05b9b6656a895a3af125b81ee94",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "page",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "pages",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:22"
+    ]
+  },
+  "ui-chrome-page-option": {
+    "fingerprint": "79001dbb4b9c95cc80658547534f92e0ed04fbcd4d458b2fe498de264f57519d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "page",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:38"
+    ]
+  },
+  "ui-chrome-previous": {
+    "fingerprint": "7976c19ab50868a1d784fce3a244e4c1d630ddf2bdcd57ce45d0fa3eb8b5df99",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:100"
+    ]
+  },
+  "ui-chrome-range-footer": {
+    "fingerprint": "53e15726bc01e0946e79297b446cd527ea01f014b3850684d7dd23a722e627e3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "first",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "last",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:26"
+    ]
+  },
+  "ui-chrome-redo": {
+    "fingerprint": "8385a9df81bfedbc7eec567c01f46e2abec34b8fca72a51b689b2638692bcc36",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:108"
+    ]
+  },
+  "ui-chrome-remove": {
+    "fingerprint": "ff472de0c3216b4d6c4afe83aa0745e8368efa046424083536c7160c75c7b94b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:122"
+    ]
+  },
+  "ui-chrome-review": {
+    "fingerprint": "155925cce5eae6611366ab4cecd64fa5cbc96524d3b1753f97f88df6f7af6c48",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:125"
+    ]
+  },
+  "ui-chrome-save": {
+    "fingerprint": "2a976f824be7212af1d0f054392d3eb1e3c6ee64625dad6b3ca93aa6264879fa",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:115"
+    ]
+  },
+  "ui-chrome-search": {
+    "fingerprint": "c7f81671508afa1e24189d583d01c9ef7d9f026b4a2fc7d861588f6b7f8da58a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:117"
+    ]
+  },
+  "ui-chrome-sent-privately": {
+    "fingerprint": "ebb518b403e18fe6ee3053b79e83959ad5cb147cfac7d1b6dffacfb38e36678a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:93"
+    ]
+  },
+  "ui-chrome-session-ended": {
+    "fingerprint": "7a81ebbb709cf34e87b15b175a8c07b0eaf53074906998497b2e8e2b12728c7c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:75"
+    ]
+  },
+  "ui-chrome-session-expiring": {
+    "fingerprint": "e9386c165d75e04cd7462e8da36031f55932615bac6a9e2587f20a695dcd125e",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:85"
+    ]
+  },
+  "ui-chrome-slot-capacity": {
+    "fingerprint": "da73ffb4f599bddcd345bb3a2e78b2b07e1b82fb20efaad4093f2b9c81aceebd",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "count",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "capacity",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:59"
+    ]
+  },
+  "ui-chrome-slot-count": {
+    "fingerprint": "7a80f25551ad7e5743a05205458ffd0edb849b08346f6f451a4831da8b3f846f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "count",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:57"
+    ]
+  },
+  "ui-chrome-total-range-footer": {
+    "fingerprint": "1a95fb09f42fa3e396c0e941ed3173a68b830a37e7c79c43bb72a2e72c78a399",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "first",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "last",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "total",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:34"
+    ]
+  },
+  "ui-chrome-try-again-in": {
+    "fingerprint": "3a0b8b1c32d9393a5bdfd73483f25831c990b91c883760bdfc99d0d5b700fb16",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "whole",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:47"
+    ]
+  },
+  "ui-chrome-unanswered": {
+    "fingerprint": "6182a18e621db64c3ac49e72aa7411c71364bd97235caba084aca28a01bc2253",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:127"
+    ]
+  },
+  "ui-chrome-undo": {
+    "fingerprint": "b5bc6994a221aa40e7eabde000b8bf590def75dacb8ee4290c9374f0ef6fa77a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:107"
+    ]
+  },
+  "ui-chrome-unsaved": {
+    "fingerprint": "5a31f94016a357aec28ab99109e13c4efdd84f310754e229a5ac8499e2c676b3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:116"
+    ]
+  },
+  "ui-chrome-updates-paused": {
+    "fingerprint": "3e6ec8e7ef0472ae4d5a4277b7f80a434f154cc8b3dc96652076dce6b422e921",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:83"
+    ]
+  },
+  "ui-chrome-waitlist": {
+    "fingerprint": "1b0c9efb772364dc55c54ae1ece7e82a5ba33d82db3df61a2c948d45181eabd8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:140"
+    ]
+  },
+  "ui-chrome-withdraw": {
+    "fingerprint": "1ef5f51d123b5bc720fd66863f1b6c1c2973ca4fb5d0df642178fa19978c3888",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:144"
+    ]
+  },
+  "ui-chrome-working": {
+    "fingerprint": "f5df4dcf3bd1395cf3ff385396650ba65a4de1cf7bbe12315b12811c97424974",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/chrome.py:81"
+    ]
+  },
+  "ui-form-date-format": {
+    "fingerprint": "c7d90428368b0ad21dca2b475236108fc6a61efe8e5f6ba2062cdd80297d3164",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:367"
+    ]
+  },
+  "ui-form-date-maximum": {
+    "fingerprint": "489ffdf71e23ffa24637662ec9d30679fb27ce9970f037b8cec996f2c9a75d74",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:371"
+    ]
+  },
+  "ui-form-date-minimum": {
+    "fingerprint": "185de6d799f080aea3e12719d69299ed6b6ed3317cda91ee3724a034f71680e2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:369"
+    ]
+  },
+  "ui-form-datetime-format": {
+    "fingerprint": "48166bdbc416649ea756737b7ef5e6f4ff0de482fb28b01533f9a477ba60f236",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:440",
+      "packages/squid-ui/src/squid_ui/forms.py:512"
+    ]
+  },
+  "ui-form-datetime-maximum": {
+    "fingerprint": "ff5d491501de9f563cbb917d46ec8ddb0de15a543b3c1ac5e1e908fc51ad273c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:463",
+      "packages/squid-ui/src/squid_ui/forms.py:545"
+    ]
+  },
+  "ui-form-datetime-minimum": {
+    "fingerprint": "afc612e0a7d75e8299c7550bd536936acf4a3b15d1e36774e63a60abe17890c1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:457",
+      "packages/squid-ui/src/squid_ui/forms.py:539"
+    ]
+  },
+  "ui-form-duration-format": {
+    "fingerprint": "dcdde888fe216a7494178b48b3eb4a5134280cafcc003621b60225db7ed36245",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:325"
+    ]
+  },
+  "ui-form-duration-maximum": {
+    "fingerprint": "d298fd6823dde34213dfb09e8d07d6a503ed749740e212d4ff4522274fabaf91",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:335"
+    ]
+  },
+  "ui-form-duration-minimum": {
+    "fingerprint": "a9d88fddda75d694bdd8bd88b89e9391765746efbdb94a10238cad61198c1c77",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:329"
+    ]
+  },
+  "ui-form-integer-format": {
+    "fingerprint": "e651fe326bf3b065e27611895a1538574bcf59e37423da6f7a64ad97ad2bac4a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:250"
+    ]
+  },
+  "ui-form-invalid-boolean": {
+    "fingerprint": "e25b9b34179fc6d2fb9409f9dcac01ba488cfddd68a47c1b0faa4726af010897",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:733"
+    ]
+  },
+  "ui-form-invalid-choice": {
+    "fingerprint": "222424bb987f61a76cbe0341845139253d44c24ab1768ce2b4c5ff48d9579b1f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:645"
+    ]
+  },
+  "ui-form-invalid-choices": {
+    "fingerprint": "fee99ee78683e2093247ab80f00204ad7d8a3b7c440ae7e469cc20e3f2d01070",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:687"
+    ]
+  },
+  "ui-form-number-finite": {
+    "fingerprint": "8fd763b68f0046a2fc0959290c10ff408e86426abf9a6c0dcfcdb6df838c6d9a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:279"
+    ]
+  },
+  "ui-form-number-format": {
+    "fingerprint": "b4189e307a6ae1c80179fc96ef5e26a2743b514e68c93a4dd819f5b566f56448",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:277"
+    ]
+  },
+  "ui-form-number-maximum": {
+    "fingerprint": "343fe349aa532363590b6502ff83fd98416aabe9758d2fd34c3fc7e18b75bb97",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:255",
+      "packages/squid-ui/src/squid_ui/forms.py:284"
+    ]
+  },
+  "ui-form-number-minimum": {
+    "fingerprint": "9a49a99d0d35bda2e0aeff333c3a6cdea382b12100a597746247306452dcca9b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:252",
+      "packages/squid-ui/src/squid_ui/forms.py:281"
+    ]
+  },
+  "ui-form-required": {
+    "fingerprint": "0b37c5d2f2d89e542c969def816752615b06e49d51c59ab306dccab47a37bafe",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:197",
+      "packages/squid-ui/src/squid_ui/forms.py:218",
+      "packages/squid-ui/src/squid_ui/forms.py:682"
+    ]
+  },
+  "ui-form-scale-integer": {
+    "fingerprint": "3d49f237a371febc15e9335861b6c9bafd9b075fc7c9a1356f79836218b2f4f1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:594"
+    ]
+  },
+  "ui-form-scale-range": {
+    "fingerprint": "67de695e5e80aaf78d060aa97670f3f18d8eec14e6a58af9445627d5176841cf",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:600"
+    ]
+  },
+  "ui-form-selection-maximum": {
+    "fingerprint": "a18bc4608634929d656de15efcbb91cb23deea6193ce62655a4b9189006453ae",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:694"
+    ]
+  },
+  "ui-form-selection-minimum": {
+    "fingerprint": "ced0f826d1d210cb5f8a9b907c1ac9ddbff25ef4ea330fe632d340d69aa84466",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:691"
+    ]
+  },
+  "ui-form-text-maximum": {
+    "fingerprint": "8c7dea99d2894fa25efb5371d3d9a21c7d52109d9bec74912460d6dce8254c12",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "maximum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:223"
+    ]
+  },
+  "ui-form-text-minimum": {
+    "fingerprint": "81b08b4e646adb68c4970c366fc86252c28d8b0b8182ef76a8daca29df1cbc83",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "minimum",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:220"
+    ]
+  },
+  "ui-form-time-ambiguous": {
+    "fingerprint": "51130cd27de66c2b808c9594c3d441e356e6b901c52649e3997836057ef2f72b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:446",
+      "packages/squid-ui/src/squid_ui/forms.py:521"
+    ]
+  },
+  "ui-form-time-format": {
+    "fingerprint": "04159f13d76b0572a1005418332d1941ea8c34ae3b607f86995538696adca122",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:394"
+    ]
+  },
+  "ui-form-time-maximum": {
+    "fingerprint": "2d66bcd2e776b6595107a7d3c327c1181f0fe35df8f6a2a8520058e7abbe1091",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:398"
+    ]
+  },
+  "ui-form-time-minimum": {
+    "fingerprint": "7e4feb168afcc195d14228bcfecf610eb04860979d44a8e8d561c2c2574fc316",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:396"
+    ]
+  },
+  "ui-form-time-nonexistent": {
+    "fingerprint": "fe1c6bc80785138d26f89922938250e691ded8cd44e2db0596bccfaf8b187078",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:453",
+      "packages/squid-ui/src/squid_ui/forms.py:527"
+    ]
+  },
+  "ui-form-timezone-offset-mismatch": {
+    "fingerprint": "86f201b10b9cdd613800ec24ac69a008945207481eb8b65ba6093ed86564723b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/forms.py:530"
+    ]
+  },
+  "ui-tally-option": {
+    "fingerprint": "b591288eaa153cc777eb41be5108cb2fb6ed668c2b7242646d42bf1e30c1795d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "label",
+        "function": null,
+        "options": []
+      },
+      {
+        "name": "count",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "packages/squid-ui/src/squid_ui/factories.py:586"
+    ]
+  }
+}

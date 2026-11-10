@@ -69,7 +69,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
             )
             if entries
-            else sd.v2.text(tr("No creator credit claims are awaiting review."))
+            else sd.v2.text(tr(t"claims-review-empty = No creator credit claims are awaiting review."))
         )
         choices: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None
         if self._claims:
@@ -93,9 +93,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._can_approve:
             buttons.append(
                 sl.action_control(
-                    tr("Take the name")
+                    tr(t"claims-view-take-the-name = Take the name")
                     if self.selected_id is not None and self.reassign_armed == self.selected_id
-                    else tr("Approve"),
+                    else tr(t"claims-view-approve = Approve"),
                     self._approve,
                     key="approve",
                     tone=sl.Tone.DANGER if self.reassign_armed == self.selected_id else sl.Tone.SUCCESS,
@@ -105,7 +105,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._can_reject:
             buttons.append(
                 sl.action_control(
-                    tr("Reject"),
+                    tr(t"claims-view-reject = Reject"),
                     self._reject,
                     key="reject",
                     available=self.selected is not None,
@@ -113,7 +113,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
             )
         return (
             sd.v2.panel(
-                sd.v2.heading(tr("Creator credit claims awaiting review")),
+                sd.v2.heading(tr(t"claims-review-heading = Creator credit claims awaiting review")),
                 body,
                 choices,
                 accent=DISCORD_BLUE,
@@ -123,7 +123,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self._claims)
-        return tr(t"Page {page} of {pages} — {total} in total")
+        return tr(t"claims-view-page-of-in-total = Page {page} of {pages} — {total} in total")
 
     async def _select_claim(self, event: sd.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
@@ -141,7 +141,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
             return
         node = ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT
         if not await self._authorize(node):
-            await event.notice(tr("You are no longer allowed to resolve creator claims."))
+            await event.notice(tr(t"claims-resolve-forbidden = You are no longer allowed to resolve creator claims."))
             return
 
         async def resolve(live: sd.ActionEvent, staff_account_id: int) -> None:
@@ -175,9 +175,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         name = resolved.alias_name
         claimant = sl.md(present_claimant(resolved))
         message = (
-            tr(t"Credited **{name}** to {claimant}.")
+            tr(t"claims-view-credited-to = Credited **{name}** to {claimant}.")
             if approve
-            else tr(t"Closed {claimant}'s claim on **{name}** without crediting it.")
+            else tr(t"claims-closed-uncredited = Closed {claimant}'s claim on **{name}** without crediting it.")
         )
         await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
 
@@ -190,19 +190,23 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:
     claim_id = claim.id
     name = claim.alias_name
-    heading = tr(t"Claim #{claim_id} — {name}")
+    heading = tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
     claimant = sl.md(present_claimant(claim))
     age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
-    detail = tr(t"{claimant} — opened {age}")
-    return tr(t"**{heading}**\n{detail}")
+    detail = tr(t"claims-view-opened = {claimant} — opened {age}")
+    return tr(t"""
+        bot-claims-view-value =
+            {{ "*" }}*{heading}**
+            {detail}
+        """)
 
 
 def _claim_label(claim: AliasClaim) -> sl.text.Message:
     claim_id = claim.id
     name = claim.alias_name
-    return tr(t"Claim #{claim_id} — {name}")
+    return tr(t"claims-view-claim = Claim #{(claim_id_text := str(claim_id))} — {name}")  # noqa: F841 - captured text identifier
 
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
     """Explain the second deliberate approval click."""
-    return conflict.message + " " + tr("Approving again takes the name from them.")
+    return conflict.message + " " + tr(t"claims-reapproval-warning = Approving again takes the name from them.")

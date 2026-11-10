@@ -33,15 +33,17 @@ class ErrorReportOperations(Protocol):
 
 
 def _traceback_footer(page: int, pages: int) -> sl.TextLike:
-    section = tr("Traceback")
-    return tr(t"{section} — page {page} of {pages} · the attachment has the whole report")
+    section = tr(t"diagnostics-view-traceback = Traceback")
+    return tr(
+        t"diagnostics-attachment-page-hint = {section} — page {page} of {pages} · the attachment has the whole report"
+    )
 
 
 ERROR_CHROME = dataclasses.replace(
     CHROME,
-    not_yours=tr("These error controls belong to someone else."),
-    previous=tr("Earlier"),
-    next=tr("Later"),
+    not_yours=tr(t"diagnostics-controls-not-owner = These error controls belong to someone else."),
+    previous=tr(t"diagnostics-view-earlier = Earlier"),
+    next=tr(t"diagnostics-view-later = Later"),
     page_footer=_traceback_footer,
 )
 
@@ -107,9 +109,15 @@ class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if isinstance(status, sl.resources.Failed):
-            nodes.append(sl.note(tr("Could not check for updates. You can still refresh reports.")))
+            nodes.append(
+                sl.note(
+                    tr(t"diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.")
+                )
+            )
         elif changed:
-            nodes.append(sl.note(tr("The report list has changed. Refresh when you are ready.")))
+            nodes.append(
+                sl.note(tr(t"diagnostics-report-list-stale = The report list has changed. Refresh when you are ready."))
+            )
         return tuple(nodes)
 
 
@@ -125,7 +133,7 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
         changed = isinstance(status, sl.resources.Ready) and status.value
         return sl.action_controls(
             sl.action_control(
-                tr("Refresh reports"),
+                tr(t"diagnostics-view-refresh-reports = Refresh reports"),
                 self._refresh,
                 key="refresh",
                 tone=sl.Tone.INFO if changed else sl.Tone.NEUTRAL,
@@ -139,7 +147,12 @@ class ErrorReportScreen(sd.Screen):
 
     policy = sd.ResponseSpec(
         timeout=SESSION_SECONDS,
-        audience=sd.Private(tr("An error report names internal paths, so it is never posted in a channel.")),
+        audience=sd.Private(
+            tr(
+                t"diagnostics-path-privacy-warning = An error report names "
+                t"internal paths, so it is never posted in a channel."
+            )
+        ),
         chrome=ERROR_CHROME,
         session=sd.SessionSpec("errors"),
     )
@@ -169,13 +182,15 @@ class ErrorReportScreen(sd.Screen):
         self._matches = 1
         self._clear_decision = sp.confirm(
             sl.section(
-                sl.heading(tr("Clear every error report?")),
-                sl.paragraph(tr("This permanently deletes reports that have not expired yet.")),
+                sl.heading(tr(t"diagnostics-view-clear-every-error-report = Clear every error report?")),
+                sl.paragraph(
+                    tr(t"diagnostics-delete-warning = This permanently deletes reports that have not expired yet.")
+                ),
             ),
             key="clear-errors",
             on_confirm=self._clear,
             on_cancel=self._cancel_clear,
-            confirm_label=tr("Delete reports"),
+            confirm_label=tr(t"diagnostics-view-delete-reports = Delete reports"),
         )
 
     @override
@@ -202,8 +217,8 @@ class ErrorReportScreen(sd.Screen):
             summary=_list_line,
             detail=lambda report: self._render_report(report, 1),
             page_size=10,
-            title=tr("Recent errors"),
-            empty=tr("Nothing has failed within the retention window."),
+            title=tr(t"diagnostics-view-recent-errors = Recent errors"),
+            empty=tr(t"diagnostics-no-recent-errors = Nothing has failed within the retention window."),
         )
 
     @property
@@ -218,8 +233,15 @@ class ErrorReportScreen(sd.Screen):
             return sl.Document(
                 (
                     sl.section(
-                        sl.heading(tr("Errors cleared")),
-                        sl.paragraph(tr(t"Deleted {count} stored error reports.")),
+                        sl.heading(tr(t"diagnostics-view-errors-cleared = Errors cleared")),
+                        sl.paragraph(
+                            tr(
+                                (
+                                    t"diagnostics-view-deleted-stored-error-reports = Deleted {count} stored error "
+                                    t"reports."
+                                )
+                            )
+                        ),
                     ),
                 )
             )
@@ -228,7 +250,7 @@ class ErrorReportScreen(sd.Screen):
         if self._detail is not None:
             return sl.Document((self._render_report(self._detail, self._matches),))
         if self._browser is None:
-            return sl.Document((sl.status(tr("Loading error reports.")),))
+            return sl.Document((sl.status(tr(t"diagnostics-view-loading-error-reports = Loading error reports.")),))
         assert self._updates is not None
         return sl.Document(
             (
@@ -236,12 +258,14 @@ class ErrorReportScreen(sd.Screen):
                 self.boundary(self._updates, key="updates"),
                 sl.action_controls(
                     sl.action_control(
-                        tr("Show all") if self.work_lost_only else tr("Show work lost only"),
+                        tr(t"diagnostics-view-show-all = Show all")
+                        if self.work_lost_only
+                        else tr(t"diagnostics-view-show-work-lost-only = Show work lost only"),
                         self._toggle_filter,
                         key="filter",
                     ),
                     sl.action_control(
-                        tr("Clear all"),
+                        tr(t"diagnostics-view-clear-all = Clear all"),
                         self._confirm_clear,
                         key="clear",
                         tone=sl.Tone.DANGER,
@@ -255,23 +279,28 @@ class ErrorReportScreen(sd.Screen):
 
     def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         reference = report.reference
-        traceback_text: sl.TextLike = report.traceback.strip() or tr("No traceback was recorded.")
+        traceback_text: sl.TextLike = report.traceback.strip() or tr(
+            t"diagnostics-view-no-traceback-was-recorded = No traceback was recorded."
+        )
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sd.v2.heading(tr(t"Error {reference}")),
+            sd.v2.heading(tr(t"diagnostics-view-error = Error {reference}")),
             # Opens at the end because the failing frame is the last one.
             sd.v2.code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
             # front; the attachment carries all of it.
-            children.append(sd.v2.heading(tr("Log tail"), level=3, priority=2))
+            children.append(sd.v2.heading(tr(t"diagnostics-view-log-tail = Log tail"), level=3, priority=2))
             children.append(
                 sd.v2.code("\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8)
             )
         children.append(sl.fields(*_summary_fields(report, matches)))
         children.append(
             sl.download(
-                tr("Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
+                tr(t"diagnostics-view-full-report = Full report"),
+                report_asset(report),
+                key="full-report",
+                emphasis=sl.semantic.Emphasis.STRONG,
             )
         )
         return sl.stack(*children)
@@ -291,7 +320,9 @@ class ErrorReportScreen(sd.Screen):
     async def _clear(self, event: sp.TransitionEvent[sp.DecisionState]) -> None:
         if self._authorize_clear is None or not await self._authorize_clear():
             self.confirming_clear = False
-            await event.source.notice(tr("You are no longer allowed to clear error reports."))
+            await event.source.notice(
+                tr(t"diagnostics-clear-forbidden = You are no longer allowed to clear error reports.")
+            )
             return
         self.cleared_count = await self._operations.clear_all()
         self.confirming_clear = False
@@ -340,23 +371,28 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
     identifier = sl.raw_md(f"`{report.correlation_id}`")
     entries = [
         sl.field(
-            tr("When"),
+            tr(t"diagnostics-view-when = When"),
             sl.md(t"{report.occurred_at.to_stdlib()}"),
         ),
-        sl.field(tr("Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
-        sl.field(tr("Exception"), sl.md(t"{report.exception_type}")),
-        sl.field(tr("Full ID"), sl.md(t"{identifier}")),
+        sl.field(tr(t"diagnostics-view-where = Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
+        sl.field(tr(t"diagnostics-view-exception = Exception"), sl.md(t"{report.exception_type}")),
+        sl.field(tr(t"diagnostics-view-full-id = Full ID"), sl.md(t"{identifier}")),
     ]
     if report.work_lost:
-        entries.append(sl.field(tr("Work lost"), tr("This job was abandoned; nothing will retry it.")))
+        entries.append(
+            sl.field(
+                tr(t"diagnostics-view-work-lost = Work lost"),
+                tr(t"diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it."),
+            )
+        )
     if matches > 1:
         # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
         # would have a moderator confidently reading the wrong incident.
         count = matches
         entries.append(
             sl.field(
-                tr("Ambiguous"),
-                tr(t"{count} reports share this reference; this is the newest."),
+                tr(t"diagnostics-view-ambiguous = Ambiguous"),
+                tr(t"diagnostics-shared-reference-note = {count} reports share this reference; this is the newest."),
             )
         )
     return entries

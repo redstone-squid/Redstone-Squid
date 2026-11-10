@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import discord
 import pytest
 
+from squid_i18n import tr
 from squid_ui import Document, scene, zoned_timestamp
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
@@ -27,7 +28,7 @@ from squid_ui.primitives import (
 )
 from squid_ui.sources import Position
 from squid_ui.temporal import ZonedDateTime
-from squid_ui.text import Localization, Message
+from squid_ui.text import Localization
 from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui_discord import testing as sd
 from squid_ui_discord.renderer import V2Renderer
@@ -61,9 +62,9 @@ def test_planner_extracts_callbacks_from_the_serializable_scene() -> None:
 
 
 def test_planner_resolves_deferred_text_on_exact_primitives() -> None:
-    localization = Localization("xx", gettext=lambda message: {"Hello": "Bonjour"}[message])
+    localization = Localization("fr", ("test-hello = Bonjour",))
 
-    result = plan(Text(Message("Hello")), target=DISCORD_V2_DPY27, localization=localization)
+    result = plan(Text(tr(t"test-hello = Hello")), target=DISCORD_V2_DPY27, localization=localization)
 
     assert result.scene.components_v2.children == (scene.Text("Bonjour"),)
 

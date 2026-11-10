@@ -4,10 +4,10 @@ import logging
 from typing import Any, Self, override
 
 import discord
-from discord import app_commands
 
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
+from squid.bot.i18n import command_text
 from squid.bot.notifications_view import NotificationScreen
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
@@ -47,7 +47,9 @@ class NotificationCog(sd.Cog[Any]):
 
     @sd.command(
         name="notifications",
-        description=app_commands.locale_str("Manage notification channels and subscriptions"),
+        description=command_text(
+            tr(t"notifications-channel-preferences = Manage notification channels and subscriptions")
+        ),
     )
     async def notifications(self, request: sd.Request[Self]) -> NotificationScreen | None:
         """Open the notification preferences and subscription workspace."""
@@ -102,22 +104,28 @@ def delivery_message(delivery: PendingNotificationDelivery) -> Message:
     build_id = delivery.payload.get("build_id")
     if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
         if isinstance(build_id, int):
-            return tr(t"A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:{build_id}`.")
-        return tr("A new build is awaiting staff review.")
+            return tr(t"""
+                notifications-build-review-link =
+                    A new build is awaiting staff review.
+                    Open it in Discord with `/build browse id:{(build_id_text := str(build_id))}`.
+                """)  # noqa: F841 - captured text identifier
+        return tr(t"notifications-build-awaiting-review = A new build is awaiting staff review.")
     if delivery.kind is NotificationKind.RECORD_GAINED:
         raw_records = delivery.payload.get("records", [])
         count = len(raw_records) if isinstance(raw_records, list) else 1
-        return tr(
-            t"A credited build gained {count} record.",
-            plural=t"A credited build gained {count} records.",
-        )
+        return tr(t"""
+            bot-notifications-a-credited-build-gained-record = {{ $count ->
+                [one] A credited build gained {count} record.
+               *[other] A credited build gained {count} records.
+            }}
+            """)
     if delivery.kind is NotificationKind.BUILD_CONFIRMED:
-        return tr("Your build was confirmed.")
+        return tr(t"bot-notifications-your-build-was-confirmed = Your build was confirmed.")
     if delivery.kind is NotificationKind.BUILD_DENIED:
-        return tr("Your build was denied.")
+        return tr(t"bot-notifications-your-build-was-denied = Your build was denied.")
     if delivery.kind is NotificationKind.CREATOR_BUILD_CONFIRMED:
-        return tr("A creator you follow has a newly confirmed build.")
-    return tr("A build notification is available.")
+        return tr(t"notifications-followed-creator-build = A creator you follow has a newly confirmed build.")
+    return tr(t"notifications-build-ready = A build notification is available.")
 
 
 def render_delivery(

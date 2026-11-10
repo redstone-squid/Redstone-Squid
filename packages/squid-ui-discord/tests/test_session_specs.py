@@ -7,8 +7,8 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+from squid_i18n import tr
 from squid_ui.primitives import Heading
-from squid_ui.text import Message
 from squid_ui_discord import (
     Everyone,
     MessageRootDefaults,
@@ -141,7 +141,7 @@ async def test_session_spec_applies_options_overrides_and_access() -> None:
 
 async def test_session_spec_preserves_a_collision_notice() -> None:
     manager = SessionManager()
-    notice = Message("This screen is already open.")
+    notice = tr(t"test-this-screen-is-already-open = This screen is already open.")
     spec = SessionSpec("panel", admission=AdmissionSpec(collision=Reject(notice=notice)))
 
     first = await spec.open(Panel(), to_message(), sessions=manager, open_context=OpenContext(7))

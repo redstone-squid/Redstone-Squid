@@ -51,17 +51,18 @@ def test_deferred_template_marker_preserves_msgid_and_values() -> None:
     page = 3
     pages = 7
 
-    message = tr(t"Page {page} of {pages}")
+    message = tr(t"test-page = Page {page} of {pages}")
 
-    assert message.template == "Page {page} of {pages}"
-    assert message.params == {"page": 3, "pages": 7}
+    assert message.declaration is not None
+    assert "Page { $page } of { $pages }" in message.declaration.source
+    assert message.bindings == {"page": 3, "pages": 7}
 
 
 def test_deferred_template_marker_rejects_expression_placeholders() -> None:
     page = 3
 
-    with pytest.raises(ValueError, match="placeholder name"):
-        tr(t"Page {page + 1}")
+    with pytest.raises(ValueError, match="local variable"):
+        tr(t"test-page = Page {page + 1}")
 
 
 def test_text_node_truncates_to_the_v2_display_limit() -> None:

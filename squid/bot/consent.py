@@ -44,7 +44,11 @@ class ConsentPrompt(sd.Screen[AccountConsent]):
         session=sd.SessionSpec(
             "consent",
             admission=sd.AdmissionSpec(
-                collision=sd.Reject(notice=tr("You already have a consent prompt open. Please answer that one."))
+                collision=sd.Reject(
+                    notice=tr(
+                        t"consent-prompt-already-open = You already have a consent prompt open. Please answer that one."
+                    )
+                )
             ),
         ),
         timeout=CONSENT_PROMPT_TIMEOUT_SECONDS,
@@ -90,8 +94,8 @@ class ConsentPrompt(sd.Screen[AccountConsent]):
                     key="accept",
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action_control(tr("Cancel"), self._cancel, key="cancel"),
-                sl.action_control(tr("Privacy notice"), self._privacy, key="privacy"),
+                sl.action_control(tr(t"consent-cancel = Cancel"), self._cancel, key="cancel"),
+                sl.action_control(tr(t"consent-privacy-notice = Privacy notice"), self._privacy, key="privacy"),
                 key="consent-actions",
             ),
         )
@@ -110,16 +114,22 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
     credit = preview.credit
     if credit is None:
         username = preview.username
-        return tr(t"No build credits **{username}** yet, so nothing is reattributed.")
+        return tr(t"consent-no-credits-notice = No build credits **{username}** yet, so nothing is reattributed.")
     count = credit.build_count
-    builds = tr(t"{count} build", plural=t"{count} builds")
+    builds = tr(t"""
+        bot-consent-build = {{ $count ->
+            [one] {count} build
+           *[other] {count} builds
+        }}
+        """)
     if credit.is_contested:
         name = credit.name
         return tr(
-            t"**{name}** ({builds}) is already credited to another creator, so agreeing moves nothing and opens a claim for staff to review."
+            t"consent-existing-credit-warning = **{name}** ({builds}) is already credited to "
+            t"another creator, so agreeing moves nothing and opens a claim for staff to review."
         )
     name = credit.name
-    return tr(t"**{name}** ({builds}) becomes attributed to your account.")
+    return tr(t"consent-credit-attribution = **{name}** ({builds}) becomes attributed to your account.")
 
 
 def _consent_prompt(
@@ -132,48 +142,54 @@ def _consent_prompt(
     if preview is None:
         return ConsentPrompt(
             user_id=user_id,
-            title=tr("Before Redstone Squid stores anything about you"),
+            title=tr(t"consent-storage-prerequisite = Before Redstone Squid stores anything about you"),
             summary=tr(
-                "Agreeing stores your Discord user ID and records this consent, so the bot can "
-                "recognise you and attribute your builds. Cancelling stores nothing."
+                t"consent-data-storage-summary = Agreeing stores your Discord user "
+                t"ID and records this consent, so the bot can recognise you and attribute your builds. "
+                t"Cancelling stores nothing."
             ),
             fields=(
                 CardField(
-                    tr("Discord account"),
-                    tr(t"<@{user_id}> (`{user_id}`)"),
+                    tr(t"consent-discord-account = Discord account"),
+                    tr(t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"),
                 ),
                 CardField(
-                    tr("Consent recorded"),
-                    tr(t"Notice {version}, timed at the moment you agree."),
+                    tr(t"consent-consent-recorded = Consent recorded"),
+                    tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
                 ),
             ),
-            accept_label=tr("Agree"),
+            accept_label=tr(t"consent-agree = Agree"),
         )
     username = preview.username
     uuid = preview.java_uuid
     return ConsentPrompt(
         user_id=user_id,
-        title=tr(t"Link {username} to your Discord account"),
+        title=tr(t"consent-link-to-your-discord-account = Link {username} to your Discord account"),
         summary=tr(
-            "Agreeing stores your Discord user ID, your Minecraft UUID and your current "
-            "Minecraft username, and records this consent. Cancelling stores nothing."
+            t"consent-agreement-details = Agreeing stores your Discord user "
+            t"ID, your Minecraft UUID and your current Minecraft username, and records this consent. "
+            t"Cancelling stores nothing."
         ),
         fields=(
             CardField(
-                tr("Minecraft account"),
-                tr(t"**{username}**\n`{uuid}`"),
+                tr(t"consent-minecraft-account = Minecraft account"),
+                tr(t"""
+                    bot-consent-value =
+                        {{ "*" }}*{username}**
+                        `{uuid}`
+                    """),
             ),
             CardField(
-                tr("Discord account"),
-                tr(t"<@{user_id}> (`{user_id}`)"),
+                tr(t"consent-discord-account = Discord account"),
+                tr(t"consent-value-2 = <@{(user_id_text := str(user_id))}> (`{(user_id_text := str(user_id))}`)"),  # noqa: F841 - captured text identifier
             ),
-            CardField(tr("Build credit"), _link_credit_value(preview)),
+            CardField(tr(t"consent-build-credit = Build credit"), _link_credit_value(preview)),
             CardField(
-                tr("Consent recorded"),
-                tr(t"Notice {version}, timed at the moment you agree."),
+                tr(t"consent-consent-recorded = Consent recorded"),
+                tr(t"consent-notice-versioning = Notice {version}, timed at the moment you agree."),
             ),
         ),
-        accept_label=tr("Agree and link"),
+        accept_label=tr(t"consent-agree-and-link = Agree and link"),
     )
 
 
@@ -294,7 +310,10 @@ async def ensure_consented_account(
     consent = await prompt_for_consent(request, user_id=user.id, timeout=timeout, parent=parent)
     if consent is NOT_ASKED or consent is None:
         if consent is None:
-            await request.respond(text_node(tr("Cancelled. No account information was stored.")), audience="personal")
+            await request.respond(
+                text_node(tr(t"consent-cancelled-no-data = Cancelled. No account information was stored.")),
+                audience="personal",
+            )
         return None
 
     granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)

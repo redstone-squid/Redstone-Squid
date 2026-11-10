@@ -27,7 +27,7 @@ from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
-from squid_ui.text import NEUTRAL, TextLike, resolve_text
+from squid_ui.text import NEUTRAL, Message, TextLike, resolve_text
 
 type Tree = object
 """Anything `walk` can inspect recursively."""
@@ -78,7 +78,7 @@ def _field_strings(tree: Tree, name: str) -> list[str]:
 
 
 def _is_text(value: object) -> bool:
-    return isinstance(value, str) or hasattr(value, "template") or hasattr(value, "content")
+    return isinstance(value, str | Message) or hasattr(value, "content")
 
 
 def texts(tree: Tree) -> list[str]:

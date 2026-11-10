@@ -114,7 +114,11 @@ class SubmissionAttentionIssue:
     def __post_init__(self) -> None:
         if _STABLE_KEY.fullmatch(self.field_id) is None:
             field_id = self.field_id
-            raise ValidationError(tr(t"invalid submission attention field ID: {field_id}"))
+            raise ValidationError(
+                tr(
+                    t"submissions-invalid-submission-attention = invalid submission attention field ID: {(field_id_text := str(field_id))}"  # noqa: F841
+                )
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +131,7 @@ class SubmissionDimensions:
 
     def __post_init__(self) -> None:
         if min(self.width, self.height, self.depth) < 1:
-            msg = tr("submission dimensions must be positive")
+            msg = tr(t"submissions-submission-dimensions-positive = submission dimensions must be positive")
             raise ValidationError(msg)
 
 
@@ -155,10 +159,16 @@ class SchematicRightsPolicy:
     def __post_init__(self) -> None:
         if self.visibility is SubmissionSchematicVisibility.PUBLIC_DOWNLOAD:
             if self.license is None or not self.rights_attested:
-                msg = tr("public schematics require a license and rights attestation")
+                msg = tr(
+                    t"submissions-public-schematic-rights-required = "
+                    t"public schematics require a license and rights attestation"
+                )
                 raise ValidationError(msg)
         elif self.license is not None or self.rights_attested:
-            msg = tr("reviewer-only schematics cannot carry a public distribution grant")
+            msg = tr(
+                t"submissions-reviewer-schematics-carry = "
+                t"reviewer-only schematics cannot carry a public distribution grant"
+            )
             raise ValidationError(msg)
 
 
@@ -177,10 +187,10 @@ class VerifiedSubmissionArtifacts:
     def __post_init__(self) -> None:
         identifiers = (*self.normalized_media_upload_ids, self.schematic_id)
         if any(identifier is not None and identifier.int == 0 for identifier in identifiers):
-            msg = tr("verified artifact identifiers cannot be nil UUIDs")
+            msg = tr(t"submissions-verified-artifact-identifiers = verified artifact identifiers cannot be nil UUIDs")
             raise ValidationError(msg)
         if len(self.normalized_media_upload_ids) != len(set(self.normalized_media_upload_ids)):
-            msg = tr("normalized media upload identifiers must be unique")
+            msg = tr(t"submissions-normalized-media-upload = normalized media upload identifiers must be unique")
             raise ValidationError(msg)
 
 
@@ -195,7 +205,9 @@ class SubmissionArtifactReadiness:
 
     def __post_init__(self) -> None:
         if (self.schematic_state is SchematicArtifactState.READY) != (self.schematic_id is not None):
-            msg = tr("only a ready schematic assessment may expose an artifact ID")
+            msg = tr(
+                t"submissions-ready-schematic-assessment = only a ready schematic assessment may expose an artifact ID"
+            )
             raise ValidationError(msg)
         VerifiedSubmissionArtifacts(self.normalized_media_upload_ids, self.schematic_id)
 
@@ -255,7 +267,7 @@ class ExtenderSubmissionDetails:
 
     def __post_init__(self) -> None:
         if self.extension_length < 1:
-            msg = tr("extender length must be positive")
+            msg = tr(t"submissions-extender-length-positive = extender length must be positive")
             raise ValidationError(msg)
         _require_stable_keys(self.pattern_keys, "pattern")
 
@@ -301,13 +313,16 @@ class NormalizedSubmission:
 
     def __post_init__(self) -> None:
         if self.source_draft_id.int == 0 or self.owner_account_id < 1:
-            msg = tr("normalized submission provenance is invalid")
+            msg = tr(t"submissions-normalized-submission-provenance = normalized submission provenance is invalid")
             raise ValidationError(msg)
         if self.schema_revision < 1 or not self.schema_id:
-            msg = tr("normalized submission schema provenance is invalid")
+            msg = tr(t"submissions-normalized-submission-schema = normalized submission schema provenance is invalid")
             raise ValidationError(msg)
         if not self.creators or not self.source_version:
-            msg = tr("normalized submissions require creators and an exact source version")
+            msg = tr(
+                t"submissions-normalized-creators-required = "
+                t"normalized submissions require creators and an exact source version"
+            )
             raise ValidationError(msg)
         compatible = (
             (self.category is SubmissionCategory.DOOR and isinstance(self.details, DoorSubmissionDetails))
@@ -319,9 +334,17 @@ class NormalizedSubmission:
         )
         if not compatible:
             category = self.category.value
-            raise ValidationError(tr(t"{category} submission has incompatible category details"))
+            raise ValidationError(
+                tr(
+                    t"submissions-submission-incompatible-category = {category} "
+                    t"submission has incompatible category details"
+                )
+            )
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
-            msg = tr("Only Paper submissions may retain an installation provenance ID.")
+            msg = tr(
+                t"submissions-paper-installation-only = Only "
+                t"Paper submissions may retain an installation provenance ID."
+            )
             raise ValidationError(msg)
         if self.sponsor_attribution:
             if (
@@ -330,10 +353,16 @@ class NormalizedSubmission:
                 or self.sponsor is None
                 or self.sponsor.installation_id != self.source_installation_id
             ):
-                msg = tr("Sponsor attribution requires a matching Paper installation projection.")
+                msg = tr(
+                    t"submissions-sponsor-installation-match-required "
+                    t"= Sponsor attribution requires a matching Paper installation projection."
+                )
                 raise ValidationError(msg)
         elif self.sponsor is not None:
-            msg = tr("A submission cannot retain a sponsor projection when attribution was not requested.")
+            msg = tr(
+                t"submissions-submission-retain-sponsor = A "
+                t"submission cannot retain a sponsor projection when attribution was not requested."
+            )
             raise ValidationError(msg)
 
 
@@ -345,7 +374,7 @@ class FinalizedBuild:
 
     def __post_init__(self) -> None:
         if self.build_id < 1:
-            msg = tr("finalized build identity is invalid")
+            msg = tr(t"submissions-finalized-build-identity = finalized build identity is invalid")
             raise ValidationError(msg)
 
 
@@ -357,7 +386,7 @@ class BuildSubmissionRejected:
 
     def __post_init__(self) -> None:
         if not self.issues:
-            msg = tr("rejected build submission requires at least one issue")
+            msg = tr(t"submissions-rejected-build-submission = rejected build submission requires at least one issue")
             raise ValidationError(msg)
 
 
@@ -366,12 +395,14 @@ type BuildSubmissionResult = FinalizedBuild | BuildSubmissionRejected
 
 def _require_stable_keys(values: tuple[str, ...], label: str) -> None:
     if len(values) != len(set(values)):
-        raise ValidationError(tr(t"{label} keys must be unique"))
+        raise ValidationError(tr(t"submissions-keys-unique = {label} keys must be unique"))
     if any(_STABLE_KEY.fullmatch(value) is None for value in values):
-        raise ValidationError(tr(t"{label} keys must be stable lowercase identifiers"))
+        raise ValidationError(
+            tr(t"submissions-keys-stable-lowercase = {label} keys must be stable lowercase identifiers")
+        )
 
 
 def _require_nonnegative_optional(values: tuple[int | None, ...]) -> None:
     if any(value is not None and value < 0 for value in values):
-        msg = tr("submission timings cannot be negative")
+        msg = tr(t"submissions-submission-timings-negative = submission timings cannot be negative")
         raise ValidationError(msg)

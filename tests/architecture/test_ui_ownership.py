@@ -1,9 +1,9 @@
 """Pin application UI ownership to Squid screens, widgets, and portable events."""
 
 import ast
-import re
 from pathlib import Path
 
+from squid_i18n.catalogs import extract
 from tests.support.source_tree import source_tree
 
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
@@ -80,33 +80,6 @@ def test_retired_event_helpers_stay_out_of_application_code() -> None:
     assert not found, sorted(found)
 
 
-_PLACEHOLDER = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*(?:![rsa])?(?::[^{}]*)?\}")
-"""A `{name}`-style field, which only a template string fills in."""
-
-
-def test_localized_ui_literals_interpolate_only_through_template_strings() -> None:
-    """A plain-string tr() keeps braces literal, so a placeholder there is never filled in."""
-    violations: list[str] = []
+def test_localized_ui_literals_are_valid_fluent_declarations() -> None:
     for path in BOT_ROOT.rglob("*.py"):
-        tree = source_tree(path)
-        for node in ast.walk(tree):
-            if (
-                not isinstance(node, ast.Call)
-                or not isinstance(node.func, ast.Name)
-                or node.func.id != "tr"
-                or not node.args
-            ):
-                continue
-            first = node.args[0]
-            if isinstance(first, ast.Constant) and isinstance(first.value, str) and _PLACEHOLDER.search(first.value):
-                violations.append(
-                    f'{path}:{node.lineno}: use tr(t"…") to interpolate; plain-string braces stay literal'
-                )
-            if isinstance(first, ast.TemplateStr):
-                violations.extend(
-                    f"{path}:{node.lineno}: assign {interpolation.str!r} to an identifier before interpolation"
-                    for interpolation in first.values
-                    if isinstance(interpolation, ast.Interpolation) and not interpolation.str.isidentifier()
-                )
-
-    assert not violations, "\n".join(violations)
+        extract(path.read_text(), str(path))

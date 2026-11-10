@@ -4,7 +4,7 @@ import inspect
 from uuid import UUID
 
 import pytest
-from babel.messages.pofile import read_po
+from fluent.syntax import ast as fluent_ast
 
 import squid.media.errors as media_errors
 from squid.core.errors import SquidError
@@ -20,6 +20,8 @@ from squid.media.errors import (
     MediaDraftStateConflictError,
     MediaLimitExceededError,
 )
+from squid_i18n import Markup, source_text
+from squid_i18n.compiler import parse_resource
 from squid_ui.text import Localization, Message, localization_scope
 
 UPLOAD_ID = UUID("75043a53-05ae-4097-bbf4-4eae1d6b088c")
@@ -75,11 +77,13 @@ def test_public_attachment_errors_localize_title_detail_and_action_at_render_tim
         DraftMediaConflictError(UPLOAD_ID),
         DraftMediaUnavailableError(),
     )
-    localization = Localization(
-        locale=locale,
-        gettext=lambda message: f"{locale}:{message}",
-        ngettext=lambda singular, plural, count: singular if count == 1 else plural,
+    resources = tuple(
+        message.declaration.source.replace(" = ", f" = {locale}:", 1)
+        for error in errors
+        for message in (error.title, error.message, error.end_user_action)
+        if isinstance(message, Message) and message.declaration is not None
     )
+    localization = Localization(locale=locale, resources=resources)
 
     with localization_scope(localization):
         for error in errors:
@@ -106,17 +110,11 @@ def _public_attachment_errors() -> dict[type[SquidError], SquidError]:
 
 
 def _catalog_keys(locale: str) -> set[str]:
-    catalog_path = locales_dir() / locale.replace("-", "_") / "LC_MESSAGES" / "squid.po"
-    with catalog_path.open(encoding="utf-8") as fileobj:
-        catalog = read_po(fileobj)
-    keys: set[str] = set()
-    for message in catalog:
-        if isinstance(message.id, str):
-            if message.id:
-                keys.add(message.id)
-        else:
-            keys.update(key for key in message.id if key)
-    return keys
+    return {
+        entry.id.name
+        for entry in parse_resource((locales_dir() / locale / "messages.ftl").read_text()).body
+        if isinstance(entry, fluent_ast.Message)
+    }
 
 
 def test_public_attachment_copy_inventory_covers_the_error_namespace() -> None:
@@ -143,9 +141,9 @@ def test_public_attachment_error_copy_is_complete_in_real_catalogs(locale: str) 
             for field, template in expected_copy.items():
                 message = getattr(error, field)
                 assert isinstance(message, Message)
-                assert message.template == template
-                assert template in catalog_keys
+                assert source_text(message, markup=Markup.PLAIN) == template
+                assert message.declaration is not None
+                assert message.declaration.identifier in catalog_keys
                 rendered = message.resolve()
-                assert rendered == localization.gettext(message.template)
                 if locale == "zh-CN":
-                    assert rendered != message.template
+                    assert rendered != template

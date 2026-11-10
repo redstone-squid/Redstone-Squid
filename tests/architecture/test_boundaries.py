@@ -1,21 +1,20 @@
 import ast
-import re
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
 
-from babel.messages.pofile import read_po
 from packaging.requirements import Requirement
 from pytest_archon import archrule
 
-from squid.core.extract import deferred_msgid, locale_str_msgid
+from squid_i18n.cli import run as check_catalogs
 from tests.support.source_tree import source_tree
 
 # Production Python roots shared by the syntax checks below. Individual rules may narrow this scope.
 SCAN_ROOTS = (
     Path("squid"),
     Path("packages/squid-reactivity/src"),
+    Path("packages/squid-i18n/src"),
     Path("packages/squid-ui/src"),
     Path("packages/squid-ui-discord/src"),
     Path("packages/squid-ui-slack/src"),
@@ -27,6 +26,10 @@ SCAN_ROOTS = (
 COMPILER_PASS_ROOT = Path("packages/squid-ui/src/squid_ui/planning")
 
 FRAMEWORK_DISTRIBUTIONS = {
+    "babel": "babel",
+    "fluent": "fluent-syntax",
+    "fluent_compiler": "fluent-compiler",
+    "squid_i18n": "squid-i18n",
     "anyio": "anyio",
     "asyncpg": "asyncpg",
     "discord": "discord-py",
@@ -46,6 +49,7 @@ FRAMEWORK_DISTRIBUTIONS = {
 FRAMEWORK_VERSION = "0.1.0a1"
 FRAMEWORK_PACKAGE_NAMES = frozenset(
     {
+        "squid-i18n",
         "squid-reactivity",
         "squid-replication",
         "squid-storage",
@@ -75,7 +79,7 @@ def _scanned_files(roots: tuple[Path, ...] = SCAN_ROOTS) -> list[Path]:
 
 
 def _dependency_name(requirement: str) -> str:
-    return re.split(r"[<>=!~;\[]", requirement, maxsplit=1)[0].strip().lower()
+    return Requirement(requirement).name.replace("_", "-").lower()
 
 
 def test_process_entry_points_use_concrete_runtime_constructors() -> None:
@@ -345,6 +349,7 @@ def test_private_names_do_not_cross_distribution_boundaries() -> None:
     exports, including the supported exports in `squid_reactivity.internals`.
     """
     framework_packages = {
+        "squid_i18n",
         "squid_reactivity",
         "squid_replication",
         "squid_storage",
@@ -409,7 +414,7 @@ def test_patterns_package_is_transport_free() -> None:
 
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
-    """Presentation is `squid.bot`'s business; shared deferred text is the sole exception."""
+    """Presentation is `squid.bot`'s business; deferred text lives in squid-i18n."""
     for package in ("squid_ui_discord*", "squid_ui_slack*", "squid_ui_widgets*"):
         (
             archrule(f"{package} is a presentation concern")
@@ -431,9 +436,7 @@ def test_only_the_bot_transport_uses_the_ui_packages() -> None:
             else:
                 continue
             violations.extend(
-                f"{path}:{node.lineno}: {imported}"
-                for imported in imports
-                if imported.startswith("squid_ui") and imported != "squid_ui.text"
+                f"{path}:{node.lineno}: {imported}" for imported in imports if imported.startswith("squid_ui")
             )
 
     assert violations == []
@@ -453,29 +456,7 @@ def test_tr_is_the_only_direct_translation_entry_point() -> None:
 
 
 def test_localized_messages_are_present_in_the_english_catalog() -> None:
-    # Check a committed catalogue so a stale or absent generated POT cannot affect the result.
-    with Path("locales/en/LC_MESSAGES/squid.po").open(encoding="utf-8") as fileobj:
-        catalog = read_po(fileobj)
-    msgids = {
-        extracted
-        for message in catalog
-        for extracted in (message.id if isinstance(message.id, list | tuple) else (message.id,))
-    }
-    authored = {
-        extracted
-        for path in Path("squid").rglob("*.py")
-        for node in ast.walk(source_tree(path))
-        if isinstance(node, ast.Call) and (msgid := deferred_msgid(node)) is not None
-        for extracted in (msgid if isinstance(msgid, tuple) else (msgid,))
-    }
-    authored.update(
-        msgid
-        for path in Path("squid").rglob("*.py")
-        for node in ast.walk(source_tree(path))
-        if isinstance(node, ast.Call) and (msgid := locale_str_msgid(node)) is not None
-    )
-
-    assert authored - msgids == set()
+    check_catalogs("check", Path("."))
 
 
 def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:

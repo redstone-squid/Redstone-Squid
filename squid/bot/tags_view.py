@@ -142,8 +142,8 @@ class TagsScreen(sd.Screen):
                 )
             ),
             page_size=15,
-            title=tr("Published build tags"),
-            empty=tr("No public build tags are available."),
+            title=tr(t"bot-tags-view-published-build-tags = Published build tags"),
+            empty=tr(t"bot-tags-view-no-public-build-tags-are-available = No public build tags are available."),
         )
         if TAG_PROPOSAL_LIST in self._capabilities:
             pending = tuple(await self._tags.pending())
@@ -165,20 +165,24 @@ class TagsScreen(sd.Screen):
                     _ModerationActions(tag, actions, self._request_moderation) if actions else _tag_fields(tag)
                 ),
                 page_size=15,
-                title=tr("Tag proposals awaiting review"),
-                empty=tr("No tag proposals are awaiting review."),
+                title=tr(t"bot-tags-view-tag-proposals-awaiting-review = Tag proposals awaiting review"),
+                empty=tr(t"tags-no-proposals-awaiting-review = No tag proposals are awaiting review."),
             )
         self._build_tabs()
 
     def _build_tabs(self) -> None:
         assert self._catalogue is not None
-        tabs = [sp.Tab("catalogue", tr("Catalogue"), self._catalogue)]
-        tabs.append(sp.Tab("contribute", tr("Propose and apply"), self._contribution_nodes()))
+        tabs = [sp.Tab("catalogue", tr(t"bot-tags-view-catalogue = Catalogue"), self._catalogue)]
+        tabs.append(
+            sp.Tab("contribute", tr(t"bot-tags-view-propose-and-apply = Propose and apply"), self._contribution_nodes())
+        )
         if self._pending is not None:
-            tabs.append(sp.Tab("moderation", tr("Moderation"), self._pending))
+            tabs.append(sp.Tab("moderation", tr(t"bot-tags-view-moderation = Moderation"), self._pending))
         if RESTRICTION_ALIAS_CREATE in self._capabilities:
-            tabs.append(sp.Tab("aliases", tr("Restriction aliases"), self._alias_nodes()))
-        self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr("Build tags"))
+            tabs.append(
+                sp.Tab("aliases", tr(t"bot-tags-view-restriction-aliases = Restriction aliases"), self._alias_nodes())
+            )
+        self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr(t"bot-tags-view-build-tags = Build tags"))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
@@ -188,18 +192,25 @@ class TagsScreen(sd.Screen):
             action_label = _action_label(action)
             return (
                 sl.section(
-                    sl.heading(tr("Confirm tag moderation")),
-                    sl.paragraph(tr(t"{action_label} **{tag_name}**?")),
+                    sl.heading(tr(t"bot-tags-view-confirm-tag-moderation = Confirm tag moderation")),
+                    sl.paragraph(tr(t"bot-tags-view-value-3 = {action_label} **{tag_name}**?")),
                 ),
                 self.boundary(self._decision, key="moderation-decision"),
             )
         if self._tabs is None:
-            return (sl.status(tr("Loading build tags.")),)
+            return (sl.status(tr(t"bot-tags-view-loading-build-tags = Loading build tags.")),)
         return (self.boundary(self._tabs, key="tabs"),)
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:
-            return (sl.note(tr("Link and consent an account in `/account` before proposing or applying tags.")),)
+            return (
+                sl.note(
+                    tr(
+                        t"tags-link-account-instructions = Link and consent an account in "
+                        t"`/account` before proposing or applying tags."
+                    )
+                ),
+            )
         assignment = _ApplyForm().spec()
         if self._build_id is not None:
             assignment = replace(
@@ -211,9 +222,14 @@ class TagsScreen(sd.Screen):
                 ),
             )
         return (
-            sl.form(tr("Propose tag"), self._proposal_form(), key="propose", on_submit=self._propose),
             sl.form(
-                tr("Apply tag to build"),
+                tr(t"bot-tags-view-propose-tag = Propose tag"),
+                self._proposal_form(),
+                key="propose",
+                on_submit=self._propose,
+            ),
+            sl.form(
+                tr(t"bot-tags-view-apply-tag-to-build = Apply tag to build"),
                 assignment,
                 key="apply",
                 on_submit=self._apply,
@@ -227,7 +243,7 @@ class TagsScreen(sd.Screen):
     def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
-                tr("Add restriction alias"),
+                tr(t"bot-tags-view-add-restriction-alias = Add restriction alias"),
                 _AliasForm().spec(),
                 key="restriction-alias",
                 on_submit=self._add_alias,
@@ -237,7 +253,7 @@ class TagsScreen(sd.Screen):
     async def _propose(self, event: sl.SubmitEvent) -> None:
         account_id = self._actor_account_id
         if account_id is None:
-            await event.notice(tr("A linked, consented account is required."))
+            await event.notice(tr(t"tags-account-consent-required = A linked, consented account is required."))
             return
         form = _ProposalForm.from_submission(event)
         name = form.name
@@ -251,12 +267,16 @@ class TagsScreen(sd.Screen):
         )
         tag_id = tag.id
         await self._refresh()
-        await event.notice(tr(t"Tag #{tag_id} is awaiting staff approval."))
+        await event.notice(
+            tr(
+                t"bot-tags-view-tag-is-awaiting-staff-approval = Tag #{(tag_id_text := str(tag_id))} is awaiting staff approval."  # noqa: F841
+            )
+        )
 
     async def _apply(self, event: sl.SubmitEvent) -> None:
         account_id = self._actor_account_id
         if account_id is None:
-            await event.notice(tr("A linked, consented account is required."))
+            await event.notice(tr(t"tags-account-consent-required = A linked, consented account is required."))
             return
         form = _ApplyForm.from_submission(event)
         build_id = self._build_id or form.build_id
@@ -265,7 +285,11 @@ class TagsScreen(sd.Screen):
         value = form.value
         tag = await self._tags.assign_showcase(build_id, tag_id, value, actor_account_id=account_id)
         tag_name = tag.display_name
-        await event.notice(tr(t"Attached **{tag_name}** to build #{build_id}."))
+        await event.notice(
+            tr(
+                t"bot-tags-view-attached-to-build = Attached **{tag_name}** to build #{(build_id_text := str(build_id))}."  # noqa: F841
+            )
+        )
 
     async def _add_alias(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RESTRICTION_ALIAS_CREATE):
@@ -276,9 +300,9 @@ class TagsScreen(sd.Screen):
         try:
             await self._restrictions.add_alias(restriction, alias)
         except AliasAlreadyAddedError:
-            await event.notice(tr("That alias is already on this restriction."))
+            await event.notice(tr(t"tags-alias-already-exists = That alias is already on this restriction."))
             return
-        await event.notice(tr("Restriction alias added."))
+        await event.notice(tr(t"bot-tags-view-restriction-alias-added = Restriction alias added."))
 
     async def _request_moderation(
         self,
@@ -288,10 +312,10 @@ class TagsScreen(sd.Screen):
     ) -> None:
         self._pending_action = (tag, action)
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-            tr("This changes the public tag catalogue."),
+            tr(t"tags-public-catalogue-warning = This changes the public tag catalogue."),
             (
-                sp.DecisionOption("confirm", tr("Confirm"), sl.Tone.DANGER),
-                sp.DecisionOption("cancel", tr("Cancel")),
+                sp.DecisionOption("confirm", tr(t"bot-tags-view-confirm = Confirm"), sl.Tone.DANGER),
+                sp.DecisionOption("cancel", tr(t"bot-tags-view-cancel = Cancel")),
             ),
             key="tag-moderation",
         ).build_component(on_decide=self._decide)
@@ -319,12 +343,14 @@ class TagsScreen(sd.Screen):
         self._pending_action = None
         self._decision = None
         await self._refresh()
-        await event.source.notice(tr(t"{action_label} **{tag_name}**."))
+        await event.source.notice(tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
-        await event.notice(tr("You are no longer allowed to perform this tag operation."))
+        await event.notice(
+            tr(t"tags-operation-permission-denied = You are no longer allowed to perform this tag operation.")
+        )
         return False
 
 
@@ -334,39 +360,45 @@ def _tag_summary(tag: TagDefinition) -> str:
 
 def _tag_fields(tag: TagDefinition) -> sl.semantic.Fields:
     return sl.fields(
-        sl.field(tr("ID"), str(tag.id)),
-        sl.field(tr("Kind"), tag.semantic_kind.value),
-        sl.field(tr("Value"), tag.value_type.value),
-        sl.field(tr("Query field"), tag.query_name or "—"),
+        sl.field(tr(t"bot-tags-view-id = ID"), str(tag.id)),
+        sl.field(tr(t"bot-tags-view-kind = Kind"), tag.semantic_kind.value),
+        sl.field(tr(t"bot-tags-view-value = Value"), tag.value_type.value),
+        sl.field(tr(t"bot-tags-view-query-field = Query field"), tag.query_name or "—"),
     )
 
 
 def _action_label(action: str) -> sl.TextLike:
-    return {"approve": tr("Approve"), "reject": tr("Reject"), "archive": tr("Archive")}[action]
+    return {
+        "approve": tr(t"bot-tags-view-approve = Approve"),
+        "reject": tr(t"bot-tags-view-reject = Reject"),
+        "archive": tr(t"bot-tags-view-archive = Archive"),
+    }[action]
 
 
 class _ProposalForm(sl.forms.Form):
-    title = tr("Propose showcase tag")
+    title = tr(t"bot-tags-view-propose-showcase-tag = Propose showcase tag")
 
-    name = sl.forms.TextField(label=tr("Display name"), maximum=80)
+    name = sl.forms.TextField(label=tr(t"bot-tags-view-display-name = Display name"), maximum=80)
     value_type = sl.forms.ChoiceField(
-        label=tr("Value type"),
+        label=tr(t"bot-tags-view-value-type = Value type"),
         default=TagValueType.NONE,
         options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in TagValueType),
     )
-    query_name = sl.forms.TextField(label=tr("Query field"), required=False, maximum=64)
+    query_name = sl.forms.TextField(label=tr(t"bot-tags-view-query-field = Query field"), required=False, maximum=64)
 
 
 class _AliasForm(sl.forms.Form):
-    title = tr("Add restriction alias")
+    title = tr(t"bot-tags-view-add-restriction-alias = Add restriction alias")
 
-    restriction = sl.forms.TextField(label=tr("Canonical restriction"), maximum=100)
-    alias = sl.forms.TextField(label=tr("New alias"), maximum=100)
+    restriction = sl.forms.TextField(
+        label=tr(t"bot-tags-view-canonical-restriction = Canonical restriction"), maximum=100
+    )
+    alias = sl.forms.TextField(label=tr(t"bot-tags-view-new-alias = New alias"), maximum=100)
 
 
 class _ApplyForm(sl.forms.Form):
-    title = tr("Apply showcase tag")
+    title = tr(t"bot-tags-view-apply-showcase-tag = Apply showcase tag")
 
-    build_id = sl.forms.IntField(label=tr("Build ID"), minimum=1)
-    tag_id = sl.forms.IntField(label=tr("Tag ID"), minimum=1)
-    value = sl.forms.TextField(label=tr("Value"), required=False, maximum=300)
+    build_id = sl.forms.IntField(label=tr(t"bot-tags-view-build-id = Build ID"), minimum=1)
+    tag_id = sl.forms.IntField(label=tr(t"bot-tags-view-tag-id = Tag ID"), minimum=1)
+    value = sl.forms.TextField(label=tr(t"bot-tags-view-value = Value"), required=False, maximum=300)

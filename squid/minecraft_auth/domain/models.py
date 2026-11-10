@@ -38,9 +38,19 @@ class PublicServerProfile:
         )
         for label, value, maximum in values:
             if value is not None and (not value.strip() or len(value) > maximum):
-                raise ValidationError(tr(t"Server profile {label} must contain 1 to {maximum} characters."))
+                raise ValidationError(
+                    tr(
+                        t"minecraft-auth-server-profile-length = Server "
+                        t"profile {label} must contain 1 to {maximum} characters."
+                    )
+                )
         if self.sponsor_opt_in and not self.enabled:
-            raise ValidationError(tr("Sponsor opt-in requires an enabled public server profile."))
+            raise ValidationError(
+                tr(
+                    t"minecraft-auth-public-sponsor-opt-in-required = Sponsor opt-in "
+                    t"requires an enabled public server profile."
+                )
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +63,12 @@ class PublishedPaperServer:
 
     def __post_init__(self) -> None:
         if not self.profile.enabled:
-            raise ValidationError(tr("A published Paper server must have its public profile enabled."))
+            raise ValidationError(
+                tr(
+                    t"minecraft-auth-published-paper-server = A published Paper "
+                    t"server must have its public profile enabled."
+                )
+            )
 
 
 @dataclass(frozen=True, slots=True)

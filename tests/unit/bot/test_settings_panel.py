@@ -208,11 +208,12 @@ async def test_changing_language_relocalizes_the_live_root(monkeypatch: pytest.M
     panel, _, message_root = make_component_panel()
     commit_render(message_root)
     original_localization = message_root.localization
-    translations = {"Server settings": "Paramètres du serveur", "Voting": "Votes"}
     monkeypatch.setattr(
         settings_view,
         "localization_for",
-        lambda locale: sl.text.Localization(locale, gettext=lambda message: translations.get(message, message)),
+        lambda locale: sl.text.Localization(
+            locale, ("bot-settings-view-server-settings = Paramètres du serveur\nbot-settings-view-voting = Votes",)
+        ),
     )
 
     with sl.runtime.transaction():

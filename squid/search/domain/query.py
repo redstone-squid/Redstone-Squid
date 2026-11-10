@@ -78,7 +78,7 @@ class BooleanExpression:
 
     def __post_init__(self) -> None:
         if len(self.operands) < 2:
-            msg = tr("Boolean expressions require at least two operands")
+            msg = tr(t"search-boolean-minimum-operands = Boolean expressions require at least two operands")
             raise ValidationError(msg)
 
 

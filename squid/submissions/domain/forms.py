@@ -66,10 +66,13 @@ class ChoiceOption:
 
     def __post_init__(self) -> None:
         if not self.value.strip() or self.value != self.value.strip() or len(self.value) > 120:
-            msg = tr("choice values must be 1-120 characters without surrounding whitespace")
+            msg = tr(
+                t"submissions-choice-characters-without = choice "
+                t"values must be 1-120 characters without surrounding whitespace"
+            )
             raise ValidationError(msg)
         if not self.label.strip():
-            msg = tr("choice labels cannot be blank")
+            msg = tr(t"submissions-choice-labels-blank = choice labels cannot be blank")
             raise ValidationError(msg)
 
 
@@ -116,17 +119,17 @@ class FieldConstraints:
 
     def __post_init__(self) -> None:
         if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
-            msg = tr("minimum cannot exceed maximum")
+            msg = tr(t"submissions-minimum-exceed-maximum = minimum cannot exceed maximum")
             raise ValidationError(msg)
         for name in ("min_length", "max_length", "min_items", "max_items"):
             value = getattr(self, name)
             if value is not None and value < 0:
-                raise ValidationError(tr(t"{name} cannot be negative"))
+                raise ValidationError(tr(t"submissions-negative = {name} cannot be negative"))
         if self.min_length is not None and self.max_length is not None and self.min_length > self.max_length:
-            msg = tr("min_length cannot exceed max_length")
+            msg = tr(t"submissions-min-length-exceed = min_length cannot exceed max_length")
             raise ValidationError(msg)
         if self.min_items is not None and self.max_items is not None and self.min_items > self.max_items:
-            msg = tr("min_items cannot exceed max_items")
+            msg = tr(t"submissions-min-items-exceed = min_items cannot exceed max_items")
             raise ValidationError(msg)
 
 
@@ -153,17 +156,35 @@ class FormField:
         _require_stable_id(self.id, "field ID")
         field_id = self.id
         if not self.label.strip():
-            raise ValidationError(tr(t"field {field_id} has a blank label"))
+            raise ValidationError(
+                tr(t"submissions-field-blank-label = field {(field_id_text := str(field_id))} has a blank label")
+            )
         if self.option_source is not None:
             _require_stable_id(self.option_source.replace(":", "_"), "option source")
         if self.options and self.option_source is not None:
-            raise ValidationError(tr(t"field {field_id} cannot have inline and dynamic options"))
+            raise ValidationError(
+                tr(
+                    t"submissions-field-inline-dynamic = field {(field_id_text := str(field_id))} cannot have inline and dynamic options"
+                )
+            )
         if self.control in {ControlKind.CHOICE, ControlKind.MULTI_CHOICE} and not (self.options or self.option_source):
-            raise ValidationError(tr(t"choice field {field_id} requires options"))
+            raise ValidationError(
+                tr(
+                    t"submissions-choice-options-required = choice field {(field_id_text := str(field_id))} requires options"
+                )
+            )
         if self.repeatable and self.value_kind is not ValueKind.STRING_LIST:
-            raise ValidationError(tr(t"repeatable field {field_id} must use string_list values"))
+            raise ValidationError(
+                tr(
+                    t"submissions-repeatable-field-use = repeatable field {(field_id_text := str(field_id))} must use string_list values"
+                )
+            )
         if not self.origins:
-            raise ValidationError(tr(t"field {field_id} must apply to at least one origin"))
+            raise ValidationError(
+                tr(
+                    t"submissions-field-apply = field {(field_id_text := str(field_id))} must apply to at least one origin"  # noqa: F841
+                )
+            )
 
     def is_visible(self, answers: Mapping[str, JSONValue], origin: SubmissionOrigin) -> bool:
         """Return whether this field participates for the supplied draft context."""
@@ -182,7 +203,11 @@ class FormSection:
         _require_stable_id(self.id, "section ID")
         if not self.title.strip():
             section_id = self.id
-            raise ValidationError(tr(t"section {section_id} has a blank title"))
+            raise ValidationError(
+                tr(
+                    t"submissions-section-blank-title = section {(section_id_text := str(section_id))} has a blank title"  # noqa: F841
+                )
+            )
         _require_unique((item.id for item in self.fields), f"section {self.id} field IDs")
 
 
@@ -198,7 +223,7 @@ class CategoryForm:
         _require_stable_id(self.code, "category code")
         if not self.label.strip():
             category = self.code
-            raise ValidationError(tr(t"category {category} has a blank label"))
+            raise ValidationError(tr(t"submissions-category-blank-label = category {category} has a blank label"))
         _require_unique((section.id for section in self.sections), f"category {self.code} section IDs")
         _require_unique(
             (item.id for section in self.sections for item in section.fields), f"category {self.code} field IDs"
@@ -229,10 +254,12 @@ class FormManifest:
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"[a-z][a-z0-9_.-]{0,127}", self.schema_id):
-            msg = tr("schema_id must be a stable lowercase identifier")
+            msg = tr(t"submissions-schema-id-stable = schema_id must be a stable lowercase identifier")
             raise ValidationError(msg)
         if self.revision < 1 or self.minimum_protocol < 1 or self.maximum_protocol < self.minimum_protocol:
-            msg = tr("form revision and protocol bounds must be positive and ordered")
+            msg = tr(
+                t"submissions-form-revision-protocol = form revision and protocol bounds must be positive and ordered"
+            )
             raise ValidationError(msg)
         _require_unique((section.id for section in self.common_sections), "common section IDs")
         _require_unique((category.code for category in self.categories), "category codes")
@@ -243,7 +270,12 @@ class FormManifest:
             if overlap:
                 category_code = category.code
                 fields = sorted(overlap)
-                raise ValidationError(tr(t"category {category_code} duplicates common fields: {fields}"))
+                raise ValidationError(
+                    tr(
+                        t"submissions-category-duplicates-common = category {category_code} duplicates "
+                        t"common fields: {fields}"
+                    )
+                )
 
     def category(self, code: str) -> CategoryForm:
         """Resolve a category by stable code."""
@@ -252,7 +284,7 @@ class FormManifest:
                 return category
         category = code
         raise ValidationError(
-            tr(t"unknown submission category: {category}"),
+            tr(t"submissions-unknown-submission-category = unknown submission category: {category}"),
             resource="submission_category",
             public_context={"category": code},
         )
@@ -391,11 +423,14 @@ def _matches_kind(value: JSONValue, kind: ValueKind) -> bool:
 def _require_stable_id(value: str, label: str) -> None:
     if _STABLE_ID.fullmatch(value) is None:
         raise ValidationError(
-            tr(t"{label} must start with a letter and contain only lowercase letters, digits, or underscores")
+            tr(
+                t"submissions-field-name-format = {label} must start with a "
+                t"letter and contain only lowercase letters, digits, or underscores"
+            )
         )
 
 
 def _require_unique(values: Iterable[str], label: str) -> None:
     materialized = tuple(values)
     if len(materialized) != len(set(materialized)):
-        raise ValidationError(tr(t"{label} must be unique"))
+        raise ValidationError(tr(t"submissions-unique = {label} must be unique"))

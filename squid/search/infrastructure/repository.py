@@ -85,7 +85,7 @@ class PostgresSearchBackend(SearchBackend):
             if field is None or not field.supports_sort:
                 field_name = request.sort.field
                 raise ValidationError(
-                    tr(t"Search results cannot be sorted by {field_name}."),
+                    tr(t"search-search-results-sorted = Search results cannot be sorted by {field_name}."),
                     code=ErrorCode.INVALID_QUERY,
                     public_context={"field": "sort", "value": request.sort.field},
                 )

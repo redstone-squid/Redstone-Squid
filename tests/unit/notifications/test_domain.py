@@ -106,14 +106,12 @@ def test_delivery_renderer_localizes_at_send_time(monkeypatch: pytest.MonkeyPatc
         kind=NotificationKind.BUILD_CONFIRMED,
         payload={"build_id": 42},
     )
-    translations = {"Your build was confirmed.": "你的作品已确认。"}
     monkeypatch.setattr(
         notification_module,
         "localization_for",
         lambda locale: Localization(
             locale=locale or "en",
-            gettext=lambda message: translations.get(message, message),
-            ngettext=lambda singular, plural, count: singular if count == 1 else plural,
+            resources=("bot-notifications-your-build-was-confirmed = 你的作品已确认。",),
         ),
     )
 

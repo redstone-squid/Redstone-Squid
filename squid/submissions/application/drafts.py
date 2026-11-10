@@ -75,7 +75,7 @@ class StoredDraft:
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
-            msg = tr("Only Paper drafts may retain an installation provenance ID.")
+            msg = tr(t"submissions-paper-may-retain = Only Paper drafts may retain an installation provenance ID.")
             raise ValidationError(msg)
 
 
@@ -188,7 +188,10 @@ class CheckedInFormRevisionMigration:
         target: FormManifest,
     ) -> Mapping[str, JSONValue]:
         if source.schema_id != target.schema_id or target.revision != source.revision + 1:
-            msg = tr("submission form revisions must be upgraded one checked-in revision at a time")
+            msg = tr(
+                t"submissions-submission-form-revisions = "
+                t"submission form revisions must be upgraded one checked-in revision at a time"
+            )
             raise ValidationError(msg)
         source_fields = {field.id for field in source.fields_for(draft.snapshot.category)}
         target_fields = {field.id for field in target.fields_for(draft.snapshot.category)}
@@ -212,7 +215,7 @@ class FixedAccountDraftCapacity:
 
     def __init__(self, limit: int = DEFAULT_ACCOUNT_DRAFT_CAPACITY) -> None:
         if limit < 1:
-            msg = tr("draft capacity must be positive")
+            msg = tr(t"submissions-draft-capacity-positive = draft capacity must be positive")
             raise InvalidStateError(msg)
         self._limit = limit
 
@@ -249,7 +252,7 @@ class SubmissionDraftService:
         permissions: DraftPermissions | None = None,
     ) -> None:
         if retention_days < 1 or inferred_capacity < 1:
-            msg = tr("draft retention must be positive")
+            msg = tr(t"submissions-draft-retention-positive = draft retention must be positive")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._manifests = manifests
@@ -279,7 +282,10 @@ class SubmissionDraftService:
     ) -> StoredDraft:
         """Create an empty draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
-            msg = tr("Paper drafts require server-derived installation provenance.")
+            msg = tr(
+                t"submissions-paper-installation-provenance-required "
+                t"= Paper drafts require server-derived installation provenance."
+            )
             raise ValidationError(msg)
         if inferred and origin is not SubmissionOrigin.DISCORD:
             message = "Inferred drafts require Discord source provenance."
@@ -320,7 +326,9 @@ class SubmissionDraftService:
         async with self._uow_factory() as uow:
             if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
                 maximum = DEFAULT_ACCOUNT_DRAFT_CAPACITY
-                raise InvalidStateError(tr(t"draft discovery limit must be between 1 and {maximum}"))
+                raise InvalidStateError(
+                    tr(t"submissions-draft-discovery-limit = draft discovery limit must be between 1 and {maximum}")
+                )
             return await uow.submission_drafts.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def attention_inbox(
@@ -384,7 +392,7 @@ class SubmissionDraftService:
         """Expire one bounded batch using the same authoritative service clock."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 1_000:
-                msg = tr("draft expiry limit must be between 1 and 1000")
+                msg = tr(t"submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000")
                 raise InvalidStateError(msg)
             result = await uow.submission_drafts.expire_due(now=now or self._now(), limit=limit)
             await uow.commit()

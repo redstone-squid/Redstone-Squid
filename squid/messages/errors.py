@@ -7,7 +7,7 @@ from squid.core.i18n import tr
 class MessageNotFoundError(NotFoundError):
     """A recorded Discord message could not be found."""
 
-    default_message = tr("Tracked message not found.")
+    default_message = tr(t"messages-tracked-message-not-found = Tracked message not found.")
     default_code = ErrorCode.MESSAGE_NOT_FOUND
     default_resource = "message"
 
