@@ -12,6 +12,7 @@ from squid.bot.posts.reconciler import PostReconciler
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
 from squid.topics import resource_topic
+from squid_reactivity import CellAddress
 from squid_ui_discord import Everyone
 from squid_ui_discord.testing import delivered_to, message_harness
 from tests.support.services import bot_services
@@ -79,7 +80,10 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     for panel, message in zip(panels, messages, strict=True):
         message_root = sd.MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
         await message_root.send(delivered_to(message))
-        assert message_root.followed == (resource_topic("build", "42"),), "following is what the render read"
+        assert message_root.followed == (
+            CellAddress(message_root.component, "value"),
+            resource_topic("build", "42"),
+        ), "following includes the resource and the topic its loader read"
 
     posts = PostRecorder()
     reconciler = ReconcileRecorder()
