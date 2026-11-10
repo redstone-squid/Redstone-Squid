@@ -3,6 +3,8 @@
 Discord bot for Minecraft redstone build submissions, records, voting, and moderation.
 Uses Python 3.14+ and discord.py.
 
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
+
 ## Code style
 
 - Use 120-character lines and full type hints.
