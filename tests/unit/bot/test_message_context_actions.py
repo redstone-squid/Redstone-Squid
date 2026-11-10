@@ -139,7 +139,7 @@ def test_redstoner_screen_is_a_private_user_guild_workspace() -> None:
     assert screen.session.scope is sd.ScopeKind.USER_GUILD
     assert screen.audience == "personal"
     assert screen.timeout == 300
-    assert {"Deploy role controls", "Close"} <= set(labels(screen.render()))
+    assert {"Deploy role controls"} <= set(labels(screen.render()))
 
 
 def test_redstoner_hides_deployment_without_initial_permission() -> None:

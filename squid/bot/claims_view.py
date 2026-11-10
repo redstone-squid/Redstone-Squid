@@ -28,7 +28,6 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     selected_id: int | None = sl.state(None)
     reassign_armed: int | None = sl.state(None)
-    closed: bool = sl.state(default=False)
 
     def __init__(
         self,
@@ -59,13 +58,6 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        if self.closed:
-            return (
-                sl.section(
-                    sl.heading(tr("Claims closed")),
-                    sl.paragraph(tr("This review queue is closed.")),
-                ),
-            )
         entries = tuple(_claim_entry(claim) for claim in self._claims)
         body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = (
             sd.v2.lines(
@@ -116,7 +108,6 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
                     available=self.selected is not None,
                 )
             )
-        buttons.append(sl.action_control(tr("Close"), self._close, key="close"))
         return (
             sd.v2.panel(
                 sd.v2.heading(tr("Creator credit claims awaiting review")),
@@ -191,10 +182,6 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._claims = tuple(await self._accounts.pending_alias_claims(with_claimants=True))
         self.selected_id = None
         self.reassign_armed = None
-
-    async def _close(self, event: sd.PressEvent) -> None:
-        self.closed = True
-        event.finish_on_success()
 
 
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:

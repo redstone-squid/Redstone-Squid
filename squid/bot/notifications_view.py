@@ -39,13 +39,12 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
 
 
 class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
-    """A notification workspace that ends when closed, replaced, or timed out."""
+    """A notification workspace that ends when replaced or timed out."""
 
     timeout = SESSION_SECONDS
 
     selected_ids: tuple[str, ...] = sl.state(())
     selected_inbox_ids: tuple[str, ...] = sl.state(())
-    closed: bool = sl.state(default=False)
     # Reload service data on mount instead of restoring it from a snapshot.
     _preferences: NotificationPreferences | None = sl.state(None, persist=False)
     _subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
@@ -110,8 +109,6 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        if self.closed:
-            return (sl.section(sl.heading(tr("Notifications closed"))),)
         on, off = tr("On"), tr("Off")
         fields = (
             sl.field(tr("Web inbox"), on if self.web_enabled else off),
@@ -239,11 +236,6 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
                     self._mark_selected_unread,
                     key="mark_selected_unread",
                     available=bool(self.selected_inbox_ids),
-                ),
-                sl.action_control(
-                    tr("Close"),
-                    self._close,
-                    key="close",
                 ),
                 key="notification-actions",
             )
@@ -378,10 +370,6 @@ class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
                 sl.forms.TextField(key="tag_value", label=tr("Exact tag value"), required=False, maximum=100),
             ),
         )
-
-    async def _close(self, event: sd.PressEvent) -> None:
-        self.closed = True
-        event.finish_on_success()
 
     def _subscription_list(self) -> sl.TextLike:
         if not self._subscriptions:

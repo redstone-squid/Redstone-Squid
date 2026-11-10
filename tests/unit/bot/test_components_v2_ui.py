@@ -379,7 +379,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     ]
 
     assert [button.label for button in result_buttons] == ["Smallest 2x2 door", "Fast door"]
-    assert "Close" in str(rendered.to_components())
+    assert "Close" not in str(rendered.to_components())
 
 
 def test_search_results_preserve_page_warnings_without_refetching_the_initial_page() -> None:

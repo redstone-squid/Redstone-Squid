@@ -137,7 +137,7 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
 
 class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
-    """An error browser that ends when closed, cleared, replaced, or timed out."""
+    """An error browser that ends when cleared, replaced, or timed out."""
 
     timeout = SESSION_SECONDS
     audience = sd.Private(tr("An error report names internal paths, so it is never posted in a channel."))
@@ -228,7 +228,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
         if self.confirming_clear:
             return sl.Document((self.boundary(self._clear_decision, key="clear-decision"),))
         if self._detail is not None:
-            return sl.Document((self._render_report(self._detail, self._matches), self._detail_actions()))
+            return sl.Document((self._render_report(self._detail, self._matches),))
         if self._browser is None:
             return sl.Document((sl.status(tr("Loading error reports.")),))
         assert self._updates is not None
@@ -250,7 +250,6 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
                     )
                     if self._can_clear
                     else None,
-                    self._close_action(),
                     key="error-actions",
                 ),
             )
@@ -279,16 +278,6 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
         )
         return sl.stack(*children)
 
-    def _detail_actions(self) -> sl.semantic.ActionControls:
-        return sl.action_controls(self._close_action(), key="detail-actions")
-
-    def _close_action(self) -> sl.semantic.ActionControl:
-        return sl.action_control(
-            tr("Close"),
-            self._close,
-            key="close",
-        )
-
     async def _refresh_reports(self, event: sl.PressEvent) -> None:
         await event.acknowledge()
         await self._load_recent()
@@ -312,9 +301,6 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
 
     async def _cancel_clear(self, _event: sp.TransitionEvent[sp.DecisionState]) -> None:
         self.confirming_clear = False
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 def report_attachment(report: ErrorReport) -> discord.File:

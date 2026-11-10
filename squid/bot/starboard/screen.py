@@ -107,10 +107,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             )
         if self._tabs is None:
             return (sl.status(tr("Loading starboards.")),)
-        return (
-            self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="starboard-actions"),
-        )
+        return (self.boundary(self._tabs, key="tabs"),)
 
     def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
@@ -262,9 +259,6 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             return True
         await event.notice(tr("You are no longer allowed to perform this starboard operation."))
         return False
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 def _board_detail(board: StarboardConfig) -> sl.semantic.Fields:

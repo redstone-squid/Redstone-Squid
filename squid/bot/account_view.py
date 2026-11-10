@@ -70,7 +70,6 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
     timeout = SESSION_SECONDS
 
     selected_id: int | None = sl.state(None)
-    closed: bool = sl.state(default=False)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
     _identities: tuple[AccountIdentity, ...] = sl.state((), persist=False)
     _needs_consent: bool = sl.state(default=False, persist=False)
@@ -124,8 +123,6 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        if self.closed:
-            return (sl.section(sl.heading(tr("Account controls closed"))),)
         if self._profile_editor is not None:
             return (
                 self.boundary(self._profile_editor, key="profile-editor"),
@@ -207,7 +204,6 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
                     key="edit_page",
                     emphasis=sl.semantic.Emphasis.STRONG,
                 ),
-                sl.action_control(tr("Close"), self._close, key="close"),
                 key="account-actions",
             )
         )
@@ -405,10 +401,6 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
     async def _reload(self) -> None:
         await self._refresh()
         self.invalidate()
-
-    async def _close(self, event: sd.PressEvent) -> None:
-        self.closed = True
-        event.finish_on_success()
 
     def _fields(self) -> list[CardField]:
         fields = self._profile_fields(self._profile)

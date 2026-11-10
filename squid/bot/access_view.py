@@ -118,10 +118,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             )
         if self._tabs is None:
             return (sl.status(tr("Loading access controls.")),)
-        return (
-            self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="access-actions"),
-        )
+        return (self.boundary(self._tabs, key="tabs"),)
 
     def _subject_browser(
         self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]
@@ -364,9 +361,6 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
                 return True
         await event.notice(tr("You are no longer allowed to change access controls."))
         return False
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 def _scope_field() -> sl.forms.ChoiceField[str]:

@@ -379,7 +379,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
 
 class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
-    """A live build workspace that ends when closed, replaced, or timed out."""
+    """A live build workspace that ends when replaced or timed out."""
 
     timeout = 300
     follow_topics = True
@@ -445,16 +445,12 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
                 self.boundary(self._selected, key="selected-build"),
                 sl.action_controls(
                     sl.action_control(tr("Back to builds"), self._back, key="back"),
-                    sl.action_control(tr("Close"), self._close, key="close"),
                     key="selected-actions",
                 ),
             )
         if self._tabs is None:
             return (sl.status(tr("Loading builds.")),)
-        return (
-            self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="build-screen-actions"),
-        )
+        return (self.boundary(self._tabs, key="tabs"),)
 
     def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
@@ -506,9 +502,6 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
 
     async def _back(self, _event: sl.PressEvent) -> None:
         self._selected = None
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 class _ConvertForm(sl.forms.Form):

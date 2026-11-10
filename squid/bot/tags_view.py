@@ -96,7 +96,7 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
 
 class TagsScreen(sd.UserSessionScreen, session_name="tags"):
-    """A tag workspace that ends when closed, replaced, or timed out."""
+    """A tag workspace that ends when replaced or timed out."""
 
     timeout = 300
 
@@ -195,10 +195,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
             )
         if self._tabs is None:
             return (sl.status(tr("Loading build tags.")),)
-        return (
-            self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="tag-actions"),
-        )
+        return (self.boundary(self._tabs, key="tabs"),)
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:
@@ -329,9 +326,6 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
             return True
         await event.notice(tr("You are no longer allowed to perform this tag operation."))
         return False
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 def _tag_summary(tag: TagDefinition) -> str:

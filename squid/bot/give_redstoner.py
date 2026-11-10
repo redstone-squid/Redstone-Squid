@@ -93,7 +93,7 @@ type PanelPublisher = Callable[[], Awaitable[None]]
 
 
 class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
-    """A Redstoner deployment screen that ends when closed, replaced, or timed out."""
+    """A Redstoner deployment screen that ends when replaced or timed out."""
 
     timeout = 300
 
@@ -120,7 +120,6 @@ class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
         actions: list[sl.semantic.ActionControl] = []
         if self._can_deploy:
             actions.append(sl.action_control(tr("Deploy role controls"), self._deploy, key="deploy"))
-        actions.append(sl.action_control(tr("Close"), self._close, key="close"))
         return (
             sl.section(
                 sl.heading(tr("Redstoner automation")),
@@ -139,9 +138,6 @@ class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
             return
         await self._publish_panel()
         await event.notice(tr("Redstoner role controls deployed."))
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):

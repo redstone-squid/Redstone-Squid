@@ -208,7 +208,7 @@ async def test_changing_language_relocalizes_the_live_root(monkeypatch: pytest.M
     panel, _, message_root = make_component_panel()
     commit_render(message_root)
     original_localization = message_root.localization
-    translations = {"Server settings": "Paramètres du serveur", "Close": "Fermer"}
+    translations = {"Server settings": "Paramètres du serveur", "Voting": "Votes"}
     monkeypatch.setattr(
         settings_view,
         "localization_for",
@@ -222,7 +222,7 @@ async def test_changing_language_relocalizes_the_live_root(monkeypatch: pytest.M
     text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
     labels = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
     assert "Paramètres du serveur" in text
-    assert "Fermer" in labels
+    assert "Votes" in labels
 
     with sl.runtime.transaction():
         result = await panel.history.undo()

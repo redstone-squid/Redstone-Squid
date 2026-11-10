@@ -109,10 +109,7 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
             return (self.boundary(self._merge_decision, key="merge-decision"),)
         if self._tabs is None:
             return (sl.status(tr("Loading account.")),)
-        return (
-            self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="account-actions"),
-        )
+        return (self.boundary(self._tabs, key="tabs"),)
 
     def _identity_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         account = self._account
@@ -354,9 +351,6 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
             message = "account workflow requires a persisted account"
             raise RuntimeError(message)
         return account.id
-
-    async def _close(self, event: sd.PressEvent) -> None:
-        event.finish_on_success()
 
 
 class _LinkForm(sl.forms.Form):

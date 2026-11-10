@@ -126,12 +126,10 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
 
 class SearchScreen(sd.UserSessionScreen, session_name="search"):
-    """A resource-backed search workspace that ends when closed, replaced, or timed out."""
+    """A resource-backed search workspace that ends when replaced or timed out."""
 
     timeout = 180
     audience = "public"
-
-    closed: bool = sl.state(default=False)
 
     def __init__(
         self,
@@ -216,21 +214,7 @@ class SearchScreen(sd.UserSessionScreen, session_name="search"):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        if self.closed:
-            return (
-                sl.section(
-                    sl.heading(tr("Search closed")),
-                    sl.truncate(sl.paragraph(tr("This search is closed."))),
-                ),
-            )
-        return (
-            self.boundary(self._browser, key="results"),
-            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="search-actions"),
-        )
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        self.closed = True
-        event.finish_on_success()
+        return (self.boundary(self._browser, key="results"),)
 
 
 def _build_id(hit: SearchHit) -> int | None:

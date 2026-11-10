@@ -224,13 +224,6 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             actions.append(sl.action_control(tr("Redo"), self._redo, key="redo"))
         if self.shows_voting:
             actions.append(sl.action_control(tr("Voting"), self._show_voting, key="voting"))
-        actions.append(
-            sl.action_control(
-                tr("Close"),
-                self._close,
-                key="close",
-            )
-        )
         children.append(sl.action_controls(*actions, key="server-actions"))
         return children
 
@@ -280,13 +273,6 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             )
         if self.shows_server:
             actions.append(sl.action_control(tr("Back"), self._show_server, key="server"))
-        actions.append(
-            sl.action_control(
-                tr("Close"),
-                self._close,
-                key="close",
-            )
-        )
         children.append(sl.action_controls(*actions, key="voting-actions"))
         return children
 
@@ -426,9 +412,6 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
 
     async def _show_server(self, event: sl.PressEvent) -> None:
         await self.open_server()
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):

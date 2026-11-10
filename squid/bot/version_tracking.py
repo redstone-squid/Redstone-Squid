@@ -42,7 +42,7 @@ type VersionAuthorizer = Callable[[], Awaitable[bool]]
 
 
 class VersionScreen(sd.UserSessionScreen, session_name="versions"):
-    """A version catalogue that ends when closed, replaced, or timed out."""
+    """A version catalogue that ends when replaced or timed out."""
 
     timeout = 300
 
@@ -97,12 +97,6 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
                     on_submit=self._add,
                 )
             )
-        nodes.append(
-            sl.action_controls(
-                sl.action_control(tr("Close"), self._close, key="close"),
-                key="version-actions",
-            )
-        )
         return tuple(nodes)
 
     async def _add(self, event: sl.SubmitEvent) -> None:
@@ -115,9 +109,6 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
         version = str(await self._versions.add(version_text, edition=edition))
         await self._refresh()
         await event.notice(tr(t"Added {version}."))
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="VersionTracker"):

@@ -43,7 +43,7 @@ def test_help_screen_uses_a_browser_for_the_command_directory() -> None:
     nodes = screen.render()
 
     assert screen._browser is not None
-    assert "Close" in labels(nodes)
+    assert "Close" not in labels(nodes)
     links = {node.key: node.url for node in walk(nodes) if isinstance(node, sl.semantic.Link)}
     assert links["invite"].startswith("https://discordapp.com/oauth2/authorize?client_id=42")
     assert links["form"] == SUBMISSION_FORM_URL

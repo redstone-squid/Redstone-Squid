@@ -57,7 +57,7 @@ class HelpClient(Protocol):
 
 
 class HelpScreen(sd.UserSessionScreen, session_name="help"):
-    """A command browser that ends when closed, replaced, or timed out."""
+    """A command browser that ends when replaced or timed out."""
 
     timeout = 300
     audience = "public"
@@ -137,11 +137,7 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
         return (
             body,
             sl.action_controls(*links, key="help-links"),
-            sl.action_controls(sl.action_control(tr("Close"), self._close, key="close"), key="help-actions"),
         )
-
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
 
 
 def _summary(command: AnyCommand) -> TextLike:

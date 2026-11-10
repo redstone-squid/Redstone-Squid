@@ -15,7 +15,7 @@ from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.accounts.models import Account, AccountIdentity, AliasClaim
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.permissions.domain import PermissionNode
-from squid_ui.testing import RecordingResponder, choose, press, press_event
+from squid_ui.testing import RecordingResponder, choose, press_event
 from squid_ui_discord.testing import commit_render
 from tests.support.discord import make_layout_bot
 
@@ -106,16 +106,6 @@ async def test_selecting_a_claim_enables_decisions() -> None:
     assert component.selected_id == 7
     assert component.selected is not None
     assert component.reassign_armed is None
-
-
-async def test_closing_finishes_the_semantic_root() -> None:
-    component = make_component((make_claim(7),)).component
-    responder = RecordingResponder()
-
-    await press(component, "close", responder=responder)
-
-    assert component.closed is True
-    assert responder.finished is True
 
 
 @pytest.mark.parametrize(
