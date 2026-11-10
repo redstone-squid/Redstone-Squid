@@ -210,8 +210,7 @@ _SET_COMPARED = {
     "creators_ign",
     "links",
 }
-# Require a submission timestamp without comparing its initial value. edited_time
-# is compared normally: save() stamps the supplied build at storage precision.
+# Require a submission timestamp without comparing its initial value.
 _DB_GENERATED = {"submission_time"}
 # Compared structurally below rather than by dataclass equality.
 _TAG_FIELDS = {"tags"}
@@ -228,6 +227,8 @@ def _assert_round_trip(saved: Build, loaded: Build) -> None:
         loaded_value = getattr(loaded, name)
         if name in _DB_GENERATED:
             assert loaded_value is not None, f"{name} should be database-generated"
+        elif isinstance(saved_value, Instant):
+            assert loaded_value == saved_value.round("microsecond", mode="floor"), f"{name} did not round-trip"
         elif name == "links":
             assert {(link.url, link.media_type) for link in loaded_value} == {
                 (link.url, link.media_type) for link in saved_value

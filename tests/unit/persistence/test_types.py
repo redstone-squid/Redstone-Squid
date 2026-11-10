@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta, timezone
 from enum import IntEnum
 
+import pytest
 from sqlalchemy import Column, MetaData, Table, create_engine, insert, select
 from sqlalchemy.dialects import sqlite
 from whenever import Instant
@@ -41,19 +42,21 @@ def test_instant_utc_treats_naive_driver_results_as_utc() -> None:
     assert result == Instant.from_utc(2026, 7, 30, hour=12, minute=34)
 
 
-def test_instant_utc_round_trips_through_sqlite() -> None:
+@pytest.mark.parametrize("nanosecond", [0, 123456000, 123456789, 999999999])
+def test_instant_utc_round_trips_at_microsecond_precision(nanosecond: int) -> None:
     metadata = MetaData()
     events = Table("events", metadata, Column("occurred_at", InstantUTC(), nullable=False))
     engine = create_engine("sqlite://")
     metadata.create_all(engine)
-    value = Instant.from_utc(2026, 7, 30, hour=12, minute=34)
+    value = Instant.from_utc(2026, 7, 30, hour=12, minute=34, nanosecond=nanosecond)
 
     with engine.begin() as connection:
         connection.execute(insert(events).values(occurred_at=value))
         result = connection.scalar(select(events.c.occurred_at))
     engine.dispose()
 
-    assert result == value
+    assert result == value.round("microsecond", mode="floor")
+    assert value.timestamp(unit="nanosecond") % 1_000_000_000 == nanosecond
 
 
 def test_int_enum_small_int_accepts_members_and_raw_integers() -> None:
