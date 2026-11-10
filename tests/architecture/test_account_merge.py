@@ -19,6 +19,7 @@ def test_every_account_foreign_key_has_an_explicit_merge_disposition() -> None:
         *PERMISSION_PROVENANCE_REFERENCES,
         *VOTING_REFERENCES,
         AccountReference("notification_subscriptions", "account_id"),
+        AccountReference("runtime_setting_changes", "actor_account_id"),
     )
     coalesced = (
         AccountReference("creator_alias_claims", "account_id"),

@@ -28,7 +28,7 @@ from squid.notifications.models import (
 )
 from squid.persistence.types import now
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.settings.models import ServerSetting
+from squid.settings.models import RuntimeSettingChange, ServerSetting
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
 from squid.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
@@ -489,3 +489,25 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
     )
     assert record_subscription.subject_id is None
     assert record_subscription.record_filter == RecordSubscriptionFilter.from_dict(record_filter)
+
+
+async def test_runtime_settings_audit_follows_the_surviving_account(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    accounts = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
+    async with migrated_session_factory() as session:
+        session.add(
+            RuntimeSettingChange(
+                actor_account_id=absorbed.id,
+                before={"welcome_enabled": True},
+                after={"welcome_enabled": False},
+            )
+        )
+        await session.commit()
+    await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
+    async with migrated_session_factory() as session:
+        audit = (await session.scalars(select(RuntimeSettingChange))).one()
+        assert audit.actor_account_id == survivor.id
+        assert audit.after == {"welcome_enabled": False}

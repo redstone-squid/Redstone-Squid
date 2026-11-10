@@ -2,7 +2,9 @@
 
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import replace
+from typing import override
 
+from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.models import RuntimeSetting, ServerSetting
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
@@ -16,7 +18,7 @@ class FakeSettingsRepository:
         raise NotImplementedError
 
     async def record_runtime_change(
-        self, actor_discord_id: int, before: RuntimeSettings, after: RuntimeSettings
+        self, actor_account_id: int, before: RuntimeSettings, after: RuntimeSettings
     ) -> None:
         raise NotImplementedError
 
@@ -54,3 +56,14 @@ class FakeSettingsUnitOfWork(FakeUnitOfWork[dict[int, ServerSetting]]):
     @property
     def settings(self) -> FakeSettingsRepository:
         return FakeSettingsRepository(self.state)
+
+
+class RuntimeSettingsStub(SettingsService):
+    """Mutable snapshot for testing consumers across runtime edits."""
+
+    def __init__(self, value: RuntimeSettings | None = None) -> None:
+        self.value = value or RuntimeSettings()
+
+    @override
+    async def get_runtime(self) -> RuntimeSettings:
+        return self.value

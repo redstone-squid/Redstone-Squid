@@ -2,7 +2,19 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Float, Integer, SmallInteger, Text, func, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    SmallInteger,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -67,7 +79,13 @@ class RuntimeSettingChange(Base):
     __tablename__ = "runtime_setting_changes"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
-    actor_discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    actor_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    """Internal account that made the edit; retained as null if that account is deleted."""
     changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, init=False
     )

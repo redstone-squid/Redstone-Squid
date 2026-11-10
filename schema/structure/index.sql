@@ -124,6 +124,9 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/record_titles.sql
 \ir public/TABLES/rules_revisions.sql
 \ir public/SEQUENCES/rules_revisions_id_seq.sql
+\ir public/TABLES/runtime_setting_changes.sql
+\ir public/SEQUENCES/runtime_setting_changes_id_seq.sql
+\ir public/TABLES/runtime_settings.sql
 \ir public/TABLES/schematic_files.sql
 \ir public/TABLES/schematic_jobs.sql
 \ir public/SEQUENCES/schematic_jobs_id_seq.sql

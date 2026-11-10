@@ -126,6 +126,11 @@ async def merge_accounts(session: AsyncSession, context: AccountMergeContext) ->
     await merge_voting(session, context)
     await merge_account_notifications(session, survivor=context.survivor, absorbed=context.absorbed)
     await merge_permissions(session, context)
+    await move_account_references(
+        session,
+        (AccountReference("runtime_setting_changes", "actor_account_id"),),
+        context,
+    )
     result = AccountMerge(
         surviving_account_id=context.survivor,
         absorbed_account_id=context.absorbed,

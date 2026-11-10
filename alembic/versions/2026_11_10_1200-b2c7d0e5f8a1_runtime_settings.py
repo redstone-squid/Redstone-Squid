@@ -40,15 +40,25 @@ def upgrade() -> None:
             "AND delete_vote_pass_threshold > 0 AND delete_vote_fail_threshold < 0",
             name="runtime_settings_thresholds",
         ),
+        comment="Singleton containing global defaults and owner-guild community routing.",
     )
     op.create_table(
         "runtime_setting_changes",
         sa.Column("id", sa.BigInteger(), primary_key=True),
-        sa.Column("actor_discord_id", sa.BigInteger(), nullable=False),
+        sa.Column(
+            "actor_account_id",
+            sa.Integer(),
+            sa.ForeignKey("accounts.id", ondelete="SET NULL"),
+            nullable=True,
+            comment="Internal account that made the edit; retained as null if that account is deleted.",
+        ),
         sa.Column("changed_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("before", postgresql.JSONB(), nullable=False),
         sa.Column("after", postgresql.JSONB(), nullable=False),
+        comment="An administrator's committed change, including before and after snapshots.",
     )
+
+    op.create_index("ix_runtime_setting_changes_actor_account_id", "runtime_setting_changes", ["actor_account_id"])
 
 
 def downgrade() -> None:
