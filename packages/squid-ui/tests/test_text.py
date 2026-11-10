@@ -163,3 +163,29 @@ def test_resolve_uses_the_current_localization() -> None:
     with localization_scope(french()):
         assert Message("Hello").resolve() == "Bonjour"
         assert plain("*a*").resolve() == "\\*a\\*"
+
+
+def test_message_from_template_preserves_formatting_until_resolution() -> None:
+    seconds = 2.5
+    label = "done"
+
+    message = Message.from_template(t"Took {seconds:.1f}s: {label!r}")
+
+    assert message.template == "Took {seconds:.1f}s: {label!r}"
+    assert message.params == {"seconds": seconds, "label": label}
+    assert message.resolve() == "Took 2\\.5s: 'done'"
+
+
+def test_message_from_template_rejects_expression_placeholders() -> None:
+    label = "done"
+
+    with pytest.raises(ValueError, match="not a placeholder name"):
+        Message.from_template(t"{label.upper()}")
+
+
+def test_message_from_template_accepts_literal_text() -> None:
+    message = Message.from_template(t"Saved.")
+
+    assert message.template == "Saved."
+    assert message.params == {}
+    assert message.resolve() == "Saved."

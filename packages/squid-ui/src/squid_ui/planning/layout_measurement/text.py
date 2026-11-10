@@ -72,10 +72,6 @@ class BudgetRegion:
         return next(iter(axes), None)
 
 
-def _escape_fences(content: str) -> str:
-    return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
-
-
 def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: Axis = Axis.DISPLAY_TEXT) -> TextUnit | None:
     """Create the allocation unit for one text-bearing primitive."""
     prefix, suffix, content, ladders, join = "", "", "", None, "\n"
@@ -92,7 +88,7 @@ def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: Axis = Ax
         case Code(content=content, lang=lang):
             prefix = f"```{lang}\n"
             suffix = "\n```"
-            content = _escape_fences(resolved_text(content))
+            content = resolved_text(content).replace("```", "``\N{ZERO WIDTH SPACE}`")
         case Lines(lines=raw_lines, join=join):
             entries = [
                 (entry.steps, entry.priority) if isinstance(entry, Alt) else ((resolved_text(entry),), 0)
@@ -121,10 +117,6 @@ def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: Axis = Ax
     )
 
 
-def _hard_split(segment: str, limit: int) -> list[str]:
-    return [segment[start : start + limit] for start in range(0, len(segment), limit)]
-
-
 def split_pages(
     text: str,
     limit: int,
@@ -145,7 +137,7 @@ def split_pages(
     chunks: list[tuple[str, str]] = []
     for segment_index, segment in enumerate(text.split(boundary)):
         separator = boundary if segment_index else ""
-        pieces = _hard_split(segment, limit) if len(segment) > limit else [segment]
+        pieces = [segment[start : start + limit] for start in range(0, len(segment), limit)] or [segment]
         for piece_index, piece in enumerate(pieces):
             chunks.append((separator if piece_index == 0 else "", piece))
     if not chunks:

@@ -124,14 +124,10 @@ type _Interactive = (
 type _Adapted = sem.Adaptation[Any] | sem.FallbackContent[Any]
 
 
-def _attribute(name: scene.HtmlAttributeName, value: scene.HtmlAttributeValue) -> scene.HtmlAttribute:
-    return scene.HtmlAttribute(name, value)
-
-
 def _attributes(
     *values: tuple[scene.HtmlAttributeName, scene.HtmlAttributeValue | None],
 ) -> tuple[scene.HtmlAttribute, ...]:
-    return tuple(_attribute(name, value) for name, value in values if value is not None)
+    return tuple(scene.HtmlAttribute(name, value) for name, value in values if value is not None)
 
 
 def _entity_key(ref: object) -> str:

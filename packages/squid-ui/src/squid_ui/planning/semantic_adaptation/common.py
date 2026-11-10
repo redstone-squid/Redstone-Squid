@@ -11,11 +11,6 @@ from squid_ui.semantic import Emphasis, Tone
 from squid_ui.text import TextLike, resolve_text
 
 
-def _remember(key: str, adapter_id: str, version: int, strategy: str, context: LoweringContext) -> None:
-    """Stage an adapter's sticky choice. Lowering reads the session and writes nothing."""
-    context.updates.append(StrategyUpdate(key, StrategyState(key, adapter_id, version, strategy)))
-
-
 def _select_strategy(axis: StrategyAxis, context: LoweringContext) -> str:
     selected = context.strategies.get(axis.path)
     if selected is None:
@@ -31,12 +26,9 @@ def _select_strategy(axis: StrategyAxis, context: LoweringContext) -> str:
     elif selected not in {candidate.strategy_id for candidate in axis.candidates}:
         message = f"{axis.path}: assignment selected unavailable strategy {selected!r}"
         raise ValueError(message)
-    _remember(
-        axis.key,
-        axis.adapter_id,
-        axis.adapter_version,
-        selected,
-        context,
+    # Stage the sticky choice; lowering does not mutate the session.
+    context.updates.append(
+        StrategyUpdate(axis.key, StrategyState(axis.key, axis.adapter_id, axis.adapter_version, selected))
     )
     return selected
 

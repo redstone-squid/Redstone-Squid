@@ -167,7 +167,7 @@ class EntityCommit(_HandlerComposition):
                 )
             case Uncontrolled():
                 await event.acknowledge()
-                self.session.select(self.key, tuple(_entity_key(value) for value in selected))
+                self.session.select(self.key, tuple(encode_entity_ref(value) for value in selected))
                 event.invalidate()
 
 
@@ -408,10 +408,6 @@ class RouteSelection(GeneratedHandler[SelectionEvent]):
         binding = self.routes.get(event.values[0]) if len(event.values) == 1 else None
         if binding is not None:
             await binding.handler(event)
-
-
-def _entity_key(ref: EntityRef) -> str:
-    return encode_entity_ref(ref)
 
 
 def _bind_ownership[ValueT, EventT](

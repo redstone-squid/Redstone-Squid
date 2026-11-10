@@ -322,7 +322,7 @@ def _safe_value(value: object, markup: Markup) -> str:
     temporal = _temporal_value(value, markup)
     if temporal is not None:
         return temporal
-    return _neutralize_mentions(_escape_markdown(str(value)))
+    return _escape_markdown(str(value)).replace("@", "@\u200b")
 
 
 def _temporal_value(value: object, markup: Markup) -> str | None:
@@ -351,10 +351,6 @@ def _escape_markdown(value: str) -> str:
             escaped.append("\\")
         escaped.append(character)
     return "".join(escaped)
-
-
-def _neutralize_mentions(value: str) -> str:
-    return value.replace("@", "@\u200b")
 
 
 __all__ = [

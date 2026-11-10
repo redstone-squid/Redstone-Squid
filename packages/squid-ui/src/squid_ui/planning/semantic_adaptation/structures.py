@@ -146,13 +146,12 @@ def _grid_matrix(node: Grid, context: LoweringContext) -> PrimitiveCode:
     return PrimitiveCode("\n".join(lines), overflow=Never())
 
 
-def _grid_option(index: int, cell: GridCell, node: Grid, context: LoweringContext) -> Option:
-    return Option(f"{_coordinate(index, node.columns)} ??{_resolve(cell.label, context)}", cell.key)
-
-
 def _grid_select(cells: Sequence[tuple[int, GridCell]], node: Grid, key: str, context: LoweringContext) -> SelectMenu:
     return SelectMenu(
-        tuple(_grid_option(index, cell, node, context) for index, cell in cells),
+        tuple(
+            Option(f"{_coordinate(index, node.columns)} ??{_resolve(cell.label, context)}", cell.key)
+            for index, cell in cells
+        ),
         node.on_pick,
         key,
         placeholder="Choose a position",

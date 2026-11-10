@@ -125,12 +125,6 @@ def assignment_cost(axes: Sequence[StrategyAxis], strategies: Mapping[str, str])
     )
 
 
-def _axis_for_choice(
-    candidates: tuple[StrategyCandidate, ...], path: str, flexibility: Flexibility, preferred: str, baseline: str | None
-) -> StrategyAxis:
-    return StrategyAxis(path, path, "", 0, flexibility, preferred, candidates, baseline)
-
-
 def choose_strategy(
     candidates: tuple[StrategyCandidate, ...],
     *,
@@ -143,7 +137,7 @@ def choose_strategy(
     if not candidates:
         message = f"{path}: adapter produced no valid strategies"
         raise ValueError(message)
-    axis = _axis_for_choice(candidates, path, flexibility, preferred, baseline)
+    axis = StrategyAxis(path, path, "", 0, flexibility, preferred, candidates, baseline)
     ranked = tuple((candidate_cost(candidate, axis=axis), candidate) for candidate in candidates)
     selected_cost, selected = min(ranked, key=lambda item: item[0])
     return StrategyChoice(selected, selected_cost, len(ranked))
