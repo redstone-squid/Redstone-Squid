@@ -31,7 +31,6 @@ from squid_ui.planning.layout_measurement.diagnostics import (
     SolveNoteCode,
     SolveNoteSeverity,
     lossy_notes,
-    note,
 )
 from squid_ui.planning.layout_measurement.model import (
     PAGE_FOOTER_PREFIX,
@@ -212,7 +211,7 @@ def _configure_paginators(
                 unit.count_pages = _count_pages(unit, policy.per)
             else:
                 builder.notes.append(
-                    note(
+                    SolveNote(
                         SolveNoteCode.PAGINATE_PER_FALLBACK,
                         f"node {unit.index} is not a Lines node; paging on overflow instead of per entry",
                     )
@@ -362,7 +361,7 @@ def _measure_once(
     cost = ResourceCost({**text_used, **structural_cost(children)})
     for axis, spent, capacity in cost.over({**limits.text_axes, **limits.capacities}):
         builder.notes.append(
-            note(
+            SolveNote(
                 SolveNoteCode.COMPONENT_BUDGET if axis == Axis.COMPONENTS else SolveNoteCode.TEXT_BUDGET,
                 f"{spent} {axis} exceed {capacity}; the document needs restructuring",
             )

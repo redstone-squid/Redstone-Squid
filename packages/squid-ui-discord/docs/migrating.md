@@ -424,3 +424,17 @@ For multiple implementations, use `sl.handlers(sd.on_press(callback), fallback=p
 The `on_selection`, `on_choice`, `on_submit`, and other event registration functions provide
 the same selection for their respective shapes. Registrations are selected using the
 adapter profile's explicit `frontend`, with no callback annotation inspection.
+
+## Updating helper-based calls
+
+Entity references now own their stable presentation encoding: use `ref.encode()` and
+`EntityRef.decode(value)`. Picker compatibility is `entity_type.supports(kind)`. The encoding itself
+is unchanged, including the distinction between integer and string IDs.
+
+Apply a delivered plan's updates with `presentation.apply_updates(plan.session_updates)`. This still
+advances the presentation revision once when the batch changes state. Apply it only after successful
+delivery; failed delivery must leave the remembered presentation unchanged.
+
+Use `str(address)` for diagnostic state/topic addresses, `inspection.measure_classic(payload, ...)`
+for an existing classic payload's cost, and `SolveNote(...)` to construct solver diagnostics. The
+`describe`, `classic.measure_host`, and diagnostic `note` forwarding functions have been removed.

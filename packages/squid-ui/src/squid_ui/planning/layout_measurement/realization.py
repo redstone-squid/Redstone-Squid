@@ -9,7 +9,6 @@ from squid_ui.planning.layout_measurement.diagnostics import (
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,
-    note,
 )
 from squid_ui.planning.layout_measurement.model import (
     MeasuredCard,
@@ -108,7 +107,7 @@ class Builder:
             return None
         if len(content) > cap:
             self.notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.CLAMP_EMBED_TEXT,
                     f"{what} clamped from {len(content)} to {cap}",
                     SolveNoteSeverity.CLAMP,
@@ -127,7 +126,7 @@ class Builder:
         fields = node.fields[: embeds.fields]
         if len(fields) != len(node.fields):
             self.notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.CLAMP_EMBED_FIELDS,
                     f"card holds {len(node.fields)} fields; keeping {len(fields)}",
                     SolveNoteSeverity.CLAMP,
@@ -162,7 +161,7 @@ class Builder:
         if label is None or len(label) <= self.limits.components.button_label:
             return button
         self.notes.append(
-            note(
+            SolveNote(
                 SolveNoteCode.CLAMP_BUTTON_LABEL,
                 f"button label clamped from {len(label)}",
                 SolveNoteSeverity.CLAMP,
@@ -175,7 +174,7 @@ class Builder:
         options = select.options
         if len(options) > limits.components.select_options:
             self.notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.CLAMP_SELECT_OPTIONS,
                     f"{len(options)} select options clamped to {limits.components.select_options}",
                     SolveNoteSeverity.CLAMP,
@@ -191,7 +190,9 @@ class Builder:
                 description = trim_keep(description, limits.components.option_description, "head")
             if (label, value, description) != (option.label, option.value, option.description):
                 self.notes.append(
-                    note(SolveNoteCode.CLAMP_SELECT_OPTION_TEXT, "select option text clamped", SolveNoteSeverity.CLAMP)
+                    SolveNote(
+                        SolveNoteCode.CLAMP_SELECT_OPTION_TEXT, "select option text clamped", SolveNoteSeverity.CLAMP
+                    )
                 )
                 option = Option(
                     label=label,
@@ -204,7 +205,7 @@ class Builder:
         placeholder = resolved_optional_text(select.placeholder)
         if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
             self.notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
                     f"select placeholder clamped from {len(placeholder)}",
                     SolveNoteSeverity.CLAMP,
@@ -222,7 +223,7 @@ class Builder:
         placeholder = resolved_optional_text(select.placeholder)
         if placeholder is not None and len(placeholder) > self.limits.components.select_placeholder:
             self.notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
                     f"select placeholder clamped from {len(placeholder)}",
                     SolveNoteSeverity.CLAMP,
@@ -250,7 +251,7 @@ class Builder:
             case Section(texts=texts, accessory=accessory):
                 if len(texts) > 3:
                     self.notes.append(
-                        note(
+                        SolveNote(
                             SolveNoteCode.CLAMP_SECTION_TEXTS,
                             f"section holds {len(texts)} texts; keeping 3",
                             SolveNoteSeverity.CLAMP,
@@ -291,7 +292,7 @@ class Builder:
             case Gallery(items=items):
                 if len(items) > 10:
                     self.notes.append(
-                        note(
+                        SolveNote(
                             SolveNoteCode.CLAMP_GALLERY_ITEMS,
                             f"gallery holds {len(items)} items; keeping 10",
                             SolveNoteSeverity.CLAMP,

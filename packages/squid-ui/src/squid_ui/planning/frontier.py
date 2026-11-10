@@ -16,7 +16,6 @@ from squid_ui.planning.layout_measurement.diagnostics import (
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,
-    note,
 )
 from squid_ui.planning.layout_measurement.realization import Builder
 from squid_ui.planning.limits import Axis, MessageLimits
@@ -131,7 +130,7 @@ def variant_notes(nodes: Sequence[Node], positions: Positions) -> list[SolveNote
         for step in range(rung):
             fidelity = node.variants[step + 1].fidelity
             notes.append(
-                note(
+                SolveNote(
                     _FIDELITY_NOTES[fidelity],
                     f"{format_path(path)} stepped to {_FIDELITY_WORDS[fidelity]}variant "
                     f"{step + 2} of {len(node.variants)} (priority {node.priority}) under layout pressure",

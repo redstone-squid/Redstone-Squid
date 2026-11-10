@@ -10,7 +10,6 @@ from typing import override
 import pytest
 
 import squid_ui as sl
-from squid_reactivity.shared_state import describe
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, message_harness
@@ -105,7 +104,7 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
     message_root = MessageRoot(Panel(), access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
 
-    assert {describe(address) for address in message_root.followed} == {"Prefs(1).first", "Prefs(1).last"}
+    assert {str(address) for address in message_root.followed} == {"Prefs(1).first", "Prefs(1).last"}
 
     with sl.runtime.transaction():
         prefs.first = "Grace"
@@ -136,7 +135,7 @@ async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runti
     message_root = MessageRoot(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message_harness()))
 
-    followed = {describe(address) for address in message_root.followed}
+    followed = {str(address) for address in message_root.followed}
 
     # Both routes: the resource can be reloaded out of band, and it can be re-pended by the
     # cell its loader read. A reader depends on each of them.

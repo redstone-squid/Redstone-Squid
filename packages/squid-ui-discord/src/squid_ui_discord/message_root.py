@@ -1014,7 +1014,7 @@ class MessageRoot[
                 item.disabled = True
             return item
 
-        rendered = self._render_message()(
+        rendered = self._binding.render_message(
             document,
             wire=wire,
             renderer=self._renderer(self._remaining_timeout()),
@@ -1067,10 +1067,6 @@ class MessageRoot[
         if not watched:
             return
         self.runtime.invalidate_addresses(address for address in commit.patches.addresses() if address in watched)
-
-    def _render_message(self) -> Callable[..., RenderedMessage[Any, Any]]:
-        """Which plan-and-render entry point this message root's target uses."""
-        return self._binding.render_message
 
     def _renderer(self, timeout: float | None) -> MountedRenderer[Any]:
         return self._binding.renderer(self, timeout)

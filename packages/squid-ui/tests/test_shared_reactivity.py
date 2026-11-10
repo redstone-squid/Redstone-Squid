@@ -5,7 +5,6 @@ from typing import override
 
 import pytest
 
-from squid_reactivity.shared_state import describe
 from squid_reactivity.topics import LocalTopicBus, Topic
 from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Boundary, Text
@@ -232,8 +231,8 @@ def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
 
 
 def test_describe_names_the_namespace_scope_and_cell(preferences: Preferences) -> None:
-    assert describe(address(preferences, "theme")) == "Preferences(Member(user_id=1)).theme"
-    assert describe(Topic("build", "7")) == "build:7"
+    assert str(address(preferences, "theme")) == "Preferences(Member(user_id=1)).theme"
+    assert str(Topic("build", "7")) == "build:7"
 
 
 # --- Publication ----------------------------------------------------------------------------

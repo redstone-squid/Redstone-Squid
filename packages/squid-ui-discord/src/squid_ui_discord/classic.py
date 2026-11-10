@@ -71,7 +71,6 @@ from squid_ui_discord.classic_renderer import ClassicRenderer, Wire
 from squid_ui_discord.fragments import _reject_dispatchable
 from squid_ui_discord.inspection import (
     CustomIdSite,
-    MessageReservation,
     audit_classic_payload,
     effective_rows,
     measure,
@@ -219,16 +218,6 @@ class AttachedClassicContribution:
         for item in self.items:
             if any(child is item for child in self.view.children):
                 self.view.remove_item(item)
-
-
-def measure_host(
-    host: MessagePayload,
-    *,
-    attachments: int = 0,
-    limits: ClassicLimits = CLASSIC_LIMITS,
-) -> MessageReservation:
-    """What a host-owned classic message already spends. Mutates and repairs nothing."""
-    return measure_classic(host, attachments=attachments, limits=limits)
 
 
 def contribute(
@@ -429,7 +418,6 @@ __all__ = [
     "heading",
     "lines",
     "link_button",
-    "measure_host",
     "option",
     "premium_button",
     "render_message",

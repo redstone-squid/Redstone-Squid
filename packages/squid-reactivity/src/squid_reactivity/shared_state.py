@@ -155,9 +155,4 @@ class SharedState[ScopeT = None](StateOwner):
         self._commit_listeners.discard(listener)
 
 
-def describe(address: Address) -> str:
-    """Return a diagnostic address such as ``Preferences(7).theme`` or ``build:123``."""
-    return str(address)
-
-
-__all__ = ["SharedState", "describe"]
+__all__ = ["SharedState"]

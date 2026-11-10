@@ -10,7 +10,6 @@ from squid_ui.planning.layout_measurement.diagnostics import (
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,
-    note,
 )
 from squid_ui.planning.layout_measurement.text import BudgetRegion, TextUnit, split_pages, trim_keep
 from squid_ui.planning.resolved import text as resolved_text
@@ -31,7 +30,9 @@ def _apply(unit: TextUnit, chrome: Chrome, notes: list[SolveNote], degradation: 
     usable = unit.grant - unit.chrome_len
     match unit.overflow:
         case Drop():
-            notes.append(note(SolveNoteCode.NODE_DROPPED, f"dropped node {unit.index} ({unit.need} chars over budget)"))
+            notes.append(
+                SolveNote(SolveNoteCode.NODE_DROPPED, f"dropped node {unit.index} ({unit.need} chars over budget)")
+            )
             degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
             return False
         case Spill() if unit.ladders is not None:
@@ -42,7 +43,7 @@ def _apply(unit: TextUnit, chrome: Chrome, notes: list[SolveNote], degradation: 
             for step, alternate in enumerate(ladder, 1):
                 if alternate and len(alternate) <= usable:
                     notes.append(
-                        note(
+                        SolveNote(
                             SolveNoteCode.ALTERNATE,
                             f"node {unit.index} degraded to a {len(alternate)}-char alternate",
                         )
@@ -52,7 +53,7 @@ def _apply(unit: TextUnit, chrome: Chrome, notes: list[SolveNote], degradation: 
                     return True
             fallback = ladder[-1] if ladder else unit.content
             notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.ALTERNATE_EXHAUSTED,
                     f"node {unit.index} exhausted its ladder; trimming the last alternate",
                 )
@@ -71,7 +72,7 @@ def _apply(unit: TextUnit, chrome: Chrome, notes: list[SolveNote], degradation: 
             return True
         case Truncate(keep=keep) if usable >= 1:
             notes.append(
-                note(SolveNoteCode.TRUNCATED, f"trimmed node {unit.index} from {len(unit.content)} to {usable}")
+                SolveNote(SolveNoteCode.TRUNCATED, f"trimmed node {unit.index} from {len(unit.content)} to {usable}")
             )
             degradation.record(
                 priority=unit.priority,
@@ -82,7 +83,7 @@ def _apply(unit: TextUnit, chrome: Chrome, notes: list[SolveNote], degradation: 
             return True
         case Never() if usable >= 1:
             notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.NEVER_CLAMPED,
                     f"clamped Never node {unit.index}: needed {unit.need}, granted {unit.grant}",
                 )
@@ -91,7 +92,7 @@ def _apply(unit: TextUnit, chrome: Chrome, notes: list[SolveNote], degradation: 
             return True
         case _:
             notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.CHROME_DROP,
                     f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}",
                 )
@@ -150,7 +151,7 @@ def _apply_condense(
     stepped = sum(1 for level in levels if level)
     if stepped:
         notes.append(
-            note(
+            SolveNote(
                 SolveNoteCode.CONDENSED,
                 f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders",
             )
@@ -158,7 +159,7 @@ def _apply_condense(
         degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", semantic_steps=sum(levels))
     if len(body) > usable:
         notes.append(
-            note(
+            SolveNote(
                 SolveNoteCode.CONDENSE_TRUNCATED,
                 f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}",
             )
@@ -204,7 +205,7 @@ def _apply_spill(
             body = unit.join.join(shown)
             if degraded:
                 notes.append(
-                    note(
+                    SolveNote(
                         SolveNoteCode.SPILL_ALTERNATES,
                         f"node {unit.index} degraded {sum(1 for level in levels if level)} entries down their ladders",
                     )
@@ -212,7 +213,7 @@ def _apply_spill(
                 degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", semantic_steps=sum(levels))
             if dropped:
                 notes.append(
-                    note(
+                    SolveNote(
                         SolveNoteCode.SPILLED,
                         f"spilled node {unit.index}: showing {total - dropped} of {total} lines",
                     )
@@ -222,7 +223,7 @@ def _apply_spill(
             return True
         if dropped < total:
             remaining_chars -= entry_lengths[drop_order[dropped]]
-    notes.append(note(SolveNoteCode.SPILL_DROPPED, f"dropped node {unit.index}: no line fits in {usable}"))
+    notes.append(SolveNote(SolveNoteCode.SPILL_DROPPED, f"dropped node {unit.index}: no line fits in {usable}"))
     degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
     return False
 
@@ -252,7 +253,7 @@ def allocate(
                 remaining -= unit.grant
         if overdraw:
             notes.append(
-                note(
+                SolveNote(
                     SolveNoteCode.NEVER_BUDGET,
                     f"Never nodes need {budget + overdraw} of {budget} available characters",
                     SolveNoteSeverity.FAILURE,
@@ -364,7 +365,7 @@ def allocate_budgeted(
     hard_floor = sum(group.floor for group in groups if not group.best_effort)
     if hard_floor > remaining:
         notes.append(
-            note(
+            SolveNote(
                 SolveNoteCode.BUDGET_FLOOR,
                 f"Budget floors need {hard_floor} of {remaining} available characters",
                 SolveNoteSeverity.FAILURE,
@@ -380,7 +381,7 @@ def allocate_budgeted(
             remaining -= group.grant
             if group.grant < group.floor:
                 notes.append(
-                    note(
+                    SolveNote(
                         SolveNoteCode.BEST_EFFORT_FLOOR,
                         f"breached best-effort budget floor {group.floor} with a {group.grant}-character grant",
                     )

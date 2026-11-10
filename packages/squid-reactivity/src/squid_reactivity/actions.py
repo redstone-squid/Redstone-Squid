@@ -9,7 +9,6 @@ their later results can still be traced to the initiating action.
 
 import json
 import logging
-import time
 import uuid
 import weakref
 from collections import deque
@@ -714,12 +713,3 @@ def continuation_callback() -> Iterator[None]:
 
 def in_continuation() -> bool:
     return _continuation_depth.get() > 0
-
-
-def elapsed(context: ActionContext) -> timedelta:
-    return datetime.now(UTC) - context.started_at
-
-
-def monotonic_started() -> float:
-    """Return a monotonic marker for adapters that need one without retaining it in results."""
-    return time.monotonic()

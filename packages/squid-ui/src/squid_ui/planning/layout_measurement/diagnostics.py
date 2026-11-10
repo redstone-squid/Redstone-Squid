@@ -77,15 +77,6 @@ def lossy_notes(notes: Sequence[SolveNote]) -> list[SolveNote]:
     return [note for note in notes if note.severity is not SolveNoteSeverity.ADAPTATION]
 
 
-def note(
-    code: SolveNoteCode,
-    message: str,
-    severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION,
-) -> SolveNote:
-    """Build one solver diagnostic."""
-    return SolveNote(code, message, severity)
-
-
 class LayoutOverflowError(LayoutError):
     """Strict measurement rejected a clamp, degradation, or constraint failure."""
 
