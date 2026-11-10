@@ -31,7 +31,7 @@ type ActorProvider = Callable[[], Awaitable[Actor]]
 type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class AccessScreen(sd.UserSessionScreen, session_name="access"):
+class AccessScreen(sd.Screen):
     """Browse and administer one subject's access in a guild.
 
     Initial capabilities determine which tabs are displayed. Mutation handlers
@@ -39,7 +39,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
     service then enforces role rank, scope, and delegation limits.
     """
 
-    timeout = 300
+    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("access"))
 
     def __init__(
         self,

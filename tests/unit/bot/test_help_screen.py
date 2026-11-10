@@ -8,6 +8,7 @@ from discord import app_commands
 import squid_ui as sl
 from squid.bot.help import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpScreen
 from squid_ui.testing import labels, texts, walk
+from squid_ui_discord import SessionSpec
 
 
 @app_commands.command()
@@ -31,10 +32,10 @@ def _client() -> Any:
 
 
 def test_help_screen_owns_one_public_session() -> None:
-    assert HelpScreen.session is not None
-    assert HelpScreen.session.name == "help"
-    assert HelpScreen.timeout == 300
-    assert HelpScreen.audience == "public"
+    assert isinstance(HelpScreen.__response_spec__.session, SessionSpec)
+    assert HelpScreen.__response_spec__.session.name == "help"
+    assert HelpScreen.__response_spec__.timeout == 300
+    assert HelpScreen.__response_spec__.audience == "public"
 
 
 def test_help_screen_uses_a_browser_for_the_command_directory() -> None:

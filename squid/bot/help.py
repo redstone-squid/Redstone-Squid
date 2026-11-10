@@ -56,11 +56,10 @@ class HelpClient(Protocol):
     def user(self) -> discord.ClientUser | None: ...
 
 
-class HelpScreen(sd.UserSessionScreen, session_name="help"):
-    """A command browser that ends when replaced or timed out."""
+class HelpScreen(sd.Screen):
+    """A command browser that ends when replaced, or timed out."""
 
-    timeout = 300
-    audience = "public"
+    policy = sd.ResponseSpec(timeout=300, audience="public", session=sd.SessionSpec("help"))
 
     def __init__(self, bot: HelpClient, commands_: Sequence[AnyCommand], command: str | None) -> None:
         self._bot = bot

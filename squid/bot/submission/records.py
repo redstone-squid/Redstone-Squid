@@ -58,14 +58,14 @@ class RecordComputationOperations(Protocol):
 type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
+class RecordsScreen(sd.Screen):
     """Show record diagnostics and maintenance controls for one guild session.
 
     Initial capabilities choose which tabs and forms are visible. Each maintenance
     action calls authorize again before invoking the record service.
     """
 
-    timeout = 300
+    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD))
 
     def __init__(
         self,

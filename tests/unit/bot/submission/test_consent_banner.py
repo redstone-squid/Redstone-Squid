@@ -20,6 +20,7 @@ from squid.bot.submission.submit import BuildSubmitCommands
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.errors import DraftCapacityExceededError
+from squid_ui_discord import Cancelled, Completed
 from squid_ui_discord.testing import AsyncCallRecorder, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
@@ -234,9 +235,8 @@ async def test_routed_consent_button_grants_consent_when_user_agrees(
     accounts = AccountRecorder(None)
     interaction = _make_interaction(accounts)
 
-    async def mock_wait(self: ConsentPrompt) -> AccountConsent:
-        self._answer.consent = AccountConsent.grant_current()
-        return self._answer.consent
+    async def mock_wait(self: ConsentPrompt) -> Completed[AccountConsent]:
+        return Completed(AccountConsent.grant_current())
 
     monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 
@@ -257,8 +257,8 @@ async def test_routed_consent_button_cancelling_stores_no_account(
     accounts = AccountRecorder(None)
     interaction = _make_interaction(accounts)
 
-    async def mock_wait(self: ConsentPrompt) -> None:
-        self._consent = None
+    async def mock_wait(self: ConsentPrompt) -> Cancelled:
+        return Cancelled()
 
     monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 

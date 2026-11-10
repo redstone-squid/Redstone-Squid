@@ -92,10 +92,10 @@ type RedstonerAuthorizer = Callable[[], Awaitable[bool]]
 type PanelPublisher = Callable[[], Awaitable[None]]
 
 
-class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
-    """A Redstoner deployment screen that ends when replaced or timed out."""
+class RedstonerScreen(sd.Screen):
+    """A Redstoner deployment screen that ends when replaced, or timed out."""
 
-    timeout = 300
+    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("redstoner", scope=sd.ScopeKind.USER_GUILD))
 
     def __init__(
         self,

@@ -63,19 +63,18 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
             message_root = press.root
             assert message_root is not None, "a press always arrives from a mounted message"
 
-            async def completed(prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
+            async def completed(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
                 await answered(prompt, consent)
                 if consent is not None:
                     await message_root.schedule()
 
             return await request_consent(
-                press,
+                event,
                 user_id=actor.id,
                 on_answer=completed,
                 preview=preview,
                 on_abandon=on_abandon,
                 timeout=timeout,
-                parent=message_root,
             )
 
         async def authorize_claim(node) -> bool:

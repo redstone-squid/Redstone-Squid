@@ -70,7 +70,7 @@ async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardStat
 async def test_scheduler_backed_wizard_renews_its_private_session() -> None:
     _, message_root, _ = await open_screen(make_screen())
 
-    assert PollScreen.timeout == 900
+    assert PollScreen.__response_spec__.timeout == 900
     assert message_root.scheduler is not None
     assert isinstance(message_root.expiry, sd.RenewEphemeral)
 

@@ -9,10 +9,7 @@ an identity that need their own acceptance and cleanup logic.
 """
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any, override
-
-import anyio
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -27,47 +24,31 @@ from squid.accounts.domain import (
 from squid.bot.ui import CardField, text_node, tr
 from squid.core.sentinel import NOT_ASKED
 
-type ConsentContinuation = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
-"""What to do once the reader has answered, run by the prompt's own press.
+type ConsentContinuation = Callable[[sd.ActionEvent, AccountConsent | None], Awaitable[None]]
+"""What to do once the reader accepts, run with fresh parent action authority.
 
 The awaiting form is only safe where the caller owns the wait. Inside a mounted action
 handler it is not: the handler runs in the mount's UI action transaction and, under the default
 `EXCLUSIVE` policy, in its dispatch lock, so awaiting an answer holds both for as long as
-the reader takes to read. A continuation runs in the *prompt's* dispatch instead, which is
-a separate mount, so the press that opened it is already finished by then.
+the reader takes to read. A continuation runs in a fresh parent dispatch after the child
+accepts, so the press that opened it has already finished.
 """
 
 CONSENT_PROMPT_TIMEOUT_SECONDS = 120.0
 
 
-@dataclass(slots=True)
-class _Answer:
-    """What the reader said, held off the component on purpose.
+class ConsentPrompt(sd.Screen[AccountConsent]):
+    """A user-owned notice that publishes consent only after the accepting action commits."""
 
-    Nothing renders it. A waiter in another task needs the answer as soon as the handler
-    signals it, before the action transaction commits. Holding it in an ordinary object
-    makes that handoff independent of transactional render state.
-    """
-
-    consent: AccountConsent | None = None
-
-
-class ConsentPrompt(sd.UserSessionScreen):
-    """A user-owned notice supporting either a waiting caller or an answer callback.
-
-    Accept and cancel signal waiting callers before running the callback. Unmount
-    also releases waiters but does not invoke the answer callback.
-    """
-
-    session = sd.SessionSpec(
-        "consent",
-        admission=sd.AdmissionSpec(
-            collision=sd.Reject(notice=tr("You already have a consent prompt open. Please answer that one."))
+    policy = sd.ResponseSpec(
+        session=sd.SessionSpec(
+            "consent",
+            admission=sd.AdmissionSpec(
+                collision=sd.Reject(notice=tr("You already have a consent prompt open. Please answer that one."))
+            ),
         ),
+        timeout=CONSENT_PROMPT_TIMEOUT_SECONDS,
     )
-    timeout = CONSENT_PROMPT_TIMEOUT_SECONDS
-
-    closed: bool = sl.state(default=False)
 
     def __init__(
         self,
@@ -77,22 +58,17 @@ class ConsentPrompt(sd.UserSessionScreen):
         summary: sl.TextLike,
         fields: tuple[CardField, ...],
         accept_label: sl.TextLike,
-        wait_timeout: float,
-        on_answer: ConsentContinuation | None = None,
     ) -> None:
         self.user_id = user_id
         self._title = title
         self._summary = summary
         self._fields = fields
         self._accept_label = accept_label
-        self._wait_timeout = wait_timeout
-        self._on_answer = on_answer
-        self._answer = _Answer()
-        self._done = anyio.Event()
 
     @property
     def consent(self) -> AccountConsent | None:
-        return self._answer.consent
+        outcome = self.outcome
+        return outcome.value if isinstance(outcome, sd.Completed) else None
 
     @property
     def notice_version(self) -> str:
@@ -121,36 +97,13 @@ class ConsentPrompt(sd.UserSessionScreen):
         )
 
     async def _accept(self, event: sd.PressEvent) -> None:
-        await self._finish(event, AccountConsent.grant_current())
+        self.complete(event, AccountConsent.grant_current())
 
     async def _cancel(self, event: sd.PressEvent) -> None:
-        await self._finish(event, None)
+        self.cancel(event)
 
     async def _privacy(self, event: sd.PressEvent) -> None:
         await event.notice(PRIVACY_NOTICE)
-
-    async def _finish(self, event: sd.PressEvent, consent: AccountConsent | None) -> None:
-        self._answer.consent = consent
-        self.closed = True
-        self._done.set()
-        # Request closure as part of this action. The dispatcher closes the prompt
-        # after the continuation succeeds and the action commits.
-        event.finish_on_success()
-        if self._on_answer is not None:
-            await self._on_answer(event, consent)
-
-    @override
-    def on_unmount(self) -> None:
-        self._done.set()
-
-    async def wait(self) -> AccountConsent | None:
-        """Wait for an answer, returning None on user cancellation, unmount, or wait timeout.
-
-        The wait deadline does not itself close the prompt's mount.
-        """
-        with anyio.move_on_after(self._wait_timeout) as scope:
-            await self._done.wait()
-        return None if scope.cancel_called else self._answer.consent
 
 
 def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
@@ -169,49 +122,10 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
     return tr(t"**{name}** ({builds}) becomes attributed to your account.")
 
 
-async def _show_prompt(
-    request: sd.Request[Any],
-    *,
-    user_id: int,
-    preview: LinkPreview | None,
-    timeout: float,
-    on_answer: ConsentContinuation | None,
-    on_abandon: Callable[[], Awaitable[None]] | None,
-    parent: sd.MessageRoot | None,
-) -> ConsentPrompt | None:
-    """Present a consent prompt and attach cleanup for an unanswered mount.
-
-    Return None if presentation is rejected. In that case no abandonment callback
-    is registered, so the caller must release any reservation itself.
-    """
-    prompt = _consent_prompt(
-        user_id=user_id,
-        preview=preview,
-        timeout=timeout,
-        on_answer=on_answer,
-    )
-    outcome = await request.respond(prompt, parent=parent)
-    if not isinstance(outcome, sd.Presented):
-        return None
-    if on_abandon is not None:
-
-        async def abandon_unanswered(_root: sd.MessageRoot) -> None:
-            if not prompt.closed:
-                await on_abandon()
-
-        if outcome.root.finished:
-            await abandon_unanswered(outcome.root)
-        else:
-            outcome.root.on_finish(abandon_unanswered)
-    return prompt
-
-
 def _consent_prompt(
     *,
     user_id: int,
     preview: LinkPreview | None,
-    timeout: float,
-    on_answer: ConsentContinuation | None,
 ) -> ConsentPrompt:
     """Build the exact notice shown before an account or identity is stored."""
     version = CURRENT_CONSENT_VERSION
@@ -234,8 +148,6 @@ def _consent_prompt(
                 ),
             ),
             accept_label=tr("Agree"),
-            wait_timeout=timeout,
-            on_answer=on_answer,
         )
     username = preview.username
     uuid = preview.java_uuid
@@ -262,8 +174,6 @@ def _consent_prompt(
             ),
         ),
         accept_label=tr("Agree and link"),
-        wait_timeout=timeout,
-        on_answer=on_answer,
     )
 
 
@@ -281,47 +191,44 @@ async def prompt_for_consent(
     and NOT_ASKED when presentation is rejected. Use `request_consent` inside
     mounted action handlers to avoid holding their transaction and dispatch lock.
     """
-    component = await _show_prompt(
-        request,
-        user_id=user_id,
-        preview=preview,
-        timeout=timeout,
-        on_answer=None,
-        on_abandon=None,
-        parent=parent,
-    )
-    if component is None:
+    component = _consent_prompt(user_id=user_id, preview=preview)
+    presented = await request.respond(component, timeout=timeout, parent=parent)
+    if not isinstance(presented, sd.Presented):
         return NOT_ASKED
-    return await component.wait()
+    outcome = await component.wait()
+    return outcome.value if isinstance(outcome, sd.Completed) else None
 
 
 async def request_consent(
-    request: sd.Request[Any],
+    event: sd.ActionEvent,
     *,
     user_id: int,
     on_answer: ConsentContinuation,
     on_abandon: Callable[[], Awaitable[None]] | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-    parent: sd.MessageRoot | None = None,
 ) -> bool:
-    """Show the notice and return, running `on_answer` from the prompt's own press.
+    """Open a child notice and return without holding the parent's action open.
 
-    Returns whether the prompt was opened; `False` means the reader has already been told
-    why not, and `on_answer` will never run. An unanswered prompt expires with its mount and
-    also never runs it. When supplied, `on_abandon` runs from the prompt root's owned finish
-    lifecycle so callers can release expiring authority without starting a detached task.
+    Acceptance runs on_answer with fresh parent action authority. Cancellation, timeout,
+    and closure run on_abandon without an action event. False means presentation failed;
+    the caller retains responsibility for releasing any reservation in that case.
     """
-    component = await _show_prompt(
-        request,
-        user_id=user_id,
-        preview=preview,
-        timeout=timeout,
-        on_answer=on_answer,
-        on_abandon=on_abandon,
-        parent=parent,
-    )
-    return component is not None
+    root = event.context.root
+    assert root is not None and isinstance(root.component, sd.Screen), "consent actions require a parent Screen"
+    prompt = _consent_prompt(user_id=user_id, preview=preview)
+    opened = False
+
+    async def answered(result: sd.ScreenResultEvent[AccountConsent]) -> None:
+        await on_answer(result, result.value)
+
+    async def abandoned(_outcome: sd.Cancelled) -> None:
+        if opened and on_abandon is not None:
+            await on_abandon()
+
+    outcome = await root.component.open_child(event, prompt, on_result=answered, on_cancel=abandoned, timeout=timeout)
+    opened = isinstance(outcome, sd.Presented)
+    return opened
 
 
 type ConsentedAccountWork = Callable[[sd.ActionEvent, int], Awaitable[None]]
@@ -338,7 +245,7 @@ async def with_consented_account(
     """Run work with the current user's consented account ID.
 
     If consent is missing or stale, open a prompt and return without waiting.
-    Acceptance creates or updates the account and runs `work` from the prompt's
+    Acceptance creates or updates the account and runs `work` in a fresh parent
     action; cancellation performs no work. The callback receives the live action
     for notices, and the original panel is scheduled to redraw afterwards.
     """
@@ -351,7 +258,7 @@ async def with_consented_account(
     message_root = request.root
     assert message_root is not None, "a press always arrives from a mounted message"
 
-    async def answered(prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
+    async def answered(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
         if consent is None:
             return
         granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)
@@ -360,11 +267,10 @@ async def with_consented_account(
         await message_root.schedule()
 
     await request_consent(
-        request,
+        event,
         user_id=user.id,
         on_answer=answered,
         timeout=timeout,
-        parent=message_root,
     )
 
 

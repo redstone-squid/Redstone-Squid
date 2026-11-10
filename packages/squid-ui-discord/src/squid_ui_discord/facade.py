@@ -10,6 +10,7 @@ from collections.abc import Hashable, Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Unpack, cast
 
+import anyio
 import discord
 
 from squid_ui import paragraph
@@ -37,8 +38,9 @@ from squid_ui_discord.response import (
     Setting,
     invoker_only,
 )
+from squid_ui_discord.screen import Screen
 from squid_ui_discord.session_specs import OpenContext, SessionOptions
-from squid_ui_discord.sessions import Opened
+from squid_ui_discord.sessions import Opened, RejectionReason
 from squid_ui_discord.sessions import Rejected as SessionRejected
 
 if TYPE_CHECKING:
@@ -204,9 +206,53 @@ class Scope[OwnerT = Any]:
             actor_id=request.user.id,
             parent=parent,
             session_key=session_key,
+            opening=request,
         )
 
     async def _present(
+        self,
+        content: FacadeContent,
+        *,
+        destination: MessageDestination,
+        policy: ResponseSpec,
+        localization: Localization,
+        source: ResponseSource | None,
+        actor_id: int | None,
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
+        opening: Request[Any] | None = None,
+    ) -> ResponseResult:
+        screen = content if isinstance(content, Screen) else None
+        if screen is not None:
+            screen._screen_claim(self, opening)
+        try:
+            result = await self._deliver(
+                content,
+                destination=destination,
+                policy=policy,
+                localization=localization,
+                source=source,
+                actor_id=actor_id,
+                parent=parent,
+                session_key=session_key,
+            )
+            if screen is not None:
+                if isinstance(result, Presented):
+                    screen._screen_opened()
+                else:
+                    await screen._screen_opening_failed()
+        except BaseException as error:
+            if screen is not None:
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await screen._screen_opening_failed()
+                    except BaseException as cleanup_error:
+                        message = "screen presentation and cleanup failed"
+                        raise BaseExceptionGroup(message, [error, cleanup_error]) from None
+            raise
+        return result
+
+    async def _deliver(
         self,
         content: FacadeContent,
         *,
@@ -241,6 +287,8 @@ class Scope[OwnerT = Any]:
                 message = "parent= and session_key= require a response session policy"
                 raise TypeError(message)
             root = self._runtime.mount(content, access=access, **options)
+            if isinstance(content, Screen):
+                content._screen_bind(root, None)
             result = await root.send(capture)
             if isinstance(result, DeliveryAbandoned):
                 return Abandoned()
@@ -252,26 +300,26 @@ class Scope[OwnerT = Any]:
             raise TypeError(message)
         open_context = OpenContext.of(source)
         configured = replace(session_spec, access=lambda _context: access)
+        options = await configured._message_root_options(open_context, options)
+        root = self._runtime.mount(content, access=access, **options)
         parent_session = self._runtime.sessions.session_for(parent) if parent is not None else None
-        existing_roots = frozenset(parent_session.message_roots) if parent_session is not None else frozenset()
+        if isinstance(content, Screen):
+            content._screen_bind(root, parent_session)
         if parent is None:
-            result = await configured.open(
-                content,
+            result = await self._runtime.sessions.open(
+                root,
                 capture,
-                sessions=self._runtime.sessions,
-                open_context=open_context,
-                key=session_key,
-                **options,
+                key=configured.key(open_context) if session_key is None else session_key,
+                admission=configured.admission,
+                actor_id=actor_id,
+                capacity=configured.capacity,
+                quota=configured.quota,
+                domain=configured.domain,
             )
+        elif parent_session is None:
+            return Rejected(RejectionReason.SESSION_FINISHED)
         else:
-            result = await configured.attach(
-                content,
-                capture,
-                sessions=self._runtime.sessions,
-                open_context=open_context,
-                parent=parent,
-                **options,
-            )
+            result = await parent_session.attach(root, capture, actor_id=actor_id, parent=parent)
         if isinstance(result, SessionRejected):
             notice_delivery = None
             if result.notice is not None:
@@ -280,13 +328,6 @@ class Scope[OwnerT = Any]:
         if isinstance(result, DeliveryAbandoned):
             return Abandoned()
         assert isinstance(result, Opened) and captured is not None
-        root = result.session.root
-        if parent is not None:
-            attached = tuple(candidate for candidate in result.session.message_roots if candidate not in existing_roots)
-            if len(attached) != 1:
-                message = "session attachment did not produce exactly one child root"
-                raise RuntimeError(message)
-            root = attached[0]
         self._runtime._track(self, root)
         return Presented(content, root, result.session, captured)
 

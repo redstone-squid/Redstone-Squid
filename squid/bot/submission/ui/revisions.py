@@ -19,8 +19,7 @@ class RevisionProposalScreen(sd.Screen):
     changed, so a correction cannot silently overwrite an intervening edit.
     """
 
-    audience = "personal"
-    timeout = 600
+    policy = sd.ResponseSpec(audience="personal", timeout=600)
     proposal: RevisionProposal = sl.state(opaque=True)
     notice: sl.TextLike = sl.state("")
 

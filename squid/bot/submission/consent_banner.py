@@ -69,17 +69,14 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
             ),
         ),
         accept_label=tr("Agree & Enable Ingestion"),
-        wait_timeout=120,
     )
     outcome = await request.respond(component)
     if not isinstance(outcome, sd.Presented):
         return
-    await component.wait()
+    result = await component.wait()
 
-    if component.consent is not None:
-        await accounts.get_or_create_identity(
-            IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
-        )
+    if isinstance(result, sd.Completed):
+        await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(interaction.user.id), consent=result.value)
         await request.respond(
             text_node(
                 tr(

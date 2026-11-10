@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable
 from typing import override
 
+import anyio
 import discord
 
 import squid_ui as sl
@@ -24,7 +25,7 @@ from squid_ui_discord.modal import EntityField
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
+class AccountWorkspace(sd.Screen):
     """Combine account linking, profile controls, creator claims, and account merges.
 
     AccountScreen supplies the overview tab. Other tabs carry the workflows that
@@ -32,7 +33,7 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
     moderation component. Rebuilding reloads the account before choosing tabs.
     """
 
-    timeout = 300
+    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("account"))
 
     def __init__(
         self,
@@ -177,7 +178,7 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
         )
 
     async def _consent(self, event: sd.PressEvent) -> None:
-        async def answered(_prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
+        async def answered(_prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
             if consent is None:
                 return
             account = self._account
@@ -243,7 +244,7 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
                 raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(self._actor_id))
             return account_id
 
-        async def answered(prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
+        async def answered(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
             nonlocal settled
             if consent is None:
                 await release()
@@ -264,13 +265,19 @@ class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
             await self._rebuild()
             await prompt.notice(link_message(refresh))
 
-        opened = await self._request_consent(
-            event,
-            answered,
-            preview=reservation.preview,
-            on_abandon=release,
-            timeout=CONSENT_PROMPT_TIMEOUT_SECONDS,
-        )
+        try:
+            opened = await self._request_consent(
+                event,
+                answered,
+                preview=reservation.preview,
+                on_abandon=release,
+                timeout=CONSENT_PROMPT_TIMEOUT_SECONDS,
+            )
+        except BaseException:
+            # Failed or cancelled presentation never transfers the reservation to a live child.
+            with anyio.CancelScope(shield=True):
+                await release()
+            raise
         if not opened:
             await release()
 

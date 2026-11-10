@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 
 
-class Panel(sd.Screen[object]):
+class Panel(sd.Screen[None, object]):
     @override
     def render(self) -> sl.LayoutNode:
         return sl.paragraph("Panel")

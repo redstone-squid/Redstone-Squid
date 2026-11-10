@@ -29,6 +29,7 @@ from squid.versions.application import VersionService
 from squid.versions.domain import Edition
 from squid_ui.testing import RecordingResponder, press_event
 from squid_ui.text import source_text
+from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import (
     AsyncCallRecorder,
     assert_within_limits,
@@ -196,11 +197,11 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
 
 
 def test_build_editor_declares_keyed_topic_following_policy() -> None:
-    assert BuildEditScreen.session is not None
-    assert BuildEditScreen.session.name == "build-edit"
-    assert BuildEditScreen.timeout == 900
-    assert BuildEditScreen.follow_topics is True
-    assert BuildEditScreen.retain_routed_on_timeout is True
+    assert isinstance(BuildEditScreen.__response_spec__.session, SessionSpec)
+    assert BuildEditScreen.__response_spec__.session.name == "build-edit"
+    assert BuildEditScreen.__response_spec__.timeout == 900
+    assert BuildEditScreen.__response_spec__.follow_topics is True
+    assert BuildEditScreen.__response_spec__.retain_routed_on_timeout is True
 
 
 async def test_expired_build_editor_retains_only_the_fresh_recovery_route(display_build: Build) -> None:

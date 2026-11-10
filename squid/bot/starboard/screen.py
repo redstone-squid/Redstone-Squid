@@ -38,14 +38,14 @@ class StarboardOperations(Protocol):
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None: ...
 
 
-class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
+class StarboardScreen(sd.Screen):
     """A guild configuration session that rechecks permission before each mutation.
 
     Initial capabilities choose visible controls; the authorizer checks current
     permission when an action is submitted, including deletion confirmation.
     """
 
-    timeout = 300
+    policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD))
 
     def __init__(
         self,

@@ -243,7 +243,7 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
     return sl.forms.FormSpec(tr(t"Edit build, section {page}"), tuple(fields), validator=validate)
 
 
-class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
+class BuildEditScreen(sd.Screen):
     """Stage local field changes, review them, and save one combined build patch.
 
     The build preview follows topic updates, while staged fields remain local.
@@ -251,9 +251,9 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
     authority and supplies the displayed build revision to the edit service.
     """
 
-    timeout = 900
-    follow_topics = True
-    retain_routed_on_timeout = True
+    policy = sd.ResponseSpec(
+        timeout=900, follow_topics=True, retain_routed_on_timeout=True, session=sd.SessionSpec("build-edit")
+    )
 
     page: int = sl.state(1)
     confirming: bool = sl.state(default=False)

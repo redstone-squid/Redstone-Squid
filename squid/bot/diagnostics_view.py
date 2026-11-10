@@ -136,12 +136,15 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
 
-class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
+class ErrorReportScreen(sd.Screen):
     """An error browser that ends when cleared, replaced, or timed out."""
 
-    timeout = SESSION_SECONDS
-    audience = sd.Private(tr("An error report names internal paths, so it is never posted in a channel."))
-    chrome = ERROR_CHROME
+    policy = sd.ResponseSpec(
+        timeout=SESSION_SECONDS,
+        audience=sd.Private(tr("An error report names internal paths, so it is never posted in a channel.")),
+        chrome=ERROR_CHROME,
+        session=sd.SessionSpec("errors"),
+    )
 
     work_lost_only: bool = sl.state(default=False)
     confirming_clear: bool = sl.state(default=False)

@@ -346,8 +346,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     assert "linked to **Notch**" in source_text(event.notices[0])
 
 
-@pytest.mark.parametrize("abandoned", [False, True], ids=["cancel", "timeout"])
-async def test_link_reservation_is_released_when_consent_does_not_complete(abandoned: bool) -> None:
+async def test_link_reservation_is_released_once_when_consent_is_abandoned() -> None:
     account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
     accounts = LinkAccountService()
     consent = ConsentCapture()
@@ -368,12 +367,9 @@ async def test_link_reservation_is_released_when_consent_does_not_complete(aband
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
 
     await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
-    if abandoned:
-        assert consent.on_abandon is not None
-        await consent.on_abandon()
-    else:
-        assert consent.answered is not None
-        await consent.answered(cast(sd.PressEvent, NoticeSource()), None)
+    assert consent.on_abandon is not None
+    await consent.on_abandon()
+    await consent.on_abandon()
 
     assert accounts.linked == []
     assert accounts.released == ["abcd"]
@@ -425,8 +421,8 @@ async def test_accountless_link_cancel_releases_without_creating_personal_rows()
     assert "Link Minecraft account" in labels(workspace._identity_nodes())
     await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
     assert accounts.created_consents == []
-    assert consent.answered is not None
-    await consent.answered(cast(sd.PressEvent, NoticeSource()), None)
+    assert consent.on_abandon is not None
+    await consent.on_abandon()
 
     assert accounts.created_consents == []
     assert accounts.linked == []
@@ -950,3 +946,45 @@ def test_unlinking_your_own_discord_account_says_what_that_costs() -> None:
     panel.selected_id = DISCORD.id
 
     assert "stop recognising you here" in resolve_text(panel._unlink_warning(), NEUTRAL).content
+
+
+async def test_link_reservation_is_released_once_when_prompt_delivery_fails() -> None:
+    accounts = LinkAccountService()
+
+    class FailedConsent(ConsentCapture):
+        @override
+        async def __call__(
+            self,
+            event: sl.ActionEvent,
+            answered: ConsentAnswer,
+            *,
+            preview: LinkPreview | None = None,
+            on_abandon: Callable[[], Awaitable[None]] | None = None,
+            timeout: float = 120.0,
+        ) -> bool:
+            await super().__call__(event, answered, preview=preview, on_abandon=on_abandon, timeout=timeout)
+            raise RuntimeError("delivery failed")
+
+    consent = FailedConsent()
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    with pytest.raises(RuntimeError, match="delivery failed"):
+        await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
+    assert consent.on_abandon is not None
+    await consent.on_abandon()
+
+    assert accounts.released == ["abcd"]
+    assert accounts.created_consents == []
+    assert accounts.linked == []

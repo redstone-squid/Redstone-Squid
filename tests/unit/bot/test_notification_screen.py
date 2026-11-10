@@ -20,6 +20,7 @@ from squid.notifications import (
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid_ui.testing import RecordingResponder, choose, labels, press, submit
+from squid_ui_discord import SessionSpec
 
 
 @dataclass(frozen=True)
@@ -138,9 +139,9 @@ async def test_screen_offers_all_follow_workflows() -> None:
 
     rendered = screen.render()
 
-    assert NotificationScreen.session is not None
-    assert NotificationScreen.session.name == "notifications"
-    assert NotificationScreen.audience == "personal"
+    assert isinstance(NotificationScreen.__response_spec__.session, SessionSpec)
+    assert NotificationScreen.__response_spec__.session.name == "notifications"
+    assert NotificationScreen.__response_spec__.audience == "personal"
     assert {"Follow creator", "Follow record", "Follow matching records"} <= set(labels(rendered))
 
 

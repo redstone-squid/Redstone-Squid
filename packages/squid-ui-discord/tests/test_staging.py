@@ -10,9 +10,8 @@ import squid_ui_discord as sd
 from squid_ui_discord.testing import ContextHarness, InteractionHarness
 
 
-class Editor(sd.Screen[object]):
-    audience = "personal"
-    session = sd.SessionSpec("editor", scope=sd.ScopeKind.USER_GUILD)
+class Editor(sd.Screen[None, object]):
+    policy = sd.ResponseSpec(audience="personal", session=sd.SessionSpec("editor", scope=sd.ScopeKind.USER_GUILD))
     count: int = sl.state(0)
     name: str = sl.state("Old")
 

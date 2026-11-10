@@ -18,8 +18,7 @@ from squid.submissions.application.inferred_drafts import materialize_candidate
 class InferenceCandidatesScreen(sd.Screen):
     """Review retained candidates and choose missing categories before opening a draft."""
 
-    audience = "personal"
-    timeout = 600
+    policy = sd.ResponseSpec(audience="personal", timeout=600)
     selected: str | None = sl.state(None)
     category: str | None = sl.state(None)
     opened: str | None = sl.state(None)

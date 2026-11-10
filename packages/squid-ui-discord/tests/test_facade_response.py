@@ -85,8 +85,8 @@ def test_response_policy_overlays_in_documented_order() -> None:
     )
     ui = runtime.scope(Owner())
 
-    class Timed(sd.Screen[Any]):
-        timeout = 30
+    class Timed(sd.Screen[None, Any]):
+        policy = sd.ResponseSpec(timeout=30)
 
         @override
         def render(self):

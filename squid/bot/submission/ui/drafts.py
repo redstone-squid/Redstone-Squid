@@ -32,8 +32,7 @@ class DraftEditorScreen(sd.Screen):
     reloads attachment and job state to show progress or issues needing correction.
     """
 
-    audience = "personal"
-    timeout = 600
+    policy = sd.ResponseSpec(audience="personal", timeout=600)
     page: int = sl.state(0)
     selected: str | None = sl.state(None)
     option_page: int = sl.state(0)

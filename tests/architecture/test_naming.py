@@ -84,8 +84,12 @@ or `Policy` for an injected one. The former `Feedback` concept is now a `Spec`.
 RETIRED_SUFFIX_EXEMPTIONS = frozenset({"Summary"})
 """`semantic.Summary` mirrors the HTML `<summary>` element inside a `Details` disclosure."""
 
-RETIRED_IDENTIFIER_WORDS = frozenset({"feedback", "locator", "outcome", "protection", "reactor", "receipt", "verdict"})
-"""Retired words checked in definition names, attributes, parameters, and local references."""
+RETIRED_IDENTIFIER_WORDS = frozenset({"feedback", "locator", "protection", "reactor", "receipt", "verdict"})
+"""Retired words checked in definition names, attributes, parameters, and local references.
+
+`outcome` names a Screen's completed-or-cancelled value; the generic Outcome class suffix
+remains retired. Result events carry only accepted values, so those names are distinct.
+"""
 
 RETIRED_IDENTIFIERS = frozenset({"summary_bytes", "summary_payload"})
 """Exact retired identifiers whose individual words remain valid elsewhere."""
@@ -227,6 +231,9 @@ NOT_AGENT_NOUNS = frozenset(
 
 
 SAME_CONCEPT_TWO_LAYERS = {
+    # Reactive operations and Discord screens each expose a cancellation arm. Their
+    # namespaces distinguish operation progress from a screen's cancellation reason.
+    "Cancelled",
     # Semantic nodes and their planned primitives share names across namespaces.
     "ControlGroup",
     "Code",

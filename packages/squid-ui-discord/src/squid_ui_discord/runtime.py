@@ -261,6 +261,8 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         targets = {session.root if (session := self.sessions.session_for(root)) is not None else root for root in roots}
         errors: list[Exception] = []
         for message_root in targets:
+            if message_root._screen_close_reason is None:
+                message_root._screen_close_reason = "scope_closed"
             try:
                 await message_root.finish(wait=False)
             except Exception as error:

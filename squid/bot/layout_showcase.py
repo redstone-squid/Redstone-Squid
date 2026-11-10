@@ -22,7 +22,6 @@ import squid_ui_widgets as sp
 from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, tr
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
-from squid_ui_discord import SessionKey
 from squid_ui_discord.session_specs import OpenContext
 from squid_ui_discord.sessions import UserScope
 
@@ -1223,7 +1222,7 @@ class PreviewPanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
 
-class Lobby(sd.SharedGuildSessionScreen):
+class Lobby(sd.Screen):
     """A guild lobby whose roster is session membership, not view state.
 
     Membership belongs to the logical session: it survives a redraw, it is what replacement
@@ -1233,14 +1232,18 @@ class Lobby(sd.SharedGuildSessionScreen):
 
     capacity = 4
     quota = 1
-    session = sd.SessionSpec(
-        "showcase-lobby",
-        scope=sd.ScopeKind.GUILD,
-        admission=sd.AdmissionSpec(collision=sd.Reject()),
-        capacity=capacity,
-        quota=quota,
+    policy = sd.ResponseSpec(
+        session=sd.SessionSpec(
+            "showcase-lobby",
+            scope=sd.ScopeKind.GUILD,
+            admission=sd.AdmissionSpec(collision=sd.Reject()),
+            capacity=capacity,
+            quota=quota,
+        ),
+        timeout=None,
+        audience="public",
+        access=sd.Everyone(),
     )
-    timeout = None
 
     started_with: int | None = sl.state(None)
     """How many players the game began with. The only fact here that *is* view state."""
@@ -1250,7 +1253,7 @@ class Lobby(sd.SharedGuildSessionScreen):
 
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
-        session = self._session()
+        session = self.session
         members = frozenset({self.host_id}) if session is None else session.members
         capacity = self.capacity if session is None else session.capacity
         placement = sp.place_roster(
@@ -1276,7 +1279,7 @@ class Lobby(sd.SharedGuildSessionScreen):
         )
 
     async def _join(self, event: sl.SelectionEvent) -> None:
-        session = self._session()
+        session = self.session
         if session is None:
             return
         # Whether this presser is *allowed* to join is the caller's question, and an async
@@ -1287,7 +1290,7 @@ class Lobby(sd.SharedGuildSessionScreen):
         self.invalidate()
 
     async def _leave(self, event: sl.PressEvent) -> None:
-        session = self._session()
+        session = self.session
         if session is None:
             return
         result = await session.leave(int(event.actor.id))
@@ -1297,20 +1300,11 @@ class Lobby(sd.SharedGuildSessionScreen):
     async def _start(self, event: sl.PressEvent) -> None:
         # Everyone may press Join, so the lobby is mounted for everyone; the controls that
         # only members may use consult the roster themselves.
-        session = self._session()
+        session = self.session
         if session is None or not session.has_member(int(event.actor.id)):
             await event.notice(tr("Join the lobby first."))
             return
         self.started_with = len(session.members)
-
-    def _session(self) -> sd.sessions.Session | None:
-        guild = self.opening.guild
-        if guild is None:
-            return None
-        session_spec = self.session
-        assert session_spec is not None
-        sessions = self.opening.runtime.sessions.get(SessionKey.guild(session_spec.name, guild.id))
-        return sessions[0] if sessions else None
 
 
 _JOIN_NOTICES = {

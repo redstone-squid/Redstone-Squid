@@ -39,7 +39,7 @@ SESSION_SECONDS = 300
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
 
-type ConsentAnswer = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
+type ConsentAnswer = Callable[[sd.ActionEvent, AccountConsent | None], Awaitable[None]]
 
 
 class ConsentRequest(Protocol):
@@ -60,14 +60,14 @@ def _link_count(count: int) -> sl.text.Message:
     return tr(t"{count} links")
 
 
-class AccountScreen(sd.UserSessionScreen, session_name="account"):
+class AccountScreen(sd.Screen):
     """Edit one account's profile and choose which linked identities appear publicly.
 
     Used as the overview within AccountWorkspace. Identity visibility changes are
     saved immediately; profile fields stay in the editor until Save profile.
     """
 
-    timeout = SESSION_SECONDS
+    policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("account"))
 
     selected_id: int | None = sl.state(None)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
@@ -381,14 +381,14 @@ class AccountScreen(sd.UserSessionScreen, session_name="account"):
 
         The prompt is opened without waiting for its answer, releasing this panel's
         action transaction and dispatch lock. On acceptance, record consent and run
-        the change from the prompt's action. The injected consent requester arranges
+        the change in a fresh parent action. The injected consent requester arranges
         for the parent panel to redraw.
         """
         if not self._needs_consent:
             await work()
             return
 
-        async def answered(_prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
+        async def answered(_prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
             if consent is None:
                 # Cancelling leaves the account and the displayed panel unchanged.
                 return

@@ -73,7 +73,7 @@ class SettingsCapabilities:
 type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
+class SettingsPanel(sd.Screen):
     """Edit a guild's publication channels, language, voting emojis, and role weights.
 
     Changes are saved as the user makes them. Channel and language changes also
@@ -81,7 +81,7 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
     stored settings; voting changes are saved without that history.
     """
 
-    timeout = SESSION_SECONDS
+    policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD))
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
     """Undo for the server page's writes; see `docs/plans/squid-ui-redesign/28-history.md`."""

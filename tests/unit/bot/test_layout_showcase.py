@@ -427,7 +427,7 @@ def _lobby_root(panel: Lobby) -> MessageRoot:
 
 
 def _lobby_session(panel: Lobby) -> sd.sessions.Session:
-    session = panel._session()
+    session = panel.session
     assert session is not None
     return session
 

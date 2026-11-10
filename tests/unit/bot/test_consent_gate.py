@@ -25,11 +25,17 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.accounts.models import Account, AccountIdentity
-from squid.bot.consent import _consent_prompt, ensure_consented_account, prompt_for_consent, request_consent
+from squid.bot.consent import (
+    ConsentPrompt,
+    _consent_prompt,
+    ensure_consented_account,
+    prompt_for_consent,
+    request_consent,
+)
 from squid.core.sentinel import NOT_ASKED
 from squid_ui.testing import RecordingResponder, press
 from squid_ui.text import NEUTRAL, resolve_text
-from squid_ui_discord import Everyone, SessionKey, SessionManager
+from squid_ui_discord import Everyone, SessionKey
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import (
     ContextHarness,
@@ -118,8 +124,6 @@ def test_link_consent_card_names_every_stored_value_and_credit_outcome(
     prompt = _consent_prompt(
         user_id=USER_ID,
         preview=LinkPreview(JAVA_UUID, "Notch", credit),
-        timeout=120,
-        on_answer=None,
     )
     root = sd.MessageRoot(prompt, access=sd.Owner(USER_ID), timeout=120)
 
@@ -139,50 +143,23 @@ def test_link_consent_card_names_every_stored_value_and_credit_outcome(
 
 
 async def test_cancel_and_privacy_never_record_consent() -> None:
-    answers: list[AccountConsent | None] = []
+    cancel_prompt = _consent_prompt(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
+    async with sd.testing.stage(cancel_prompt, owner=object(), user_id=USER_ID) as ui:
+        await ui.press("cancel")
+        outcome = await cancel_prompt.wait()
+        assert outcome == sd.Cancelled(sd.ScreenCancelReason.USER)
+        assert cancel_prompt.consent is None
+        assert ui.root.finished
 
-    async def answer(_event: sl.PressEvent, consent: AccountConsent | None) -> None:
-        answers.append(consent)
-
-    cancel_prompt = _consent_prompt(
-        user_id=USER_ID,
-        preview=LinkPreview(JAVA_UUID, "Notch"),
-        timeout=120,
-        on_answer=answer,
-    )
-    cancel_responder = RecordingResponder()
-
-    await press(cancel_prompt, "cancel", responder=cancel_responder)
-
-    assert cancel_prompt.consent is None
-    assert cancel_prompt.closed
-    assert cancel_responder.finished
-    assert answers == [None]
-
-    privacy_prompt = _consent_prompt(
-        user_id=USER_ID,
-        preview=LinkPreview(JAVA_UUID, "Notch"),
-        timeout=120,
-        on_answer=answer,
-    )
+    privacy_prompt = _consent_prompt(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
     privacy_responder = RecordingResponder()
-
     await press(privacy_prompt, "privacy", responder=privacy_responder)
 
     assert privacy_prompt.consent is None
-    assert not privacy_prompt.closed
-    assert answers == [None]
+    assert privacy_prompt.outcome is None
     assert privacy_responder.notices == [
         (resolve_text(PRIVACY_NOTICE, NEUTRAL).content, sl.interactions.Visibility.PRIVATE)
     ]
-
-
-def answer(view_holder: list[Any], *, agree: bool) -> None:
-    """Stand in for the user pressing a button, without a real interaction."""
-    view = view_holder[0]
-    if agree:
-        view.consent = AccountConsent.grant_current()
-    view.stop()
 
 
 async def test_an_already_consented_user_is_never_prompted() -> None:
@@ -279,10 +256,11 @@ async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
     outcomes: list[Any] = []
 
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(request, user_id=USER_ID)))
+        tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(request, user_id=USER_ID, timeout=7)))
         while not ctx.bot.sessions.get(key):
             await anyio.sleep(0)
         first = ctx.bot.sessions.get(key)
+        assert next(iter(first[0].message_roots)).timeout == 7
 
         second = await prompt_for_consent(request, user_id=USER_ID)
 
@@ -327,8 +305,10 @@ def _stub_prompt(monkeypatch: pytest.MonkeyPatch, *, agree: bool) -> None:
     monkeypatch.setattr("squid.bot.consent.prompt_for_consent", prompt)
 
 
-class _Gate(sl.Component):
+class _Gate(sd.Screen):
     """A panel that asks for consent and keeps answering presses while the notice is up."""
+
+    policy = sd.ResponseSpec(session=sd.SessionSpec("gate"), timeout=None)
 
     presses: int = sl.state(default=0)
     granted: bool = sl.state(default=False)
@@ -346,21 +326,21 @@ class _Gate(sl.Component):
             ),
         ]
 
-    async def _ask(self, event: sl.PressEvent) -> None:
-        request = await sd.request(event)
-        await request_consent(
-            request,
+    async def _ask(self, event: sd.PressEvent) -> None:
+        opened = await request_consent(
+            event,
             user_id=USER_ID,
             on_answer=self._answered,
             on_abandon=self._abandoned,
-            parent=request.root,
         )
+        if not opened:
+            await self._abandoned()
 
     async def _count(self, event: sl.PressEvent) -> None:
         del event
         self.presses += 1
 
-    async def _answered(self, _prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+    async def _answered(self, event: sd.ActionEvent, consent: AccountConsent | None) -> None:
         self.granted = consent is not None
 
     async def _abandoned(self) -> None:
@@ -374,69 +354,101 @@ def _clicked(client: Any, *, message_id: int) -> Any:
     return interaction
 
 
-def _prompt_of(registry: SessionManager, panel: sd.MessageRoot) -> sd.MessageRoot | None:
-    """The notice attached to `panel`'s session, which is where `parent=` puts it."""
-    session = registry.session_for(panel)
-    assert session is not None
-    return next((message_root for message_root in session.message_roots if message_root is not panel), None)
+def _prompt_of(panel: _Gate) -> sd.MessageRoot | None:
+    """A consent child has its own admission key and the parent's owned lifetime."""
+    assert panel.opening is not None
+    sessions = panel.opening.runtime.sessions.get(SessionKey.user("consent", USER_ID))
+    return next(iter(sessions[0].message_roots), None) if sessions else None
 
 
 async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None:
-    """request_consent returns once the notice opens, freeing the originating action.
-
-    Awaiting the answer inside the panel's exclusive action would hold its UI transaction and
-    dispatch lock. A second press proves the panel remains usable while the notice is open.
-    """
-    bot = make_layout_bot()
-    registry = bot.sessions
     panel = _Gate()
-    message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
-    commit_render(message_root)
-
-    # Bounded well under the prompt's 120 s: a press that still waited would hang here rather
-    # than fail, and a test that only passes once the prompt times out proves nothing.
-    with anyio.fail_after(5):
-        await message_root.dispatch("ask", _clicked(bot, message_id=1))
-        assert _prompt_of(registry, message_root) is not None
-
-        commit_render(message_root)
-        await message_root.dispatch("count", _clicked(bot, message_id=2))
-
-    assert panel.presses == 1
+    async with sd.testing.stage(panel, owner=object(), user_id=USER_ID) as ui:
+        with anyio.fail_after(5):
+            await ui.press("ask")
+            assert _prompt_of(panel) is not None
+            await ui.press("count")
+        assert panel.presses == 1
 
 
-async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
-    """The work the press was about runs from the prompt's own press, not from the panel's."""
-    bot = make_layout_bot()
-    registry = bot.sessions
+async def test_the_prompt_carries_the_answer_back_with_fresh_parent_authority() -> None:
     panel = _Gate()
-    message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
-    commit_render(message_root)
-    await message_root.dispatch("ask", _clicked(bot, message_id=1))
+    async with sd.testing.stage(panel, owner=object(), user_id=USER_ID) as ui:
+        await ui.press("ask")
+        prompt = _prompt_of(panel)
+        assert prompt is not None
+        commit_render(prompt)
+        await prompt.dispatch("accept", _clicked(ui.interaction.client, message_id=3))
 
-    prompt = _prompt_of(registry, message_root)
-    assert prompt is not None
-    commit_render(prompt)
-    await prompt.dispatch("accept", _clicked(bot, message_id=3))
-
-    assert panel.granted
-    assert panel.abandoned == 0
-    assert prompt.finished
+        assert panel.granted
+        assert panel.abandoned == 0
+        assert prompt.finished
+        assert not ui.root.finished
 
 
-async def test_an_unanswered_prompt_runs_cleanup_from_its_owned_finish_lifecycle() -> None:
-    bot = make_layout_bot()
-    registry = bot.sessions
+@pytest.mark.parametrize("cause", ["closure", "cancel", "timeout", "parent-close"])
+async def test_an_uncompleted_prompt_runs_cleanup_once(cause: str) -> None:
     panel = _Gate()
-    message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
-    commit_render(message_root)
-    await message_root.dispatch("ask", _clicked(bot, message_id=1))
+    async with sd.testing.stage(panel, owner=object(), user_id=USER_ID) as ui:
+        await ui.press("ask")
+        prompt = _prompt_of(panel)
+        assert prompt is not None
+        if cause == "cancel":
+            await prompt.dispatch("cancel", _clicked(ui.interaction.client, message_id=3))
+        elif cause == "timeout":
+            await prompt.handle_timeout()
+        elif cause == "parent-close":
+            await ui.root.finish()
+        else:
+            await prompt.finish()
+        await prompt.finish()
 
-    prompt = _prompt_of(registry, message_root)
-    assert prompt is not None
-    await prompt.finish()
+        assert panel.abandoned == 1
+        assert not panel.granted
 
-    assert panel.abandoned == 1
+
+async def test_rejected_prompt_leaves_cleanup_to_the_caller_once() -> None:
+    panel = _Gate()
+    async with sd.testing.stage(panel, owner=object(), user_id=USER_ID) as ui:
+        await ui.press("ask")
+        prompt = _prompt_of(panel)
+        assert prompt is not None
+        await ui.press("ask")
+
+        assert panel.abandoned == 1
+        assert _prompt_of(panel) is prompt
+        assert not prompt.finished
+        await prompt.finish()
+        assert panel.abandoned == 2
+
+
+async def test_failed_parent_work_does_not_publish_consent_and_can_retry() -> None:
+    class FailingGate(_Gate):
+        fail: bool = sl.state(default=True)
+
+        @override
+        async def _answered(self, event: sd.ActionEvent, consent: AccountConsent | None) -> None:
+            assert event.context.root is not None
+            assert event.context.root.component is self
+            self.granted = True
+            if self.fail:
+                raise RuntimeError("business write failed")
+
+    panel = FailingGate()
+    async with sd.testing.stage(panel, owner=object(), user_id=USER_ID) as ui:
+        await ui.press("ask")
+        prompt = _prompt_of(panel)
+        assert prompt is not None
+        await prompt.dispatch("accept", _clicked(ui.interaction.client, message_id=3))
+
+        assert not panel.granted
+        assert not prompt.finished
+        assert isinstance(prompt.component, ConsentPrompt)
+        assert prompt.component.outcome is None
+        assert prompt.component.consent is None
+        panel.fail = False
+        await prompt.dispatch("accept", _clicked(ui.interaction.client, message_id=4))
+
+        assert panel.granted
+        assert prompt.finished
+        assert isinstance(await prompt.component.wait(), sd.Completed)

@@ -247,12 +247,15 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, s
     return sl.section(sl.heading(draft.question), sl.paragraph(options), sl.fields(*fields))
 
 
-class PollScreen(sd.UserGuildSessionScreen, session_name="poll-wizard"):
+class PollScreen(sd.Screen):
     """A poll wizard that ends when published, cancelled, replaced, or timed out."""
 
-    timeout = 900
-    expiry = sd.RenewEphemeral()
-    follow_topics = True
+    policy = sd.ResponseSpec(
+        timeout=900,
+        expiry=sd.RenewEphemeral(),
+        follow_topics=True,
+        session=sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD),
+    )
 
     published_url: str | None = sl.state(None)
     cancelled: bool = sl.state(default=False)

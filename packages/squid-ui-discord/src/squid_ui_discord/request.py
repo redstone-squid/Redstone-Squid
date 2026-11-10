@@ -355,12 +355,6 @@ class Request[OwnerT = Any]:
             resolved = content.content
         else:
             resolved = content
-        if hasattr(type(resolved), "__response_spec__"):
-            if resolved.__dict__.get("_screen_presented", False):
-                message = f"{type(resolved).__name__} has already been presented"
-                raise RuntimeError(message)
-            object.__setattr__(resolved, "_screen_opening", self)
-            object.__setattr__(resolved, "_screen_presented", True)
         explicit = overrides.get("audience")
         if self._deferred is not None:
             compatible = explicit in (None, "personal") or isinstance(explicit, Private)

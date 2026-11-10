@@ -38,10 +38,10 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
             return tr("Record filter")
 
 
-class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
-    """A notification workspace that ends when replaced or timed out."""
+class NotificationScreen(sd.Screen):
+    """A notification workspace that ends when replaced, or timed out."""
 
-    timeout = SESSION_SECONDS
+    policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("notifications"))
 
     selected_ids: tuple[str, ...] = sl.state(())
     selected_inbox_ids: tuple[str, ...] = sl.state(())

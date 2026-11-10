@@ -125,11 +125,10 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._build_node = await self._render_build(build)
 
 
-class SearchScreen(sd.UserSessionScreen, session_name="search"):
-    """A resource-backed search workspace that ends when replaced or timed out."""
+class SearchScreen(sd.Screen):
+    """A resource-backed search workspace that ends when replaced, or timed out."""
 
-    timeout = 180
-    audience = "public"
+    policy = sd.ResponseSpec(timeout=180, audience="public", session=sd.SessionSpec("search"))
 
     def __init__(
         self,

@@ -1041,6 +1041,9 @@ class SessionManager:
             if key is not None:
                 self._by_key.setdefault(key, []).append(newcomer)
             newcomer._activate()
+        for victim in victims:
+            if victim.root._screen_close_reason is None:
+                victim.root._screen_close_reason = "replaced"
         try:
             await self._finish_sessions(victims, disable=True)
         except Exception:
