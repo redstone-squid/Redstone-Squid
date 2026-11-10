@@ -21,6 +21,7 @@ from squid.builds.domain import BuildCategory, BuildDraft
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
 from squid.settings.application import SettingsService
+from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
 from squid.submissions.application.revisions import RevisionProposalService
@@ -76,6 +77,10 @@ class SettingsRecorder(SettingsService):
     @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
+
+    @override
+    async def get_runtime(self) -> RuntimeSettings:
+        return RuntimeSettings(build_log_channel_ids=(BUILD_LOG_CHANNEL,))
 
 
 class AccountIdResolver:

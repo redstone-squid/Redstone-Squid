@@ -15,7 +15,8 @@ from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.routes._root import _feature_group
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
-from squid.community.domain import RedstonerDecisionKind
+from squid.community.application import RedstonerService
+from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
@@ -58,7 +59,7 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     """
     assert interaction.guild is not None
     member = interaction.user
-    community = interaction.client.community_config
+    community = await interaction.client.services.settings.get_runtime()
     redstoner_role = interaction.guild.get_role(community.redstoner_role_id)
     if redstoner_role is None or redstoner_role not in member.roles:
         return
@@ -146,7 +147,6 @@ class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
 class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     def __init__(self, bot: BotT):
         super().__init__(bot)
-        self.service = bot.services.redstoner
 
     @sd.Cog.listener("on_message")
     async def give_redstoner(self, message: discord.Message):
@@ -187,7 +187,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 )
             )
 
-        community = self.bot.community_config
+        community = await self.bot.services.settings.get_runtime()
         return RedstonerScreen(
             guild_id=guild.id,
             role_id=community.redstoner_role_id,
@@ -213,7 +213,18 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
         """Give the redstoner role to a user based on a Starboard message."""
-        decision = self.service.evaluate(
+        if message.guild is None or message.guild.id != self.bot.owner_server_id:
+            return
+        community = await self.bot.services.settings.get_runtime()
+        if not community.redstoner_enabled:
+            return
+        service = RedstonerService(
+            RedstonerPolicy(
+                community.redstoner_starboard_author_id,
+                community.redstoner_starboard_channel_id,
+            )
+        )
+        decision = service.evaluate(
             author_id=message.author.id,
             channel_id=message.channel.id,
             mentioned_user_ids=[mention.id for mention in message.mentions],
@@ -235,7 +246,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         assert decision.source_message_url is not None
         member = next(mention for mention in message.mentions if mention.id == decision.member_id)
         assert message.guild is not None
-        redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
+        redstoner_role = message.guild.get_role(community.redstoner_role_id)
         if redstoner_role is None:
             with localization_scope(localization_for(locale)):
                 payload = render_payload([text_node(tr("Could not find the redstoner role."))])
@@ -254,7 +265,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 locale=locale,
             )
         await send_to(
-            self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id),
+            self.bot.get_channel(community.redstoner_announcement_channel_id),
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
         )(presentation)
 

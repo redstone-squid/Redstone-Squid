@@ -64,10 +64,11 @@ async def ensure_build_review(
     for guild_id in {channel.guild.id for channel in unique_channels}:
         options.extend((await bot.services.votes.emoji_preset(guild_id, VoteKind.BUILD)).options)
 
+    settings = await bot.services.settings.get_runtime()
     session_id = await bot.services.votes.ensure_build_submission_vote(
         author_account_id=build.submitter_account_id,
-        pass_threshold=3,
-        fail_threshold=-3,
+        pass_threshold=settings.build_vote_pass_threshold,
+        fail_threshold=settings.build_vote_fail_threshold,
         build_id=build.id,
         changes=[("submission_status", Status.PENDING, Status.CONFIRMED)],
         options=options,
@@ -94,10 +95,11 @@ async def start_delete_log_vote(
         raise ValueError(msg)
 
     options = (await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG)).options
+    settings = await bot.services.settings.get_runtime()
     session_id = await bot.services.votes.start_delete_log_vote(
         author_account_id=author_account_id,
-        pass_threshold=3,
-        fail_threshold=-3,
+        pass_threshold=settings.delete_vote_pass_threshold,
+        fail_threshold=settings.delete_vote_fail_threshold,
         message_id=target_message.id,
         channel_id=target_message.channel.id,
         server_id=target_message.guild.id,

@@ -1,5 +1,6 @@
 """Various admin commands for the bot."""
 
+import json
 import re
 from typing import TYPE_CHECKING, Literal, Self
 
@@ -7,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Greedy
+from pydantic import ValidationError
 
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
@@ -130,6 +132,44 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if author_id != payload.user_id:
             return
         await message.delete()
+
+    @sd.prefix_command(name="runtime-settings", hidden=True)
+    @commands.is_owner()
+    async def runtime_settings(
+        self,
+        request: sd.Request[Self],
+        setting: str | None = None,
+        *,
+        value: str | None = None,
+    ) -> sd.CommandResult:
+        """Inspect settings or change one using a JSON value, e.g. welcome_forward_chance 0.25.
+
+        Booleans use true/false; build_log_channel_ids accepts an array of IDs.
+        Changes apply to subsequent operations. Vote defaults affect new sessions only.
+        """
+        service = self.bot.services.settings
+        if setting is None:
+            settings = await service.get_runtime()
+            return text_node(json.dumps(settings.model_dump(mode="json"), indent=2))
+        if value is None:
+            settings = await service.get_runtime()
+            if setting not in type(settings).model_fields:
+                return text_node("Unknown runtime setting. Run runtime-settings to list available names.")
+            return text_node(f"{setting}: {json.dumps(settings.model_dump(mode='json')[setting])}")
+        account = await self.bot.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD,
+            str(request.user.id),
+        )
+        if account is None or account.id is None or account.needs_consent_refresh:
+            return text_node("Open /account and accept the current privacy notice before changing runtime settings.")
+        try:
+            settings = await service.update_runtime(
+                {setting: json.loads(value)},
+                actor_account_id=account.id,
+            )
+        except (json.JSONDecodeError, ValidationError) as exc:
+            return text_node(f"Invalid setting: {exc}")
+        return text_node(f"Saved {setting}: {json.dumps(settings.model_dump(mode='json')[setting])}")
 
     @sd.prefix_command(name="s", hidden=True)
     @commands.is_owner()

@@ -197,3 +197,20 @@ def test_welcome_relay_rejects_ambiguous_and_expired_matches() -> None:
 
     clock.now = 20
     assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alex!") is None
+
+
+def test_runtime_probability_changes_do_not_resample_pending_welcomes() -> None:
+    service = WelcomeRelayService(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1))
+    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
+    service.configure(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=0), enabled=True)
+    assert service.record_join(42, "Alice") is not None
+    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Bob!") is None
+    assert service.record_join(43, "Bob") is None
+
+
+@pytest.mark.parametrize(("enabled", "channel_id"), [(False, 1), (True, 2)])
+def test_disabling_or_rerouting_welcomes_discards_pending_matches(enabled: bool, channel_id: int) -> None:
+    service = WelcomeRelayService(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1))
+    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
+    service.configure(WelcomeRelayPolicy(welcome_channel_id=channel_id, forward_chance=1), enabled=enabled)
+    assert service.record_join(42, "Alice") is None

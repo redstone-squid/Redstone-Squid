@@ -37,8 +37,8 @@ from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
-from squid.community.application import RedstonerService, WelcomeRelayService
-from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
+from squid.community.application import WelcomeRelayService
+from squid.community.domain import WelcomeRelayPolicy
 from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
 from squid.events.application import DomainEventService
@@ -84,6 +84,7 @@ from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.search.application import SearchEmbeddingService, SearchService
 from squid.search.application.projection import SearchProjectionService
 from squid.settings.application import SettingsService
+from squid.settings.domain.runtime import RuntimeSettings
 from squid.starboard.application import StarboardService
 from squid.submissions.application import (
     CheckedInFormManifestRegistry,
@@ -305,10 +306,21 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def settings(self) -> SettingsService:
+        return SettingsService(
+            uow_factory=self.uow_factory,
+            runtime_defaults=RuntimeSettings(
+                **self.config.community.model_dump(),
+                notification_retention_days=self.config.notifications.retention_days,
+            ),
+        )
+
+    @cached_property
     def notifications(self) -> NotificationService:
         return NotificationService(
             uow_factory=self.uow_factory,
             retention_days=self.config.notifications.retention_days,
+            runtime_settings=self.settings.get_runtime,
         )
 
     @cached_property
@@ -736,7 +748,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         schematics=graph.schematics,
         search=graph.search,
         tags=graph.tags,
-        settings=SettingsService(uow_factory=graph.uow_factory),
+        settings=graph.settings,
         starboards=graph.starboards,
         suggestions=graph.bot_suggestions,
         accounts=graph.accounts,
@@ -746,12 +758,6 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         discord_reconciliation=DiscordReconciliationService(uow_factory=graph.uow_factory),
         domain_events=DomainEventService(uow_factory=graph.uow_factory),
         notifications=graph.notifications,
-        redstoner=RedstonerService(
-            RedstonerPolicy(
-                starboard_author_id=config.community.redstoner_starboard_author_id,
-                starboard_channel_id=config.community.redstoner_starboard_channel_id,
-            )
-        ),
         welcome_relay=WelcomeRelayService(
             WelcomeRelayPolicy(
                 welcome_channel_id=config.community.welcome_channel_id,

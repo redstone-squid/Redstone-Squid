@@ -8,10 +8,12 @@ import discord
 import pytest
 
 from squid.bot.version_tracking import VersionTracker
+from squid.settings.domain.runtime import RuntimeSettings
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition, MinecraftVersion, parse_version_string
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
+from tests.support.settings import RuntimeSettingsStub
 
 
 class VersionRecorder(VersionService):
@@ -50,7 +52,10 @@ async def test_version_announcements(
 ) -> None:
     versions = VersionRecorder()
     bot = make_layout_bot(
-        services=bot_services(versions=versions),
+        services=bot_services(
+            versions=versions, settings=RuntimeSettingsStub(RuntimeSettings(version_tracker_channel_id=10))
+        ),
+        owner_server_id=123,
         user=SimpleNamespace(id=1, bot=True),
         community_config=SimpleNamespace(version_tracker_channel_id=10),
         get_channel=lambda channel_id: SimpleNamespace(id=channel_id),
@@ -58,6 +63,7 @@ async def test_version_announcements(
     message = cast(
         discord.Message,
         SimpleNamespace(
+            guild=SimpleNamespace(id=123),
             content=content,
             author=SimpleNamespace(id=author_id, bot=author_id in (1, 3)),
             channel=SimpleNamespace(id=channel_id),
@@ -77,13 +83,21 @@ async def test_storage_errors_propagate() -> None:
     versions = VersionRecorder()
     versions.failure = RuntimeError("storage unavailable")
     bot = make_layout_bot(
-        services=bot_services(versions=versions),
+        services=bot_services(
+            versions=versions, settings=RuntimeSettingsStub(RuntimeSettings(version_tracker_channel_id=10))
+        ),
+        owner_server_id=123,
         user=SimpleNamespace(id=1),
         community_config=SimpleNamespace(version_tracker_channel_id=10),
     )
     message = cast(
         discord.Message,
-        SimpleNamespace(content="Java 1.21.4", author=SimpleNamespace(id=2), channel=SimpleNamespace(id=10)),
+        SimpleNamespace(
+            guild=SimpleNamespace(id=123),
+            content="Java 1.21.4",
+            author=SimpleNamespace(id=2),
+            channel=SimpleNamespace(id=10),
+        ),
     )
 
     with pytest.raises(RuntimeError, match="storage unavailable"):

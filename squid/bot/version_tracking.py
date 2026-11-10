@@ -143,8 +143,11 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
     @sd.Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message) -> None:
         """Ingest version announcements, ignoring our own replies and non-version posts."""
+        if message.guild is None or message.guild.id != self.bot.owner_server_id:
+            return
+        settings = await self.bot.services.settings.get_runtime()
         channel_id = message.channel.id
-        if channel_id != self.bot.community_config.version_tracker_channel_id:
+        if channel_id != settings.version_tracker_channel_id:
             return
         if message.author == self.bot.user:
             return

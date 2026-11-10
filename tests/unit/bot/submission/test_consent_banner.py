@@ -18,6 +18,7 @@ from squid.bot.submission.consent_banner import (
 )
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.settings.application import SettingsService
+from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.errors import DraftCapacityExceededError
 from squid_ui_discord.testing import AsyncCallRecorder, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
@@ -76,6 +77,10 @@ class SettingsRecorder(SettingsService):
     @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
+
+    @override
+    async def get_runtime(self) -> RuntimeSettings:
+        return RuntimeSettings(build_log_channel_ids=(BUILD_LOG_CHANNEL,))
 
 
 @dataclass(frozen=True)

@@ -90,6 +90,16 @@ class WelcomeRelayService:
         self._pending_members: list[PendingWelcomeMember] = []
         self._pending_messages: list[PendingWelcomeMessage] = []
 
+    def configure(self, policy: WelcomeRelayPolicy, *, enabled: bool) -> None:
+        """Apply current policy without re-sampling messages already accepted.
+
+        Disabling or changing the source channel discards pending matches.
+        """
+        if not enabled or policy.welcome_channel_id != self._policy.welcome_channel_id:
+            self._pending_members.clear()
+            self._pending_messages.clear()
+        self._policy = policy
+
     def record_join(self, user_id: int, username: str) -> WelcomeRelayDecision | None:
         """Record a member join and return a decision when its message arrived first."""
         now = self._clock()

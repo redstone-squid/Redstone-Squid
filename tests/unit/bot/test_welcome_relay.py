@@ -13,8 +13,10 @@ from squid.bot import welcome_relay
 from squid.community.application import WelcomeRelayService
 from squid.community.domain import WelcomeRelayPolicy
 from squid.runtime import BotServices
+from squid.settings.domain.runtime import RuntimeSettings
 from squid_ui_discord.testing import AsyncCallRecorder
 from tests.support.services import bot_services
+from tests.support.settings import RuntimeSettingsStub
 
 
 class CountingRandom(Random):
@@ -37,6 +39,7 @@ class CommunityConfig:
 class Bot:
     services: BotServices
     community_config: CommunityConfig
+    owner_server_id: int
     get_or_fetch_messageable_channel: AsyncCallRecorder
 
 
@@ -56,6 +59,7 @@ class Message:
 class Member:
     id: int
     name: str
+    guild: Channel
 
 
 @pytest.mark.parametrize("message_first", [False, True])
@@ -70,13 +74,20 @@ async def test_welcome_relay_forwards_once_in_either_event_order_without_cache_o
     )
     general_channel = mocker.Mock(spec=discord.TextChannel)
     fetch_channel = AsyncCallRecorder(result=general_channel)
-    bot = Bot(bot_services(welcome_relay=service), CommunityConfig(welcome_relay_channel_id=20), fetch_channel)
+    settings = RuntimeSettingsStub(
+        RuntimeSettings(
+            welcome_channel_id=10,
+            welcome_relay_channel_id=20,
+            welcome_forward_chance=1,
+        )
+    )
+    bot = Bot(bot_services(welcome_relay=service, settings=settings), CommunityConfig(20), 1, fetch_channel)
     cog = welcome_relay.WelcomeRelay(cast(Any, bot))
     message = cast(
         discord.Message,
         Message(Channel(10), discord.MessageType.new_member, "Everyone welcome Alice!"),
     )
-    member = cast(discord.Member, Member(42, "Alice"))
+    member = cast(discord.Member, Member(42, "Alice", Channel(1)))
     sent: list[object] = []
     mentions: list[discord.AllowedMentions] = []
 

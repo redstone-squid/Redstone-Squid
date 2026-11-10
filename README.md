@@ -61,6 +61,27 @@ The complete deployment requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_
 variables take precedence over `.env`. Discord OAuth,
 REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
 
+Community routing, welcome forwarding, automation switches, vote threshold defaults, and notification
+retention live in `runtime_settings`. After applying migrations (`uv run --locked alembic upgrade head`),
+the first settings read seeds this singleton from the deployment configuration. Keep initial community
+and retention configuration consistent across processes; later environment edits do not override the row.
+The bot owner can inspect or edit settings without restarting:
+
+```text
+!runtime-settings
+!runtime-settings welcome_forward_chance 0.25
+!runtime-settings welcome_enabled false
+!runtime-settings build_vote_pass_threshold 5
+!runtime-settings build_log_channel_ids [726156829629087814, 667401499554611210]
+```
+
+Use your configured command prefix if it differs from `!`. Values use JSON syntax. Changes are validated
+and recorded with the internal account, timestamp, and before/after values in `runtime_setting_changes`.
+Each operation reads fresh settings. Vote threshold changes affect new sessions; existing sessions keep
+their thresholds. Welcome probability changes affect new messages; disabling relaying or changing its
+source clears pending matches when the relay next handles an event. Retention changes apply on the next
+notification cleanup. Channel and role settings configure the existing owner-guild automations.
+
 The pepper settings key the digests stored for API keys, web sessions, CLI authorization secrets, and
 Minecraft credentials. Each is a deployment key that never reaches the database, so rotating one
 invalidates every credential it protects. `docs/credential-hashing.md` documents the construction and

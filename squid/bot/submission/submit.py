@@ -215,18 +215,17 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         )
         return tuple(nodes) if nodes else text_node("No active drafts or inference runs.")
 
-    def _is_build_log_message(self, message: Message) -> bool:
+    async def _is_build_log_message(self, message: Message) -> bool:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
-        return (
-            not message.author.bot
-            and isinstance(message.channel, discord.TextChannel)
-            and message.channel.id in self.bot.community_config.build_log_channel_ids
-        )
+        if message.author.bot or not isinstance(message.channel, discord.TextChannel):
+            return False
+        settings = await self.bot.services.settings.get_runtime()
+        return message.channel.id in settings.build_log_channel_ids
 
     @sd.Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
         """Ingest an eligible build log message when its author has current consent."""
-        if not self._is_build_log_message(message):
+        if not await self._is_build_log_message(message):
             return
         assert isinstance(message.channel, discord.TextChannel)
         account = await self.bot.services.accounts.get_account_by_identity(
@@ -268,7 +267,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Review proposed build corrections inferred from this message."""
         await enforce(request, BUILD_SUBMISSION_RECALC)
-        if not self._is_build_log_message(message):
+        if not await self._is_build_log_message(message):
             return error_node(
                 tr("Nothing to recalculate"),
                 tr("Builds are only read out of messages posted in a build log channel."),

@@ -25,7 +25,7 @@ from squid.auth.application import ApiKeyService
 from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.cli_auth import CliAuthorizationService
-from squid.community.application import RedstonerService, WelcomeRelayService
+from squid.community.application import WelcomeRelayService
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured, install_log_capture
 from squid.events.application import DomainEventService
@@ -152,7 +152,6 @@ class BotServices:
     discord_reconciliation: DiscordReconciliationService
     domain_events: DomainEventService
     notifications: NotificationService
-    redstoner: RedstonerService
     welcome_relay: WelcomeRelayService
 
 

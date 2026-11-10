@@ -1,6 +1,6 @@
 """Notification preference, subscription, and inbox orchestration."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from squid.notifications.domain import (
 )
 from squid.notifications.errors import NotificationNotFoundError, NotificationSubscriptionNotFoundError
 from squid.notifications.models import InboxNotification, NotificationSubscription
+from squid.settings.domain.runtime import RuntimeSettings
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
@@ -89,12 +90,19 @@ class NotificationService:
     messages require its permission check as well as the account's preferences.
     """
 
-    def __init__(self, *, uow_factory: UnitOfWorkFactory[NotificationUnitOfWork], retention_days: int = 90) -> None:
+    def __init__(
+        self,
+        *,
+        uow_factory: UnitOfWorkFactory[NotificationUnitOfWork],
+        retention_days: int = 90,
+        runtime_settings: Callable[[], Awaitable[RuntimeSettings]] | None = None,
+    ) -> None:
         if retention_days < 1:
             msg = tr("retention_days must be positive")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
         self._retention_days = retention_days
+        self._runtime_settings = runtime_settings
 
     async def preferences(self, account_id: int) -> NotificationPreferences:
         """Return preferences, including an implicit disabled profile when absent."""
@@ -229,8 +237,13 @@ class NotificationService:
         Old source events are also removed when no inbox item or event-delivery
         record still references them.
         """
+        retention_days = (
+            (await self._runtime_settings()).notification_retention_days
+            if self._runtime_settings is not None
+            else self._retention_days
+        )
         async with self._uow_factory() as uow:
-            result = await uow.notifications.cleanup(retention_days=self._retention_days)
+            result = await uow.notifications.cleanup(retention_days=retention_days)
             await uow.commit()
             return result
 

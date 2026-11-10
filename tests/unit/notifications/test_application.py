@@ -12,7 +12,9 @@ from squid.notifications.application import NotificationRepository
 from squid.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.errors import NotificationSubscriptionNotFoundError
 from squid.notifications.models import NotificationSubscription
+from squid.settings.domain.runtime import RuntimeSettings
 from tests.support.delivery_uow import NotificationUnitOfWork
+from tests.support.settings import RuntimeSettingsStub
 
 SUBJECT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -97,3 +99,24 @@ async def test_read_and_unread_use_the_same_visibility_contract() -> None:
 
     await service.mark_read(7, 3, visibility=visibility)
     await service.mark_unread(7, 3, visibility=visibility)
+
+
+async def test_cleanup_reads_retention_each_time() -> None:
+    class Repository:
+        def __init__(self) -> None:
+            self.days: list[int] = []
+
+        async def cleanup(self, *, retention_days: int) -> int:
+            self.days.append(retention_days)
+            return 1
+
+    repository = Repository()
+    settings = RuntimeSettingsStub()
+    service = NotificationService(
+        uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository)),
+        runtime_settings=settings.get_runtime,
+    )
+    assert await service.cleanup() == 1
+    settings.value = RuntimeSettings(notification_retention_days=7)
+    assert await service.cleanup() == 1
+    assert repository.days == [90, 7]

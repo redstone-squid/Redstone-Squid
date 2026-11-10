@@ -625,7 +625,11 @@ class WorkerConfig(_FrozenModel):
 
 
 class CommunityConfig(_FrozenModel):
-    """Discord channel and user IDs used by community automation."""
+    """Initial owner-guild routing used to seed runtime_settings on first access.
+
+    Once that database row exists, edit it through the owner runtime-settings command.
+    Environment changes no longer override its values.
+    """
 
     redstoner_starboard_author_id: int = 700796664276844612
     redstoner_starboard_channel_id: int = 1332630008270684241
@@ -941,6 +945,7 @@ class NotificationConfig(_FrozenModel):
 
     public_site_url: AnyHttpUrl | None = None
     retention_days: int = Field(default=90, ge=1, le=3650)
+    """Initial retention used only when the runtime settings row is first created."""
 
     _empty_public_site_url = field_validator("public_site_url", mode="before")(_empty_to_none)
 
