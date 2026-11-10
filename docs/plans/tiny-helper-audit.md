@@ -1,14 +1,19 @@
 # Tiny-helper audit
 
-Audit baseline: `fa7d274c5`, 2026-11-10. Findings are recommendations; no production code was changed.
+Audit baseline: `fa7d274c5`, 2026-11-10. Cleanup completed on 2026-11-10.
+
+All 24 finding groups below have been implemented. Source locations in the findings describe the audit
+baseline; the implementation and follow-up decisions are recorded here so those locations remain useful
+as review evidence.
 
 This audit follows [the small-helper guidance](../code-documentation-style.md#small-helpers).
 The question is whether an abstraction helps its callers, not whether it is short.
-Recommendations are recorded before implementation so unrelated changes can be reviewed separately.
+The findings were recorded before implementation; cleanup was committed in separate reviewable pieces.
 
 ## Findings at a glance
 
-There are 24 finding groups, plus eight follow-ups requiring an API or policy decision.
+The audit identified 24 finding groups and eight follow-ups. All are resolved, including explicit retention
+decisions for filesystem helpers and CLI workflow policy.
 
 | Priority | Findings | Reason |
 | --- | --- | --- |
@@ -20,6 +25,32 @@ There are 24 finding groups, plus eight follow-ups requiring an API or policy de
 H01 includes the original `require_consented_account` example and three related operations. H19 and H20
 were reproduced against the actual functions. H21 was reproduced by evaluating the existing guard bodies.
 The remaining findings come from definitions and call-site inspection, not observed production failures.
+
+## Implementation
+
+| Findings | Result | Commits |
+| --- | --- | --- |
+| H01 | Consent, credential matching, permission subjects, and effective permissions are Caller methods. | `3eaee3203` |
+| H02 | Page and PageAnchor own their `from_domain` constructors. | `669d0483f` |
+| H03, H08 | Candidate.create owns construction; empty-query limiting uses lazy islice. | `8312093fa` |
+| H04-H07, H09-H10, H14-H15 | Removed dead application helpers and forwarding layers; reused domain tag normalization. | `7b827c46a` |
+| H11-H14 | Entity/presentation behavior moved onto its types; redundant library wrappers and unused clocks removed. | `07461210f`, `6b686c97f` |
+| H16 | Developer-tool status summaries share one presentation module. | `c3eddd8e7` |
+| H17-H18 | Plain claimant labeling moved to accounts; hydration and account creation have explicit names. | `1cbb6dbb4`, `492603125` |
+| H19 | Cursor fingerprints and option revisions use unambiguous length/array encodings. | `d7e3cc5b8`, `3dd69cd48` |
+| H20-H22 | Exact pagination integers, checked error envelopes, and direct idempotency UUID creation. | `1ff5cc223` |
+| H23 | Protocol-owned player-token validation is shared with stored credentials. | `00a087c4b` |
+| H24 | Terminal label formatting is shared; generic transport predicates belong to error types. | `163812241` |
+
+H17 also exposed a pre-existing bug in plain message interpolation: it still escaped Markdown punctuation.
+`2b368768e` makes plain interpolation preserve literal values, with regression tests. Discord Markdown
+interpolation still escapes as before. Shared claimant labels no longer include formatting backticks or
+Discord autocomplete truncation; the Discord adapter retains mention formatting and its display limit.
+
+Package API replacements are documented in
+[the migration guide](../../packages/squid-ui-discord/docs/migrating.md#updating-helper-based-calls).
+No forwarding compatibility aliases were left behind. Existing cursor fingerprints and option revisions
+will change once with the new encoding; callers should treat them as opaque content identities.
 
 ## Scope and method
 
@@ -54,7 +85,7 @@ identical-body, low-reference, and nested-wrapper searches. Shortness is a disco
 The tracked non-Python inventory includes 70 TS/TSX, 50 Astro, 41 Kotlin, and 21 Rust files (including tests
 and generated files). Generated SDK implementations, SQL schema exports, historical migration bodies,
 vendored/dependency files, and completed design spikes are excluded from cleanup recommendations.
-No Rust or Kotlin behavioral change is claimed or tested. Public package functions may have consumers
+The initial audit did not execute Rust or Kotlin tests; cleanup validation is recorded below. Public package functions may have consumers
 outside this repository; absence of local references alone is not permission to break those APIs.
 
 ## Issue classes
@@ -123,8 +154,9 @@ The wrapper does not translate errors, cache, or enforce another rule.
 
 `collect_lookback` in `squid/bot/submission/message_context.py:137` and `utcnow` in `squid/core/time.py:6`
 have no references in executable tracked source after checking imports and all tracked-text matches.
-No dynamic registration or patch target was found; `collect_lookback` appears only in a historical plan. The latter also returns a formatted string despite its clock-like name; do not promote it into a
-replacement time API.
+No dynamic registration or patch target was found; `collect_lookback` appears only in a historical plan.
+The latter also returns a formatted string despite its clock-like name; do not promote it into a replacement
+time API.
 
 ### H08: A custom take loop duplicates itertools.islice
 
@@ -298,20 +330,20 @@ then replace line breaks/tabs with spaces. Put that named operation beside `sani
 single-line presentation. Error-enum-specific filesystem helpers need a more careful review and are not
 an automatic consequence of this straightforward consolidation.
 
-## Changes that need an API or policy decision
+## Follow-up decisions
 
-These are follow-ups, not confirmed safe deletions:
+The cleanup resolved the eight questions raised by the audit:
 
-| Location | Evidence and decision |
+| Location | Decision |
 | --- | --- |
-| `squid/starboard/application/services.py:220`, `get_role_multipliers` | No tracked consumers. Decide whether this application service operation is still part of the supported surface before removing it. |
-| `squid/schematics/application/services.py:535`, `bytes_for` | No tracked consumers, but it is a public service operation with missing-file semantics. Check intended service API. |
-| `squid/persistence/engine.py:69`, `validate_database_consistency` | No tracked consumers; readiness now checks migration heads. Decide whether manual diagnostic use is supported. |
-| `squid-reactivity/shared_state.py:158`, `describe` | Only returns `str(address)`, but it is re-exported and tested as public API. Prefer `str` in a coordinated API cleanup, not an isolated deletion. |
-| `squid-ui-discord/classic.py:224`, `measure_host` | Forwarder to `measure_classic`, exported in `__all__`. Decide whether the domain-specific name is intentional or a stale compatibility alias. |
-| `squid-ui/planning/layout_measurement/diagnostics.py:80`, `note` | A direct `SolveNote` constructor wrapper. Consider using the class directly; weigh the established diagnostic authoring API and its many call sites. |
-| CLI `profile.rs`, `credential.rs`, `encrypted_state.rs` filesystem helpers | Similar symlink checks, atomic writes, directory syncing, and permissions, but error types and check order differ. Consolidate only after specifying the shared filesystem contract. |
-| CLI `lib.rs:1864-1880,2863-2891` error classifiers | Generic transport predicates could move to `TransportError`; CLI-specific authorization/retry policy can legitimately remain at the orchestration boundary. Avoid indiscriminate method conversion. |
+| `StarboardService.get_role_multipliers` | Removed after confirming no tracked consumers, registrations, exports, or supported documentation. |
+| `SchematicService.bytes_for` | Removed after the same consumer check; live file-reading operations remain. |
+| `DatabaseEngine.validate_database_consistency` | Removed; readiness uses the live migration-head check. |
+| `squid-reactivity.shared_state.describe` | Removed; all callers use `str(address)`, with migration guidance. |
+| `squid-ui-discord.classic.measure_host` | Removed; callers use `inspection.measure_classic`, with migration guidance. |
+| Solver diagnostic `note` | Removed; consumers construct `SolveNote` directly. |
+| CLI filesystem helpers | Retained. They perform I/O and validation under different error enums and symlink-check orders. Sharing them would require a new error adapter or change when errors occur. |
+| CLI error classifiers | Generic unauthorized/network checks moved to TransportError/CliAuthError. Enrollment, pending authorization, and invalid-session retry policy remain with their workflows. |
 
 ## Helpers to retain
 
@@ -331,7 +363,7 @@ These are follow-ups, not confirmed safe deletions:
 | Kotlin transport extension functions, Rust error conversions | Adapt transport/domain errors or attach context; they are not empty pass-through layers. |
 | TypeScript URL encoding, CSRF extraction, storage-failure handling, locale conversion | Preserve protocol, security, fallback, and representation rules even when only a few lines long. |
 
-## Implementation order and verification
+## Original implementation plan
 
 1. Fix H19 and H20 with regression cases showing distinct content identities and exact/rejected numeric anchors.
    Tighten H21 separately with malformed problem responses.
@@ -347,7 +379,7 @@ would reject useful callbacks and let larger ownership mistakes through. Review 
 reason for each helper: policy, reuse, an interface/type boundary, or a cohesive operation.
 
 
-## Reproducing the content-hash findings
+## Verifying content identities after cleanup
 
 Run from the repository root with the installed Python environment:
 
@@ -358,25 +390,40 @@ from squid.submissions.infrastructure.options import _content_revision
 from squid.submissions.domain import ChoiceOption
 from squid_ui.planning.cursors import content_fingerprint
 
-assert content_fingerprint(["a\0b", "c"]) == content_fingerprint(["a", "b\0c"])
-assert content_fingerprint([]) == content_fingerprint([""])
-assert content_revision([Suggestion("a", "b\nc\0d")]) == content_revision(
+assert content_fingerprint(["a\0b", "c"]) != content_fingerprint(["a", "b\0c"])
+assert content_fingerprint([]) != content_fingerprint([""])
+assert content_revision([Suggestion("a", "b\nc\0d")]) != content_revision(
     [Suggestion("a", "b"), Suggestion("c", "d")]
 )
-assert _content_revision((ChoiceOption("a", "b\nc\0d"),)) == _content_revision(
+assert _content_revision((ChoiceOption("a", "b\nc\0d"),)) != _content_revision(
     (ChoiceOption("a", "b"), ChoiceOption("c", "d"))
 )
 ```
 
-These assertions demonstrate the current defect; regression tests for the fix should assert inequality.
+These assertions now pass. At the audit baseline each pair compared equal; regression tests retain these cases.
 
 ## Validation
 
-- `just typecheck`: passed, zero errors. Existing suppressions were not changed.
-- Focused Python tests with `--no-cov`: 44 passed across consent dependencies, suggestion matching, and suggestion services.
-- Focused Vitest tests with coverage disabled: 18 passed across pagination and search.
-- Actual-function hash and pagination reproducers confirmed H19-H20; isolated existing guard bodies confirmed H21.
-- Installed pre-commit hooks checked the report; `git diff --check` passed.
+- `just typecheck`: zero errors after the Python changes; no new suppressions or baseline file.
+- Integrated API, CLI-auth, and Minecraft-auth transport checks: 301 passed.
+- Web: 47 focused tests, ESLint, and Astro checks passed.
+- Minecraft protocol/core: 59 tests passed.
+- Rust: 35 focused tests, rustfmt, and normal Clippy passed. Strict Clippy reports the same 39 existing
+  `result_large_err` diagnostics on an archived pre-change CLI checkout; no suppressions were added.
+- Focused package and application tests cover the method moves, content collisions, lazy iteration,
+  consent/permission behavior, claimant rendering, and plain interpolation.
+- Installed hooks format/lint each Python commit. `git diff --check` passed.
 
-Passing baseline tests do not refute the reproduced gaps: the existing cases do not cover these inputs.
-The full test suite was not run for this documentation-only audit. No refactors or fixes have been applied.
+The full configured Python suite was run again after the final code changes. It retains the three
+baseline failures listed below; the claimant interpolation failure found during integration is fixed.
+Database/container integration tests are outside that configured suite.
+
+Three unrelated failures were independently reproduced using an archived `a01a6c5e3` source tree:
+
+- `test_no_model_stores_a_bare_datetime`: `runtime_setting_changes.changed_at` bypasses InstantUTC.
+- `test_localized_messages_are_present_in_the_english_catalog`: pre-existing showcase/workbench msgids
+  are missing from the English catalogue. The changed claimant msgids were updated in both catalogues.
+- `test_application_and_domain_layers_raise_only_structured_errors`: a builtin raise in
+  `squid/settings/domain/runtime.py` violates the existing boundary rule.
+
+These existing failures were not suppressed or folded into the helper cleanup.
