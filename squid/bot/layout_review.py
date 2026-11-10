@@ -84,8 +84,10 @@ class ReviewForm(sl.forms.Form):
 
 
 class ReviewerPanel(InspectablePanel):
+    policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-reviewer")))
+
     history: sl.runtime.History = sl.runtime.history(limit=10)
-    outcome: str = sl.state("Submit a review, then undo it. The other reviewer's contribution stays.", persist=False)
+    notice: str = sl.state("Submit a review, then undo it. The other reviewer's contribution stays.", persist=False)
 
     def __init__(self, room: ReviewRoom, seat: Reviewer, *, simulated: bool) -> None:
         self.room = room
@@ -124,7 +126,7 @@ class ReviewerPanel(InspectablePanel):
                 ),
                 key="review-actions",
             ),
-            sl.note(self.outcome),
+            sl.note(self.notice),
             self.inspector(),
         )
         return sl.section(heading, *children, accent=DISCORD_GREEN)
@@ -134,14 +136,14 @@ class ReviewerPanel(InspectablePanel):
         return (
             f"Seat: {self.seat.name} · decision={self.seat.review.decision}\n"
             f"Local history: undo={self.history.can_undo}, redo={self.history.can_redo}\n"
-            f"Last outcome: {self.outcome}\nShared totals: {self.room.totals()}\n"
+            f"Last notice: {self.notice}\nShared totals: {self.room.totals()}\n"
             "Each seat owns a separate shared cell. Undo records that seat, not the room totals."
         )
 
     def record_activity(self, line: str) -> None:
         # Activity is an audit of actions, not part of a reviewer's undoable contribution.
-        def committed(commit: sl.runtime.ActionCommit, continuation: sl.runtime.ActionContinuation) -> None:
-            with continuation.start_action("Log review activity"):
+        def committed(commit: sl.runtime.ActionCommit) -> None:
+            with sl.runtime.transaction("Log review activity", caused_by=commit.context):
                 self.room.log(line)
 
         sl.runtime.on_action_commit(committed)
@@ -155,16 +157,20 @@ class ReviewerPanel(InspectablePanel):
 
     async def _undo(self, event: sl.PressEvent[sd.Request]) -> None:
         if not self.room.closed:
-            self.outcome = history_outcome("Undo", await self.history.undo())
-            self.record_activity(f"{self.seat.name}: {self.outcome}")
+            self.notice = history_outcome("Undo", await self.history.undo())
+            self.record_activity(f"{self.seat.name}: {self.notice}")
 
     async def _redo(self, event: sl.PressEvent[sd.Request]) -> None:
         if not self.room.closed:
-            self.outcome = history_outcome("Redo", await self.history.redo())
-            self.record_activity(f"{self.seat.name}: {self.outcome}")
+            self.notice = history_outcome("Redo", await self.history.redo())
+            self.record_activity(f"{self.seat.name}: {self.notice}")
 
 
 class ReviewSummary(InspectablePanel):
+    policy = InspectablePanel.policy.overlay(
+        sd.ResponseSpec(access=sd.Everyone(), session=sd.SessionSpec("layout-review"))
+    )
+
     def __init__(self, room: ReviewRoom, host_id: int, mode: Literal["simulated", "live"]) -> None:
         self.room = room
         self.host_id = host_id
@@ -235,13 +241,10 @@ class ReviewSummary(InspectablePanel):
         seat = next((seat for seat in self.room.seats if seat.user_id == user_id), None)
         if seat is None:
             seat = Reviewer(user_id, f"<@{user_id}>")
+        # Reviewers are participants in this room's session, not result-producing child flows.
         result = await event.context.respond(
             ReviewerPanel(self.room, seat, simulated=False),
-            access=sd.Owner(user_id),
-            audience="public",
-            live_updates=True,
             parent=event.context.root,
-            session=sd.SessionSpec("layout-reviewer"),
         )
         if isinstance(result, sd.Presented):
             self.panels[user_id] = result.root
@@ -253,4 +256,4 @@ class ReviewSummary(InspectablePanel):
             await event.notice(tr(t"layout-review-close-forbidden = Only the host can close this room."))
             return
         self.room.closed = True
-        event.finish_on_success()
+        self.complete(event, None)

@@ -155,8 +155,10 @@ class BuildForm(sl.forms.Form):
 
 
 class Workbench(InspectablePanel):
+    policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-workbench")))
+
     history: sl.runtime.History = sl.runtime.history(limit=10)
-    outcome: str = sl.state("Edit the build, then undo. Watch the preview follow both changes.", persist=False)
+    notice: str = sl.state("Edit the build, then undo. Watch the preview follow both changes.", persist=False)
     fail_next: bool = sl.state(default=False)
 
     def __init__(self, draft: BuildDraft) -> None:
@@ -221,7 +223,7 @@ class Workbench(InspectablePanel):
                 ),
                 key="publishing",
             ),
-            sl.note(self.outcome),
+            sl.note(self.notice),
             self.inspector(),
         )
         return sl.section(heading, *children, accent=DISCORD_BLUE)
@@ -231,7 +233,7 @@ class Workbench(InspectablePanel):
         return (
             f"Shared draft: {self.draft.build.title} · {self.draft.build.dimensions} · {self.draft.build.ticks} ticks\n"
             f"Local history: undo={self.history.can_undo}, redo={self.history.can_redo}\n"
-            f"Last outcome: {self.outcome}\nOperation: {self.draft.publication_text()}\n"
+            f"Last notice: {self.notice}\nOperation: {self.draft.publication_text()}\n"
             "The preview follows cells it reads; no handler pushes an edit to it."
         )
 
@@ -242,10 +244,10 @@ class Workbench(InspectablePanel):
         self.draft.build = BuildSample(description=_LONG_DESCRIPTION, oversized=True)
 
     async def _undo(self, event: sl.PressEvent[sd.Request]) -> None:
-        self.outcome = history_outcome("Undo", await self.history.undo())
+        self.notice = history_outcome("Undo", await self.history.undo())
 
     async def _redo(self, event: sl.PressEvent[sd.Request]) -> None:
-        self.outcome = history_outcome("Redo", await self.history.redo())
+        self.notice = history_outcome("Redo", await self.history.redo())
 
     async def _fail(self, event: sl.PressEvent[sd.Request]) -> None:
         if not self.draft.publishing:
@@ -274,6 +276,8 @@ class Workbench(InspectablePanel):
 
 
 class BuildPreview(InspectablePanel):
+    policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-preview")))
+
     def __init__(self, draft: BuildDraft) -> None:
         self.draft = draft
 

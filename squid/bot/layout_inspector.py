@@ -7,7 +7,8 @@ import squid_ui_discord as sd
 from squid.bot.ui import tr
 
 
-class InspectablePanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class InspectablePanel(sd.Screen):
+    policy = sd.ResponseSpec(audience="public", live_updates=True)
     inspection: str = sl.state("", persist=False)
 
     def inspection_state(self) -> str:

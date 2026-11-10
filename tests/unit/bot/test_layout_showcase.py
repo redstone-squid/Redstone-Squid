@@ -7,6 +7,7 @@ import pytest
 from discord.ext import commands
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.layout_showcase import LayoutShowcaseCog
 from squid_ui_discord.testing import ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
@@ -23,6 +24,18 @@ async def test_commands_deliver_live_panels(command: str, count: int) -> None:
     assert harness.source.send.await_count == count
     for call in harness.source.send.await_args_list:
         assert isinstance(call.kwargs["view"], discord.ui.LayoutView)
+    (session,) = bot.ui.sessions.active()
+    assert len(session.message_roots) == count
+    for root in session.message_roots:
+        screen = root.component
+        assert isinstance(screen, sd.Screen)
+        assert screen.owner is cog
+        assert screen.opening is not None
+        assert screen.opening.source is ctx
+        assert screen.session is session
+        assert screen.parent is None
+        assert screen.outcome is None
+        assert root.scheduler is bot.ui.scheduler
 
 
 def test_only_two_subcommands_remain() -> None:
@@ -46,6 +59,8 @@ async def test_live_join_is_idempotent_and_host_close_finishes_children() -> Non
     panel = summary.component
     assert len(panel.room.seats) == 1
     reviewer = panel.panels[8]
+    assert reviewer.component.session is session
+    assert reviewer.component.parent is None
     await summary.dispatch("join", InteractionHarness(user_id=8, client=bot).source)
     assert len(panel.room.seats) == 1
     assert panel.panels[8] is reviewer
@@ -60,3 +75,5 @@ async def test_live_join_is_idempotent_and_host_close_finishes_children() -> Non
     assert reviewer.finished
     assert reviewer.followed == ()
     assert panel.room.closed
+    assert await panel.wait() == sd.Completed(None)
+    assert isinstance(await reviewer.component.wait(), sd.Cancelled)

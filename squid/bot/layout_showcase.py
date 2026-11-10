@@ -29,18 +29,13 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         draft = BuildDraft()
         editor = await request.respond(
             Workbench(draft),
-            access=sd.Owner(ctx.author.id),
-            live_updates=True,
-            session=sd.SessionSpec("layout-workbench"),
             session_key=uuid.uuid4(),
         )
         if isinstance(editor, sd.Presented):
+            # The preview shares the editor's session and lifetime; it does not return a result.
             await request.respond(
                 BuildPreview(draft),
-                access=sd.Owner(ctx.author.id),
-                live_updates=True,
                 parent=editor.root,
-                session=sd.SessionSpec("layout-preview"),
             )
 
     @layout_group.command(name="review")
@@ -52,19 +47,13 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             room.seats = tuple(Reviewer(ctx.author.id, name) for name in ("Alice", "Bob"))
         summary = await request.respond(
             ReviewSummary(room, ctx.author.id, mode),
-            access=sd.Everyone(),
-            live_updates=True,
-            session=sd.SessionSpec("layout-review"),
             session_key=uuid.uuid4(),
         )
         if isinstance(summary, sd.Presented):
             for seat in room.seats:
                 await request.respond(
                     ReviewerPanel(room, seat, simulated=True),
-                    access=sd.Owner(ctx.author.id),
-                    live_updates=True,
                     parent=summary.root,
-                    session=sd.SessionSpec("layout-reviewer"),
                 )
 
 
