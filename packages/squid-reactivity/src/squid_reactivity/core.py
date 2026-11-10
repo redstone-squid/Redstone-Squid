@@ -291,17 +291,6 @@ class _Cell:
         self.version += 1
         _bump_epoch()
 
-    def restore(self, value: Any, version: int) -> None:
-        """Put a cell back exactly as an action found it, version included.
-
-        The version goes back rather than forward: a reader that sampled this cell before the
-        action is still valid, and bumping would make it recompute for a value that never
-        changed. The epoch still moves, because settled readers must re-check.
-        """
-        self.value = value
-        self.version = version
-        _bump_epoch()
-
 
 def _staged_value(cell: _Cell) -> Any:
     """This action's pending value for `cell`, or `_MISSING` if it has not written one."""
@@ -494,17 +483,15 @@ def strong_read() -> Iterator[None]:
 
 @dataclass(slots=True)
 class _Staged:
-    """A pending cell replacement and the value and version that preceded it.
+    """A pending replacement with a revision for reads inside its transaction.
 
-    Before publication, rollback discards this entry without changing the cell.
-    Values are retained by reference, so ordinary state must be treated as immutable.
+    Rollback discards the entry. Publication determines committed version lineage
+    from the cell being replaced, which may have changed since staging began.
     """
 
     owner: ReactiveOwner
     name: str
     cell: _Cell
-    before: Any
-    before_version: int
     value: Any
     version: int
 
@@ -716,13 +703,6 @@ class _Transaction:
     result_hooks: list[tuple[object | None, Callable[[ActionResult], None]]] = field(default_factory=list)
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
-    applied: bool = False
-    """Whether `publish` has put the staged values into the cells.
-
-    Rollback before this point must not write: the cells were never touched, and a shared
-    cell may hold a value someone else committed while this action was staging. Restoring
-    `before` over that would revert a write this action never saw.
-    """
     published: bool = False
     """Whether the commit reached the point where this action's writes became visible."""
     write_block: str | None = None
@@ -831,7 +811,7 @@ class _Transaction:
             raise ReactiveWriteError(message)
         entry = self.writes.get(cell)
         if entry is None:
-            self.writes[cell] = _Staged(owner, name, cell, cell.value, cell.version, value, cell.version + 1)
+            self.writes[cell] = _Staged(owner, name, cell, value, cell.version + 1)
         else:
             entry.value = value
             entry.version += 1
@@ -841,37 +821,13 @@ class _Transaction:
         # sampled it has to be told the world moved even though nothing is published yet.
         _bump_epoch()
 
-    def publish(self) -> None:
-        """Install staged values and advance each cell beyond its committed version.
-
-        Keep the staged version when it is still newer than the committed one. If
-        another action committed first, advance beyond that version instead. Reusing
-        a version would leave computed values unable to detect the new value.
-        """
-        if not self.writes:
-            self.applied = True
-            return
-        for entry in self.writes.values():
-            entry.cell.value = entry.value
-            entry.cell.version = max(entry.version, entry.cell.version + 1)
-        self.applied = True
-        _bump_epoch()
-
-    def restore(self) -> None:
-        """Put every written cell back where the action found it.
-
-        Only if the values ever left the overlay. An action that fails before publication --
-        every handler failure, and every rejected commit precondition -- never touched a cell,
-        so there is nothing to put back and writing anyway would clobber whoever did.
-        """
-        for entry in reversed(tuple(self.writes.values())):
-            if self.applied:
-                entry.cell.restore(entry.before, entry.before_version)
-            entry.owner._state_rolled_back()
-        if self.writes:
-            # Even when nothing was written back: a computed that read a staged version is
-            # settled against a version that has just stopped existing, and only the epoch
-            # tells it to look again.
+    def publish(self, patches: CellPatchSet) -> None:
+        """Install exactly the values and versions recorded in the publication plan."""
+        for entry, patch in zip(self.writes.values(), patches, strict=True):
+            entry.cell.value = patch.after.raw()
+            entry.cell.version = patch.after_version
+        self.published = True
+        if patches:
             _bump_epoch()
 
     def enlist[ParticipantT: TransactionParticipant[Any]](
@@ -904,10 +860,10 @@ class _Transaction:
             tuple(
                 CellPatch(
                     CellTarget(entry.owner, entry.name, entry.cell),
-                    SlotValue.from_raw(entry.before),
+                    SlotValue.from_raw(entry.cell.value),
                     SlotValue.from_raw(entry.value),
-                    entry.before_version,
-                    entry.version,
+                    entry.cell.version,
+                    max(entry.version, entry.cell.version + 1),
                 )
                 for entry in self.writes.values()
             )
@@ -962,12 +918,11 @@ class _Transaction:
         )
         self.commit_record = commit
         _checkpoint("commit.before_publication")
-        self.publish()
+        self.publish(commit.patches)
         _checkpoint("commit.after_cell_publication")
         # Cell installation begins the infallible publication phase. An adapter that raises
         # from apply has violated the participant contract; rolling cells back could not undo
         # a participant that applied only partly, so preserve the committed diagnostic truth.
-        self.published = True
         try:
             for participant, value in prepared:
                 participant.apply(value)
@@ -1030,7 +985,16 @@ class _Transaction:
                 failures.append(report)
                 self.cleanup_errors.append(report)
                 _log.exception("a transaction participant failed to abort")
-        self.restore()
+        for owner in reversed(tuple(self.changed.values())):
+            try:
+                owner._state_rolled_back()
+            except Exception as error:
+                report = ExceptionReport.capture(error)
+                failures.append(report)
+                self.cleanup_errors.append(report)
+                _log.exception("a reactive owner failed to process its rolled-back state")
+        if self.writes:
+            _bump_epoch()
         return tuple(failures)
 
 

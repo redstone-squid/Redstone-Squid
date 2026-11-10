@@ -7,12 +7,16 @@ from squid_reactivity import (
     ActionPurpose,
     ActionRollback,
     ActorRef,
+    FrameworkIntegrityError,
     Reactive,
     StaleReactiveContextError,
+    apply_conditional_patches,
+    inspect_cells,
     readonly_transaction,
     state,
     transaction,
 )
+from squid_reactivity.testing import InterleavingHarness
 
 
 class Counter(Reactive):
@@ -78,3 +82,57 @@ def test_readonly_transactions_expose_their_result() -> None:
     with readonly_transaction() as tx:
         assert tx.result is None
     assert isinstance(tx.result, ActionCommit)
+
+
+def test_blind_write_records_the_value_it_replaces_and_can_be_undone() -> None:
+    model = Counter()
+    schedule = InterleavingHarness()
+    schedule.at("transaction.close_staging", lambda: setattr(model, "value", 2))
+    with schedule.installed(), transaction() as tx:
+        model.value = 1
+    assert isinstance(tx.result, ActionCommit)
+    patch = tx.result.patches.patches[0]
+    assert patch.before.value == 2
+    assert patch.before_version == 1
+    assert patch.after_version == inspect_cells(model)["value"].version == 2
+
+    with transaction():
+        apply_conditional_patches(tx.result.patches.inverse())
+    assert model.value == 2
+
+
+def test_failure_after_cell_publication_preserves_the_commit() -> None:
+    model = Counter()
+    schedule = InterleavingHarness()
+
+    def fail() -> None:
+        raise RuntimeError("after publication")
+
+    schedule.at("commit.after_cell_publication", fail)
+    with schedule.installed(), pytest.raises(FrameworkIntegrityError), transaction() as tx:
+        model.value = 1
+    assert isinstance(tx.result, ActionCommit)
+    assert model.value == 1
+    assert "framework_integrity_failure" in tx.result.tags
+
+
+def test_rollback_notifies_each_owner_once_and_preserves_the_original_error() -> None:
+    calls: list[str] = []
+
+    class FailingOwner(Reactive):
+        first: int = state(0)
+        second: int = state(0)
+
+        def on_state_rollback(self) -> None:
+            calls.append("rollback")
+            raise RuntimeError("cleanup failed")
+
+    model = FailingOwner()
+    with pytest.raises(ValueError, match="handler failed"), transaction() as tx:
+        model.first = 1
+        model.second = 2
+        raise ValueError("handler failed")
+    assert calls == ["rollback"]
+    assert (model.first, model.second) == (0, 0)
+    assert isinstance(tx.result, ActionRollback)
+    assert len(tx.result.cleanup_errors) == 1
