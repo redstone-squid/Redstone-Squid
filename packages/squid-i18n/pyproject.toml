@@ -1,0 +1,16 @@
+[project]
+name = "squid-i18n"
+version = "0.1.0a1"
+description = "Typed Python template strings compiled into deferred Fluent messages"
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["babel>=2.17", "fluent-syntax==0.19.0", "fluent-compiler @ git+https://github.com/redstone-squid/fluent-compiler.git@5d1646977f9eb4e606c13f703d59a92799ca29c2"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]

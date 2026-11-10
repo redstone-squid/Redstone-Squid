@@ -30,6 +30,7 @@ dependencies = [
     "rapidfuzz>=3.13.0",
     "squid-ui-discord",
     "squid-ui",
+    "squid-i18n",
     "squid-ui-widgets",
     "squid-replication",
     # squid/topics.py imports the PostgreSQL LISTEN/NOTIFY bridge directly.
@@ -117,12 +118,14 @@ members = [
     "packages/squid-replication",
     "packages/squid-storage",
     "packages/squid-ui",
+    "packages/squid-i18n",
     "packages/squid-ui-discord",
     "packages/squid-ui-slack",
     "packages/squid-ui-widgets",
 ]
 
 [tool.uv.sources]
+squid-i18n = { workspace = true }
 squid-ui-discord = { workspace = true }
 squid-ui = { workspace = true }
 squid-ui-slack = { workspace = true }
@@ -192,6 +195,7 @@ known-first-party = [
     "squid_ui_discord",
     "squid_ui_slack",
     "squid_ui",
+    "squid_i18n",
     "squid_ui_widgets",
     "squid_reactivity",
     "squid_replication",
@@ -316,6 +320,7 @@ search-path = [
     "packages/squid-replication/src",
     "packages/squid-storage/src",
     "packages/squid-ui/src",
+    "packages/squid-i18n/src",
     "packages/squid-ui-discord/src",
     "packages/squid-ui-slack/src",
     "packages/squid-ui-widgets/src",
@@ -337,6 +342,7 @@ testpaths = [
     "packages/squid-reactivity/tests",
     "packages/squid-storage/tests",
     "packages/squid-ui/tests",
+    "packages/squid-i18n/tests",
     "packages/squid-ui-discord/tests",
     "packages/squid-ui-slack/tests",
     "packages/squid-ui-widgets/tests",
