@@ -2,7 +2,7 @@
 name = "redstone-squid"
 description = "A bot designed to manage redstone records"
 version = "1.5.7"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -134,9 +134,16 @@ squid-storage = { workspace = true }
 package = false
 exclude-newer = "7 days"
 
+# The pinned replication test adapters use PyO3 versions predating Python 3.15.
+# Build against the stable ABI until those adapters update PyO3.
+[tool.uv.extra-build-variables]
+loro = { PYO3_USE_ABI3_FORWARD_COMPATIBILITY = "1" }
+pycrdt = { PYO3_USE_ABI3_FORWARD_COMPATIBILITY = "1" }
+
 [tool.ruff]
 line-length = 120
 target-version = "py314"
+per-file-target-version = { "squid/**/*.py" = "py315", "tests/**/*.py" = "py315", "app.py" = "py315" }
 # Historical design spikes are not shipped code and may use older APIs and conventions.
 extend-exclude = ["docs/plans/**/spikes/"]
 
@@ -253,7 +260,7 @@ commit_args = ""
 files.glob = "**/config.py,pyproject.toml"
 
 [tool.basedpyright]
-pythonVersion = "3.14"
+pythonVersion = "3.15"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
 # Match what Pyrefly's `project-includes` already treats as this repo's source.
@@ -298,7 +305,7 @@ enableExperimentalFeatures = true  # For `TypeForm` support
 [tool.pyrefly]
 project-includes = ["squid/**/*.py", "tests/**/*.py", "packages/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
-python-version = "3.14"
+python-version = "3.15"
 # List every workspace src directory so Pyrefly checks editable packages as first-party code.
 # project-includes alone does not override their discovery through site-packages .pth files.
 # Keep this list in sync with [tool.uv.workspace] members.

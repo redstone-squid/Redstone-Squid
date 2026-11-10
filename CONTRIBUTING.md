@@ -13,7 +13,7 @@ Please follow the [code of conduct](CODE_OF_CONDUCT.md) in all interactions.
 
 ## Development setup
 
-The project targets Python 3.14+ and uses [uv](https://docs.astral.sh/uv/) with a locked
+The Squid application targets Python 3.15+ and uses [uv](https://docs.astral.sh/uv/) with a locked
 workspace, plus [just](https://github.com/casey/just) for common tasks:
 
 ```console
