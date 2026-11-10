@@ -215,3 +215,10 @@ def test_duplicate_source_ids_fail_at_startup() -> None:
     source = SuggestionSource(id="dupe", provider=StaticProvider.of([]))
     with pytest.raises(InvalidStateError, match="duplicate suggestion source"):
         SuggestionRegistry.of((source, source))
+
+
+def test_content_revision_preserves_field_and_item_boundaries() -> None:
+    combined = (Suggestion("a", "b\nc\0d"),)
+    split = (Suggestion("a", "b"), Suggestion("c", "d"))
+    assert content_revision(combined) != content_revision(split)
+    assert content_revision((Suggestion("a\0b", "c"),)) != content_revision((Suggestion("a", "b\0c"),))

@@ -1,6 +1,7 @@
 """Approved, authoritative submission form options."""
 
 import hashlib
+import json
 from collections.abc import Sequence
 from typing import Protocol, override
 
@@ -78,7 +79,7 @@ class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
 
 
 def _content_revision(options: tuple[ChoiceOption, ...]) -> int:
-    payload = "\n".join(f"{option.value}\0{option.label}" for option in options).encode()
+    payload = json.dumps([(option.value, option.label) for option in options], separators=(",", ":")).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") or 1
 
 

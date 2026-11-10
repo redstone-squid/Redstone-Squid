@@ -3,7 +3,8 @@
 import pytest
 
 from squid.submissions.application import CheckedInFormManifestRegistry
-from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
+from squid.submissions.domain import ChoiceOption
+from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog, _content_revision
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
@@ -97,3 +98,10 @@ async def test_checked_in_registry_resolves_only_exact_revision() -> None:
 async def test_unknown_option_source_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown submission option source"):
         await ApprovedSubmissionOptionCatalog(FakeTags(), FakeVersions()).options("untrusted", "door", locale="en")
+
+
+def test_option_revision_preserves_field_and_item_boundaries() -> None:
+    combined = (ChoiceOption("a", "b\nc\0d"),)
+    split = (ChoiceOption("a", "b"), ChoiceOption("c", "d"))
+    assert _content_revision(combined) != _content_revision(split)
+    assert _content_revision((ChoiceOption("a\0b", "c"),)) != _content_revision((ChoiceOption("a", "b\0c"),))

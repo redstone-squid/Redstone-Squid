@@ -7,6 +7,7 @@ to the caller.
 """
 
 import hashlib
+import json
 import logging
 from collections.abc import Sequence
 
@@ -168,7 +169,7 @@ def content_revision(items: Sequence[Suggestion]) -> int:
     replicas to issue the same ETag for unchanged options. Descriptions and kinds
     are excluded, so changes to those fields do not invalidate it.
     """
-    payload = "\n".join(f"{item.value}\0{item.label}" for item in items).encode()
+    payload = json.dumps([(item.value, item.label) for item in items], separators=(",", ":")).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") or 1
 
 
