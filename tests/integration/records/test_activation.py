@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from squid.builds.domain import BuildCategory
-from squid.builds.history import BuildChange
 from squid.events.models import DomainEvent
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.records.application.models import (
@@ -42,9 +41,10 @@ from squid.records.models import (
 from squid.tags.domain.models import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid.versions.models import Version
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 from tests.support.database import record_queries
 from tests.support.submission_targets import seed_account_and_version, submission_build
-from tests.support.unit_of_work import transact
 
 
 def _batch(rules_revision_id: int, build_ids: list[int]) -> ComputationBatch:
@@ -97,9 +97,7 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
         build = submission_build(BuildCategory.DOOR, owner)
         await transact(
             builds,
-            lambda uow, build=build: uow.builds.save(
-                build, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow, build=build: uow.builds.save(build),
             commit=True,
         )
         assert build.id is not None
@@ -165,7 +163,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
     # Stored facets reference real restriction tags; the batch below uses ids 1 and 2.
-    async with sessions.begin() as session:
+    async with build_edit_session(sessions) as session:
         for tag_id, name in ((1, "Flush"), (2, "Seamless")):
             session.add(
                 TagDefinition(
@@ -182,7 +180,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
     build = submission_build(BuildCategory.DOOR, owner)
     await transact(
         partial(SqlAlchemyUnitOfWork, sessions),
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
@@ -263,7 +261,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
         assert len(record_title_writes) <= 2
         assert len(definition_writes) <= 2
 
-    async with sessions.begin() as session:
+    async with build_edit_session(sessions) as session:
         next_rules_revision = RulesRevision(
             document_hash="next-test-rules_revision", calculator_version="next", formatter_version="same"
         )

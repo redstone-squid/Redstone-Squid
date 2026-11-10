@@ -3,7 +3,7 @@
 import logging
 from typing import Protocol
 
-from squid.builds.history import BuildChange
+from squid.builds.history import BuildEditActor, HistoryOperation
 from squid.diagnostics.log_capture import work_lost
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.notifications import NotificationService
@@ -28,9 +28,27 @@ class VoteOutcomeReader(Protocol):
 class BuildStatusWriter(Protocol):
     """Apply the final moderation status of a build."""
 
-    async def confirm(self, build_id: int, *, change: BuildChange) -> object: ...
+    async def confirm(
+        self,
+        build_id: int,
+        *,
+        actor: BuildEditActor,
+        source: str,
+        operation: HistoryOperation = "moderation",
+        correlation_kind: str | None = None,
+        correlation_id: str | None = None,
+    ) -> object: ...
 
-    async def deny(self, build_id: int, *, change: BuildChange) -> object: ...
+    async def deny(
+        self,
+        build_id: int,
+        *,
+        actor: BuildEditActor,
+        source: str,
+        operation: HistoryOperation = "moderation",
+        correlation_kind: str | None = None,
+        correlation_id: str | None = None,
+    ) -> object: ...
 
 
 class CoreEventHandler(Protocol):
@@ -53,24 +71,20 @@ class ApplyBuildVoteOutcomeHandler:
         if snapshot.result is VoteSessionResult.APPROVED:
             await self._builds.confirm(
                 snapshot.target.build_id,
-                change=BuildChange(
-                    operation="moderation",
-                    source="vote_outcome",
-                    actor_system="vote_worker",
-                    correlation_kind="domain_event",
-                    correlation_id=str(event.id),
-                ),
+                actor="vote_worker",
+                operation="moderation",
+                source="vote_outcome",
+                correlation_kind="domain_event",
+                correlation_id=str(event.id),
             )
         elif snapshot.result is VoteSessionResult.DENIED:
             await self._builds.deny(
                 snapshot.target.build_id,
-                change=BuildChange(
-                    operation="moderation",
-                    source="vote_outcome",
-                    actor_system="vote_worker",
-                    correlation_kind="domain_event",
-                    correlation_id=str(event.id),
-                ),
+                actor="vote_worker",
+                operation="moderation",
+                source="vote_outcome",
+                correlation_kind="domain_event",
+                correlation_id=str(event.id),
             )
 
 

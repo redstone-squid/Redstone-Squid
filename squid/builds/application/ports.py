@@ -8,9 +8,10 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.builds.history import BuildChange
+from squid.builds.history import BuildEditActor, HistoryOperation
 from squid.builds.models import Build
 from squid.permissions.application.ports import PermissionUnitOfWork
+from squid.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +33,33 @@ class BuildSchematicSummary:
     sign_texts: tuple[str, ...] = ()
 
 
-class BuildRepository(Protocol):
+class BuildEditing(Protocol):
+    """Declare attribution once for all build writes in the current transaction."""
+
+    def editing(
+        self,
+        *,
+        actor: BuildEditActor,
+        source: str,
+        operation: HistoryOperation = "edit",
+        correlation_kind: str | None = None,
+        correlation_id: str | None = None,
+    ) -> AbstractAsyncContextManager[None]:
+        """Attribute all build changes in this transaction to an account ID or named system actor.
+
+        Open one scope before mutation. Scope exit flushes changes; the transaction owner
+        commits inside or after the scope. Exceptions roll back, and nested scopes fail.
+        Meaningful build writes outside the scope are rejected by the database.
+        """
+        ...
+
+
+class BuildEditingUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def builds(self) -> BuildEditing: ...
+
+
+class BuildRepository(BuildEditing, Protocol):
     """Persistence operations required by the build application service."""
 
     async def get_by_id(self, build_id: int) -> Build | None: ...
@@ -43,13 +70,11 @@ class BuildRepository(Protocol):
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]: ...
 
-    def changes(self, change: BuildChange) -> AbstractAsyncContextManager[object]: ...
+    async def save(self, build: Build) -> None: ...
 
-    async def save(self, build: Build, *, change: BuildChange) -> None: ...
+    async def confirm(self, build: Build) -> None: ...
 
-    async def confirm(self, build: Build, *, change: BuildChange) -> None: ...
-
-    async def deny(self, build: Build, *, change: BuildChange) -> None: ...
+    async def deny(self, build: Build) -> None: ...
 
 
 class BuildLockManager(Protocol):

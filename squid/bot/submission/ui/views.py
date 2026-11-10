@@ -2,7 +2,7 @@
 
 BuildEditScreen keeps field changes local until the user saves one combined patch.
 New submissions use DraftEditorScreen in drafts.py instead: its answers are saved
-as a retained submission draft after each change and later finalized into a build.
+as a retained submission draft after each context and later finalized into a build.
 """
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -28,8 +28,8 @@ from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
-from squid.builds.history import BuildChange
 from squid.builds.models import Build, DoorBuild
+from squid.core.errors import AuthorizationError
 from squid.topics import resource_topic
 from squid_ui.text import Message
 
@@ -405,7 +405,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
                 sl.heading(tr("Edit build")),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(sl.field(tr("Fields in this section"), self.summary_text())),
-                sl.note(tr("Reloading a fresh editor discards every staged change in this one.")),
+                sl.note(tr("Reloading a fresh editor discards every staged context in this one.")),
                 accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         )
@@ -483,9 +483,13 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         if build.id is None:
             patch.apply(build)
             actor = await subject_for_interaction(cast(sd.Request[Any], event.context))
+            if actor.account_id is None:
+                raise AuthorizationError
             await self.builds.save(
                 build,
-                change=BuildChange(operation="create", source="discord_editor", actor_account_id=actor.account_id),
+                actor=actor.account_id,
+                operation="create",
+                source="discord_editor",
             )
             self._build_id = build.id
         else:

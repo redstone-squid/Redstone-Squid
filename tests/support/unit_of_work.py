@@ -1,11 +1,13 @@
 """Common scope behavior for service test doubles."""
 
 from collections.abc import Awaitable, Callable
+from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, fields, is_dataclass
 from types import TracebackType
 from typing import Self
 
+from squid.builds.history import BuildEditActor, HistoryOperation
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
@@ -22,6 +24,21 @@ class CommittedState[StateT]:
     """Copy values for a transaction or commit; mapped entities can supply their own copier."""
 
 
+class FakeBuildEditing:
+    """Attribution scope for service tests; database tests exercise recording itself."""
+
+    def editing(
+        self,
+        *,
+        actor: BuildEditActor,
+        source: str,
+        operation: HistoryOperation = "edit",
+        correlation_kind: str | None = None,
+        correlation_id: str | None = None,
+    ) -> nullcontext[None]:
+        return nullcontext()
+
+
 class FakeUnitOfWork[StateT]:
     """Give a service a working copy of state and publish its changes when it commits.
 
@@ -34,6 +51,10 @@ class FakeUnitOfWork[StateT]:
     def __init__(self, committed: CommittedState[StateT]) -> None:
         self._committed = committed
         self.state = committed.clone(committed.value)
+
+    @property
+    def builds(self) -> FakeBuildEditing:
+        return FakeBuildEditing()
 
     async def __aenter__(self) -> Self:
         return self

@@ -24,5 +24,9 @@ ALTER TABLE ONLY public.versions
 ALTER TABLE ONLY public.versions
     ADD CONSTRAINT versions_pkey PRIMARY KEY (id);
 
+CREATE TRIGGER versions_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
+
 CREATE TRIGGER versions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.versions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+CREATE TRIGGER versions_reject_truncate BEFORE TRUNCATE ON public.versions FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 

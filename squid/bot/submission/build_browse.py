@@ -21,7 +21,6 @@ from squid.bot.submission.ui.controls import build_edit
 from squid.bot.ui import tr
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
-from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -239,11 +238,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         async def apply_review(source: sd.ActionEvent, account_id: int) -> None:
             if not await self._may(source, node):
                 return
-            change = BuildChange(operation="moderation", source="discord_review", actor_account_id=account_id)
             if action == "approve":
-                await self._builds.confirm(self._build_id, change=change)
+                await self._builds.confirm(self._build_id, actor=account_id, source="discord_review")
             else:
-                await self._builds.deny(self._build_id, change=change)
+                await self._builds.deny(self._build_id, actor=account_id, source="discord_review")
             await self._refresh_posts(self._build_id)
             await source.notice(tr("Build review state updated."))
 

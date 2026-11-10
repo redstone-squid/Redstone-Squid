@@ -957,6 +957,7 @@ def test_sponsor_migration_refuses_to_discard_retained_provenance(
     draft_id = "88888888-8888-4888-8888-888888888888"
     try:
         with engine.begin() as connection:
+            _begin_build_edit(connection)
             account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
             build_id = connection.execute(
                 text(
@@ -972,6 +973,7 @@ def test_sponsor_migration_refuses_to_discard_retained_provenance(
             command.downgrade(config, "f4a5b6c7d8e9")
 
         with engine.begin() as connection:
+            _begin_build_edit(connection)
             connection.execute(
                 text("UPDATE builds SET sponsor_installation_id = NULL, sponsor_display_name = NULL WHERE id = :id"),
                 {"id": build_id},
@@ -1457,6 +1459,7 @@ def test_schema_audit_constraints(
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
+            _begin_build_edit(connection)
             account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
             for category in (None, "Unknown"):
                 with pytest.raises(DBAPIError), connection.begin_nested():
@@ -1692,6 +1695,16 @@ def _insert_vote_session(connection: Connection, account_id: int, kind: str) -> 
     ).scalar_one()
 
 
+def _begin_build_edit(connection: Connection) -> None:
+    connection.execute(
+        text(
+            "SELECT begin_build_edit(jsonb_build_object("
+            "'actor_system', 'migration_test', 'source', 'test', 'operation', 'edit', "
+            "'operation_id', gen_random_uuid()))"
+        )
+    )
+
+
 def test_deleting_a_build_removes_only_its_vote_sessions(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -1702,6 +1715,7 @@ def test_deleting_a_build_removes_only_its_vote_sessions(
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
+            _begin_build_edit(connection)
             account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
             doomed_build, kept_build = _insert_build(connection, account), _insert_build(connection, account)
             sessions = {}
@@ -1729,6 +1743,7 @@ def test_deleting_a_build_removes_only_its_vote_sessions(
             )
 
         with engine.begin() as connection:
+            _begin_build_edit(connection)
             # The old statement trigger deleted every orphan-looking session even when no build matched.
             connection.execute(text("DELETE FROM builds WHERE id = -1"))
             connection.execute(text("DELETE FROM builds WHERE id = :id"), {"id": doomed_build})
@@ -1781,6 +1796,7 @@ def test_build_lease_and_embedding_writes_queue_nothing(
     queues = ("search_projection_queue", "record_recompute_queue", "discord_sync_queue")
     try:
         with engine.begin() as connection:
+            _begin_build_edit(connection)
             account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
             build_id = _insert_build(connection, account)
             for queue in queues:
@@ -1824,6 +1840,7 @@ def test_hardening_constraints(
         for subtype in (None, "other_builds"):
             connection = engine.connect()
             try:
+                _begin_build_edit(connection)
                 build_id = connection.execute(insert_build, {"account": account}).scalar_one()
                 if subtype is not None:
                     connection.execute(text(f"INSERT INTO {subtype} (build_id) VALUES (:id)"), {"id": build_id})

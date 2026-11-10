@@ -21,7 +21,8 @@ from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import MergeTicket as AccountMergeTicketModel
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
-from tests.support.unit_of_work import transact
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 
@@ -136,7 +137,7 @@ async def test_an_expired_ticket_stops_matching(
 
     # Age the whole row rather than only its expiry, so the CHECK stays satisfied.
     past = Instant.now().subtract(hours=1)
-    async with async_session_factory.begin() as session:
+    async with build_edit_session(async_session_factory) as session:
         await session.execute(
             update(AccountMergeTicketModel)
             .where(AccountMergeTicketModel.account_id == account.id)

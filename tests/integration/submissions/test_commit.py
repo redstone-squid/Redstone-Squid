@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.domain import BuildCategory
-from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
@@ -34,8 +33,9 @@ from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
 from squid.submissions.models.finalization import SubmissionFinalizationResult, SubmissionReceiptMedia
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
-from tests.support.unit_of_work import transact
 
 
 class PreparedBuilds:
@@ -64,7 +64,7 @@ async def claimed_submission(
     payload = normalized_submission(owner, draft_id, "Java 1.21.0")
     if with_media:
         upload_id = UUID(int=992)
-        async with sessions.begin() as session:
+        async with build_edit_session(sessions) as session:
             session.add(
                 MediaUploadRecord(
                     id=upload_id,
@@ -188,7 +188,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     from squid.submissions.models.finalization import SubmissionFinalizationJob
 
     original = await claimed_submission(migrated_session_factory)
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         staff = Account()
         session.add(staff)
         await session.flush()
@@ -248,7 +248,7 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
     survivor = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert staff.id is not None
     assert survivor.id is not None
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await session.execute(
             update(SubmissionFinalizationJob)
             .where(
@@ -266,7 +266,7 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
     claim = replace(claim, requested_by_account_id=staff.id)
     await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, staff.id), commit=True)
     jobs = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         assert (
             await PostgresFinalizationJobRepository(lambda: session).complete(
                 claim, FinalizedBuild(99), now=Instant.now()
@@ -297,7 +297,7 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
     sessions = migrated_session_factory
     claim = await claimed_submission(sessions)
     source = MessageSnapshot(123456, channel_id=456, author_id=789, content="Original inferred facts")
-    async with sessions.begin() as session:
+    async with build_edit_session(sessions) as session:
         draft = await session.get(SubmissionDraft, claim.draft_id)
         assert draft is not None
         draft.source_messages = TypeAdapter(tuple[MessageSnapshot, ...]).dump_python((source,), mode="json")
@@ -322,7 +322,7 @@ async def test_executor_recovers_a_loaded_source_build(
     existing = await PreparedBuilds().prepare(claim.payload)
     await transact(
         repository,
-        lambda uow: uow.builds.save(existing, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(existing),
         commit=True,
     )
 

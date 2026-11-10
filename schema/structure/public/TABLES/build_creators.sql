@@ -10,9 +10,13 @@ ALTER TABLE ONLY public.build_creators
 
 CREATE INDEX build_creators_alias_idx ON public.build_creators USING btree (alias_id);
 
+CREATE TRIGGER build_creators_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
+
 CREATE TRIGGER build_creators_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 CREATE TRIGGER build_creators_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_creators FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER build_creators_reject_truncate BEFORE TRUNCATE ON public.build_creators FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 
 ALTER TABLE ONLY public.build_creators
     ADD CONSTRAINT build_creators_alias_id_fkey FOREIGN KEY (alias_id) REFERENCES public.creator_aliases(id) ON DELETE RESTRICT;

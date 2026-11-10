@@ -22,8 +22,8 @@ from squid.accounts.models import Account, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain import BuildCategory, Info, Status, UnresolvedTaxonomy
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
-from squid.builds.history import BuildChange
-from squid.builds.infrastructure.history import record_build_changes
+from squid.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
+from squid.builds.infrastructure.edit_scope import build_edit_scope
 from squid.builds.infrastructure.loading import BuildLoader
 from squid.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
@@ -438,20 +438,26 @@ class BuildRepository:
             )
         ).all()
 
-    def changes(self, change: BuildChange) -> AbstractAsyncContextManager[object]:
-        """Group nested build and schematic writes into one history operation."""
-        return record_build_changes(self._session(), change)
+    def editing(
+        self,
+        *,
+        actor: BuildEditActor,
+        source: str,
+        operation: HistoryOperation = "edit",
+        correlation_kind: str | None = None,
+        correlation_id: str | None = None,
+    ) -> AbstractAsyncContextManager[None]:
+        """Attribute every build mutation in this transaction, including other repositories.
 
-    async def save(self, build: Build, *, change: BuildChange) -> None:
-        """Save and record the persisted aggregate in the caller's transaction."""
-        async with record_build_changes(self._session(), change, () if build.id is None else (build.id,)) as history:
-            created = build.id is None
-            await self._save(build)
-            if created:
-                assert build.id is not None
-                history.created(build.id)
+        Open once before writing and commit inside or after the scope. Helpers use
+        the existing scope; opening another scope in the transaction is rejected.
+        """
+        context = BuildEditContext.from_actor(
+            actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
+        )
+        return build_edit_scope(self._session(), context)
 
-    async def _save(self, build: Build) -> None:
+    async def save(self, build: Build) -> None:
         """Insert a new build or update an existing build in the caller's transaction.
 
         A None ID selects insertion. A supplied ID must already exist; this is not
@@ -752,23 +758,21 @@ class BuildRepository:
             )
         )
 
-    async def confirm(self, build: Build, *, change: BuildChange) -> None:
+    async def confirm(self, build: Build) -> None:
         """Mark a persisted build confirmed, checking and advancing its revision."""
         if build.id is None:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "confirm"})
 
-        async with record_build_changes(self._session(), change, (build.id,)):
-            await self._set_status(build, Status.CONFIRMED, operation="confirm")
+        await self._set_status(build, Status.CONFIRMED, operation="confirm")
 
-    async def deny(self, build: Build, *, change: BuildChange) -> None:
+    async def deny(self, build: Build) -> None:
         """Mark a persisted build denied, checking and advancing its revision."""
         if build.id is None:
             msg = "Build ID is missing."
             raise InvalidStateError(msg, context={"operation": "deny"})
 
-        async with record_build_changes(self._session(), change, (build.id,)):
-            await self._set_status(build, Status.DENIED, operation="deny")
+        await self._set_status(build, Status.DENIED, operation="deny")
 
     async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
         assert build.id is not None

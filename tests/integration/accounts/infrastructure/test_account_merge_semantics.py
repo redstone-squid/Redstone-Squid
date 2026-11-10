@@ -33,7 +33,8 @@ from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
 from squid.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
 from squid.voting.models import GenericVoteSession, Vote, VoteSession, VoteSessionOption
-from tests.support.unit_of_work import transact
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 
 
 @pytest.mark.parametrize(
@@ -52,7 +53,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
     draft_id = uuid.UUID("f0000000-0000-4000-8000-000000000001")
     seeded_at = Instant.now()
 
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         session.add(
             SubmissionDraft(
                 id=draft_id,
@@ -121,7 +122,7 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
     survivor_healthy = profile_state == "healthy_survivor"
     absorbed_healthy = profile_state == "healthy_absorbed"
     both_suspended = profile_state == "both_suspended_disabled"
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         session.add_all(
             [
                 NotificationProfile(
@@ -156,7 +157,7 @@ async def test_profile_merge_inserts_an_absorbed_only_profile_for_the_survivor(
     absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         session.add(NotificationProfile(account_id=absorbed.id, web_enabled=True, dm_enabled=False))
 
     await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
@@ -179,7 +180,7 @@ async def test_no_collision_notification_and_delivery_move_together_at_merge_com
     absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
         session.add(event)
         await session.flush()
@@ -214,7 +215,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
     absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         account_rows = tuple(
             (await session.scalars(select(Account).where(Account.id.in_((survivor.id, absorbed.id))))).all()
         )
@@ -275,7 +276,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
         await transact(notifications, lambda uow: uow.notifications.complete_delivery(stale_claim), commit=True)
         is False
     )
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await transact(
             notifications,
             lambda uow: uow.notifications._insert_candidates(
@@ -344,7 +345,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
     disabled_subject_id = uuid.UUID("f0000000-0000-4000-8000-000000000003")
     resolved_at = now()
     record_filter: dict[str, object] = {"build_kinds": ["door"]}
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         # Ballots record the guild they were cast in, which must have a settings row.
         session.add(ServerSetting(server_id=1))
         alias = CreatorAlias(name="Merge Builder")

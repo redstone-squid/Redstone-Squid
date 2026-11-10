@@ -5,7 +5,7 @@ from typing import cast, override
 from whenever import Instant
 
 from squid.builds.application import BuildService
-from squid.builds.history import BuildChange
+from squid.builds.history import BuildEditActor, HistoryOperation
 from squid.builds.models import Build
 from squid.config import WorkerConfig
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
@@ -34,12 +34,30 @@ class BuildRecorder(BuildService):
         self.denied: list[int] = []
 
     @override
-    async def confirm(self, build_id: int, *, change: BuildChange) -> Build:
+    async def confirm(
+        self,
+        build_id: int,
+        *,
+        actor: BuildEditActor,
+        source: str,
+        operation: HistoryOperation = "moderation",
+        correlation_kind: str | None = None,
+        correlation_id: str | None = None,
+    ) -> Build:
         self.confirmed.append(build_id)
         return cast(Build, object())
 
     @override
-    async def deny(self, build_id: int, *, change: BuildChange) -> Build:
+    async def deny(
+        self,
+        build_id: int,
+        *,
+        actor: BuildEditActor,
+        source: str,
+        operation: HistoryOperation = "moderation",
+        correlation_kind: str | None = None,
+        correlation_id: str | None = None,
+    ) -> Build:
         self.denied.append(build_id)
         return cast(Build, object())
 

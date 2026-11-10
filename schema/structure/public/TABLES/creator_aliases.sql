@@ -26,7 +26,11 @@ CREATE INDEX creator_aliases_account_idx ON public.creator_aliases USING btree (
 
 CREATE INDEX creator_aliases_normalized_name_prefix_idx ON public.creator_aliases USING btree (normalized_name text_pattern_ops);
 
+CREATE TRIGGER creator_aliases_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.creator_aliases FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
+
 CREATE TRIGGER creator_aliases_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.creator_aliases FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+CREATE TRIGGER creator_aliases_reject_truncate BEFORE TRUNCATE ON public.creator_aliases FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 
 ALTER TABLE ONLY public.creator_aliases
     ADD CONSTRAINT creator_aliases_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;

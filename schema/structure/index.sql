@@ -9,9 +9,13 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir EXTENSIONS/pg_trgm.sql
 \ir EXTENSIONS/unaccent.sql
 \ir EXTENSIONS/vector.sql
+\ir public/FUNCTIONS/begin_build_edit.sql
 \ir public/FUNCTIONS/build_history_snapshot_v1.sql
 \ir public/TRIGGER_FUNCTIONS/bump_permission_epoch.sql
+\ir public/FUNCTIONS/capture_build_edit.sql
+\ir public/TRIGGER_FUNCTIONS/capture_build_edit_trigger.sql
 \ir public/TRIGGER_FUNCTIONS/check_permission_role_include_cycle.sql
+\ir public/FUNCTIONS/close_build_edit.sql
 \ir public/TRIGGER_FUNCTIONS/delete_vote_session_after_build_vote_session_delete.sql
 \ir public/TRIGGER_FUNCTIONS/emit_domain_event.sql
 \ir public/TRIGGER_FUNCTIONS/enforce_build_category_subtype.sql
@@ -22,6 +26,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/enqueue_metadata_search_projection.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_starboard_sync.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_submission_status.sql
+\ir public/TRIGGER_FUNCTIONS/finish_build_edit_trigger.sql
 \ir public/FUNCTIONS/get_quantified_version_names.sql
 \ir public/FUNCTIONS/power_set_max.sql
 \ir public/FUNCTIONS/publish_domain_event.sql
@@ -40,6 +45,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/build_creators.sql
 \ir public/TABLES/build_edit_history.sql
 \ir public/SEQUENCES/build_edit_history_id_seq.sql
+\ir public/TABLES/build_edit_pending.sql
 \ir public/TABLES/build_history_states.sql
 \ir public/SEQUENCES/build_history_states_id_seq.sql
 \ir public/TABLES/build_links.sql

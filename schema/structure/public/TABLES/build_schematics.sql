@@ -124,6 +124,10 @@ CREATE INDEX build_schematics_rights_attested_by_idx ON public.build_schematics 
 
 CREATE INDEX build_schematics_uploaded_by_idx ON public.build_schematics USING btree (uploaded_by_account_id);
 
+CREATE TRIGGER build_schematics_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.build_schematics FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
+
+CREATE TRIGGER build_schematics_reject_truncate BEFORE TRUNCATE ON public.build_schematics FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
+
 ALTER TABLE ONLY public.build_schematics
     ADD CONSTRAINT build_schematics_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
 

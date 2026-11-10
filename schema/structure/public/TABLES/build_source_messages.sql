@@ -16,6 +16,10 @@ COMMENT ON COLUMN public.build_source_messages."position" IS 'Submission order, 
 ALTER TABLE ONLY public.build_source_messages
     ADD CONSTRAINT build_source_messages_pkey PRIMARY KEY (build_id, message_id);
 
+CREATE TRIGGER build_source_messages_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.build_source_messages FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
+
+CREATE TRIGGER build_source_messages_reject_truncate BEFORE TRUNCATE ON public.build_source_messages FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
+
 ALTER TABLE ONLY public.build_source_messages
     ADD CONSTRAINT build_source_messages_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
 

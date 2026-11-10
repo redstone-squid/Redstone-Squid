@@ -22,7 +22,6 @@ from squid.builds.application.restrictions import RestrictionService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
-from squid.builds.history import BuildChange
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
@@ -68,8 +67,9 @@ from squid.submissions.models.finalization import SubmissionFinalizationInput, S
 from squid.submissions.payload_integrity import submission_payload_digest
 from squid.tags.models import TagDefinition
 from squid.versions.application import VersionService
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
-from tests.support.unit_of_work import transact
 
 
 class NoopEmbeddings:
@@ -108,9 +108,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     for build in builds:
         await transact(
             repository,
-            lambda uow, build=build: uow.builds.save(
-                build, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow, build=build: uow.builds.save(build),
             commit=True,
         )
         assert build.id is not None
@@ -146,9 +144,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
         build.description = f"Updated {category.value}"
         await transact(
             repository,
-            lambda uow, build=build: uow.builds.save(
-                build, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow, build=build: uow.builds.save(build),
             commit=True,
         )
         reloaded = await transact(repository, lambda uow, build=build: uow.builds.get_by_id(build.id))
@@ -160,9 +156,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     with pytest.raises(IntegrityError):
         await transact(
             repository,
-            lambda uow: uow.builds.save(
-                duplicate, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow: uow.builds.save(duplicate),
             commit=True,
         )
 
@@ -183,7 +177,7 @@ async def test_repository_round_trips_immutable_public_sponsor_snapshot(
 
     await transact(
         repository,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
@@ -222,14 +216,12 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
     pending = submission_build(BuildCategory.OTHER, account_id)
     await transact(
         repository,
-        lambda uow: uow.builds.save(
-            confirmed, change=BuildChange(operation="edit", source="test", actor_system="test")
-        ),
+        lambda uow: uow.builds.save(confirmed),
         commit=True,
     )
     await transact(
         repository,
-        lambda uow: uow.builds.save(pending, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(pending),
         commit=True,
     )
     assert confirmed.id is not None
@@ -329,9 +321,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     with pytest.raises(InvalidBuildError, match="Unknown canonical Minecraft versions"):
         await transact(
             repository,
-            lambda uow: uow.builds.save(
-                invalid_build, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow: uow.builds.save(invalid_build),
             commit=True,
         )
     assert invalid_build.id is None
@@ -376,7 +366,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     result = next(result for result in results if result is not None)
     assert isinstance(result, FinalizedBuild)
 
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         staff = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
         session.add(staff)
         await session.flush()
@@ -439,12 +429,12 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
     build = submission_build(BuildCategory.OTHER, owner_id)
     await transact(
         partial(SqlAlchemyUnitOfWork, migrated_session_factory),
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
 
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         survivor = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
         absorbed = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
         session.add_all([survivor, absorbed])
@@ -492,7 +482,7 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
     assert len(claimed) == 2
     stale_absorbed_claim = next(delivery for delivery in claimed if delivery.discord_id == 700000000000000002)
     seeded_at = now()
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         rows = tuple(
             (
                 await session.scalars(
@@ -574,13 +564,13 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
     build.versions = []
     await transact(
         partial(SqlAlchemyUnitOfWork, migrated_session_factory),
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
     build_id = build.id
 
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         session.add_all(
             [
                 SubmissionDraft(
@@ -819,7 +809,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     build.versions = []
     await transact(
         partial(SqlAlchemyUnitOfWork, migrated_session_factory),
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
@@ -828,7 +818,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     await transact(accounts, lambda uow: uow.accounts.merge(survivor.id, absorbed.id), commit=True)
 
     result = FinalizedBuild(build_id)
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         assert (
             await PostgresFinalizationJobRepository(lambda: session).complete(stale_claim, result, now=Instant.now())
             is False
@@ -839,7 +829,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     assert replacement_claim.draft_id == claimed_draft_id
     assert replacement_claim.payload.owner_account_id == survivor.id
     assert replacement_claim.payload.sponsor == sponsor
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         assert (
             await PostgresFinalizationJobRepository(lambda: session).complete(
                 replacement_claim, result, now=Instant.now()
@@ -896,7 +886,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     assert pending_status is DraftStatus.PROCESSING
 
     with pytest.raises(DBAPIError, match="submission finalization inputs are immutable"):
-        async with migrated_session_factory.begin() as session:
+        async with build_edit_session(migrated_session_factory) as session:
             await session.execute(
                 update(SubmissionFinalizationInput)
                 .where(SubmissionFinalizationInput.job_id == pending_job.id)
@@ -942,7 +932,7 @@ async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
         ),
         commit=True,
     )
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await session.execute(
             update(SubmissionFinalizationJob)
             .where(SubmissionFinalizationJob.draft_id == draft_id)
@@ -972,7 +962,7 @@ async def test_account_merge_carries_permission_rules_and_keeps_the_stricter_eff
     absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         builtin_roles = {
             role.builtin_key: role
             for role in (

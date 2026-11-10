@@ -151,7 +151,10 @@ class AccountService:
             or not absorbed_proof.is_recent_at(checked_at)
         ):
             raise InvalidMergeProofError
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=surviving_proof.account_id, operation="account_merge", source="account_merge"),
+        ):
             result = await uow.accounts.merge(surviving_proof.account_id, absorbed_proof.account_id)
             await uow.commit()
             return result
@@ -203,7 +206,10 @@ class AccountService:
         supplies recent proof for the absorbed account. Ticket consumption and the merge
         share a transaction, so a failed merge does not spend the code.
         """
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=surviving_account_id, operation="account_merge", source="account_merge"),
+        ):
             ticket = await uow.accounts.consume_merge_ticket(code)
             checked_at = now or Instant.now()
             if ticket is None:
@@ -297,7 +303,10 @@ class AccountService:
         """
         if reservation is None:
             await self.guard_verification_attempts(attempted_by)
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=account_id, operation="edit", source="identity_link"),
+        ):
             result = await uow.accounts.consume_code_and_link_account(
                 account_id=account_id,
                 code=code,
@@ -440,7 +449,10 @@ class AccountService:
         username = await self._minecraft_username_lookup(identity.java_uuid)
         if username is None:
             raise MinecraftAccountNotFoundError(identity.java_uuid)
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=account_id, operation="edit", source="identity_refresh"),
+        ):
             result = await uow.accounts.refresh_java_identity(
                 account_id=account_id,
                 java_uuid=identity.java_uuid,
@@ -451,7 +463,10 @@ class AccountService:
 
     async def request_alias_claim(self, account_id: int, name: str) -> AliasClaim:
         """Open a staff-reviewed request to be credited under a creator name."""
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=account_id, operation="edit", source="alias_claim"),
+        ):
             account = await uow.accounts.get_by_id(account_id)
             if account is None or account.id is None:
                 raise AccountNotFoundError(account_id)
@@ -504,7 +519,10 @@ class AccountService:
     async def _resolve_claim(
         self, claim_id: int, status: ClaimStatus, staff_account_id: int, *, reassign: bool = False
     ) -> AliasClaim:
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=staff_account_id, operation="edit", source="alias_claim"),
+        ):
             claim = await uow.accounts.get_claim(claim_id)
             if claim is None or claim.status is not ClaimStatus.PENDING:
                 raise ClaimNotFoundError(claim_id)

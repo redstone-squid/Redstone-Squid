@@ -23,7 +23,8 @@ from squid.builds.infrastructure import taxonomy as _taxonomy  # noqa: F401 — 
 from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
-from tests.support.unit_of_work import transact
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
@@ -46,7 +47,7 @@ async def _credit_builds(
     session_factory: async_sessionmaker[AsyncSession], *, alias_name: str, submitter_id: int, count: int
 ) -> int:
     """Create *count* builds crediting a fresh alias, returning the alias id."""
-    async with session_factory.begin() as session:
+    async with build_edit_session(session_factory) as session:
         alias = CreatorAlias(name=alias_name)
         session.add(alias)
         await session.flush()
@@ -126,7 +127,7 @@ async def test_unclaimed_names_do_not_appear_and_uncredited_names_count_zero(
     assert account.id is not None
     assert account.public_creator_id is not None
     await _credit_builds(async_session_factory, alias_name="Someone Else", submitter_id=account.id, count=2)
-    async with async_session_factory.begin() as session:
+    async with build_edit_session(async_session_factory) as session:
         session.add(CreatorAlias(name="Uncredited"))
     await transact(
         repository,

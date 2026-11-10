@@ -24,7 +24,7 @@ from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
 
-class BuildHistoryState(Base, kw_only=True):
+class BuildHistorySnapshot(Base, kw_only=True):
     """One observed build state, shared by adjacent history entries."""
 
     __tablename__ = "build_history_states"
@@ -43,7 +43,7 @@ class BuildHistoryState(Base, kw_only=True):
     snapshot: Mapped[dict[str, JsonValue]] = mapped_column(JSONB)
 
 
-class BuildHistoryRecord(Base, kw_only=True):
+class BuildHistoryEntry(Base, kw_only=True):
     """An append-only operation whose states and actor survive live-record deletion."""
 
     __tablename__ = "build_edit_history"
@@ -87,3 +87,20 @@ class BuildHistoryRecord(Base, kw_only=True):
     correlation_id: Mapped[str | None] = mapped_column(Text)
     before_state_id: Mapped[int | None] = mapped_column(BigInteger)
     after_state_id: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class PendingBuildEdit(Base, kw_only=True):
+    """Transaction-local work removed by the deferred history trigger before commit."""
+
+    __tablename__ = "build_edit_pending"
+    __table_args__ = (
+        CheckConstraint(
+            "(before_snapshot IS NULL) = (before_revision IS NULL)", name="build_edit_pending_before_check"
+        ),
+    )
+
+    transaction_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    context: Mapped[dict[str, JsonValue]] = mapped_column(JSONB)
+    before_snapshot: Mapped[dict[str, JsonValue] | None] = mapped_column(JSONB, nullable=True)
+    before_revision: Mapped[int | None] = mapped_column(BigInteger)

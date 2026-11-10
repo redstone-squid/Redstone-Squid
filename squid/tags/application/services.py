@@ -6,12 +6,13 @@ from decimal import Decimal, InvalidOperation
 from typing import Protocol
 from uuid import uuid4
 
+from squid.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.tags.domain import TagModerationStatus, TagValue, TagValueType
 from squid.tags.errors import TagNotFoundError
 from squid.tags.models import TagDefinition
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.unit_of_work import UnitOfWorkFactory
 
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -48,7 +49,7 @@ class TagDefinitionRepository(Protocol):
     ) -> bool: ...
 
 
-class TagUnitOfWork(UnitOfWork, Protocol):
+class TagUnitOfWork(BuildEditingUnitOfWork, Protocol):
     @property
     def tags(self) -> TagDefinitionRepository: ...
 
@@ -142,7 +143,10 @@ class TagService:
         actor_account_id: int,
     ) -> TagDefinition:
         """Attach an approved showcase tag to a build submitted by the caller."""
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=actor_account_id, operation="edit", source="showcase_assignment"),
+        ):
             definition = await uow.tags.get(tag_id)
             if (
                 definition is None

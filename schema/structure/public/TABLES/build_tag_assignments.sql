@@ -33,9 +33,13 @@ CREATE INDEX build_tag_assignments_tag_build_idx ON public.build_tag_assignments
 
 CREATE INDEX build_tag_assignments_text_idx ON public.build_tag_assignments USING btree (tag_id, text_value, build_id) WHERE (text_value IS NOT NULL);
 
+CREATE TRIGGER build_tag_assignments_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
+
 CREATE TRIGGER build_tag_assignments_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 CREATE TRIGGER build_tag_assignments_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.build_tag_assignments FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER build_tag_assignments_reject_truncate BEFORE TRUNCATE ON public.build_tag_assignments FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 
 ALTER TABLE ONLY public.build_tag_assignments
     ADD CONSTRAINT build_tag_assignments_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;

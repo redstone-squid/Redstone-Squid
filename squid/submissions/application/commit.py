@@ -6,7 +6,6 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.builds.application.ports import BuildUnitOfWork
-from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.core.errors import InvalidStateError
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
@@ -76,7 +75,16 @@ class BuildSubmissionExecutor:
         ):
             message = "Prepared build does not match its submission provenance."
             raise InvalidStateError(message)
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(
+                actor=job.requested_by_account_id or job.payload.owner_account_id,
+                operation="create",
+                source="submission_finalization",
+                correlation_kind="submission_draft",
+                correlation_id=str(job.draft_id),
+            ),
+        ):
             draft = await uow.finalization_jobs.lock_claim(job)
             if draft is None:
                 return None
@@ -107,13 +115,6 @@ class BuildSubmissionExecutor:
             else:
                 await uow.builds.save(
                     candidate,
-                    change=BuildChange(
-                        operation="create",
-                        source="submission_finalization",
-                        actor_account_id=job.requested_by_account_id or job.payload.owner_account_id,
-                        correlation_kind="submission_draft",
-                        correlation_id=str(job.draft_id),
-                    ),
                 )
             assert candidate.id is not None
             result = FinalizedBuild(candidate.id)

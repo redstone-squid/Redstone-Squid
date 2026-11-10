@@ -33,6 +33,7 @@ from squid.schematics.domain.models import (
     SchematicVisibility,
     SimulationResult,
 )
+from tests.support.build_edits import build_edit_session
 from tests.unit.schematics.fakes import make_analysis
 
 pytestmark = pytest.mark.asyncio
@@ -47,7 +48,7 @@ async def async_session_factory(
 
 @pytest.fixture
 async def schematic_tables(async_session_factory: async_sessionmaker[AsyncSession]) -> AsyncEngine:
-    async with async_session_factory.begin() as session:
+    async with build_edit_session(async_session_factory) as session:
         account = Account()
         session.add(account)
         await session.flush()
@@ -155,7 +156,7 @@ async def test_uploader_account_attribution_reaches_the_persisted_attachment(
     repository: SchematicStorageService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with async_session_factory.begin() as session:
+    async with build_edit_session(async_session_factory) as session:
         account = Account()
         session.add(account)
         await session.flush()
@@ -202,7 +203,7 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
     second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
     first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
     manual_url = "https://media.example/user-managed-render.png"
-    async with async_session_factory.begin() as session:
+    async with build_edit_session(async_session_factory) as session:
         await session.execute(
             text("INSERT INTO build_links (build_id, url, media_type) VALUES (1, :url, 'render')"),
             {"url": manual_url},
@@ -572,7 +573,7 @@ async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     now = Instant.parse_iso("2026-08-11T12:00:00Z")
-    async with async_session_factory.begin() as session:
+    async with build_edit_session(async_session_factory) as session:
         account = Account()
         session.add(account)
         await session.flush()

@@ -4,7 +4,7 @@ import hashlib
 from typing import Protocol
 
 from squid.artifacts import ArtifactStore
-from squid.builds.history import BuildChange
+from squid.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import DataIntegrityError
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
@@ -15,7 +15,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
 )
 from squid.schematics.models import SchematicFile
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 class SchematicMetadataRepository(Protocol):
@@ -30,7 +30,6 @@ class SchematicMetadataRepository(Protocol):
         analysis: SchematicAnalysis,
         *,
         primary: bool,
-        change: BuildChange,
         original_filename: str | None = None,
         uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
@@ -117,18 +116,19 @@ class SchematicStorageService:
         uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
     ) -> int:
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(
+                actor=uploaded_by_account_id if uploaded_by_account_id is not None else "schematic_worker",
+                operation="schematic",
+                source="schematic_attachment",
+            ),
+        ):
             value = await uow.schematic_metadata.record_analysis(
                 build_id,
                 sha256,
                 analysis,
                 primary=primary,
-                change=BuildChange(
-                    operation="schematic",
-                    source="schematic_attachment",
-                    actor_account_id=uploaded_by_account_id,
-                    actor_system="schematic_worker" if uploaded_by_account_id is None else None,
-                ),
                 original_filename=original_filename,
                 uploaded_by_account_id=uploaded_by_account_id,
                 publication=publication,
@@ -188,6 +188,6 @@ class SchematicStorageService:
             await uow.commit()
 
 
-class SchematicStorageUnitOfWork(UnitOfWork, Protocol):
+class SchematicStorageUnitOfWork(BuildEditingUnitOfWork, Protocol):
     @property
     def schematic_metadata(self) -> SchematicMetadataRepository: ...

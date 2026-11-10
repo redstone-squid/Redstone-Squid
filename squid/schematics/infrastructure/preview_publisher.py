@@ -9,8 +9,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.builds.history import BuildChange
-from squid.builds.infrastructure.history import record_build_changes
 from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
 from squid.persistence.types import now
@@ -271,57 +269,53 @@ class PostgresSchematicPreviewRepository:
         Preserve other render links. The caller must hold the build-row lock; previous_url identifies
         a link whose recipe row has already been updated in this transaction.
         """
-        change = BuildChange(operation="schematic", source="generated_preview", actor_system="preview_worker")
-        async with record_build_changes(session, change, (build_id,)):
-            registered_urls = PostgresSchematicPreviewRepository._registered_preview_urls(build_id)
-            owned_url = BuildLink.url.in_(registered_urls)
-            if previous_url is not None:
-                owned_url = or_(owned_url, BuildLink.url == previous_url)
-            existing = tuple(
-                await session.scalars(
-                    select(BuildLink.url).where(
-                        BuildLink.build_id == build_id,
-                        BuildLink.media_type == "render",
-                        owned_url,
-                    )
-                )
-            )
-            if existing == (url,):
-                return
-            await session.execute(
-                delete(BuildLink).where(
+        registered_urls = PostgresSchematicPreviewRepository._registered_preview_urls(build_id)
+        owned_url = BuildLink.url.in_(registered_urls)
+        if previous_url is not None:
+            owned_url = or_(owned_url, BuildLink.url == previous_url)
+        existing = tuple(
+            await session.scalars(
+                select(BuildLink.url).where(
                     BuildLink.build_id == build_id,
                     BuildLink.media_type == "render",
                     owned_url,
                 )
             )
-            await session.execute(insert(BuildLink).values(build_id=build_id, url=url, media_type="render"))
-            await session.execute(update(Build).where(Build.id == build_id).values(revision=Build.revision + 1))
+        )
+        if existing == (url,):
+            return
+        await session.execute(
+            delete(BuildLink).where(
+                BuildLink.build_id == build_id,
+                BuildLink.media_type == "render",
+                owned_url,
+            )
+        )
+        await session.execute(insert(BuildLink).values(build_id=build_id, url=url, media_type="render"))
+        await session.execute(update(Build).where(Build.id == build_id).values(revision=Build.revision + 1))
 
     @staticmethod
     async def _clear_generated_preview_link(session: AsyncSession, build_id: int) -> None:
-        change = BuildChange(operation="schematic", source="generated_preview", actor_system="preview_worker")
-        async with record_build_changes(session, change, (build_id,)):
-            registered_urls = PostgresSchematicPreviewRepository._registered_preview_urls(build_id)
-            existing = await session.scalar(
-                select(BuildLink.url)
-                .where(
-                    BuildLink.build_id == build_id,
-                    BuildLink.media_type == "render",
-                    BuildLink.url.in_(registered_urls),
-                )
-                .limit(1)
+        registered_urls = PostgresSchematicPreviewRepository._registered_preview_urls(build_id)
+        existing = await session.scalar(
+            select(BuildLink.url)
+            .where(
+                BuildLink.build_id == build_id,
+                BuildLink.media_type == "render",
+                BuildLink.url.in_(registered_urls),
             )
-            if existing is None:
-                return
-            await session.execute(
-                delete(BuildLink).where(
-                    BuildLink.build_id == build_id,
-                    BuildLink.media_type == "render",
-                    BuildLink.url.in_(registered_urls),
-                )
+            .limit(1)
+        )
+        if existing is None:
+            return
+        await session.execute(
+            delete(BuildLink).where(
+                BuildLink.build_id == build_id,
+                BuildLink.media_type == "render",
+                BuildLink.url.in_(registered_urls),
             )
-            await session.execute(update(Build).where(Build.id == build_id).values(revision=Build.revision + 1))
+        )
+        await session.execute(update(Build).where(Build.id == build_id).values(revision=Build.revision + 1))
 
     @staticmethod
     def _registered_preview_urls(build_id: int) -> Select[str]:

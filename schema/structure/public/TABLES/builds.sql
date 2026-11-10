@@ -72,6 +72,8 @@ CREATE INDEX idx_builds_category ON public.builds USING btree (category);
 
 CREATE INDEX idx_builds_submission_time ON public.builds USING btree (submission_time DESC);
 
+CREATE TRIGGER builds_capture_edit BEFORE INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.capture_build_edit_trigger();
+
 CREATE CONSTRAINT TRIGGER builds_category_subtype_check AFTER INSERT OR UPDATE OF id, category ON public.builds DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_build_category_subtype();
 
 CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
@@ -83,6 +85,8 @@ CREATE TRIGGER builds_enqueue_discord_sync_on_update AFTER UPDATE ON public.buil
 CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
 CREATE TRIGGER builds_enqueue_search_on_update AFTER UPDATE ON public.builds FOR EACH ROW WHEN (((to_jsonb(old.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]) IS DISTINCT FROM (to_jsonb(new.*) - ARRAY['embedding'::text, 'locked_at'::text, 'lock_token'::text, 'lock_expires_at'::text]))) EXECUTE FUNCTION public.enqueue_build_search_projection();
+
+CREATE TRIGGER builds_reject_truncate BEFORE TRUNCATE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
 
 ALTER TABLE ONLY public.builds
     ADD CONSTRAINT builds_submitter_account_id_fkey FOREIGN KEY (submitter_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;

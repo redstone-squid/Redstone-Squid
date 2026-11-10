@@ -23,7 +23,6 @@ from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import BuildCategory, Status
-from squid.builds.history import BuildChange
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
@@ -34,7 +33,8 @@ from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind
 from squid.tags.models import TagAlias, TagApplicability, TagDefinition
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.models import Version
-from tests.support.unit_of_work import transact
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 
 # Canonical display names of the official taxonomy seeded below, one per
 # restriction type plus two patterns. Tests that expect a clean round trip
@@ -76,7 +76,7 @@ def _official_tag(
 
 async def _seed_catalogue(session_factory: async_sessionmaker[AsyncSession]) -> int:
     """Seed one account, one version, one server, and the official taxonomy."""
-    async with session_factory.begin() as session:
+    async with build_edit_session(session_factory) as session:
         account = Account()
         session.add(account)
         session.add(ServerSetting(server_id=4000))
@@ -251,7 +251,7 @@ async def _resolve_and_save(
     await apply_build_taxonomy(build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory)))
     await transact(
         repository,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
 
@@ -337,9 +337,7 @@ async def test_loaded_status_is_a_status_member(
 
     await transact(
         repository,
-        lambda uow: uow.builds.confirm(
-            loaded, change=BuildChange(operation="edit", source="test", actor_system="test")
-        ),
+        lambda uow: uow.builds.confirm(loaded),
         commit=True,
     )
     reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
@@ -443,7 +441,7 @@ async def test_source_messages_round_trip(
     )
     await transact(
         repository,
-        lambda uow: uow.builds.save(frozen, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(frozen),
         commit=True,
     )
     assert frozen.id is not None
@@ -478,7 +476,7 @@ async def test_saving_a_build_keeps_newer_source_message_content(
     )
     await transact(
         repository,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
@@ -490,7 +488,7 @@ async def test_saving_a_build_keeps_newer_source_message_content(
     edited.description = "changed"
     await transact(
         repository,
-        lambda uow: uow.builds.save(edited, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(edited),
         commit=True,
     )
 
@@ -521,9 +519,7 @@ async def test_one_message_can_source_several_builds(
         )
         await transact(
             repository,
-            lambda uow, build=build: uow.builds.save(
-                build, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow, build=build: uow.builds.save(build),
             commit=True,
         )
         assert build.id is not None
@@ -560,7 +556,7 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
 
     await transact(
         repository,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
@@ -599,7 +595,7 @@ async def test_save_persists_tags_verbatim_without_mutating_input(
     build.patterns = []
     await transact(
         repository,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
 
@@ -633,7 +629,7 @@ async def test_apply_build_taxonomy_defaults_door_pattern(
 
     await transact(
         repository,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
@@ -828,7 +824,7 @@ async def test_detached_build_preview_changes_only_on_explicit_save(
 
     await transact(
         repository,
-        lambda uow: uow.builds.save(preview, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(preview),
         commit=True,
     )
     saved = await transact(repository, lambda uow: uow.builds.get_by_id(loaded.id))
@@ -851,11 +847,11 @@ async def test_source_read_preserves_unclassified_links(
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     await transact(
         repository,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
 
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         loaded = await BuildRepository(lambda: session).get_by_source_submission_draft_id(draft_id)
         assert loaded is not None
         assert not session.dirty
@@ -870,15 +866,21 @@ async def test_tracked_status_change_advances_the_revision_once(
 ) -> None:
     owner = await _seed_catalogue(migrated_session_factory)
     build = OtherBuild(submitter_account_id=owner)
-    async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
-        await uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test"))
+    async with (
+        SqlAlchemyUnitOfWork(migrated_session_factory) as uow,
+        uow.builds.editing(actor="test_fixture", source="fixture"),
+    ):
+        await uow.builds.save(build)
         await uow.commit()
     assert build.id is not None
     previous_revision = build.revision
-    async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
+    async with (
+        SqlAlchemyUnitOfWork(migrated_session_factory) as uow,
+        uow.builds.editing(actor="test_fixture", source="fixture"),
+    ):
         tracked = await uow.builds.get_for_update(build.id)
         assert tracked is not None
-        await uow.builds.confirm(tracked, change=BuildChange(operation="edit", source="test", actor_system="test"))
+        await uow.builds.confirm(tracked)
         assert tracked.submission_status is Status.CONFIRMED
         await uow.commit()
     async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:

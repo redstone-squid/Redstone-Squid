@@ -11,7 +11,6 @@ from squid.builds.application import BuildEditor, BuildService
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildDraft
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
-from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.permissions.application import PermissionService
@@ -175,7 +174,18 @@ class RevisionProposalService:
         return await self._approve_prepared(proposal, prepared, BuildEditor(actor))
 
     async def _approve_prepared(self, proposal: RevisionProposal, build: Build, actor: BuildEditor) -> RevisionProposal:
-        async with self._uow_factory() as uow:
+        if actor.subject.account_id is None:
+            raise AuthorizationError
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(
+                actor=actor.subject.account_id,
+                operation="recalculation",
+                source="revision_proposal",
+                correlation_kind="revision_proposal",
+                correlation_id=str(proposal.id),
+            ),
+        ):
             # Use account merging's lock order: build first, then proposal, to avoid deadlocks.
             current = await uow.builds.get_for_update(proposal.build_id or 0)
             if current is None:
@@ -208,13 +218,6 @@ class RevisionProposalService:
             build.edited_time = Instant.now()
             await uow.builds.save(
                 build,
-                change=BuildChange(
-                    operation="recalculation",
-                    source="revision_proposal",
-                    actor_account_id=actor.subject.account_id,
-                    correlation_kind="revision_proposal",
-                    correlation_id=str(proposal.id),
-                ),
             )
             result = await uow.revision_proposals.mark_approved(
                 proposal.id, account_id=actor.subject.account_id, revision=build.revision

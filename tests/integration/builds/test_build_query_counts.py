@@ -8,12 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
-from squid.builds.history import BuildChange
 from squid.builds.models import OtherBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.models import Version
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 from tests.support.database import record_queries
-from tests.support.unit_of_work import transact
 
 # Keep the budget independent of page size; fixture data exercises related creator and version loads.
 # Category columns load in one extra query per category on the page; the fixtures use only `OtherBuild`.
@@ -22,7 +22,7 @@ _EXPECTED_PAGE_QUERIES = 8
 
 async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -> tuple[int, list[int]]:
     """Create builds with distinct creators but a shared version and submitter."""
-    async with session_factory.begin() as session:
+    async with build_edit_session(session_factory) as session:
         account = Account()
         session.add(account)
         await session.flush()
@@ -49,9 +49,7 @@ async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -
         )
         await transact(
             repository,
-            lambda uow, build=build: uow.builds.save(
-                build, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow, build=build: uow.builds.save(build),
             commit=True,
         )
         assert build.id is not None

@@ -9,10 +9,11 @@ import anyio
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
+from squid.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
 from squid.schematics.models import SchematicPreviewObject
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.unit_of_work import UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +105,10 @@ class SchematicPreviewStorage:
     async def publish_fresh_preview(
         self, schematic_id: int, recipe_hash: str, url: str, object_key: str, *, width: int, height: int, byte_size: int
     ) -> StoredRender | None:
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor="preview_worker", operation="schematic", source="generated_preview"),
+        ):
             result = await uow.schematic_previews.publish_fresh_preview(
                 schematic_id, recipe_hash, url, object_key, width=width, height=height, byte_size=byte_size
             )
@@ -120,7 +124,10 @@ class SchematicPreviewStorage:
             await self._mark_object_not_ready(retained[1].object_key)
             msg = "A cached schematic preview disappeared after it was selected for publication."
             raise DataIntegrityError(msg, context={"object_key": retained[1].object_key})
-        async with self._uow_factory() as uow:
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor="preview_worker", operation="schematic", source="generated_preview"),
+        ):
             applied = await uow.schematic_previews.publish_cached_preview(schematic_id, recipe_hash, url)
             await uow.commit()
             return applied
@@ -181,6 +188,6 @@ class SchematicPreviewStorage:
             await uow.commit()
 
 
-class PreviewUnitOfWork(UnitOfWork, Protocol):
+class PreviewUnitOfWork(BuildEditingUnitOfWork, Protocol):
     @property
     def schematic_previews(self) -> PreviewMetadataRepository: ...

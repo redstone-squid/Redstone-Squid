@@ -14,6 +14,7 @@ from squid.builds.models import OtherBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
+from tests.support.build_edits import build_edit_session
 
 
 @pytest.fixture
@@ -25,7 +26,7 @@ async def uow(migrated_session_factory: async_sessionmaker[AsyncSession]) -> Asy
 async def _account(session_factory: async_sessionmaker[AsyncSession], *, bedrock_xuid: int) -> int:
     """An account with a Bedrock identity and deliberately no Discord one."""
     identity = AccountIdentityValue.bedrock(bedrock_xuid)
-    async with session_factory.begin() as session:
+    async with build_edit_session(session_factory) as session:
         account = Account()
         session.add(account)
         await session.flush()
@@ -34,7 +35,7 @@ async def _account(session_factory: async_sessionmaker[AsyncSession], *, bedrock
 
 
 async def _build(session_factory: async_sessionmaker[AsyncSession], *, submitter_account_id: int) -> int:
-    async with session_factory.begin() as session:
+    async with build_edit_session(session_factory) as session:
         build = OtherBuild(
             submitter_account_id=submitter_account_id,
             submission_status=Status.PENDING,
@@ -49,7 +50,7 @@ async def _build(session_factory: async_sessionmaker[AsyncSession], *, submitter
 
 
 async def _approved_tag(session_factory: async_sessionmaker[AsyncSession], *, created_by_account_id: int) -> int:
-    async with session_factory.begin() as session:
+    async with build_edit_session(session_factory) as session:
         definition = TagDefinition(
             stable_key="user_00000000000000000000000000000001",
             display_name="Showcase",
@@ -82,7 +83,10 @@ async def test_an_account_without_discord_can_tag_its_own_build(
     build_id = await _build(migrated_session_factory, submitter_account_id=account_id)
     tag_id = await _approved_tag(migrated_session_factory, created_by_account_id=account_id)
 
-    assigned = await uow.tags.assign_showcase(build_id=build_id, tag_id=tag_id, value=None, actor_account_id=account_id)
+    async with uow.builds.editing(actor=account_id, source="test"):
+        assigned = await uow.tags.assign_showcase(
+            build_id=build_id, tag_id=tag_id, value=None, actor_account_id=account_id
+        )
 
     await uow.commit()
     assert assigned is True

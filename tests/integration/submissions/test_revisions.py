@@ -15,7 +15,6 @@ from squid.builds.application import BuildEditor, BuildService
 from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
-from squid.builds.history import BuildChange
 from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError
 from squid.permissions.application import PermissionService
@@ -27,9 +26,10 @@ from squid.submissions.application.revision_values import RevisionFacts, Revisio
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.unit_of_work import UnitOfWorkFactory
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 from tests.support.database import record_queries
 from tests.support.submission_targets import seed_account_and_version, submission_build
-from tests.support.unit_of_work import transact
 
 
 class EditPolicy(BuildService):
@@ -50,7 +50,7 @@ async def prepared_proposal(
     build = submission_build(BuildCategory.DOOR, owner)
     await transact(
         builds,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     before = revision_values(build)
@@ -106,7 +106,7 @@ async def test_stale_approval_retains_the_unapplied_proposal(
     repository, proposal, build, actor, policy = await prepared_proposal(migrated_session_factory)
     await transact(
         partial(SqlAlchemyUnitOfWork, migrated_session_factory),
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     with pytest.raises(BuildRevisionMismatchError):
@@ -176,7 +176,7 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
     role: Literal["owner", "requester", "staff"],
 ) -> None:
     repository, original, _, owner, builds = await prepared_proposal(migrated_session_factory)
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         requester, staff = Account(), Account()
         session.add_all((requester, staff))
         await session.flush()
@@ -219,7 +219,7 @@ async def test_history_refuses_a_list_containing_another_accounts_proposal(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     repository, proposal, _, owner, builds = await prepared_proposal(migrated_session_factory)
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         other = Account()
         session.add(other)
         await session.flush()

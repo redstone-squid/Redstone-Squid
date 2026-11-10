@@ -20,8 +20,6 @@ from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import Account as AccountModel
 from squid.accounts.models import AliasClaim as CreatorAliasClaimModel
 from squid.accounts.models import PublicCreatorRedirect
-from squid.builds.history import BuildChange
-from squid.builds.infrastructure.history import record_build_changes
 from squid.notifications.infrastructure.account_merge import merge_account_notifications
 from squid.permissions.infrastructure.account_merge import merge_permissions
 from squid.persistence.account_merge import AccountMergeContext, AccountReference, move_account_references
@@ -110,36 +108,29 @@ async def merge_accounts(session: AsyncSession, context: AccountMergeContext) ->
     if absorbed is None:
         raise AccountNotFoundError(context.absorbed)
 
-    build_ids = tuple(
-        await session.scalars(
-            text("""
-        SELECT id FROM builds WHERE submitter_account_id = :absorbed
-        UNION SELECT c.build_id FROM build_creators c JOIN creator_aliases a ON a.id = c.alias_id
-            WHERE a.account_id = :absorbed
-        UNION SELECT build_id FROM build_schematics WHERE rights_attested_by_account_id = :absorbed
-    """),
-            context.parameters,
-        )
+    # Lock the complete affected aggregate set before different merge phases touch it.
+    await session.execute(
+        text("""
+            SELECT id FROM builds WHERE id IN (
+                SELECT id FROM builds WHERE submitter_account_id = :absorbed
+                UNION SELECT c.build_id FROM build_creators c JOIN creator_aliases a ON a.id = c.alias_id
+                    WHERE a.account_id = :absorbed
+                UNION SELECT build_id FROM build_schematics WHERE rights_attested_by_account_id = :absorbed
+            ) ORDER BY id FOR UPDATE
+        """),
+        context.parameters,
     )
-    change = BuildChange(
-        operation="account_merge",
-        source="account_merge",
-        actor_system="account_merge",
-        correlation_kind="absorbed_account",
-        correlation_id=str(context.absorbed),
+    await merge_submissions(session, context)
+    await move_account_references(session, IDENTITY_PROFILE_REFERENCES, context)
+    await _merge_creator_credit(session, context)
+    await merge_voting(session, context)
+    await merge_account_notifications(session, survivor=context.survivor, absorbed=context.absorbed)
+    await merge_permissions(session, context)
+    result = AccountMerge(
+        surviving_account_id=context.survivor,
+        absorbed_account_id=context.absorbed,
+        surviving_public_creator_id=survivor.public_creator_id,
+        redirected_public_creator_id=absorbed.public_creator_id,
     )
-    async with record_build_changes(session, change, build_ids):
-        await merge_submissions(session, context)
-        await move_account_references(session, IDENTITY_PROFILE_REFERENCES, context)
-        await _merge_creator_credit(session, context)
-        await merge_voting(session, context)
-        await merge_account_notifications(session, survivor=context.survivor, absorbed=context.absorbed)
-        await merge_permissions(session, context)
-        result = AccountMerge(
-            surviving_account_id=context.survivor,
-            absorbed_account_id=context.absorbed,
-            surviving_public_creator_id=survivor.public_creator_id,
-            redirected_public_creator_id=absorbed.public_creator_id,
-        )
-        await _retire_absorbed_account(session, survivor, absorbed)
-        return result
+    await _retire_absorbed_account(session, survivor, absorbed)
+    return result

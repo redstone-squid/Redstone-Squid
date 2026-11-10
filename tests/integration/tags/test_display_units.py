@@ -9,18 +9,18 @@ from squid.accounts.models import Account
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.builds.application.queries import PublicBuildSummary
 from squid.builds.domain import Status
-from squid.builds.history import BuildChange
 from squid.builds.models import OtherBuild
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition, UnitDefinition
-from tests.support.unit_of_work import transact
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 
 
 async def test_public_values_and_incompatible_assignment_units(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         account = Account()
         session.add(account)
         session.add_all(
@@ -52,7 +52,7 @@ async def test_public_values_and_incompatible_assignment_units(
     )
     await transact(
         factory,
-        lambda uow: uow.builds.save(build, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(build),
         commit=True,
     )
     assert build.id is not None
@@ -71,7 +71,7 @@ async def test_public_values_and_incompatible_assignment_units(
     edited.tags[0].display_unit = "test_block"
     await transact(
         factory,
-        lambda uow: uow.builds.save(edited, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(edited),
         commit=True,
     )
     loaded = await transact(factory, lambda uow: uow.builds.get_by_id(build.id))
@@ -87,7 +87,7 @@ async def test_public_values_and_incompatible_assignment_units(
     edited.tags[0].numeric_value = precise
     await transact(
         factory,
-        lambda uow: uow.builds.save(edited, change=BuildChange(operation="edit", source="test", actor_system="test")),
+        lambda uow: uow.builds.save(edited),
         commit=True,
     )
     async with factory() as uow:

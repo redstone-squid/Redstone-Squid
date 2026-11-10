@@ -9,12 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.models import Account
 from squid.builds.application.queries import BuildListSort
 from squid.builds.domain import Status
-from squid.builds.history import BuildChange
 from squid.builds.models import OtherBuild
 from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
-from tests.support.unit_of_work import transact
+from tests.support.build_edits import build_edit_session
+from tests.support.build_edits import transact_build_edit as transact
 
 pytestmark = pytest.mark.asyncio
 
@@ -23,7 +23,7 @@ _CONFIRMED = frozenset({Status.CONFIRMED})
 
 async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) -> list[int]:
     """Persist *count* confirmed builds and return their identifiers in creation order."""
-    async with session_factory.begin() as session:
+    async with build_edit_session(session_factory) as session:
         account = Account()
         session.add(account)
         await session.flush()
@@ -39,9 +39,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) ->
         )
         await transact(
             repository,
-            lambda uow, build=build: uow.builds.save(
-                build, change=BuildChange(operation="edit", source="test", actor_system="test")
-            ),
+            lambda uow, build=build: uow.builds.save(build),
             commit=True,
         )
         assert build.id is not None

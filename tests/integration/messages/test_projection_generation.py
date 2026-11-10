@@ -3,6 +3,8 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from tests.support.build_edits import build_edit_session
+
 
 async def _seed(session: AsyncSession) -> int:
     """Create a guild, an account, and a build with one post rendering it."""
@@ -55,10 +57,10 @@ async def test_generation_survives_job_completion(
 
     Separate transactions model an edit, a completed render, queue acknowledgement, and a later edit.
     """
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         build_id = await _seed(session)
 
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await session.execute(text("UPDATE builds SET ai_generated = true WHERE id = :id"), {"id": build_id})
 
     async with migrated_session_factory() as session:
@@ -67,21 +69,21 @@ async def test_generation_survives_job_completion(
         assert await _applied(session) < coalesced
 
     # The reconciler renders the card and acknowledges the generation it rendered.
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await session.execute(
             text("UPDATE discord_posts SET applied_revision = :generation WHERE message_id = 100"),
             {"generation": coalesced},
         )
 
     # `ClaimedRowQueue.complete` deletes the acknowledged row, taking its generation.
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await session.execute(
             text("DELETE FROM discord_sync_queue WHERE resource_kind = 'build' AND source_key = :key"),
             {"key": str(build_id)},
         )
 
     # A later edit recreates the deleted queue row.
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await session.execute(text("UPDATE builds SET ai_generated = false WHERE id = :id"), {"id": build_id})
 
     async with migrated_session_factory() as session:
@@ -96,7 +98,7 @@ async def test_generation_survives_job_completion(
 async def test_generations_are_unique_across_resources(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    async with migrated_session_factory.begin() as session:
+    async with build_edit_session(migrated_session_factory) as session:
         await session.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
         account_id = (await session.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id"))).scalar_one()
         for _ in range(3):
