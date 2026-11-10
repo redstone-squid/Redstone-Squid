@@ -14,7 +14,7 @@ from squid.accounts.domain import AccountConsent, IdentityProvider
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.accounts.models import Account
 from squid.bot.account_presentation import link_conflict, link_message, refresh_message
-from squid.bot.account_view import AccountScreen, ConsentRequest
+from squid.bot.account_view import AccountOverview, ConsentRequest
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
 from squid.bot.ui import tr
@@ -28,7 +28,7 @@ type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 class AccountWorkspace(sd.Screen):
     """Combine account linking, profile controls, creator claims, and account merges.
 
-    AccountScreen supplies the overview tab. Other tabs carry the workflows that
+    AccountOverview supplies the overview tab. Other tabs carry the workflows that
     create or change account relationships; claim reviewers also get the shared
     moderation component. Rebuilding reloads the account before choosing tabs.
     """
@@ -59,7 +59,7 @@ class AccountWorkspace(sd.Screen):
         self._authorize_claim = authorize_claim
         self._can_refresh_any = can_refresh_any
         self._can_refresh_identity = can_refresh_identity
-        self._overview: AccountScreen | None = None
+        self._overview: AccountOverview | None = None
         self._claims: ClaimReviewComponent | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
         self._merge_code: str | None = None
@@ -75,7 +75,7 @@ class AccountWorkspace(sd.Screen):
         account_id = None if self._account is None else self._account.id
         self._overview = None
         if account_id is not None:
-            self._overview = AccountScreen(
+            self._overview = AccountOverview(
                 accounts=self._accounts,
                 account_id=account_id,
                 actor_id=self._actor_id,

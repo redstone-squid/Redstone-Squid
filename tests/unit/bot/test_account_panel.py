@@ -29,8 +29,9 @@ from squid.accounts.domain import (
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.bot.account_presentation import refresh_message
-from squid.bot.account_view import AccountScreen, ConsentAnswer
+from squid.bot.account_view import AccountOverview, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
+from squid.bot.consent import ConsentPrompt, request_consent
 from squid.bot.verify import VerifyCog
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
@@ -715,9 +716,9 @@ def test_account_is_one_app_only_workspace() -> None:
     assert "account" in {command.name for command in cog.__cog_app_commands__}
 
 
-def _account_panel(profile: AccountProfile) -> AccountScreen:
+def _account_panel(profile: AccountProfile) -> AccountOverview:
     accounts = AccountMutationService()
-    panel = AccountScreen(
+    panel = AccountOverview(
         accounts=accounts,
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
@@ -779,7 +780,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     assert len(source.notices) == 1
 
 
-def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[str, Any]]:
+def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountOverview, dict[str, Any]]:
     """Capture the consent continuation without mounting the notice.
 
     Notice interactions are covered in ``test_consent_gate.py``.
@@ -805,7 +806,7 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[s
         opened["on_answer"] = answer
         return True
 
-    panel = AccountScreen(
+    panel = AccountOverview(
         accounts=AccountMutationService(),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
@@ -890,9 +891,9 @@ class _Recorder:
         self.requests.append(request)
 
 
-def _linked_panel() -> tuple[AccountScreen, _Recorder, AccountMutationService, sd.MessageRoot]:
+def _linked_panel() -> tuple[AccountOverview, _Recorder, AccountMutationService, sd.MessageRoot]:
     accounts = AccountMutationService()
-    panel = AccountScreen(
+    panel = AccountOverview(
         accounts=accounts,
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
@@ -984,3 +985,81 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
     assert accounts.released == ["abcd"]
     assert accounts.created_consents == []
     assert accounts.linked == []
+
+
+async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> None:
+    account = Account(identities=(DISCORD,), id=ACCOUNT_ID, created_at=NOW)
+
+    class OverviewAccounts(AccountMutationService):
+        @override
+        async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account:
+            assert provider is IdentityProvider.DISCORD
+            assert subject == str(AUTHOR_ID)
+            return account
+
+        @override
+        async def get_account_by_id(self, account_id: int) -> Account:
+            assert account_id == ACCOUNT_ID
+            return account
+
+        @override
+        async def get_profile(self, account_id: int) -> AccountProfile:
+            return AccountProfile.empty(account_id)
+
+    accounts = OverviewAccounts()
+
+    async def consent(
+        event: sd.ActionEvent,
+        answered: ConsentAnswer,
+        *,
+        preview: LinkPreview | None = None,
+        on_abandon: Callable[[], Awaitable[None]] | None = None,
+        timeout: float = 120.0,
+    ) -> bool:
+        assert event.context.root is not None
+        assert event.context.root.component is workspace
+        return await request_consent(
+            event,
+            user_id=AUTHOR_ID,
+            on_answer=answered,
+            preview=preview,
+            on_abandon=on_abandon,
+            timeout=timeout,
+        )
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    async with sd.testing.stage(workspace, owner=object(), user_id=AUTHOR_ID) as ui:
+        overview = workspace._overview
+        assert isinstance(overview, AccountOverview)
+        assert not isinstance(overview, sd.Screen)
+        edit_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("edit_page"))
+        await ui.press(edit_key)
+
+        assert workspace.opening is not None
+        sessions = workspace.opening.runtime.sessions.get(sd.SessionKey.user("consent", AUTHOR_ID))
+        assert len(sessions) == 1
+        child_root = next(iter(sessions[0].message_roots))
+        prompt = child_root.component
+        assert isinstance(prompt, ConsentPrompt)
+        assert prompt.parent is workspace
+        assert overview._profile_editor is None
+
+        interaction = sd.testing.InteractionHarness(AUTHOR_ID, client=ui.interaction.client)
+        await child_root.dispatch("accept", interaction.source)
+
+        assert accounts.consent_grants == [ACCOUNT_ID]
+        assert overview._profile_editor is not None
+        assert not ui.root.finished
+        assert child_root.finished

@@ -34,8 +34,6 @@ from squid.bot.profile_render import own_profile_avatar
 from squid.bot.ui import CardField, tr
 from squid.core.errors import ValidationError
 
-SESSION_SECONDS = 300
-
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
 
@@ -60,14 +58,12 @@ def _link_count(count: int) -> sl.text.Message:
     return tr(t"account-view-links = {count} links")
 
 
-class AccountScreen(sd.Screen):
+class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Edit one account's profile and choose which linked identities appear publicly.
 
     Used as the overview within AccountWorkspace. Identity visibility changes are
     saved immediately; profile fields stay in the editor until Save profile.
     """
-
-    policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("account"))
 
     selected_id: int | None = sl.state(None)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
