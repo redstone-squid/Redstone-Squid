@@ -39,12 +39,12 @@ import type {
   FormOptionSetResponse,
   MediaKind,
   PrivacyNoticeDetail,
-  ProblemDetail,
   StoredDraftResponse,
   SubmissionFinalizationGetResponse,
 } from "../generated/types.gen";
 import { getRuntimeConfig, type RuntimeConfig } from "./config";
 import type { Locale } from "./i18n";
+import { decodeProblemDetail, type ApiProblemDetail } from "./problem-details";
 import { WEB_SUBMISSION_CAPABILITIES } from "./submission-form";
 
 type ApiResult<T> = { data: T | undefined; error?: unknown; response?: Response };
@@ -54,14 +54,14 @@ export type SubmissionFailureKind =
 
 export class SubmissionApiError extends Error {
   readonly status: number;
-  readonly problem: ProblemDetail | undefined;
+  readonly problem: ApiProblemDetail | undefined;
   readonly kind: SubmissionFailureKind;
   readonly networkFailure: boolean;
   readonly requestId: string | null;
 
   constructor(
     status: number,
-    problem?: ProblemDetail,
+    problem?: ApiProblemDetail,
     options?: ErrorOptions & { networkFailure?: boolean; requestId?: string | null },
   ) {
     super(problem?.detail ?? problem?.title ?? "The submission service did not answer.", options);
@@ -120,14 +120,8 @@ export type CliLinkApi = {
   signInUrl: (returnTo: string) => string;
 };
 
-function isProblemDetail(value: unknown): value is ProblemDetail {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Partial<ProblemDetail>;
-  return typeof candidate.title === "string" && typeof candidate.status === "number";
-}
-
 function apiError(result: { error?: unknown; response?: Response }): SubmissionApiError {
-  const problem = isProblemDetail(result.error) ? result.error : undefined;
+  const problem = decodeProblemDetail(result.error);
   const networkFailure = result.response === undefined;
   return new SubmissionApiError(result.response?.status ?? problem?.status ?? 503, problem, {
     cause: result.error,
@@ -168,10 +162,6 @@ function signInUrl(config: RuntimeConfig, returnTo: string, provider = "discord"
   const url = new URL(`${config.apiBaseUrl}/v1/auth/${provider}`);
   url.searchParams.set("redirect_to", returnTo);
   return url.toString();
-}
-
-function requestId(): string {
-  return crypto.randomUUID();
 }
 
 function createSubmissionClient(locale: Locale, config: RuntimeConfig): Client {
@@ -284,7 +274,7 @@ export function createSubmissionApi(
         }),
       ),
     createDraft: async (category) => {
-      const idempotencyKey = requestId();
+      const idempotencyKey = crypto.randomUUID();
       const request = async () =>
         mutations.execute(idempotencyKey, async (headers) =>
           unwrap(
@@ -320,7 +310,7 @@ export function createSubmissionApi(
         ),
       ),
     deleteDraft: async (draftId) => {
-      const idempotencyKey = requestId();
+      const idempotencyKey = crypto.randomUUID();
       await mutations.execute(idempotencyKey, async (headers) => {
         const result = await submissionDraftDelete({
           client,
@@ -346,7 +336,7 @@ export function createSubmissionApi(
       }
     },
     discardMedia: async (draftId, uploadId) => {
-      const idempotencyKey = requestId();
+      const idempotencyKey = crypto.randomUUID();
       await mutations.execute(idempotencyKey, async (headers) => {
         const result = await submissionMediaDiscard({
           client,
@@ -357,7 +347,7 @@ export function createSubmissionApi(
       });
     },
     submitDraft: async (draftId) =>
-      mutations.execute(requestId(), async (headers) =>
+      mutations.execute(crypto.randomUUID(), async (headers) =>
         unwrap(
           await submissionFinalizationStart({
             client,
@@ -386,7 +376,7 @@ export function createMinecraftLinkApi(
   const mutations = createMutationSession(client);
   return {
     approve: async (userCode) => {
-      const idempotencyKey = requestId();
+      const idempotencyKey = crypto.randomUUID();
       const request = async () =>
         mutations.execute(idempotencyKey, async (headers) =>
           unwrap(
@@ -424,7 +414,7 @@ export function createCliLinkApi(
         }),
       ),
     approve: async (userCode) => {
-      const idempotencyKey = requestId();
+      const idempotencyKey = crypto.randomUUID();
       const request = async () =>
         mutations.execute(idempotencyKey, async (headers) =>
           unwrap(
@@ -466,7 +456,7 @@ export function createConsentApi(
   return {
     notice: async () => unwrap(await consentNoticeGet({ client })),
     grant: async (version) => {
-      const idempotencyKey = requestId();
+      const idempotencyKey = crypto.randomUUID();
       await mutations.execute(idempotencyKey, async (headers) =>
         unwrap(
           await accountConsentGrant({
@@ -531,7 +521,7 @@ export function createRuntimeSettingsApi(
   return {
     get: async () => unwrap(await runtimeSettingsGet({ client })),
     update: async (body) => {
-      const key = requestId();
+      const key = crypto.randomUUID();
       return mutations.execute(key, async (headers) =>
         unwrap(await runtimeSettingsUpdate({ client, body, headers })),
       );

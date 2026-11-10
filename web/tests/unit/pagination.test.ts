@@ -34,6 +34,22 @@ describe("page addresses read from a URL", () => {
     expect(readPageParams(params("offset=0"))).toEqual({});
   });
 
+  it("rejects unsafe anchors without rounding them and falls back to the next valid address", () => {
+    expect(readPageParams(params("after_id=9007199254740993&before_id=42"))).toEqual({
+      beforeId: 42,
+    });
+    expect(readPageParams(params("before_id=9007199254740993"))).toEqual({});
+    expect(readOffset(params("offset=9007199254740993"))).toBeUndefined();
+    expect(readPageParams(params("after_id=9007199254740991"))).toEqual({
+      afterId: Number.MAX_SAFE_INTEGER,
+    });
+  });
+
+  it("preserves JavaScript numeric syntax for safe page addresses", () => {
+    expect(readPageParams(params("after_id=1e2"))).toEqual({ afterId: 100 });
+    expect(readOffset(params("offset=0x10"))).toBe(16);
+  });
+
   it("reads the offset of an offset-only collection", () => {
     expect(readOffset(params("offset=20"))).toBe(20);
     expect(readOffset(params("offset=0"))).toBeUndefined();

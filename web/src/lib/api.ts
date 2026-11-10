@@ -15,7 +15,6 @@ import type {
   PageBuildSummary,
   PageRecordSummary,
   PageSchematicSummary,
-  ProblemDetail,
   RecordDetail,
   SearchScope,
   SearchSuggestions,
@@ -23,6 +22,7 @@ import type {
 } from "../generated/types.gen";
 import { getRuntimeConfig, type RuntimeConfig } from "./config";
 import type { Locale } from "./i18n";
+import { decodeProblemDetail, type ApiProblemDetail } from "./problem-details";
 
 const API_TIMEOUT_MS = 5_000;
 
@@ -30,12 +30,12 @@ type ApiResult<T> = { data: T | undefined; error?: unknown; response?: Response 
 
 export class CatalogueApiError extends Error {
   readonly status: number;
-  readonly problem: ProblemDetail | undefined;
+  readonly problem: ApiProblemDetail | undefined;
   readonly requestId: string | null;
 
   constructor(
     status: number,
-    problem?: ProblemDetail,
+    problem?: ApiProblemDetail,
     options?: ErrorOptions & { requestId?: string | null },
   ) {
     super(problem?.detail ?? problem?.title ?? "Catalogue API request failed.", options);
@@ -46,15 +46,9 @@ export class CatalogueApiError extends Error {
   }
 }
 
-function isProblemDetail(value: unknown): value is ProblemDetail {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Partial<ProblemDetail>;
-  return typeof candidate.title === "string" && typeof candidate.status === "number";
-}
-
 function unwrap<T>(result: ApiResult<T>): T {
   if (result.data !== undefined) return result.data;
-  const problem = isProblemDetail(result.error) ? result.error : undefined;
+  const problem = decodeProblemDetail(result.error);
   throw new CatalogueApiError(result.response?.status ?? problem?.status ?? 503, problem, {
     requestId: result.response?.headers.get("Request-Id") ?? null,
   });
