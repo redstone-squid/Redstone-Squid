@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.domain.schematics import DraftSchematicState
 
@@ -43,8 +43,8 @@ class DraftSchematicSource(Base, kw_only=True):
     sha256: Mapped[str | None] = mapped_column(Text)
     byte_size: Mapped[int | None] = mapped_column(BigInteger)
     state: Mapped[DraftSchematicState] = mapped_column(StrEnumText(DraftSchematicState))
-    updated_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=now, server_default=func.now())
-    created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=now, server_default=func.now())
+    updated_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now, server_default=func.now())
+    created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now, server_default=func.now())
 
 
 class DraftSchematicLink(Base, kw_only=True):

@@ -30,7 +30,7 @@ from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.persistence.base import Base
 from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 
 
 class MediaUploadRecord(Base, kw_only=True):
@@ -71,7 +71,7 @@ class MediaUploadRecord(Base, kw_only=True):
     strip_audio: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     raw_deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -114,7 +114,7 @@ class MediaArtifactRecord(Base, kw_only=True):
     width: Mapped[int | None] = mapped_column(Integer, default=None)
     height: Mapped[int | None] = mapped_column(Integer, default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -146,7 +146,7 @@ class MediaArtifactObjectRecord(Base, kw_only=True):
     first_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     last_upload_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
@@ -154,10 +154,10 @@ class MediaArtifactObjectRecord(Base, kw_only=True):
     cleanup_claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     cleanup_claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     first_seen_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     last_seen_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -186,10 +186,10 @@ class MediaArtifactPublicationRecord(Base, kw_only=True):
     claim_token: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     renewed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 

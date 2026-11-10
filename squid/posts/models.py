@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 from squid.posts.domain import ResourceKind, Surface
 
 
@@ -51,7 +51,7 @@ class DiscordPost(Base, kw_only=True):
     applied_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
     """The last rendered queue generation; a larger queued generation means an update is pending."""
     posted_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     rendered_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     """When a rendered update was last recorded; None until the first update."""

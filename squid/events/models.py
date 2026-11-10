@@ -7,7 +7,7 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 
 
 class DomainEvent(Base, kw_only=True):
@@ -28,7 +28,7 @@ class DomainEvent(Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
     occurred_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 

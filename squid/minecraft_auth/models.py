@@ -20,7 +20,7 @@ from whenever import Instant
 
 from squid.minecraft_auth.domain.models import MinecraftClientOrigin, PublicServerProfile
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 
 
 class PaperInstallation(Base, kw_only=True):
@@ -77,7 +77,7 @@ class PaperInstallation(Base, kw_only=True):
     public_website_url: Mapped[str | None] = mapped_column(Text, init=False)
     sponsor_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), init=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     rotated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

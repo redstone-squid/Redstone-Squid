@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 
 
 class CliDeviceEnrollment(Base, kw_only=True):
@@ -90,10 +90,10 @@ class CliDevice(Base, kw_only=True):
     client_instance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     last_used_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 

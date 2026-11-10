@@ -15,7 +15,7 @@ from whenever import Instant
 
 from squid.accounts.domain import IdentityProvider
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 
 
 class WebSession(Base, kw_only=True):
@@ -33,9 +33,9 @@ class WebSession(Base, kw_only=True):
     account_id: Mapped[int] = mapped_column(
         ForeignKey("accounts.id", name="web_sessions_account_id_fkey", ondelete="CASCADE"), nullable=False
     )
-    created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=now)
+    created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
-    last_seen_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=now)
+    last_seen_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     user_agent: Mapped[str | None] = mapped_column(Text, default=None)
 
@@ -52,5 +52,5 @@ class OAuthState(Base, kw_only=True):
     )
     """The namespace this state was minted for; the callback refuses a mismatch."""
     redirect_to: Mapped[str | None] = mapped_column(Text, default=None)
-    created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=now)
+    created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)

@@ -6,7 +6,7 @@ from functools import partial
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from whenever import Instant
+from whenever import Instant, patch_current_time
 
 from squid.accounts.domain import IdentityProvider
 from squid.persistence.base import Base
@@ -57,11 +57,14 @@ async def test_the_cap_starts_a_lockout_and_the_read_agrees(
     for _ in range(MAX_FAILURES - 1):
         await _fail(repository)
 
-    locked_until = await _fail(repository)
+    proposed_at = Instant.now().round("second", mode="floor").add(nanoseconds=123456789)
+    with patch_current_time(proposed_at, keep_ticking=False):
+        locked_until = await _fail(repository)
 
     assert locked_until is not None
     observed = await transact(repository, lambda uow: uow.accounts.verification_lockout(DISCORD, SUBJECT))
     assert observed == locked_until
+    assert locked_until == proposed_at.add(seconds=LOCKOUT).round("microsecond", mode="floor")
     assert locked_until > Instant.now()
 
 

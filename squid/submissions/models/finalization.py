@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 from squid.submissions.domain import FinalizationJobStatus
 
 _LEGACY_SPONSOR_FORBIDDEN_SQL = """
@@ -143,7 +143,7 @@ class SubmissionFinalizationJob(Base, kw_only=True):
     status: Mapped[FinalizationJobStatus] = mapped_column(StrEnumText(FinalizationJobStatus), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
@@ -154,10 +154,10 @@ class SubmissionFinalizationJob(Base, kw_only=True):
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
     attention_issues: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default_factory=list)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -187,7 +187,7 @@ class SubmissionFinalizationResult(Base, kw_only=True):
         "provenance", JSONB, default=None, deferred=True
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -214,7 +214,7 @@ class SubmissionFinalizationInput(Base, kw_only=True):
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     payload_sha256: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -235,5 +235,5 @@ class SubmissionReceiptMedia(Base, kw_only=True):
         primary_key=True,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

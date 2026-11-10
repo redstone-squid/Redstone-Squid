@@ -38,7 +38,6 @@ from squid.builds.models import (
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
 from squid.messages.domain import MessageSnapshot
 from squid.messages.models import Message
-from squid.persistence.types import now
 from squid.settings.infrastructure.repository import ensure_server_settings
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.loading import assignment_units, definition_units
@@ -464,7 +463,7 @@ class BuildRepository:
         an upsert. Updates check the revision and reject changes to category,
         existing draft provenance, or sponsor attribution.
         """
-        build.edited_time = now()
+        build.edited_time = Instant.now()
 
         if build.id is None:
             session = self._session()
@@ -478,13 +477,13 @@ class BuildRepository:
         if build.id is not None:
             message = "Transactional insertion requires a new build."
             raise InvalidStateError(message)
-        build.edited_time = now()
+        build.edited_time = Instant.now()
         submitter_account_id = await self._resolve_submitter_account_id(session, build)
         build.submitter_account_id = submitter_account_id
         build.submission_status = build.submission_status or Status.PENDING
         build.ai_generated = build.ai_generated or False
         build.display_name = _normalize_display_name(build.display_name)
-        build.submission_time = build.submission_time or now()
+        build.submission_time = build.submission_time or Instant.now()
         for name, value in zip(
             (
                 "sponsor_installation_id",
@@ -543,7 +542,7 @@ class BuildRepository:
         build.submitter_account_id = submitter_account_id
         build.display_name = _normalize_display_name(build.display_name)
         build.ai_generated = build.ai_generated or False
-        build.edited_time = build.edited_time or now()
+        build.edited_time = build.edited_time or Instant.now()
         # A detached edit cannot change the repository lease or the creation timestamp.
         for name in ("locked_at", "lock_token", "lock_expires_at", "submission_time"):
             setattr(build, name, getattr(sql_build, name))
@@ -771,7 +770,7 @@ class BuildRepository:
 
     async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
         assert build.id is not None
-        edited_time = now()
+        edited_time = Instant.now()
         session = self._session()
         statement = (
             update(Build)

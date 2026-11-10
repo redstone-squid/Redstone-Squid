@@ -11,7 +11,6 @@ from whenever import Instant
 
 from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
-from squid.persistence.types import now
 from squid.schematics.application.preview_storage import PreviewCleanupClaim, PreviewCleanupInProgressError
 from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
 from squid.schematics.models import (
@@ -88,7 +87,7 @@ class PostgresSchematicPreviewRepository:
         new metadata, which clears readiness and requires a new upload.
         """
         session = self._session()
-        seen_at = now()
+        seen_at = Instant.now()
         await session.execute(
             insert(SchematicPreviewObject)
             .values(object_key=object_key, byte_size=byte_size, sha256=sha256, last_seen_at=seen_at)
@@ -125,7 +124,7 @@ class PostgresSchematicPreviewRepository:
         Check that the reservation still matches and no cleanup claim exists. This method does not
         inspect object storage.
         """
-        ready_at = now()
+        ready_at = Instant.now()
         session = self._session()
         row = await session.scalar(
             select(SchematicPreviewObject)
@@ -361,7 +360,7 @@ class PostgresSchematicPreviewRepository:
             return None
         token = uuid4()
         row.cleanup_claim_token = token
-        row.cleanup_claimed_at = now()
+        row.cleanup_claimed_at = Instant.now()
         row.ready_at = None
         return PreviewCleanupClaim(row.object_key, token)
 

@@ -39,7 +39,6 @@ from squid.permissions.models import (
     PermissionRolePattern,
 )
 from squid.persistence.base import Base
-from squid.persistence.types import now
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.database import record_queries
@@ -245,7 +244,7 @@ async def test_delivery_claim_selects_most_recent_discord_identity_and_completes
     async with async_session_factory.begin() as session:
         account_id = (await session.scalars(select(Account.id))).one()
         # Equal verification times exercise the identity-ID tie-breaker.
-        verified_at = now()
+        verified_at = Instant.now()
         existing = (await session.scalars(select(AccountIdentity))).one()
         existing.verified_at = verified_at
         session.add(

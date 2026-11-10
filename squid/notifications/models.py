@@ -27,7 +27,7 @@ from whenever import Instant
 from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
 from squid.persistence.base import Base
 from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 
 
 class RecordFilterJSON(TypeDecorator[RecordSubscriptionFilter]):
@@ -61,10 +61,10 @@ class NotificationProfile(Base, kw_only=True):
     dm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_suspended_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -116,7 +116,7 @@ class NotificationSubscription(Base, kw_only=True):
     record_filter: Mapped[RecordSubscriptionFilter | None] = mapped_column("filter", RecordFilterJSON(), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -158,7 +158,7 @@ class InboxNotification(Base, kw_only=True):
     )
     web_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     read_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 

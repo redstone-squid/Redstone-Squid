@@ -26,7 +26,6 @@ from squid.notifications.models import (
     NotificationProfile,
     NotificationSubscription,
 )
-from squid.persistence.types import now
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.models import RuntimeSettingChange, ServerSetting
 from squid.submissions.domain import SubmissionOrigin
@@ -118,7 +117,7 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
     absorbed = await transact(accounts, lambda uow: uow.accounts.create(), commit=True)
     assert survivor.id is not None
     assert absorbed.id is not None
-    suspended_at = now()
+    suspended_at = Instant.now()
     survivor_healthy = profile_state == "healthy_survivor"
     absorbed_healthy = profile_state == "healthy_absorbed"
     both_suspended = profile_state == "both_suspended_disabled"
@@ -146,7 +145,7 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
         profile = await session.get(NotificationProfile, survivor.id)
     assert profile is not None
     assert profile.dm_enabled is (survivor_healthy or absorbed_healthy)
-    assert profile.dm_suspended_at == (suspended_at if both_suspended else None)
+    assert profile.dm_suspended_at == (suspended_at.round("microsecond", mode="floor") if both_suspended else None)
 
 
 async def test_profile_merge_inserts_an_absorbed_only_profile_for_the_survivor(
@@ -343,7 +342,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
     assert absorbed.id is not None
     subject_id = uuid.UUID("f0000000-0000-4000-8000-000000000002")
     disabled_subject_id = uuid.UUID("f0000000-0000-4000-8000-000000000003")
-    resolved_at = now()
+    resolved_at = Instant.now()
     record_filter: dict[str, object] = {"build_kinds": ["door"]}
     async with build_edit_session(migrated_session_factory) as session:
         # Ballots record the guild they were cast in, which must have a settings row.

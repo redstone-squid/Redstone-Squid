@@ -26,7 +26,7 @@ from whenever import Instant
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
 from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 
 
 class SearchDocument(Base, kw_only=True):
@@ -77,7 +77,7 @@ class SearchDocument(Base, kw_only=True):
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(EMBEDDING_DIMENSION), default=None)
     embedding_model: Mapped[str | None] = mapped_column(Text, default=None)
     refreshed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -170,14 +170,14 @@ class SearchProjectionQueueItem(QueueColumns, DeadLetterColumns, Base, kw_only=T
     source_key: Mapped[str] = mapped_column(Text, nullable=False)
     action: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'upsert'"))
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(),
         nullable=False,
         server_default=func.now(),
-        default_factory=now,
+        default_factory=Instant.now,
         comment="Earliest time a worker may claim this item; retries move it into the future.",
     )
 
@@ -207,14 +207,14 @@ class SearchEmbeddingQueueItem(QueueColumns, DeadLetterColumns, Base, kw_only=Tr
     )
     source_hash: Mapped[str] = mapped_column(Text, nullable=False)
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(),
         nullable=False,
         server_default=func.now(),
-        default_factory=now,
+        default_factory=Instant.now,
         comment="Earliest time a worker may claim this item; retries move it into the future.",
     )
 

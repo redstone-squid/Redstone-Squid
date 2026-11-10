@@ -35,7 +35,7 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.queue_models import QueueColumns
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 from squid.records.domain import BaseTitle, BuildKind, ResolutionStatus, VersionScope
 from squid.records.domain.models import FacetKind, MaterializationSource
 
@@ -67,7 +67,7 @@ class RulesRevision(Base, kw_only=True):
     formatter_version: Mapped[str] = mapped_column(Text, nullable=False)
     activated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -106,7 +106,7 @@ class TitleDefinition(Base, kw_only=True):
         StrEnumText(MaterializationSource), nullable=False, server_default=text("'eager'")
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     @property
@@ -172,7 +172,7 @@ class RecordTitle(Base, kw_only=True):
     )
     category_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -245,7 +245,7 @@ class ComputationRun(Base, kw_only=True):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     started_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     error: Mapped[str | None] = mapped_column(Text, default=None)
@@ -287,7 +287,7 @@ class TitleResult(Base, kw_only=True):
     )
     history_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     computed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -393,14 +393,14 @@ class RecordRecomputeQueueItem(QueueColumns, Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
     )
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(),
         nullable=False,
         server_default=func.now(),
-        default_factory=now,
+        default_factory=Instant.now,
         comment="Earliest next claim time; retry backoff advances it without changing the enqueue time.",
     )
 

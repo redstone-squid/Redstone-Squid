@@ -3,12 +3,12 @@
 import uuid
 
 import pytest
+from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
 from squid.notifications.domain import NotificationKind, NotificationSource
 from squid.notifications.infrastructure.account_merge import _coalesce_notification_deliveries
 from squid.notifications.models import NotificationDeliveryRecord
-from squid.persistence.types import now
 
 
 @pytest.mark.parametrize(
@@ -63,7 +63,7 @@ def test_record_source_rejects_missing_or_malformed_payload_build_id(build_id: o
 
 
 def test_delivery_collision_keeps_live_work_and_fences_both_prior_claims() -> None:
-    timestamp = now()
+    timestamp = Instant.now()
     survivor = NotificationDeliveryRecord(
         notification_id=1,
         account_id=7,
@@ -102,7 +102,7 @@ def test_delivery_collision_keeps_live_work_and_fences_both_prior_claims() -> No
 
 
 def test_delivery_collision_never_forgets_a_completed_send() -> None:
-    timestamp = now()
+    timestamp = Instant.now()
     survivor = NotificationDeliveryRecord(notification_id=1, account_id=7, available_at=timestamp)
     survivor.id = 1
     absorbed = NotificationDeliveryRecord(

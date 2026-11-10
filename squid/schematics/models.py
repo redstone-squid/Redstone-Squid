@@ -21,7 +21,7 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
 
@@ -48,7 +48,7 @@ class SchematicFile(Base):
     """The format the content sniffer identified, e.g. `litematic`."""
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -233,7 +233,7 @@ class BuildSchematic(Base, kw_only=True):
     )
     """Account that supplied the file, which can differ from the account attesting publication rights."""
     analyzed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -263,10 +263,10 @@ class SchematicPreviewObject(Base, kw_only=True):
     cleanup_claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """Token required to finish cleanup; its presence prevents reuse or publication."""
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     last_seen_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -301,7 +301,7 @@ class SchematicRender(Base, kw_only=True):
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -323,14 +323,14 @@ class SchematicRenderQueueItem(QueueColumns, DeadLetterColumns, Base, kw_only=Tr
         primary_key=True,
     )
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(),
         nullable=False,
         server_default=func.now(),
-        default_factory=now,
+        default_factory=Instant.now,
         comment="Earliest time a worker may claim this job, including retry backoff.",
     )
 
@@ -384,7 +384,7 @@ class SchematicJob(QueueColumns, DeadLetterColumns, Base, kw_only=True):
     error_kind: Mapped[str | None] = mapped_column(Text, default=None)
     error_context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     claim_token: Mapped[uuid.UUID | None] = mapped_column(

@@ -49,7 +49,7 @@ from squid.accounts.domain.profiles import ProfileLink
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 
 _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
 """Generated from the enum so the CHECK cannot drift from the domain."""
@@ -96,7 +96,7 @@ class Account(Base, kw_only=True):
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
     consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
@@ -168,10 +168,10 @@ class AccountIdentity(Base, kw_only=True):
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
     verified_at: Mapped[Instant | None] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     """Whether this identity appears on the account's public creator profile."""
@@ -321,10 +321,10 @@ class AccountProfile(Base, kw_only=True):
     )
     """Linked identity used for the avatar. Unlinking it clears this choice; writes check account ownership."""
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     @classmethod
@@ -345,7 +345,7 @@ class PublicCreatorRedirect(Base):
         nullable=False,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -399,7 +399,7 @@ class CreatorAlias(Base, kw_only=True):
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_method: Mapped[ClaimMethod | None] = mapped_column(StrEnumText(ClaimMethod), default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     public_creator_id: uuid.UUID | None = None
@@ -454,7 +454,7 @@ class AliasClaim(Base, kw_only=True):
     )
     status: Mapped[ClaimStatus] = mapped_column(StrEnumText(ClaimStatus), nullable=False, default=ClaimStatus.PENDING)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     resolved_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     resolved_by_account_id: Mapped[int | None] = mapped_column(
@@ -487,7 +487,7 @@ class VerificationCode(Base, kw_only=True):
     username: Mapped[str] = mapped_column(Text, nullable=False, default="")
     valid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     expires: Mapped[Instant] = mapped_column(
         InstantUTC(),
@@ -516,7 +516,7 @@ class VerificationAttempt(Base):
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 
@@ -545,7 +545,7 @@ class MergeTicket(Base, kw_only=True):
     """End of the authentication proof window in which the ticket can be redeemed."""
 
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     def is_live_at(self, now: Instant) -> bool:

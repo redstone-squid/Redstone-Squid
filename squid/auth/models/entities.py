@@ -8,7 +8,7 @@ from whenever import Instant
 from squid.auth.models.types import PermissionPatterns
 from squid.permissions.domain import Pattern
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 
 
 class ApiKey(Base, kw_only=True):
@@ -48,7 +48,7 @@ class ApiKey(Base, kw_only=True):
     )
     """Account that created the credential, when known."""
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     """When the credential was created."""
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

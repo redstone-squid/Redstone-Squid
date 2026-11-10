@@ -9,21 +9,14 @@ from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 from whenever import Instant
 
-__all__ = ["InstantUTC", "IntEnumSmallInt", "StrEnumText", "now"]
-
-
-def now() -> Instant:
-    """Return the current instant rounded down to PostgreSQL timestamp precision.
-
-    Whenever instants support nanoseconds; PostgreSQL timestamps store microseconds.
-    Use this function for persisted defaults so the value still compares equal after
-    reading it back. Use `Instant.now()` when storage precision does not matter.
-    """
-    return Instant.now().round("microsecond", mode="floor")
+__all__ = ["InstantUTC", "IntEnumSmallInt", "StrEnumText"]
 
 
 class InstantUTC(TypeDecorator[Instant]):
     """Store UTC timestamps while exposing them as Whenever instants.
+
+    Values lose sub-microsecond precision when converted for storage. The original
+    in-memory value is unchanged, so exact equality after a round trip is not guaranteed.
 
     Adapted from Advanced Alchemy's ``DateTimeUTC`` type. See
     ``THIRD_PARTY_LICENSES/advanced-alchemy.txt`` for its MIT license.

@@ -5,10 +5,10 @@ from collections.abc import Sequence
 
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
 from squid.persistence.account_merge import AccountMergeContext, AccountReference, move_account_references
-from squid.persistence.types import now
 from squid.submissions.domain import FinalizationJobStatus
 from squid.submissions.models.entities import SubmissionDraft
 from squid.submissions.models.finalization import SubmissionFinalizationJob
@@ -118,7 +118,7 @@ async def _canonicalize_finalization_job_owners(
             )
         ).all()
     )
-    rewritten_at = now()
+    rewritten_at = Instant.now()
     for job in jobs:
         payload = job.payload
         if not isinstance(payload, dict):

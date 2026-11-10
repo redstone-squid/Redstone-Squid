@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.errors import JSONValue
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 
 
 class SubmissionRevisionProposal(Base, kw_only=True):
@@ -52,4 +52,4 @@ class SubmissionRevisionProposal(Base, kw_only=True):
         Integer, ForeignKey("accounts.id", ondelete="RESTRICT"), default=None
     )
     applied_revision: Mapped[int | None] = mapped_column(Integer, default=None)
-    created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=now, server_default=func.now())
+    created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now, server_default=func.now())

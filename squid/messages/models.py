@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 
 
 class Message(Base):
@@ -37,7 +37,7 @@ class Message(Base):
     created_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     """When Discord created the message, denormalised from the snowflake."""
     observed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     """When the bot first recorded this message."""
     edited_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

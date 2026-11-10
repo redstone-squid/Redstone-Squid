@@ -41,7 +41,6 @@ from squid.permissions.models import (
     PermissionRoleAssignment,
     PermissionRolePattern,
 )
-from squid.persistence.types import now
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
@@ -481,7 +480,7 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
     claimed = await transact(notifications, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True)
     assert len(claimed) == 2
     stale_absorbed_claim = next(delivery for delivery in claimed if delivery.discord_id == 700000000000000002)
-    seeded_at = now()
+    seeded_at = Instant.now()
     async with build_edit_session(migrated_session_factory) as session:
         rows = tuple(
             (
@@ -534,10 +533,10 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
     assert len(merged) == 1
     assert merged[0].account_id == survivor_id
     assert merged[0].source_key == f"event:{notification_event.id}:staff:{survivor_id}"
-    assert merged[0].read_at == seeded_at
+    assert merged[0].read_at == seeded_at.round("microsecond", mode="floor")
     assert len(merged_deliveries) == 1
     assert merged_deliveries[0].account_id == survivor_id
-    assert merged_deliveries[0].sent_at == seeded_at
+    assert merged_deliveries[0].sent_at == seeded_at.round("microsecond", mode="floor")
     assert merged_deliveries[0].claimed_at is None
     assert merged_deliveries[0].claim_token is None
     assert merged_deliveries[0].attempts == 0

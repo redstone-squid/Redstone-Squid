@@ -32,7 +32,7 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.messages.models import Message
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC
 from squid.starboard.domain.models import StarboardDirection
 
 
@@ -93,7 +93,7 @@ class StarboardConfig(Base, kw_only=True):
     replied_to: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     ping_author: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     emojis: tuple[StarboardEmoji, ...] = ()
@@ -202,7 +202,7 @@ class OriginMessage(Base, kw_only=True):
     is_nsfw: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     has_image: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     seen_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     @property
@@ -259,7 +259,7 @@ class StarboardVote(Base, kw_only=True):
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     target_author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
 

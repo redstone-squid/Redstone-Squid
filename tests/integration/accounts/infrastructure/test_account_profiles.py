@@ -230,7 +230,7 @@ class TestProfileWrites:
         loaded = await transact(repository, lambda uow: uow.accounts.get_profile(account.id))
         assert loaded is not None
         assert (loaded.display_name, loaded.bio, loaded.links, loaded.hidden) == (None, None, (), False)
-        assert loaded.updated_at == cleared.updated_at
+        assert loaded.updated_at == cleared.updated_at.round("microsecond", mode="floor")
 
     async def test_database_refuses_an_overlong_display_name(
         self,

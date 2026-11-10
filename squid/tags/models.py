@@ -34,7 +34,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.persistence.types import InstantUTC, StrEnumText
 from squid.tags.domain import (
     RecordOperator,
     TagAuthority,
@@ -157,10 +157,10 @@ class TagDefinition(Base, kw_only=True):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     archived_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
@@ -196,7 +196,7 @@ class TagAlias(Base, kw_only=True):
     alias: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     definition: Mapped[TagDefinition] = relationship(back_populates="aliases", lazy="raise_on_sql", default=None)
@@ -297,10 +297,10 @@ class TagAssignment(Base, kw_only=True, init=False):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     definition: Mapped[TagDefinition] = relationship(
@@ -326,7 +326,7 @@ class TagAssignment(Base, kw_only=True, init=False):
         self.evidence = evidence
         self.provenance = provenance
         self.created_by_account_id = created_by_account_id
-        self.created_at = self.updated_at = now()
+        self.created_at = self.updated_at = Instant.now()
 
     @property
     def presentation_unit(self) -> UnitDefinition | None:
