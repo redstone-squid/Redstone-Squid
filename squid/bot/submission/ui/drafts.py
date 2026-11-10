@@ -78,8 +78,10 @@ class DraftEditorScreen(sd.Screen):
         status = draft.status.value.replace("_", " ")
         if self.result is not None and self.result.result is not None:
             status = f"Saved as build #{self.result.result.build_id}."
+        field_labels = {field.id: field.label for field in self.manifest.fields_for(draft.category)}
         issues = "\n".join(
-            f"{issue.field_id}: {issue.reason.value.replace('_', ' ')}" for issue in self.draft.preparation_issues
+            f"{field_labels.get(issue.field_id, issue.field_id)}: {issue.reason.value.replace('_', ' ')}"
+            for issue in self.draft.preparation_issues
         )
         editable = draft.status in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}
         fields = self.fields[self.page * 20 : (self.page + 1) * 20]
