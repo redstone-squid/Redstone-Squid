@@ -125,6 +125,29 @@ class Message:
     markup: Markup = Markup.DISCORD_MARKDOWN
     plural: str | None = None
 
+    @classmethod
+    def from_template(cls, template: Template) -> Message:
+        """Create a deferred message with simple identifier placeholders.
+
+        Preserve conversions and format specifications for render time. Expressions
+        such as attribute access are rejected because catalogue keys need named
+        parameters. Repeated names use the last interpolated value.
+        """
+        values: dict[str, object] = {}
+        parts: list[str] = []
+        for string, interpolation in zip(template.strings, template.interpolations, strict=False):
+            name = interpolation.expression
+            if not name.isidentifier():
+                detail = f"template string interpolation {name!r} is not a placeholder name"
+                raise ValueError(detail)
+            conversion = "" if interpolation.conversion is None else f"!{interpolation.conversion}"
+            format_spec = "" if not interpolation.format_spec else f":{interpolation.format_spec}"
+            parts.append(string)
+            parts.append(f"{{{name}{conversion}{format_spec}}}")
+            values[name] = interpolation.value
+        parts.append(template.strings[-1])
+        return cls("".join(parts), values)
+
     @override
     def __str__(self) -> str:
         # Without this, an f-string or str() silently shows the dataclass repr to users.

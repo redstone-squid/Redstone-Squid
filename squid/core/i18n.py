@@ -10,7 +10,7 @@ import gettext
 from collections.abc import Sequence
 from functools import cache
 from pathlib import Path
-from string.templatelib import Interpolation, Template
+from string.templatelib import Template
 from typing import overload
 
 from babel import Locale, UnknownLocaleError
@@ -20,27 +20,6 @@ from squid_ui.text import Localization, Message
 DOMAIN = "squid"
 DEFAULT_LOCALE = "en"
 SUPPORTED_LOCALES = frozenset({"en", "zh-CN"})
-
-
-def _placeholder(interpolation: Interpolation) -> str:
-    name = interpolation.expression
-    if not name.isidentifier():
-        detail = f"template string interpolation {name!r} is not a placeholder name"
-        raise ValueError(detail)
-    conversion = "" if interpolation.conversion is None else f"!{interpolation.conversion}"
-    format_spec = "" if not interpolation.format_spec else f":{interpolation.format_spec}"
-    return f"{{{name}{conversion}{format_spec}}}"
-
-
-def _message_from_template(template: Template) -> Message:
-    values: dict[str, object] = {}
-    parts: list[str] = []
-    for string, interpolation in zip(template.strings, template.interpolations, strict=False):
-        parts.append(string)
-        parts.append(_placeholder(interpolation))
-        values[interpolation.expression] = interpolation.value
-    parts.append(template.strings[-1])
-    return Message("".join(parts), values)
 
 
 @overload
@@ -68,13 +47,13 @@ def tr(message: str | Template, /, *, plural: Template | None = None) -> Message
             detail = "plural forms need a template string with an integer 'count'"
             raise TypeError(detail)
         return Message(message)
-    singular_message = _message_from_template(message)
+    singular_message = Message.from_template(message)
     if plural is None:
         return singular_message
     if not isinstance(plural, Template):
         detail = "plural template must be a Python template string"
         raise TypeError(detail)
-    plural_message = _message_from_template(plural)
+    plural_message = Message.from_template(plural)
     if singular_message.params.keys() != plural_message.params.keys():
         detail = "singular and plural templates must use the same placeholders"
         raise ValueError(detail)
@@ -143,11 +122,6 @@ def _language_match(requested: str) -> str | None:
     return None
 
 
-def _match_locale(requested: str) -> str | None:
-    """Match a single locale tag against `SUPPORTED_LOCALES`, or None if none fit."""
-    return _exact_match(requested) or _language_match(requested)
-
-
 def negotiate_locale(requested: str | None) -> str:
     """Choose a supported locale by exact match, then language, then the default.
 
@@ -155,7 +129,7 @@ def negotiate_locale(requested: str | None) -> str:
     """
     if requested is None:
         return DEFAULT_LOCALE
-    return _match_locale(requested) or DEFAULT_LOCALE
+    return _exact_match(requested) or _language_match(requested) or DEFAULT_LOCALE
 
 
 def negotiate_locale_candidates(requested: Sequence[str]) -> str:
