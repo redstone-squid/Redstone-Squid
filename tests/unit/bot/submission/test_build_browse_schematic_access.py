@@ -12,6 +12,7 @@ from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
+from squid_reactivity import LocalTopicBus
 from tests.unit.schematics.fakes import make_analysis
 
 UPLOADER_ID = 11
@@ -71,6 +72,7 @@ def _detail(stored: StoredSchematic | None, *, actor: int | None, held: set[str]
 
     return _BuildDetail(
         DoorBuild(id=7),
+        changes=LocalTopicBus().topic("build", "1"),
         queries=cast(Any, None),
         builds=cast(Any, None),
         schematics=FeaturedSchematics(stored),

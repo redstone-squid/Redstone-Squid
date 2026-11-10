@@ -199,7 +199,12 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
                 if attachment is not None
             ),
         )
-        return await draft_editor(self.bot.services, uploader_account_id, draft_id)
+        return await draft_editor(
+            self.bot.services,
+            uploader_account_id,
+            draft_id,
+            changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
+        )
 
     @BuildCommandGroup.build_group.command(name="drafts", defer="private")
     async def saved_drafts(self, request: sd.Request[Self], *, inbox: bool = False) -> sd.CommandResult:

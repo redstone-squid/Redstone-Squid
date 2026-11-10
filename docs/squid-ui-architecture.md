@@ -707,7 +707,9 @@ reads. Changes during delivery leave the runtime dirty for its next render. Stag
 or finishing the runtime discards the outstanding candidate. Sources hold
 weak subscription handles, so a long-lived model cannot keep an abandoned runtime alive. A Discord
 scheduler arranges delivery of automatic updates; it needs no topic bus for reactive models.
-`TopicBus` remains the integration mechanism for explicit external `watch(Topic(...))` dependencies.
+`TopicBus` owns named external dependencies. Obtain a handle with `bus.topic("build", "42")`
+and pass it to readers, which call `handle.watch()`. Handles carry their owning bus,
+so readers need no ambient bus.
 
 All reactive fields use the same transaction rules, including component fields. A read followed by
 a write checks the committed version. `strong_read()` also checks reads used to decide unrelated

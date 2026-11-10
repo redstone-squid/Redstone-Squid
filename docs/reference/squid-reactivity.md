@@ -62,12 +62,16 @@ Retain one model per factory key; no scope metadata is required on the model.
 ## Topics
 
 Optional invalidation for external dependencies, such as database records or files.
-A resource calls `watch(Topic("build", "42"))`; after a committed database change, the
-application publishes that topic so consumers know to reload. Reactive objects notify
-readers directly and need no topic bus. `LocalTopicBus` operates in one process; a host-owned
+The application obtains a handle with `bus.topic("build", "42")` and passes it to readers.
+A resource calls `handle.watch()`; after a committed database change, `handle.publish()`
+notifies its consumers. Looking up a handle does not track a read. Equal names on different
+buses are independent. Bridges use portable `Topic` names and publish into their local bus.
+Reactive objects notify readers directly and need no topic bus. `LocalTopicBus` operates in one process; a host-owned
 bridge can publish events received from another process.
 
 ::: squid_reactivity.Topic
+
+::: squid_reactivity.TopicHandle
 
 ::: squid_reactivity.TopicBus
 

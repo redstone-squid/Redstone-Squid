@@ -21,7 +21,7 @@ from squid.submissions.domain import (
     ValueKind,
 )
 from squid.submissions.domain.intake import IntakeStatus
-from squid.topics import resource_topic
+from squid_reactivity import TopicHandle
 
 
 class DraftEditorScreen(sd.Screen):
@@ -40,10 +40,13 @@ class DraftEditorScreen(sd.Screen):
     options: tuple[ChoiceOption, ...] = sl.state((), opaque=True)
     selected_attachment: str | None = sl.state(None)
 
-    def __init__(self, services: BotServices, actor_id: int, draft: StoredDraft, manifest: FormManifest) -> None:
+    def __init__(
+        self, services: BotServices, actor_id: int, draft: StoredDraft, manifest: FormManifest, *, changes: TopicHandle
+    ) -> None:
         self.services = services
         self.actor_id = actor_id
         self._draft_id = draft.snapshot.id
+        self._changes = changes
         self._seed: tuple[StoredDraft, tuple[SuppliedAttachment, ...], FinalizationJobSnapshot | None] | None = (
             draft,
             (),
@@ -359,7 +362,7 @@ class DraftEditorScreen(sd.Screen):
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[StoredDraft, tuple[SuppliedAttachment, ...], FinalizationJobSnapshot | None]:
         """Refresh the private editor when durable submission reconciliation publishes a change."""
-        sl.runtime.watch(resource_topic("submission_draft", str(self._draft_id)))
+        self._changes.watch()
         seed, self._seed = self._seed, None
         return seed if seed is not None else await self._read()
 
@@ -436,7 +439,9 @@ def _display(value: JSONValue) -> str:
     return str(value)
 
 
-async def draft_editor(services: BotServices, actor_id: int, draft_id: UUID) -> DraftEditorScreen:
+async def draft_editor(
+    services: BotServices, actor_id: int, draft_id: UUID, *, changes: TopicHandle
+) -> DraftEditorScreen:
     """Reopen the pinned manifest and current draft after a process or session restart."""
     draft = await services.submission_drafts.get_accessible(draft_id, actor_id)
     manifest = await services.submission_forms.manifest_revision(
@@ -445,6 +450,6 @@ async def draft_editor(services: BotServices, actor_id: int, draft_id: UUID) -> 
     if manifest is None:
         message = "This draft's form revision is unavailable."
         raise ValueError(message)
-    screen = DraftEditorScreen(services, actor_id, draft, manifest)
+    screen = DraftEditorScreen(services, actor_id, draft, manifest, changes=changes)
     await screen._reload()
     return screen

@@ -11,8 +11,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind
-from squid.topics import resource_topic
-from squid_reactivity import CellAddress
+from squid_reactivity import CellAddress, TopicHandle
 from squid_ui_discord import Everyone
 from squid_ui_discord.testing import delivered_to, message_harness
 from tests.support.services import bot_services
@@ -25,12 +24,13 @@ class Projection(sl.Component):
     that topic makes the mounted panel reload the value and schedule a new render.
     """
 
-    def __init__(self, read) -> None:
+    def __init__(self, read, changes: TopicHandle) -> None:
+        self._changes = changes
         self._read = read
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def value(self) -> str:
-        sl.runtime.watch(resource_topic("build", "42"))
+        self._changes.watch()
         return self._read()
 
     @override
@@ -75,14 +75,17 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     scheduler = sd.MessageRootScheduler(bus)
     messages = [message_harness(message_id=1), message_harness(message_id=2)]
     source = "before"
-    panels = [Projection(lambda: source), Projection(lambda: source)]
+    panels = [
+        Projection(lambda: source, bus.topic("build", "42")),
+        Projection(lambda: source, bus.topic("build", "42")),
+    ]
 
     for panel, message in zip(panels, messages, strict=True):
         message_root = sd.MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
         await message_root.send(delivered_to(message))
         assert message_root.followed == (
             CellAddress(message_root.component, "value"),
-            resource_topic("build", "42"),
+            bus.topic("build", "42"),
         ), "following includes the resource and the topic its loader read"
 
     posts = PostRecorder()

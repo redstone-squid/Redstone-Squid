@@ -68,6 +68,7 @@ from squid_reactivity.topics import (
     Topic,
     TopicBus,
     TopicCodec,
+    TopicHandle,
     TopicSnapshot,
     watch,
 )
@@ -198,6 +199,7 @@ __all__ = [
     "Topic",
     "TopicBus",
     "TopicCodec",
+    "TopicHandle",
     "TopicSnapshot",
     "TransactionParticipant",
     "TransactionView",

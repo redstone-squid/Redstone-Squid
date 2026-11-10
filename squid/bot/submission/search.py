@@ -200,6 +200,7 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
             self.queries,
             self.builds,
             self.bot.services.schematics,
+            topics=self.bot.topic_bus,
             initial_id=build_id,
             render_build=lambda build: self.bot.for_build(build).render_node(),
             capabilities=capabilities,

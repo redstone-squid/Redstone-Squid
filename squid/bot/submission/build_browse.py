@@ -35,7 +35,7 @@ from squid.permissions.domain.catalogue import (
 from squid.schematics.application import ConvertRequest, SchematicService, summarise_losses
 from squid.schematics.domain.models import SchematicFormat
 from squid.schematics.errors import AmbiguousSimulationInputError, SchematicRenderRefusedError
-from squid.topics import resource_topic
+from squid_reactivity import TopicBus, TopicHandle
 from squid_ui.sources import window_fingerprint
 
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
@@ -99,6 +99,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self,
         build: Build,
         *,
+        changes: TopicHandle,
         queries: BuildQueryService,
         builds: BuildService,
         schematics: SchematicService,
@@ -109,6 +110,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         refresh_posts: RefreshPosts,
     ) -> None:
         assert build.id is not None
+        self._changes = changes
         self._build_id = build.id
         self._seed: Build | None = build
         self._queries = queries
@@ -126,7 +128,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
-        sl.runtime.watch(resource_topic("build", str(self._build_id)))
+        self._changes.watch()
         build, self._seed = self._seed, None
         if build is None:
             build = await self._queries.get(self._build_id)
@@ -457,6 +459,7 @@ class BuildBrowseScreen(sd.Screen):
         builds: BuildService,
         schematics: SchematicService,
         *,
+        topics: TopicBus,
         initial_id: int | None,
         render_build: BuildRenderer,
         capabilities: BuildCapabilities,
@@ -464,6 +467,7 @@ class BuildBrowseScreen(sd.Screen):
         authorize: BuildAuthorizer,
         refresh_posts: RefreshPosts,
     ) -> None:
+        self._topics = topics
         self._queries = queries
         self._builds = builds
         self._schematics = schematics
@@ -540,6 +544,7 @@ class BuildBrowseScreen(sd.Screen):
     def _detail(self, build: Build) -> _BuildDetail:
         return _BuildDetail(
             build,
+            changes=self._topics.topic("build", str(build.id)),
             queries=self._queries,
             builds=self._builds,
             schematics=self._schematics,

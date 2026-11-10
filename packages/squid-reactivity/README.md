@@ -40,7 +40,7 @@ The package is layered:
   version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
 - `squid_reactivity.state_pool` retains one model per factory key. Models do not require scope metadata.
 - Every `Reactive` field has an identity address. Consumers subscribe directly without a host-supplied bus.
-- `squid_reactivity.topics` provides portable `Topic` values, tracked `watch()` reads, the small
+- `squid_reactivity.topics` provides portable `Topic` names, bus-owned `TopicHandle` dependencies, and the small
   synchronous `TopicBus` protocol, `LocalTopicBus`, and committed/staged subscription
   reconciliation.
 - `squid_reactivity.resources` is an optional import for tracked asynchronous values. It uses
@@ -63,5 +63,24 @@ the bus reports it through `on_subscriber_error`, continues delivering to the re
 subscribers, and never lets the subscriber kill the bus. The default hook logs the exception.
 
 The bus deliberately has no queue, run loop, durability, expiry, or bridge policy. A real host
-implements the two-method `TopicBus` protocol and owns any loops needed to connect processes or
+implements the `TopicBus` protocol and owns any loops needed to connect processes or
 schedule asynchronous projection refreshes.
+
+Obtain a named dependency from its owning bus and pass the handle to readers:
+
+```python
+from squid_reactivity import LocalTopicBus
+
+bus = LocalTopicBus()
+build_changes = bus.topic("build", "42")
+# Inside a render, computed value, or resource loader:
+build_changes.watch()
+# After a database change or an incoming bridge notification:
+build_changes.publish()
+```
+
+Looking up a handle does not record a read. Equal names on different buses refer to independent
+dependencies. Observed handles carry their bus and can be followed with
+`SubscriptionReconciler(None, callback)`. Bridges keep using portable `Topic` names;
+`bus.publish(Topic("build", "42"))` reaches the same dependency as `build_changes.publish()`.
+The bus holds handles weakly, so unused names do not accumulate reactive state.

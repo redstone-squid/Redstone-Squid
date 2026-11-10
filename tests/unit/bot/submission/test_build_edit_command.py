@@ -24,7 +24,6 @@ from squid.permissions.domain import PermissionNode, Subject
 from squid.posts.application import PostService
 from squid.posts.domain import PostReference
 from squid.settings.application import SettingsService
-from squid.topics import resource_topic
 from squid_ui.testing import RecordingResponder, press_event
 from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
 from tests.support.discord import make_layout_bot
@@ -212,7 +211,7 @@ async def test_a_stored_editor_follows_its_build_without_rereading_it() -> None:
     component = _component(_sent_view(interaction))
     assert component is not None
     message_root = cast(Any, _sent_view(interaction))._root
-    assert message_root.observed == (resource_topic("build", "1"),)
+    assert cog.bot.topic_bus.topic("build", "1") in message_root.observed
 
 
 async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:

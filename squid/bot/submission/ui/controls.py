@@ -69,7 +69,12 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
     actor = await ensure_consented_account(request, interaction.client.services.accounts)
     if actor is None:
         return
-    screen = await draft_editor(interaction.client.services, actor, UUID(draft_id))
+    screen = await draft_editor(
+        interaction.client.services,
+        actor,
+        UUID(draft_id),
+        changes=interaction.client.topic_bus.topic("submission_draft", draft_id),
+    )
     await request.respond(
         screen, audience="personal", session_key=sd.SessionKey.custom("draft", (interaction.user.id, draft_id))
     )

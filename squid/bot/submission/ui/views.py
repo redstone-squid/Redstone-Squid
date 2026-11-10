@@ -30,7 +30,7 @@ from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import DEFAULT
-from squid.topics import resource_topic
+from squid_reactivity import TopicHandle
 from squid_ui.text import Message
 
 _DOOR_ONLY = frozenset({BuildCategory.DOOR})
@@ -458,9 +458,11 @@ class BuildEditScreen(sd.Screen):
         authorize: Callable[[], Awaitable[bool]],
         render_build: Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]],
         refresh_posts: Callable[[int], Awaitable[None]],
+        changes: TopicHandle | None = None,
         recovered: bool = False,
     ) -> None:
         self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None] | None = (build, node)
+        self._changes = changes
         self._build_id = build.id
         self.builds = builds
         self._authorize = authorize
@@ -474,8 +476,8 @@ class BuildEditScreen(sd.Screen):
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None]:
         """Load the edited build and keep its preview current with the build topic."""
-        if self._build_id is not None:
-            sl.runtime.watch(resource_topic("build", str(self._build_id)))
+        if self._changes is not None:
+            self._changes.watch()
         seed, self._seed = self._seed, None
         if seed is not None:
             return seed

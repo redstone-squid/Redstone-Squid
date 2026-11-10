@@ -56,6 +56,7 @@ async def prepare_build_editor(
         authorize=authorize,
         render_build=render_build,
         refresh_posts=refresh_posts,
+        changes=None if build.id is None else client.topic_bus.topic("build", str(build.id)),
         recovered=recovered,
     )
     return prepared

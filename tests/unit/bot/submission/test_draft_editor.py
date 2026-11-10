@@ -32,6 +32,7 @@ from squid.submissions.domain import (
     FormManifest,
     SubmissionOrigin,
 )
+from squid_reactivity import LocalTopicBus
 from squid_ui.testing import labels
 from squid_ui.text import source_text
 from squid_ui_discord.testing import commit_render
@@ -116,9 +117,19 @@ def setup() -> tuple[BotServices, Drafts]:
 
 async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
     services, drafts = setup()
-    first = await draft_editor(services, 7, drafts.current.snapshot.id)
+    first = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
     await first._save("display_name", "Saved name")
-    reopened = await draft_editor(services, 7, drafts.current.snapshot.id)
+    reopened = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
     assert reopened is not first
     assert reopened.draft.snapshot.answers["display_name"] == "Saved name"
     assert reopened.manifest.revision == reopened.draft.snapshot.schema_revision
@@ -128,7 +139,12 @@ async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
 
 async def test_staff_writes_use_actor_and_preserve_owner() -> None:
     services, drafts = setup()
-    editor = await draft_editor(services, 99, drafts.current.snapshot.id)
+    editor = await draft_editor(
+        services,
+        99,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
     await editor._save("description", "Staff correction")
     assert editor.draft.snapshot.owner_account_id == 7
     assert all(actor == 99 for actor in drafts.actors)
@@ -137,7 +153,12 @@ async def test_staff_writes_use_actor_and_preserve_owner() -> None:
 
 async def test_stale_modal_does_not_overwrite_a_newer_edit() -> None:
     services, drafts = setup()
-    editor = await draft_editor(services, 7, drafts.current.snapshot.id)
+    editor = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
     base_revision = editor.draft.snapshot.revision
     await editor._save("display_name", "Newer value")
     await editor._save("display_name", "Stale modal", base_revision=base_revision)
@@ -148,7 +169,13 @@ async def test_stale_modal_does_not_overwrite_a_newer_edit() -> None:
 def test_every_visible_field_comes_from_the_manifest() -> None:
     services, drafts = setup()
     manifest = build_submission_manifest()
-    editor = DraftEditorScreen(services, 7, drafts.current, manifest)
+    editor = DraftEditorScreen(
+        services,
+        7,
+        drafts.current,
+        manifest,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
     assert {field.id for field in editor.fields} <= {field.id for field in manifest.fields_for("other")}
     assert "source_version" in {field.id for field in editor.fields}
     assert "rights_attestation" not in {field.id for field in editor.fields}
@@ -156,7 +183,12 @@ def test_every_visible_field_comes_from_the_manifest() -> None:
 
 async def test_manifest_pages_fit_discord_component_limits() -> None:
     services, drafts = setup()
-    editor = await draft_editor(services, 7, drafts.current.snapshot.id)
+    editor = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
     root = sd.MessageRoot(editor, access=sd.Owner(7), timeout=None)
     commit_render(root)
     editor.selected = "creators"
@@ -165,7 +197,12 @@ async def test_manifest_pages_fit_discord_component_limits() -> None:
 
 async def test_live_projection_refreshes_saved_state() -> None:
     services, drafts = setup()
-    editor = await draft_editor(services, 7, drafts.current.snapshot.id)
+    editor = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
     await editor.projection.reload()
     drafts.current = replace(drafts.current, snapshot=replace(drafts.current.snapshot, status=DraftStatus.SUBMITTED))
     await editor.projection.reload()

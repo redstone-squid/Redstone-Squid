@@ -285,8 +285,8 @@ def install[ClientT: discord.Client](
 ) -> DiscordUIRuntime[ClientT]:
     """Assemble and register the UI runtime for a client without starting its tasks.
 
-    The scheduler delivers live reactive updates with or without a topic bus. Supply
-    a bus only for external dependencies declared with watch(Topic(...)). The localization
+    The scheduler delivers live reactive updates with or without a topic bus.
+    External dependencies carry their owning bus in topic handles. The localization
     callback resolves the locale for each new Request.
 
     Raises:

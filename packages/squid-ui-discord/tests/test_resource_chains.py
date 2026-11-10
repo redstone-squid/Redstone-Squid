@@ -21,7 +21,8 @@ TOPIC = sl.runtime.Topic("build", "1")
 class Chain(sl.Component[sl.ComponentsV2Target]):
     """`node` derives from `build`, which watches a topic."""
 
-    def __init__(self, source: str = "v1") -> None:
+    def __init__(self, source: str = "v1", *, changes: sl.runtime.TopicHandle | None = None) -> None:
+        self.changes = changes if changes is not None else sl.runtime.LocalTopicBus().topic("build", "1")
         self.source = source
         self.build_loads = 0
         self.node_loads = 0
@@ -30,7 +31,7 @@ class Chain(sl.Component[sl.ComponentsV2Target]):
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def build(self) -> str:
         self.build_loads += 1
-        sl.runtime.watch(TOPIC)
+        self.changes.watch()
         return self.source
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
@@ -71,7 +72,7 @@ async def test_a_publish_two_links_up_repends_the_dependent() -> None:
     assert panel.node.value == "card(v1)"
 
     panel.source = "v2"
-    sl.runtime.LocalTopicBus().publish(TOPIC)
+    panel.changes.publish()
 
     # `node` never read the topic; it read `build`, which did. Asking `node` whether it moved
     # re-checks `build`, which re-checks the topic.
@@ -184,12 +185,12 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
     bus = sl.runtime.LocalTopicBus()
     scheduler = squid_ui_discord.MessageRootScheduler(bus)
-    panel = Chain()
+    panel = Chain(changes=bus.topic("build", "1"))
     message: Any = message_harness()
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
 
-    assert TOPIC in message_root.followed, "a render reading only `node` still follows what `build` watched"
+    assert panel.changes in message_root.followed, "a render reading only `node` still follows what `build` watched"
 
     panel.source = "v2"
     bus.publish(TOPIC)
