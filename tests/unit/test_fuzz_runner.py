@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run_fuzz_target import LONG_RUN_SECONDS, TARGETS, command_for, parse_run
+from scripts.run_fuzz_target import LONG_RUN_SECONDS, TARGETS, command_for, main, parse_run
 
 
 def test_parse_run_defaults_to_the_smoke_budget() -> None:
@@ -51,3 +51,11 @@ def test_command_uses_separate_corpus_and_artifact_directories(tmp_path: Path) -
     artifacts = tmp_path / ".fuzz" / "artifacts" / "search_parser"
     assert command[-1] == f"-artifact_prefix={artifacts}/"
     assert (tmp_path / ".fuzz/corpus/search_parser/valid").read_bytes() == b"title:door"
+
+
+def test_native_fuzzing_explains_the_unsupported_interpreter(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["target=version_parser"])
+
+    assert raised.value.code == 2
+    assert "Atheris does not yet support Python 3.15" in capsys.readouterr().err

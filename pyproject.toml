@@ -95,7 +95,8 @@ dev = [
     "redstone-squid[schematics,observability]",
 ]
 fuzz = [
-    "atheris>=3.0.0; sys_platform == 'linux'",
+    # Atheris bytecode instrumentation does not yet support Python 3.15.
+    "atheris>=3.1.0; sys_platform == 'linux' and python_version < '3.15'",
 ]
 # Documentation tooling is installed only when building or publishing the site.
 docs = [

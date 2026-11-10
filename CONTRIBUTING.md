@@ -31,6 +31,14 @@ uv run prek install       # installs the pre-commit and pre-push hooks
   to your change.
 - **Formatting and linting**: ruff, enforced by the pre-commit hooks; `just lint` runs both.
 
+The workspace packages still support Python 3.14+. The root development environment
+runs on Python 3.15; use `uv sync --locked --all-packages` before checking the whole workspace.
+
+Native Atheris fuzzing is temporarily unavailable because [upstream supports Python
+3.11–3.14](https://github.com/google/atheris#installation-instructions). Its scheduled job
+is disabled until a compatible release is available. API fuzzing and property tests
+remain available.
+
 ## Framework ground rules
 
 - Names in each package's `__all__` are the supported public surface and are snapshot-tested in

@@ -99,6 +99,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
         run = parse_run(parsed.settings, allow_long_run=parsed.allow_long_run)
     except ValueError as error:
         parser.error(str(error))
+    if sys.version_info >= (3, 15):
+        parser.error("Atheris does not yet support Python 3.15; native fuzzing is temporarily unavailable.")
     root = Path(__file__).resolve().parents[1]
     return subprocess.run(command_for(run, root), check=False).returncode
 

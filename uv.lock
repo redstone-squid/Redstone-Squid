@@ -230,12 +230,6 @@ wheels = [
 ]
 
 [[package]]
-name = "atheris"
-version = "3.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f8/58/5965955898e16bee17c8379eae12194993bf641c4629016991248b862069/atheris-3.0.0.tar.gz", hash = "sha256:1f0929c7bc3040f3fe4102e557718734190cf2d7718bbb8e3ce6d3eb56ef5bb3", size = 373239, upload-time = "2025-11-24T23:54:02.15Z" }
-
-[[package]]
 name = "attrs"
 version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2283,9 +2277,6 @@ docs = [
     { name = "mkdocstrings-python" },
     { name = "zensical" },
 ]
-fuzz = [
-    { name = "atheris", marker = "sys_platform == 'linux'" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -2356,7 +2347,7 @@ docs = [
     { name = "mkdocstrings-python", specifier = ">=1.18,<2" },
     { name = "zensical", specifier = ">=0.0.47,<0.1" },
 ]
-fuzz = [{ name = "atheris", marker = "sys_platform == 'linux'", specifier = ">=3.0.0" }]
+fuzz = [{ name = "atheris", marker = "python_full_version < '3.15' and sys_platform == 'linux'", specifier = ">=3.1.0" }]
 
 [[package]]
 name = "referencing"

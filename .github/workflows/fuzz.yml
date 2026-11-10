@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   version-parser:
+    # Restore when Atheris supports Python 3.15: https://github.com/google/atheris#installation-instructions
+    if: ${{ false }}
     name: Version parser
     runs-on: ubuntu-latest
     timeout-minutes: 15
