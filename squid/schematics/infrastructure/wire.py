@@ -170,13 +170,6 @@ def decode_worker_request(frame: Frame) -> WorkerRequest:
     return WorkerRequest(request_id, operation, params, job_id)
 
 
-def validate_request_payloads(operation: object, payloads: Sequence[bytes]) -> Operation:
-    """Check the operation name and its required number of binary inputs."""
-    decoded = _operation(operation)
-    _payload_arity(payloads, _REQUEST_PAYLOAD_ARITY[decoded], f"{decoded} request")
-    return decoded
-
-
 def validate_durable_request_payloads(operation: object, payloads: Sequence[bytes]) -> Operation:
     """Validate durable-job inputs, where a render may carry a pack as a second object."""
     decoded = _operation(operation)

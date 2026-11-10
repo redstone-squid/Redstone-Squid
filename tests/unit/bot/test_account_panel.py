@@ -272,10 +272,6 @@ class AccountMutationService(AccountService):
         return self.unlinked
 
 
-def text_of(view: discord.ui.LayoutView) -> str:
-    return "\n".join(child.content for child in view.walk_children() if isinstance(child, discord.ui.TextDisplay))
-
-
 async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> None:
     accounts = NoAccountService()
 

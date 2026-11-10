@@ -70,7 +70,6 @@ from squid.records.application import PublicRecordQueryService, RecordComputatio
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
 from squid.schematics.application import (
     RenderRequest,
-    SchematicAnalyzer,
     SchematicJobService,
     SchematicRenderJobService,
     SchematicService,
@@ -123,15 +122,6 @@ from squid.worker.queue_health import PostgresQueueHealthMonitor
 logger = logging.getLogger(__name__)
 
 
-def create_schematic_analyzer(
-    config: SchematicConfig,
-    jobs: SchematicJobService,
-    artifacts: ArtifactStore,
-) -> SchematicAnalyzer:
-    """Build a queue client; only the dedicated worker process owns native execution."""
-    return QueuedSchematicAnalyzer(jobs, artifacts, config)
-
-
 def create_schematic_service(
     config: SchematicConfig,
     artifacts: ArtifactStore,
@@ -146,7 +136,7 @@ def create_schematic_service(
     so this process can prepare render requests. Native rendering still runs in
     the dedicated worker process.
     """
-    analyzer = create_schematic_analyzer(config, jobs, artifacts)
+    analyzer = QueuedSchematicAnalyzer(jobs, artifacts, config)
     resource_pack = None
     if render_capable and config.render_enabled:
         resource_pack = ResourcePackLoader(

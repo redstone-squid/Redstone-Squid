@@ -129,7 +129,7 @@ class VoteReactionHandler:
         member = await event.member(humans_only=True)
         if message is None or member is None:
             return
-        account_id = await self._consented_account_id(member.id)
+        account_id = await self._voters.consented_account_id(member.id)
         if account_id is None:
             if not recovering:
                 await self._decline_unconsented_vote(message, member, payload.emoji)
@@ -268,10 +268,6 @@ class VoteReactionHandler:
             payload = render_payload([text_node(describe_rejection(rejection))])
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
             await send_to(message.channel)(payload)
-
-    async def _consented_account_id(self, discord_id: int) -> int | None:
-        """Return an existing account ID only when its consent is current; never create one."""
-        return await self._voters.consented_account_id(discord_id)
 
     async def _decline_unconsented_vote(
         self,

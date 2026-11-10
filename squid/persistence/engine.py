@@ -7,11 +7,10 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, create_engine, make_url, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from squid.config import DatabaseConfig
 from squid.core.errors import DataIntegrityError
-from squid.persistence.inspection import is_sane_database
 
 
 class DatabaseEngine:
@@ -65,12 +64,6 @@ class DatabaseEngine:
                 context={"database_heads": sorted(versions), "application_heads": sorted(expected)},
                 developer_action="Run the release migration job before making the service ready.",
             )
-
-    def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
-        """Raise `DataIntegrityError` if the schema fails the model consistency checks."""
-        if not is_sane_database(base_cls, self.sync_engine):
-            msg = "The database schema is not consistent with the expected schema."
-            raise DataIntegrityError(msg)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

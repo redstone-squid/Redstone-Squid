@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.builds.application import RestrictionDefinition
 from squid.builds.domain import RestrictionTypeLiteral
+from squid.builds.domain.taxonomy import normalize_tag_name
 from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 from squid.tags.models import TagAlias, TagDefinition
 
@@ -42,7 +43,7 @@ class RestrictionRepository:
 
     async def add_alias(self, restriction: str, alias: str) -> None:
         """Add a normalized alias in a savepoint; the caller commits the transaction."""
-        normalized_alias = _normalize(alias)
+        normalized_alias = normalize_tag_name(alias)
         session = self._session()
         restriction_id = await get_restriction_id(session, restriction)
         alias_restriction_id = await get_restriction_id(session, alias)
@@ -69,7 +70,7 @@ async def get_restriction_id(session: AsyncSession, name_or_alias: str) -> int |
     Return None if missing or ambiguous. This lookup does not filter moderation
     status; use fetch_all_restrictions for the approved list.
     """
-    normalized = _normalize(name_or_alias)
+    normalized = normalize_tag_name(name_or_alias)
     statement = (
         select(TagDefinition.id)
         .outerjoin(TagAlias, TagAlias.tag_id == TagDefinition.id)
@@ -84,7 +85,3 @@ async def get_restriction_id(session: AsyncSession, name_or_alias: str) -> int |
     )
     rows = tuple((await session.scalars(statement)).unique().all())
     return rows[0] if len(rows) == 1 else None
-
-
-def _normalize(value: str) -> str:
-    return " ".join(value.casefold().split())

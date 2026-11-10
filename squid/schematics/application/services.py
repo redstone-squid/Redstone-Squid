@@ -532,13 +532,6 @@ class SchematicService:
         await self._analyzer.aclose()
         await self._preview_service.aclose()
 
-    async def bytes_for(self, sha256: str) -> bytes:
-        """Return stored schematic bytes, or raise if they are gone."""
-        data = await self._store.get_file(sha256)
-        if data is None:
-            raise SchematicNotFoundError(context={"sha256": sha256}, public_context={"sha256": sha256})
-        return data
-
     def _vet(self, data: bytes, *, filename: str) -> SchematicFormat:
         """Check upload and inflation budgets, then infer a supported format.
 

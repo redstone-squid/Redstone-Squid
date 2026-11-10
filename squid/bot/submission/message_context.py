@@ -134,17 +134,6 @@ async def resolve_reply_chain(
     return tuple(parents)
 
 
-def collect_lookback[MessageT: GroupableMessage](
-    history: Sequence[MessageT], group: Sequence[MessageT], *, limit: int = 3
-) -> tuple[MessageT, ...]:
-    """Return the messages immediately preceding a group from chronological history."""
-    if not group or limit <= 0:
-        return ()
-    first_id = group[0].id
-    index = next((position for position, item in enumerate(history) if item.id == first_id), 0)
-    return tuple(history[max(0, index - limit) : index])
-
-
 async def collect_images(
     messages: Sequence[discord.Message], *, max_images: int = 6, max_bytes: int = 4 * 1024 * 1024
 ) -> tuple[InlineImage, ...]:

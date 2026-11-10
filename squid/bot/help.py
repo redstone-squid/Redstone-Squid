@@ -174,17 +174,6 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                     known.add(item.qualified_name)
         return commands_
 
-    def _root_commands(self) -> list[AnyCommand]:
-        """Combine visible prefix roots with app-only roots, preferring prefix duplicates.
-
-        Only the prefix `hidden` flag is checked; no caller-specific authorization runs.
-        """
-        prefix_commands = [item for item in self.bot.commands if not item.hidden]
-        named = {item.name for item in prefix_commands}
-        app_tree = self.bot.tree.get_commands(type=discord.AppCommandType.chat_input)
-        app_only = [item for item in app_tree if item.name not in named]
-        return [*prefix_commands, *app_only]
-
     @help.autocomplete("command")
     async def command_autocomplete(
         self, _interaction: discord.Interaction[BotT], needle: str

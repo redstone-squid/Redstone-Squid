@@ -471,7 +471,7 @@ class BuildRepository:
             await self._insert(session, build)
             await session.flush()
         else:
-            await self._update_existing(build)
+            await self._update(self._session(), build)
 
     async def _insert(self, session: AsyncSession, build: Build) -> None:
         """Insert a prepared build within the caller's transaction, including its database events."""
@@ -506,11 +506,6 @@ class BuildRepository:
             await self._setup_relationships(build, session, sql_build)
         await session.flush()
         await self._sync_source_messages(build, session)
-
-    async def _update_existing(self, build: Build) -> None:
-        """Save an existing build using the caller's session."""
-        session = self._session()
-        await self._update(session, build)
 
     async def _update(self, session: AsyncSession, build: Build) -> None:
         """Update a prepared build and its events within the caller's transaction."""

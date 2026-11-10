@@ -217,10 +217,6 @@ class StarboardService:
             await uow.starboards.set_role_multiplier(config.id, role_id, multiplier)
             await uow.commit()
 
-    async def get_role_multipliers(self, config: StarboardConfig) -> dict[int, float]:
-        async with self._uow_factory() as uow:
-            return dict(await uow.starboards.role_multipliers(config.id))
-
     async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None:
         """Return one entry's config, origin and score, for rendering."""
         async with self._uow_factory() as uow:

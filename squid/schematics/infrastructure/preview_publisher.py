@@ -70,7 +70,7 @@ class PostgresSchematicPreviewRepository:
         )
         if row is None or row.object_key is None:
             return None
-        preview_object = await self._preview_object(row.object_key)
+        preview_object = await session.get(SchematicPreviewObject, row.object_key)
         if preview_object is None or preview_object.cleanup_claim_token is not None or preview_object.ready_at is None:
             return None
         return _stored_render(row), preview_object
@@ -388,10 +388,6 @@ class PostgresSchematicPreviewRepository:
             )
             .values(cleanup_claim_token=None, cleanup_claimed_at=None)
         )
-
-    async def _preview_object(self, object_key: str) -> SchematicPreviewObject | None:
-        session = self._session()
-        return await session.get(SchematicPreviewObject, object_key)
 
     async def mark_object_not_ready(self, object_key: str) -> None:
         session = self._session()

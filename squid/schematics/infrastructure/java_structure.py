@@ -161,7 +161,7 @@ class _NbtReader:
         return root
 
     def _payload(self, kind: int, depth: int) -> NbtValue:
-        self._claim_value()
+        self._claim_values(1)
         if depth > _MAX_NBT_DEPTH:
             msg = "NBT exceeds the maximum nesting depth"
             raise JavaStructureDecodeError(msg)
@@ -258,9 +258,6 @@ class _NbtReader:
         value = self._data[self._offset : end]
         self._offset = end
         return value
-
-    def _claim_value(self) -> None:
-        self._claim_values(1)
 
     def _claim_values(self, count: int) -> None:
         if count > self._values_left:
