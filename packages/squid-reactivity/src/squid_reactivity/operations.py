@@ -30,7 +30,7 @@ from squid_reactivity.diagnostics import (
     emit_causal_event,
     has_event_observers,
 )
-from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
+from squid_reactivity.resources import AsyncBinding, _observe
 from squid_reactivity.tracking import (
     _Signal,
 )
@@ -105,10 +105,6 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     a joining waiter leaves it running. Awaiting returns the value or raises the
     stored error, while status exposes progress and the final outcome.
     """
-
-    pending_mode = PendingMode.EXPLICIT
-    reconcile_while_pending = True
-    settle_without_delivery = True
 
     def __init__(
         self,

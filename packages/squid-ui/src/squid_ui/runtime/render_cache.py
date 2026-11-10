@@ -9,6 +9,7 @@ from collections.abc import Iterable, Mapping
 
 from squid_reactivity.resources import AsyncBinding, PendingMode
 from squid_reactivity.topics import Address
+from squid_ui.runtime.async_bindings import async_render_policy
 from squid_ui.runtime.definition import AnyComponent
 from squid_ui.runtime.tree import IncrementalRender, _ComponentRender, _ExpandedSubtree
 from squid_ui.target_types import RenderTarget
@@ -129,7 +130,9 @@ class RenderCache[RenderTargetT: RenderTarget]:
             if cached is None or cached.revision != component.__dict__.get("_state_revision", 0):
                 continue
             atomic = {
-                id(binding): binding for binding in cached.async_bindings if binding.pending_mode is PendingMode.ATOMIC
+                id(binding): binding
+                for binding in cached.async_bindings
+                if async_render_policy(binding).pending_mode is PendingMode.ATOMIC
             }
             moved = tuple(
                 source for source, version in tuple(cached.observation.sources.items()) if source.settle() != version

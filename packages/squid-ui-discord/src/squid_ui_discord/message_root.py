@@ -86,6 +86,7 @@ from squid_ui.profiling import (
     TraceResult,
     TraceStatus,
 )
+from squid_ui.runtime.async_bindings import async_render_policy
 from squid_ui.runtime.component import Component, ComponentTree
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
@@ -1310,7 +1311,11 @@ class MessageRoot[
 
     @staticmethod
     def _pending_resources(tree: ComponentTree[RenderTargetT, Any], pending: PendingMode) -> tuple[AsyncBinding, ...]:
-        return tuple(binding for binding in tree.async_bindings if binding.pending_mode is pending and binding.pending)
+        return tuple(
+            binding
+            for binding in tree.async_bindings
+            if async_render_policy(binding).pending_mode is pending and binding.pending
+        )
 
     async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
         """Settle one observed resource tier concurrently under this render operation.
@@ -1348,7 +1353,9 @@ class MessageRoot[
             done = asyncio.Event()
             delivery_open = self._handle is not None and not self._handle.expired()
             if not delivery_open:
-                bindings = tuple(binding for binding in bindings if binding.settle_without_delivery)
+                bindings = tuple(
+                    binding for binding in bindings if async_render_policy(binding).settle_without_delivery
+                )
                 if not bindings:
                     self._candidates.mark_dirty()
                     return
@@ -1374,7 +1381,8 @@ class MessageRoot[
                     await current_wake.wait()
                     current_wake.clear()
                     live_progress = any(
-                        binding.reconcile_while_pending and binding.pending for binding in current_bindings
+                        async_render_policy(binding).reconcile_while_pending and binding.pending
+                        for binding in current_bindings
                     )
                     while delivery_open and self.runtime.dirty and (current_done.is_set() or live_progress):
                         presented = await self._present_async_update(candidate, through=through, profile=profile)

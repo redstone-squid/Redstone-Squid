@@ -57,11 +57,7 @@ from squid_reactivity.transactions import (
 
 
 class AsyncBinding(Protocol):
-    """A caller-owned asynchronous value discovered during a synchronous render."""
-
-    pending_mode: PendingMode
-    reconcile_while_pending: bool
-    settle_without_delivery: bool
+    """An observed asynchronous value whose loader runs in the caller's task."""
 
     @property
     def pending(self) -> bool: ...
@@ -276,9 +272,6 @@ class Resource[ValueT](AsyncBinding):
     Loads track their dependencies. A later read notices changed versions and
     marks the resource pending again. Concurrent waiters share the current load.
     """
-
-    reconcile_while_pending = False
-    settle_without_delivery = False
 
     def __init__(
         self,

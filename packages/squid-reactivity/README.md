@@ -61,7 +61,9 @@ The package is layered:
   only the standard library and runs loads in the caller's task. Cancellation is the host's:
   `abandon_superseded_loads` installs a `LoadScope` factory -- `anyio.CancelScope` satisfies the
   protocol as it stands -- and a superseded generation is then stopped rather than run to
-  completion. Uninstalled, it runs on and only its result is discarded.
+  completion. Uninstalled, it runs on and only its result is discarded. Resource read
+  modes belong here; UI delivery and pending reconciliation policy lives in
+  `squid_ui.runtime.async_bindings`.
 - `squid_reactivity.operations` separates repeatable definitions from causally identified one-shot
   executions; every retry receives a fresh execution ID and terminal status.
 
