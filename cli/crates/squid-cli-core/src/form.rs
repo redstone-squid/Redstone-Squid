@@ -14,7 +14,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::process::{EditorError, ExternalTextEditor};
-use crate::terminal::sanitize_terminal_text;
+use crate::terminal::{sanitize_terminal_text, single_line_terminal_text};
 use crate::{locale::Locale, locale::MessageKey};
 
 const MAXIMUM_FIELD_CODE_BYTES: usize = 96;
@@ -576,16 +576,6 @@ fn render_options(options: &[ChoiceOption], output: &mut impl Write) -> Result<(
         .map_err(FormError::Io)?;
     }
     Ok(())
-}
-
-fn single_line_terminal_text(value: &str) -> String {
-    sanitize_terminal_text(value)
-        .chars()
-        .map(|character| match character {
-            '\n' | '\r' | '\t' => ' ',
-            other => other,
-        })
-        .collect()
 }
 
 fn read_line(input: &mut impl BufRead, output: &mut impl Write) -> Result<String, FormError> {

@@ -561,10 +561,10 @@ impl ConnectedSession {
                 .ok_or_else(authentication_required)?;
             match operation(&self.client, &token) {
                 Ok(value) => return Ok(value),
-                Err(error) if is_transport_network_failure(&error) && !network_retried => {
+                Err(error) if error.is_network_failure() && !network_retried => {
                     network_retried = true;
                 }
-                Err(error) if is_transport_unauthorized(&error) && !refreshed => {
+                Err(error) if error.is_unauthorized() && !refreshed => {
                     self.refresh()?;
                     refreshed = true;
                     network_retried = false;
@@ -1870,14 +1870,6 @@ fn authentication_required() -> CommandFailure {
     .with_suggested_action(MessageKey::SuggestedLogin)
 }
 
-fn is_transport_unauthorized(error: &TransportError) -> bool {
-    matches!(error, TransportError::Http { status: 401, .. })
-}
-
-fn is_transport_network_failure(error: &TransportError) -> bool {
-    matches!(error, TransportError::Request(_))
-}
-
 fn run_auth(
     command: AuthCommand,
     format: OutputFormat,
@@ -2192,7 +2184,7 @@ fn retry_cli_network_once<T>(
     mut operation: impl FnMut() -> Result<T, CliAuthError>,
 ) -> Result<T, CliAuthError> {
     match operation() {
-        Err(error) if is_network_failure(&error) => operation(),
+        Err(error) if error.is_network_failure() => operation(),
         result => result,
     }
 }
@@ -2884,10 +2876,6 @@ fn is_invalid_session(error: &CliAuthError) -> bool {
             error,
             CliAuthError::Transport(TransportError::Http { status: 401, .. })
         )
-}
-
-fn is_network_failure(error: &CliAuthError) -> bool {
-    matches!(error, CliAuthError::Transport(TransportError::Request(_)))
 }
 
 fn encrypted_state_failure(error: EncryptedStateError) -> CommandFailure {

@@ -20,7 +20,7 @@ use crate::form::{
     parse_integer_answer, parse_repeatable_answer, validate_text_answer,
 };
 use crate::locale::{Locale, MessageKey};
-use crate::terminal::sanitize_terminal_text;
+use crate::terminal::{sanitize_terminal_text, single_line_terminal_text};
 
 const MAXIMUM_TUI_INPUT_CHARACTERS: usize = 1024 * 1024;
 
@@ -376,7 +376,7 @@ fn draw_field(
         ])
         .split(area);
     let required = if field.required { " *" } else { "" };
-    let title = format!("{}{}", single_line(&field.label), required);
+    let title = format!("{}{}", single_line_terminal_text(&field.label), required);
     frame.render_widget(
         Paragraph::new(title)
             .block(
@@ -468,7 +468,10 @@ fn draw_control(
                     } else {
                         " "
                     };
-                ListItem::new(format!("{marker} {}", single_line(&option.label)))
+                ListItem::new(format!(
+                    "{marker} {}",
+                    single_line_terminal_text(&option.label)
+                ))
             });
             frame.render_widget(
                 List::new(items).block(
@@ -493,7 +496,7 @@ fn draw_control(
                 };
                 ListItem::new(format!(
                     "{cursor} [{selected}] {}",
-                    single_line(&option.label)
+                    single_line_terminal_text(&option.label)
                 ))
             });
             frame.render_widget(
@@ -519,16 +522,6 @@ fn footer(field: &FormField, locale: Locale) -> &'static str {
         FormControl::SingleChoice { .. } => locale.message(MessageKey::TuiFooterSingleChoice),
         FormControl::MultipleChoice { .. } => locale.message(MessageKey::TuiFooterMultipleChoice),
     }
-}
-
-fn single_line(value: &str) -> String {
-    sanitize_terminal_text(value)
-        .chars()
-        .map(|character| match character {
-            '\n' | '\r' | '\t' => ' ',
-            other => other,
-        })
-        .collect()
 }
 
 #[cfg(test)]

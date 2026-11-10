@@ -732,6 +732,20 @@ pub enum TransportError {
     Io(#[source] io::Error),
 }
 
+impl TransportError {
+    /// Whether the backend refused the supplied authentication credentials.
+    #[must_use]
+    pub fn is_unauthorized(&self) -> bool {
+        matches!(self, Self::Http { status: 401, .. })
+    }
+
+    /// Whether sending the request failed, rather than receiving an HTTP rejection.
+    #[must_use]
+    pub fn is_network_failure(&self) -> bool {
+        matches!(self, Self::Request(_))
+    }
+}
+
 /// Map an HTTP status to the CLI's stable error class without interpreting localized text.
 #[must_use]
 pub const fn status_class(status: StatusCode) -> crate::exit::ExitStatus {
@@ -1031,10 +1045,8 @@ mod tests {
             ClientInstanceId::generate(),
             &RendererCapabilities::prompt(false),
         )?;
-        let result = client.send_json::<Value>(
-            ApiRequest::new(ApiMethod::Get, "/v1/capabilities"),
-            None,
-        );
+        let result =
+            client.send_json::<Value>(ApiRequest::new(ApiMethod::Get, "/v1/capabilities"), None);
         assert!(matches!(
             result,
             Err(TransportError::Http { status: 302, .. })

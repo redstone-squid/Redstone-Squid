@@ -15,6 +15,18 @@ pub fn sanitize_terminal_text(value: &str) -> String {
         .collect()
 }
 
+/// Sanitize terminal text and flatten retained newlines and tabs into spaces.
+#[must_use]
+pub fn single_line_terminal_text(value: &str) -> String {
+    sanitize_terminal_text(value)
+        .chars()
+        .map(|character| match character {
+            '\n' | '\r' | '\t' => ' ',
+            other => other,
+        })
+        .collect()
+}
+
 fn is_bidirectional_control(character: char) -> bool {
     matches!(
         character,
@@ -28,7 +40,7 @@ fn is_bidirectional_control(character: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_terminal_text;
+    use super::{sanitize_terminal_text, single_line_terminal_text};
 
     #[test]
     fn removes_escape_and_bidi_controls() {
@@ -41,5 +53,13 @@ mod tests {
     #[test]
     fn preserves_unicode_lines_and_tabs() {
         assert_eq!(sanitize_terminal_text("红石\n\tSquid"), "红石\n\tSquid");
+    }
+
+    #[test]
+    fn flattens_labels_after_removing_terminal_controls() {
+        assert_eq!(
+            single_line_terminal_text("红石\n\tSquid\r\u{1b}\u{202e}"),
+            "红石  Squid"
+        );
     }
 }

@@ -438,6 +438,14 @@ pub enum CliAuthError {
     ProofValueTooLong,
 }
 
+impl CliAuthError {
+    /// Whether authorization failed while sending its HTTP request.
+    #[must_use]
+    pub fn is_network_failure(&self) -> bool {
+        matches!(self, Self::Transport(error) if error.is_network_failure())
+    }
+}
+
 /// Invalid or unreadable encrypted authorization state.
 #[derive(Debug, Error)]
 pub enum AuthStateError {
