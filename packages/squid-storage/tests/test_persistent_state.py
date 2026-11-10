@@ -1,6 +1,7 @@
 """Contract tests for the reactive persistence bridge."""
 
-from collections.abc import Mapping
+import asyncio
+from collections.abc import Hashable, Mapping
 from typing import override
 
 import anyio
@@ -279,4 +280,124 @@ async def test_the_factory_can_build_a_model_without_key_metadata(slot: Slot[str
         loaded = await pool.load("guild")
         assert loaded.theme == "dark"
         assert pool.get_existing("guild") is loaded
+        await pool.close()
+
+
+async def test_concurrent_loads_share_one_fully_restored_model(slot: Slot[str, Mapping[str, object]]) -> None:
+    entered, resume, second_started = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    made: list[Preferences] = []
+    loaded: list[Preferences] = []
+
+    class PausedStore(MemoryScopedStore):
+        @override
+        async def get[S: Hashable, V](self, slot: Slot[S, V], scope: S, *, touch: bool = False) -> V | None:
+            entered.set()
+            await resume.wait()
+            return await super().get(slot, scope, touch=touch)
+
+    def make(key: str) -> Preferences:
+        model = Preferences()
+        made.append(model)
+        return model
+
+    store = PausedStore()
+    await store.put(slot, "guild", {"theme": "light"})
+    pool = PersistentStatePool(make, store=store, slot=slot)
+
+    async def load(*, second: bool = False) -> None:
+        if second:
+            second_started.set()
+        loaded.append(await pool.load("guild"))
+
+    async def load_second() -> None:
+        await load(second=True)
+
+    with anyio.fail_after(2):
+        async with anyio.create_task_group() as worker:
+            await worker.start(pool.run)
+            async with anyio.create_task_group() as readers:
+                readers.start_soon(load)
+                await entered.wait()
+                readers.start_soon(load_second)
+                await second_started.wait()
+                assert pool.get_existing("guild") is None
+                assert pool.active() == {}
+                resume.set()
+            assert len(made) == 1
+            assert loaded == [made[0], made[0]]
+            assert made[0].theme == "light"
+            await pool.close()
+
+
+async def test_failed_hydration_can_retry_without_retaining_or_saving_the_failed_model(
+    slot: Slot[str, Mapping[str, object]],
+) -> None:
+    class FailingReadStore(MemoryScopedStore):
+        fail = True
+
+        @override
+        async def get[S: Hashable, V](self, slot: Slot[S, V], scope: S, *, touch: bool = False) -> V | None:
+            if self.fail:
+                self.fail = False
+                raise OSError("read failed")
+            return await super().get(slot, scope, touch=touch)
+
+    made: list[Preferences] = []
+
+    def make(key: str) -> Preferences:
+        model = Preferences()
+        made.append(model)
+        return model
+
+    store = FailingReadStore()
+    pool = PersistentStatePool(make, store=store, slot=slot)
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(pool.run)
+        with pytest.raises(OSError, match="read failed"):
+            await pool.load("guild")
+        assert pool.active() == {}
+        made[0].theme = "unowned"
+        await pool.flush()
+        assert await store.get(slot, "guild") is None
+        loaded = await pool.load("guild")
+        assert loaded is made[1]
+        assert loaded.theme == "dark"
+        await pool.close()
+
+
+async def test_one_model_cannot_restore_two_storage_scopes(slot: Slot[str, Mapping[str, object]]) -> None:
+    model = Preferences()
+    store = MemoryScopedStore()
+    await store.put(slot, "first", {"theme": "light"})
+    await store.put(slot, "second", {"theme": "blue"})
+    pool: PersistentStatePool[str, Preferences] = PersistentStatePool(lambda key: model, store=store, slot=slot)
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(pool.run)
+        assert await pool.load("first") is model
+        with pytest.raises(ValueError, match="different keys"):
+            await pool.load("second")
+        assert pool.get_existing("second") is None
+        assert model.theme == "light"
+        model.theme = "changed"
+        await pool.flush()
+        assert await store.get(slot, "first") == {"theme": "changed"}
+        assert await store.get(slot, "second") == {"theme": "blue"}
+        await pool.close()
+
+
+@pytest.mark.parametrize("invalid_result", [False, True])
+async def test_failed_construction_leaves_no_cached_model(
+    slot: Slot[str, Mapping[str, object]], invalid_result: bool
+) -> None:
+    def make(key: str) -> Preferences:
+        if invalid_result:
+            return object()  # type: ignore[bad-return]  # Exercise a factory that violates its annotation.
+        raise RuntimeError("factory failed")
+
+    pool = PersistentStatePool(make, store=MemoryScopedStore(), slot=slot)
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(pool.run)
+        with pytest.raises(TypeError if invalid_result else RuntimeError):
+            await pool.load("guild")
+        assert pool.active() == {}
         await pool.close()

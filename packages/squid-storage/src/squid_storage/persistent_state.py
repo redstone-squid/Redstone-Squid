@@ -1,7 +1,7 @@
 """Restore shared view state on load and save snapshots after reactive commits.
 
-PersistentStatePool wraps ReactivePool with asynchronous storage. The first
-load creates an instance, restores its saved fields, and only then makes it
+PersistentStatePool retains one model per scope. The first load creates an
+instance, restores its saved fields, and only then makes it
 available to other consumers. Later commits queue snapshots for a worker, so
 storage latency does not hold up the reactive action.
 """
@@ -9,11 +9,12 @@ storage latency does not hold up the reactive action.
 import asyncio
 import logging
 from collections.abc import Callable, Hashable, Mapping
+from types import MappingProxyType
 
 import anyio
 from anyio.abc import TaskStatus
 
-from squid_reactivity import Reactive, ReactivePool, export_state, restore_state
+from squid_reactivity import Reactive, export_state, restore_state
 from squid_storage.scoped import ScopedStore, Slot
 
 _logger = logging.getLogger(__name__)
@@ -42,7 +43,8 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
     ) -> None:
         self.store = store
         self.slot = slot
-        self._pool: ReactivePool[ScopeT, SharedT] = ReactivePool(factory)
+        self._factory = factory
+        self._models: dict[ScopeT, SharedT] = {}
         self._on_error = on_error
         self._listeners: dict[ScopeT, Callable[[], None]] = {}
         self._pending: dict[ScopeT, Mapping[str, object]] = {}
@@ -83,32 +85,39 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
             if self._closing:
                 msg = "persisted pool is closed"
                 raise RuntimeError(msg)
-            existing = self._pool.get_existing(scope)
+            existing = self._models.get(scope)
             if existing is not None:
                 return existing
             if not self._running:
                 msg = "persisted pool is not running; start run() before loading a model"
                 raise RuntimeError(msg)
-            created = self._pool._create(scope)
-            # Restore before adoption: the synchronous pool's normal get() would
-            # expose the instance before its persisted fields had been loaded.
+            created = self._factory(scope)
+            if not isinstance(created, Reactive):
+                msg = "reactive factory must return a Reactive object"
+                raise TypeError(msg)
+            # Sharing an instance across scopes would restore and save different
+            # storage identities through the same mutable state.
+            if any(held is created for held in self._models.values()):
+                msg = "reactive factory reused one object for different keys"
+                raise ValueError(msg)
             values = await self.store.get(self.slot, scope)
             if values is not None:
                 restore_state(created, values)
-            canonical = self._pool._adopt(scope, created)
-            if canonical is created:
-                listener = self._listener_for(created, scope)
-                self._listeners[scope] = listener
-                created._add_commit_listener(listener)
-            return canonical
+            # The load lock covers construction and hydration. Publish only a fully
+            # restored model, and leave failed loads absent so callers can retry.
+            listener = self._listener_for(created, scope)
+            created._add_commit_listener(listener)
+            self._listeners[scope] = listener
+            self._models[scope] = created
+            return created
 
     def get_existing(self, scope: ScopeT) -> SharedT | None:
         """Return the model already loaded for scope, or None. Reads nothing."""
-        return self._pool.get_existing(scope)
+        return self._models.get(scope)
 
     def active(self) -> Mapping[ScopeT, SharedT]:
         """Snapshot the loaded models. Inspection only, so it stays synchronous."""
-        return self._pool.active()
+        return MappingProxyType(dict(self._models))
 
     async def delete(self, scope: ScopeT) -> SharedT | None:
         """Retire a cached handle and detach its persistence listener, preserving stored data.
@@ -118,7 +127,7 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
         commits cannot overwrite the new handle's slot. Return None if the scope was not loaded.
         """
         async with self._load_lock:
-            retired = self._pool.delete(scope)
+            retired = self._models.pop(scope, None)
             if retired is None:
                 return None
             self._detach(retired, scope)
@@ -128,9 +137,9 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
     async def clear(self) -> None:
         """Retire every cached handle as delete does, preserving the stored values."""
         async with self._load_lock:
-            for scope, handle in self._pool.active().items():
+            for scope, handle in tuple(self._models.items()):
                 self._detach(handle, scope)
-            self._pool.clear()
+            self._models.clear()
         await self.flush()
 
     async def flush(self) -> None:
