@@ -390,11 +390,8 @@ def settling(node: _SettlingNode) -> Iterator[None]:
     path = cycle_path(node)
     if path is not None:
         raise ReactiveCycleError(path)
-    token = _SETTLING.set((*_SETTLING.get(), node))
-    try:
+    with _SETTLING.set((*_SETTLING.get(), node)):
         yield
-    finally:
-        _SETTLING.reset(token)
 
 
 _READ_ONLY: ContextVar[object | None] = ContextVar("squid_reactivity_read_only", default=None)
@@ -407,11 +404,8 @@ def read_only() -> Iterator[None]:
     Nested scopes cannot initialize objects belonging to an outer scope. Dependency
     capture is independent: use capture_reads() to collect reads as well.
     """
-    token = _READ_ONLY.set(object())
-    try:
+    with _READ_ONLY.set(object()):
         yield
-    finally:
-        _READ_ONLY.reset(token)
 
 
 def _check_write(owner: ReactiveOwner, name: str) -> None:
@@ -445,11 +439,8 @@ def untracked() -> Iterator[None]:
     handlers already run outside any consumer, so this is for a computed that deliberately
     samples something it does not want to recompute for.
     """
-    token = _CONSUMER.set(None)
-    try:
+    with _CONSUMER.set(None):
         yield
-    finally:
-        _CONSUMER.reset(token)
 
 
 @contextmanager
@@ -460,11 +451,8 @@ def relaxed_read() -> Iterator[None]:
     writes, and any read taken inside :func:`strong_read`. Unlike :func:`untracked`, this
     does not change reactive dependency tracking.
     """
-    token = _RELAXED_READS.set(_RELAXED_READS.get() + 1)
-    try:
+    with _RELAXED_READS.set(_RELAXED_READS.get() + 1):
         yield
-    finally:
-        _RELAXED_READS.reset(token)
 
 
 @contextmanager
@@ -476,11 +464,8 @@ def strong_read() -> Iterator[None]:
     body to make one action serializable over what it read; wrap one read to guard just that
     one. :func:`relaxed_read` nested inside opts a read back out.
     """
-    token = _STRONG_READS.set(_STRONG_READS.get() + 1)
-    try:
+    with _STRONG_READS.set(_STRONG_READS.get() + 1):
         yield
-    finally:
-        _STRONG_READS.reset(token)
 
 
 @dataclass(slots=True)
@@ -898,12 +883,12 @@ class _Transaction:
         Block writes and new participants, and exclude these internal reads from
         the observation report because conflict validation has already run.
         """
-        token = _CURRENT.set(self)
-        try:
-            with block_writes("a transaction participant cannot write while preparing"), relaxed_read():
-                yield
-        finally:
-            _CURRENT.reset(token)
+        with (
+            _CURRENT.set(self),
+            block_writes("a transaction participant cannot write while preparing"),
+            relaxed_read(),
+        ):
+            yield
 
     def commit(self) -> ActionCommit:
         """Prepare everything, publish synchronously, and return the immutable commit."""
@@ -1229,12 +1214,8 @@ def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[Trans
     if outer is not None and (outer.writes or outer.participants or outer.preconditions):
         message = "a fresh action cannot start after the admitting transaction staged changes"
         raise FreshActionError(message)
-    token = _CURRENT.set(None)
-    try:
-        with transaction(action_context=action_context) as handle:
-            yield handle
-    finally:
-        _CURRENT.reset(token)
+    with _CURRENT.set(None), transaction(action_context=action_context) as handle:
+        yield handle
 
 
 @contextmanager
@@ -1718,12 +1699,8 @@ class _Derived:
         self._settled = False
         self._epoch = -1
         self.sources = {}
-        token = _CONSUMER.set(self)
-        try:
-            with settling(self), read_only():
-                value = self._function(self.owner)
-        finally:
-            _CONSUMER.reset(token)
+        with _CONSUMER.set(self), settling(self), read_only():
+            value = self._function(self.owner)
         self._settled = True
         self._view = view
         # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
@@ -1842,11 +1819,8 @@ def capture_reads() -> Iterator[Dependencies]:
     direct dependencies; their upstream notification addresses are resolved on demand.
     """
     dependencies = Dependencies()
-    token = _CONSUMER.set(dependencies)
-    try:
+    with _CONSUMER.set(dependencies):
         yield dependencies
-    finally:
-        _CONSUMER.reset(token)
 
 
 @contextmanager
