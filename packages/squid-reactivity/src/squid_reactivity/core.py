@@ -285,8 +285,7 @@ class _Cell:
 
     def write(self, value: Any) -> None:
         self.value = value
-        self.version += 1
-        _bump_epoch()
+        self.touch()
 
     def touch(self) -> None:
         """Advance the version without replacing the value."""
@@ -763,10 +762,9 @@ class _Transaction:
         Strong reads have a separate first-read version. An earlier ordinary read
         must not become a precondition just because a later read is strong.
         """
-        if cell not in self.observed:
-            self.observed[cell] = cell.version
-        if strong and cell not in self.strong:
-            self.strong[cell] = cell.version
+        self.observed.setdefault(cell, cell.version)
+        if strong:
+            self.strong.setdefault(cell, cell.version)
 
     def check_preconditions(self) -> None:
         """Check required versions before publishing writes or participant changes.
@@ -786,7 +784,7 @@ class _Transaction:
         for cell, version in required.items():
             if cell.version == version:
                 continue
-            detail = ConflictDetail(self.target_id(cell), version, cell.version)
+            detail = ConflictDetail(_slot_name(cell), version, cell.version)
             message = (
                 f"{_slot_name(cell)} changed while this action was running: expected version "
                 f"{version}, found {cell.version}. Nothing was published."
@@ -794,13 +792,10 @@ class _Transaction:
             raise ReactiveConflictError(detail, message)
         _checkpoint("commit.after_validation")
 
-    def target_id(self, cell: _Cell) -> str:
-        return _slot_name(cell)
-
     def require_version(self, cell: _Cell, version: int) -> None:
         existing = self.preconditions.get(cell)
         if existing is not None and existing != version:
-            detail = ConflictDetail(self.target_id(cell), existing, version)
+            detail = ConflictDetail(_slot_name(cell), existing, version)
             raise ReactiveConflictError(detail, "incompatible inverse preconditions")
         self.preconditions[cell] = version
 
@@ -856,8 +851,6 @@ class _Transaction:
 
     def patches(self) -> CellPatchSet:
         """Freeze the physical slot lineage written by this action."""
-        if not self.writes:
-            return CellPatchSet()
         return CellPatchSet(
             tuple(
                 CellPatch(
@@ -872,7 +865,7 @@ class _Transaction:
         )
 
     def reads(self) -> tuple[ObservedRead, ...]:
-        return tuple(ObservedRead(self.target_id(cell), version) for cell, version in self.observed.items())
+        return tuple(ObservedRead(_slot_name(cell), version) for cell, version in self.observed.items())
 
     @contextmanager
     def preparing(self) -> Iterator[None]:
@@ -1583,27 +1576,33 @@ class ComputedReport:
     """Identities of the cells and computeds its last run read, in read order."""
 
 
+def _descriptors[DescriptorT](cls: type, kind: type[DescriptorT]) -> Iterator[tuple[str, DescriptorT]]:
+    """Visit matching declarations base-first, retaining overridden descriptors.
+
+    Callers decide which declarations to keep after applying their own filters.
+    Visiting every match also preserves lazy cell/node creation during inspection.
+    """
+    for base in reversed(cls.__mro__):
+        for name, descriptor in vars(base).items():
+            if isinstance(descriptor, kind):
+                yield name, descriptor
+
+
 def inspect_cells(owner: ReactiveOwner) -> dict[str, CellReport]:
     """Report every declared state field on `owner`, by public name."""
     reports: dict[str, CellReport] = {}
-    for klass in reversed(type(owner).__mro__):
-        for name, descriptor in vars(klass).items():
-            if isinstance(descriptor, _State):
-                cell = descriptor.cell(owner)
-                reports[name] = CellReport(id(cell), cell.settle(), descriptor.is_set(owner), descriptor.opaque)
+    for name, descriptor in _descriptors(type(owner), _State):
+        cell = descriptor.cell(owner)
+        reports[name] = CellReport(id(cell), cell.settle(), descriptor.is_set(owner), descriptor.opaque)
     return reports
 
 
 def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
     """Report every computed on `owner`, without evaluating one that has never run."""
     reports: dict[str, ComputedReport] = {}
-    for klass in reversed(type(owner).__mro__):
-        for name, descriptor in vars(klass).items():
-            if isinstance(descriptor, _Computed):
-                node = descriptor.node(owner)
-                reports[name] = ComputedReport(
-                    id(node), node.evaluated, node.version, tuple(id(source) for source in node.sources)
-                )
+    for name, descriptor in _descriptors(type(owner), _Computed):
+        node = descriptor.node(owner)
+        reports[name] = ComputedReport(id(node), node.evaluated, node.version, tuple(map(id, node.sources)))
     return reports
 
 
@@ -1623,14 +1622,7 @@ def declared_cells(owner: ReactiveOwner) -> dict[_Cell, int]:
 
 
 def _state_fields(owner: ReactiveOwner) -> dict[str, _State]:
-    fields: dict[str, _State] = {}
-    for cls in reversed(type(owner).__mro__):
-        fields.update(
-            (name, descriptor)
-            for name, descriptor in vars(cls).items()
-            if isinstance(descriptor, _State) and descriptor.persist
-        )
-    return fields
+    return {name: descriptor for name, descriptor in _descriptors(type(owner), _State) if descriptor.persist}
 
 
 def export_state(owner: ReactiveOwner) -> dict[str, Any]:
@@ -1896,21 +1888,11 @@ class Reactive:
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        declared = {
-            name: descriptor
-            for klass in reversed(cls.__mro__)
-            for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _State)
-        }
+        declared = dict(_descriptors(cls, _State))
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
         cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
-        cls._computed_descriptors = {
-            name: descriptor
-            for klass in reversed(cls.__mro__)
-            for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _Computed)
-        }
+        cls._computed_descriptors = dict(_descriptors(cls, _Computed))
         required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
         cls.__init__ = _checked_init(cls.__init__, required if cls._reactive_require_state else ())
 
