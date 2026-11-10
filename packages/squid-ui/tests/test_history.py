@@ -617,7 +617,7 @@ def test_memory_outbox_persists_first_intent_at_the_commit_point() -> None:
     with transaction():
         joined = enlist(outbox, lambda: outbox.participant(intent))
         assert joined is not None
-        on_action_commit(lambda commit, continuation: visible_at_commit.append(outbox.records))
+        on_action_commit(lambda commit: visible_at_commit.append(outbox.records))
 
     assert visible_at_commit[0][0].intent == intent
     assert visible_at_commit[0][0].attempts == 0

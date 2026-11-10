@@ -65,7 +65,7 @@ def test_semantic_inverse_preserves_later_remote_sequence_and_commutative_work(
     local, remote, _ = _documents()
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         local.counter("votes").increment(local_amount)
         local.set("tags").add("mine")
         local.text("title").insert(0, "A")
@@ -96,7 +96,7 @@ def test_causally_later_register_write_always_conflicts_the_earlier_action(
     local, remote, _ = _documents()
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         local.map("settings").set("mode", local_value)
     remote.import_update(local.export_since())
     with transaction():

@@ -153,7 +153,7 @@ async def test_post_commit_status_is_observable_without_starting_work_from_rende
         host = UIExecutionHost()
         await tasks.start(host.run)
         with transaction():
-            on_action_commit(lambda commit, continuation: handle._commit(commit, continuation, host))
+            on_action_commit(lambda commit: handle._commit(commit, host))
         await started.wait()
         assert runtime.dirty
         tree = runtime.render(reuse_committed=True)

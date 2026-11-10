@@ -25,7 +25,6 @@ from squid_reactivity.actions import (
     DEFAULT_REDACTION,
     ActionCommit,
     ActionContext,
-    ActionContinuation,
     ActionId,
     ActionPurpose,
     CausalRef,
@@ -565,7 +564,7 @@ class History:
         commits do not create another normal history entry.
         """
 
-        def committed(commit: ActionCommit, continuation: object) -> None:
+        def committed(commit: ActionCommit) -> None:
             if commit.context.kind in {ActionPurpose.UNDO, ActionPurpose.REDO}:
                 return
             self._push(
@@ -626,7 +625,7 @@ class History:
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
-                def committed(commit: ActionCommit, continuation: object) -> None:
+                def committed(commit: ActionCommit) -> None:
                     assert entry is not None
                     self._release_entry(entry)
                     entry.undo_action_id = commit.context.action_id
@@ -833,7 +832,7 @@ class History:
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
-                def committed(commit: ActionCommit, continuation: object) -> None:
+                def committed(commit: ActionCommit) -> None:
                     assert entry is not None
                     self._release_entry(entry)
                     entry.undo_plan = UndoPlan.from_commit(commit)
@@ -890,7 +889,7 @@ class History:
         self._redoable.clear()
         self._signal.notify()
 
-    def _reserve(self, callback: Callable[[ActionCommit, ActionContinuation], None]) -> None:
+    def _reserve(self, callback: Callable[[ActionCommit], None]) -> None:
         current = CURRENT_TRANSACTION.get()
         if current is not None and current.readonly:
             message = "a read-only action changed nothing, so it has nothing to record"

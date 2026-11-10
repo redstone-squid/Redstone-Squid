@@ -28,7 +28,6 @@ from typing import Any, ClassVar, Protocol, Self, overload, override
 from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
-    ActionContinuation,
     ActionPurpose,
     ActionResult,
     ActionRollback,
@@ -637,7 +636,7 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     _check_write(owner, name)
     current = _CURRENT.get()
     if current is None and in_continuation():
-        message = "direct reactive mutation in an continuation hook is forbidden; use continuation.start_action(...)"
+        message = "direct reactive mutation in a result callback is forbidden; open a new transaction(...)"
         raise ReactiveWriteError(message)
     if current is not None and not current.writable():
         current.reject_stale(f"{type(owner).__name__}.{name}")
@@ -669,15 +668,15 @@ class Transaction:
 
     def after_commit(self, callback: Callable[[ActionCommit], None], *, key: object | None = None) -> None:
         self._check_current()
-        on_action_commit(lambda result, continuation: callback(result), key=key)
+        on_action_commit(callback, key=key)
 
     def after_rollback(self, callback: Callable[[ActionRollback], None], *, key: object | None = None) -> None:
         self._check_current()
-        on_action_rollback(lambda result, continuation: callback(result), key=key)
+        on_action_rollback(callback, key=key)
 
     def after_result(self, callback: Callable[[ActionResult], None], *, key: object | None = None) -> None:
         self._check_current()
-        on_action_result(lambda result, continuation: callback(result), key=key)
+        on_action_result(callback, key=key)
 
     def _check_current(self) -> None:
         current = _CURRENT.get()
@@ -712,15 +711,9 @@ class _Transaction:
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
-    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, ActionContinuation], None]]] = field(
-        default_factory=list
-    )
-    rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, ActionContinuation], None]]] = field(
-        default_factory=list
-    )
-    result_hooks: list[tuple[object | None, Callable[[ActionResult, ActionContinuation], None]]] = field(
-        default_factory=list
-    )
+    commit_hooks: list[tuple[object | None, Callable[[ActionCommit], None]]] = field(default_factory=list)
+    rollback_hooks: list[tuple[object | None, Callable[[ActionRollback], None]]] = field(default_factory=list)
+    result_hooks: list[tuple[object | None, Callable[[ActionResult], None]]] = field(default_factory=list)
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
@@ -1102,16 +1095,15 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
 
 def _notify_hooks(
     result: ActionResult,
-    hooks: Sequence[tuple[object | None, Callable[[Any, ActionContinuation], None]]],
+    hooks: Sequence[tuple[object | None, Callable[[Any], None]]],
 ) -> None:
     if not hooks:
         return
-    continuation = ActionContinuation(result)
     with continuation_callback():
         for _, callback in hooks:
             _checkpoint("continuation.before_hook")
             try:
-                callback_result = callback(result, continuation)
+                callback_result = callback(result)
                 if inspect.isawaitable(callback_result):
                     if inspect.iscoroutine(callback_result):
                         callback_result.close()
@@ -1312,27 +1304,21 @@ def readonly_transaction(*, action_context: ActionContext | None = None) -> Iter
         _emit_commit(current, commit)
 
 
-def on_action_commit(
-    callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None
-) -> None:
+def on_action_commit(callback: Callable[[ActionCommit], None], *, key: object | None = None) -> None:
     """Register a synchronous callback for a successful commit.
 
     Call inside a transaction. Callback failures are reported without changing
-    the result. Use the supplied continuation to start a new action for writes.
+    the result. Open a new transaction for writes; caused_by=result.context links it to this action.
     """
     _add_action_hook("commit", callback, key=key)
 
 
-def on_action_rollback(
-    callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None
-) -> None:
+def on_action_rollback(callback: Callable[[ActionRollback], None], *, key: object | None = None) -> None:
     """Register a synchronous callback after rollback; its errors are reported."""
     _add_action_hook("rollback", callback, key=key)
 
 
-def on_action_result(
-    callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None
-) -> None:
+def on_action_result(callback: Callable[[ActionResult], None], *, key: object | None = None) -> None:
     """Register a synchronous callback for either commit or rollback."""
     _add_action_hook("result", callback, key=key)
 

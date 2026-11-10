@@ -200,7 +200,7 @@ class ActionResponder:
             callback,
             name=name or getattr(callback, "__qualname__", type(callback).__qualname__),
         )
-        on_action_commit(lambda commit, continuation: operation._commit(commit, continuation, host))
+        on_action_commit(lambda commit: operation._commit(commit, host))
         on_action_rollback(operation._discard)
         self._after_commit.append(operation)
         return operation

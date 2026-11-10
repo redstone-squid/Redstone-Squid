@@ -13,7 +13,6 @@ keeping component renders synchronous.
 from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
-    ActionContinuation,
     ActionLedger,
     ActionPurpose,
     ActionResult,
@@ -102,7 +101,6 @@ from squid_reactivity.topics import (
 __all__ = [
     "ActionCommit",
     "ActionContext",
-    "ActionContinuation",
     "ActionLedger",
     "ActionPurpose",
     "ActionResult",

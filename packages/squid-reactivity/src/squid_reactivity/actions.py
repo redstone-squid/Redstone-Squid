@@ -674,31 +674,6 @@ def emit_continuation_failure(result: ActionResult, stage: str, callback: str, e
     )
 
 
-class ActionContinuation:
-    """Start work linked to an action that has already committed or rolled back."""
-
-    def __init__(self, result: ActionResult) -> None:
-        self.result = result
-
-    @contextmanager
-    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.RECOVERY) -> Iterator[ActionContext]:
-        """Start a fresh causal action and transaction."""
-        from squid_reactivity.core import fresh_action_transaction
-
-        context = ActionContext.create(
-            name,
-            kind=kind,
-            cause=self.result.context.causal_ref(),
-            root_action_id=self.result.context.root_action_id,
-        )
-        with fresh_action_transaction(action_context=context):
-            yield context
-
-    def start_operation[ResultT](self, start: Callable[[CausalRef, ActionId], ResultT]) -> ResultT:
-        """Start application-owned work with immutable cause and root identifiers."""
-        return start(self.result.context.causal_ref(), self.result.context.root_action_id)
-
-
 @contextmanager
 def continuation_callback() -> Iterator[None]:
     """Mark this with block as continuation work after an action result."""

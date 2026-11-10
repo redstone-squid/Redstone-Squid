@@ -178,7 +178,7 @@ class TestStaging:
         panel.declared = 1
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, continuation: seen.append(commit))
+            on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 2
             panel.declared = 3
         (commit,) = seen
@@ -462,7 +462,7 @@ class TestActionCommitHooks:
         assert panel.declared == 0
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, continuation: seen.append(commit))
+            on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -473,7 +473,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(Uncopyable()))
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, continuation: seen.append(commit))
+            on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -483,7 +483,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(Uncopyable()))
         seen: list[ActionCommit] = []
         with pytest.raises(RuntimeError), transaction():
-            on_action_commit(lambda commit, continuation: seen.append(commit))
+            on_action_commit(lambda commit: seen.append(commit))
             panel.declared = 7
             message = "the action failed"
             raise RuntimeError(message)
@@ -494,7 +494,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(service))
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, continuation: seen.append(commit))
+            on_action_commit(lambda commit: seen.append(commit))
             panel.service = Uncopyable()
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -503,9 +503,9 @@ class TestActionCommitHooks:
     def test_one_key_registers_once(self):
         key = object()
         with transaction():
-            on_action_commit(lambda commit, continuation: None, key=key)
+            on_action_commit(lambda commit: None, key=key)
             with pytest.raises(RuntimeError, match="already registered"):
-                on_action_commit(lambda commit, continuation: None, key=key)
+                on_action_commit(lambda commit: None, key=key)
 
     def test_blocked_writes_name_their_reason(self):
         panel = attached(Panel(Uncopyable()))
@@ -709,7 +709,7 @@ class TestCommitFailures:
         """A failed commit observer must not roll back state or suppress invalidation."""
         panel = watched()
 
-        def explode(commit: ActionCommit, continuation) -> None:
+        def explode(commit: ActionCommit) -> None:
             message = "the recorder failed"
             raise RuntimeError(message)
 
@@ -724,7 +724,7 @@ class TestCommitFailures:
         log: list[str] = []
         panel = watched()
         with transaction():
-            on_action_commit(lambda commit, continuation: log.append("hook"))
+            on_action_commit(lambda commit: log.append("hook"))
             enlist(object(), lambda: Recorder(log, "a"))
             panel.declared = 7
         assert log == ["a.prepare", "a.apply", "a.finalize", "hook"]

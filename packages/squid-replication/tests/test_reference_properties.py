@@ -56,7 +56,7 @@ def test_semantic_inverse_preserves_later_remote_work(local_amount: int, remote_
     remote = Replica("remote").open("project")
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         local.counter("votes").increment(local_amount)
         local.set("tags").add("mine")
     remote.import_update(local.export_since())
@@ -85,7 +85,7 @@ def _sync(replicas: list[ReplicatedDocument], order: list[int]) -> None:
 def _discard(document: ReplicatedDocument, value: str) -> ReplicationChangeToken:
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         document.set("tags").discard(value)
     token = commits[0].participant_changes[0].token
     assert isinstance(token, ReplicationChangeToken)

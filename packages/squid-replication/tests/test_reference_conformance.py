@@ -250,7 +250,7 @@ def test_action_token_selectively_inverts_counter_and_add_after_remote_work() ->
     remote = Replica("b").open("project")
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         local.counter("votes").increment(2)
         local.set("tags").add("mine")
     remote.import_update(local.export_since())
@@ -281,7 +281,7 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
         local.set("tags").discard("shared")
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         remote.set("tags").discard("shared")
     local.import_update(remote.export_since())
 
@@ -341,7 +341,7 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
     source = Replica("a").open("project")
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         source.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
     assert isinstance(token, ReplicationChangeToken)
@@ -408,7 +408,7 @@ def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> 
     document = Replica("a").open("project")
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         document.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
 
@@ -424,7 +424,7 @@ def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
     document = Replica("a").open("project")
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         document.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
@@ -441,7 +441,7 @@ def test_durable_history_token_rejects_wrong_document_and_schema() -> None:
     source = Replica("a").open("source")
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         source.counter("votes").increment(1)
     token = commits[0].participant_changes[0].token
     assert isinstance(token, ReplicationChangeToken)

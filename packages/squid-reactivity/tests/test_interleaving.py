@@ -118,7 +118,7 @@ def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> N
 
     hook_schedule = InterleavingHarness()
     with hook_schedule.installed(), transaction():
-        on_action_commit(lambda commit, continuation: (_ for _ in ()).throw(RuntimeError("hook")))
+        on_action_commit(lambda commit: (_ for _ in ()).throw(RuntimeError("hook")))
     assert "continuation.before_hook" in hook_schedule.seen
 
 

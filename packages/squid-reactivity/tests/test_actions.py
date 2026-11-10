@@ -112,7 +112,7 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
     with pytest.raises(RuntimeError, match="failed"), transaction():
         preferences.theme = "dark"
 
-        def observe(rollback, continuation) -> None:
+        def observe(rollback) -> None:
             seen.append((rollback.reason.value, preferences.theme))
 
         on_action_rollback(observe)
@@ -176,7 +176,7 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
     counter = Counter()
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         counter.value = committed_value
     inverse = commits[0].patches.inverse()
 
@@ -196,7 +196,7 @@ def test_retained_patch_uses_weak_slot_authority() -> None:
     owner = weakref.ref(counter)
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         counter.value = 1
     inverse = commits[0].patches.inverse()
 
@@ -258,7 +258,7 @@ def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
 def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) -> None:
     preferences = Preferences()
 
-    def fail(commit, continuation) -> None:
+    def fail(commit) -> None:
         raise RuntimeError("hook failed")
 
     with caplog.at_level(logging.ERROR), transaction():
@@ -273,7 +273,7 @@ def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
     ledger = ActionLedger()
     add_action_result_sink(ledger)
 
-    def fail(commit, continuation) -> None:
+    def fail(commit) -> None:
         raise RuntimeError("secret hook detail")
 
     try:
@@ -366,7 +366,7 @@ def test_continuation_direct_mutation_is_rejected() -> None:
     preferences = Preferences()
     errors: list[Exception] = []
 
-    def mutate(commit, continuation) -> None:
+    def mutate(commit) -> None:
         try:
             preferences.theme = "forbidden"
         except Exception as error:
@@ -386,8 +386,8 @@ def test_continuation_recovery_is_a_fresh_causally_linked_action() -> None:
     ledger = ActionLedger()
     add_action_result_sink(ledger)
 
-    def recover(rollback, continuation) -> None:
-        with continuation.start_action("present error"):
+    def recover(rollback) -> None:
+        with transaction("present error", caused_by=rollback.context):
             preferences.theme = "recovered"
 
     try:
@@ -467,7 +467,7 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     add_action_result_sink(ledger)
     try:
         with pytest.raises(RuntimeError), transaction(action_context=context):
-            on_action_rollback(lambda rollback, continuation: rollbacks.append(rollback))
+            on_action_rollback(lambda rollback: rollbacks.append(rollback))
             raise RuntimeError("private failure message")
     finally:
         ledger.close()

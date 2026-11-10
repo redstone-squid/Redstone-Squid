@@ -24,7 +24,7 @@ def _replica(name: str, peer_id: int) -> Replica:
 def _record(callback: Callable[[], object]) -> ReplicationChangeToken:
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, continuation: commits.append(commit))
+        on_action_commit(lambda commit: commits.append(commit))
         callback()
     token = commits[0].participant_changes[0].token
     assert isinstance(token, ReplicationChangeToken)
