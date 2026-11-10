@@ -113,8 +113,9 @@ Apply targeted cell changes, optionally conditioned on what the writer last saw.
 
 ## Actions
 
-An action is one named, attributable unit of work. These names identify the running action,
-control its transaction, and describe its outcome.
+An action is an identified transaction. `transaction(name, actor=..., caused_by=...)` yields a
+`Transaction` whose context is available immediately and whose result is set when the outer
+block finishes. Nested blocks share the handle. Callbacks receive the completed result.
 
 ::: squid_reactivity.action_scope
 
@@ -130,7 +131,9 @@ control its transaction, and describe its outcome.
 
 ::: squid_reactivity.ActionRollback
 
-::: squid_reactivity.ActionContinuation
+::: squid_reactivity.Transaction
+
+::: squid_reactivity.ActionRelation
 
 ::: squid_reactivity.ActorRef
 
@@ -146,14 +149,14 @@ control its transaction, and describe its outcome.
 
 ## Observing results
 
-Sinks observe redacted snapshots of committed and rolled-back actions -- the seam for audit
-logs and telemetry.
+Observer scopes deliver diagnostic snapshots for actions, operations, resource loads, and
+callback failures. Each scope owns its registration and redaction policy. Tasks inherit active
+registrations, but delivery stops when the owning scope exits. Ledgers and encoded sinks do
+not register themselves; applications own their storage and retention.
 
-::: squid_reactivity.action_result_sink
+::: squid_reactivity.observe_events
 
-::: squid_reactivity.add_action_result_sink
-
-::: squid_reactivity.remove_action_result_sink
+::: squid_reactivity.EventSink
 
 ::: squid_reactivity.on_action_commit
 
@@ -167,13 +170,13 @@ logs and telemetry.
 
 ::: squid_reactivity.ActionResultCodec
 
-::: squid_reactivity.ActionLedger
+::: squid_reactivity.EventLedger
 
 ::: squid_reactivity.RedactionPolicy
 
-::: squid_reactivity.DurableResultPolicy
+::: squid_reactivity.EventCodec
 
-::: squid_reactivity.DurableResultSink
+::: squid_reactivity.EncodedEventSink
 
 ::: squid_reactivity.CausalEventSnapshot
 

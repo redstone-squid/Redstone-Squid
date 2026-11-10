@@ -44,7 +44,7 @@ For restoration and saving across restarts, use `squid_storage.PersistentStatePo
 The package is layered:
 
 - `squid_reactivity.actions` provides sortable action IDs, causal contexts, immutable terminal
-  outcomes, bounded ledgers, aftermath authority, and portable redacted schema version 1.
+  outcomes, scoped diagnostic observers, and portable event encoding.
 - `squid_reactivity.core` provides state cells, computed values, full strong-read OCC,
   version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
 - Every `Reactive` field has an identity address. Consumers subscribe directly without a host-supplied bus.
@@ -65,6 +65,42 @@ taken inside `strong_read()`, or when it was pinned with `require_version()`; a 
 not validated by default. `relaxed_read()` opts a read out of that validation;
 `untracked()` independently opts out of dependency capture. Commit and rollback aftermath hooks are
 failure-isolated and cannot mutate through a completed transaction. Recovery starts a new causal action.
+
+An action is an identified transaction. The yielded handle exposes its context immediately
+and its `result` after the outer block finishes, including when the block raises. Nested
+transactions share the outer handle.
+
+```python
+from squid_reactivity import ActionCommit, EventLedger, observe_events
+
+
+def record_commit(result: ActionCommit) -> None:
+    print(result.context.name, len(result.patches))
+
+
+ledger = EventLedger(limit=100)
+with observe_events(ledger):
+    with transaction("Increment counter") as tx:
+        tx.after_commit(record_commit)
+        counter.count += 1
+
+assert isinstance(tx.result, ActionCommit)
+```
+
+`after_commit`, `after_rollback`, and `after_result` receive one completed result. A callback
+that needs to write opens `transaction("Follow up", caused_by=result.context)`; it cannot
+write directly into a completed transaction. `ActionRelation` separately describes which
+historical action an undo, redo, or compensation targets.
+
+`observe_events(sink, redaction=RedactionPolicy(...))` observes actions, operations, resource
+loads, and callback failures in its execution scope. Child tasks inherit the registration;
+leaving the scope disables it in those tasks too. Independent scopes do not see each other's
+work. The observer applies its policy before delivery, omitting metadata and redacting exception messages
+by default. Rich transaction results remain available to their caller independently of observers.
+
+`EventLedger` stores recent events without registering itself. `EncodedEventSink(EventCodec(), append)`
+encodes every event variant and calls an application-owned writer; the application controls storage
+and retention. `ActionResultCodec` remains available for the existing version-one action format.
 
 `LocalTopicBus.publish()` delivers synchronously in registration order. If a subscriber raises,
 the bus reports it through `on_subscriber_error`, continues delivering to the remaining
