@@ -252,7 +252,7 @@ async def test_registered_claim_provider_uses_full_plain_labels(java_name: str |
     identity = (
         AccountIdentity.discord(555) if java_name is None else AccountIdentity.java(JAVA_UUID, username=java_name)
     )
-    claim = _claim(Account(identities=(identity,), consent=None, id=42, created_at=NOW, public_creator_id=None))
+    claim = _claim(Account(identities=(identity,), consent=None, id=42, created_at=NOW, public_creator_id=OTHER_UUID))
 
     class Claims:
         async def pending_alias_claims(self, *, with_claimants: bool = False) -> tuple[AliasClaim, ...]:
@@ -261,7 +261,8 @@ async def test_registered_claim_provider_uses_full_plain_labels(java_name: str |
 
     (candidate,) = await AliasClaimProvider(Claims()).candidates(SuggestionRequest(source="alias_claims_pending"))
 
-    assert candidate.suggestion.description == ("Discord user 555" if java_name is None else java_name)
+    # A public creator ID takes precedence over a Discord identity when no Java name is available.
+    assert candidate.suggestion.description == (f"creator {OTHER_UUID}" if java_name is None else java_name)
 
 
 # Account-panel unlink interactions are covered in ``test_account_panel.py``.
