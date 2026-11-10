@@ -24,7 +24,7 @@ class AccentDefault(StrEnum):
 
 
 INHERIT = AccentDefault.INHERIT
-type Accent = Color | None | AccentDefault
+type Accent = Color | AccentDefault | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +56,8 @@ class PaletteRegistry:
         self._palettes = dict(palettes)
         self._validate_name(default)
         if default not in self._palettes:
-            raise KeyError(f"default palette {default!r} is not registered")
+            message = f"default palette {default!r} is not registered"
+            raise KeyError(message)
         self._default = default
 
     def register(self, name: str, palette: Palette) -> None:
@@ -70,19 +71,22 @@ class PaletteRegistry:
         try:
             return self._palettes[selected]
         except KeyError:
-            raise KeyError(f"unknown palette {selected!r}") from None
+            message = f"unknown palette {selected!r}"
+            raise KeyError(message) from None
 
     def set_default(self, name: str) -> None:
         """Select the registered palette used by an unnamed resolution."""
         self._validate_name(name)
         if name not in self._palettes:
-            raise KeyError(f"unknown palette {name!r}")
+            message = f"unknown palette {name!r}"
+            raise KeyError(message)
         self._default = name
 
     @staticmethod
     def _validate_name(name: str) -> None:
         if not name:
-            raise ValueError("palette names must not be empty")
+            message = "palette names must not be empty"
+            raise ValueError(message)
 
 
 DEFAULT_PALETTE = Palette()
