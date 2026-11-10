@@ -5,6 +5,7 @@ from typing import cast
 
 from squid.settings.application.ports import SettingsUnitOfWork
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
+from squid.settings.domain.runtime import RuntimeSettings
 from squid.unit_of_work import UnitOfWorkFactory
 
 _CHANNEL_FIELDS: dict[Setting, str] = {
@@ -19,8 +20,38 @@ _CHANNEL_FIELDS: dict[Setting, str] = {
 class SettingsService:
     """Read and update server settings in short transactions."""
 
-    def __init__(self, *, uow_factory: UnitOfWorkFactory[SettingsUnitOfWork]) -> None:
+    def __init__(
+        self,
+        *,
+        uow_factory: UnitOfWorkFactory[SettingsUnitOfWork],
+        runtime_defaults: RuntimeSettings | None = None,
+    ) -> None:
         self._uow_factory = uow_factory
+        self._runtime_defaults = runtime_defaults or RuntimeSettings()
+
+    async def get_runtime(self) -> RuntimeSettings:
+        """Read current settings, persisting deployment defaults on first use."""
+        async with self._uow_factory() as uow:
+            row = await uow.settings.runtime(self._runtime_defaults)
+            result = RuntimeSettings.model_validate(row)
+            await uow.commit()
+            return result
+
+    async def update_runtime(self, changes: Mapping[str, object], *, actor_discord_id: int) -> RuntimeSettings:
+        """Validate and audit a patch atomically. The caller must authorize the actor.
+
+        Locking the singleton prevents concurrent patches from losing unrelated changes.
+        """
+        async with self._uow_factory() as uow:
+            row = await uow.settings.runtime(self._runtime_defaults, for_update=True)
+            before = RuntimeSettings.model_validate(row)
+            after = RuntimeSettings.model_validate(before.model_dump() | dict(changes))
+            if before != after:
+                for field, value in after.model_dump().items():
+                    setattr(row, field, value)
+                await uow.settings.record_runtime_change(actor_discord_id, before, after)
+            await uow.commit()
+            return after
 
     async def guild_joined(self, server_id: int) -> None:
         """Mark the bot as present, creating settings if this is its first visit."""

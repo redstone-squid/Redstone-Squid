@@ -3,13 +3,22 @@
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import replace
 
-from squid.settings.models import ServerSetting
+from squid.settings.domain.runtime import RuntimeSettings
+from squid.settings.models import RuntimeSetting, ServerSetting
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
 class FakeSettingsRepository:
     def __init__(self, rows: dict[int, ServerSetting]) -> None:
         self.rows = rows
+
+    async def runtime(self, defaults: RuntimeSettings, *, for_update: bool = False) -> RuntimeSetting:
+        raise NotImplementedError
+
+    async def record_runtime_change(
+        self, actor_discord_id: int, before: RuntimeSettings, after: RuntimeSettings
+    ) -> None:
+        raise NotImplementedError
 
     async def get(self, server_id: int, *, for_update: bool = False) -> ServerSetting | None:
         return self.rows.get(server_id)

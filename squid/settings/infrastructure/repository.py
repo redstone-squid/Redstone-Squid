@@ -6,7 +6,8 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.settings.models import ServerSetting
+from squid.settings.domain.runtime import RuntimeSettings
+from squid.settings.models import RuntimeSetting, RuntimeSettingChange, ServerSetting
 
 
 async def ensure_server_settings(session: AsyncSession, server_ids: Iterable[int | None]) -> Sequence[int]:
@@ -44,6 +45,26 @@ class SettingsRepository:
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
+
+    async def runtime(self, defaults: RuntimeSettings, *, for_update: bool = False) -> RuntimeSetting:
+        session = self._session()
+        # Seed from deployment configuration once; subsequent processes never overwrite it.
+        await session.execute(insert(RuntimeSetting).values(id=1, **defaults.model_dump()).on_conflict_do_nothing())
+        statement = select(RuntimeSetting).where(RuntimeSetting.id == 1)
+        if for_update:
+            statement = statement.with_for_update()
+        return (await session.scalars(statement)).one()
+
+    async def record_runtime_change(
+        self, actor_discord_id: int, before: RuntimeSettings, after: RuntimeSettings
+    ) -> None:
+        self._session().add(
+            RuntimeSettingChange(
+                actor_discord_id=actor_discord_id,
+                before=before.model_dump(mode="json"),
+                after=after.model_dump(mode="json"),
+            )
+        )
 
     async def get(self, server_id: int, *, for_update: bool = False) -> ServerSetting | None:
         statement = select(ServerSetting).where(ServerSetting.server_id == server_id)

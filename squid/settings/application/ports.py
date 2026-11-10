@@ -3,12 +3,19 @@
 from collections.abc import Collection, Iterable, Sequence
 from typing import Protocol
 
-from squid.settings.models import ServerSetting
+from squid.settings.domain.runtime import RuntimeSettings
+from squid.settings.models import RuntimeSetting, ServerSetting
 from squid.unit_of_work import UnitOfWork
 
 
 class SettingsStore(Protocol):
     """Settings entities attached to the caller's transaction."""
+
+    async def runtime(self, defaults: RuntimeSettings, *, for_update: bool = False) -> RuntimeSetting: ...
+
+    async def record_runtime_change(
+        self, actor_discord_id: int, before: RuntimeSettings, after: RuntimeSettings
+    ) -> None: ...
 
     async def get(self, server_id: int, *, for_update: bool = False) -> ServerSetting | None: ...
 
