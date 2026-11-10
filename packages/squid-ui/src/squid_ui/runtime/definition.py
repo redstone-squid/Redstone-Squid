@@ -74,9 +74,7 @@ class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
     _owned_services: ServiceOwner | None = None
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
-    _reactive_internal_attributes = frozenset(
-        {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
-    )
+    _reactive_internal_attributes = frozenset({"_runtime", "_parent", "_loaded", "_state_revision"})
 
     @override
     def on_state_rollback(self) -> None:
@@ -142,11 +140,9 @@ class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
     @override
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
-        dependency = vars(self).get("_dependency_invalidation", False)
-        if not dependency:
-            vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1
+        vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1
         if self._runtime is not None:
-            self._runtime.invalidate(self, check_dependencies=dependency)
+            self._runtime.invalidate(self)
         elif self._parent is not None:
             self._parent.invalidate()
 

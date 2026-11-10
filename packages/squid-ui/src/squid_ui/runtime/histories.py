@@ -90,15 +90,6 @@ class HistoryResultStatus(Enum):
     NEEDS_RECONCILIATION = "needs_reconciliation"
 
 
-class UndoMode(Enum):
-    """Whether undo must preserve state changes made after the recorded action.
-
-    CONDITIONAL checks versions before restoring values.
-    """
-
-    CONDITIONAL = "conditional"
-
-
 class HistoryOwner(Protocol):
     """Receive invalidation when a history stack changes.
 
@@ -459,7 +450,6 @@ class HistoryEntry:
     compensation: CompensationSpec | None = None
     original_commit: ActionCommit | None = None
     compensation_execution: CompensationExecution | None = None
-    mode: UndoMode = UndoMode.CONDITIONAL
     retentions: tuple[object, ...] = ()
 
 
@@ -573,7 +563,6 @@ class History:
         label: TextLike,
         *,
         compensate: CompensationSpec | None = None,
-        mode: UndoMode = UndoMode.CONDITIONAL,
     ) -> None:
         """Reserve this history's entry for the current writable action.
 
@@ -592,7 +581,6 @@ class History:
                     UndoPlan.from_commit(commit),
                     compensation=compensate,
                     original_commit=commit,
-                    mode=mode,
                 )
             )
 
@@ -1063,7 +1051,6 @@ __all__ = [
     "MemoryCompensationOutbox",
     "RedoResult",
     "TransactionalCompensationOutbox",
-    "UndoMode",
     "UndoPlan",
     "UndoResult",
     "history",
