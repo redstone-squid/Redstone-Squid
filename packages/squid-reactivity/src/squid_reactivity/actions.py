@@ -10,12 +10,11 @@ their later results can still be traced to the initiating action.
 import json
 import logging
 import uuid
-import weakref
 from collections import deque
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from contextvars import ContextVar
-from dataclasses import dataclass, field
+from contextvars import Context, ContextVar
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from types import MappingProxyType
@@ -459,58 +458,116 @@ class ActionResultCodec:
         )
 
 
-class ActionResultSink(Protocol):
-    """A synchronous consumer of retention-safe causal events."""
+class EventCodec:
+    """Encode all diagnostic event variants in a versioned JSON envelope.
 
-    def accept(self, result: CausalEventSnapshot) -> None: ...
+    Action payloads retain the ActionResultCodec format. Encoding preserves the
+    supplied event; observer scopes apply redaction before a sink receives it.
+    """
+
+    schema_version = 1
+    max_encoded_bytes = 1_048_576
+
+    def encode(self, event: CausalEventSnapshot) -> bytes:
+        if isinstance(event, ActionResultSnapshot):
+            kind = "action"
+            payload = json.loads(ActionResultCodec().encode(event))
+        else:
+            kind = {
+                OperationEventSnapshot: "operation",
+                ResourceEventSnapshot: "resource",
+                ContinuationFailureSnapshot: "continuation_failure",
+            }[type(event)]
+            payload = asdict(event)
+            payload["timestamp"] = event.timestamp.isoformat()
+        return json.dumps(
+            {"schema": self.schema_version, "event": kind, "data": payload}, sort_keys=True, separators=(",", ":")
+        ).encode()
+
+    def decode(self, data: bytes) -> CausalEventSnapshot:
+        if len(data) > self.max_encoded_bytes:
+            message = "event exceeds the maximum encoded size"
+            raise ValueError(message)
+        try:
+            envelope = json.loads(data)
+            if envelope["schema"] != self.schema_version:
+                message = "unsupported event schema"
+                raise ValueError(message)  # noqa: TRY301 - unify malformed input errors below.
+            kind, payload = envelope["event"], envelope["data"]
+            if kind == "action":
+                return ActionResultCodec().decode(json.dumps(payload).encode())
+            timestamp = datetime.fromisoformat(payload["timestamp"])
+            cause = payload["cause"]
+            cause = None if cause is None else CausalRef(cause["kind"], cause["identity"])
+            report = payload["exception"]
+            report = None if report is None else ExceptionReport(report["type_name"], report["message"])
+            if kind == "operation":
+                return OperationEventSnapshot(
+                    payload["execution_id"],
+                    payload["root_action_id"],
+                    cause,
+                    payload["name"],
+                    payload["status"],
+                    timestamp,
+                    report,
+                )
+            if kind == "resource":
+                return ResourceEventSnapshot(
+                    payload["generation_id"],
+                    payload["root_action_id"],
+                    cause,
+                    payload["name"],
+                    payload["status"],
+                    timestamp,
+                    report,
+                )
+            if kind == "continuation_failure" and cause is not None and report is not None:
+                return ContinuationFailureSnapshot(
+                    payload["failure_id"],
+                    payload["root_action_id"],
+                    cause,
+                    payload["stage"],
+                    payload["callback"],
+                    timestamp,
+                    report,
+                )
+            message = "unknown or incomplete event variant"
+            raise ValueError(message)  # noqa: TRY301 - unify malformed input errors below.
+        except (UnicodeDecodeError, KeyError, TypeError, AttributeError, ValueError) as error:
+            message = "event has a corrupt or unsupported schema"
+            raise ValueError(message) from error
 
 
-@dataclass(frozen=True, slots=True)
-class DurableResultPolicy:
-    """The privacy, storage, and retention declaration for an encoded result sink."""
+class EventSink(Protocol):
+    """A synchronous consumer of retention-safe diagnostic events."""
 
-    redaction: RedactionPolicy = DEFAULT_REDACTION
-    value_serialization: str = "summaries-only"
-    actor_privacy: str = "application-controlled"
-    encryption: str = "host-responsibility"
-    retention: str = "host-defined"
+    def accept(self, event: CausalEventSnapshot, /) -> None: ...
 
 
-class DurableResultSink:
-    """Encode committed/rolled-back results for a host store. Calling :meth:`close` unregisters it."""
+class EncodedEventSink:
+    """Encode events and pass them to application-owned storage.
 
-    def __init__(
-        self,
-        append: Callable[[bytes], None],
-        *,
-        policy: DurableResultPolicy | None = None,
-        codec: ActionResultCodec | None = None,
-    ) -> None:
+    Register with observe_events to receive events. The application owns the
+    append callback and its storage, retention, and durability guarantees.
+    """
+
+    def __init__(self, codec: EventCodec, append: Callable[[bytes], None]) -> None:
+        self.codec = codec
         self.append = append
-        self.policy = DurableResultPolicy() if policy is None else policy
-        self.codec = codec or ActionResultCodec()
-        self.closed = False
-        add_action_result_sink(self, policy=self.policy.redaction)
 
-    def accept(self, result: CausalEventSnapshot) -> None:
-        if isinstance(result, ActionResultSnapshot):
-            self.append(self.codec.encode(result))
-
-    def close(self) -> None:
-        self.closed = True
-        remove_action_result_sink(self)
+    def accept(self, event: CausalEventSnapshot) -> None:
+        self.append(self.codec.encode(event))
 
 
-class ActionLedger:
+class EventLedger:
     """Keep the most recent diagnostic events, up to the configured limit.
 
-    Register this ledger with add_action_result_sink or action_result_sink to
-    receive events. Calling close removes that registration.
+    Pass this ledger to observe_events to collect events within an execution scope.
     """
 
     def __init__(self, limit: int = 100) -> None:
         if limit < 1:
-            message = "an action ledger needs room for at least one result"
+            message = "an event ledger needs room for at least one event"
             raise ValueError(message)
         self._events: deque[CausalEventSnapshot] = deque(maxlen=limit)
 
@@ -525,21 +582,18 @@ class ActionLedger:
     def results(self) -> tuple[ActionResultSnapshot, ...]:
         return tuple(event for event in self._events if isinstance(event, ActionResultSnapshot))
 
-    def close(self) -> None:
-        remove_action_result_sink(self)
-
 
 _RUNTIME_ID = uuid.uuid4()
 _sequence = 0
 
 
-@dataclass(frozen=True, slots=True)
-class _SinkRegistration:
-    reference: weakref.ReferenceType[ActionResultSink]
-    policy: RedactionPolicy
+@dataclass(slots=True)
+class _Observer:
+    sink: EventSink | None
+    redaction: RedactionPolicy
 
 
-_sinks: list[_SinkRegistration] = []
+_observers: ContextVar[tuple[_Observer, ...]] = ContextVar("squid_reactivity_observers", default=())
 _CURRENT_ACTION: ContextVar[ActionContext | None] = ContextVar("squid_reactivity_action", default=None)
 _CURRENT_CAUSALITY: ContextVar[tuple[CausalRef, ActionId | None] | None] = ContextVar(
     "squid_reactivity_causality", default=None
@@ -585,87 +639,98 @@ def causal_scope(cause: CausalRef, root_action_id: ActionId | None) -> Iterator[
         _CURRENT_CAUSALITY.reset(token)
 
 
-def add_action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION) -> None:
-    """Register a process-wide observer of committed and rolled-back actions.
-
-    The sink is held weakly and observes redacted snapshots under `policy`. Registering an
-    already-registered sink is a no-op and keeps its original policy. For an observer with a
-    narrower life than the process, prefer :func:`action_result_sink`, which cannot leak a
-    registration.
-    """
-    if not any(registration.reference() is sink for registration in _sinks):
-        _sinks.append(_SinkRegistration(weakref.ref(sink), policy))
-
-
-def remove_action_result_sink(sink: ActionResultSink) -> None:
-    """Unregister a sink; unknown sinks are ignored."""
-    _sinks[:] = [
-        registration
-        for registration in _sinks
-        if (registered := registration.reference()) is not None and registered is not sink
-    ]
-
-
 @contextmanager
-def action_result_sink(
-    sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION
-) -> Iterator[ActionResultSink]:
-    """Register a sink until the with block exits.
+def observe_events(sink: EventSink, *, redaction: RedactionPolicy = DEFAULT_REDACTION) -> Iterator[EventSink]:
+    """Observe work in this execution scope and tasks started within it.
 
-    The scoped form of :func:`add_action_result_sink`, for observers -- a test collector, a
-    bounded diagnostic capture -- whose life is a block rather than the process.
+    Exiting disables delivery even in child tasks that inherited the scope. The
+    scope owns the registration, not the sink. Nested scopes for the same sink
+    deliver once using the innermost active scope's policy.
     """
-    add_action_result_sink(sink, policy=policy)
+    registration = _Observer(sink, redaction)
+    token = _observers.set((*_observers.get(), registration))
     try:
         yield sink
     finally:
-        remove_action_result_sink(sink)
+        registration.sink = None
+        _observers.reset(token)
+
+
+def copy_event_observers(base: Context) -> Context:
+    """Copy a host context with the submitting scope's diagnostic registrations.
+
+    Schedulers that discard caller-local state can use this for submitted work.
+    Registrations keep their original lifetimes; this does not extend a scope.
+    """
+    context = base.copy()
+    inherited = context.get(_observers, ())
+    registrations = {id(observer): observer for observer in (*inherited, *_observers.get())}
+    context.run(_observers.set, tuple(registrations.values()))
+    return context
+
+
+def has_event_observers() -> bool:
+    """Whether this execution scope has any active diagnostic observers."""
+    return any(observer.sink is not None for observer in _observers.get())
+
+
+def _redact(snapshot: CausalEventSnapshot, policy: RedactionPolicy) -> CausalEventSnapshot:
+    if isinstance(snapshot, ActionResultSnapshot):
+        return replace(
+            snapshot,
+            actor=snapshot.actor if policy.include_actor else None,
+            metadata=snapshot.metadata if policy.include_metadata else (),
+            exception=policy.redact_exception(snapshot.exception),
+        )
+    exception = policy.redact_exception(snapshot.exception)
+    if isinstance(snapshot, ContinuationFailureSnapshot):
+        assert exception is not None
+        return replace(snapshot, exception=exception)
+    return replace(snapshot, exception=exception)
+
+
+def _deliver(event: ActionResult | CausalEventSnapshot) -> None:
+    seen: set[int] = set()
+    snapshots: dict[RedactionPolicy, CausalEventSnapshot] = {}
+    failures: list[tuple[str, Exception]] = []
+    for observer in reversed(_observers.get()):
+        sink = observer.sink
+        if sink is None or id(sink) in seen:
+            continue
+        seen.add(id(sink))
+        try:
+            snapshot = snapshots.get(observer.redaction)
+            if snapshot is None:
+                snapshot = (
+                    ActionResultSnapshot.from_result(event, observer.redaction)
+                    if isinstance(event, (ActionCommit, ActionRollback))
+                    else _redact(event, observer.redaction)
+                )
+                snapshots[observer.redaction] = snapshot
+            sink.accept(snapshot)
+        except Exception as error:
+            _log.exception("a diagnostic event sink failed")
+            failures.append((type(sink).__qualname__, error))
+    # Only action-result delivery generates failure events. A failed delivery of
+    # those diagnostics is logged without producing another diagnostic recursively.
+    if isinstance(event, (ActionCommit, ActionRollback)):
+        for callback, error in failures:
+            emit_continuation_failure(event, "result_sink", callback, error)
 
 
 def emit_result(result: ActionResult) -> None:
-    if not _sinks:
-        return
-    live: list[_SinkRegistration] = []
-    snapshots: dict[RedactionPolicy, ActionResultSnapshot] = {}
-    failures: list[tuple[ActionResultSink, Exception]] = []
-    for registration in _sinks:
-        sink = registration.reference()
-        if sink is None:
-            continue
-        live.append(registration)
-        try:
-            snapshot = snapshots.get(registration.policy)
-            if snapshot is None:
-                snapshot = ActionResultSnapshot.from_result(result, registration.policy)
-                snapshots[registration.policy] = snapshot
-            sink.accept(snapshot)
-        except Exception as error:
-            _log.exception("an action result sink failed")
-            failures.append((sink, error))
-    _sinks[:] = live
-    for sink, error in failures:
-        emit_continuation_failure(result, "result_sink", type(sink).__qualname__, error)
+    _deliver(result)
 
 
 def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
-    """Send an event to live sinks, logging sink failures and continuing delivery."""
-    live: list[_SinkRegistration] = []
-    for registration in _sinks:
-        sink = registration.reference()
-        if sink is None:
-            continue
-        live.append(registration)
-        try:
-            sink.accept(snapshot)
-        except Exception:
-            _log.exception("an action result sink failed")
-    _sinks[:] = live
+    """Apply each observer's policy and isolate failures during delivery."""
+    _deliver(snapshot)
 
 
 def emit_continuation_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
-    """Report a callback failure linked to its action, with the message redacted."""
-    exception = DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
-    assert exception is not None
+    """Report a callback failure linked to its action."""
+    if not has_event_observers():
+        return
     emit_causal_event(
         ContinuationFailureSnapshot(
             str(uuid.uuid7()),
@@ -674,7 +739,7 @@ def emit_continuation_failure(result: ActionResult, stage: str, callback: str, e
             stage,
             callback,
             datetime.now(UTC),
-            exception,
+            ExceptionReport.capture(error),
         )
     )
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from squid.bot.devtools import _authorized, setup
+from squid_reactivity import EventLedger
 from squid_ui.profiling import MemoryProfiler
 from squid_ui_discord import MessageRootScheduler, SessionManager
 from squid_ui_discord.devtools import DevTools
@@ -20,6 +21,7 @@ class Bot:
     sessions: SessionManager | None = None
     ui: UIRuntime | None = None
     development_mode: bool = False
+    action_ledger: EventLedger = field(default_factory=EventLedger)
     add_cog: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
     is_owner: AsyncCallRecorder = field(default_factory=lambda: AsyncCallRecorder(result=True))
 
@@ -40,6 +42,7 @@ async def test_setup_adds_the_generic_cog_with_the_host_manager() -> None:
 
     cog = bot.add_cog.await_args.args[0]
     assert isinstance(cog, DevTools)
+    assert cog._action_ledger is bot.action_ledger
     assert cog._manager is manager
     assert cog._scheduler is scheduler
     assert cog._profiler is profiler

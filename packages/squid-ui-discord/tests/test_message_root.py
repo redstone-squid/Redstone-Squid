@@ -21,7 +21,7 @@ import squid_ui as sl
 import squid_ui_discord
 import squid_ui_discord.message_root_contracts
 from squid_i18n import tr
-from squid_reactivity import ActionLedger, add_action_result_sink
+from squid_reactivity import EventLedger, observe_events
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui import (
     ActionEvent,
@@ -557,19 +557,16 @@ class TestDispatchProfiling:
 
     async def test_handler_span_links_to_the_semantic_action_identity(self) -> None:
         profiler = MemoryProfiler()
-        ledger = ActionLedger()
-        add_action_result_sink(ledger)
-        message_root = MessageRoot(Counter(), access=Everyone(), profiler=profiler, timeout=None)
-        commit_render(message_root)
+        ledger = EventLedger()
+        with observe_events(ledger):
+            message_root = MessageRoot(Counter(), access=Everyone(), profiler=profiler, timeout=None)
+            commit_render(message_root)
 
-        try:
             await message_root.dispatch("inc", interaction_harness())
-        finally:
-            ledger.close()
 
-        handler = next(span for span in _profile_trace(profiler).spans if span.name == "handler")
-        action_id = dict((attribute.key, attribute.value) for attribute in handler.attributes)["action_id"]
-        assert any(result.action_id == action_id for result in ledger.results)
+            handler = next(span for span in _profile_trace(profiler).spans if span.name == "handler")
+            action_id = dict((attribute.key, attribute.value) for attribute in handler.attributes)["action_id"]
+            assert any(result.action_id == action_id for result in ledger.results)
 
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()

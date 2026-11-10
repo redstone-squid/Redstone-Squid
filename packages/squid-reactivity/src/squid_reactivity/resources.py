@@ -22,13 +22,13 @@ from types import TracebackType
 from typing import Any, Literal, Protocol, overload, override
 
 from squid_reactivity.actions import (
-    DEFAULT_REDACTION,
     ActionId,
     CausalRef,
     ExceptionReport,
     ResourceEventSnapshot,
     current_causality,
     emit_causal_event,
+    has_event_observers,
 )
 from squid_reactivity.addresses import CellAddress, publish
 from squid_reactivity.completion import Completion
@@ -559,8 +559,10 @@ class Resource[ValueT](AsyncBinding):
         generation: tuple[uuid.UUID, CausalRef | None, ActionId | None],
         error: BaseException | None = None,
     ) -> None:
+        if not has_event_observers():
+            return
         generation_id, cause, root_action_id = generation
-        exception = None if error is None else DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
+        exception = None if error is None else ExceptionReport.capture(error)
         emit_causal_event(
             ResourceEventSnapshot(
                 str(generation_id),

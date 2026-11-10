@@ -18,13 +18,12 @@ from discord.ext.commands import Context
 
 import squid_ui as sl
 from squid_reactivity.actions import (
-    ActionLedger,
     ActionResultSnapshot,
     CausalEventSnapshot,
     ContinuationFailureSnapshot,
+    EventLedger,
     OperationEventSnapshot,
     ResourceEventSnapshot,
-    add_action_result_sink,
 )
 from squid_reactivity.topics import TopicBus
 from squid_ui.document import InlineAsset
@@ -69,7 +68,7 @@ async def open_devtools(
     source: delivery.Replyable,
     *,
     runtime: DevToolsRuntime,
-    action_ledger: ActionLedger | None = None,
+    action_ledger: EventLedger | None = None,
     focus: DevToolsSection | str = DevToolsSection.OVERVIEW,
     message_root_id: str | None = None,
     session_id: str | None = None,
@@ -100,7 +99,11 @@ async def open_devtools(
 
 
 class DevTools[BotT: commands.Bot](commands.Cog):
-    """The unified ``!dev ui`` operational control plane."""
+    """The unified ``!dev ui`` operational control plane.
+
+    Supply an EventLedger observed by the host's observe_events scope to show
+    action and background-work diagnostics. Creating this cog starts no observers.
+    """
 
     def __init__(
         self,
@@ -111,7 +114,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         scheduler: MessageRootScheduler | None = None,
         bus: TopicBus | None = None,
         runtime: DevToolsRuntime | None = None,
-        action_ledger: ActionLedger | None = None,
+        action_ledger: EventLedger | None = None,
     ) -> None:
         self._check = check
         self._runtime = runtime or DevToolsRuntime(
@@ -124,16 +127,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         self._scheduler = self._runtime.scheduler
         self._bus = self._runtime.bus
         self._profiler = self._runtime.profiler
-        self._action_ledger = action_ledger or ActionLedger(limit=200)
-        self._owns_action_ledger = action_ledger is None
-        if self._owns_action_ledger:
-            add_action_result_sink(self._action_ledger)
-
-    @override
-    async def cog_unload(self) -> None:
-        """Close the DevTools-owned action ledger when Discord unloads this cog."""
-        if self._owns_action_ledger:
-            self._action_ledger.close()
+        self._action_ledger = action_ledger or EventLedger(limit=200)
 
     @override
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter

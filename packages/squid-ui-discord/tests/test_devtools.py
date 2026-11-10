@@ -10,7 +10,7 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui_discord
-from squid_reactivity import ActionLedger, OperationEventSnapshot, add_action_result_sink, transaction
+from squid_reactivity import EventLedger, OperationEventSnapshot, observe_events, transaction
 from squid_ui.primitives import Button, Heading, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind
 from squid_ui_discord import Everyone, MessageRoot, Owner, live
@@ -140,9 +140,8 @@ class TestMountCommands:
         assert "missing" in str(ctx.send.await_args.kwargs["view"].to_components())
 
     async def test_actions_uses_ledger_when_profiler_has_no_trace(self) -> None:
-        ledger = ActionLedger()
-        add_action_result_sink(ledger)
-        try:
+        ledger = EventLedger()
+        with observe_events(ledger):
             with transaction():
                 pass
             ctx = make_context()
@@ -153,11 +152,9 @@ class TestMountCommands:
             rendered = str(ctx.send.await_args.kwargs["view"].to_components())
             assert "Action results" in rendered
             assert ledger.results[0].action_id in rendered
-        finally:
-            ledger.close()
 
     async def test_actions_renders_operation_nodes_with_profiler_disabled(self) -> None:
-        ledger = ActionLedger()
+        ledger = EventLedger()
         ledger.accept(OperationEventSnapshot("execution-1", None, None, "publish", "succeeded", datetime.now(UTC)))
         ctx = make_context()
         cog = DevTools(action_ledger=ledger)

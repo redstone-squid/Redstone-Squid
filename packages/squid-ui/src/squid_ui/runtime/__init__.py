@@ -3,11 +3,11 @@
 from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
-    ActionLedger,
     ActionPurpose,
     ActionRelation,
     ActionResult,
     ActionRollback,
+    EventLedger,
     RollbackReason,
 )
 from squid_reactivity.core import (
@@ -122,7 +122,6 @@ __all__ = [
     "ActionCommit",
     "ActionContext",
     "ActionDiscardedError",
-    "ActionLedger",
     "ActionPurpose",
     "ActionRelation",
     "ActionResult",
@@ -155,6 +154,7 @@ __all__ = [
     "Dependencies",
     "Discarded",
     "DisclosureState",
+    "EventLedger",
     "Failed",
     "History",
     "HistoryEntry",

@@ -10,12 +10,12 @@ from typing import override
 import pytest
 
 from squid_reactivity import (
-    ActionLedger,
+    EventLedger,
     Reactive,
     ReactiveConflictError,
     TransactionParticipant,
-    add_action_result_sink,
     enlist,
+    observe_events,
     on_action_commit,
     state,
     strong_read,
@@ -67,66 +67,59 @@ def test_scheduler_reproduces_a_b_a_lineage_change() -> None:
 def test_scheduler_classifies_cancellation_before_publication_once() -> None:
     model = Model()
     schedule = InterleavingHarness()
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-    schedule.at("commit.before_validation", lambda: (_ for _ in ()).throw(asyncio.CancelledError()))
-    try:
+    ledger = EventLedger()
+    with observe_events(ledger):
+        schedule.at("commit.before_validation", lambda: (_ for _ in ()).throw(asyncio.CancelledError()))
         with schedule.installed(), pytest.raises(asyncio.CancelledError), transaction():
             model.result = "never"
-    finally:
-        ledger.close()
 
-    assert model.result == ""
-    assert len(ledger.results) == 1
-    assert ledger.results[0].terminal == "rolled_back"
-    assert ledger.results[0].reason == "cancelled"
+        assert model.result == ""
+        assert len(ledger.results) == 1
+        assert ledger.results[0].terminal == "rolled_back"
+        assert ledger.results[0].reason == "cancelled"
 
 
 def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> None:
     schedule = InterleavingHarness()
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-    calls: list[str] = []
+    ledger = EventLedger()
+    with observe_events(ledger):
+        calls: list[str] = []
 
-    class Participant:
-        def prepare(self, view) -> None:
-            calls.append("prepare")
-            raise RuntimeError("prepare rejected")
+        class Participant:
+            def prepare(self, view) -> None:
+                calls.append("prepare")
+                raise RuntimeError("prepare rejected")
 
-        def describe_change(self, prepared: None) -> None:
-            return None
+            def describe_change(self, prepared: None) -> None:
+                return None
 
-        def apply(self, prepared: None) -> None:
-            raise AssertionError("unreachable")
+            def apply(self, prepared: None) -> None:
+                raise AssertionError("unreachable")
 
-        def abort(self, prepared: None, cause: BaseException) -> None:
-            calls.append("abort")
+            def abort(self, prepared: None, cause: BaseException) -> None:
+                calls.append("abort")
 
-        def finalize(self, prepared: None) -> None:
-            raise AssertionError("unreachable")
+            def finalize(self, prepared: None) -> None:
+                raise AssertionError("unreachable")
 
-    try:
         with schedule.installed(), pytest.raises(RuntimeError, match="prepare rejected"), transaction():
             enlist(object(), Participant)
-    finally:
-        ledger.close()
 
-    assert calls == ["prepare", "abort"]
-    assert len(ledger.results) == 1
-    assert ledger.results[0].reason == "participant_prepare_failed"
-    assert schedule.seen.index("commit.before_participant_prepare") < schedule.seen.index("rollback.before_abort")
+        assert calls == ["prepare", "abort"]
+        assert len(ledger.results) == 1
+        assert ledger.results[0].reason == "participant_prepare_failed"
+        assert schedule.seen.index("commit.before_participant_prepare") < schedule.seen.index("rollback.before_abort")
 
-    hook_schedule = InterleavingHarness()
-    with hook_schedule.installed(), transaction():
-        on_action_commit(lambda commit: (_ for _ in ()).throw(RuntimeError("hook")))
-    assert "continuation.before_hook" in hook_schedule.seen
+        hook_schedule = InterleavingHarness()
+        with hook_schedule.installed(), transaction():
+            on_action_commit(lambda commit: (_ for _ in ()).throw(RuntimeError("hook")))
+        assert "continuation.before_hook" in hook_schedule.seen
 
 
 def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() -> None:
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-    read_only = InterleavingHarness()
-    try:
+    ledger = EventLedger()
+    with observe_events(ledger):
+        read_only = InterleavingHarness()
         with read_only.installed(), transaction():
             pass
         assert len(ledger.results) == 1
@@ -153,50 +146,45 @@ def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() ->
         integrity = InterleavingHarness()
         with integrity.installed(), pytest.raises(RuntimeError, match="integrity failure"), transaction():
             enlist(object(), BrokenParticipant)
-    finally:
-        ledger.close()
 
-    assert len(ledger.results) == 2
-    assert ledger.results[1].terminal == "committed"
-    assert ledger.results[1].tags == frozenset({"framework_integrity_failure"})
-    assert "commit.before_publication" in integrity.seen
-    assert "commit.after_cell_publication" in integrity.seen
+        assert len(ledger.results) == 2
+        assert ledger.results[1].terminal == "committed"
+        assert ledger.results[1].tags == frozenset({"framework_integrity_failure"})
+        assert "commit.before_publication" in integrity.seen
+        assert "commit.after_cell_publication" in integrity.seen
 
 
 def test_change_description_failure_aborts_with_the_prepared_value() -> None:
     prepared_value = object()
     aborted: list[object | None] = []
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
+    ledger = EventLedger()
+    with observe_events(ledger):
 
-    class Participant(TransactionParticipant[object]):
-        @override
-        def prepare(self, view) -> object:
-            return prepared_value
+        class Participant(TransactionParticipant[object]):
+            @override
+            def prepare(self, view) -> object:
+                return prepared_value
 
-        @override
-        def describe_change(self, prepared: object) -> None:
-            assert prepared is prepared_value
-            raise RuntimeError("cannot describe change")
+            @override
+            def describe_change(self, prepared: object) -> None:
+                assert prepared is prepared_value
+                raise RuntimeError("cannot describe change")
 
-        @override
-        def apply(self, prepared: object) -> None:
-            raise AssertionError("unreachable")
+            @override
+            def apply(self, prepared: object) -> None:
+                raise AssertionError("unreachable")
 
-        @override
-        def abort(self, prepared: object | None, cause: BaseException) -> None:
-            aborted.append(prepared)
+            @override
+            def abort(self, prepared: object | None, cause: BaseException) -> None:
+                aborted.append(prepared)
 
-        @override
-        def finalize(self, prepared: object) -> None:
-            raise AssertionError("unreachable")
+            @override
+            def finalize(self, prepared: object) -> None:
+                raise AssertionError("unreachable")
 
-    try:
         with pytest.raises(RuntimeError, match="describe change"), transaction():
             enlist(object(), Participant)
-    finally:
-        ledger.close()
 
-    assert aborted == [prepared_value]
-    assert len(ledger.results) == 1
-    assert ledger.results[0].reason == "participant_prepare_failed"
+        assert aborted == [prepared_value]
+        assert len(ledger.results) == 1
+        assert ledger.results[0].reason == "participant_prepare_failed"

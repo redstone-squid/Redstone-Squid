@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any, Self, cast
 
+import anyio
 import discord
+import pytest
 from discord.ext.commands import Bot, Context
 from pydantic import SecretStr
 from pytest_mock import MockerFixture
@@ -13,6 +15,7 @@ import squid_ui_discord as sd
 from squid.bot import app as bot_app
 from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, DiscordConfig, VerificationConfig
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
+from squid_reactivity import EventLedger, transaction
 from squid_ui.text import Localization, current_localization
 from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
 from tests.support.runtime import SchedulingRecorder
@@ -195,3 +198,26 @@ async def test_ui_cleanup_failure_still_closes_application_resources(mocker: Moc
     bot.catbox.aclose.assert_awaited_once()
     bot.media_previews.aclose.assert_awaited_once()
     close_gateway.assert_awaited_once()
+
+
+@pytest.mark.parametrize("development", [True, False])
+async def test_start_owns_diagnostic_observation(mocker: MockerFixture, development: bool) -> None:
+    bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
+    bot.development_mode = development
+    bot.action_ledger = EventLedger()
+
+    async def work() -> None:
+        with transaction("child"):
+            pass
+
+    async def start(self: Bot, token: str, *, reconnect: bool = True) -> None:
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(work)
+        raise RuntimeError("connection closed")
+
+    mocker.patch.object(Bot, "start", start)
+    with pytest.raises(RuntimeError, match="connection closed"):
+        await bot.start("test-token")
+    with transaction("outside"):
+        pass
+    assert [result.name for result in bot.action_ledger.results] == (["child"] if development else [])

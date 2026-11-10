@@ -53,7 +53,7 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_reactivity import LocalTopicBus
+from squid_reactivity import EventLedger, LocalTopicBus, observe_events
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
@@ -179,6 +179,7 @@ class RedstoneSquid(Bot):
         # and must never create one, so the lookup is cached rather than avoided.
         self.account_ids = AccountIdCache()
         self.layout_profiler = MemoryProfiler()
+        self.action_ledger = EventLedger(limit=200)
         self.topic_bus = LocalTopicBus()
         self.topic_bridge: PostgresTopicBridge | None = None
         # Publishing goes through whichever of the two reaches every process. Until
@@ -267,6 +268,13 @@ class RedstoneSquid(Bot):
                 await super().invoke(ctx)
                 if ctx.command_failed:
                     span.set_error()
+
+    @override
+    async def start(self, token: str, *, reconnect: bool = True) -> None:
+        """Own development diagnostics for the bot and the tasks it starts."""
+        observation = observe_events(self.action_ledger) if self.development_mode else contextlib.nullcontext()
+        with observation:
+            await super().start(token, reconnect=reconnect)
 
     @override
     async def close(self) -> None:

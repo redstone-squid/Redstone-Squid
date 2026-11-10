@@ -14,12 +14,12 @@ import pytest
 
 from squid_reactivity import (
     ActionCommit,
-    ActionLedger,
     ChangeReport,
     ConflictDetail,
+    EventLedger,
     Reactive,
     ReactiveConflictError,
-    add_action_result_sink,
+    observe_events,
     on_action_commit,
     state,
     strong_read,
@@ -176,19 +176,15 @@ def test_remote_import_invalidates_and_has_a_remote_action_result() -> None:
     updates = source.export_since()
     snapshots = []
     target.subscribe(snapshots.append)
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-
-    try:
+    ledger = EventLedger()
+    with observe_events(ledger):
         target.import_update(updates)
-    finally:
-        ledger.close()
 
-    assert snapshots[-1].counter("votes") == 1
-    assert ledger.results[-1].kind == "remote"
-    assert ledger.results[-1].actor is not None
-    assert ledger.results[-1].actor.identity == "a"
-    assert ledger.results[-1].metadata == ()
+        assert snapshots[-1].counter("votes") == 1
+        assert ledger.results[-1].kind == "remote"
+        assert ledger.results[-1].actor is not None
+        assert ledger.results[-1].actor.identity == "a"
+        assert ledger.results[-1].metadata == ()
 
 
 def test_scheduler_places_remote_import_before_local_validation() -> None:
@@ -504,18 +500,14 @@ def test_duplicate_operations_remain_a_reactive_noop_after_envelope_deduplicatio
     snapshots = []
     target.subscribe(snapshots.append)
     version = target._version_cell.version
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-
-    try:
+    ledger = EventLedger()
+    with observe_events(ledger):
         target.import_update(encoded)
-    finally:
-        ledger.close()
 
-    assert target.counter("votes").value == 1
-    assert target._version_cell.version == version
-    assert snapshots == []
-    assert ledger.results[-1].changes == ChangeReport()
+        assert target.counter("votes").value == 1
+        assert target._version_cell.version == version
+        assert snapshots == []
+        assert ledger.results[-1].changes == ChangeReport()
 
 
 def test_envelope_rejects_invalid_identifiers() -> None:

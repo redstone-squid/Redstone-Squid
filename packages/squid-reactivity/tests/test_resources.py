@@ -5,13 +5,13 @@ import pytest
 
 from squid_reactivity import (
     ActionContext,
-    ActionLedger,
+    EventLedger,
     LocalTopicBus,
     Reactive,
     ResourceEventSnapshot,
     SubscriptionReconciler,
     action_scope,
-    add_action_result_sink,
+    observe_events,
     observe_reads,
     state,
     transaction,
@@ -132,20 +132,17 @@ async def test_cancelled_load_attempt_remains_pending_and_retryable() -> None:
 
 async def test_resource_generations_are_causal_without_profiler_retention() -> None:
     source = Source()
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-    action = ActionContext.create("refresh")
-    try:
+    ledger = EventLedger()
+    with observe_events(ledger):
+        action = ActionContext.create("refresh")
         with action_scope(action):
             await source.value.reload()
-    finally:
-        ledger.close()
 
-    events = [event for event in ledger.events if isinstance(event, ResourceEventSnapshot)]
-    assert [event.status for event in events] == ["started", "ready"]
-    assert {event.generation_id for event in events} == {events[0].generation_id}
-    assert events[0].cause == action.causal_ref()
-    assert events[0].root_action_id == str(action.root_action_id)
+        events = [event for event in ledger.events if isinstance(event, ResourceEventSnapshot)]
+        assert [event.status for event in events] == ["started", "ready"]
+        assert {event.generation_id for event in events} == {events[0].generation_id}
+        assert events[0].cause == action.causal_ref()
+        assert events[0].root_action_id == str(action.root_action_id)
 
 
 async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads() -> None:
@@ -202,41 +199,37 @@ class _Checkpointed(Reactive):
         return f"attempt-{attempt}"
 
 
-def _generation_statuses(ledger: ActionLedger) -> list[str]:
+def _generation_statuses(ledger: EventLedger) -> list[str]:
     return [event.status for event in ledger.events if isinstance(event, ResourceEventSnapshot)]
 
 
 async def test_an_installed_scope_abandons_a_superseded_load() -> None:
     """A host cancellation scope stops an obsolete loader before it returns."""
     owner = _Checkpointed()
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-    try:
+    ledger = EventLedger()
+    with observe_events(ledger):
         with abandon_superseded_loads(anyio.CancelScope):
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(owner.value._load)
                 await asyncio.sleep(0)
                 owner.value.invalidate()
                 tasks.start_soon(owner.value._load)
-    finally:
-        ledger.close()
 
-    assert owner.value.status == Ready("attempt-2")
-    assert owner.attempts == 2
-    assert owner.finished == [2], "the superseded loader never resumed past its checkpoint"
-    assert not owner.released.is_set(), "nothing had to release it, which is the point"
-    statuses = _generation_statuses(ledger)
-    assert statuses.count("abandoned") == 1
-    assert "superseded" not in statuses
-    assert statuses[-1] == "ready"
+        assert owner.value.status == Ready("attempt-2")
+        assert owner.attempts == 2
+        assert owner.finished == [2], "the superseded loader never resumed past its checkpoint"
+        assert not owner.released.is_set(), "nothing had to release it, which is the point"
+        statuses = _generation_statuses(ledger)
+        assert statuses.count("abandoned") == 1
+        assert "superseded" not in statuses
+        assert statuses[-1] == "ready"
 
 
 async def test_a_superseded_load_runs_to_completion_without_an_installed_scope() -> None:
     """Without a cancellation scope, the obsolete loader finishes but its result is ignored."""
     owner = _Checkpointed()
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
-    try:
+    ledger = EventLedger()
+    with observe_events(ledger):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(owner.value._load)
             await asyncio.sleep(0)
@@ -244,14 +237,12 @@ async def test_a_superseded_load_runs_to_completion_without_an_installed_scope()
             tasks.start_soon(owner.value._load)
             await asyncio.sleep(0)
             owner.released.set()
-    finally:
-        ledger.close()
 
-    assert owner.value.status == Ready("attempt-2")
-    assert owner.finished == [2, 1], "the abandoned loader ran on and finished after the live one"
-    statuses = _generation_statuses(ledger)
-    assert statuses.count("superseded") == 1
-    assert "abandoned" not in statuses
+        assert owner.value.status == Ready("attempt-2")
+        assert owner.finished == [2, 1], "the abandoned loader ran on and finished after the live one"
+        statuses = _generation_statuses(ledger)
+        assert statuses.count("superseded") == 1
+        assert "abandoned" not in statuses
 
 
 async def test_replacing_a_resource_abandons_the_load_it_supersedes() -> None:

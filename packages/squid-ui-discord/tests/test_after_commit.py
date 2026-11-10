@@ -11,7 +11,7 @@ from typing import override
 import anyio
 import pytest
 
-from squid_reactivity.actions import ActionLedger, OperationEventSnapshot, action_result_sink
+from squid_reactivity.actions import EventLedger, OperationEventSnapshot, observe_events
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.operations import Failed, Pending, Succeeded
 from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, Reactive, state
@@ -77,8 +77,8 @@ async def test_operation_observes_commit_and_shares_history_causality_without_re
         assert observed == []
 
     panel, root = await mount(handler)
-    ledger = ActionLedger()
-    with action_result_sink(ledger):
+    ledger = EventLedger()
+    with observe_events(ledger):
         await root.dispatch("save", interaction_harness())
         operation = handles[0]
         assert await operation == 42
@@ -241,8 +241,8 @@ async def test_readonly_action_can_schedule_work_with_its_dispatch_identity() ->
 
     root = MessageRoot(ReadPanel(handler), access=Everyone())
     await root.send(delivered_to(message_harness()))
-    ledger = ActionLedger()
-    with action_result_sink(ledger):
+    ledger = EventLedger()
+    with observe_events(ledger):
         await root.dispatch("save", interaction_harness())
     assert observed == [True]
     assert handles[0].context is not None

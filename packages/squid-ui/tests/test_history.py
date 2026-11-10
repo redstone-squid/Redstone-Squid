@@ -10,12 +10,12 @@ import anyio
 import pytest
 
 from squid_reactivity import (
-    ActionLedger,
     ChangeReport,
+    EventLedger,
     OperationEventSnapshot,
     TransactionContribution,
-    add_action_result_sink,
     enlist,
+    observe_events,
     on_action_commit,
 )
 from squid_reactivity.actions import ChangeToken
@@ -455,28 +455,25 @@ async def test_external_success_then_local_conflict_needs_reconciliation_without
 
 async def test_compensation_intent_and_local_inverse_are_causal_actions() -> None:
     subject, _ = panel()
-    ledger = ActionLedger()
-    add_action_result_sink(ledger)
+    ledger = EventLedger()
+    with observe_events(ledger):
 
-    async def compensate(key: str) -> None:
-        pass
+        async def compensate(key: str) -> None:
+            pass
 
-    try:
         with transaction():
             subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "page"))
             subject.page = 4
         original = ledger.results[-1]
 
         result = await subject.history.undo()
-    finally:
-        ledger.close()
 
-    assert result.applied
-    descendants = [result for result in ledger.results if result.root_action_id == original.root_action_id]
-    assert [result.kind for result in descendants] == ["normal", "compensation", "compensation"]
-    assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
-    operation_events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
-    assert [event.status for event in operation_events] == ["reverting", "external_succeeded", "reverted"]
+        assert result.applied
+        descendants = [result for result in ledger.results if result.root_action_id == original.root_action_id]
+        assert [result.kind for result in descendants] == ["normal", "compensation", "compensation"]
+        assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
+        operation_events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
+        assert [event.status for event in operation_events] == ["reverting", "external_succeeded", "reverted"]
 
 
 async def test_fresh_compensation_is_rejected_after_outer_handler_staged_work() -> None:

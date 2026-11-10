@@ -22,7 +22,6 @@ from enum import Enum
 from typing import Any, Protocol, Self, overload
 
 from squid_reactivity.actions import (
-    DEFAULT_REDACTION,
     ActionCommit,
     ActionContext,
     ActionId,
@@ -36,6 +35,7 @@ from squid_reactivity.actions import (
     TransactionContribution,
     current_action,
     emit_causal_event,
+    has_event_observers,
 )
 from squid_reactivity.core import (
     CellPatchSet,
@@ -144,7 +144,9 @@ class CompensationExecution:
         """Record an inspectable transition without changing any transactional domain state."""
         self.status = status
         self.error = error
-        report = None if error is None else DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
+        if not has_event_observers():
+            return
+        report = None if error is None else ExceptionReport.capture(error)
         emit_causal_event(
             OperationEventSnapshot(
                 str(self.context.execution_id),

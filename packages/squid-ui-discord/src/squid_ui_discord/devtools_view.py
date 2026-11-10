@@ -20,7 +20,7 @@ import squid_ui as sl
 # a host would write it. Safe despite `__init__` importing this module: every use below is
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_ui_discord
-from squid_reactivity.actions import ActionLedger
+from squid_reactivity.actions import EventLedger
 from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
 from squid_ui_discord.devtools_presentation import recovery_summary, scheduler_summary, topic_summary
 from squid_ui_discord.devtools_runtime import DevToolsAction, DevToolsRuntime, DurableRecordInspection
@@ -241,7 +241,7 @@ class OperationalInspector(sl.Component):
         runtime: DevToolsRuntime,
         *,
         client: discord.Client | None = None,
-        action_ledger: ActionLedger | None = None,
+        action_ledger: EventLedger | None = None,
     ) -> None:
         self._devtools_runtime = runtime
         self._client = client

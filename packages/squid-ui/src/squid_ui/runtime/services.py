@@ -18,6 +18,7 @@ from contextvars import Context, copy_context
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
+from squid_reactivity.actions import copy_event_observers
 from squid_ui.runtime.tasks import anyio, task_is_within
 
 if TYPE_CHECKING:
@@ -292,7 +293,8 @@ class UIExecutionHost:
     def start_operation(self, operation: Callable[[], Awaitable[None]]) -> None:
         """Accept an operation while open and run it to completion under the host.
 
-        The callback inherits the host context and is shielded from cancellation.
+        The callback inherits the host context and the submitting scope's diagnostic
+        observers, and is shielded from cancellation.
         Closing the host waits for accepted operations; even host-owned callers
         cannot submit new operations once closure begins. Bound waits that may stall.
         Failures are logged without cancelling unrelated work. Callers needing an
@@ -303,7 +305,8 @@ class UIExecutionHost:
     def start_cleanup(self, cleanup: Callable[[], Awaitable[None]]) -> None:
         """Supervise accepted cleanup, including when its initiating caller is cancelled.
 
-        The callback inherits the host context and runs shielded from cancellation.
+        The callback inherits the host context and the submitting scope's diagnostic
+        observers, and runs shielded from cancellation.
         It should bound resource-specific operations that may stall. Closing the
         host waits for accepted callbacks before cancelling remaining service runs.
         Activity already running on this host may submit further cleanup while the
@@ -318,7 +321,7 @@ class UIExecutionHost:
         self._submit(tasks, cleanup, kind="cleanup")
 
     def _submit(self, tasks: TaskGroup, callback: Callable[[], Awaitable[None]], *, kind: str) -> None:
-        self._context.run(tasks.start_soon, self._run_callback, callback, kind)
+        copy_event_observers(self._context).run(tasks.start_soon, self._run_callback, callback, kind)
         self._pending_callbacks += 1
         self._callbacks_done.clear()
 

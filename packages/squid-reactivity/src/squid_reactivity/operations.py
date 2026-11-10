@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 from typing import Any, overload, override
 
 from squid_reactivity.actions import (
-    DEFAULT_REDACTION,
     ActionContext,
     ActionId,
     ActionPurpose,
@@ -26,6 +25,7 @@ from squid_reactivity.actions import (
     causal_scope,
     current_action,
     emit_causal_event,
+    has_event_observers,
 )
 from squid_reactivity.completion import Completion
 from squid_reactivity.core import _Signal, fresh_action_transaction
@@ -203,7 +203,9 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             yield context
 
     def _emit(self, status: str, error: BaseException | None = None) -> None:
-        report = None if error is None else DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
+        if not has_event_observers():
+            return
+        report = None if error is None else ExceptionReport.capture(error)
         emit_causal_event(
             OperationEventSnapshot(
                 str(self.context.execution_id),
