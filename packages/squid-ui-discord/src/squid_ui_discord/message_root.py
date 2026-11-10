@@ -286,6 +286,10 @@ def _wall_clock_now(scheduler: object) -> datetime:
     return value
 
 
+_ACTION_UNLOCK: ContextVar[tuple[object, Callable[[], None]] | None] = ContextVar(
+    "squid_ui_discord_action_unlock", default=None
+)
+
 _SCHEDULED_REFRESH: ContextVar[object | None] = ContextVar("squid_ui_discord_scheduled_refresh", default=None)
 
 
@@ -527,6 +531,7 @@ class MessageRoot[
         self._render_lock = asyncio.Lock()
         self._settlement_wake: asyncio.Event | None = None
         self._finished = False
+        self._screen_close_reason: str | None = None
         self._shutdown = Shutdown()
         self._finishing_hooks: list[Callable[[AnyMessageRoot], None]] = []
         self._finish_children: Callable[[bool], Awaitable[None]] | None = None
@@ -1691,6 +1696,54 @@ class MessageRoot[
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
                 raise
 
+    async def _dispatch_screen_result(
+        self, interaction: discord.Interaction, callback: Callable[[ActionEvent[Request[Any]]], Awaitable[None]]
+    ) -> bool:
+        """Dispatch a child result as a fresh serialized action on this parent.
+
+        The completing child's interaction identifies the actor and supplies reply authority;
+        it never supplies an edit handle for the parent's message. Call after the child's
+        transaction and action lock end. False means the callback did not commit successfully.
+        """
+        current = CURRENT_TRANSACTION.get()
+        if current is not None and not current.closed:
+            message = "screen results must run after the child action commits"
+            raise RuntimeError(message)
+        key = "screen:result"
+        completed = False
+
+        async def accept(event: ActionEvent) -> None:
+            nonlocal completed
+            # The Discord event resolver supplies a parent-scoped Request; the generic
+            # dispatch machinery erases invocation contexts to support other bindings.
+            await callback(cast(ActionEvent[Any], event))
+            if self.finished:
+                message = "parent screen closed before accepting its child result"
+                raise RuntimeError(message)
+            completed = True
+
+        binding = ActionBinding(key, accept)
+        with (
+            localization_scope(self.localization),
+            self.profiler.operation(OperationKind.DISPATCH, name=key) as operation,
+        ):
+            profile = _DispatchProfile(
+                operation,
+                interaction,
+                GenerationDecision(None, self._candidates.generation),
+                operation.start_span("acknowledgement"),
+                resumed=True,
+            )
+
+            async def invoke(current: ActionBinding, rebased: bool, generation: int) -> None:
+                # Access and shutdown are checked after acquiring the parent's lock: either
+                # can change while another action holds it.
+                if await self._begin_dispatch(interaction, profile):
+                    await self._invoke(current, key, interaction, None, None, generation, rebased, profile)
+
+            await self._dispatch_binding(binding, key, interaction, None, invoke, profile)
+            return completed and profile.action is ActionStatus.HANDLED
+
     async def _dispatch_renewal(
         self,
         binding: _RenewalBinding,
@@ -1899,9 +1952,19 @@ class MessageRoot[
         from squid_ui_discord.runtime import DiscordUIRuntimeMissing
 
         try:
-            return await _resolve_request(interaction, root=cast(MessageRoot, self))
+            request = await _resolve_request(interaction, root=cast(MessageRoot, self))
         except DiscordUIRuntimeMissing:
             return None
+        if request.root is not self:
+            # A child result uses the current child interaction but the parent's scope.
+            # Keep the interaction's original memoized request bound to the child.
+            return replace(
+                request,
+                root=cast(MessageRoot, self),
+                scope=request.runtime.scope_of_root(cast(MessageRoot, self)),
+                localization=self.localization,
+            )
+        return request
 
     async def _event(self, interaction: discord.Interaction, values: _SelectionValues) -> ActionEvent:
         """The portable event one Discord interaction becomes."""
@@ -2099,6 +2162,15 @@ class MessageRoot[
 
         with profile.operation.span("action_lock"):
             await self._action_lock.acquire()
+        locked = True
+
+        def unlock() -> None:
+            nonlocal locked
+            if locked:
+                locked = False
+                self._action_lock.release()
+
+        unlock_token = _ACTION_UNLOCK.set((self, unlock))
         try:
             profile.decide_generation(self._candidates.generation)
             if binding.mode is ActionMode.EXCLUSIVE and generation not in {None, self._candidates.generation}:
@@ -2129,7 +2201,8 @@ class MessageRoot[
                 return
             challenged = admission.challenge
         finally:
-            self._action_lock.release()
+            _ACTION_UNLOCK.reset(unlock_token)
+            unlock()
         # Only a challenge falls out of the block above rather than returning from inside it.
         # The dialog is opened with the lock released and the press already over, so every
         # other control on the panel stays live while the actor reads the question.
@@ -2388,6 +2461,11 @@ class MessageRoot[
     async def _present_action_result(
         self, adapter: ActionResponder, interaction: discord.Interaction, profile: _DispatchProfile
     ) -> PresentationStatus:
+        if adapter._screen_unlocked is not None:
+            lease = _ACTION_UNLOCK.get()
+            if lease is not None and lease[0] is self:
+                lease[1]()
+            adapter._screen_unlocked.set()
         errors = await adapter._wait_after_commit()
         presentation = PresentationStatus.NOT_REQUIRED
         try:
@@ -2918,9 +2996,15 @@ class MessageRoot[
         await self.finish(wait=False)
 
     async def handle_timeout(self) -> None:
+        self._screen_close_reason = self._screen_close_reason or "timeout"
         await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout)
 
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
+        if self.finished:
+            # An in-flight action can fail after its owner closes. Resolving another
+            # scoped Request would revive closed authority and mask the original error.
+            logger.error("component error after closure in %s", source, exc_info=error)
+            return
         # Runtime constructs message roots, so this callback must import it after initialization.
         from squid_ui_discord.runtime import DiscordUIRuntime, DiscordUIRuntimeMissing
 

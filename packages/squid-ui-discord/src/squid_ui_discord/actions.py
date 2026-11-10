@@ -44,6 +44,7 @@ class ActionResponder:
         self._finish_requested = False
         self._finish_accepted = False
         self._after_commit: list[PostCommitOperation[Any]] = []
+        self._screen_unlocked: asyncio.Event | None = None
 
     async def acknowledge(self) -> None:
         if not self.interaction.response.is_done():
@@ -204,6 +205,20 @@ class ActionResponder:
         on_action_rollback(operation._discard)
         self._after_commit.append(operation)
         return operation
+
+    def _on_screen_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> PostCommitOperation[ValueT]:
+        """Run a screen continuation after commit and release of this action's lock."""
+        unlocked = self._screen_unlocked
+        if unlocked is None:
+            unlocked = self._screen_unlocked = asyncio.Event()
+
+        async def after_unlock() -> ValueT:
+            await unlocked.wait()
+            return await callback()
+
+        return self.on_success(after_unlock, name=name)
 
     async def _wait_after_commit(self) -> list[Exception]:
         errors: list[Exception] = []
