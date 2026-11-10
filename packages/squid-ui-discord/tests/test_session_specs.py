@@ -330,3 +330,9 @@ async def test_a_session_spec_carries_its_quota_and_domain() -> None:
     assert first.session.domain == "game"
     assert isinstance(second, Rejected)
     assert second.reason is RejectionReason.QUOTA_REACHED
+
+
+@pytest.mark.parametrize("name", [None, ""])
+def test_keys_require_a_resolved_nonempty_session_name(name: str | None) -> None:
+    with pytest.raises(ValueError, match="resolved non-empty name"):
+        SessionSpec(name).key(OpenContext(7, 42))

@@ -145,7 +145,9 @@ def _empty_options() -> SessionOptions:
 class SessionSpec:
     """Reusable recipe shared by every opening of one logical screen."""
 
-    name: str
+    name: str | None = None
+    """Stable session identity; a Screen supplies its qualified class name when omitted."""
+
     scope: ScopeKind = ScopeKind.USER
     admission: AdmissionSpec = DEFAULT_ADMISSION
     capacity: int | None = None
@@ -176,6 +178,9 @@ class SessionSpec:
 
     def key(self, open_context: OpenContext) -> SessionKey:
         """Derive this screen's session key from an opener."""
+        if not isinstance(self.name, str) or not self.name:
+            message = "SessionSpec.key requires a resolved non-empty name"
+            raise ValueError(message)
         return SessionKey(self.name, self.scope.resolve(open_context))
 
     async def _message_root_options(self, open_context: OpenContext, overrides: SessionOptions) -> SessionOptions:
