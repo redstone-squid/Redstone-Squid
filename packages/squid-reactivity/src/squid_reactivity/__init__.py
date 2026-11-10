@@ -1,10 +1,10 @@
 """Keep view state reactive and publish related changes together.
 
-Declare fields with `state` and derived values with `computed` on a StateOwner.
+Declare fields with `state` and derived values with `computed` on a Reactive.
 Reads record dependencies; assignments advance versions so later reads can
 refresh derived values. A `transaction` stages related assignments and publishes
-them when the block succeeds. SharedState adds topic-bus notifications for
-multiple mounted components that use the same instance.
+them when the block succeeds. Consumers subscribe directly to the fields they
+read; models need no bus or host metadata.
 
 The resources and operations modules add asynchronous loading and progress while
 keeping component renders synchronous.
@@ -52,18 +52,17 @@ from squid_reactivity.core import (
     FrameworkIntegrityError,
     FreshActionError,
     Observation,
+    Reactive,
     ReactiveConflictError,
     ReactiveCycleError,
     ReactiveWriteError,
     ReactivityError,
     StaleReactiveContextError,
-    StateOwner,
     TransactionParticipant,
     TransactionView,
     UndeclaredStateError,
     addresses,
     apply_conditional_patches,
-    apply_local_overwrite_patches,
     batch,
     block_writes,
     computed,
@@ -84,8 +83,7 @@ from squid_reactivity.core import (
     transaction,
     untracked,
 )
-from squid_reactivity.shared_state import SharedState
-from squid_reactivity.state_pool import SharedStateFactory, SharedStatePool
+from squid_reactivity.state_pool import ReactiveFactory, ReactivePool
 from squid_reactivity.topics import (
     Address,
     CellAddress,
@@ -133,18 +131,17 @@ __all__ = [
     "Observation",
     "ObservedRead",
     "OperationEventSnapshot",
+    "Reactive",
     "ReactiveConflictError",
     "ReactiveCycleError",
+    "ReactiveFactory",
+    "ReactivePool",
     "ReactiveWriteError",
     "ReactivityError",
     "RedactionPolicy",
     "ResourceEventSnapshot",
     "RollbackReason",
-    "SharedState",
-    "SharedStateFactory",
-    "SharedStatePool",
     "StaleReactiveContextError",
-    "StateOwner",
     "SubscriptionReconciler",
     "Topic",
     "TopicBus",
@@ -158,7 +155,6 @@ __all__ = [
     "add_action_result_sink",
     "addresses",
     "apply_conditional_patches",
-    "apply_local_overwrite_patches",
     "batch",
     "block_writes",
     "computed",

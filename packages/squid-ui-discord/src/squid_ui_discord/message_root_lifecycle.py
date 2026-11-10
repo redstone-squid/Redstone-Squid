@@ -11,7 +11,6 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from typing import Any
 
-from squid_reactivity.topics import SubscriptionReconciler
 from squid_ui.document import Asset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
@@ -47,7 +46,6 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self,
         mount_id: str,
         runtime: ComponentRuntime[RenderTargetT],
-        subscriptions: SubscriptionReconciler,
         *,
         environment: Callable[[], _PlanEnvironment],
         remaining_timeout: Callable[[], float | None],
@@ -57,7 +55,6 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
     ) -> None:
         self._mount_id = mount_id
         self._runtime = runtime
-        self._subscriptions = subscriptions
         self._environment = environment
         self._remaining_timeout = remaining_timeout
         self._committed = committed
@@ -125,7 +122,6 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         presentation = self._runtime.presentation
         presentation.apply_updates(candidate.session_updates)
         self._runtime.plan_memo.promote(presentation, presentation.revision)
-        self._subscriptions.commit()
         # Component hooks can invalidate or raise after reconciling the delivered tree.
         # Settlement precedes them so cleanup never rolls back that committed work.
         self._runtime.commit(candidate.tree, rendered_revision=candidate.revision)
@@ -196,7 +192,7 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         if not isinstance(candidate, _PlannedCandidate):
             candidate.view.stop()
         if not isinstance(candidate, _LifecycleCandidate):
-            self._subscriptions.discard()
+            self._runtime.discard()
         self.mark_dirty()
 
     def _swap_view(self, view: AnyMountedView) -> None:

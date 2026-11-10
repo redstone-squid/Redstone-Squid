@@ -8,8 +8,8 @@ from squid_reactivity import (
     ActionContext,
     ActionLedger,
     OperationEventSnapshot,
+    Reactive,
     ResourceEventSnapshot,
-    StateOwner,
     action_scope,
     add_action_result_sink,
     state,
@@ -144,7 +144,7 @@ async def test_operation_start_and_terminal_state_form_causal_ledger_nodes() -> 
 
 
 async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -> None:
-    class StatefulOwner(StateOwner):
+    class StatefulOwner(Reactive):
         value: int = state(0)
 
         @override
@@ -173,7 +173,7 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
 
 
 async def test_action_operation_response_and_resource_generation_form_one_graph() -> None:
-    class GraphOwner(StateOwner):
+    class GraphOwner(Reactive):
         value: int = state(0)
 
         @override

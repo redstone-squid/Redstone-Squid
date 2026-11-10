@@ -9,7 +9,6 @@ from discord.ext.commands import Context
 import squid_ui_discord as sd
 from squid.bot.layout_review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
 from squid.bot.layout_workbench import BuildDraft, BuildPreview, Workbench
-from squid_ui_discord.sessions import UserScope
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -27,7 +26,7 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def workbench(self, ctx: Context[BotT]) -> None:
         """Edit a sample build and watch a second message update live."""
         request = await self.ui.request(ctx)
-        draft = BuildDraft(self.bot.topic_bus, UserScope(ctx.author.id))
+        draft = BuildDraft()
         editor = await request.respond(
             Workbench(draft),
             access=sd.Owner(ctx.author.id),
@@ -48,12 +47,11 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def review(self, ctx: Context[BotT], mode: Literal["simulated", "live"] = "simulated") -> None:
         """Review together, or operate Alice and Bob yourself in simulated mode."""
         request = await self.ui.request(ctx)
-        bus = self.bot.topic_bus
-        room = ReviewRoom(bus, UserScope(ctx.author.id))
+        room = ReviewRoom()
         if mode == "simulated":
-            room.seats = tuple(Reviewer(bus, UserScope(ctx.author.id), name) for name in ("Alice", "Bob"))
+            room.seats = tuple(Reviewer(ctx.author.id, name) for name in ("Alice", "Bob"))
         summary = await request.respond(
-            ReviewSummary(room, bus, ctx.author.id, mode),
+            ReviewSummary(room, ctx.author.id, mode),
             access=sd.Everyone(),
             follow_topics=True,
             session=sd.SessionSpec("layout-review"),

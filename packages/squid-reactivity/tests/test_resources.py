@@ -8,9 +8,9 @@ from squid_reactivity import (
     ActionContext,
     ActionLedger,
     LocalTopicBus,
+    Reactive,
     ResourceEventSnapshot,
-    SharedState,
-    StateOwner,
+    SubscriptionReconciler,
     Topic,
     action_scope,
     add_action_result_sink,
@@ -21,7 +21,7 @@ from squid_reactivity import (
 from squid_reactivity.resources import Pending, Ready, abandon_superseded_loads, resource
 
 
-class Source(StateOwner):
+class Source(Reactive):
     key = state("first")
 
     def __init__(self) -> None:
@@ -47,12 +47,12 @@ async def test_resource_tracks_state_and_repends_after_a_source_moves() -> None:
 
 
 async def test_publish_during_load_repends_the_result() -> None:
-    topic = Topic("build", "42")
     bus = LocalTopicBus()
+    topic = Topic("build", "42")
     started = asyncio.Event()
     resume = asyncio.Event()
 
-    class Watched(StateOwner):
+    class Watched(Reactive):
         @resource
         async def value(self) -> str:
             watch(topic)
@@ -89,29 +89,31 @@ async def test_resource_replace_joins_the_transaction() -> None:
 
 
 async def test_shared_resource_publishes_its_cell_address() -> None:
-    bus = LocalTopicBus()
     published = []
 
-    class Preferences(SharedState[int]):
+    class Preferences(Reactive):
         @resource
         async def theme(self) -> str:
             return "dark"
 
-    preferences = Preferences(bus, 7)
+    preferences = Preferences()
     address = preferences.theme.address
     assert address is not None
-    unsubscribe = bus.subscribe(address, published.append)
+    subscriptions = SubscriptionReconciler(None, published.append)
+    subscriptions.stage([address])
+    subscriptions.commit()
 
     await preferences.theme.reload()
 
-    assert published == [address]
-    unsubscribe()
+    # Reload announces both pending and settled status.
+    assert published == [address, address]
+    subscriptions.close()
 
 
 async def test_cancelled_load_attempt_remains_pending_and_retryable() -> None:
     attempts = 0
 
-    class Retryable(StateOwner):
+    class Retryable(Reactive):
         @resource
         async def value(self) -> str:
             nonlocal attempts
@@ -152,7 +154,7 @@ async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads(
     """A superseded loader keeps running, and what it reads on the way out is not a dependency."""
     released = asyncio.Event()
 
-    class Mixer(StateOwner):
+    class Mixer(Reactive):
         abandoned = state(0)
         live = state(0)
 
@@ -188,7 +190,7 @@ async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads(
     assert owner.value.status == Pending(Ready("live-0")), "a cell the live load read still is one"
 
 
-class _Checkpointed(StateOwner):
+class _Checkpointed(Reactive):
     """A loader whose first attempt parks at a checkpoint until something releases it."""
 
     def __init__(self) -> None:
@@ -280,7 +282,7 @@ async def test_an_installed_scope_does_not_swallow_a_cancellation_from_outside()
     """The load scope must let the caller's cancellation reach the caller."""
     attempts = 0
 
-    class Retryable(StateOwner):
+    class Retryable(Reactive):
         @resource
         async def value(self) -> str:
             nonlocal attempts

@@ -92,7 +92,7 @@ class ProfiledScheduler(Protocol):
 class ReactiveScheduler(Protocol):
     """A scheduler that can preserve the component attribution of a bus change."""
 
-    def schedule_reactive(self, message_root: AnyMessageRoot, address: Address) -> None: ...
+    def schedule_invalidated(self, message_root: AnyMessageRoot, address: Address) -> None: ...
 
 
 type ResumedPress = Callable[[], Awaitable[None]]

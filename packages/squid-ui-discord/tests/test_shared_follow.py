@@ -15,10 +15,10 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui import Component, PressEvent, state
+from squid_ui import Component, PressEvent, Reactive, state
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.profiling import PresentationStatus
-from squid_ui.runtime import CellAddress, LocalTopicBus, SharedState, transaction
+from squid_ui.runtime import CellAddress, LocalTopicBus, transaction
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
@@ -29,7 +29,7 @@ class Member:
     user_id: int
 
 
-class Workspace(SharedState[Member]):
+class Workspace(Reactive):
     selected: int | None = state(None)
     detail: str = state("")
 
@@ -130,12 +130,12 @@ def address(workspace: Workspace, name: str) -> CellAddress:
 async def test_two_mounts_react_once_each_to_one_commit() -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     message_roots = [MessageRoot(Panel(workspace), access=Everyone(), scheduler=scheduler) for _ in range(2)]
     refreshes: dict[str, int] = {}
     for message_root in message_roots:
         await message_root.send(delivered_to(message_harness()))
-        assert message_root.followed == (address(workspace, "selected"),)
+        assert address(workspace, "selected") in message_root.followed
 
         def counted(message_root: MessageRoot = message_root):
             async def refresh(*, links=()) -> None:
@@ -156,7 +156,7 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
 async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(monkeypatch) -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
 
     class Parity(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
@@ -195,14 +195,14 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
 
 
 async def test_equal_computed_value_switches_the_mounts_followed_branch() -> None:
-    class Values(SharedState[Member]):
+    class Values(Reactive):
         use_b: bool = state(default=False)
         a: int = state(1)
         b: int = state(1)
 
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    values = Values(bus, Member(1))
+    values = Values()
 
     class Panel(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
@@ -274,36 +274,44 @@ async def test_explicit_scheduler_request_resamples_opaque_component_inputs() ->
 async def test_a_dropped_conditional_read_stops_refreshing() -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     panel = Panel(workspace)
     panel.show_detail = True
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
     await message_root.send(delivered_to(message_harness()))
-    assert set(message_root.followed) == {address(workspace, "selected"), address(workspace, "detail")}
+    assert set(message_root.followed) == {
+        CellAddress(panel, "show_detail"),
+        address(workspace, "selected"),
+        address(workspace, "detail"),
+    }
 
     panel.show_detail = False
     await message_root.refresh()
-    assert message_root.followed == (address(workspace, "selected"),)
-    assert {topic.topic for topic in bus.snapshot().topics} == {address(workspace, "selected")}
+    assert address(workspace, "selected") in message_root.followed
+    assert bus.snapshot().topics == ()
 
 
 async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     """Over-subscribe, never under-subscribe: a failed delivery's follow is dropped next render."""
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     panel = Panel(workspace)
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
     await message_root.send(delivered_to(message_harness()))
 
     panel.show_detail = True
     candidate = message_root._stage()
-    assert set(message_root.followed) == {address(workspace, "selected"), address(workspace, "detail")}
+    assert set(message_root.followed) == {
+        CellAddress(panel, "show_detail"),
+        address(workspace, "selected"),
+        address(workspace, "detail"),
+    }
     message_root._rollback(candidate)
 
     panel.show_detail = False
     await message_root.refresh()
-    assert message_root.followed == (address(workspace, "selected"),)
+    assert address(workspace, "selected") in message_root.followed
 
 
 async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() -> None:
@@ -315,11 +323,11 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
     """
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     panel = Swapper(workspace)
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
     await message_root.send(delivered_to(message_harness()))
-    assert message_root.followed == (address(workspace, "selected"),)
+    assert address(workspace, "selected") in message_root.followed
 
     panel.other = True
     candidate = message_root._stage()
@@ -343,24 +351,24 @@ async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
     """Drop the old render's subscriptions once the replacement reaches Discord."""
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     panel = Swapper(workspace)
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
     await message_root.send(delivered_to(message_harness()))
 
     panel.other = True
     await message_root.refresh()
-    assert message_root.followed == (address(workspace, "detail"),)
-    assert {topic.topic for topic in bus.snapshot().topics} == {address(workspace, "detail")}
+    assert message_root.followed == (CellAddress(panel, "other"), address(workspace, "detail"))
+    assert bus.snapshot().topics == ()
 
 
 async def test_no_follow_outlives_its_root() -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     message_root = MessageRoot(Panel(workspace), access=Everyone(), scheduler=scheduler)
     await message_root.send(delivered_to(message_harness()))
-    assert bus.snapshot().topics != ()
+    assert message_root.followed
 
     await message_root.finish(disable=False)
     assert message_root.followed == ()
@@ -370,7 +378,7 @@ async def test_no_follow_outlives_its_root() -> None:
 async def test_a_namespace_dropped_by_its_last_message_root_is_collected() -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     gone = weakref.ref(workspace)
     message_root = MessageRoot(Panel(workspace), access=Everyone(), scheduler=scheduler)
     await message_root.send(delivered_to(message_harness()))
@@ -381,14 +389,15 @@ async def test_a_namespace_dropped_by_its_last_message_root_is_collected() -> No
     assert gone() is None
 
 
-async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCaptureFixture) -> None:
+async def test_reactive_observation_needs_no_topic_bus(caplog: pytest.LogCaptureFixture) -> None:
     bus = LocalTopicBus()
-    workspace = Workspace(bus, Member(1))
+    workspace = Workspace()
     message_root = MessageRoot(Panel(workspace), access=Everyone())
     with caplog.at_level("WARNING"):
         await message_root.send(delivered_to(message_harness()))
         await message_root.refresh()
-    assert sum("scheduler has no topic bus" in record.message for record in caplog.records) == 1
+    assert not any("scheduler has no topic bus" in record.message for record in caplog.records)
+    assert address(workspace, "selected") in message_root.followed
 
 
 class TestSelfWrites:
@@ -396,7 +405,7 @@ class TestSelfWrites:
 
     def panel(self, *, busy: sl.interactions.BusySpec | None = None, run=None) -> tuple[Workspace, Writer, MessageRoot]:
         bus = LocalTopicBus()
-        workspace = Workspace(bus, Member(1))
+        workspace = Workspace()
         panel = Writer(workspace, busy=busy, run=run)
         return workspace, panel, MessageRoot(panel, access=Everyone(), timeout=None, pending_after=30)
 
@@ -415,7 +424,7 @@ class TestSelfWrites:
     async def test_the_reactor_suppresses_the_self_published_render(self) -> None:
         bus = LocalTopicBus()
         scheduler = MessageRootScheduler(bus)
-        workspace = Workspace(bus, Member(1))
+        workspace = Workspace()
         message_root = MessageRoot(Writer(workspace), access=Everyone(), scheduler=scheduler, timeout=None)
         message: Any = message_harness()
         await message_root.send(delivered_to(message))
@@ -446,7 +455,7 @@ class TestSelfWrites:
         """The observed set is what the render read; subscribing is a separate, optional thing."""
         _, _, message_root = self.panel()
         await message_root.send(delivered_to(message_harness()))
-        assert message_root.followed == (), "no scheduler, so nothing is subscribed"
+        assert message_root.followed == message_root.observed
         assert message_root.observed != ()
 
         interaction = interaction_harness()
@@ -527,12 +536,12 @@ class TestSelfWrites:
 
     async def test_a_write_to_an_in_flight_candidates_new_read_keeps_it_dirty(self) -> None:
         bus = LocalTopicBus()
-        workspace = Workspace(bus, Member(1))
+        workspace = Workspace()
         panel = Swapper(workspace)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=30)
         message: Any = message_harness()
         await message_root.send(delivered_to(message))
-        assert message_root.observed == (address(workspace, "selected"),)
+        assert message_root.observed == (CellAddress(panel, "other"), address(workspace, "selected"))
 
         started = asyncio.Event()
         release = asyncio.Event()

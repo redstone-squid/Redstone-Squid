@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Protocol, TypeVar, cast, overload, override
 
-from squid_reactivity.core import StateOwner
+from squid_reactivity.core import Reactive
 from squid_ui.context import ContextKey
 from squid_ui.document import DocumentLike
 from squid_ui.primitives.nodes import Boundary
@@ -54,7 +54,7 @@ so this is the only way to preserve portable-component substitution.
 """
 
 
-class Component(StateOwner, ABC, Generic[RenderTargetT, ContextT]):
+class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
     """A reusable part of an interface, combining state with a render method.
 
     render describes the current layout without changing state. State changes
@@ -77,21 +77,6 @@ class Component(StateOwner, ABC, Generic[RenderTargetT, ContextT]):
     _reactive_internal_attributes = frozenset(
         {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
     )
-
-    @override
-    def _state_changed(self, names: frozenset[str]) -> None:
-        """React to committed writes to these state slots.
-
-        Nothing is refreshed here. A computed and a resource each record what they read and
-        re-check it when something asks for the value, so a commit only has to say the tree
-        needs drawing again. `names` is for a subclass that wants to know which fields moved.
-        """
-        del names
-        vars(self)["_dependency_invalidation"] = True
-        try:
-            self.invalidate()
-        finally:
-            vars(self).pop("_dependency_invalidation", None)
 
     @override
     def on_state_rollback(self) -> None:

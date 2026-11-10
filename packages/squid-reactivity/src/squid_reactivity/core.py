@@ -46,6 +46,7 @@ from squid_reactivity.actions import (
     in_continuation,
     next_commit_sequence,
 )
+from squid_reactivity.addresses import CellAddress, publish, subscribe
 
 _log = logging.getLogger(__name__)
 
@@ -233,8 +234,8 @@ def _active() -> _Transaction | None:
 class _Cell:
     """Store one field's value, version, and optional publication address.
 
-    Shared fields have CellAddress values. Topics use cells with Topic addresses
-    and no payload. Local component fields have no address. Addressed reads can
+    Reactive fields, including component fields, have CellAddress values. Topics
+    use cells with Topic addresses and no payload. Addressed reads can
     be checked for conflicts and collected as render subscriptions.
     """
 
@@ -425,7 +426,7 @@ def untracked() -> Iterator[None]:
 
 @contextmanager
 def relaxed_read() -> Iterator[None]:
-    """Read shared state without adding a commit-time consistency precondition.
+    """Read reactive state without adding a commit-time consistency precondition.
 
     Only reads a precondition would otherwise cover are affected: a cell this action also
     writes, and any read taken inside :func:`strong_read`. Unlike :func:`untracked`, this
@@ -440,9 +441,9 @@ def relaxed_read() -> Iterator[None]:
 
 @contextmanager
 def strong_read() -> Iterator[None]:
-    """Require every shared read taken inside to still hold its version at commit.
+    """Require every reactive read taken inside to still hold its version at commit.
 
-    The upgrade an action opts into when it branches on shared state it does not write --
+    The upgrade an action opts into when it branches on reactive state it does not write --
     read A, write B, and by default nothing says A was still true. Wrap the whole handler
     body to make one action serializable over what it read; wrap one read to guard just that
     one. :func:`relaxed_read` nested inside opts a read back out.
@@ -584,25 +585,6 @@ def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
     resolved = tuple((patch, *patch.target.resolve(patch.expected_version)) for patch in patches)
     for patch, _, cell in resolved:
         current.require_version(cell, patch.expected_version)
-    for patch, owner, cell in resolved:
-        _write(owner, patch.target.name, cell, patch.value.raw())
-
-
-def apply_local_overwrite_patches(patches: Sequence[ConditionalCellPatch]) -> None:
-    """Stage an explicitly unsafe overwrite, refusing shared or participant-backed targets."""
-    current = _CURRENT.get()
-    if current is None or not current.writable():
-        message = "local overwrite patches require an active writable transaction"
-        raise RuntimeError(message)
-    resolved = tuple((patch, *patch.target.resolve(patch.expected_version)) for patch in patches)
-    for patch, _, cell in resolved:
-        if cell.address is None:
-            continue
-        # Named here, unlike `CellTarget.identity`: this cell is alive, so the report can say
-        # which shared field the policy was pointed at instead of an opaque slot id.
-        detail = ConflictDetail(_slot_name(cell), patch.expected_version, cell.version)
-        message = f"local overwrite policy cannot target shared state ({_slot_name(cell)})"
-        raise ReactiveConflictError(detail, message)
     for patch, owner, cell in resolved:
         _write(owner, patch.target.name, cell, patch.value.raw())
 
@@ -1371,7 +1353,7 @@ class _State:
     def address(self, instance: ReactiveOwner) -> Any:
         """Ask the owner for this field's publication address, or return None.
 
-        SharedState supplies the binding hook. Local component state has no address.
+        Reactive supplies identity addresses for both models and components.
         """
         binding = getattr(instance, "_state_binding", None)
         return None if binding is None else binding(self.public_name)
@@ -1428,20 +1410,10 @@ class _State:
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
         if rendering():
-            if self.address(instance) is not None:
-                # shared state: visible to other mounts mid-render, a correctness problem
-                # beyond this tree, so no exemption applies -- not even to a fresh instance.
-                message = (
-                    f"{instance!r}.{self.public_name} was written while a render was reading it. "
-                    f"A render turns state into a tree and may not change the state it is "
-                    f"reading; write shared state from an action handler."
-                )
-                raise ReactiveWriteError(message)
             observation = _RENDER_OBSERVATION.get()
             if observation is None or not observation.exempts(instance):
-                # Component state: nothing publishes it beyond this tree, but a torn read
-                # (write, then read back) still draws a tree no single state ever produced,
-                # silently and finally -- the invalidation the write would schedule never fires.
+                # Construction may initialize a new object. Existing objects must stay
+                # unchanged so every reader in this projection sees one consistent state.
                 message = (
                     f"{type(instance).__name__}.{self.public_name} was written while a render "
                     f"was reading it. A render must produce one tree from the state it reads, "
@@ -1880,7 +1852,7 @@ def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
     """Return the addresses read by a callable, raising if none are found.
 
     For example, ``addresses(lambda: preferences.theme)`` returns the address
-    of that shared field. Reads through computed values include their source
+    of that field. Reads through computed values include their source
     addresses. The callable runs as a read-only render observation.
     """
     with observe_render() as observation:
@@ -1888,8 +1860,8 @@ def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
     found = observation.addresses()
     if not found:
         message = (
-            "addresses() read no shared state: the callable must read at least one state() "
-            "off a namespace, directly or through a computed. Component state has no address."
+            "addresses() read no reactive state: the callable must read at least one state() "
+            "field on a Reactive object, directly or through a computed."
         )
         raise ValueError(message)
     return found
@@ -1902,7 +1874,7 @@ def _checked_init(
     """Wrap an initializer so required reactive state is assigned before it returns."""
 
     @functools.wraps(original)
-    def __init__(self: StateOwner, *args: Any, **kwargs: Any) -> None:
+    def __init__(self: Reactive, *args: Any, **kwargs: Any) -> None:
         try:
             original(self, *args, **kwargs)
             if type(self).__init__ is not __init__:
@@ -1918,11 +1890,11 @@ def _checked_init(
     return __init__
 
 
-class StateOwner:
-    """Reusable owner for transactional state and computed values.
+class Reactive:
+    """Reusable reactive state and behavior, independent of rendering.
 
-    Declare fields with `state()` and derived properties with `computed`, then
-    override `on_state_commit` to refresh the view that reads them. Fields without
+    Declare fields with `state()` and derived properties with `computed`. Consumers
+    automatically follow fields they read through a subscription reconciler. Fields without
     a default must be assigned before initialization finishes.
 
     Construction may assign ordinary attributes. Once the owner exists, writes
@@ -1930,6 +1902,8 @@ class StateOwner:
     Opaque collaborator changes are signaled through `mutated`; that delays their
     notifications but cannot undo mutations already made to the collaborator.
     """
+
+    _reactive_commit_listeners: set[Callable[[], None]]
 
     _state_names: ClassVar[frozenset[str]] = frozenset()
     _state_descriptors: ClassVar[dict[str, _State]] = {}
@@ -1960,6 +1934,7 @@ class StateOwner:
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         instance = super().__new__(cls)
+        object.__setattr__(instance, "_reactive_commit_listeners", set())
         note_born(instance)
         return instance
 
@@ -1972,9 +1947,6 @@ class StateOwner:
         ):
             report_undeclared_write(self, name)
         object.__setattr__(self, name, value)
-
-    def _state_changed(self, names: frozenset[str]) -> None:
-        self.on_state_commit(names)
 
     def _state_rolled_back(self) -> None:
         self.on_state_rollback()
@@ -2012,3 +1984,29 @@ class StateOwner:
         # No notification of its own: the staged write carries one, delivered at the commit
         # outside an action and at `finalize_commit` inside one.
         descriptor.mutated(self)
+
+    def _state_binding(self, name: str) -> CellAddress:
+        return CellAddress(self, name)
+
+    def _resource_binding(self, name: str) -> tuple[CellAddress, Callable[[CellAddress], None]]:
+        return CellAddress(self, name), publish
+
+    def _subscribe(self, name: str, callback: Callable[[CellAddress], None]) -> Callable[[], None]:
+        return subscribe(self, name, callback)
+
+    def _state_changed(self, names: frozenset[str]) -> None:
+        for descriptor in type(self)._state_descriptors.values():
+            if descriptor._name in names:
+                publish(CellAddress(self, descriptor.public_name))
+        for listener in tuple(self._reactive_commit_listeners):
+            try:
+                listener()
+            except Exception:
+                _log.exception("reactive commit listener failed")
+        self.on_state_commit(names)
+
+    def _add_commit_listener(self, listener: Callable[[], None]) -> None:
+        self._reactive_commit_listeners.add(listener)
+
+    def _remove_commit_listener(self, listener: Callable[[], None]) -> None:
+        self._reactive_commit_listeners.discard(listener)

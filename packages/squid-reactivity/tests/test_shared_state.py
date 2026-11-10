@@ -4,21 +4,29 @@ import contextvars
 
 import pytest
 
-from squid_reactivity import LocalTopicBus, ReactiveConflictError, SharedState, state, transaction
+from squid_reactivity import (
+    Reactive,
+    ReactiveConflictError,
+    SubscriptionReconciler,
+    UndeclaredStateError,
+    state,
+    transaction,
+)
 from squid_reactivity.core import _CURRENT
 from squid_reactivity.topics import Address, CellAddress
 
 
-class Preferences(SharedState[int]):
+class Preferences(Reactive):
     theme: str = state("dark")
 
 
 def test_shared_commit_publishes_the_exact_cell() -> None:
-    bus = LocalTopicBus()
-    preferences = Preferences(bus, 7)
+    preferences = Preferences()
     address = CellAddress(preferences, "theme")
     seen: list[Address] = []
-    bus.subscribe(address, seen.append)
+    subscriptions = SubscriptionReconciler(None, seen.append)
+    subscriptions.stage([address])
+    subscriptions.commit()
 
     with transaction():
         preferences.theme = "light"
@@ -29,8 +37,7 @@ def test_shared_commit_publishes_the_exact_cell() -> None:
 
 
 def test_shared_read_write_conflict_rolls_back() -> None:
-    bus = LocalTopicBus()
-    preferences = Preferences(bus, 7)
+    preferences = Preferences()
 
     with pytest.raises(ReactiveConflictError), transaction():
         assert preferences.theme == "dark"
@@ -45,7 +52,7 @@ def test_shared_read_write_conflict_rolls_back() -> None:
 
 
 def test_shared_namespace_rejects_undeclared_attributes() -> None:
-    preferences = Preferences(LocalTopicBus(), 7)
+    preferences = Preferences()
 
-    with pytest.raises(AttributeError, match="not declared state"):
+    with pytest.raises(UndeclaredStateError, match="not declared state"), transaction():
         preferences.extra = True  # type: ignore[attr-defined]

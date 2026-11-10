@@ -424,7 +424,7 @@ async def _measure_resource_resolution(components: int, samples: int) -> ChangeS
 
     try:
         result = await _measure_async_changes("atomic_resource_resolution", components, samples, prepare, operation)
-        assert root.renders == 2
+        assert root.renders == 1
         assert leaf.loads == samples + 1
         assert leaf.renders == samples + 2
         return result

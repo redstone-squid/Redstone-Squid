@@ -161,6 +161,10 @@ class MessageRootScheduler:
         message_root.runtime.invalidate_address(address)
         self._enqueue(message_root)
 
+    def schedule_invalidated(self, message_root: MessageRoot, address: Address) -> None:
+        """Enqueue a root whose runtime already invalidated the observed address."""
+        self._enqueue(message_root)
+
     def _enqueue(self, message_root: MessageRoot) -> None:
         """Enqueue an already invalidated mount while coalescing requests."""
         if message_root.finished:

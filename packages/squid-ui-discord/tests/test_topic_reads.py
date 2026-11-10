@@ -4,7 +4,7 @@ A resource loader declares its dependency with `sl.runtime.watch(topic)`. When a
 renders that resource, the message root must also follow the topic so a publication can
 reload the value and refresh the message. These tests cover that indirect dependency as
 well as topics watched directly during render. `test_shared_follow.py` covers the same
-subscription updates for `sl.runtime.SharedState` cells.
+subscription updates for `sl.Reactive` cells.
 """
 
 import asyncio
@@ -15,7 +15,7 @@ import discord
 import squid_ui as sl
 from squid_ui import Component, resource, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import LocalTopicBus, PendingMode, Topic
+from squid_ui.runtime import CellAddress, LocalTopicBus, PendingMode, Topic
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.delivery import DeliveryResult, handle_for
@@ -83,8 +83,12 @@ async def test_a_topic_watched_only_inside_a_loader_is_followed_by_the_root() ->
     load, _ = counting_loader(["first"])
     message_root, message = await mounted(Watcher(load), bus, scheduler)
 
-    assert message_root.followed == (BUILD,)
-    assert message_root.observed == (BUILD,)
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (BUILD,)
+    assert message_root.observed == (
+        CellAddress(message_root.component, "value"),
+        CellAddress(message_root.component, "topic"),
+        BUILD,
+    )
 
 
 async def test_a_variadic_watch_follows_every_topic_it_names() -> None:
@@ -93,7 +97,7 @@ async def test_a_variadic_watch_follows_every_topic_it_names() -> None:
     load, _ = counting_loader(["first"])
     message_root, message = await mounted(Watcher(load, topics=(BUILD, OTHER)), bus, scheduler)
 
-    assert set(message_root.followed) == {BUILD, OTHER}
+    assert set(message_root.followed) == {CellAddress(message_root.component, "value"), BUILD, OTHER}
 
 
 async def test_a_topic_watched_in_render_is_followed_too() -> None:
@@ -109,7 +113,7 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
     scheduler = MessageRootScheduler(bus)
     message_root, message = await mounted(Direct(), bus, scheduler)
 
-    assert message_root.followed == (BUILD,)
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (BUILD,)
 
 
 # --- Refreshing -----------------------------------------------------------------------
@@ -223,12 +227,12 @@ async def test_a_dropped_conditional_watch_stops_refreshing_once_delivered() -> 
     load, _ = counting_loader(["first", "second"])
     panel = Watcher(load)
     message_root, message = await mounted(panel, bus, scheduler)
-    assert message_root.followed == (BUILD,)
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (BUILD,)
 
     panel.topic = OTHER
     await message_root.refresh()
 
-    assert message_root.followed == (OTHER,)
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (OTHER,)
     assert {snapshot.topic for snapshot in bus.snapshot().topics} == {OTHER}
 
 
@@ -245,7 +249,7 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
 
     panel.topic = BUILD
     await message_root.refresh()
-    assert message_root.followed == (BUILD,)
+    assert tuple(address for address in message_root.followed if isinstance(address, Topic)) == (BUILD,)
 
 
 async def test_no_follow_outlives_its_root() -> None:

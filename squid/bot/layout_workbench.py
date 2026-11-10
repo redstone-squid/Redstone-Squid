@@ -11,7 +11,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.layout_inspector import InspectablePanel
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, tr
-from squid_ui_discord.sessions import UserScope
 
 _TAGS = (
     "Flush",
@@ -83,7 +82,7 @@ class BuildSample:
     tag: str = "Flush"
 
 
-class BuildDraft(sl.runtime.SharedState[UserScope]):
+class BuildDraft(sl.Reactive):
     """One invocation's draft and publication, retained only by its live panels."""
 
     build: BuildSample = sl.state(BuildSample())

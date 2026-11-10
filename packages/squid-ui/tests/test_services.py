@@ -9,7 +9,7 @@ import anyio
 import pytest
 from anyio.abc import TaskGroup, TaskStatus
 
-from squid_ui import Component, ComponentsV2Target, DocumentLike, state
+from squid_ui import Component, ComponentsV2Target, DocumentLike, Reactive, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import (
     ComponentRuntime,
@@ -17,7 +17,6 @@ from squid_ui.runtime import (
     LocalTopicBus,
     ManagedService,
     ServiceOwner,
-    SharedState,
     Topic,
     UIExecutionHost,
 )
@@ -376,13 +375,13 @@ async def test_injected_service_renders_before_readiness_and_publishes_ready_sta
         bus = LocalTopicBus()
         release = asyncio.Event()
 
-        class Status(SharedState):
+        class Status(Reactive):
             ready: bool = state(default=False)
 
         class Loading(Recorder):
             def __init__(self) -> None:
                 super().__init__()
-                self.status = Status(bus)
+                self.status = Status()
 
             @override
             async def setup(self) -> None:
@@ -472,10 +471,10 @@ def test_owned_services_require_host_and_render_cannot_register_services() -> No
 async def test_cached_tree_requires_running_execution_host(cached: str) -> None:
     async with running_host() as host:
 
-        class Values(SharedState):
+        class Values(Reactive):
             count: int = state(default=0)
 
-        values = Values(LocalTopicBus())
+        values = Values()
 
         class ReadingPanel(Panel):
             @override
@@ -1010,12 +1009,12 @@ async def test_owned_subscription_stops_updating_retained_shared_state() -> None
         bus = LocalTopicBus()
         topic = Topic("build", "42")
 
-        class Updates(SharedState):
+        class Updates(Reactive):
             count: int = state(default=0)
 
         class Subscription(ManagedService):
             def __init__(self) -> None:
-                self.state = Updates(bus)
+                self.state = Updates()
 
             @override
             async def run(self, *, task_status: TaskStatus[None]) -> None:
@@ -1060,10 +1059,10 @@ async def test_service_run_uses_host_context_not_activating_transaction() -> Non
     context = ContextVar("service_test_context", default="unconfigured")
     bus = LocalTopicBus()
 
-    class Values(SharedState):
+    class Values(Reactive):
         count: int = state(default=0)
 
-    values = Values(bus)
+    values = Values()
 
     class Writer(ManagedService):
         @override

@@ -14,7 +14,7 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics_view import ERROR_CHROME, ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.models import ErrorReport
-from squid_ui.runtime import LocalTopicBus, Resource, UIExecutionHost
+from squid_ui.runtime import Resource, UIExecutionHost
 from squid_ui.sources import Position
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
 from squid_ui_discord import (
@@ -70,7 +70,6 @@ def make_screen(
     operations = ErrorReportRecorder(reports, report=report, matches=matches)
     return ErrorReportScreen(
         operations,
-        bus=LocalTopicBus(),
         reference=report.reference if report is not None else None,
         can_clear=can_clear,
         authorize_clear=Authorizer(allowed=True) if can_clear else None,
@@ -131,7 +130,7 @@ async def message_root_browser(
     """Load browser data before the synchronous rendering assertions."""
     await browser.on_load()
     browser._loaded = True
-    bot = make_layout_bot(topic_bus=browser._bus)
+    bot = make_layout_bot()
     message_root = bot.ui.mount(browser, access=Owner(1), chrome=ERROR_CHROME, execution_host=execution_host)
     if browser._browser is not None:
         await browser._browser.window._load()

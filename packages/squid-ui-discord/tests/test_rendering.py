@@ -17,8 +17,8 @@ import squid_ui as sl
 import squid_ui.runtime.expansion as expansion_module
 import squid_ui.runtime.owner as owner_module
 import squid_ui_discord as sd
-from squid_reactivity.shared_state import SharedState
-from squid_reactivity.topics import CellAddress, LocalTopicBus
+from squid_reactivity.core import Reactive
+from squid_reactivity.topics import CellAddress
 from squid_ui import Component, ContextKey, PressEvent, state
 from squid_ui.document import Asset, Document, InlineAsset
 from squid_ui.errors import LayoutInvariantError
@@ -548,10 +548,10 @@ class TestRenderCaching:
         assert unchanged.nodes == initial.nodes
 
     def test_address_invalidation_backdates_before_tree_expansion(self, monkeypatch) -> None:
-        class Values(SharedState[object]):
+        class Values(Reactive):
             value: int = state(0)
 
-        values = Values(LocalTopicBus(), object())
+        values = Values()
 
         class Parity(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
@@ -588,12 +588,12 @@ class TestRenderCaching:
         assert runtime.components is committed_components
 
     def test_equal_computed_value_refreshes_changed_dependency_addresses(self) -> None:
-        class Values(SharedState[object]):
+        class Values(Reactive):
             use_b: bool = state(default=False)
             a: int = state(1)
             b: int = state(1)
 
-        values = Values(LocalTopicBus(), object())
+        values = Values()
 
         class Panel(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
@@ -635,11 +635,11 @@ class TestRenderCaching:
         assert changed.nodes == (Text("2"),)
 
     def test_address_invalidation_only_renders_the_dependent_sibling(self) -> None:
-        class Values(SharedState[object]):
+        class Values(Reactive):
             left: int = state(0)
             right: int = state(0)
 
-        values = Values(LocalTopicBus(), object())
+        values = Values()
 
         class Value(Component[sl.ComponentsV2Target]):
             def __init__(self, name: str) -> None:
@@ -843,7 +843,7 @@ def test_duplicate_sibling_embed_keys_are_rejected() -> None:
 
 
 def test_one_component_instance_cannot_occupy_two_paths() -> None:
-    child = Counter("shared")
+    child = Counter("nested")
 
     class Duplicate(Component[sl.ComponentsV2Target]):
         @override

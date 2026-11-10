@@ -1,18 +1,18 @@
-"""SharedState namespaces: declaration, lifetime, staging, and the commit precondition."""
+"""Reactive namespaces: declaration, lifetime, staging, and the commit precondition."""
 
 import contextvars
 import gc
 import weakref
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, override
+from typing import override
 
 import pytest
 
-from squid_reactivity.topics import LocalTopicBus
-from squid_ui import Component, DiscordTarget, computed, state
+from squid_reactivity import Address, SubscriptionReconciler, UndeclaredStateError, export_state
+from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import CellAddress, ReactiveConflictError, SharedState, transaction
+from squid_ui.runtime import CellAddress, ReactiveConflictError, transaction
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,24 +21,43 @@ class Member:
     guild_id: int
 
 
-class Preferences(SharedState[Member]):
+class Preferences(Reactive):
     theme: str = state("system")
     locale: str = state("en")
 
 
-class Workspace(SharedState[Member]):
+class Workspace(Reactive):
     theme: str = state("unrelated")
     selected: int | None = state(None)
     filters: tuple[str, ...] = state(())
 
 
-class Anonymous(SharedState):
+class Anonymous(Reactive):
     flag: bool = state(default=False)
 
 
+type Follow = Callable[[CellAddress, Callable[[Address], None]], Callable[[], None]]
+
+
 @pytest.fixture
-def bus() -> LocalTopicBus:
-    return LocalTopicBus()
+def follow() -> Iterator[Follow]:
+    subscriptions: list[SubscriptionReconciler] = []
+
+    def observe(address: CellAddress, callback: Callable[[Address], None]) -> Callable[[], None]:
+        reconciler = SubscriptionReconciler(None, callback)
+        reconciler.stage([address])
+        reconciler.commit()
+        subscriptions.append(reconciler)
+
+        def close() -> None:
+            reconciler.close()
+            subscriptions.remove(reconciler)
+
+        return close
+
+    yield observe
+    for reconciler in subscriptions:
+        reconciler.close()
 
 
 @pytest.fixture
@@ -49,61 +68,42 @@ def here() -> Member:
 # --- Declaration ------------------------------------------------------------------------
 
 
-def test_cells_are_read_and_written_as_attributes(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_cells_are_read_and_written_as_attributes(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     assert preferences.theme == "system"
     preferences.theme = "dark"
     assert preferences.theme == "dark"
     assert preferences.locale == "en"
 
 
-def test_two_namespaces_with_the_same_cell_name_do_not_collide(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
-    workspace = Workspace(bus, here)
+def test_two_namespaces_with_the_same_cell_name_do_not_collide(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
+    workspace = Workspace()
     preferences.theme = "dark"
     assert workspace.theme == "unrelated"
 
 
-def test_two_handles_of_one_class_are_separate_state(bus: LocalTopicBus) -> None:
-    mine = Preferences(bus, Member(1, 2))
-    yours = Preferences(bus, Member(3, 2))
+def test_two_handles_of_one_class_are_separate_state(follow: Follow) -> None:
+    mine = Preferences()
+    yours = Preferences()
     mine.theme = "dark"
     assert yours.theme == "system"
 
 
-def test_scope_is_whatever_the_host_gave_it(bus: LocalTopicBus, here: Member) -> None:
-    assert Preferences(bus, here).scope == here
-    assert Anonymous(bus).scope is None
+def test_models_can_declare_domain_metadata_and_private_state() -> None:
+    class Model(Reactive):
+        scope: int = state(0)
+        _hidden: int = state(1)
+
+    model = Model()
+    assert model.scope == 0
+    assert model._hidden == 1
 
 
-def test_an_unhashable_or_mutable_scope_is_accepted(bus: LocalTopicBus) -> None:
-    mutable = ["guild", 7]
-    assert Anonymous(bus, mutable).scope is mutable  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
-
-
-def test_repr_names_the_class_and_the_scope(bus: LocalTopicBus, here: Member) -> None:
-    assert repr(Preferences(bus, here)) == "Preferences(Member(user_id=1, guild_id=2))"
-    assert repr(Anonymous(bus)) == "Anonymous()"
-
-
-def test_a_reserved_name_raises_at_class_creation() -> None:
-    with pytest.raises(TypeError, match="reserves 'scope'"):
-
-        class Bad(SharedState[int]):
-            scope: int = state(0)
-
-
-def test_an_underscored_cell_raises_at_class_creation() -> None:
-    with pytest.raises(TypeError, match="underscored"):
-
-        class Bad(SharedState[int]):
-            _hidden: int = state(0)
-
-
-def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) -> None:
+def test_one_declaration_serves_both_owners(follow: Follow, here: Member) -> None:
     """The same descriptor supports component-local and shared state through its owner type."""
 
-    class Namespace(SharedState[Member]):
+    class Namespace(Reactive):
         value: int = state(0)
 
     class Panel(Component[DiscordTarget]):
@@ -113,7 +113,7 @@ def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) ->
         def render(self):
             return Text(str(self.value))
 
-    namespace = Namespace(bus, here)
+    namespace = Namespace()
     panel = Panel()
     namespace.value = 1
     panel.value = 1
@@ -121,9 +121,9 @@ def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) ->
     assert (namespace.value, panel.value) == (1, 1)
 
 
-def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: Member) -> None:
+def test_models_and_components_have_identity_addresses(follow: Follow, here: Member) -> None:
 
-    class Namespace(SharedState[Member]):
+    class Namespace(Reactive):
         value: int = state(0)
 
     class Panel(Component[DiscordTarget]):
@@ -133,40 +133,29 @@ def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: M
         def render(self):
             return Text(str(self.value))
 
-    namespace = Namespace(bus, here)
+    namespace = Namespace()
     assert type(namespace)._state_descriptors["value"].address(namespace) == CellAddress(namespace, "value")
-    assert Panel._state_descriptors["value"].address(Panel()) is None
+    panel = Panel()
+    assert Panel._state_descriptors["value"].address(panel) == CellAddress(panel, "value")
 
 
-def test_a_namespace_refuses_persistence_it_cannot_honour() -> None:
-    with pytest.raises(TypeError, match="never persisted"):
+def test_explicit_persistence_uses_declared_fields() -> None:
+    class Model(Reactive):
+        saved: int = state(1, persist=True)
+        transient: int = state(2, persist=False)
 
-        class Bad(SharedState[int]):
-            wrong: int = state(0, persist=True)
-
-
-def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: LocalTopicBus, here: Member) -> None:
-    """Plain state() declarations must work for shared state as well as component state.
-
-    SharedState rejects an explicit persist=True, but accepts the descriptor's default
-    so callers can use the same declaration syntax for both owners.
-    """
-
-    class Fine(SharedState[Member]):
-        value: int = state(0)
-
-    assert Fine(bus, here).value == 0
+    assert export_state(Model()) == {"saved": 1}
 
 
-def test_an_undeclared_attribute_cannot_be_written(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
-    with pytest.raises(AttributeError, match="not declared state"):
+def test_an_undeclared_attribute_cannot_be_written(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
+    with pytest.raises(UndeclaredStateError, match="not declared state"), transaction():
         preferences.undeclared = 1
 
 
-def test_a_cell_cannot_be_deleted(bus: LocalTopicBus, here: Member) -> None:
+def test_a_cell_cannot_be_deleted(follow: Follow, here: Member) -> None:
     """Reset is an assignment. `del` would mean removal, and the attribute stays."""
-    preferences = Preferences(bus, here)
+    preferences = Preferences()
     preferences.theme = "dark"
     with pytest.raises(AttributeError):
         del preferences.theme
@@ -176,15 +165,15 @@ def test_a_cell_cannot_be_deleted(bus: LocalTopicBus, here: Member) -> None:
 # --- Values -----------------------------------------------------------------------------
 
 
-def test_an_equal_write_changes_nothing(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_an_equal_write_changes_nothing(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     preferences.theme = "dark"
     published: list[object] = []
-    bus.subscribe(CellAddress(preferences, "theme"), _record(published))
+    follow(CellAddress(preferences, "theme"), _record(published))
     preferences.theme = "dark"
     assert published == []
     preferences.theme = "light"
-    assert len(bus.snapshot().topics) == 1
+    assert published == [CellAddress(preferences, "theme")]
 
 
 class Held:
@@ -198,19 +187,19 @@ class Held:
     __hash__ = None  # type: ignore[assignment]
 
 
-def test_an_opaque_cell_settles_by_identity(bus: LocalTopicBus) -> None:
-    class Services(SharedState):
+def test_an_opaque_cell_settles_by_identity(follow: Follow) -> None:
+    class Services(Reactive):
         held: Held = state(factory=Held, opaque=True)
 
-    services = Services(bus)
+    services = Services()
     same = services.held
     services.held = same
     services.held = Held()
     assert services.held is not same
 
 
-def test_a_replaced_collection_is_stored_as_assigned(bus: LocalTopicBus, here: Member) -> None:
-    workspace = Workspace(bus, here)
+def test_a_replaced_collection_is_stored_as_assigned(follow: Follow, here: Member) -> None:
+    workspace = Workspace()
     workspace.filters = (*workspace.filters, "redstone")
     assert workspace.filters == ("redstone",)
 
@@ -225,38 +214,38 @@ def _record(into: list[object]):
     return subscriber
 
 
-async def test_a_write_outside_an_action_publishes_immediately(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+async def test_a_write_outside_an_action_publishes_immediately(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     theme = CellAddress(preferences, "theme")
     seen: list[object] = []
-    bus.subscribe(theme, _record(seen))
+    follow(theme, _record(seen))
     preferences.theme = "dark"
     assert seen == [theme]
 
 
-async def test_only_the_cells_that_moved_publish(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+async def test_only_the_cells_that_moved_publish(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     seen: list[object] = []
-    bus.subscribe(CellAddress(preferences, "theme"), _record(seen))
-    bus.subscribe(CellAddress(preferences, "locale"), _record(seen))
+    follow(CellAddress(preferences, "theme"), _record(seen))
+    follow(CellAddress(preferences, "locale"), _record(seen))
     with transaction():
         preferences.theme = "dark"
     assert seen == [CellAddress(preferences, "theme")]
 
 
-async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus) -> None:
+async def test_an_in_place_mutation_publishes_with_its_action(follow: Follow) -> None:
     """`mutated()` is a write like any other, and a rolled-back one was never published.
 
     The list itself keeps the appended item, but subscribers receive no notification
     from the failed transaction.
     """
 
-    class Draft(SharedState):
+    class Draft(Reactive):
         body: list[str] = state(factory=list, opaque=True)  # pyright: ignore[reportAssignmentType]  # pyrefly: ignore[bad-assignment]
 
-    draft = Draft(bus)
+    draft = Draft()
     seen: list[object] = []
-    bus.subscribe(CellAddress(draft, "body"), _record(seen))
+    follow(CellAddress(draft, "body"), _record(seen))
 
     with pytest.raises(RuntimeError, match="abort"), transaction():
         draft.body.append("first")
@@ -276,12 +265,12 @@ async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus
 # --- Transaction staging -------------------------------------------------------------------
 
 
-async def test_writes_stage_and_publish_together(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
-    workspace = Workspace(bus, here)
+async def test_writes_stage_and_publish_together(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
+    workspace = Workspace()
     seen: list[object] = []
     for handle, name in ((preferences, "theme"), (workspace, "selected")):
-        bus.subscribe(CellAddress(handle, name), _record(seen))
+        follow(CellAddress(handle, name), _record(seen))
     with transaction():
         preferences.theme = "dark"
         assert preferences.theme == "dark", "an action reads its own writes"
@@ -290,8 +279,8 @@ async def test_writes_stage_and_publish_together(bus: LocalTopicBus, here: Membe
     assert len(seen) == 2
 
 
-def test_a_staged_write_is_not_visible_to_another_reader(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_a_staged_write_is_not_visible_to_another_reader(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     observed: list[str] = []
     with transaction():
         preferences.theme = "dark"
@@ -309,10 +298,10 @@ def elsewhere[ValueT](what: Callable[[], ValueT]) -> ValueT:
     return contextvars.Context().run(what)
 
 
-async def test_a_failed_action_leaks_no_staged_value(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+async def test_a_failed_action_leaks_no_staged_value(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     seen: list[object] = []
-    bus.subscribe(CellAddress(preferences, "theme"), _record(seen))
+    follow(CellAddress(preferences, "theme"), _record(seen))
     with pytest.raises(RuntimeError, match="handler failed"), transaction():
         preferences.theme = "dark"
         message = "handler failed"
@@ -321,8 +310,8 @@ async def test_a_failed_action_leaks_no_staged_value(bus: LocalTopicBus, here: M
     assert seen == []
 
 
-def test_one_action_spans_several_namespaces(bus: LocalTopicBus, here: Member) -> None:
-    handles = [Workspace(bus, Member(index, 2)) for index in range(3)]
+def test_one_action_spans_several_namespaces(follow: Follow, here: Member) -> None:
+    handles = [Workspace() for index in range(3)]
     with pytest.raises(RuntimeError, match="handler failed"), transaction():
         for index, handle in enumerate(handles):
             handle.selected = index
@@ -334,30 +323,30 @@ def test_one_action_spans_several_namespaces(bus: LocalTopicBus, here: Member) -
 # --- The commit precondition --------------------------------------------------------------
 
 
-def test_a_read_and_written_cell_conflicts_when_it_moves(bus: LocalTopicBus, here: Member) -> None:
-    workspace = Workspace(bus, here)
-    conflict = r"Workspace\(Member\(user_id=1, guild_id=2\)\)\.filters"
+def test_a_read_and_written_cell_conflicts_when_it_moves(follow: Follow, here: Member) -> None:
+    workspace = Workspace()
+    conflict = r"\.filters changed"
     with pytest.raises(ReactiveConflictError, match=conflict), transaction():
         workspace.filters = (*workspace.filters, "mine")
         _write_from_elsewhere(workspace, "filters", ("theirs",))
     assert workspace.filters == ("theirs",), "the losing action published nothing"
 
 
-def _write_from_elsewhere(handle: SharedState[Any], name: str, value: object) -> None:
+def _write_from_elsewhere(handle: Reactive, name: str, value: object) -> None:
     """Commit a value the way another task's action would, around this transaction."""
     elsewhere(lambda: setattr(handle, name, value))
 
 
-def test_a_write_only_cell_is_blind(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_a_write_only_cell_is_blind(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     with transaction():
         preferences.locale = "fr"
         _write_from_elsewhere(preferences, "locale", "de")
     assert preferences.locale == "fr", "last commit wins"
 
 
-def test_a_read_only_action_never_conflicts(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_a_read_only_action_never_conflicts(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     composed: list[str] = []
     with transaction():
         composed.append(preferences.theme)
@@ -366,8 +355,8 @@ def test_a_read_only_action_never_conflicts(bus: LocalTopicBus, here: Member) ->
     assert preferences.theme == "dark"
 
 
-def test_reading_a_staged_value_does_not_enter_the_read_set(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_reading_a_staged_value_does_not_enter_the_read_set(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     with transaction():
         preferences.theme = "dark"
         assert preferences.theme == "dark"
@@ -375,8 +364,8 @@ def test_reading_a_staged_value_does_not_enter_the_read_set(bus: LocalTopicBus, 
     assert preferences.theme == "dark"
 
 
-def test_a_later_write_does_not_clear_the_guard(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_a_later_write_does_not_clear_the_guard(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     with pytest.raises(ReactiveConflictError), transaction():
         seen = preferences.theme
         preferences.theme = f"{seen}+"
@@ -384,8 +373,8 @@ def test_a_later_write_does_not_clear_the_guard(bus: LocalTopicBus, here: Member
         _write_from_elsewhere(preferences, "theme", "moved")
 
 
-def test_a_b_a_conflicts_by_version_lineage(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_a_b_a_conflicts_by_version_lineage(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     with pytest.raises(ReactiveConflictError), transaction():
         seen = preferences.theme
         preferences.theme = f"{seen}!"
@@ -394,9 +383,9 @@ def test_a_b_a_conflicts_by_version_lineage(bus: LocalTopicBus, here: Member) ->
     assert preferences.theme == "system"
 
 
-def test_a_conflict_publishes_nothing_at_all(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
-    workspace = Workspace(bus, here)
+def test_a_conflict_publishes_nothing_at_all(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
+    workspace = Workspace()
     with pytest.raises(ReactiveConflictError), transaction():
         workspace.selected = 9
         preferences.theme = f"{preferences.theme}!"
@@ -404,8 +393,8 @@ def test_a_conflict_publishes_nothing_at_all(bus: LocalTopicBus, here: Member) -
     assert workspace.selected is None
 
 
-def test_local_state_rolls_back_with_a_conflict(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_local_state_rolls_back_with_a_conflict(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
 
     class Panel(Component[DiscordTarget]):
         open: bool = state(default=False)
@@ -422,8 +411,8 @@ def test_local_state_rolls_back_with_a_conflict(bus: LocalTopicBus, here: Member
     assert panel.open is False
 
 
-def test_outside_an_action_every_write_is_blind(bus: LocalTopicBus, here: Member) -> None:
-    preferences = Preferences(bus, here)
+def test_outside_an_action_every_write_is_blind(follow: Follow, here: Member) -> None:
+    preferences = Preferences()
     seen = preferences.theme
     _write_from_elsewhere(preferences, "theme", "dark")
     preferences.theme = f"{seen}!"
@@ -433,8 +422,8 @@ def test_outside_an_action_every_write_is_blind(bus: LocalTopicBus, here: Member
 # --- Computed over shared state -----------------------------------------------------------
 
 
-def test_a_computed_recomputes_when_another_owner_writes(bus: LocalTopicBus, here: Member) -> None:
-    workspace = Workspace(bus, here)
+def test_a_computed_recomputes_when_another_owner_writes(follow: Follow, here: Member) -> None:
+    workspace = Workspace()
     runs: list[int] = []
 
     class Detail(Component[DiscordTarget]):
@@ -462,10 +451,10 @@ def test_a_computed_recomputes_when_another_owner_writes(bus: LocalTopicBus, her
 # --- Lifetime ---------------------------------------------------------------------------
 
 
-async def test_a_namespace_with_no_holder_is_collected(bus: LocalTopicBus, here: Member) -> None:
-    workspace = Workspace(bus, here)
+async def test_a_namespace_with_no_holder_is_collected(follow: Follow, here: Member) -> None:
+    workspace = Workspace()
     gone = weakref.ref(workspace)
-    unfollow = bus.subscribe(CellAddress(workspace, "selected"), _record([]))
+    unfollow = follow(CellAddress(workspace, "selected"), _record([]))
     workspace.selected = 3
     # Release both references held by this fixture: the namespace itself and the unsubscribe
     # callback, which closes over its cell address.

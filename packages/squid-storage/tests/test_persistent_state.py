@@ -6,12 +6,16 @@ from typing import override
 import anyio
 import pytest
 
-from squid_reactivity import LocalTopicBus, SharedState, state, transaction
+from squid_reactivity import Reactive, state, transaction
 from squid_storage import MemoryScopedStore, PersistentStatePool, Slot, json_codec
 
 
-class Preferences(SharedState[str]):
+class Preferences(Reactive):
     theme: str = state("dark")
+
+
+def make_preferences(key: str) -> Preferences:
+    return Preferences()
 
 
 @pytest.fixture
@@ -24,7 +28,7 @@ async def test_load_hydrates_and_reuses_the_canonical_handle(
 ) -> None:
     store = MemoryScopedStore()
     await store.put(slot, "guild", {"theme": "light"})
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -41,7 +45,7 @@ async def test_committed_state_persists_but_rolled_back_state_does_not(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
     store = MemoryScopedStore()
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -69,7 +73,7 @@ async def test_store_failures_are_reported_without_failing_the_action(
             raise OSError("offline")
 
     errors: list[BaseException] = []
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=BrokenStore(), slot=slot, on_error=errors.append)
+    pool = PersistentStatePool(make_preferences, store=BrokenStore(), slot=slot, on_error=errors.append)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -94,7 +98,7 @@ async def test_the_worker_outlives_the_task_that_first_loaded(
     """
     store = MemoryScopedStore()
     await store.put(slot, "guild", {"theme": "light"})
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -115,7 +119,7 @@ async def test_the_worker_outlives_the_task_that_first_loaded(
 async def test_loading_a_pool_that_is_not_running_is_refused(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot)
+    pool = PersistentStatePool(make_preferences, store=MemoryScopedStore(), slot=slot)
 
     with pytest.raises(RuntimeError, match="not running"):
         await pool.load("guild")
@@ -124,7 +128,7 @@ async def test_loading_a_pool_that_is_not_running_is_refused(
 async def test_a_closed_pool_refuses_further_loads(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot)
+    pool = PersistentStatePool(make_preferences, store=MemoryScopedStore(), slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -142,9 +146,7 @@ async def test_a_commit_after_close_is_reported_rather_than_dropped(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
     errors: list[BaseException] = []
-    pool = PersistentStatePool(
-        Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot, on_error=errors.append
-    )
+    pool = PersistentStatePool(make_preferences, store=MemoryScopedStore(), slot=slot, on_error=errors.append)
     preferences: Preferences | None = None
 
     async with anyio.create_task_group() as tasks:
@@ -166,7 +168,7 @@ async def test_a_dropped_generation_stops_persisting_to_the_slot_it_no_longer_ow
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
     store = MemoryScopedStore()
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -197,7 +199,7 @@ async def test_drop_writes_out_what_the_retired_handle_already_committed(
 ) -> None:
     """Deleting a cached handle preserves its last committed value for future hydration."""
     store = MemoryScopedStore()
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -212,7 +214,7 @@ async def test_drop_writes_out_what_the_retired_handle_already_committed(
 
 
 async def test_dropping_an_absent_scope_returns_none(slot: Slot[str, Mapping[str, object]]) -> None:
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot)
+    pool = PersistentStatePool(make_preferences, store=MemoryScopedStore(), slot=slot)
 
     assert await pool.delete("guild") is None
     await pool.close()
@@ -220,7 +222,7 @@ async def test_dropping_an_absent_scope_returns_none(slot: Slot[str, Mapping[str
 
 async def test_clear_retires_every_scope(slot: Slot[str, Mapping[str, object]]) -> None:
     store = MemoryScopedStore()
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -235,7 +237,7 @@ async def test_clear_retires_every_scope(slot: Slot[str, Mapping[str, object]]) 
 
 
 async def test_active_snapshots_the_loaded_namespaces(slot: Slot[str, Mapping[str, object]]) -> None:
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot)
+    pool = PersistentStatePool(make_preferences, store=MemoryScopedStore(), slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -251,7 +253,7 @@ async def test_active_snapshots_the_loaded_namespaces(slot: Slot[str, Mapping[st
 
 async def test_a_closed_pool_stops_persisting(slot: Slot[str, Mapping[str, object]]) -> None:
     store = MemoryScopedStore()
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=store, slot=slot)
+    pool = PersistentStatePool(make_preferences, store=store, slot=slot)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
@@ -264,9 +266,17 @@ async def test_a_closed_pool_stops_persisting(slot: Slot[str, Mapping[str, objec
         assert await store.get(slot, "guild") is None
 
 
-async def test_the_namespace_and_bus_stay_readable(slot: Slot[str, Mapping[str, object]]) -> None:
-    bus = LocalTopicBus()
-    pool = PersistentStatePool(Preferences, bus, store=MemoryScopedStore(), slot=slot)
+async def test_the_factory_can_build_a_model_without_key_metadata(slot: Slot[str, Mapping[str, object]]) -> None:
+    class Unscoped(Reactive):
+        theme: str = state("dark")
 
-    assert pool.namespace is Preferences
-    assert pool.bus is bus
+    def make(key: str) -> Unscoped:
+        return Unscoped()
+
+    pool = PersistentStatePool(make, store=MemoryScopedStore(), slot=slot)
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(pool.run)
+        loaded = await pool.load("guild")
+        assert loaded.theme == "dark"
+        assert pool.get_existing("guild") is loaded
+        await pool.close()

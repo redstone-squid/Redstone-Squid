@@ -330,7 +330,7 @@ class TestStateWithoutAnInitialValue:
 
 
 class TestMutatedInPlace:
-    def test_it_schedules_a_draw_for_a_change_nothing_observed(self):
+    def test_it_does_not_schedule_a_draw_for_an_unobserved_change(self):
         panel = Panel(Uncopyable())
         runtime = ComponentRuntime(panel)
         runtime.commit(runtime.render())
@@ -338,7 +338,7 @@ class TestMutatedInPlace:
 
         panel.mutated(panel.service)
 
-        assert runtime.dirty is True
+        assert runtime.dirty is False
 
     def test_it_rejects_an_object_no_opaque_field_holds(self):
         """The point of passing the object: the call breaks when the declaration goes away."""
@@ -362,15 +362,22 @@ class TestMutatedInPlace:
         assert runtime.dirty is False
 
     def test_it_announces_a_committed_signal_once(self):
-        panel = Panel(Uncopyable())
+        class Reader(Panel):
+            @override
+            def render(self):
+                return Text(str(self.service))
+
+        panel = Reader(Uncopyable())
         runtime = ComponentRuntime(panel)
         runtime.commit(runtime.render())
 
+        revision = runtime.revision
         with transaction():
             panel.mutated(panel.service)
             panel.mutated(panel.service)
 
         assert runtime.dirty is True
+        assert runtime.revision == revision + 1
 
 
 class TestAbstractBases:

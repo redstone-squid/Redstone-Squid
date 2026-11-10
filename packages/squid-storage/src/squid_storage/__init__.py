@@ -3,7 +3,7 @@
 DurableSessionStore keeps published sessions and coordinates which host may
 update or replace them. ScopedStore holds typed values under a slot name and
 scope, such as preferences for one member. PersistentStatePool connects scoped
-storage to reactive SharedState, restoring values on load and queuing snapshots
+storage to reactive Reactive, restoring values on load and queuing snapshots
 after commits. Memory, SQLite, and PostgreSQL implementations share these
 contracts; PostgresTopicBridge carries change notifications between processes.
 """

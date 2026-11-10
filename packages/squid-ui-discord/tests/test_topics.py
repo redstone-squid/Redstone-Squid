@@ -8,12 +8,11 @@ import anyio
 import pytest
 
 from squid_reactivity.topics import Address, CellAddress, KindKeyCodec, LocalTopicBus, Topic, TopicBus
-from squid_ui import state
-from squid_ui.runtime import SharedState
+from squid_ui import Reactive, state
 from squid_ui_discord.durability import PostgresTopicBridge
 
 
-class Workspace(SharedState[int]):
+class Workspace(Reactive):
     selected: int | None = state(None)
 
 
@@ -209,7 +208,7 @@ async def test_a_cell_address_is_published_locally_only() -> None:
     def record(address: Address) -> None:
         seen.append(address)
 
-    workspace = Workspace(bus, 7)
+    workspace = Workspace()
     address = CellAddress(workspace, "selected")
     bus.subscribe(address, record)
     bridge = _bridge(server, bus)
@@ -301,7 +300,7 @@ def test_a_topic_is_equal_and_hashes_by_value() -> None:
 
 def test_a_cell_address_separates_two_namespaces_of_one_class() -> None:
     bus = LocalTopicBus()
-    first, second = Workspace(bus, 1), Workspace(bus, 2)
+    first, second = Workspace(), Workspace()
     assert CellAddress(first, "selected") == CellAddress(first, "selected")
     assert CellAddress(first, "selected") != CellAddress(second, "selected")
     assert CellAddress(first, "selected") != CellAddress(first, "other")
@@ -310,7 +309,7 @@ def test_a_cell_address_separates_two_namespaces_of_one_class() -> None:
 def test_a_namespace_that_defines_equality_cannot_merge_two_addresses() -> None:
     """Identity, not equality: a host's `__eq__` must not collapse two live namespaces."""
 
-    class Loose(SharedState[int]):
+    class Loose(Reactive):
         selected: int | None = state(None)
 
         @override
@@ -322,7 +321,7 @@ def test_a_namespace_that_defines_equality_cannot_merge_two_addresses() -> None:
             return 0
 
     bus = LocalTopicBus()
-    first, second = Loose(bus, 1), Loose(bus, 2)
+    first, second = Loose(), Loose()
     assert first == second
     assert CellAddress(first, "selected") != CellAddress(second, "selected")
 

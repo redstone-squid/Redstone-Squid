@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from squid_reactivity.resources import AsyncBinding
-from squid_reactivity.topics import Address
+from squid_reactivity.topics import Address, SubscriptionReconciler, TopicBus
 from squid_ui.context import ContextKey
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache, PlanMemo
@@ -41,6 +41,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         presentation: PresentationState | None = None,
         on_invalidate: Callable[[], None] | None = None,
+        on_reactive_invalidate: Callable[[Address], None] | None = None,
+        topic_bus: TopicBus | None = None,
         context: Mapping[ContextKey[Any], object] | None = None,
         plan_cache: PlanCache | None = None,
         execution_host: UIExecutionHost | None = None,
@@ -52,6 +54,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         root._runtime = self
         self.presentation = presentation if presentation is not None else PresentationState()
         self.on_invalidate = on_invalidate
+        self.on_reactive_invalidate = on_reactive_invalidate
+        self.subscriptions = SubscriptionReconciler(topic_bus, self._reactive_changed)
         self.context = dict(context or {})
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.plan_memo = PlanMemo()
@@ -67,6 +71,25 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.dirty = True
         """Whether the committed tree is behind the inputs a fresh render would read."""
 
+    def _reactive_changed(self, address: Address) -> None:
+        self.invalidate_address(address)
+        if self.on_reactive_invalidate is not None:
+            self.on_reactive_invalidate(address)
+
+    def stage(self, tree: ComponentTree[RenderTargetT]) -> None:
+        """Observe a candidate while preserving the delivered tree's dependencies."""
+        # Loading can discover several successive candidates before one is delivered.
+        # Keep the committed dependencies throughout each discovery pass.
+        if self.subscriptions.staged is not None:
+            self.subscriptions.discard()
+        self.subscriptions.stage(tree.observations)
+
+    def discard(self) -> None:
+        """Release prospective dependencies without changing the delivered tree."""
+        if self.subscriptions.staged is not None:
+            self.subscriptions.discard()
+        self._candidate_tree = None
+
     def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None:
         """Declare the render inputs moved, so anything rendered before now is stale."""
         self._invalidate_components(
@@ -80,7 +103,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         requested = set(addresses)
         if not requested:
             return
-        active: set[Address] = set()
+        active: set[Address] = set(self.subscriptions.watched)
         if self._committed_tree is not None:
             active.update(self._committed_tree.observations)
         if self._candidate_tree is not None:
@@ -168,6 +191,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
         self._cache.rendered()
+        if not terminal:
+            self.stage(tree)
         if not tree.deferred:
             self._candidate_tree = tree
             self._candidate_revision = self.revision
@@ -214,6 +239,10 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
         def depth(path: str) -> int:
             return 0 if path == "$" else path.count(".") + 1
+
+        if self.subscriptions.staged != tree.observations:
+            self.stage(tree)
+        self.subscriptions.commit()
 
         if tree is self._committed_tree:
             if rendered_revision is None or self.revision == rendered_revision:
@@ -336,6 +365,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
 
         Call ``await runtime.wait_services()`` afterwards to wait for cleanup.
         """
+        self.subscriptions.clear()
         for _path, component in sorted(
             self.components.items(),
             key=lambda item: 0 if item[0] == "$" else item[0].count(".") + 1,

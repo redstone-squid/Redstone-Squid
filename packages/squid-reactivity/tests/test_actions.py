@@ -22,12 +22,10 @@ from squid_reactivity import (
     ContinuationFailureSnapshot,
     DurableResultPolicy,
     DurableResultSink,
-    LocalTopicBus,
+    Reactive,
     ReactiveConflictError,
     ReactiveWriteError,
     RedactionPolicy,
-    SharedState,
-    StateOwner,
     add_action_result_sink,
     apply_conditional_patches,
     computed,
@@ -44,16 +42,16 @@ from squid_reactivity import (
 from squid_reactivity.core import _CURRENT
 
 
-class Preferences(SharedState[int]):
+class Preferences(Reactive):
     theme: str = state("system")
     locale: str = state("en")
 
 
-class Counter(SharedState[int]):
+class Counter(Reactive):
     value: int = state(0)
 
 
-class LocalCounter(StateOwner):
+class LocalCounter(Reactive):
     value: int = state(0)
 
 
@@ -67,7 +65,7 @@ def _outside_write(preferences: Preferences, name: str, value: str) -> None:
 def test_each_action_emits_one_identified_terminal_outcome() -> None:
     ledger = ActionLedger()
     add_action_result_sink(ledger)
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
     context = ActionContext.create("change theme")
     try:
         with transaction(action_context=context):
@@ -108,7 +106,7 @@ def test_read_only_actions_emit_terminal_outcomes() -> None:
 
 
 def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
     seen: list[tuple[str, str]] = []
 
     with pytest.raises(RuntimeError, match="failed"), transaction():
@@ -125,7 +123,7 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
 
 def test_write_skew_is_allowed_by_default() -> None:
     """Changing a field that was only read does not invalidate an ordinary transaction."""
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with transaction():
         assert preferences.theme == "system"
@@ -137,7 +135,7 @@ def test_write_skew_is_allowed_by_default() -> None:
 
 
 def test_strong_read_rejects_write_skew() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with pytest.raises(ReactiveConflictError), transaction():
         with strong_read():
@@ -150,7 +148,7 @@ def test_strong_read_rejects_write_skew() -> None:
 
 
 def test_a_read_the_action_also_writes_conflicts_without_opting_in() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with pytest.raises(ReactiveConflictError), transaction():
         preferences.theme = preferences.theme + "-dim"
@@ -161,7 +159,7 @@ def test_a_read_the_action_also_writes_conflicts_without_opting_in() -> None:
 
 def test_a_b_a_lineage_change_conflicts_even_when_value_matches() -> None:
     """Restoring the original value still advances the version and causes a conflict."""
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with pytest.raises(ReactiveConflictError), transaction():
         preferences.theme = preferences.theme + "-dim"
@@ -175,7 +173,7 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
     committed_value: int, later_value: int | None
 ) -> None:
     assume(later_value is None or later_value != committed_value)
-    counter = Counter(LocalTopicBus(), 1)
+    counter = Counter()
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
@@ -211,7 +209,7 @@ def test_retained_patch_uses_weak_slot_authority() -> None:
 
 
 def test_relaxed_read_opts_back_out_of_a_strong_read() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with transaction(), strong_read():
         with relaxed_read():
@@ -223,7 +221,7 @@ def test_relaxed_read_opts_back_out_of_a_strong_read() -> None:
 
 
 def test_relaxed_read_drops_the_precondition_on_a_cell_the_action_also_writes() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with transaction():
         with relaxed_read():
@@ -236,10 +234,10 @@ def test_relaxed_read_drops_the_precondition_on_a_cell_the_action_also_writes() 
 
 def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
     """It drops the precondition, not the dependency: the computed still recomputes."""
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
     runs = 0
 
-    class Banner(StateOwner):
+    class Banner(Reactive):
         @computed
         def caption(self) -> str:
             nonlocal runs
@@ -258,7 +256,7 @@ def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
 
 
 def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     def fail(commit, continuation) -> None:
         raise RuntimeError("hook failed")
@@ -331,7 +329,7 @@ def test_sink_and_participant_finalize_failures_are_causal_diagnostic_nodes() ->
 
 
 def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
     ledger = ActionLedger()
     add_action_result_sink(ledger)
 
@@ -365,7 +363,7 @@ def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
 
 
 def test_continuation_direct_mutation_is_rejected() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
     errors: list[Exception] = []
 
     def mutate(commit, continuation) -> None:
@@ -384,7 +382,7 @@ def test_continuation_direct_mutation_is_rejected() -> None:
 
 
 def test_continuation_recovery_is_a_fresh_causally_linked_action() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
     ledger = ActionLedger()
     add_action_result_sink(ledger)
 
@@ -525,7 +523,7 @@ def test_durable_sink_encodes_outcomes_and_declares_host_policy() -> None:
 
 def test_a_strong_read_guards_its_own_version_not_an_earlier_unguarded_one() -> None:
     """The first strong read establishes the precondition, even after an ordinary read."""
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with transaction():
         assert preferences.theme == "system"
@@ -538,7 +536,7 @@ def test_a_strong_read_guards_its_own_version_not_an_earlier_unguarded_one() -> 
 
 
 def test_the_first_strong_read_is_the_one_the_commit_requires() -> None:
-    preferences = Preferences(LocalTopicBus(), 1)
+    preferences = Preferences()
 
     with pytest.raises(ReactiveConflictError), transaction():
         with strong_read():

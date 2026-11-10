@@ -1,7 +1,7 @@
 """Static checks for state overloads, shared scopes, resource results, and context values.
 
-Mutable container inputs expose read-only ABC types to callers. SharedState's type
-parameter determines its scope type; omitting it means SharedState[None]. This file
+Mutable container inputs expose read-only ABC types to callers. Models declare
+their own constructor parameters and ordinary metadata. This file
 is checked by the project type checker and is not a pytest runtime test.
 """
 
@@ -10,7 +10,7 @@ from collections.abc import Set as AbstractSet
 from typing import Any, assert_type, override
 
 from squid_reactivity.topics import LocalTopicBus
-from squid_ui import Component, ContextKey, paragraph, resource, state
+from squid_ui import Component, ContextKey, Reactive, paragraph, resource, state
 from squid_ui.runtime import (
     AtomicResource,
     AtomicResourceStatus,
@@ -20,7 +20,6 @@ from squid_ui.runtime import (
     Ready,
     Resource,
     ResourceStatus,
-    SharedState,
     addresses,
 )
 from squid_ui.semantic import Paragraph
@@ -49,18 +48,17 @@ assert_type(state(0), int)
 assert_type(state(factory=int), int)
 
 
-class Anonymous(SharedState):
+class Anonymous(Reactive):
     flag: bool = state(default=False)
 
 
-class Scoped(SharedState[int]):
+class UserSettings(Reactive):
     theme: str = state("system")
 
 
-assert_type(Anonymous(bus).scope, None)
-assert_type(Scoped(bus, 7).scope, int)
-assert_type(Scoped(bus, 7).theme, str)
-assert_type(addresses(lambda: Scoped(bus, 7).theme), tuple[Any, ...])
+assert_type(Anonymous().flag, bool)
+assert_type(UserSettings().theme, str)
+assert_type(addresses(lambda: UserSettings().theme), tuple[Any, ...])
 
 
 class ResourceTypes(Component):

@@ -31,7 +31,7 @@ from squid_reactivity.actions import ActionCommit, ActionContext, ActionContinua
 from squid_reactivity.core import on_action_commit, readonly_transaction, transaction
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
-from squid_reactivity.topics import Address, SubscriptionReconciler
+from squid_reactivity.topics import Address, SubscriptionReconciler, Topic
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
 from squid_ui.document import Document
@@ -511,12 +511,13 @@ class MessageRoot[
                 return
             if current.scheduler is not None:
                 if isinstance(current.scheduler, ReactiveScheduler):
-                    current.scheduler.schedule_reactive(current, address)
+                    current.scheduler.schedule_invalidated(current, address)
                 else:
-                    current.runtime.invalidate_address(address)
                     current.scheduler.schedule(current)
 
-        self._subscriptions = SubscriptionReconciler(topic_bus, refresh)
+        self.runtime.subscriptions.bus = topic_bus
+        self.runtime.on_reactive_invalidate = refresh
+        self._subscriptions = self.runtime.subscriptions
         reconciler_ref = weakref.ref(self._subscriptions)
         if isinstance(expiry, RenewEphemeral) and not isinstance(scheduler, ExpirySupervisor):
             message = "RenewEphemeral requires a scheduler that supervises mount expiry"
@@ -545,7 +546,6 @@ class MessageRoot[
         self._candidates = _CandidateLifecycle(
             self.id,
             self.runtime,
-            self._subscriptions,
             environment=self._plan_environment,
             remaining_timeout=self._remaining_timeout,
             committed=lambda: self._hooks.notify_committed(self),
@@ -770,7 +770,12 @@ class MessageRoot[
         Runs no `on_load`, because it cannot: the paths that can await one stage through
         :meth:`_stage_loaded`, and the terminal and stage-only paths deliberately do not.
         """
-        return self._draw(self.runtime.render(terminal=self._finished), disabled=disabled)
+        if self._candidates.pending is not None:
+            message = "a delivery candidate is already staged"
+            raise RuntimeError(message)
+        candidate = self._draw(self.runtime.render(terminal=self._finished), disabled=disabled)
+        self._candidates.stage_only(candidate)
+        return candidate
 
     def _document_for(self, tree: ComponentTree[RenderTargetT, Any]) -> Document[RenderTargetT, Any]:
         """Build the authored document once for an identical runtime tree and status."""
@@ -849,14 +854,18 @@ class MessageRoot[
 
     def _stage_observations(self, tree: ComponentTree[RenderTargetT, Any]) -> None:
         observed = tree.observations
-        if observed and self._subscriptions.bus is None and not self._follow_warned:
+        if (
+            any(isinstance(address, Topic) for address in observed)
+            and self._subscriptions.bus is None
+            and not self._follow_warned
+        ):
             self._follow_warned = True
             logger.warning(
-                "mount %s renders shared state or a watched topic but its scheduler has no "
+                "mount %s renders a watched topic but its scheduler has no "
                 "topic bus, so changes made elsewhere will not refresh it",
                 self.id,
             )
-        self._subscriptions.stage(observed)
+        self.runtime.stage(tree)
 
     def _draw(
         self,
@@ -873,7 +882,7 @@ class MessageRoot[
         try:
             staged = planned if planned is not None else self._plan_tree(tree, profile)
         except BaseException:
-            self._subscriptions.discard()
+            self.runtime.discard()
             raise
         generation = self._candidates.issue_generation()
         handlers: dict[str, ActionBinding] = {}
@@ -918,11 +927,11 @@ class MessageRoot[
         try:
             view, rendered = draw()
         except BaseException:
-            self._subscriptions.discard()
+            self.runtime.discard()
             raise
         assets = rendered.assets
         if handlers.keys() != staged.handlers.keys() or assets != staged.assets:
-            self._subscriptions.discard()
+            self.runtime.discard()
             view.stop()
             message = "Discord drawing changed the planned action or attachment shape"
             raise LayoutInvariantError(message)
@@ -968,7 +977,7 @@ class MessageRoot[
         try:
             planned = self._plan_tree(tree, profile)
         except BaseException:
-            self._subscriptions.discard()
+            self.runtime.discard()
             raise
         if self._candidates.same_as_live(planned):
             return planned
@@ -1043,34 +1052,21 @@ class MessageRoot[
 
     @contextmanager
     def _action_transaction(self, mode: ActionMode, context: ActionContext) -> Iterator[None]:
-        """Run one handler in its transaction, watching for writes this mount renders.
-
-        Shared writes normally announce their addresses on the topic bus. Inspecting this
-        action's committed patches also invalidates the fields this root reads, including
-        when no bus scheduler is installed. Its ensuing refresh can then show the write
-        without waiting for a separate scheduled refresh.
-        """
+        """Run a handler and preserve application commits even for unrendered writes."""
         if mode is ActionMode.PARALLEL_READ:
             with readonly_transaction(action_context=context):
                 yield
             return
         with transaction(action_context=context):
-            on_action_commit(self._note_shared_writes, key=self)
+            on_action_commit(self._note_action_commit, key=self)
             yield
 
-    def _note_shared_writes(self, commit: ActionCommit, continuation: ActionContinuation) -> None:
-        """Move the render-input revision if the action wrote a shared cell this mount reads.
-
-        Through `invalidate` rather than the candidate owner's dirty flag, because a candidate delivered
-        while the handler ran commits `runtime.dirty` over whatever this set: the revision is
-        the only dirtiness a render in flight is measured against. The reconciler's watched
-        addresses include a staged candidate's reads: a candidate that newly reads the
-        written cell must not commit a value it has already been told is stale.
-        """
-        watched = self._subscriptions.watched
-        if not watched:
-            return
-        self.runtime.invalidate_addresses(address for address in commit.patches.addresses() if address in watched)
+    def _note_action_commit(self, commit: ActionCommit, continuation: ActionContinuation) -> None:
+        # Direct subscriptions already invalidate every affected render cache. A write to
+        # unrendered state still needs application commit hooks, including persistence,
+        # even when the existing tree and visible generation can be reused.
+        if commit.patches:
+            self._candidates.mark_dirty()
 
     def _renderer(self, timeout: float | None) -> MountedRenderer[Any]:
         return self._binding.renderer(self, timeout)
@@ -1244,70 +1240,76 @@ class MessageRoot[
         are not run again. No candidate is committed here, and hook side effects are not
         rolled back.
         """
-        for pass_index in range(_MAX_LOAD_PASSES):
-            cached_atomic = self.runtime.pending_cached_atomic_resources()
-            if cached_atomic:
-                if profile is None:
-                    await self._settle_resources(cached_atomic)
-                else:
-                    with profile.span(
-                        "resource_settle.atomic",
-                        attributes={
-                            "count": len(cached_atomic),
-                            "pass": pass_index,
-                            "source": "cached",
-                            "strategy": "direct" if len(cached_atomic) == 1 else "task_group",
-                        },
-                    ):
+        try:
+            for pass_index in range(_MAX_LOAD_PASSES):
+                cached_atomic = self.runtime.pending_cached_atomic_resources()
+                if cached_atomic:
+                    if profile is None:
                         await self._settle_resources(cached_atomic)
-                continue
-            if _needs_load(root := self.runtime.root):
-                if profile is None:
-                    await self._load_all((root,))
-                else:
-                    with profile.span("component_load", attributes={"count": 1, "pass": pass_index}):
+                    else:
+                        with profile.span(
+                            "resource_settle.atomic",
+                            attributes={
+                                "count": len(cached_atomic),
+                                "pass": pass_index,
+                                "source": "cached",
+                                "strategy": "direct" if len(cached_atomic) == 1 else "task_group",
+                            },
+                        ):
+                            await self._settle_resources(cached_atomic)
+                    continue
+                if _needs_load(root := self.runtime.root):
+                    if profile is None:
                         await self._load_all((root,))
-                continue
-            if profile is None:
-                tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
-            else:
-                with profile.span("runtime_render", attributes={"pass": pass_index}):
+                    else:
+                        with profile.span("component_load", attributes={"count": 1, "pass": pass_index}):
+                            await self._load_all((root,))
+                    continue
+                if profile is None:
                     tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
-            if tree.deferred:
-                if profile is None:
-                    await self._load_all(tree.deferred)
                 else:
-                    with profile.span(
-                        "component_load",
-                        attributes={"count": len(tree.deferred), "pass": pass_index},
-                    ):
+                    with profile.span("runtime_render", attributes={"pass": pass_index}):
+                        tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
+                self.runtime.stage(tree)
+                if tree.deferred:
+                    if profile is None:
                         await self._load_all(tree.deferred)
-                continue
-            atomic = self._pending_resources(tree, PendingMode.ATOMIC)
-            if atomic:
-                if profile is None:
-                    await self._settle_resources(atomic)
-                else:
-                    with profile.span(
-                        "resource_settle.atomic",
-                        attributes={
-                            "count": len(atomic),
-                            "pass": pass_index,
-                            "source": "discovered",
-                            "strategy": "direct" if len(atomic) == 1 else "task_group",
-                        },
-                    ):
+                    else:
+                        with profile.span(
+                            "component_load",
+                            attributes={"count": len(tree.deferred), "pass": pass_index},
+                        ):
+                            await self._load_all(tree.deferred)
+                    continue
+                atomic = self._pending_resources(tree, PendingMode.ATOMIC)
+                if atomic:
+                    if profile is None:
                         await self._settle_resources(atomic)
-                continue
-            if preflight and not disabled:
+                    else:
+                        with profile.span(
+                            "resource_settle.atomic",
+                            attributes={
+                                "count": len(atomic),
+                                "pass": pass_index,
+                                "source": "discovered",
+                                "strategy": "direct" if len(atomic) == 1 else "task_group",
+                            },
+                        ):
+                            await self._settle_resources(atomic)
+                    continue
+                if preflight and not disabled:
+                    if profile is None:
+                        return self._preflight(tree)
+                    with profile.span("preflight"):
+                        return self._preflight(tree, profile=profile)
                 if profile is None:
-                    return self._preflight(tree)
-                with profile.span("preflight"):
-                    return self._preflight(tree, profile=profile)
-            if profile is None:
-                return self._draw(tree, disabled=disabled)
-            with profile.span("draw"):
-                return self._draw(tree, disabled=disabled, profile=profile)
+                    return self._draw(tree, disabled=disabled)
+                with profile.span("draw"):
+                    return self._draw(tree, disabled=disabled, profile=profile)
+        except BaseException:
+            self.runtime.discard()
+            raise
+        self.runtime.discard()
         message = f"mount {self.id}: component and resource loading did not settle in {_MAX_LOAD_PASSES} passes"
         raise LayoutInvariantError(message)
 

@@ -3,7 +3,6 @@
 import squid_ui as sl
 from squid.bot.layout_review import Reviewer, ReviewerPanel, ReviewRoom, ReviewSummary
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner
-from squid_ui_discord.sessions import UserScope
 from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,
@@ -16,14 +15,14 @@ from squid_ui_discord.testing import (
 def room_panels() -> tuple[ReviewRoom, MessageRoot, MessageRoot, MessageRoot, MessageRootScheduler]:
     bus = sl.runtime.LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    room = ReviewRoom(bus, UserScope(7))
-    room.seats = tuple(Reviewer(bus, UserScope(7), name) for name in ("Alice", "Bob"))
+    room = ReviewRoom()
+    room.seats = tuple(Reviewer(7, name) for name in ("Alice", "Bob"))
     alice, bob = (ReviewerPanel(room, seat, simulated=True) for seat in room.seats)
     return (
         room,
         MessageRoot(alice, access=Owner(7), scheduler=scheduler, timeout=None),
         MessageRoot(bob, access=Owner(7), scheduler=scheduler, timeout=None),
-        MessageRoot(ReviewSummary(room, bus, 7, "simulated"), access=Everyone(), scheduler=scheduler, timeout=None),
+        MessageRoot(ReviewSummary(room, 7, "simulated"), access=Everyone(), scheduler=scheduler, timeout=None),
         scheduler,
     )
 

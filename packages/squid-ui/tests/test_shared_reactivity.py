@@ -5,10 +5,10 @@ from typing import override
 
 import pytest
 
-from squid_reactivity.topics import LocalTopicBus, Topic
-from squid_ui import Component, DiscordTarget, computed, state
+from squid_reactivity.topics import LocalTopicBus, SubscriptionReconciler, Topic
+from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.primitives import Boundary, Text
-from squid_ui.runtime import CellAddress, ReactiveWriteError, SharedState, addresses, transaction
+from squid_ui.runtime import CellAddress, ReactiveWriteError, addresses, transaction
 from squid_ui.runtime.component import render_component_tree
 
 
@@ -17,7 +17,7 @@ class Member:
     user_id: int
 
 
-class Preferences(SharedState[Member]):
+class Preferences(Reactive):
     theme: str = state("system")
     locale: str = state("en")
 
@@ -29,7 +29,7 @@ def bus() -> LocalTopicBus:
 
 @pytest.fixture
 def preferences(bus: LocalTopicBus) -> Preferences:
-    return Preferences(bus, Member(1))
+    return Preferences()
 
 
 def address(preferences: Preferences, name: str) -> CellAddress:
@@ -53,19 +53,24 @@ class Panel(Component[DiscordTarget]):
 
 
 def test_a_render_reports_the_shared_cells_it_read(preferences: Preferences) -> None:
-    tree = render_component_tree(Panel(preferences))
-    assert tree.observations == (address(preferences, "theme"),)
+    panel = Panel(preferences)
+    tree = render_component_tree(panel)
+    assert tree.observations == (CellAddress(panel, "show_locale"), address(preferences, "theme"))
 
 
 def test_a_dropped_conditional_read_stops_being_observed(preferences: Preferences) -> None:
     panel = Panel(preferences)
     panel.show_locale = True
     assert set(render_component_tree(panel).observations) == {
+        CellAddress(panel, "show_locale"),
         address(preferences, "theme"),
         address(preferences, "locale"),
     }
     panel.show_locale = False
-    assert render_component_tree(panel).observations == (address(preferences, "theme"),)
+    assert render_component_tree(panel).observations == (
+        CellAddress(panel, "show_locale"),
+        address(preferences, "theme"),
+    )
 
 
 def test_repeated_reads_are_one_observation(preferences: Preferences) -> None:
@@ -77,7 +82,7 @@ def test_repeated_reads_are_one_observation(preferences: Preferences) -> None:
     assert render_component_tree(Repeats()).observations == (address(preferences, "theme"),)
 
 
-def test_a_render_observes_component_state_as_nothing(preferences: Preferences) -> None:
+def test_a_render_observes_component_state(preferences: Preferences) -> None:
     class Local(Component[DiscordTarget]):
         count: int = state(0)
 
@@ -85,7 +90,8 @@ def test_a_render_observes_component_state_as_nothing(preferences: Preferences) 
         def render(self) -> Text:
             return Text(str(self.count))
 
-    assert render_component_tree(Local()).observations == ()
+    local = Local()
+    assert render_component_tree(local).observations == (CellAddress(local, "count"),)
 
 
 def test_a_cached_computed_still_reports_its_shared_sources(preferences: Preferences) -> None:
@@ -111,7 +117,11 @@ def test_a_cached_computed_still_reports_its_shared_sources(preferences: Prefere
 
 def test_a_read_outside_a_render_records_no_dependency(preferences: Preferences) -> None:
     assert preferences.theme == "system"
-    assert render_component_tree(Panel(preferences)).observations == (address(preferences, "theme"),)
+    panel = Panel(preferences)
+    assert render_component_tree(panel).observations == (
+        CellAddress(panel, "show_locale"),
+        address(preferences, "theme"),
+    )
 
 
 def test_a_write_during_a_render_raises(preferences: Preferences) -> None:
@@ -121,7 +131,7 @@ def test_a_write_during_a_render_raises(preferences: Preferences) -> None:
             preferences.theme = "dark"
             return Text("never")
 
-    with pytest.raises(RuntimeError, match="while a render was reading it"):
+    with pytest.raises(RuntimeError, match="factory="):
         render_component_tree(Writes())
     assert preferences.theme == "system"
 
@@ -224,14 +234,13 @@ def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
             return Text(str(self.count))
 
     local = Local()
-    with pytest.raises(ValueError, match="read no shared state"):
-        addresses(lambda: local.count)
-    with pytest.raises(ValueError, match="read no shared state"):
+    assert addresses(lambda: local.count) == (CellAddress(local, "count"),)
+    with pytest.raises(ValueError, match="read no reactive state"):
         addresses(lambda: 42)
 
 
 def test_describe_names_the_namespace_scope_and_cell(preferences: Preferences) -> None:
-    assert str(address(preferences, "theme")) == "Preferences(Member(user_id=1)).theme"
+    assert str(address(preferences, "theme")) == f"{preferences!r}.theme"
     assert str(Topic("build", "7")) == "build:7"
 
 
@@ -244,8 +253,10 @@ async def test_a_commit_publishes_once_to_every_subscriber(bus: LocalTopicBus, p
     def subscriber(topic: object) -> None:
         seen.append(topic)
 
-    for _ in range(2):
-        bus.subscribe(address(preferences, "theme"), subscriber)
+    subscriptions = [SubscriptionReconciler(None, subscriber) for _ in range(2)]
+    for subscription in subscriptions:
+        subscription.stage([address(preferences, "theme")])
+        subscription.commit()
     with transaction():
         preferences.theme = "dark"
         preferences.theme = "light"
@@ -258,7 +269,9 @@ async def test_a_rolled_back_action_publishes_nothing(bus: LocalTopicBus, prefer
     def subscriber(topic: object) -> None:
         seen.append(topic)
 
-    bus.subscribe(address(preferences, "theme"), subscriber)
+    subscription = SubscriptionReconciler(None, subscriber)
+    subscription.stage([address(preferences, "theme")])
+    subscription.commit()
     with pytest.raises(RuntimeError, match="no"), transaction():
         preferences.theme = "dark"
         message = "no"

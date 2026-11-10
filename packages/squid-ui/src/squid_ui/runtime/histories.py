@@ -47,7 +47,6 @@ from squid_reactivity.core import (
     TransactionParticipant,
     TransactionView,
     apply_conditional_patches,
-    apply_local_overwrite_patches,
     enlist,
     fresh_action_transaction,
     has_action_hook,
@@ -94,12 +93,10 @@ class HistoryResultStatus(Enum):
 class UndoMode(Enum):
     """Whether undo must preserve state changes made after the recorded action.
 
-    CONDITIONAL checks versions before restoring values. LOCAL_OVERWRITE permits
-    overwriting newer local cell values, but cannot undo transaction participants.
+    CONDITIONAL checks versions before restoring values.
     """
 
     CONDITIONAL = "conditional"
-    LOCAL_OVERWRITE = "local_overwrite"
 
 
 class HistoryOwner(Protocol):
@@ -636,11 +633,6 @@ class History:
         try:
             with fresh_action_transaction(action_context=context):
                 planned: list[tuple[ChangeToken[Any], object]] = []
-                if entry.mode is UndoMode.LOCAL_OVERWRITE and entry.undo_plan.participants:
-                    detail = ConflictDetail("participant", 0, 0)
-                    raise ReactiveConflictError(  # noqa: TRY301
-                        detail, "local overwrite policy cannot target transaction participants"
-                    )
                 for change in entry.undo_plan.participants:
                     inverse = change.token.plan_inverse()
                     if isinstance(inverse, ConflictDetail):
@@ -648,14 +640,12 @@ class History:
                             inverse, f"{change.participant_id} cannot be inverted safely"
                         )
                     planned.append((change.token, inverse))
-                if entry.mode is UndoMode.LOCAL_OVERWRITE:
-                    apply_local_overwrite_patches(entry.undo_plan.cells)
-                else:
-                    apply_conditional_patches(entry.undo_plan.cells)
+                apply_conditional_patches(entry.undo_plan.cells)
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
                 def committed(commit: ActionCommit, continuation: object) -> None:
+                    assert entry is not None
                     self._release_entry(entry)
                     entry.undo_action_id = commit.context.action_id
                     entry.redo_plan = UndoPlan.from_commit(commit)
@@ -850,11 +840,6 @@ class History:
         try:
             with fresh_action_transaction(action_context=context):
                 planned: list[tuple[ChangeToken[Any], object]] = []
-                if entry.mode is UndoMode.LOCAL_OVERWRITE and entry.redo_plan.participants:
-                    detail = ConflictDetail("participant", 0, 0)
-                    raise ReactiveConflictError(  # noqa: TRY301
-                        detail, "local overwrite policy cannot target transaction participants"
-                    )
                 for change in entry.redo_plan.participants:
                     inverse = change.token.plan_inverse()
                     if isinstance(inverse, ConflictDetail):
@@ -862,14 +847,12 @@ class History:
                             inverse, f"{change.participant_id} cannot be reapplied safely"
                         )
                     planned.append((change.token, inverse))
-                if entry.mode is UndoMode.LOCAL_OVERWRITE:
-                    apply_local_overwrite_patches(entry.redo_plan.cells)
-                else:
-                    apply_conditional_patches(entry.redo_plan.cells)
+                apply_conditional_patches(entry.redo_plan.cells)
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
                 def committed(commit: ActionCommit, continuation: object) -> None:
+                    assert entry is not None
                     self._release_entry(entry)
                     entry.undo_plan = UndoPlan.from_commit(commit)
                     entry.retentions = self._retain_plan(entry.undo_plan)

@@ -10,7 +10,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.layout_workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
 from squid_ui_discord import MessageRoot, MessageRootScheduler, Owner
-from squid_ui_discord.sessions import UserScope
 from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,
@@ -23,7 +22,7 @@ from squid_ui_discord.testing import (
 def workbench() -> tuple[BuildDraft, Workbench, MessageRoot, MessageRoot, MessageRootScheduler]:
     bus = sl.runtime.LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
-    draft = BuildDraft(bus, UserScope(7))
+    draft = BuildDraft()
     editor = Workbench(draft)
     return (
         draft,

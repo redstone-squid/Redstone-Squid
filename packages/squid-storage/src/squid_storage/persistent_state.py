@@ -1,6 +1,6 @@
 """Restore shared view state on load and save snapshots after reactive commits.
 
-PersistentStatePool wraps SharedStatePool with asynchronous storage. The first
+PersistentStatePool wraps ReactivePool with asynchronous storage. The first
 load creates an instance, restores its saved fields, and only then makes it
 available to other consumers. Later commits queue snapshots for a worker, so
 storage latency does not hold up the reactive action.
@@ -9,19 +9,18 @@ storage latency does not hold up the reactive action.
 import asyncio
 import logging
 from collections.abc import Callable, Hashable, Mapping
-from typing import Any
 
 import anyio
 from anyio.abc import TaskStatus
 
-from squid_reactivity import SharedState, SharedStatePool, TopicBus, export_state, restore_state
+from squid_reactivity import Reactive, ReactivePool, export_state, restore_state
 from squid_storage.scoped import ScopedStore, Slot
 
 _logger = logging.getLogger(__name__)
 
 
-class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
-    """Hydrate one shared namespace per scope and persist its committed state.
+class PersistentStatePool[ScopeT: Hashable, SharedT: Reactive]:
+    """Hydrate one reactive model per scope and persist its committed state.
 
     Start run in a host-owned task group before the first load. Hydration completes
     before a handle enters the cache, so concurrent loads share fully restored state.
@@ -35,17 +34,15 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
 
     def __init__(
         self,
-        namespace: type[SharedT],
-        bus: TopicBus,
+        factory: Callable[[ScopeT], SharedT],
         *,
         store: ScopedStore,
         slot: Slot[ScopeT, Mapping[str, object]],
-        factory: Callable[[TopicBus, ScopeT], SharedT] | None = None,
         on_error: Callable[[BaseException], None] | None = None,
     ) -> None:
         self.store = store
         self.slot = slot
-        self._pool: SharedStatePool[ScopeT, SharedT] = SharedStatePool(namespace, bus, factory=factory or namespace)
+        self._pool: ReactivePool[ScopeT, SharedT] = ReactivePool(factory)
         self._on_error = on_error
         self._listeners: dict[ScopeT, Callable[[], None]] = {}
         self._pending: dict[ScopeT, Mapping[str, object]] = {}
@@ -55,16 +52,6 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         self._idle.set()
         self._running = False
         self._closing = False
-
-    @property
-    def namespace(self) -> type[SharedT]:
-        """The one shared namespace class this pool owns."""
-        return self._pool.namespace
-
-    @property
-    def bus(self) -> TopicBus:
-        """The topic bus every namespace this pool retains must hold."""
-        return self._pool.bus
 
     async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
         """Own the persistence worker until close drains it or the caller cancels.
@@ -88,10 +75,10 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
             self._running = False
 
     async def load(self, scope: ScopeT) -> SharedT:
-        """Return the canonical namespace for scope, hydrating it on the first load."""
+        """Return the canonical model for scope, hydrating it on the first load."""
         async with self._load_lock:
             # Checked before the cache: `close` is terminal for the pool, even for a scope it
-            # already holds. A caller still holding that namespace keeps an ordinary `SharedState`;
+            # already holds. A caller still holding that namespace keeps an ordinary `Reactive`;
             # what ended is the pool's willingness to hand out more and to persist them.
             if self._closing:
                 msg = "persisted pool is closed"
@@ -100,7 +87,7 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
             if existing is not None:
                 return existing
             if not self._running:
-                msg = "persisted pool is not running; start run() before loading a namespace"
+                msg = "persisted pool is not running; start run() before loading a model"
                 raise RuntimeError(msg)
             created = self._pool._create(scope)
             # Restore before adoption: the synchronous pool's normal get() would
@@ -116,11 +103,11 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
             return canonical
 
     def get_existing(self, scope: ScopeT) -> SharedT | None:
-        """Return the namespace already loaded for scope, or None. Reads nothing."""
+        """Return the model already loaded for scope, or None. Reads nothing."""
         return self._pool.get_existing(scope)
 
     def active(self) -> Mapping[ScopeT, SharedT]:
-        """Snapshot the loaded namespaces. Inspection only, so it stays synchronous."""
+        """Snapshot the loaded models. Inspection only, so it stays synchronous."""
         return self._pool.active()
 
     async def delete(self, scope: ScopeT) -> SharedT | None:

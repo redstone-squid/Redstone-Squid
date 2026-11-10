@@ -46,11 +46,10 @@ ERROR_CHROME = dataclasses.replace(
 )
 
 
-class _ReportChanges(sl.runtime.SharedState):
+class _ReportChanges(sl.Reactive):
     """Share the latest report comparison between the notice and refresh controls."""
 
-    def __init__(self, bus: sl.runtime.TopicBus, check: Callable[[], Awaitable[bool]]) -> None:
-        super().__init__(bus)
+    def __init__(self, check: Callable[[], Awaitable[bool]]) -> None:
         self._check = check
         self.changed.replace(value=False)
 
@@ -67,7 +66,6 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
         operations: ErrorReportOperations,
         shown: tuple[ErrorReport, ...],
         *,
-        bus: sl.runtime.TopicBus,
         work_lost_only: bool,
         refresh: Callable[[sl.PressEvent], Awaitable[None]],
     ) -> None:
@@ -76,7 +74,7 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._work_lost_only = work_lost_only
         self._notice = _ReportUpdateNotice()
         self._controls = _ReportUpdateControls(refresh)
-        self._changes = _ReportChanges(bus, self._check)
+        self._changes = _ReportChanges(self._check)
         self.monitor = self.own(ErrorReportRefresh(self.changed))
 
     @property
@@ -159,13 +157,11 @@ class ErrorReportScreen(sd.Screen):
         self,
         operations: ErrorReportOperations,
         *,
-        bus: sl.runtime.TopicBus,
         reference: str | None = None,
         can_clear: bool = False,
         authorize_clear: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         self._operations = operations
-        self._bus = bus
         self._reference = reference
         self._can_clear = can_clear
         self._authorize_clear = authorize_clear
@@ -195,7 +191,6 @@ class ErrorReportScreen(sd.Screen):
         self._updates = _ReportUpdates(
             self._operations,
             self._reports,
-            bus=self._bus,
             work_lost_only=self.work_lost_only,
             refresh=self._refresh_reports,
         )

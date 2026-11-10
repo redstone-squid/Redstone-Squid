@@ -21,7 +21,7 @@ from squid_reactivity import (
 from squid_reactivity.actions import ChangeToken
 from squid_reactivity.core import readonly_transaction
 from squid_reactivity.operations import OperationContext
-from squid_ui import Component, DiscordTarget, state
+from squid_ui import Component, DiscordTarget, Reactive, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import (
     CompensationClaim,
@@ -35,11 +35,8 @@ from squid_ui.runtime import (
     HistoryEntryState,
     HistoryError,
     HistoryResultStatus,
-    LocalTopicBus,
     MemoryCompensationOutbox,
     ReactiveWriteError,
-    SharedState,
-    UndoMode,
     history,
     history_actions,
     inspect_cells,
@@ -48,7 +45,7 @@ from squid_ui.runtime import (
 from squid_ui.semantic import ActionControl
 
 
-class Workspace(SharedState[str]):
+class Workspace(Reactive):
     selected: int | None = state(None)
     filters: tuple[str, ...] = state(())
 
@@ -82,7 +79,7 @@ class UnassignedPanel(Component[DiscordTarget]):
 
 
 def panel() -> tuple[Panel, Workspace]:
-    workspace = Workspace(LocalTopicBus(), "here")
+    workspace = Workspace()
     subject = Panel(workspace)
     ComponentRuntime(subject)
     return subject, workspace
@@ -213,24 +210,24 @@ async def test_later_same_target_write_conflicts_without_clobbering() -> None:
     assert not subject.history.can_undo
 
 
-async def test_named_local_overwrite_policy_replaces_later_ephemeral_work() -> None:
+async def test_component_state_undo_checks_intervening_writes() -> None:
     subject, _ = panel()
     with transaction():
-        subject.history.record("page", mode=UndoMode.LOCAL_OVERWRITE)
+        subject.history.record("page")
         subject.page = 4
     with transaction():
         subject.page = 8
 
     result = await subject.history.undo()
 
-    assert result.applied
-    assert subject.page == 1
+    assert result.status is HistoryResultStatus.CONFLICT
+    assert subject.page == 8
 
 
-async def test_local_overwrite_policy_refuses_shared_state() -> None:
+async def test_model_state_undo_checks_intervening_writes() -> None:
     subject, workspace = panel()
     with transaction():
-        subject.history.record("select", mode=UndoMode.LOCAL_OVERWRITE)
+        subject.history.record("select")
         workspace.selected = 7
     with transaction():
         workspace.selected = 9

@@ -73,8 +73,8 @@ class AsyncBinding(Protocol):
 class AddressedOwner(Protocol):
     """Publish resource changes to consumers other than the resource owner.
 
-    SharedState resources use addresses so every mount that read them receives
-    updates. A component's private resource only needs to invalidate that component.
+    Resources on models and components use identity addresses so every runtime
+    that read them receives updates.
     """
 
     def _resource_binding(self, name: str) -> tuple[Address, Callable[[Address], None]]:
@@ -308,11 +308,7 @@ class Resource[ValueT](AsyncBinding):
         self._label = name
         self.pending_mode = pending_mode
         self.address = address
-        """Where this resource's changes are published, or `None` for a component's own.
-
-        Mirrors `_Cell.address`: present exactly when something other than the owner might
-        be looking, which for a resource means it was declared on a `SharedState` namespace.
-        """
+        """Publication address, or None for a custom owner without address support."""
         self._publish = publish
         self._status: ResourceStatus[ValueT] = Pending()
         self._loading: _Load[ValueT] | None = None
@@ -366,19 +362,11 @@ class Resource[ValueT](AsyncBinding):
         self._recheck()
         return self.version
 
-    def _landed(self) -> None:
-        """Advance the version and publish the installed value's address.
-
-        Pending transitions do not publish here. The load that follows publishes
-        once it installs a ready value or a failure.
-        """
-        self._moved()
+    def _notify(self) -> None:
+        """Notify readers of a status change, including an explicit reload becoming pending."""
         if self.address is not None and self._publish is not None:
             self._publish(self.address)
-
-    def _notify(self) -> None:
-        """Request a render for a private resource. Shared resources notify through the bus."""
-        if self.address is None:
+        else:
             self._owner.invalidate()
 
     def _moved(self) -> None:
@@ -464,7 +452,7 @@ class Resource[ValueT](AsyncBinding):
             baseline = {source: source.settle() for source in self.sources}
         self._new_generation()
         self._status = Ready(value)
-        self._landed()
+        self._moved()
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
         # as they stand now, and a later change to one of them should still reload.
         self.sources = baseline
@@ -553,7 +541,7 @@ class Resource[ValueT](AsyncBinding):
                 if token == self._request_token:
                     self.sources = load.sources
                     self._status = Failed(error, _previous(self._status))
-                    self._landed()
+                    self._moved()
                     self._notify()
                     self._emit_generation("failed", generation, error)
                 else:
@@ -566,7 +554,7 @@ class Resource[ValueT](AsyncBinding):
                 elif token == self._request_token:
                     self.sources = load.sources
                     self._status = Ready(value)
-                    self._landed()
+                    self._moved()
                     self._notify()
                     self._emit_generation("ready", generation)
                 else:

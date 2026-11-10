@@ -10,7 +10,7 @@ import pprint
 from collections.abc import Awaitable, Callable, Hashable, Iterable, Sequence
 from datetime import datetime
 from enum import Enum, StrEnum
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
 import discord
 
@@ -970,10 +970,14 @@ def _reactivity(message_root: squid_ui_discord.MessageRoot) -> list[str]:
     may read another component's state and printing an identity would say nothing.
     """
     components = message_root.runtime.components
-    # Deduplicated by identity: several panels usually hold the very same namespace, and
-    # that is the point of one.
+    # A model can be read through several components; inspect it once, outside the tree.
+    component_ids = {id(component) for component in components.values()}
     namespaces = {
-        id(owner): owner for owner, _ in (_pair(topic) for topic in message_root.observed) if owner is not None
+        id(address.owner): address.owner
+        for address in message_root.observed
+        if isinstance(address, sl.runtime.CellAddress)
+        and isinstance(address.owner, sl.Reactive)
+        and id(address.owner) not in component_ids
     }
     labels: dict[int, str] = {}
     for path, component in components.items():
@@ -998,20 +1002,11 @@ def _reactivity(message_root: squid_ui_discord.MessageRoot) -> list[str]:
             read = ", ".join(labels.get(source, "<external>") for source in node.sources) or "nothing"
             lines.append(f"  {name} v{node.version} <- {read}")
     for namespace in namespaces.values():
-        lines.append(f"{namespace!r} (shared)")
+        lines.append(f"{namespace!r} (model)")
         for name, cell in sl.runtime.inspect_cells(namespace).items():
             marks = " ".join(mark for mark, on in (("opaque", cell.opaque), ("default", not cell.assigned)) if on)
             lines.append(f"  {name} v{cell.version}{f'  [{marks}]' if marks else ''}")
     return lines
-
-
-def _pair(topic: object) -> tuple[sl.runtime.SharedState[Any] | None, object]:
-    """Split a legacy (SharedState, descriptor) tuple; return (None, topic) otherwise."""
-    match topic:
-        case (sl.runtime.SharedState() as owner, descriptor):
-            return owner, descriptor
-        case _:
-            return None, topic
 
 
 def _dump_lines(lines: list[str]) -> str:

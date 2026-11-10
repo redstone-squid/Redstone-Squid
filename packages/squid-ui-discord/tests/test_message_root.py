@@ -2819,18 +2819,17 @@ class TestStateDescriptor:
             _ = Cyclic().first
         assert raised.value.path == ("Cyclic.first", "Cyclic.second", "Cyclic.first")
 
-    def test_batch_coalesces_invalidations(self):
+    def test_batch_notifies_each_owner_once(self):
         class Pair(Component[sl.ComponentsV2Target]):
             left: int = state(0)
             right: int = state(0)
 
             def __init__(self) -> None:
-                self.invalidations = 0
+                self.commits = 0
 
             @override
-            def invalidate(self) -> None:
-                self.invalidations += 1
-                super().invalidate()
+            def on_state_commit(self, names: frozenset[str]) -> None:
+                self.commits += 1
 
             @override
             def render(self):
@@ -2841,7 +2840,7 @@ class TestStateDescriptor:
             component.left = 1
             component.right = 2
 
-        assert component.invalidations == 1
+        assert component.commits == 1
 
     def test_transaction_rolls_back_every_assignment_it_covered(self):
         class Form(Component[sl.ComponentsV2Target]):
@@ -3818,10 +3817,10 @@ class TestDeferredExpansion:
 
         assert tree.deferred == (child,)
         assert "render:child" not in log
-        # Set before the defer check, so a deferred child's on_load still invalidates.
+        # Deferred children retain their place in the discovered tree.
         assert child._parent is host
 
-    def test_a_deferred_child_still_invalidates_through_its_parent(self):
+    def test_a_deferred_child_first_renders_its_latest_state(self):
         log: list[str] = []
         child = Leaf(log, "child")
         host = Host(log, child)
@@ -3832,7 +3831,9 @@ class TestDeferredExpansion:
 
         child.label = "written by a load"
 
-        assert invalidated
+        assert not invalidated
+        tree = runtime.render()
+        assert tree.nodes == (Text("host"), Text("written by a load"))
 
     def test_a_discovery_tree_cannot_be_committed(self):
         log: list[str] = []

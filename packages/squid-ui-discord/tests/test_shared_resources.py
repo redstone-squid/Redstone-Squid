@@ -1,4 +1,4 @@
-"""Computed values and resources declared on an `sl.runtime.SharedState` namespace.
+"""Computed values and resources declared on an `sl.Reactive` namespace.
 
 Several message roots can read the same namespace. Computed values derive from its cells,
 so readers follow those cells. A resource can also change when its asynchronous loader
@@ -10,12 +10,13 @@ from typing import override
 import pytest
 
 import squid_ui as sl
+from squid_reactivity import CellAddress
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, message_harness
 
 
-class Prefs(sl.runtime.SharedState[int]):
+class Prefs(sl.Reactive):
     first: str = sl.state("Ada")
     last: str = sl.state("Lovelace")
     unread: str = sl.state("not looked at")
@@ -25,11 +26,12 @@ class Prefs(sl.runtime.SharedState[int]):
         return f"{self.first} {self.last}"
 
 
-class Catalog(sl.runtime.SharedState[int]):
+class Catalog(sl.Reactive):
     key: str = sl.state("k1")
 
-    def __init__(self, bus: sl.runtime.LocalTopicBus, scope: int) -> None:
-        super().__init__(bus, scope)
+    def __init__(
+        self,
+    ) -> None:
         self._loads = 0
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
@@ -71,7 +73,7 @@ def bus() -> sl.runtime.LocalTopicBus:
 
 
 def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.runtime.LocalTopicBus) -> None:
-    prefs = Prefs(bus, 1)
+    prefs = Prefs()
     assert prefs.full == "Ada Lovelace"
 
     prefs.first = "Grace"
@@ -81,7 +83,7 @@ def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.runtime.LocalTo
 
 def test_two_namespaces_compute_independently(bus: sl.runtime.LocalTopicBus) -> None:
     """The computed is per-instance, like the cells it reads: the handle is the state."""
-    one, two = Prefs(bus, 1), Prefs(bus, 2)
+    one, two = Prefs(), Prefs()
 
     one.first = "Grace"
 
@@ -93,7 +95,7 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
 ) -> None:
     """A computed carries no address: what moves is the cells, so those are what to follow."""
     scheduler = MessageRootScheduler(bus)
-    prefs = Prefs(bus, 1)
+    prefs = Prefs()
 
     class Panel(sl.Component[sl.ComponentsV2Target]):
         @override
@@ -104,7 +106,7 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
     message_root = MessageRoot(Panel(), access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
 
-    assert {str(address) for address in message_root.followed} == {"Prefs(1).first", "Prefs(1).last"}
+    assert set(message_root.followed) == {CellAddress(prefs, "first"), CellAddress(prefs, "last")}
 
     with sl.runtime.transaction():
         prefs.first = "Grace"
@@ -121,7 +123,7 @@ async def test_one_namespace_resource_loads_once_for_every_message_root_holding_
     bus: sl.runtime.LocalTopicBus,
 ) -> None:
     scheduler = MessageRootScheduler(bus)
-    catalog = Catalog(bus, 1)
+    catalog = Catalog()
 
     message_roots = [await mounted(catalog, scheduler, message_harness(message_id=message_id)) for message_id in (1, 2)]
 
@@ -131,20 +133,20 @@ async def test_one_namespace_resource_loads_once_for_every_message_root_holding_
 
 async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runtime.LocalTopicBus) -> None:
     scheduler = MessageRootScheduler(bus)
-    catalog = Catalog(bus, 1)
+    catalog = Catalog()
     message_root = MessageRoot(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message_harness()))
 
-    followed = {str(address) for address in message_root.followed}
+    followed = set(message_root.followed)
 
     # Both routes: the resource can be reloaded out of band, and it can be re-pended by the
     # cell its loader read. A reader depends on each of them.
-    assert followed == {"Catalog(1).entries", "Catalog(1).key"}
+    assert followed == {CellAddress(catalog, "entries"), CellAddress(catalog, "key")}
 
 
 async def test_an_out_of_band_reload_redraws_every_root(bus: sl.runtime.LocalTopicBus) -> None:
     scheduler = MessageRootScheduler(bus)
-    catalog = Catalog(bus, 1)
+    catalog = Catalog()
     messages = [message_harness(message_id=1), message_harness(message_id=2)]
     message_roots = [await mounted(catalog, scheduler, message) for message in messages]
 
@@ -157,7 +159,7 @@ async def test_an_out_of_band_reload_redraws_every_root(bus: sl.runtime.LocalTop
 
 async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.runtime.LocalTopicBus) -> None:
     scheduler = MessageRootScheduler(bus)
-    catalog = Catalog(bus, 1)
+    catalog = Catalog()
     messages = [message_harness(message_id=1), message_harness(message_id=2)]
     message_roots = [await mounted(catalog, scheduler, message) for message in messages]
 
@@ -173,7 +175,7 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
 
 async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.LocalTopicBus) -> None:
     scheduler = MessageRootScheduler(bus)
-    catalog = Catalog(bus, 1)
+    catalog = Catalog()
     message = message_harness()
     message_root = await mounted(catalog, scheduler, message)
 
@@ -188,7 +190,7 @@ async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.Local
 async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopicBus) -> None:
     """A rolled-back replacement must not wake other message roots through the topic bus."""
     scheduler = MessageRootScheduler(bus)
-    catalog = Catalog(bus, 1)
+    catalog = Catalog()
     message = message_harness()
     message_root = await mounted(catalog, scheduler, message)
     edits = message.edit.await_count
@@ -205,14 +207,13 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopi
 
 
 def test_two_namespaces_hold_separate_resources(bus: sl.runtime.LocalTopicBus) -> None:
-    one, two = Catalog(bus, 1), Catalog(bus, 2)
+    one, two = Catalog(), Catalog()
 
     assert one.entries is not two.entries
     assert one.entries.address != two.entries.address
 
 
-def test_a_component_resource_carries_no_address() -> None:
-    """Component-owned resources do not publish under a SharedState bus address."""
+def test_a_component_resource_has_an_identity_address() -> None:
 
     class Panel(sl.Component[sl.ComponentsV2Target]):
         @sl.resource
@@ -223,25 +224,58 @@ def test_a_component_resource_carries_no_address() -> None:
         def render(self):
             return sl.paragraph("x")
 
-    assert Panel().value.address is None
+    panel = Panel()
+    assert panel.value.address == CellAddress(panel, "value")
 
 
 # --- Declaration errors ---------------------------------------------------------------
 
 
-def test_a_namespace_resource_may_not_take_a_reserved_name() -> None:
-    with pytest.raises(TypeError, match="reserves 'scope'"):
+async def test_models_can_use_scope_and_bus_as_domain_names() -> None:
+    class Model(sl.Reactive):
+        @sl.resource
+        async def scope(self) -> str:
+            return "x"
 
-        class Bad(sl.runtime.SharedState[int]):
-            @sl.resource
-            async def scope(self) -> str:  # type: ignore[override]
-                return "x"
+        @sl.computed
+        def bus(self) -> str:
+            return "y"
+
+    model = Model()
+    assert await model.scope.reload() == sl.resources.Ready("x")
+    assert model.bus == "y"
 
 
-def test_a_namespace_computed_may_not_take_a_reserved_name() -> None:
-    with pytest.raises(TypeError, match="reserves 'bus'"):
+async def test_failed_discovery_releases_new_model_reads() -> None:
+    old, new = Prefs(), Prefs()
 
-        class Bad(sl.runtime.SharedState[int]):
-            @sl.computed
-            def bus(self) -> str:  # type: ignore[override]
-                return "x"
+    class BrokenChild(sl.Component[sl.ComponentsV2Target]):
+        @override
+        async def on_load(self) -> None:
+            raise ValueError("load failed")
+
+        @override
+        def render(self):
+            return sl.paragraph("unreachable")
+
+    class Switch(sl.Component[sl.ComponentsV2Target]):
+        changed: bool = sl.state(default=False)
+
+        def __init__(self) -> None:
+            self.child = BrokenChild()
+
+        @override
+        def render(self):
+            if self.changed:
+                return [sl.paragraph(new.full), self.boundary(self.child, key="child")]
+            return sl.paragraph(old.full)
+
+    panel = Switch()
+    root = MessageRoot(panel, access=Everyone(), timeout=None)
+    await root.send(delivered_to(message_harness()))
+    panel.changed = True
+    with pytest.raises(ValueError, match="load failed"):
+        await root.refresh()
+    assert CellAddress(old, "first") in root.followed
+    assert CellAddress(new, "first") not in root.followed
+    assert root.runtime.subscriptions.staged is None

@@ -100,7 +100,7 @@ class ScopeKind(StrEnum):
         """Build the chosen scope; guild-based scopes raise when the opener has no guild.
 
         When the kind is known statically, OpenContext.user_guild and its peers return
-        the specific scope type. The same values can key a SharedStatePool, allowing
+        the specific scope type. The same values can key a ReactivePool, allowing
         a session's key.scope to identify shared state without a separate conversion.
         """
         match self:

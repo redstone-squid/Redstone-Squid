@@ -11,9 +11,8 @@ import pytest
 
 from squid_reactivity import (
     ActionLedger,
-    LocalTopicBus,
+    Reactive,
     ReactiveConflictError,
-    SharedState,
     TransactionParticipant,
     add_action_result_sink,
     enlist,
@@ -25,19 +24,19 @@ from squid_reactivity import (
 from squid_reactivity.testing import InterleavingHarness
 
 
-class Model(SharedState[str]):
+class Model(Reactive):
     source: str = state("A")
     result: str = state("")
 
 
 def test_scheduler_reproduces_read_a_write_b_write_skew() -> None:
-    model = Model(LocalTopicBus(), "model")
+    model = Model()
     schedule = InterleavingHarness()
     schedule.at("commit.before_validation", lambda: setattr(model, "source", "B"))
 
     with (
         schedule.installed(),
-        pytest.raises(ReactiveConflictError, match=r"Model\('model'\)\.source changed"),
+        pytest.raises(ReactiveConflictError, match=r"\.source changed"),
         transaction(),
         strong_read(),
     ):
@@ -49,7 +48,7 @@ def test_scheduler_reproduces_read_a_write_b_write_skew() -> None:
 
 
 def test_scheduler_reproduces_a_b_a_lineage_change() -> None:
-    model = Model(LocalTopicBus(), "model")
+    model = Model()
     schedule = InterleavingHarness()
 
     def move_twice() -> None:
@@ -66,7 +65,7 @@ def test_scheduler_reproduces_a_b_a_lineage_change() -> None:
 
 
 def test_scheduler_classifies_cancellation_before_publication_once() -> None:
-    model = Model(LocalTopicBus(), "model")
+    model = Model()
     schedule = InterleavingHarness()
     ledger = ActionLedger()
     add_action_result_sink(ledger)

@@ -17,8 +17,8 @@ from squid_reactivity import (
     ActionLedger,
     ChangeReport,
     ConflictDetail,
+    Reactive,
     ReactiveConflictError,
-    StateOwner,
     add_action_result_sink,
     on_action_commit,
     state,
@@ -50,7 +50,7 @@ def Replica(replica_id: str) -> _Replica:
     return _Replica(replica_id, backend=_REFERENCE_BACKEND)
 
 
-class LocalModel(StateOwner):
+class LocalModel(Reactive):
     selected: bool = state(default=False)
 
 

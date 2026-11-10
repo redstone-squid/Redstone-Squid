@@ -8,7 +8,6 @@ import squid_ui_discord as sd
 from squid.bot.layout_inspector import InspectablePanel
 from squid.bot.layout_workbench import history_outcome
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, tr
-from squid_ui_discord.sessions import UserScope
 
 
 @dataclass(frozen=True)
@@ -17,18 +16,18 @@ class Review:
     comment: str = ""
 
 
-class Reviewer(sl.runtime.SharedState[UserScope]):
+class Reviewer(sl.Reactive):
     """A separate cell per seat keeps one reviewer's undo away from another's work."""
 
     review: Review = sl.state(Review())
     name: str = sl.state("")
 
-    def __init__(self, bus: sl.runtime.TopicBus, scope: UserScope, name: str) -> None:
-        super().__init__(bus, scope)
+    def __init__(self, user_id: int, name: str) -> None:
+        self.user_id = user_id
         self.name = name
 
 
-class ReviewRoom(sl.runtime.SharedState[UserScope]):
+class ReviewRoom(sl.Reactive):
     seats: tuple[Reviewer, ...] = sl.state((), persist=False, opaque=True)
     closed: bool = sl.state(default=False)
     activity: tuple[str, ...] = sl.state(())
@@ -147,11 +146,8 @@ class ReviewerPanel(InspectablePanel):
 
 
 class ReviewSummary(InspectablePanel):
-    def __init__(
-        self, room: ReviewRoom, bus: sl.runtime.TopicBus, host_id: int, mode: Literal["simulated", "live"]
-    ) -> None:
+    def __init__(self, room: ReviewRoom, host_id: int, mode: Literal["simulated", "live"]) -> None:
         self.room = room
-        self.bus = bus
         self.host_id = host_id
         self.mode = mode
         self.panels: dict[int, sd.MessageRoot] = {}
@@ -205,9 +201,9 @@ class ReviewSummary(InspectablePanel):
         if existing is not None and not existing.finished:
             await event.notice(tr("You already have a reviewer panel in this room."))
             return
-        seat = next((seat for seat in self.room.seats if seat.scope == UserScope(user_id)), None)
+        seat = next((seat for seat in self.room.seats if seat.user_id == user_id), None)
         if seat is None:
-            seat = Reviewer(self.bus, UserScope(user_id), f"<@{user_id}>")
+            seat = Reviewer(user_id, f"<@{user_id}>")
         result = await event.context.respond(
             ReviewerPanel(self.room, seat, simulated=False),
             access=sd.Owner(user_id),

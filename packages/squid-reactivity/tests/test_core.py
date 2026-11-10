@@ -6,12 +6,10 @@ from typing import override
 import pytest
 
 from squid_reactivity import (
-    LocalTopicBus,
+    Reactive,
     ReactiveConflictError,
     ReactiveWriteError,
-    SharedState,
     StaleReactiveContextError,
-    StateOwner,
     computed,
     observe_reads,
     state,
@@ -20,7 +18,7 @@ from squid_reactivity import (
 )
 
 
-class Counter(StateOwner):
+class Counter(Reactive):
     value: int = state(0)
 
     def __init__(self) -> None:
@@ -66,7 +64,7 @@ def test_observed_state_cannot_be_written() -> None:
 
 
 def test_construction_inside_an_observation_may_assign_declared_state() -> None:
-    class Required(StateOwner):
+    class Required(Reactive):
         value: int = state()
 
         def __init__(self, value: int) -> None:
@@ -145,12 +143,12 @@ def test_a_synchronous_transaction_is_confined_to_nobody() -> None:
     assert counter.value == 3
 
 
-class Preferences(SharedState[None]):
+class Preferences(Reactive):
     theme: str = state("light")
     locale: str = state("en")
 
 
-class Label(StateOwner):
+class Label(Reactive):
     preferences: Preferences = state(opaque=True)
 
     def __init__(self, preferences: Preferences) -> None:
@@ -167,8 +165,7 @@ async def test_a_blind_write_moves_the_version_past_the_action_that_beat_it() ->
     The computed value is read between commits. If the second commit reused
     the first version, that cached value would appear current and never update.
     """
-    bus = LocalTopicBus()
-    preferences = Preferences(bus)
+    preferences = Preferences()
     label = Label(preferences)
     staged = asyncio.Event()
     published = asyncio.Event()
@@ -202,8 +199,7 @@ async def test_a_strong_read_is_not_satisfied_by_a_version_a_later_write_reused(
     If it reused the quick action's version, the guarded action would miss the
     conflict and publish a result based on an obsolete value.
     """
-    bus = LocalTopicBus()
-    preferences = Preferences(bus)
+    preferences = Preferences()
     staged = asyncio.Event()
     quick_committed = asyncio.Event()
     guarded_read = asyncio.Event()

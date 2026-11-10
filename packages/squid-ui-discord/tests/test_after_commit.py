@@ -14,16 +14,14 @@ import pytest
 from squid_reactivity.actions import ActionLedger, OperationEventSnapshot, action_result_sink
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.operations import Failed, Pending, Succeeded
-from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, state
+from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, Reactive, state
 from squid_ui.interactions import ActionMode
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import (
     ActionDiscardedError,
     Discarded,
     History,
-    LocalTopicBus,
     PostCommitOperation,
-    SharedState,
     UIExecutionHost,
     history,
     transaction,
@@ -255,10 +253,10 @@ async def test_readonly_action_can_schedule_work_with_its_dispatch_identity() ->
 
 
 async def test_commit_conflict_discards_operation() -> None:
-    class Counter(SharedState[str]):
+    class Counter(Reactive):
         value: int = state(0)
 
-    counter = Counter(LocalTopicBus(), "test")
+    counter = Counter()
     requested, release = asyncio.Event(), asyncio.Event()
     handles: list[PostCommitOperation[None]] = []
     ran: list[bool] = []

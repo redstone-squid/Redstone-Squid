@@ -26,7 +26,6 @@ from squid_reactivity.core import (
     UndeclaredStateError,
     addresses,
     apply_conditional_patches,
-    apply_local_overwrite_patches,
     batch,
     block_writes,
     computed,
@@ -57,8 +56,7 @@ from squid_reactivity.resources import (
     ResourceStatus,
     resource,
 )
-from squid_reactivity.shared_state import SharedState
-from squid_reactivity.state_pool import SharedStateFactory, SharedStatePool
+from squid_reactivity.state_pool import ReactiveFactory, ReactivePool
 from squid_reactivity.topics import (
     Address,
     BusSnapshot,
@@ -176,6 +174,8 @@ __all__ = [
     "PresentationState",
     "ReactiveConflictError",
     "ReactiveCycleError",
+    "ReactiveFactory",
+    "ReactivePool",
     "ReactiveWriteError",
     "Ready",
     "RedoResult",
@@ -188,9 +188,6 @@ __all__ = [
     "ServiceRun",
     "ServiceRunStatus",
     "SessionUpdate",
-    "SharedState",
-    "SharedStateFactory",
-    "SharedStatePool",
     "StaleReactiveContextError",
     "StrategyState",
     "StrategyUpdate",
@@ -212,7 +209,6 @@ __all__ = [
     "UndoResult",
     "addresses",
     "apply_conditional_patches",
-    "apply_local_overwrite_patches",
     "batch",
     "block_writes",
     "computed",

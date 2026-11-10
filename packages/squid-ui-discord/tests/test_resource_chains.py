@@ -189,7 +189,7 @@ async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
 
-    assert message_root.followed == (TOPIC,), "a render reading only `node` still follows what `build` watched"
+    assert TOPIC in message_root.followed, "a render reading only `node` still follows what `build` watched"
 
     panel.source = "v2"
     bus.publish(TOPIC)
