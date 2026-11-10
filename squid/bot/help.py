@@ -13,7 +13,7 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import card_node, error_node, render_payload, tr
 from squid.config import BuildConfig
-from squid.suggestions.application import candidate, rank
+from squid.suggestions.application import Candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
 from squid_ui.text import Message, TextLike
 from squid_ui_discord import send_to
@@ -202,7 +202,7 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 if cog.get_commands()
             ][:MAX_SUGGESTIONS]
 
-        candidates = [candidate(command.qualified_name) for command in self.bot.walk_commands()]
+        candidates = [Candidate.create(command.qualified_name) for command in self.bot.walk_commands()]
         return [
             app_commands.Choice(name=match.label, value=match.value)
             for match in rank(needle, candidates, limit=MAX_SUGGESTIONS)

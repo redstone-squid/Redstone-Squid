@@ -7,7 +7,7 @@ restriction picked in Discord, on the web form, and in-game is spelled identical
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.suggestions.application import Candidate, candidate
+from squid.suggestions.application import Candidate
 from squid.suggestions.application.queries import TaxonomyEntry
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.cache import TtlCache
@@ -60,7 +60,7 @@ class TaxonomyProvider:
             await self._reader.taxonomy(self._semantic_kind, build_kind=self._build_kind, authority=self._authority)
         )
         return tuple(
-            candidate(
+            Candidate.create(
                 value=str(entry.id) if self._by_id else entry.stable_key,
                 label=entry.display_name,
                 description=_alias_hint(entry),
@@ -83,7 +83,7 @@ class PendingTagProvider:
         # Deliberately uncached: a moderator works down this list and must not be offered a
         # proposal they approved a second ago.
         return tuple(
-            candidate(
+            Candidate.create(
                 value=str(item.id),
                 label=item.display_name,
                 description=f"#{item.id} · {item.semantic_kind.value}",

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.suggestions.application import Candidate, candidate
+from squid.suggestions.application import Candidate
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.cache import TtlCache
 from squid.versions.domain import MinecraftVersion
@@ -30,7 +30,7 @@ class VersionProvider:
         # Newest first, because an empty query should offer the versions people actually submit
         # against rather than the oldest ones the catalogue happens to start with.
         names = sorted({str(version) for version in await self._versions.list_all()}, key=_sort_key)
-        return tuple(candidate(name, kind="version") for name in names)
+        return tuple(Candidate.create(name, kind="version") for name in names)
 
 
 class VersionIdReader(Protocol):
@@ -52,7 +52,7 @@ class VersionIdProvider:
 
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
         return tuple(
-            candidate(str(version_id), label=name, kind="version", terms=(name, str(version_id)))
+            Candidate.create(str(version_id), label=name, kind="version", terms=(name, str(version_id)))
             for version_id, name in await self._reader.version_ids()
         )
 

@@ -1,6 +1,6 @@
 """Application services for cross-surface suggestions."""
 
-from squid.suggestions.application.matching import Candidate, MatchTier, candidate, rank
+from squid.suggestions.application.matching import Candidate, MatchTier, rank
 from squid.suggestions.application.ports import (
     ComposedSuggestionProvider,
     SuggestionAuthorizer,
@@ -23,7 +23,6 @@ __all__ = [
     "SuggestionService",
     "SuggestionSource",
     "UnknownSuggestionSourceError",
-    "candidate",
     "content_revision",
     "rank",
 ]

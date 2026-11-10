@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Iterable, Sequence
 
-from squid.suggestions.application import Candidate, candidate
+from squid.suggestions.application import Candidate
 from squid.suggestions.domain import SuggestionRequest
 
 
@@ -19,12 +19,12 @@ class StaticProvider:
     @classmethod
     def of(cls, values: Sequence[str], *, kind: str = "") -> StaticProvider:
         """Build a provider whose value and label are the same string."""
-        return cls(candidate(value, kind=kind) for value in values)
+        return cls(Candidate.create(value, kind=kind) for value in values)
 
     @classmethod
     def labelled(cls, values: Sequence[tuple[str, str]], *, kind: str = "") -> StaticProvider:
         """Build a provider from `(value, label)` pairs."""
-        return cls(candidate(value, label, kind=kind) for value, label in values)
+        return cls(Candidate.create(value, label, kind=kind) for value, label in values)
 
 
 class CallableProvider:

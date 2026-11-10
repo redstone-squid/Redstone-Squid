@@ -1,14 +1,14 @@
 """Shared suggestion ranking tests."""
 
-from squid.suggestions.application.matching import Candidate, MatchTier, candidate, rank
+from squid.suggestions.application.matching import Candidate, MatchTier, rank
 from squid.suggestions.domain import Suggestion
 
 RESTRICTIONS = [
-    candidate("seamless", "Seamless"),
-    candidate("semi_seamless", "Semi-Seamless"),
-    candidate("full_lamp", "Full Lamp"),
-    candidate("flush", "Flush"),
-    candidate("skydoor", "Skydoor"),
+    Candidate.create("seamless", "Seamless"),
+    Candidate.create("semi_seamless", "Semi-Seamless"),
+    Candidate.create("full_lamp", "Full Lamp"),
+    Candidate.create("flush", "Flush"),
+    Candidate.create("skydoor", "Skydoor"),
 ]
 
 
@@ -29,7 +29,7 @@ def test_fuzzy_matches_a_typo_that_matches_nothing_literally() -> None:
 
 
 def test_exact_match_leads_even_when_another_candidate_shares_the_prefix() -> None:
-    candidates = [candidate("door_frame", "Door Frame"), candidate("door", "Door")]
+    candidates = [Candidate.create("door_frame", "Door Frame"), Candidate.create("door", "Door")]
     assert labels(rank("door", candidates, limit=5)) == ["Door", "Door Frame"]
 
 
@@ -61,9 +61,16 @@ def test_value_is_matched_when_it_differs_from_the_label() -> None:
 
 
 def test_ties_break_on_label_so_ordering_is_stable() -> None:
-    candidates = [candidate("b", "Beta Door"), candidate("a", "Alpha Door")]
+    candidates = [Candidate.create("b", "Beta Door"), Candidate.create("a", "Alpha Door")]
     assert labels(rank("door", candidates, limit=5)) == ["Alpha Door", "Beta Door"]
 
 
 def test_tiers_are_ordered_worst_to_best() -> None:
     assert MatchTier.FUZZY < MatchTier.SUBSTRING < MatchTier.WORD_PREFIX < MatchTier.PREFIX < MatchTier.EXACT
+
+
+def test_empty_query_only_consumes_the_requested_page() -> None:
+    candidates = iter(RESTRICTIONS)
+    assert labels(rank("", candidates, limit=0)) == []
+    assert labels(rank("", candidates, limit=2)) == ["Seamless", "Semi-Seamless"]
+    assert next(candidates).suggestion.label == "Full Lamp"

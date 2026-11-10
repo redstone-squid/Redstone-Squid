@@ -11,7 +11,7 @@ from typing import Protocol
 from squid.permissions.models import PermissionRole
 from squid.starboard.domain import EDITABLE_SETTINGS
 from squid.starboard.models import StarboardConfig
-from squid.suggestions.application import Candidate, candidate
+from squid.suggestions.application import Candidate
 from squid.suggestions.domain import SuggestionRequest
 
 
@@ -36,7 +36,7 @@ class StarboardNameProvider:
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         guild_id = int(request.context["guild_id"])
         return tuple(
-            candidate(
+            Candidate.create(
                 config.name,
                 description=f"#{config.channel_id}" + ("" if config.enabled else " · disabled"),
                 kind="starboard",
@@ -51,7 +51,7 @@ class StarboardSettingProvider:
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         del request
         return tuple(
-            candidate(name, description=_setting_hint(kind), kind="starboard_setting")
+            Candidate.create(name, description=_setting_hint(kind), kind="starboard_setting")
             for name, kind in sorted(EDITABLE_SETTINGS.items())
         )
 
@@ -65,7 +65,7 @@ class PermissionRoleProvider:
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         guild_id = int(request.context["guild_id"])
         return tuple(
-            candidate(
+            Candidate.create(
                 role.slug,
                 description=f"rank {role.rank}" + (" · protected" if role.protected else ""),
                 kind="permission_role",

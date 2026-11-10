@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from squid.notifications.models import NotificationSubscription
-from squid.suggestions.application import Candidate, candidate
+from squid.suggestions.application import Candidate
 from squid.suggestions.domain import SuggestionRequest
 
 
@@ -29,7 +29,7 @@ class SubscriptionProvider:
         if account_id is None:
             return ()
         return tuple(
-            candidate(
+            Candidate.create(
                 str(subscription.id),
                 label=f"#{subscription.id} · {subscription.kind.value}",
                 description=_target(subscription),

@@ -10,7 +10,6 @@ from squid.suggestions.application import (
     SuggestionService,
     SuggestionSource,
     UnknownSuggestionSourceError,
-    candidate,
     content_revision,
 )
 from squid.suggestions.domain import (
@@ -174,7 +173,7 @@ async def test_enumerate_refuses_a_queried_source() -> None:
 
 
 async def test_source_kind_label_is_stamped_onto_unlabelled_candidates() -> None:
-    provider = RecordingProvider((candidate("seamless", "Seamless"),))
+    provider = RecordingProvider((Candidate.create("seamless", "Seamless"),))
     source = SuggestionSource(id="restrictions", provider=provider, kind_label="restriction")
     result = await service_for(source).suggest(SuggestionRequest(source="restrictions"))
     assert result.items[0].kind == "restriction"

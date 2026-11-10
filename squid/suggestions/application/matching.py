@@ -8,6 +8,7 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum
+from itertools import islice
 
 from rapidfuzz import fuzz
 
@@ -36,6 +37,20 @@ class Candidate:
     suggestion: Suggestion
     terms: tuple[str, ...] = field(default=())
 
+    @classmethod
+    def create(
+        cls,
+        value: str,
+        label: str | None = None,
+        *,
+        description: str | None = None,
+        kind: str = "",
+        terms: tuple[str, ...] = (),
+    ) -> Candidate:
+        """Build a candidate, matched on `terms` when given and on its label and value otherwise."""
+        suggestion = Suggestion(value=value, label=label or value, description=description, kind=kind)
+        return cls(suggestion, terms)
+
     def match_terms(self) -> tuple[str, ...]:
         """Return the strings to match, defaulting to the label and value."""
         if self.terms:
@@ -43,19 +58,6 @@ class Candidate:
         if self.suggestion.value == self.suggestion.label:
             return (self.suggestion.label,)
         return (self.suggestion.label, self.suggestion.value)
-
-
-def candidate(
-    value: str,
-    label: str | None = None,
-    *,
-    description: str | None = None,
-    kind: str = "",
-    terms: tuple[str, ...] = (),
-) -> Candidate:
-    """Build a candidate, matched on `terms` when given and on its label and value otherwise."""
-    suggestion = Suggestion(value=value, label=label or value, description=description, kind=kind)
-    return Candidate(suggestion, terms)
 
 
 def rank(query: str, candidates: Iterable[Candidate], *, limit: int) -> tuple[Suggestion, ...]:
@@ -72,7 +74,7 @@ def rank(query: str, candidates: Iterable[Candidate], *, limit: int) -> tuple[Su
         return ()
     normalized = _fold(query)
     if not normalized:
-        return tuple(item.suggestion for item in _take(candidates, limit))
+        return tuple(item.suggestion for item in islice(candidates, limit))
 
     scored: list[tuple[int, float, str, Suggestion]] = []
     for item in candidates:
@@ -111,15 +113,6 @@ def _score(query: str, term: str) -> tuple[MatchTier, float] | None:
     if score >= FUZZY_SCORE_CUTOFF:
         return MatchTier.FUZZY, score
     return None
-
-
-def _take(candidates: Iterable[Candidate], limit: int) -> list[Candidate]:
-    taken: list[Candidate] = []
-    for item in candidates:
-        taken.append(item)
-        if len(taken) >= limit:
-            break
-    return taken
 
 
 def _fold(value: str) -> str:

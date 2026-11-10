@@ -17,7 +17,6 @@ from squid.suggestions.application import (
     SuggestionRegistry,
     SuggestionService,
     SuggestionSource,
-    candidate,
 )
 from squid.suggestions.domain import SourceKind, SuggestionRequest, ValueType, Visibility
 from squid.suggestions.infrastructure.providers import StaticProvider
@@ -33,7 +32,7 @@ class RecordingProvider:
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         self.requests.append(request)
-        return (candidate("seamless", "Seamless"),)
+        return (Candidate.create("seamless", "Seamless"),)
 
 
 def service(*sources: SuggestionSource) -> SuggestionService:

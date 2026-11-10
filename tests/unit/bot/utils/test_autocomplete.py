@@ -7,13 +7,7 @@ must enforce access and return an empty response for provider failures and timeo
 import anyio
 
 from squid.bot.utils.autocomplete import CHOICE_NAME_LIMIT, suggests
-from squid.suggestions.application import (
-    Candidate,
-    SuggestionRegistry,
-    SuggestionService,
-    SuggestionSource,
-    candidate,
-)
+from squid.suggestions.application import Candidate, SuggestionRegistry, SuggestionService, SuggestionSource
 from squid.suggestions.domain import Suggestion, SuggestionRequest, ValueType, Visibility
 from squid.suggestions.infrastructure.providers import StaticProvider
 from tests.support.discord import make_autocomplete_interaction
@@ -28,7 +22,7 @@ class BuildProvider:
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         del request
-        return (candidate("412", "#412 — 4x4 flush TNT door"),)
+        return (Candidate.create("412", "#412 — 4x4 flush TNT door"),)
 
 
 class FailingProvider:

@@ -15,7 +15,7 @@ from squid.search.application.completion import (
     render_value,
 )
 from squid.search.application.fields import FieldRegistry
-from squid.suggestions.application import Candidate, candidate, rank
+from squid.suggestions.application import Candidate, rank
 from squid.suggestions.domain import (
     MAX_SUGGESTIONS,
     ReplacementSpan,
@@ -84,7 +84,7 @@ def _terms(context: CompletionContext, registry: FieldRegistry, limit: int) -> t
     candidates: list[Candidate] = [
         # The colon is part of the value: picking a field should leave the caret ready to type a
         # value rather than making the user punctuate it themselves.
-        candidate(
+        Candidate.create(
             f"{field.name}:",
             label=f"{field.name}:",
             description=field.value_type.value,
@@ -95,6 +95,6 @@ def _terms(context: CompletionContext, registry: FieldRegistry, limit: int) -> t
     ]
     if context.prefix:
         candidates.extend(
-            candidate(keyword, description="combine terms", kind="operator") for keyword in BOOLEAN_KEYWORDS
+            Candidate.create(keyword, description="combine terms", kind="operator") for keyword in BOOLEAN_KEYWORDS
         )
     return rank(context.prefix, candidates, limit=limit)

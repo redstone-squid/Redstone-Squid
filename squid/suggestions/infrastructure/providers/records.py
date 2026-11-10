@@ -5,7 +5,7 @@ from typing import Protocol
 
 from squid.accounts.models import AliasClaim
 from squid.bot.profile_render import present_claimant
-from squid.suggestions.application import Candidate, candidate
+from squid.suggestions.application import Candidate
 from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 
 
@@ -30,7 +30,7 @@ class RecordDefinitionProvider:
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         rows = await self._reader.title_definitions(request.query, limit=request.limit or MAX_SUGGESTIONS)
         return tuple(
-            candidate(
+            Candidate.create(
                 str(definition_id),
                 label=title,
                 description=build_kind,
@@ -61,7 +61,9 @@ class CreatorProfileProvider:
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         profiles = await self._reader.creator_profiles(request.query, limit=request.limit or MAX_SUGGESTIONS)
-        return tuple(candidate(creator_id, label=name, kind="creator", terms=(name,)) for creator_id, name in profiles)
+        return tuple(
+            Candidate.create(creator_id, label=name, kind="creator", terms=(name,)) for creator_id, name in profiles
+        )
 
 
 class RecordTitleProvider:
@@ -73,7 +75,7 @@ class RecordTitleProvider:
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
         record_titles = await self._reader.record_titles(request.query, limit=request.limit or MAX_SUGGESTIONS)
         return tuple(
-            candidate(
+            Candidate.create(
                 public_id,
                 label=title,
                 description=subtitle,
@@ -106,7 +108,7 @@ class AliasClaimProvider:
         # Uncached for the same reason as pending tags: a reviewer works down this list, and a
         # claim they just resolved must stop being offered.
         return tuple(
-            candidate(
+            Candidate.create(
                 str(claim.id),
                 label=f"#{claim.id} · {claim.alias_name}",
                 # Discord truncates a description at 100 characters, and a mention renders as raw
@@ -130,6 +132,6 @@ class CreatorProvider:
         creators = await self._reader.creators(request.query, limit=request.limit or MAX_SUGGESTIONS)
         return tuple(
             # Show existing ownership before the user submits a claim request.
-            candidate(name, description="claimed" if claimed else None, kind="creator")
+            Candidate.create(name, description="claimed" if claimed else None, kind="creator")
             for name, claimed in creators
         )

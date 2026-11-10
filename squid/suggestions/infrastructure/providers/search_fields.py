@@ -8,7 +8,7 @@ memorized from documentation.
 from typing import Protocol
 
 from squid.search.application.fields import FieldRegistry
-from squid.suggestions.application import Candidate, candidate
+from squid.suggestions.application import Candidate
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.cache import TtlCache
 
@@ -33,7 +33,7 @@ class SearchFieldProvider:
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
         registry = await self._search.fields()
         return tuple(
-            candidate(
+            Candidate.create(
                 value=field.name,
                 label=field.name,
                 description=f"{field.value_type.value}, ranges supported"
@@ -69,6 +69,6 @@ class SearchSortProvider:
         )
         results: list[Candidate] = []
         for field in sortable:
-            results.append(candidate(field.name, f"{field.name} (ascending)", kind="sort"))
-            results.append(candidate(f"-{field.name}", f"{field.name} (descending)", kind="sort"))
+            results.append(Candidate.create(field.name, f"{field.name} (ascending)", kind="sort"))
+            results.append(Candidate.create(f"-{field.name}", f"{field.name} (descending)", kind="sort"))
         return tuple(results)
