@@ -60,7 +60,7 @@ class PostgresDraftSchematics:
             if existing.state in {DraftSchematicState.DELETING, DraftSchematicState.DELETED}:
                 msg = "This schematic source has expired; upload it with a new identifier."
                 raise ConflictError(msg)
-            if existing.state is not DraftSchematicState.WAITING_SANITIZER:
+            if existing.state is not DraftSchematicState.PENDING:
                 existing.state = DraftSchematicState.UPLOADING
                 existing.updated_at = Instant.now()
         else:
@@ -89,7 +89,7 @@ class PostgresDraftSchematics:
                 else DraftSchematicSource.state == DraftSchematicState.UPLOADING,
             )
             .values(
-                state=DraftSchematicState.WAITING_SANITIZER if succeeded else DraftSchematicState.FAILED,
+                state=DraftSchematicState.PENDING if succeeded else DraftSchematicState.FAILED,
                 updated_at=func.now(),
             )
         )

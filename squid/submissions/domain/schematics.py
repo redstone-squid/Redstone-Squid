@@ -6,10 +6,12 @@ from uuid import UUID
 
 
 class DraftSchematicState(StrEnum):
-    """Source-storage state; quarantine is never evidence of successful sanitization."""
+    """Progress from retained original bytes to validated schematic analysis."""
 
     UPLOADING = "uploading"
-    WAITING_SANITIZER = "waiting_sanitizer"
+    PENDING = "pending"
+    READY = "ready"
+    REJECTED = "rejected"
     FAILED = "failed"
     DELETING = "deleting"
     DELETED = "deleted"

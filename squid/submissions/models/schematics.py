@@ -1,8 +1,10 @@
 """Private schematic sources and their independently editable draft references."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, Index, Integer, Text, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as SQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
@@ -24,13 +26,14 @@ class DraftSchematicSource(Base, kw_only=True):
         ),
         CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="submission_schematic_sources_sha_check"),
         CheckConstraint(
-            "state IN ('uploading', 'waiting_sanitizer', 'failed', 'deleting', 'deleted')",
+            "state IN ('uploading', 'pending', 'ready', 'rejected', 'failed', 'deleting', 'deleted')",
             name="submission_schematic_sources_state_check",
         ),
         CheckConstraint(
-            "state <> 'waiting_sanitizer' OR (sha256 IS NOT NULL AND byte_size IS NOT NULL)",
+            "state NOT IN ('pending', 'ready', 'rejected') OR (sha256 IS NOT NULL AND byte_size IS NOT NULL)",
             name="submission_schematic_sources_uploaded_check",
         ),
+        CheckConstraint("state <> 'ready' OR analysis IS NOT NULL", name="submission_schematic_sources_ready_check"),
         Index("submission_schematic_sources_owner_idx", "owner_account_id"),
         Index("submission_schematic_sources_actor_idx", "uploaded_by_account_id"),
         Index("submission_schematic_sources_cleanup_idx", "updated_at", postgresql_where=text("state <> 'deleted'")),
@@ -43,6 +46,8 @@ class DraftSchematicSource(Base, kw_only=True):
     sha256: Mapped[str | None] = mapped_column(Text)
     byte_size: Mapped[int | None] = mapped_column(BigInteger)
     state: Mapped[DraftSchematicState] = mapped_column(StrEnumText(DraftSchematicState))
+    analysis: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
+    last_error: Mapped[str | None] = mapped_column(Text, default=None)
     updated_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now, server_default=func.now())
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now, server_default=func.now())
 

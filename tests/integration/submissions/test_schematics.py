@@ -115,7 +115,7 @@ async def test_failed_reserved_download_can_retry_but_cannot_change_known_bytes(
     await transact(repo, lambda uow: uow.draft_schematics.finish_upload(source_id, succeeded=False), commit=True)
     assert (await transact(repo, lambda uow: uow.draft_schematics.list(draft.snapshot.id)))[
         0
-    ].state is DraftSchematicState.WAITING_SANITIZER
+    ].state is DraftSchematicState.PENDING
     different = DraftSchematic(source_id, "source.schem", "b" * 64, 3, DraftSchematicState.UPLOADING)
     current = await reload(sessions, draft)
     with pytest.raises(ConflictError):

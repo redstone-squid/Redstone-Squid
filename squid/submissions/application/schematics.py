@@ -121,7 +121,7 @@ class DraftSchematicService:
             draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
             retained = await uow.draft_schematics.register(draft, source, draft_actor_id(actor))
             await uow.commit()
-        if retained.state is not DraftSchematicState.WAITING_SANITIZER:
+        if retained.state is not DraftSchematicState.PENDING:
             try:
                 # The cleanup grace period is longer than this bounded storage operation.
                 with anyio.fail_after(60):
