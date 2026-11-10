@@ -254,44 +254,43 @@ class ActionResultSnapshot:
     ) -> ActionResultSnapshot:
         policy = DEFAULT_REDACTION if policy is None else policy
         context = result.context
-        common = (
-            context.actor if policy.include_actor else None,
-            tuple(sorted(context.metadata.items())) if policy.include_metadata else (),
-            None if context.reverses_action_id is None else str(context.reverses_action_id),
-            None if context.reapplies_action_id is None else str(context.reapplies_action_id),
-            None if context.compensates_action_id is None else str(context.compensates_action_id),
-        )
         if isinstance(result, ActionCommit):
+            terminal = "committed"
+            timestamp = result.committed_at
+            sequence = result.sequence
+            reason = None
             changes = ChangeReport(len(result.patches), len(result.participant_changes))
-            return cls(
-                str(context.action_id),
-                str(context.root_action_id),
-                context.cause,
-                context.kind.value,
-                context.name,
-                "committed",
-                result.committed_at,
-                result.sequence,
-                None,
-                changes,
-                result.tags,
-                *common,
-            )
+            tags = result.tags
+            conflict = None
+            exception = None
+        else:
+            terminal = "rolled_back"
+            timestamp = result.rolled_back_at
+            sequence = None
+            reason = result.reason.value
+            changes = result.staged_report
+            tags = frozenset()
+            conflict = result.conflict
+            exception = policy.redact_exception(result.exception)
         return cls(
-            str(context.action_id),
-            str(context.root_action_id),
-            context.cause,
-            context.kind.value,
-            context.name,
-            "rolled_back",
-            result.rolled_back_at,
-            None,
-            result.reason.value,
-            result.staged_report,
-            frozenset(),
-            *common,
-            result.conflict,
-            policy.redact_exception(result.exception),
+            action_id=str(context.action_id),
+            root_action_id=str(context.root_action_id),
+            cause=context.cause,
+            kind=context.kind.value,
+            name=context.name,
+            terminal=terminal,
+            timestamp=timestamp,
+            sequence=sequence,
+            reason=reason,
+            changes=changes,
+            tags=tags,
+            actor=context.actor if policy.include_actor else None,
+            metadata=tuple(sorted(context.metadata.items())) if policy.include_metadata else (),
+            reverses_action_id=None if context.reverses_action_id is None else str(context.reverses_action_id),
+            reapplies_action_id=None if context.reapplies_action_id is None else str(context.reapplies_action_id),
+            compensates_action_id=None if context.compensates_action_id is None else str(context.compensates_action_id),
+            conflict=conflict,
+            exception=exception,
         )
 
 
@@ -408,24 +407,23 @@ class ActionResultCodec:
             message = "action result exceeds the maximum encoded size"
             raise ValueError(message)
         try:
-            return self._decode(data)
-        except (KeyError, TypeError, AttributeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            payload = json.loads(data)
+        except (UnicodeDecodeError, ValueError) as error:
             message = "action result has a corrupt schema"
             raise ValueError(message) from error
-        except ValueError as error:
-            if str(error).startswith("unsupported action result schema"):
-                raise
-            message = "action result has a corrupt schema"
-            raise ValueError(message) from error
-
-    def _decode(self, data: bytes) -> ActionResultSnapshot:
-        payload = json.loads(data)
         if not isinstance(payload, dict):
             message = "action result has a corrupt schema"
-            raise TypeError(message)
+            raise ValueError(message)  # noqa: TRY004 - malformed encoded values share one public error type.
         if payload.get("schema") != self.schema_version:
             message = f"unsupported action result schema {payload.get('schema')!r}"
             raise ValueError(message)
+        try:
+            return self._decode(payload)
+        except (KeyError, TypeError, AttributeError, ValueError) as error:
+            message = "action result has a corrupt schema"
+            raise ValueError(message) from error
+
+    def _decode(self, payload: dict[str, Any]) -> ActionResultSnapshot:
         cause = payload["cause"]
         sequence = payload["sequence"]
         actor = payload["actor"]

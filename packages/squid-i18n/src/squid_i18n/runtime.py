@@ -9,6 +9,7 @@ from functools import lru_cache
 from typing import Final
 from zoneinfo import ZoneInfo
 
+from babel import UnknownLocaleError
 from fluent_compiler.compiler import CompiledFtl, compile_messages
 from fluent_compiler.resource import FtlResource
 from fluent_compiler.types import fluent_date, fluent_number
@@ -52,12 +53,16 @@ class _Escaper:
 def compile_catalog(locale: str, resources: tuple[str, ...], markup: text.Markup) -> CompiledFtl:
     # Validate duplicate IDs across files as well as parser junk before compilation.
     parse_resource("\n".join(resources))
-    compiled = compile_messages(
-        locale,
-        [FtlResource.from_string(resource) for resource in resources],
-        use_isolating=False,
-        escapers=[_Escaper(markup)],
-    )
+    try:
+        compiled = compile_messages(
+            locale,
+            [FtlResource.from_string(resource) for resource in resources],
+            use_isolating=False,
+            escapers=[_Escaper(markup)],
+        )
+    except UnknownLocaleError as error:
+        msg = f"Unsupported Fluent locale: {locale}"
+        raise CatalogError(msg) from error
     if compiled.errors:
         raise CatalogError(
             "Invalid Fluent catalog: " + "; ".join(f"{identifier}: {error}" for identifier, error in compiled.errors)

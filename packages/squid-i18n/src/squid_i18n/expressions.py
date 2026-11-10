@@ -68,6 +68,16 @@ def NUMBER(
         ):
             msg = "Digit options must be nonnegative integers"
             raise DeclarationError(msg)
+    if any(
+        value is not None and value < 1
+        for value in (
+            minimum_integer_digits,
+            minimum_significant_digits,
+            maximum_significant_digits,
+        )
+    ):
+        msg = "Integer and significant digit options must be positive"
+        raise DeclarationError(msg)
     if (
         minimum_fraction_digits is not None
         and maximum_fraction_digits is not None

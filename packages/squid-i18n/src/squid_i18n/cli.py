@@ -26,8 +26,9 @@ def run(command: str, root: Path, locale: str | None = None) -> list[str]:
         found = collect(source_root.rglob("*.py"))
         if not found and not locales.exists():
             continue
-        source, metadata = artifacts(found)
         english = locales / "en"
+        supplemental = tuple(path.read_text() for path in sorted(english.glob("*.ftl")) if path.name != "messages.ftl")
+        source, metadata = artifacts(found, supplemental)
         if command in {"extract", "update", "init"}:
             english.mkdir(parents=True, exist_ok=True)
             (english / "messages.ftl").write_text(source)

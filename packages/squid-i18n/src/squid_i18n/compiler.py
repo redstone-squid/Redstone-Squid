@@ -52,6 +52,10 @@ def parse_resource(source: str) -> ast.Resource:
                 msg = f"Duplicate Fluent identifier: {key}"
                 raise CatalogError(msg)
             seen.add(key)
+            attributes = [attribute.id.name for attribute in entry.attributes]
+            if len(attributes) != len(set(attributes)):
+                msg = f"Duplicate Fluent attribute in {key}"
+                raise CatalogError(msg)
     return resource
 
 
@@ -79,7 +83,10 @@ def expression_slot(expression: str) -> Slot:
         raise DeclarationError(msg)
     options: list[tuple[str, Option]] = []
     for keyword in node.keywords:
-        if keyword.arg not in OPTION_NAMES:
+        allowed = {"date_style", "time_style", "time_zone"}
+        if function == "NUMBER":
+            allowed = OPTION_NAMES.keys() - allowed
+        if keyword.arg not in allowed:
             msg = f"Unknown {function} option: {keyword.arg}"
             raise DeclarationError(msg)
         try:

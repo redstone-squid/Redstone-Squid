@@ -6,7 +6,21 @@ requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
 dependencies = ["babel>=2.17", "fluent-syntax==0.19.0", "fluent-compiler @ git+https://github.com/redstone-squid/fluent-compiler.git@5d1646977f9eb4e606c13f703d59a92799ca29c2"]
+
+[project.urls]
+Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]

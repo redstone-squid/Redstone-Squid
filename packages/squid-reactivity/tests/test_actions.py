@@ -435,6 +435,15 @@ def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
         codec.decode(b" " * 1_048_577)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [b"null", b"[]", b"\xff", b'{"schema":1}', b'{"schema":1,"timestamp":"invalid"}'],
+)
+def test_codec_rejects_malformed_records(data: bytes) -> None:
+    with pytest.raises(ValueError, match="corrupt schema"):
+        ActionResultCodec().decode(data)
+
+
 def test_application_validation_has_a_distinct_rollback_reason() -> None:
     ledger = ActionLedger()
     add_action_result_sink(ledger)

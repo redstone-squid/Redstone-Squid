@@ -72,7 +72,7 @@ def collect(paths: Iterable[Path]) -> list[LocatedDeclaration]:
     return found
 
 
-def artifacts(found: Iterable[LocatedDeclaration]) -> tuple[str, str]:
+def artifacts(found: Iterable[LocatedDeclaration], supplemental: tuple[str, ...] = ()) -> tuple[str, str]:
     """Return deterministic English FTL and JSON binding metadata."""
     entries: dict[str, Declaration] = {}
     locations: dict[str, set[str]] = {}
@@ -87,6 +87,7 @@ def artifacts(found: Iterable[LocatedDeclaration]) -> tuple[str, str]:
     source = "".join(
         "# " + ", ".join(sorted(locations[key])) + "\n" + value.source + "\n" for key, value in sorted(entries.items())
     )
+    source = source.rstrip() + "\n" if source else ""
     metadata = {
         key: {
             "fingerprint": value.fingerprint,
@@ -97,7 +98,7 @@ def artifacts(found: Iterable[LocatedDeclaration]) -> tuple[str, str]:
         }
         for key, value in sorted(entries.items())
     }
-    validate("en", (source,), entries.values())
+    validate("en", (source, *supplemental), entries.values())
     return source, json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
 
 
