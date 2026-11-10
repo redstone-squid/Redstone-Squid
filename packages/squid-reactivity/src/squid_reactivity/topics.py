@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, override, runtime_checkable
 from weakref import WeakValueDictionary
 
+from squid_reactivity.addresses import CellAddress
 from squid_reactivity.core import _Cell
 
 logger = logging.getLogger(__name__)
@@ -22,29 +23,6 @@ class Topic:
     @override
     def __str__(self) -> str:
         return f"{self.kind}:{self.key}"
-
-
-@dataclass(frozen=True, slots=True, eq=False)
-class CellAddress:
-    """Identify a shared field by owner identity and field name."""
-
-    owner: object
-    name: str
-
-    @override
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, CellAddress):
-            return NotImplemented
-        return other.owner is self.owner and other.name == self.name
-
-    @override
-    def __hash__(self) -> int:
-        return hash((id(self.owner), self.name))
-
-    @override
-    def __str__(self) -> str:
-        """Return a diagnostic name such as ``Preferences(7).theme``."""
-        return f"{self.owner!r}.{self.name}"
 
 
 type Address = Topic | CellAddress
@@ -292,11 +270,16 @@ class SubscriptionReconciler:
         acquired: list[Address] = []
         bus = self.bus
         try:
-            if bus is not None:
-                for address in wanted:
-                    if address not in self._follows:
-                        self._follows[address] = bus.subscribe(address, self.callback)
-                        acquired.append(address)
+            for address in wanted:
+                if address in self._follows:
+                    continue
+                if isinstance(address, CellAddress) and hasattr(address.owner, "_subscribe"):
+                    self._follows[address] = address.owner._subscribe(address.name, self.callback)
+                elif bus is not None:
+                    self._follows[address] = bus.subscribe(address, self.callback)
+                else:
+                    continue
+                acquired.append(address)
         except BaseException:
             for address in reversed(acquired):
                 self._follows.pop(address)()
@@ -319,7 +302,11 @@ class SubscriptionReconciler:
         """End reconciliation and release every committed or staged subscription."""
         if self._closed:
             return
+        self.clear()
         self._closed = True
+
+    def clear(self) -> None:
+        """Release subscriptions while permitting later reuse by a remounted runtime."""
         self._committed = ()
         self._staged = None
         for unsubscribe in tuple(self._follows.values()):
