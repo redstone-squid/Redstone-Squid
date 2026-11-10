@@ -51,14 +51,6 @@ and publish together on success; failure discards them.
 
 ::: squid_reactivity.ObservedRead
 
-## Model retention
-
-Retain one model per factory key; no scope metadata is required on the model.
-
-::: squid_reactivity.ReactivePool
-
-::: squid_reactivity.ReactiveFactory
-
 ## Topics
 
 Optional invalidation for external dependencies, such as database records or files.

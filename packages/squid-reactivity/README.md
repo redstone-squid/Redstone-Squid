@@ -31,6 +31,8 @@ observes model fields read during rendering, including reads through nested mode
 values. Explicit `observe_reads()` users can follow the resulting addresses with
 `SubscriptionReconciler(None, callback)`; retain the reconciler and close it when finished.
 Sources hold weak subscription handles and cannot keep abandoned consumers alive.
+Retain models in application-owned attributes or dictionaries when they should outlive a consumer.
+For restoration and saving across restarts, use `squid_storage.PersistentStatePool`.
 
 The package is layered:
 
@@ -38,7 +40,6 @@ The package is layered:
   outcomes, bounded ledgers, aftermath authority, and portable redacted schema version 1.
 - `squid_reactivity.core` provides state cells, computed values, full strong-read OCC,
   version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
-- `squid_reactivity.state_pool` retains one model per factory key. Models do not require scope metadata.
 - Every `Reactive` field has an identity address. Consumers subscribe directly without a host-supplied bus.
 - `squid_reactivity.topics` provides portable `Topic` names, bus-owned `TopicHandle` dependencies, and the small
   synchronous `TopicBus` protocol, `LocalTopicBus`, and committed/staged subscription

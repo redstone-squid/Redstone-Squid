@@ -13,7 +13,7 @@ expands them in roughly this order.
 |---|---|---|---|
 | Rendering | what the user sees | `Document`, `plan`, target adapters, `sl.scene.Scene`, `Renderer` | [Semantic authoring](#semantic-authoring-adaptation-and-exact-primitives), [Scenes and renderers](#scenes-and-renderers) |
 | State | what one component knows | `sl.state`, `sl.computed`, `sl.resource` | [Components and reactivity](#components-and-vue-inspired-reactivity) |
-| Reactive models | state and behavior reused across panels | `Reactive`, `ReactivePool` | [Reusable reactive models](#reusable-reactive-models) |
+| Reactive models | state and behavior reused across panels | `Reactive` | [Reusable reactive models](#reusable-reactive-models) |
 | Actions | what a press is allowed to do | `sl.action_control`, `Guard`, `history`, `ActionMiddleware` | [Actions and frontend adapters](#actions-and-frontend-adapters) |
 | Lifetime | how long a panel lives and who may use it | `MessageRoot`, `SessionSpec`, `SessionManager`, `AccessPolicy` | [Which entry point to use](#which-entry-point-to-use), [Ownership and lifetime](#ownership-and-lifetime) |
 | Durability | what survives a restart | `DurableSessionRuntime`, `Router`, `PersistentStatePool` | [Durable sessions](#durable-sessions), [Durable route graph](#durable-route-graph-and-dispatch-onion) |
@@ -35,7 +35,7 @@ flowchart TB
         widgets[Reusable components<br/><code>squid-ui-widgets</code>]
         component["Component or Screen<br/>declared state and synchronous <code>render()</code>"]
         reactive[Reactive model<br/><code>state · computed · resource · operation</code>]
-        shared[Reusable reactive models<br/><code>Reactive · ReactivePool</code>]
+        shared[Reusable reactive models<br/><code>Reactive</code>]
         actions[Portable actions and form handlers<br/>events · guards · history]
 
         host -->|constructs and injects| component
@@ -719,11 +719,11 @@ intervening work.
 
 ### Retaining one model per key
 
-Construct and pass a model directly when its consumers determine its lifetime. Use `ReactivePool`
-when a host needs to retain one model per key:
+Share a model by passing the same instance to its consumers. When models should survive
+between panels, retain them in an application-owned attribute or dictionary. For lazy
+construction per user, an ordinary lookup is enough:
 
 ```python
-from squid_reactivity import ReactivePool
 from squid_ui_discord.sessions import UserScope
 
 
@@ -731,14 +731,22 @@ def make_search(key: UserScope) -> Search:
     return Search()
 
 
-searches = ReactivePool(make_search)
-search = searches.get(UserScope(user.id))
+searches: dict[UserScope, Search] = {}
+
+
+def search_for(key: UserScope) -> Search:
+    if key not in searches:
+        searches[key] = make_search(key)
+    return searches[key]
+
+
+search = search_for(UserScope(user.id))
 ```
 
-The key belongs to the pool; the model does not need to store it. A factory can use the key to select
-application dependencies, such as a user's search index. Its signature determines the pool's key
-and value types. `get` constructs once per key, `get_existing` never constructs, and `delete`, `clear`,
-and `active` manage retention. Removing an entry does not reset a model still held by a consumer.
+The application decides when to remove entries. Removing one does not reset or stop a model
+still held by a consumer; a later lookup creates an independent instance. The key need not
+be stored on the model. Avoid `setdefault(key, make_search(key))` when construction is costly
+or has side effects: it calls the factory even when an entry already exists.
 
 `PersistentStatePool(make_search, store=store, slot=slot)` adds explicit hydration and persistence:
 start its `run()` task, use `await load(key)`, and end with `flush`/`close`. It snapshots declared
@@ -1269,9 +1277,9 @@ Choose the primitive by what it does:
 | `ManagedService` | Run activity under an explicit owner until it ends. |
 
 A service can publish shared state, but it need not have any. Ordinary async queries belong
-in resources; explicit submissions belong in operations. `ReactivePool` retains handles,
-and removing a handle does not run cleanup. `provide()` and `inject()` share access without
-establishing ownership of activity.
+in resources; explicit submissions belong in operations. Retaining a model in a dictionary
+does not establish ownership of its activity, and removing it does not run cleanup.
+`provide()` and `inject()` share access without establishing ownership of activity.
 
 For subscriptions or ongoing work that should stop with a panel, declare a `ManagedService`
 with `self.own(service)` before the component's first render. Construction and registration

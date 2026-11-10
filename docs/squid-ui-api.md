@@ -7,7 +7,7 @@ composition and adapter contracts.
 |---|---|
 | Reuse reactive state and behavior | `squid_ui.Reactive` (also `squid_reactivity.Reactive`) |
 | Observe external changes | `squid_reactivity.Topic`, `watch`, optional `TopicBus` |
-| Retain one model per key | `squid_reactivity.ReactivePool` |
+| Retain one model per key | Application-owned dictionary |
 | Declare stateful UI | `squid_ui.Component`, `state`, `computed`, `resource` |
 | Author layout | lowercase `squid_ui` factories such as `section`, `heading`, `choices` |
 | Plan portable output | `squid_ui.planning.plan`, an explicit target |

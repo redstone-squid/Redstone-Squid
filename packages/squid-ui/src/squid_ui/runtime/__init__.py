@@ -56,7 +56,6 @@ from squid_reactivity.resources import (
     ResourceStatus,
     resource,
 )
-from squid_reactivity.state_pool import ReactiveFactory, ReactivePool
 from squid_reactivity.topics import (
     Address,
     BusSnapshot,
@@ -174,8 +173,6 @@ __all__ = [
     "PresentationState",
     "ReactiveConflictError",
     "ReactiveCycleError",
-    "ReactiveFactory",
-    "ReactivePool",
     "ReactiveWriteError",
     "Ready",
     "RedoResult",

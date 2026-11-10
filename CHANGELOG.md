@@ -13,7 +13,7 @@ version's `squid-ui-v*` tag is pushed.
 Initial public alpha of the suite.
 
 - `squid-reactivity`: dependency-free transactional reactive state — transactions,
-  computed values, resources, topics, shared state pools, and auditable actions.
+  computed values, resources, topics, shared models, and auditable actions.
 - `squid-ui`: semantic components, limits-aware planning to explicit targets, exact
   primitives, the resolved-scene codec with published JSON Schema (scene protocol 1), and a
   first-class native HTML target.
@@ -25,6 +25,14 @@ Initial public alpha of the suite.
   records, persistent reactive state pools, and a Postgres topic bridge.
 - `squid-replication`: replicated-state containers over a reference backend, Loro, and an
   experimental pycrdt backend.
+
+Model retention simplification, still pre-release:
+
+- Remove `ReactivePool`, `ReactiveFactory`, and `squid_reactivity.state_pool`, including their
+  `squid_ui.runtime` re-exports. Share model instances directly or retain them in an
+  application-owned dictionary for keyed lookup.
+- `PersistentStatePool` keeps its public API and now owns construction, hydration, and
+  retention directly. It still rejects factories that reuse one model across storage scopes.
 
 Node-vocabulary and typing cleanup, still pre-release:
 

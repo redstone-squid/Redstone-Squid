@@ -83,7 +83,6 @@ from squid_reactivity.core import (
     transaction,
     untracked,
 )
-from squid_reactivity.state_pool import ReactiveFactory, ReactivePool
 from squid_reactivity.topics import (
     Address,
     CellAddress,
@@ -135,8 +134,6 @@ __all__ = [
     "Reactive",
     "ReactiveConflictError",
     "ReactiveCycleError",
-    "ReactiveFactory",
-    "ReactivePool",
     "ReactiveWriteError",
     "ReactivityError",
     "RedactionPolicy",
