@@ -168,8 +168,6 @@ not register themselves; applications own their storage and retention.
 
 ::: squid_reactivity.ActionResultSnapshot
 
-::: squid_reactivity.ActionResultCodec
-
 ::: squid_reactivity.EventLedger
 
 ::: squid_reactivity.RedactionPolicy

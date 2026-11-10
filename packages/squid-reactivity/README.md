@@ -100,7 +100,8 @@ by default. Rich transaction results remain available to their caller independen
 
 `EventLedger` stores recent events without registering itself. `EncodedEventSink(EventCodec(), append)`
 encodes every event variant and calls an application-owned writer; the application controls storage
-and retention. `ActionResultCodec` remains available for the existing version-one action format.
+and retention. Every event uses the same envelope; an action carries its history relation
+as one optional `relation` object.
 
 `LocalTopicBus.publish()` delivers synchronously in registration order. If a subscriber raises,
 the bus reports it through `on_subscriber_error`, continues delivering to the remaining

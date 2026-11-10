@@ -13,7 +13,6 @@ from squid_reactivity import (
     ActionCommit,
     ActionContext,
     ActionPurpose,
-    ActionResultCodec,
     ActionResultSnapshot,
     ActionRollback,
     ActionValidationError,
@@ -379,31 +378,6 @@ def test_undo_kind_is_explicit_identity_not_hook_timing() -> None:
         with transaction(action_context=context):
             pass
         assert ledger.results[0].kind == "undo"
-
-
-def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
-    ledger = EventLedger()
-    with observe_events(ledger):
-        with transaction():
-            pass
-        codec = ActionResultCodec()
-
-        assert codec.decode(codec.encode(ledger.results[0])) == ledger.results[0]
-        with pytest.raises(ValueError, match="unsupported"):
-            codec.decode(b'{"schema":2}')
-        with pytest.raises(ValueError, match="corrupt"):
-            codec.decode(b"not-json")
-        with pytest.raises(ValueError, match="maximum encoded size"):
-            codec.decode(b" " * 1_048_577)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [b"null", b"[]", b"\xff", b'{"schema":1}', b'{"schema":1,"timestamp":"invalid"}'],
-)
-def test_codec_rejects_malformed_records(data: bytes) -> None:
-    with pytest.raises(ValueError, match="corrupt schema"):
-        ActionResultCodec().decode(data)
 
 
 def test_application_validation_has_a_distinct_rollback_reason() -> None:

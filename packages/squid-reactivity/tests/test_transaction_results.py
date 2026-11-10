@@ -9,10 +9,10 @@ from squid_reactivity import (
     ActionCommit,
     ActionPurpose,
     ActionRelation,
-    ActionResultCodec,
     ActionResultSnapshot,
     ActionRollback,
     ActorRef,
+    EventCodec,
     FrameworkIntegrityError,
     Reactive,
     StaleReactiveContextError,
@@ -153,20 +153,18 @@ def test_history_relation_survives_snapshot_encoding(kind: Literal["reverses", "
         pass
     assert isinstance(tx.result, ActionCommit)
     snapshot = ActionResultSnapshot.from_result(tx.result)
-    codec = ActionResultCodec()
-    assert codec.decode(codec.encode(snapshot)).relation == relation
+    codec = EventCodec()
+    decoded = codec.decode(codec.encode(snapshot))
+    assert isinstance(decoded, ActionResultSnapshot)
+    assert decoded.relation == relation
 
 
-def test_decoding_rejects_multiple_history_relations() -> None:
+def test_decoding_rejects_unknown_history_relations() -> None:
     with transaction() as tx:
         pass
     assert isinstance(tx.result, ActionCommit)
-    codec = ActionResultCodec()
+    codec = EventCodec()
     payload = json.loads(codec.encode(ActionResultSnapshot.from_result(tx.result)))
-    payload["relations"] = {
-        "reverses": str(tx.context.action_id),
-        "reapplies": str(tx.context.action_id),
-        "compensates": None,
-    }
-    with pytest.raises(ValueError, match="corrupt schema"):
+    payload["data"]["relation"] = {"kind": "unknown", "action_id": str(tx.context.action_id)}
+    with pytest.raises(ValueError, match="schema"):
         codec.decode(json.dumps(payload).encode())

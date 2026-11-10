@@ -352,190 +352,85 @@ type CausalEventSnapshot = (
 )
 
 
-class ActionResultCodec:
-    """Encode and decode action summaries as versioned JSON.
-
-    Decoding rejects unsupported versions, malformed records, and inputs larger
-    than max_encoded_bytes. Encoding preserves the supplied snapshot, so callers
-    must apply any required redaction before passing it here.
-    """
-
-    schema_version = 1
-    max_encoded_bytes = 1_048_576
-
-    def encode(self, result: ActionResultSnapshot) -> bytes:
-        payload = {
-            "schema": self.schema_version,
-            "action_id": result.action_id,
-            "root_action_id": result.root_action_id,
-            "cause": None if result.cause is None else {"kind": result.cause.kind, "identity": result.cause.identity},
-            "kind": result.kind,
-            "name": result.name,
-            "terminal": result.terminal,
-            "timestamp": result.timestamp.isoformat(),
-            "sequence": None
-            if result.sequence is None
-            else {"runtime_id": str(result.sequence.runtime_id), "value": result.sequence.value},
-            "reason": result.reason,
-            "changes": {"cells": result.changes.cells, "participants": result.changes.participants},
-            "tags": sorted(result.tags),
-            "actor": None if result.actor is None else {"kind": result.actor.kind, "identity": result.actor.identity},
-            "metadata": dict(result.metadata),
-            "relations": {
-                kind: str(result.relation.action_id)
-                if result.relation is not None and result.relation.kind == kind
-                else None
-                for kind in ("reverses", "reapplies", "compensates")
-            },
-            "conflict": None
-            if result.conflict is None
-            else {
-                "target_id": result.conflict.target_id,
-                "expected_version": result.conflict.expected_version,
-                "actual_version": result.conflict.actual_version,
-            },
-            "exception": None
-            if result.exception is None
-            else {"type_name": result.exception.type_name, "message": result.exception.message},
-        }
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-
-    def decode(self, data: bytes) -> ActionResultSnapshot:
-        if len(data) > self.max_encoded_bytes:
-            message = "action result exceeds the maximum encoded size"
-            raise ValueError(message)
-        try:
-            payload = json.loads(data)
-        except (UnicodeDecodeError, ValueError) as error:
-            message = "action result has a corrupt schema"
-            raise ValueError(message) from error
-        if not isinstance(payload, dict):
-            message = "action result has a corrupt schema"
-            raise ValueError(message)  # noqa: TRY004 - malformed encoded values share one public error type.
-        if payload.get("schema") != self.schema_version:
-            message = f"unsupported action result schema {payload.get('schema')!r}"
-            raise ValueError(message)
-        try:
-            return self._decode(payload)
-        except (KeyError, TypeError, AttributeError, ValueError) as error:
-            message = "action result has a corrupt schema"
-            raise ValueError(message) from error
-
-    def _decode(self, payload: dict[str, Any]) -> ActionResultSnapshot:
-        cause = payload["cause"]
-        sequence = payload["sequence"]
-        actor = payload["actor"]
-        relations = payload["relations"]
-        relation = None
-        kinds: tuple[Literal["reverses", "reapplies", "compensates"], ...] = ("reverses", "reapplies", "compensates")
-        for kind in kinds:
-            if relations[kind] is not None:
-                if relation is not None:
-                    message = "an action can have only one history relation"
-                    raise ValueError(message)
-                relation = ActionRelation(kind, uuid.UUID(relations[kind]))
-        conflict = payload["conflict"]
-        exception = payload["exception"]
-        return ActionResultSnapshot(
-            payload["action_id"],
-            payload["root_action_id"],
-            None if cause is None else CausalRef(cause["kind"], cause["identity"]),
-            payload["kind"],
-            payload["name"],
-            payload["terminal"],
-            datetime.fromisoformat(payload["timestamp"]),
-            None if sequence is None else CommitSequence(uuid.UUID(sequence["runtime_id"]), sequence["value"]),
-            payload["reason"],
-            ChangeReport(payload["changes"]["cells"], payload["changes"]["participants"]),
-            frozenset(payload.get("tags", ())),
-            None if actor is None else ActorRef(actor["kind"], actor["identity"]),
-            tuple(sorted(payload["metadata"].items())),
-            relation,
-            None
-            if conflict is None
-            else ConflictDetail(conflict["target_id"], conflict["expected_version"], conflict["actual_version"]),
-            None if exception is None else ExceptionReport(exception["type_name"], exception["message"]),
-        )
-
-
 class EventCodec:
-    """Encode all diagnostic event variants in a versioned JSON envelope.
+    """Encode diagnostic events as JSON with one schema and an event discriminator.
 
-    Action payloads retain the ActionResultCodec format. Encoding preserves the
-    supplied event; observer scopes apply redaction before a sink receives it.
+    Decoding rejects unsupported schemas, malformed records, and oversized input.
+    Encoding preserves the supplied event; observer scopes apply redaction before
+    a sink receives it.
     """
 
-    schema_version = 1
+    schema_version = 2
     max_encoded_bytes = 1_048_576
+    _types: dict[str, type[CausalEventSnapshot]] = {
+        "action": ActionResultSnapshot,
+        "operation": OperationEventSnapshot,
+        "resource": ResourceEventSnapshot,
+        "continuation_failure": ContinuationFailureSnapshot,
+    }
 
     def encode(self, event: CausalEventSnapshot) -> bytes:
-        if isinstance(event, ActionResultSnapshot):
-            kind = "action"
-            payload = json.loads(ActionResultCodec().encode(event))
-        else:
-            kind = {
-                OperationEventSnapshot: "operation",
-                ResourceEventSnapshot: "resource",
-                ContinuationFailureSnapshot: "continuation_failure",
-            }[type(event)]
-            payload = asdict(event)
-            payload["timestamp"] = event.timestamp.isoformat()
+        kind = next(kind for kind, event_type in self._types.items() if isinstance(event, event_type))
         return json.dumps(
-            {"schema": self.schema_version, "event": kind, "data": payload}, sort_keys=True, separators=(",", ":")
+            {"schema": self.schema_version, "event": kind, "data": asdict(event)},
+            default=self._encode_value,
+            sort_keys=True,
+            separators=(",", ":"),
         ).encode()
+
+    @staticmethod
+    def _encode_value(value: object) -> str | list[str]:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, uuid.UUID):
+            return str(value)
+        if isinstance(value, frozenset):
+            return sorted(value)
+        message = f"unsupported event value {type(value).__name__}"
+        raise TypeError(message)
 
     def decode(self, data: bytes) -> CausalEventSnapshot:
         if len(data) > self.max_encoded_bytes:
             message = "event exceeds the maximum encoded size"
             raise ValueError(message)
         try:
-            envelope = json.loads(data)
-            if envelope["schema"] != self.schema_version:
-                message = "unsupported event schema"
-                raise ValueError(message)  # noqa: TRY301 - unify malformed input errors below.
-            kind, payload = envelope["event"], envelope["data"]
-            if kind == "action":
-                return ActionResultCodec().decode(json.dumps(payload).encode())
-            timestamp = datetime.fromisoformat(payload["timestamp"])
-            cause = payload["cause"]
-            cause = None if cause is None else CausalRef(cause["kind"], cause["identity"])
-            report = payload["exception"]
-            report = None if report is None else ExceptionReport(report["type_name"], report["message"])
-            if kind == "operation":
-                return OperationEventSnapshot(
-                    payload["execution_id"],
-                    payload["root_action_id"],
-                    cause,
-                    payload["name"],
-                    payload["status"],
-                    timestamp,
-                    report,
-                )
-            if kind == "resource":
-                return ResourceEventSnapshot(
-                    payload["generation_id"],
-                    payload["root_action_id"],
-                    cause,
-                    payload["name"],
-                    payload["status"],
-                    timestamp,
-                    report,
-                )
-            if kind == "continuation_failure" and cause is not None and report is not None:
-                return ContinuationFailureSnapshot(
-                    payload["failure_id"],
-                    payload["root_action_id"],
-                    cause,
-                    payload["stage"],
-                    payload["callback"],
-                    timestamp,
-                    report,
-                )
-            message = "unknown or incomplete event variant"
-            raise ValueError(message)  # noqa: TRY301 - unify malformed input errors below.
+            return self._decode(json.loads(data))
         except (UnicodeDecodeError, KeyError, TypeError, AttributeError, ValueError) as error:
             message = "event has a corrupt or unsupported schema"
             raise ValueError(message) from error
+
+    def _decode(self, envelope: dict[str, Any]) -> CausalEventSnapshot:
+        if envelope["schema"] != self.schema_version:
+            message = "unsupported event schema"
+            raise ValueError(message)
+        event_type = self._types[envelope["event"]]
+        payload = envelope["data"]
+        payload["timestamp"] = datetime.fromisoformat(payload["timestamp"])
+        if payload["cause"] is not None:
+            payload["cause"] = CausalRef(**payload["cause"])
+        if payload["exception"] is not None:
+            payload["exception"] = ExceptionReport(**payload["exception"])
+        if event_type is ActionResultSnapshot:
+            payload["changes"] = ChangeReport(**payload["changes"])
+            payload["tags"] = frozenset(payload["tags"])
+            payload["metadata"] = tuple((key, value) for key, value in payload["metadata"])
+            if payload["sequence"] is not None:
+                sequence = payload["sequence"]
+                payload["sequence"] = CommitSequence(uuid.UUID(sequence["runtime_id"]), sequence["value"])
+            if payload["actor"] is not None:
+                payload["actor"] = ActorRef(**payload["actor"])
+            if payload["conflict"] is not None:
+                payload["conflict"] = ConflictDetail(**payload["conflict"])
+            if payload["relation"] is not None:
+                relation = payload["relation"]
+                if relation["kind"] not in ("reverses", "reapplies", "compensates"):
+                    message = "unknown history relation"
+                    raise ValueError(message)
+                payload["relation"] = ActionRelation(relation["kind"], uuid.UUID(relation["action_id"]))
+        elif event_type is ContinuationFailureSnapshot and (payload["cause"] is None or payload["exception"] is None):
+            message = "a callback failure requires a cause and exception"
+            raise ValueError(message)
+        return event_type(**payload)
 
 
 class EventSink(Protocol):
