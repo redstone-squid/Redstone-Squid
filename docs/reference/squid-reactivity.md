@@ -10,8 +10,8 @@ import squid_reactivity as sr
 
 ## State and transactions
 
-State mutates only inside a transaction; everything staged commits atomically or rolls back
-whole.
+Assignments outside a transaction publish immediately. Inside a transaction, assignments stage
+and publish together on success; failure discards them.
 
 ::: squid_reactivity.state
 
@@ -31,7 +31,7 @@ whole.
 
 ::: squid_reactivity.enlist
 
-::: squid_reactivity.StateOwner
+::: squid_reactivity.Reactive
 
 ::: squid_reactivity.TransactionView
 
@@ -51,15 +51,13 @@ whole.
 
 ::: squid_reactivity.ObservedRead
 
-## Shared state
+## Model retention
 
-One reactive namespace shared across owners, pooled per scope.
+Retain one model per factory key; no scope metadata is required on the model.
 
-::: squid_reactivity.SharedState
+::: squid_reactivity.ReactivePool
 
-::: squid_reactivity.SharedStatePool
-
-::: squid_reactivity.SharedStateFactory
+::: squid_reactivity.ReactiveFactory
 
 ## Topics
 
@@ -108,8 +106,6 @@ Apply targeted cell changes, optionally conditioned on what the writer last saw.
 ::: squid_reactivity.ConditionalCellPatch
 
 ::: squid_reactivity.apply_conditional_patches
-
-::: squid_reactivity.apply_local_overwrite_patches
 
 ## Actions
 

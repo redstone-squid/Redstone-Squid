@@ -18,6 +18,8 @@ A component declares reactive fields and renders a layout tree. State changes in
 are transactional; `computed` derives values, and `resource` loads asynchronously with
 first-class pending and failure states.
 
+::: squid_ui.Reactive
+
 ::: squid_ui.Component
 
 ::: squid_ui.state

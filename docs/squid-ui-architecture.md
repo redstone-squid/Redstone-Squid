@@ -13,7 +13,7 @@ expands them in roughly this order.
 |---|---|---|---|
 | Rendering | what the user sees | `Document`, `plan`, target adapters, `sl.scene.Scene`, `Renderer` | [Semantic authoring](#semantic-authoring-adaptation-and-exact-primitives), [Scenes and renderers](#scenes-and-renderers) |
 | State | what one component knows | `sl.state`, `sl.computed`, `sl.resource` | [Components and reactivity](#components-and-vue-inspired-reactivity) |
-| Shared state | what several panels agree on | `SharedState`, `SharedStatePool`, `TopicBus` | [Shared state across message roots](#shared-state-across-message-roots) |
+| Reactive models | state and behavior reused across panels | `Reactive`, `ReactivePool` | [Reusable reactive models](#reusable-reactive-models) |
 | Actions | what a press is allowed to do | `sl.action_control`, `Guard`, `history`, `ActionMiddleware` | [Actions and frontend adapters](#actions-and-frontend-adapters) |
 | Lifetime | how long a panel lives and who may use it | `MessageRoot`, `SessionSpec`, `SessionManager`, `AccessPolicy` | [Which entry point to use](#which-entry-point-to-use), [Ownership and lifetime](#ownership-and-lifetime) |
 | Durability | what survives a restart | `DurableSessionRuntime`, `Router`, `PersistentStatePool` | [Durable sessions](#durable-sessions), [Durable route graph](#durable-route-graph-and-dispatch-onion) |
@@ -35,7 +35,7 @@ flowchart TB
         widgets[Reusable components<br/><code>squid-ui-widgets</code>]
         component["Component or Screen<br/>declared state and synchronous <code>render()</code>"]
         reactive[Reactive model<br/><code>state · computed · resource · operation</code>]
-        shared[Cross-root view state<br/><code>SharedState · SharedStatePool · TopicBus</code>]
+        shared[Reusable reactive models<br/><code>Reactive · ReactivePool</code>]
         actions[Portable actions and form handlers<br/>events · guards · history]
 
         host -->|constructs and injects| component
@@ -618,9 +618,8 @@ That guarantee reaches declared state, and only declared state:
 
 | Attribute | Re-renders on write | Rolled back on failure |
 |---|---|---|
-| `sl.state(...)` | yes | yes |
+| `sl.state(...)` on a `Reactive` or `Component` | consumers that read the field | yes |
 | `sl.state(opaque=True)` | on assignment, or on `mutated()` | to the previous reference |
-| `sl.state(...)` on an `sl.runtime.SharedState` | every message root that rendered it, through the bus | yes |
 | a plain attribute | no | it cannot be written inside an action at all |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
 
@@ -630,7 +629,7 @@ of them; another task reading the same component across an `await` sees the comm
 until then. Rolling back is dropping the overlay.
 
 Every transaction has a stable `ActionContext` and exactly one terminal outcome. A publishing
-transaction validates every strong shared/replicated read by version, freezes its cell patches,
+transaction validates every strong reactive/replicated read by version, freezes its cell patches,
 and prepares all participants under the runtime commit gate. Installing patches and synchronously
 applying the prepared participants is the commit point. Reactive notifications, participant
 finalizers, ledger sinks, and aftermath hooks run after the gate and cannot veto that truth. An
@@ -651,65 +650,92 @@ the actual undo commit. External effects use an idempotent compensation executio
 partial success remains inspectable. The complete pipeline and examples are in
 [`docs/action-ledger.md`](action-ledger.md).
 
-## Shared state across message roots
+## Reusable reactive models
 
-`sl.state()` is per-component and per-message-root. When two live panels must agree on something the
-*view* owns -- a filter, a selection, a theme -- declare an `sl.runtime.SharedState` namespace instead:
+`sl.Reactive` groups state, derived values, resources, and methods without requiring a render
+method. `sl.Component` extends it with rendering, context, and component lifecycle. Use a model
+when several components need the same behavior, or when state should outlive a particular panel.
 
-    class Appearance(sl.runtime.SharedState[int]):
-        accent: int = sl.state(DISCORD_BLUE)
-        density: str = sl.state("comfortable")
+```python
+class Search(sl.Reactive):
+    query: str = sl.state("")
 
-    appearance = Appearance(bot.topic_bus, user.id)
+    @sl.computed
+    def normalized(self) -> str:
+        return self.query.strip().lower()
 
-State on a namespace is `sl.state()` one level out and is literally the same storage, so replacement,
-the equality no-op, `opaque=`, staging and rollback all behave identically. Two differences:
-a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
-one component, and a strongly read shared cell -- one the action also writes, or reads inside
-`strong_read()` -- carries its version as a commit precondition when the action publishes anything.
-If someone else moves it meanwhile -- including A→B→A -- the
-action raises `sl.runtime.ReactiveConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
-for that, shown through `handle_error` or an `ActionMiddleware`.
+    def clear(self) -> None:
+        self.query = ""
 
-There is no global store and no lookup by type: two panels converge because something handed
-them the same object, by constructor injection or `ContextKey`. That also settles lifetime -- the
-handle *is* the state, so panels holding it means it dies with the last panel, and a cog or session
-holding it means it survives every panel opening and closing. When what a host holds is *one handle
-per scope*, `sl.runtime.SharedStateStatePool` writes that lifetime down where it is known instead of leaving a
-`setdefault` cache around every namespace; see below. A message root subscribes to exactly the cells
-its latest render read, reconciled at stage time, and `sl.runtime.addresses(lambda: appearance.accent)`
-names an address by hand for a host that wants to follow one itself. A message root repaints its own
-writes inside the interaction that made them -- `MessageRoot.observed` is what it rendered,
-`MessageRoot.followed` what it managed to subscribe to -- so a missing scheduler costs live updates
-from *other* message roots and nothing else. Nothing durable belongs
-here; anything the application would still want with nobody looking at it is a service.
 
-### Pooling one namespace per scope
+class SearchSummary(sl.Component):
+    def __init__(self, search: Search) -> None:
+        self.search = search
 
-A pool is strong and single-typed: it owns one `SharedState` subclass and retains one canonical handle
-per hashable scope until that scope is dropped, the pool is cleared, or the pool itself is released.
+    def render(self):
+        return sl.paragraph(f"Searching for {self.search.normalized}")
 
-    self._appearance = sl.runtime.SharedStateStatePool(Appearance, bot.topic_bus)
-    ...
-    appearance = self._appearance.get(scope)
 
-`get(scope)` is get-or-create and synchronous, so nothing awaits between the miss and the insert.
-`get_existing`, `delete`, `clear` and `active` are the rest of the surface. Where the pool is held *is*
-the retention policy -- on the bot for process lifetime, on a cog for extension lifetime, on a
-session for that session's. `squid/bot/layout_showcase.py` keeps one on the cog for exactly that
-reason. None of this changes `SharedState` itself: constructing a handle and passing it directly stays
-supported, and a scope used outside a pool may still be mutable or unhashable.
+search = Search()
+left = SearchSummary(search)
+right = SearchSummary(search)
+```
 
-The scope a pool keys on is the one a `SessionSpec` already computes.
-`OpenContext.of(interaction)` yields the context, and asking it for a kind statically --
-`open_context.user_guild()` is a `UserGuildScope` -- lets a `SharedState[UserGuildScope]`
-pool refuse the wrong scope at the call site. A panel holding its session key reaches a pool
-through `key.scope` with nothing to convert. `OpenContext` and `ScopeKind` are deliberately
-not on `sd`; import them from `squid_ui_discord.session_specs`.
+Both readers observe the same object. Each runtime automatically follows the fields its render
+reads, including reads through computed values and nested models. An unread field does not request
+another render. Replacing a reference dynamically requires a declared field such as
+`search: Search = sl.state(opaque=True)`; an ordinary constructor attribute is suitable when that
+reference stays fixed. Constructor injection and `ContextKey` are both ways to pass the same object.
 
-`squid_storage.PersistentStatePool` is the hydrating variant, for a namespace that should survive a
-restart: `await load(scope)` in place of `get(scope)`, `run()` as the background writer, and
-`flush`/`close` to end it.
+Models need no bus, scope, or base initializer. Their constructors should take only domain inputs
+or collaborators their behavior uses. Framework-independent code can import the same `Reactive`
+class from `squid_reactivity`; UI code uses `sl.Reactive` alongside `sl.Component`.
+
+A model can declare `@sl.resource` and `@sl.operation` too. Resources track the state their loaders
+read, and consumers observe pending, ready, failed, and replaced results. Operations remain
+explicitly started work. Reactive models do not acquire component lifecycle hooks or own background
+tasks: use a `ManagedService` with an explicit owner for ongoing activity.
+
+`ComponentRuntime` keeps subscriptions for the delivered tree while it observes a prospective
+replacement. Commit retires unused reads; discard releases only prospective reads. Sources hold
+weak subscription handles, so a long-lived model cannot keep an abandoned runtime alive. A Discord
+scheduler arranges delivery of automatic updates; it needs no topic bus for reactive models.
+`TopicBus` remains the integration mechanism for explicit external `watch(Topic(...))` dependencies.
+
+All reactive fields use the same transaction rules, including component fields. A read followed by
+a write checks the committed version. `strong_read()` also checks reads used to decide unrelated
+writes. A competing change raises `ReactiveConflictError` and publishes nothing, including when a
+value changes from A to B and back to A. Undo and redo likewise check versions and refuse to overwrite
+intervening work.
+
+### Retaining one model per key
+
+Construct and pass a model directly when its consumers determine its lifetime. Use `ReactivePool`
+when a host needs to retain one model per key:
+
+```python
+from squid_reactivity import ReactivePool
+from squid_ui_discord.sessions import UserScope
+
+
+def make_search(key: UserScope) -> Search:
+    return Search()
+
+
+searches = ReactivePool(make_search)
+search = searches.get(UserScope(user.id))
+```
+
+The key belongs to the pool; the model does not need to store it. A factory can use the key to select
+application dependencies, such as a user's search index. Its signature determines the pool's key
+and value types. `get` constructs once per key, `get_existing` never constructs, and `delete`, `clear`,
+and `active` manage retention. Removing an entry does not reset a model still held by a consumer.
+
+`PersistentStatePool(make_search, store=store, slot=slot)` adds explicit hydration and persistence:
+start its `run()` task, use `await load(key)`, and end with `flush`/`close`. It snapshots declared
+persisted fields through `export_state` and `restore_state`. Resources, operations, and subscriptions
+are runtime state. TODO: define nested reactive graph persistence, including identity and references;
+current snapshots do not recursively persist model graphs.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
 
@@ -920,8 +946,9 @@ which is the one place webhook tokens and response shapes are understood. When n
 live the render waits in `MessageRoot.pending` for the next interaction — `refresh()` has always
 promised the next opportunity rather than the current instant.
 
-Cross-root refresh uses a payload-free `sl.runtime.TopicBus`: a topic is an exact hashable address,
-not state. Subscribers re-read application services before asking their message root to refresh, so the
+Reactive models notify readers directly. Changes in external application services use a payload-free
+`sl.runtime.TopicBus`: a topic names a dependency without carrying its state. Subscribers re-read
+application services before asking their message root to refresh, so the
 data layer remains the only source of truth. `LocalTopicBus` delivers synchronously and isolates
 subscriber failures through a reporting hook; MessageRootScheduler scheduling coalesces per message root, and different
 mounts refresh concurrently without one message root rendering over itself. The host supervises
@@ -1227,13 +1254,13 @@ Choose the primitive by what it does:
 
 | API | Responsibility |
 |---|---|
-| `SharedState` | Share reactive data between consumers. |
+| `Reactive` | Share reactive data between consumers. |
 | `resource` | Derive an async value from dependencies; safe to cancel and restart. |
 | `operation` | Represent an explicitly started execution and its outcome. |
 | `ManagedService` | Run activity under an explicit owner until it ends. |
 
 A service can publish shared state, but it need not have any. Ordinary async queries belong
-in resources; explicit submissions belong in operations. `SharedStatePool` retains handles,
+in resources; explicit submissions belong in operations. `ReactivePool` retains handles,
 and removing a handle does not run cleanup. `provide()` and `inject()` share access without
 establishing ownership of activity.
 
@@ -1262,12 +1289,12 @@ Fetching the updated preview can remain a resource; the service only owns the su
 import anyio
 from anyio.abc import TaskStatus
 
-from squid_ui import Component, ComponentsV2Target, DocumentLike, state
+from squid_ui import Component, ComponentsV2Target, DocumentLike, Reactive, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import ContextKey, ManagedService, SharedState, Topic, TopicBus
+from squid_ui.runtime import ContextKey, ManagedService, Topic, TopicBus
 
 
-class UpdateState(SharedState):
+class UpdateState(Reactive):
     changed: bool = state(default=False)
 
 
@@ -1275,7 +1302,7 @@ class BuildUpdates(ManagedService):
     def __init__(self, bus: TopicBus, build_id: int) -> None:
         self.bus = bus
         self.topic = Topic("build", str(build_id))
-        self.state = UpdateState(bus)
+        self.state = UpdateState()
 
     async def run(self, *, task_status: TaskStatus[None]) -> None:
         def changed(_: Topic) -> None:
@@ -1321,9 +1348,9 @@ setup completes. Data required before first delivery belongs in `on_load()` or a
 The diagnostics report browser is a production example in
 `squid/bot/diagnostics_view.py`. Its update panel owns `ErrorReportRefresh`, which awaits an
 initial comparison before signalling readiness and then schedules periodic checks. The notice
-and refresh controls inject the same monitor. Its resource lives on `SharedState`, so each
-child observes changes through the topic bus. A resource owned locally by the parent would
-invalidate that parent, which is insufficient for independently cached child readers.
+and refresh controls inject the same monitor. Its resource lives on a `Reactive` model, and
+each child observes that resource directly. The same observation works for a resource declared
+on a component; every cached reader is invalidated when the resource changes.
 Query failures remain visible resource results and leave manual refresh available; hiding the
 update panel cancels its work. Reopening it keeps the service object and starts a fresh run.
 The report being read only changes after an explicit refresh. This exercises asynchronous
@@ -1346,7 +1373,7 @@ next run waiting for previous cleanup; rendering during that wait can still see 
 
 Readiness is an execution signal, not reactive state. Calling `task_status.started()` wakes
 readiness waiters but does not redraw consumers. Publish UI-visible loading, ready, or error
-state through `SharedState` so the normal render subscriptions update the UI. Define what retained
+state through `Reactive` so the normal render subscriptions update the UI. Define what retained
 state means during a restart, and make service methods check whether their required resources
 are available. Injecting a service is not evidence that those resources are ready.
 
@@ -1447,7 +1474,7 @@ completed waits release those results. Later activations do not inherit earlier 
 use the error handler or logs for history. See the method docstrings for the wait
 and failure semantics. `UIExecutionHost.close()` awaits all remaining runs and error handlers.
 
-Component ownership is unrelated to `SharedState.scope` (a diagnostic label), pool keys, and
+Component ownership is independent of reactive model references, pool keys, and
 Discord access policies. Work that must outlive a panel belongs to an application/session owner.
 
 ### Finishing panels and sessions

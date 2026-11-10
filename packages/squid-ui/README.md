@@ -28,6 +28,12 @@ class Counter(sl.Component):
         self.count += 1
 ```
 
+For reusable state and behavior without rendering, extend `sl.Reactive`. `Component` already
+extends it. A model can contain state, computed properties, resources, operations, and other models.
+Pass the same instance to components that should share it; the runtime automatically follows the
+fields each render reads. Models need no bus, scope, or `super().__init__()` call. See
+[reusable reactive models](https://redstone-squid.github.io/Redstone-Squid/squid-ui-architecture/#reusable-reactive-models).
+
 The base package contains semantic nodes, planning, exact primitives, the component runtime,
 the resolved-scene codec, and first-class HTML and Slack planning targets. It has no frontend SDK
 dependency; `markdown-it-py` is its direct Markdown parser dependency.

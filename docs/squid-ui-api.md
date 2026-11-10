@@ -5,6 +5,8 @@ composition and adapter contracts.
 
 | Task | Public API |
 |---|---|
+| Reuse reactive state and behavior | `squid_ui.Reactive` (also `squid_reactivity.Reactive`) |
+| Retain one model per key | `squid_reactivity.ReactivePool` |
 | Declare stateful UI | `squid_ui.Component`, `state`, `computed`, `resource` |
 | Author layout | lowercase `squid_ui` factories such as `section`, `heading`, `choices` |
 | Plan portable output | `squid_ui.planning.plan`, an explicit target |

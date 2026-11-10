@@ -609,7 +609,7 @@ class MessageRoot[
 
     @property
     def observed(self) -> tuple[Address, ...]:
-        """The shared cell addresses the generation on screen read.
+        """The reactive fields and external topics the generation on screen read.
 
         What the reader is looking at, whether or not anything can notify this mount about
         them. A render staged since is not here until it is delivered; `followed` may
@@ -619,7 +619,7 @@ class MessageRoot[
 
     @property
     def followed(self) -> tuple[Address, ...]:
-        """The currently retained bus subscriptions, for diagnostics.
+        """The currently retained reactive and topic subscriptions, for diagnostics.
 
         These may cover both the committed generation and a staged successor. Topics followed
         separately by the host through its scheduler are not listed here.

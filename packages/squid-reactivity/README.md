@@ -6,10 +6,10 @@ background tasks.
 This is an alpha release. The Python API may change before 1.0.
 
 ```python
-from squid_reactivity import StateOwner, computed, observe_reads, state, transaction
+from squid_reactivity import Reactive, computed, observe_reads, state, transaction
 
 
-class Counter(StateOwner):
+class Counter(Reactive):
     count: int = state(0)
 
     @computed
@@ -25,14 +25,21 @@ with observe_reads() as read_set:
     assert counter.doubled == 2
 ```
 
+`Reactive` is a reusable model, with no required constructor or rendering method. Share an instance
+by passing it to consumers. `squid_ui.Component` extends this class and its runtime automatically
+observes model fields read during rendering, including reads through nested models and computed
+values. Explicit `observe_reads()` users can follow the resulting addresses with
+`SubscriptionReconciler(None, callback)`; retain the reconciler and close it when finished.
+Sources hold weak subscription handles and cannot keep abandoned consumers alive.
+
 The package is layered:
 
 - `squid_reactivity.actions` provides sortable action IDs, causal contexts, immutable terminal
   outcomes, bounded ledgers, aftermath authority, and portable redacted schema version 1.
 - `squid_reactivity.core` provides state cells, computed values, full strong-read OCC,
-  version-conditional patches, staged transaction participants, and the reusable `StateOwner` owner.
-- `squid_reactivity.shared_state` provides `SharedState`, whose state fields publish exact `CellAddress`
-  values through a host-supplied bus.
+  version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
+- `squid_reactivity.state_pool` retains one model per factory key. Models do not require scope metadata.
+- Every `Reactive` field has an identity address. Consumers subscribe directly without a host-supplied bus.
 - `squid_reactivity.topics` provides portable `Topic` values, tracked `watch()` reads, the small
   synchronous `TopicBus` protocol, `LocalTopicBus`, and committed/staged subscription
   reconciliation.

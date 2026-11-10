@@ -1934,6 +1934,7 @@ class Reactive:
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         instance = super().__new__(cls)
+        # Subclasses can initialize their own inputs without calling a base initializer.
         object.__setattr__(instance, "_reactive_commit_listeners", set())
         note_born(instance)
         return instance
