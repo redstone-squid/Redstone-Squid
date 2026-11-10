@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass, field, replace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 from whenever import Instant
 
+import squid_ui as sl
 from squid.bot.submission.build_browse import _BuildDetail  # pyright: ignore[reportPrivateUsage]
 from squid.builds.models import DoorBuild
 from squid.permissions.domain import PermissionNode
@@ -13,6 +15,7 @@ from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
 from squid_reactivity import LocalTopicBus
+from squid_ui.testing import press_event
 from tests.unit.schematics.fakes import make_analysis
 
 UPLOADER_ID = 11
@@ -130,3 +133,35 @@ async def test_an_anonymous_actor_never_matches_a_legacy_row_without_an_uploader
     )
 
     assert result is None
+
+
+async def test_schematic_actions_publish_their_results_inside_a_transaction(monkeypatch: pytest.MonkeyPatch) -> None:
+    detail = _detail(PUBLIC, actor=None, held=set())
+    monkeypatch.setattr(detail._schematics, "explain_render_skip", AsyncMock(return_value=None))
+    monkeypatch.setattr(detail._schematics, "convert", AsyncMock(return_value=(b"schematic", ())))
+
+    with sl.runtime.transaction():
+        await detail._schematic_info(press_event())
+        await detail._schematic_download(press_event())
+
+    assert detail._schematic_result is not None
+    assert detail._asset is not None
+    assert detail._asset.name == "build-7.litematic"
+    assert detail._asset.source == sl.document.InlineAsset(b"schematic")
+
+
+async def test_a_failed_schematic_action_discards_its_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    detail = _detail(PUBLIC, actor=None, held=set())
+    monkeypatch.setattr(detail._schematics, "explain_render_skip", AsyncMock(return_value=None))
+    monkeypatch.setattr(detail._schematics, "convert", AsyncMock(return_value=(b"schematic", ())))
+
+    async def download_then_fail() -> None:
+        await detail._schematic_info(press_event())
+        await detail._schematic_download(press_event())
+        raise RuntimeError("later failure")
+
+    with pytest.raises(RuntimeError, match="later failure"), sl.runtime.transaction():
+        await download_then_fail()
+
+    assert detail._schematic_result is None
+    assert detail._asset is None

@@ -95,6 +95,13 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     actions recheck permission through authorize; the routed editor checks its own access.
     """
 
+    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        None, opaque=True
+    )
+    _pending_review: str | None = sl.state(None, persist=False)
+    _schematic_result: sl.TextLike | None = sl.state(None, opaque=True)
+    _asset: sl.document.Asset | None = sl.state(None, opaque=True)
+
     def __init__(
         self,
         build: Build,
@@ -121,10 +128,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._actor_account_id = actor_account_id
         self._authorize = authorize
         self._refresh_posts = refresh_posts
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
-        self._pending_review: str | None = None
-        self._schematic_result: sl.TextLike | None = None
-        self._asset: sl.document.Asset | None = None
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
