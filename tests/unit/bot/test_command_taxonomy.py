@@ -27,8 +27,7 @@ UNGATED_COMMANDS = frozenset(
         # Public: anyone may run these.
         "layout",
         "layout workbench",
-        "layout lobby",
-        "layout shared",
+        "layout review",
     }
 )
 """Explicit exceptions to the permission-node requirement for commands in PUBLIC_COGS."""
