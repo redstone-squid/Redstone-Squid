@@ -24,22 +24,44 @@ class Topic:
         return f"{self.kind}:{self.key}"
 
 
-type Address = Topic | CellAddress
+class TopicHandle:
+    """A named reactive dependency owned by one bus.
+
+    Obtain handles through bus.topic(). Looking up a handle does not track a read;
+    watch() does. Consumers can retain a handle without separately retaining its bus.
+    """
+
+    def __init__(self, bus: TopicBus, name: Topic) -> None:
+        self._bus = bus
+        self.name = name
+        self._cell = _Cell(address=self)
+
+    def watch(self) -> None:
+        """Track invalidation without adding a transaction commit precondition."""
+        self._cell.track(self._cell.version)
+
+    def publish(self) -> None:
+        """Invalidate this dependency and notify subscribers synchronously."""
+        self._bus.publish(self.name)
+
+    def subscribe(self, callback: Callable[[TopicHandle], None]) -> Callable[[], None]:
+        """Subscribe to this handle until the returned callable is called."""
+        return self._bus.subscribe(self.name, lambda _: callback(self))
+
+    @override
+    def __str__(self) -> str:
+        return str(self.name)
+
+
+type Address = Topic | TopicHandle | CellAddress
 type Subscriber = Callable[[Address], None]
 type SubscriberErrorHandler = Callable[[Address, Subscriber, Exception], None]
 
 
-_TOPIC_CELLS: WeakValueDictionary[Topic, _Cell] = WeakValueDictionary()
-
-
-def watch(*topics: Topic) -> None:
-    """Track these topics as dependencies of the current computation or render."""
+def watch(*topics: TopicHandle) -> None:
+    """Track several bus-owned handles in the current computation or render."""
     for topic in topics:
-        cell = _TOPIC_CELLS.get(topic)
-        if cell is None:
-            cell = _Cell(address=topic)
-            _TOPIC_CELLS[topic] = cell
-        cell.track(cell.version)
+        topic.watch()
 
 
 class TopicCodec(Protocol):
@@ -81,10 +103,12 @@ class TopicBus(Protocol):
     Reactive objects notify their consumers directly, without this bus. Hosts publish
     named topics after database changes, file changes, or incoming remote events.
 
-    Implementations must advance a :class:`Topic`'s tracked version before notifying
-    subscribers, even when there are no subscribers. Delivery scheduling, coalescing,
+    Each bus owns its topic handles and advances their tracked versions before
+    notifying subscribers, even when there are no subscribers. Delivery scheduling, coalescing,
     durability, and bridges are deliberately outside this protocol.
     """
+
+    def topic(self, kind: str, key: str) -> TopicHandle: ...
 
     def subscribe[AddressT: Address](
         self, address: AddressT, callback: Callable[[AddressT], None]
@@ -144,10 +168,26 @@ class LocalTopicBus:
     def __init__(self, *, on_subscriber_error: SubscriberErrorHandler = _log_subscriber_error) -> None:
         self._on_subscriber_error = on_subscriber_error
         self._addresses: dict[Address, _AddressState] = {}
+        self._topics: WeakValueDictionary[Topic, TopicHandle] = WeakValueDictionary()
+
+    def topic(self, kind: str, key: str) -> TopicHandle:
+        """Return this bus's handle for a portable name, without tracking a read.
+
+        Unused handles are collected once no reader, observation, or subscription
+        retains them. Publishing an unwatched name does not allocate a handle.
+        """
+        name = Topic(kind, key)
+        handle = self._topics.get(name)
+        if handle is None:
+            handle = TopicHandle(self, name)
+            self._topics[name] = handle
+        return handle
 
     def subscribe[AddressT: Address](
         self, address: AddressT, callback: Callable[[AddressT], None]
     ) -> Callable[[], None]:
+        if isinstance(address, TopicHandle):
+            return address.subscribe(lambda _: callback(address))
         state = self._addresses.setdefault(address, _AddressState({}))
         token = object()
         state.subscriptions[token] = callback
@@ -162,10 +202,13 @@ class LocalTopicBus:
 
     def publish(self, *addresses: Address) -> None:
         for address in addresses:
+            if isinstance(address, TopicHandle):
+                address.publish()
+                continue
             if isinstance(address, Topic):
-                cell = _TOPIC_CELLS.get(address)
-                if cell is not None:
-                    cell.touch()
+                handle = self._topics.get(address)
+                if handle is not None:
+                    handle._cell.touch()
             state = self._addresses.get(address)
             if state is None:
                 continue
@@ -255,6 +298,8 @@ class SubscriptionReconciler:
                     continue
                 if isinstance(address, CellAddress):
                     self._follows[address] = subscribe(address.owner, address.name, self.callback)
+                elif isinstance(address, TopicHandle):
+                    self._follows[address] = address.subscribe(self.callback)
                 elif bus is not None:
                     self._follows[address] = bus.subscribe(address, self.callback)
                 else:
@@ -324,6 +369,7 @@ __all__ = [
     "Topic",
     "TopicBus",
     "TopicCodec",
+    "TopicHandle",
     "TopicSnapshot",
     "watch",
 ]

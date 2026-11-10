@@ -10,7 +10,6 @@ from squid_reactivity import (
     Reactive,
     ResourceEventSnapshot,
     SubscriptionReconciler,
-    Topic,
     action_scope,
     add_action_result_sink,
     observe_reads,
@@ -47,7 +46,7 @@ async def test_resource_tracks_state_and_repends_after_a_source_moves() -> None:
 
 async def test_publish_during_load_repends_the_result() -> None:
     bus = LocalTopicBus()
-    topic = Topic("build", "42")
+    topic = bus.topic("build", "42")
     started = asyncio.Event()
     resume = asyncio.Event()
 

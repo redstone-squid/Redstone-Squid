@@ -59,11 +59,12 @@ def test_error_hook_failures_are_isolated(caplog: pytest.LogCaptureFixture) -> N
 
 
 def test_publish_moves_a_watched_version_without_subscribers() -> None:
+    bus = LocalTopicBus()
     with observe_reads() as observation:
-        watch(BUILD)
+        watch(bus.topic(BUILD.kind, BUILD.key))
     source, version = next(iter(observation.sources.items()))
 
-    LocalTopicBus().publish(BUILD)
+    bus.publish(BUILD)
 
     assert source.settle() != version
 
@@ -164,3 +165,50 @@ def test_duplicate_callbacks_have_independent_idempotent_subscriptions() -> None
     unsubscribe_first()
     bus.publish(BUILD)
     assert seen == [BUILD, BUILD]
+
+
+def test_handles_are_canonical_only_within_their_bus() -> None:
+    first, second = LocalTopicBus(), LocalTopicBus()
+    handle = first.topic("build", "42")
+    assert first.topic("build", "42") is handle
+    assert second.topic("build", "42") is not handle
+    with observe_reads() as observation:
+        first.topic("build", "42")
+    assert not observation.sources
+
+
+def test_handles_follow_their_owner_without_a_reconciler_bus() -> None:
+    first, second = LocalTopicBus(), LocalTopicBus()
+    handle = first.topic("build", "42")
+    with observe_reads() as observation:
+        handle.watch()
+    source, version = next(iter(observation.sources.items()))
+    seen: list[Address] = []
+    subscriptions = SubscriptionReconciler(None, seen.append)
+    subscriptions.stage(observation.addresses())
+    subscriptions.commit()
+
+    second.publish(handle.name)
+    assert source.settle() == version
+    assert seen == []
+    first.publish(handle.name)
+    assert source.settle() != version
+    assert seen == [handle]
+    handle.publish()
+    assert seen == [handle, handle]
+    subscriptions.close()
+    handle.publish()
+    assert seen == [handle, handle]
+
+
+def test_a_handle_subscription_keeps_the_watched_generation_alive() -> None:
+    bus = LocalTopicBus()
+    handle = bus.topic("build", "42")
+    seen: list[Address] = []
+    unsubscribe = handle.subscribe(seen.append)
+    handle.publish()
+    assert seen == [handle]
+    unsubscribe()
+    unsubscribe()
+    handle.publish()
+    assert seen == [handle]
