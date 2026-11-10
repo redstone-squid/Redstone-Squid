@@ -48,7 +48,9 @@ use squid_cli_core::submission::{
     FormOptionSet, StoredDraft, SubmissionApi, SubmissionContractError, SubmissionFinalization,
 };
 use squid_cli_core::terminal::sanitize_terminal_text;
-use squid_cli_core::transport::{ApiClient, TransportError, status_code_class};
+use squid_cli_core::transport::{
+    ApiClient, ApiMethod, ApiRequest, TransportError, status_code_class,
+};
 use squid_cli_core::tui::read_answer_tui;
 use squid_cli_core::version::VersionInfo;
 use uuid::Uuid;
@@ -77,6 +79,11 @@ enum OutputFormat {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// View or edit global runtime settings (requires global administrator permission).
+    Settings {
+        #[command(subcommand)]
+        command: SettingsCommand,
+    },
     /// Sign in, sign out, and inspect this profile's CLI device session.
     Auth {
         #[command(subcommand)]
@@ -120,6 +127,14 @@ enum Command {
     },
     /// Report CLI and submission-protocol compatibility.
     Version,
+}
+
+#[derive(Debug, Subcommand)]
+enum SettingsCommand {
+    /// Show current runtime settings.
+    Show,
+    /// Change one setting using a JSON value. Discord IDs must be quoted strings.
+    Set { name: String, value: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -405,6 +420,11 @@ pub fn main_entry() -> ExitCode {
 
 fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError> {
     match cli.command {
+        Command::Settings { command } => {
+            let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
+            let mut session = ConnectedSession::open(locale, &store)?;
+            run_settings(command, cli.output, &mut session, output)
+        }
         Command::Auth { command } => {
             let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
             run_auth(command, cli.output, locale, &store, output)
@@ -1406,6 +1426,52 @@ fn attach_preserved_draft(error: RunError, draft_id: Uuid) -> RunError {
         }
         error => error,
     }
+}
+
+fn run_settings(
+    command: SettingsCommand,
+    format: OutputFormat,
+    session: &mut ConnectedSession,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    let (operation, body) = match command {
+        SettingsCommand::Show => ("settings.show", None),
+        SettingsCommand::Set { name, value } => {
+            let value = serde_json::from_str::<Value>(&value).map_err(|error| {
+                CommandFailure::new(
+                    ExitStatus::Usage,
+                    "invalid_json_value",
+                    MessageKey::InvalidJsonValue,
+                )
+                .with_field_error("value", sanitize_terminal_text(&error.to_string()))
+            })?;
+            ("settings.set", Some(serde_json::json!({ name: value })))
+        }
+    };
+    let key = Uuid::new_v4();
+    let response = session.request(|client, token| {
+        let request = if let Some(body) = &body {
+            ApiRequest::new(ApiMethod::Patch, "/v1/settings/runtime")
+                .with_json(body)?
+                .with_idempotency_key(key)
+        } else {
+            ApiRequest::new(ApiMethod::Get, "/v1/settings/runtime")
+        };
+        client.send_json::<Value>(request, Some(token))
+    })?;
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new(operation, &response.data);
+            envelope.request_id = response.request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human => writeln!(
+            output,
+            "{}",
+            sanitize_terminal_text(&response.data.to_string())
+        )?,
+    }
+    Ok(())
 }
 
 fn run_errors(
@@ -2974,6 +3040,10 @@ const fn command_name(command: &Command) -> &'static str {
             ProfileCommand::Use { .. } => "profile.use",
             ProfileCommand::Remove { .. } => "profile.remove",
         },
+        Command::Settings { command } => match command {
+            SettingsCommand::Show => "settings.show",
+            SettingsCommand::Set { .. } => "settings.set",
+        },
         Command::Errors { command } => match command {
             ErrorsCommand::Show { .. } => "errors.show",
             ErrorsCommand::List { .. } => "errors.list",
@@ -3003,6 +3073,16 @@ impl From<io::Error> for RunError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn runtime_settings_commands_parse() {
+        assert!(super::Cli::try_parse_from(["squid", "settings", "show"]).is_ok());
+        let parsed =
+            super::Cli::try_parse_from(["squid", "settings", "set", "welcome_enabled", "false"]);
+        assert!(matches!(parsed, Ok(super::Cli {
+            command: super::Command::Settings { command: super::SettingsCommand::Set { name, value } }, ..
+        }) if name == "welcome_enabled" && value == "false"));
+    }
+
     use clap::Parser;
     use tempfile::tempdir;
 

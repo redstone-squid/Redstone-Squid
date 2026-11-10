@@ -16,12 +16,14 @@ from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import allows, enforce
+from squid.bot.utils.permissions import allows, enforce, requires
 from squid.core.i18n import tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
     RESTRICTION_ALIAS_CREATE,
+    SETTINGS_RUNTIME_EDIT,
+    SETTINGS_RUNTIME_VIEW,
     TAG_PROPOSAL_APPROVE,
     TAG_PROPOSAL_ARCHIVE,
     TAG_PROPOSAL_LIST,
@@ -133,9 +135,28 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return
         await message.delete()
 
-    @sd.prefix_command(name="runtime-settings", hidden=True)
-    @commands.is_owner()
+    @sd.command(name="runtime-settings", description="View or change global runtime settings", defer="private")
+    async def runtime_settings_slash(
+        self,
+        request: sd.Request[Self],
+        setting: str | None = None,
+        value: str | None = None,
+    ) -> sd.CommandResult:
+        return await self._runtime_settings(request, setting, value=value)
+
+    @sd.prefix_command(name="runtime-settings")
+    @requires(SETTINGS_RUNTIME_VIEW, SETTINGS_RUNTIME_EDIT, mode="any")
     async def runtime_settings(
+        self,
+        request: sd.Request[Self],
+        setting: str | None = None,
+        *,
+        value: str | None = None,
+    ) -> sd.CommandResult:
+        """View or change global runtime settings with JSON values."""
+        return await self._runtime_settings(request, setting, value=value)
+
+    async def _runtime_settings(
         self,
         request: sd.Request[Self],
         setting: str | None = None,
@@ -147,7 +168,10 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         Booleans use true/false; build_log_channel_ids accepts an array of IDs.
         Changes apply to subsequent operations. Vote defaults affect new sessions only.
         """
+        await enforce(request, SETTINGS_RUNTIME_EDIT if value is not None else SETTINGS_RUNTIME_VIEW)
         service = self.bot.services.settings
+        if value is not None and setting is None:
+            return text_node("Choose a setting to change.")
         if setting is None:
             settings = await service.get_runtime()
             return text_node(json.dumps(settings.model_dump(mode="json"), indent=2))

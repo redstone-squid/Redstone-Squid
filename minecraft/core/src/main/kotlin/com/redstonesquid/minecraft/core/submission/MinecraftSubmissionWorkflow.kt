@@ -15,6 +15,7 @@ import com.redstonesquid.minecraft.core.command.SuggestionSlot
 import com.redstonesquid.minecraft.core.http.BackendApiException
 import com.redstonesquid.minecraft.core.http.BackendTransport
 import com.redstonesquid.minecraft.core.http.BackendTransportException
+import com.redstonesquid.minecraft.core.settings.RuntimeSettingsClient
 import com.redstonesquid.minecraft.protocol.ClientCapabilities
 import com.redstonesquid.minecraft.protocol.CURRENT_PROTOCOL_VERSION
 import com.redstonesquid.minecraft.protocol.DraftListResponse
@@ -71,6 +72,29 @@ public class MinecraftSubmissionWorkflow(
             "Paper workflows require an installation key and Fabric workflows must not have one"
         }
         require(maxPlayerSessions in 1..100_000) { "max player sessions is outside the supported range" }
+    }
+
+    /** The backend checks global-administrator permissions, independently of Minecraft operator status. */
+    public fun settings(playerId: UUID, name: String?, value: String?, notify: (String) -> Unit) {
+        if (!requireGrant(playerId, notify)) return
+        val future = runCatching {
+            RuntimeSettingsClient(transport, secretStore, grantKey(playerId), paperInstallationKey, clock)
+                .request(name, value)
+        }.getOrElse { error ->
+            notify(if (error is IllegalArgumentException) "Use /squid settings [name] [JSON value]. Quote Discord IDs." else safeFailure(error))
+            return
+        }
+        future.whenComplete { settings, failure ->
+            dispatch {
+                if (failure != null) {
+                    notify(safeFailure(failure))
+                } else {
+                    val visible = checkNotNull(settings).filterKeys { name == null || it == name }
+                    if (visible.isEmpty()) notify("Unknown runtime setting.")
+                    visible.forEach { (key, entry) -> notify("$key: $entry") }
+                }
+            }
+        }
     }
 
     public fun link(playerId: UUID, notify: (String) -> Unit) {

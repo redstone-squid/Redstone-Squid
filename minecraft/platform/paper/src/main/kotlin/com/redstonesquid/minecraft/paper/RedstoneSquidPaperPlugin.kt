@@ -92,6 +92,9 @@ private class PaperCommandActions(
         }
         val notify: (String) -> Unit = player::sendPlainMessage
         when (action) {
+            SquidCommandAction.SETTINGS -> workflow.settings(
+                player.uniqueId, optionalArgument(context, "name"), optionalArgument(context, "value"), notify,
+            )
             SquidCommandAction.LINK -> workflow.link(player.uniqueId, notify)
             SquidCommandAction.SUBMIT -> workflow.submit(
                 player.uniqueId,

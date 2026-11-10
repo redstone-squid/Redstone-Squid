@@ -175,7 +175,7 @@ class TestLoadCost:
 class TestGuildDelegation:
     @pytest.mark.parametrize(
         "pattern",
-        ["settings.**", "settings.server.edit", "starboard.*.edit", "vote.**"],
+        ["settings.server.**", "settings.server.edit", "starboard.*.edit", "vote.**"],
     )
     def test_guild_only_patterns_are_delegable(self, pattern: str) -> None:
         permissions, _ = service()
@@ -185,6 +185,8 @@ class TestGuildDelegation:
     @pytest.mark.parametrize(
         "pattern",
         [
+            "settings.**",  # includes global runtime settings
+            "settings.runtime.edit",
             "build.**",  # reaches global nodes
             "**",  # reaches everything
             "@destructive",  # spans both scopes

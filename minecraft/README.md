@@ -115,3 +115,12 @@ Loader, Fabric API, and Fabric Language Kotlin at runtime.
   player bearer; Fabric sends only its PKCE-issued player bearer. Draft origin is
   derived from that authenticated session, and client APIs never accept account
   IDs.
+
+## Global runtime settings
+
+After `/squid link`, global administrators can use `/squid settings` to read settings,
+`/squid settings welcome_forward_chance` to inspect one, and
+`/squid settings welcome_forward_chance 0.25` to change it. Values use JSON syntax;
+quote Discord IDs, for example `/squid settings welcome_channel_id "1356094722531393680"`.
+The API checks the linked account's global permissions and records its internal account ID.
+Minecraft operator status and Paper installation credentials alone do not grant this authority.

@@ -30,7 +30,9 @@ DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     (tr("Community"), frozenset({"poll", "recount"})),
     (
         tr("Administration & setup"),
-        frozenset({"access", "errors", "records", "redstoner", "settings", "starboard", "versions"}),
+        frozenset(
+            {"access", "errors", "records", "redstoner", "runtime-settings", "settings", "starboard", "versions"}
+        ),
     ),
     (tr("Information"), frozenset({"help"})),
 )

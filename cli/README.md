@@ -127,3 +127,11 @@ cargo fmt --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 ```
+
+## Global runtime settings
+
+Global administrators can read settings with `squid settings show` and change one with
+`squid settings set welcome_forward_chance 0.25`. Use `--output json` for scripted output.
+The server checks `settings.runtime.view` or `settings.runtime.edit` against the signed-in account.
+Discord IDs are JSON strings: `squid settings set welcome_channel_id '"1356094722531393680"'`.
+Changes affect subsequent operations; existing voting sessions keep their thresholds.

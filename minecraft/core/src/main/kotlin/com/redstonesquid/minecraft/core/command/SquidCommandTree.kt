@@ -26,6 +26,7 @@ public enum class SquidCommandAction(
     POSITION_TWO("pos2", "redstonesquid.submit", CommandAudience.PLAYER),
     SELECTION("selection", "redstonesquid.submit", CommandAudience.PLAYER),
     CANCEL("cancel", "redstonesquid.submit", CommandAudience.PLAYER),
+    SETTINGS("settings", "redstonesquid.use", CommandAudience.PLAYER),
     STATUS("status", "redstonesquid.use", CommandAudience.PLAYER),
     LINK("link", "redstonesquid.use", CommandAudience.PLAYER),
     SERVER_CLAIM("claim", "redstonesquid.server.manage", CommandAudience.SERVER_ADMIN),
@@ -92,6 +93,14 @@ public object SquidCommandTree {
                     StringArgumentType.word(),
                 ).suggests(provider(suggestions, SuggestionSlot.SUBMIT_TARGET))
                     .executes { actions.execute(action, it) },
+            )
+            SquidCommandAction.SETTINGS -> node.then(
+                RequiredArgumentBuilder.argument<S, String>("name", StringArgumentType.word())
+                    .executes { actions.execute(action, it) }
+                    .then(
+                        RequiredArgumentBuilder.argument<S, String>("value", StringArgumentType.greedyString())
+                            .executes { actions.execute(action, it) },
+                    ),
             )
             SquidCommandAction.SET -> node.then(
                 RequiredArgumentBuilder.argument<S, String>(

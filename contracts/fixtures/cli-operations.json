@@ -463,7 +463,7 @@
         "body": {
           "title": "Forbidden",
           "status": 403,
-          "code": "FORBIDDEN"
+          "code": "UNAUTHORIZED"
         }
       }
     },
@@ -498,7 +498,7 @@
         "body": {
           "title": "Forbidden",
           "status": 403,
-          "code": "FORBIDDEN"
+          "code": "UNAUTHORIZED"
         }
       }
     }

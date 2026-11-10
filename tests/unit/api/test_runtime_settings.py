@@ -53,7 +53,11 @@ def test_discord_ids_cross_the_wire_without_javascript_rounding() -> None:
 def test_http_read_requires_the_global_view_permission() -> None:
 
     config = TEST_CONFIG.model_copy(
-        update={"api": TEST_CONFIG.api.model_copy(update={"secret_nodes": ["settings.runtime.view"]})},
+        update={
+            "api": type(TEST_CONFIG.api).model_validate(
+                TEST_CONFIG.api.model_dump() | {"secret_nodes": ["settings.runtime.view"]}
+            )
+        },
     )
     app, _ = build_app(config=config)
     with TestClient(app) as client:

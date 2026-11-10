@@ -22,6 +22,7 @@ public const val MAX_BACKEND_RESPONSE_BYTES: Int = 1024 * 1024
 public enum class BackendHttpMethod {
     GET,
     POST,
+    PATCH,
     DELETE,
 }
 
@@ -183,6 +184,7 @@ public class BoundedJdkHttpTransport(
         return when (request.method) {
             BackendHttpMethod.GET -> builder.GET().build()
             BackendHttpMethod.POST -> builder.POST(bodyPublisher).build()
+            BackendHttpMethod.PATCH -> builder.method("PATCH", bodyPublisher).build()
             BackendHttpMethod.DELETE -> builder.method("DELETE", bodyPublisher).build()
         }
     }

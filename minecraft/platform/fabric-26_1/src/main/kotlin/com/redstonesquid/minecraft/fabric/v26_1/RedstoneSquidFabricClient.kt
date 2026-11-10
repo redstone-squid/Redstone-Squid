@@ -86,6 +86,9 @@ private class FabricCommandActions(
         val locale = Locale.getDefault().toLanguageTag()
         val notify: (String) -> Unit = { source.sendFeedback(Component.literal(it)) }
         when (action) {
+            SquidCommandAction.SETTINGS -> workflow.settings(
+                playerId, optionalArgument(context, "name"), optionalArgument(context, "value"), notify,
+            )
             SquidCommandAction.LINK -> workflow.link(playerId, notify)
             SquidCommandAction.SUBMIT -> workflow.submit(
                 playerId,
