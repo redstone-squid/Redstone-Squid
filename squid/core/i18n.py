@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from functools import cache
 from pathlib import Path
 from string.templatelib import Template
-from typing import overload
+from typing import LiteralString, overload
 
 from babel import Locale, UnknownLocaleError
 
@@ -27,7 +27,7 @@ def tr(message: Template, /, *, plural: Template | None = None) -> Message: ...
 
 
 @overload
-def tr(message: str, /) -> Message: ...
+def tr(message: LiteralString, /) -> Message: ...
 
 
 def tr(message: str | Template, /, *, plural: Template | None = None) -> Message:

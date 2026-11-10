@@ -222,8 +222,9 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
         fields.append(
             field_type(
                 key=item.key,
-                label=tr(spec.label),
-                placeholder=tr(spec.placeholder),
+                # Field metadata includes generated labels, so these are dynamic catalog keys.
+                label=Message(spec.label),
+                placeholder=Message(spec.placeholder),
                 default=item.current_text,
                 required=spec.required,
                 minimum=spec.minimum,

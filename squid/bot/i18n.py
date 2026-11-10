@@ -6,9 +6,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale, tr
+from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.settings.application import SettingsService
-from squid_ui.text import Localization, localization_scope
+from squid_ui.text import Localization, Message, localization_scope
 from squid_ui_discord.contracts import LocalizationSource
 from squid_ui_discord.runtime import DiscordUIRuntime
 
@@ -66,4 +66,5 @@ class SquidAppCommandTranslator(app_commands.Translator):
         if resolved == DEFAULT_LOCALE:
             return None  # Let discord.py fall back to the source string.
         with localization_scope(localization_for(resolved)):
-            return tr(string.message).resolve()
+            # Command keys are extracted from locale_str declarations, not this adapter.
+            return Message(string.message).resolve()
