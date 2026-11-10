@@ -8,8 +8,8 @@ from squid.builds.application.commands import Dimensions
 from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild
+from squid.core.sentinel import UNSET
 
-UNSET = sentinel("UNSET")
 type PatchValue[T] = T | UNSET
 
 

@@ -24,12 +24,12 @@ from squid.bot.submission.ui.fields import (
 )
 from squid.bot.ui import DISCORD_YELLOW, tr
 from squid.bot.utils.permissions import subject_for_interaction
-from squid.bot.utils.sentinel import DEFAULT
 from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
+from squid.core.sentinel import DEFAULT
 from squid.topics import resource_topic
 from squid_ui.text import Message
 

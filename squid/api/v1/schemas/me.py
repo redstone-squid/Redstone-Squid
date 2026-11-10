@@ -14,8 +14,8 @@ from squid.accounts.domain import (
     ProfileUpdate,
     avatar_url_for,
 )
-from squid.accounts.domain.profiles import UNSET
 from squid.accounts.models import Account, AccountIdentity, AccountProfile
+from squid.core.sentinel import UNSET
 
 
 class ProfileLinkDetail(BaseModel):

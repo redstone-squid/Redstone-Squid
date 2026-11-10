@@ -8,12 +8,12 @@ from squid.accounts.domain import (
     MAX_BIO_LENGTH,
     MAX_DISPLAY_NAME_LENGTH,
     MAX_PROFILE_LINKS,
-    UNSET,
     ProfileLink,
     ProfileUpdate,
 )
 from squid.accounts.models import AccountProfile
 from squid.core.errors import ValidationError
+from squid.core.sentinel import UNSET
 
 
 class TestTextNormalization:

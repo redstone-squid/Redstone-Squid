@@ -8,7 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import UNSET, AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
+from squid.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
 from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
 from squid.accounts.models import AccountIdentity, AccountProfile, MergeTicket
 from squid.api.security import UNBOUNDED, Caller
@@ -24,6 +24,7 @@ from squid.api.v1.me import (
 )
 from squid.api.v1.schemas.me import IdentityVisibilityRequest, MergeRequest, ProfileUpdateRequest
 from squid.core.errors import AuthenticationError
+from squid.core.sentinel import UNSET
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 SURVIVING_ID = UUID("22222222-2222-4222-8222-222222222222")

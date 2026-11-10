@@ -3,6 +3,7 @@
 from copy import deepcopy
 
 from squid.builds.application import BuildEditPatch
+from squid.core.sentinel import UNSET
 
 
 def test_combine_preserves_every_typed_patch_field() -> None:
@@ -50,4 +51,5 @@ def test_copied_patch_does_not_overwrite_omitted_fields() -> None:
     original = BuildEditPatch(version_spec="1.21", normal_opening_time=8)
     incoming = deepcopy(BuildEditPatch(normal_opening_time=None))
 
+    assert incoming.version_spec is UNSET
     assert BuildEditPatch.combine([original, incoming]) == BuildEditPatch(version_spec="1.21", normal_opening_time=None)

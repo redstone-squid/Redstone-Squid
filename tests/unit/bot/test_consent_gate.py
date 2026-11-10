@@ -25,7 +25,8 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.accounts.models import Account, AccountIdentity
-from squid.bot.consent import NOT_ASKED, _consent_prompt, ensure_consented_account, prompt_for_consent, request_consent
+from squid.bot.consent import _consent_prompt, ensure_consented_account, prompt_for_consent, request_consent
+from squid.core.sentinel import NOT_ASKED
 from squid_ui.testing import RecordingResponder, press
 from squid_ui.text import NEUTRAL, resolve_text
 from squid_ui_discord import Everyone, SessionKey, SessionManager

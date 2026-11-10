@@ -25,9 +25,7 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.bot.ui import CardField, text_node, tr
-
-NOT_ASKED = sentinel("NOT_ASKED")
-"""The question was never put to the user, and they have already been told why."""
+from squid.core.sentinel import NOT_ASKED
 
 type ConsentContinuation = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
 """What to do once the reader has answered, run by the prompt's own press.

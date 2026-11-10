@@ -16,6 +16,7 @@ from whenever import Instant
 from squid.accounts.domain.models import IdentityProvider
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.core.sentinel import UNSET
 from squid_ui.text import Message
 
 MAX_PROFILE_LINKS: Final = 10
@@ -108,9 +109,6 @@ class ProfileLink:
             raise ValidationError(tr("Links may not carry credentials."))
         return cls(label=clean_label, url=clean_url)
 
-
-UNSET = sentinel("UNSET")
-"""`None` means "clear this field" in a `ProfileUpdate`, so absence needs its own value."""
 
 type Patch[T] = T | UNSET
 
