@@ -2,10 +2,12 @@
 
 import logging
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from functools import lru_cache
 from typing import Final
+from zoneinfo import ZoneInfo
 
 from fluent_compiler.compiler import CompiledFtl, compile_messages
 from fluent_compiler.resource import FtlResource
@@ -67,7 +69,9 @@ def _arguments(message: text.Message, localization: text.Localization) -> dict[s
     args: dict[str, object] = {}
     for name, value in message.bindings.items():
         if isinstance(value, text.Message | text.ResolvedText):
-            resolved = text.resolve_text(value, localization)
+            resolved = text.resolve_text(
+                replace(value, markup=text.Markup.PLAIN) if message.markup is text.Markup.PLAIN else value, localization
+            )
             args[name] = _SafeText(
                 text.discord_text(resolved) if message.markup is text.Markup.DISCORD_MARKDOWN else resolved.content
             )
@@ -76,7 +80,11 @@ def _arguments(message: text.Message, localization: text.Localization) -> dict[s
         elif isinstance(value, NumberExpression):
             args[name] = fluent_number(value.value, **dict(value.options))
         elif isinstance(value, DateTimeExpression):
-            args[name] = fluent_date(value.value, **dict(value.options))
+            options: dict[str, object] = dict(value.options)
+            zone = options.get("timeZone")
+            if isinstance(zone, str):
+                options["timeZone"] = ZoneInfo(zone)
+            args[name] = fluent_date(value.value, **options)
         elif isinstance(value, text.TextValue | datetime):
             args[name] = _SafeText(text._temporal_value(value, message.markup) or "")
         elif isinstance(value, bool):
@@ -109,8 +117,7 @@ def render_message(message: text.Message, localization: text.Localization) -> te
             function = compiled.message_functions.get(key)
             if function is not None:
                 errors: list[Exception] = []
-                context = text.Localization(candidate, resources, localization.source_resources)
-                output = function(_arguments(message, context), errors)
+                output = function(_arguments(message, localization), errors)
                 if not errors:
                     return text.ResolvedText(str(output), message.markup)
         except CatalogError, TypeError, ValueError, ArithmeticError:

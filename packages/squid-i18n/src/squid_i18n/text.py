@@ -170,12 +170,17 @@ def tr(template: Template, /) -> Message:
             msg = "DATETIME must be the squid_i18n constructor"
             raise DeclarationError(msg)
         if isinstance(value, NumberExpression | DateTimeExpression):
+            if slot.function is None:
+                msg = "Call NUMBER or DATETIME directly in the declaration so extraction sees its options"
+                raise DeclarationError(msg)
             developer = tuple(
                 (key, option)
                 for key, option in value.options
                 if key in DEVELOPER_OPTIONS and (key, option) != ("style", "decimal")
             )
-            value = replace(value, options=developer) if developer else value.value
+            value = (
+                replace(value, options=developer) if developer or isinstance(value, DateTimeExpression) else value.value
+            )
         if slot.name in bindings and bindings[slot.name] is not value and bindings[slot.name] != value:
             msg = f"Conflicting captured values for {slot.name}"
             raise DeclarationError(msg)
@@ -216,7 +221,15 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
     if isinstance(value, str):
         return ResolvedText(value)
     if value.declaration is None:
-        parts = [resolve_text(part, localization) for part in value.parts]
+        parts = [
+            resolve_text(
+                replace(part, markup=Markup.PLAIN)
+                if value.markup is Markup.PLAIN and isinstance(part, Message)
+                else part,
+                localization,
+            )
+            for part in value.parts
+        ]
         return ResolvedText(
             value.separator.join(
                 discord_text(part) if value.markup is Markup.DISCORD_MARKDOWN else part.content for part in parts

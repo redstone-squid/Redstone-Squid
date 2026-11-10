@@ -51,6 +51,8 @@ def run(command: str, root: Path, locale: str | None = None) -> list[str]:
             if not directory.is_dir() or directory.name == "en":
                 continue
             files = sorted(directory.glob("*.ftl"))
+            if not files:
+                continue
             resources = tuple(path.read_text() for path in files)
             validate(directory.name, resources, (item.declaration for item in found))
             ids = {

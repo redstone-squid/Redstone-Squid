@@ -126,3 +126,39 @@ def test_bad_translation_falls_back_without_logging_values(caplog: pytest.LogCap
     locale = Localization("zh-CN", ("hello = { NUMBER($name) }\n",))
     assert resolve_text(message, locale).content == r"Hello private\-name"
     assert "private-name" not in caplog.text
+
+
+def test_datetime_constructor_does_not_become_a_discord_timestamp() -> None:
+    instant = datetime(2026, 11, 10, 12, tzinfo=UTC)
+    message = tr(t"date = {DATETIME(instant, date_style='long', time_style='short')}")
+    assert "12:00" in source_text(message)
+    assert "<t:" not in source_text(message)
+    zoned = tr(t"date-zoned = {DATETIME(instant, time_style='short', time_zone='Europe/Brussels')}")
+    assert "1:00" in source_text(zoned)
+
+
+def test_fallback_retains_reader_locale_for_nested_messages() -> None:
+    child = tr(t"child = Hello")
+    parent = tr(t"parent = Notice: {child}")
+    with localization_scope(Localization("fr", ("child = Bonjour",))):
+        assert parent.resolve() == "Notice: Bonjour"
+
+
+def test_plain_diagnostics_remain_plain_through_nested_compositions() -> None:
+    name = "*name* @everyone"
+    child = tr(t"child = {name}")
+    parent = tr(t"parent = {child}") + child
+    assert source_text(parent, markup=Markup.PLAIN) == "*name* @everyone*name* @everyone"
+
+
+def test_multiline_declarations_preserve_newlines_and_blank_lines() -> None:
+    name = "Ada"
+    message = tr(t"""
+        greeting =
+            Hello {name}.
+
+            Welcome back.
+        """)
+    assert source_text(message) == "Hello Ada.\n\nWelcome back."
+    assert message.declaration is not None
+    assert "\\u000A" not in message.declaration.source
