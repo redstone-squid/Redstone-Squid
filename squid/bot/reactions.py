@@ -64,11 +64,10 @@ import logging
 import time
 from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, cast, overload, override
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import anyio
 import discord
-from discord.ext import commands
 
 from squid.core.concurrency import run_all
 from squid.observability import add_counter, record_gauge, record_histogram
@@ -763,34 +762,3 @@ class ReactionRouter:
             )
         finally:
             record_histogram("squid.reaction.handler.duration", time.monotonic() - started, attributes=attributes)
-
-
-class ReactionRouterCog(commands.Cog):
-    """Own the bot's only Discord raw-reaction listeners."""
-
-    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
-        self.bot = bot
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
-        await self.bot.reactions.dispatch_add(payload)
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent) -> None:
-        await self.bot.reactions.dispatch_remove(payload)
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_clear(self, payload: discord.RawReactionClearEvent) -> None:
-        await self.bot.reactions.dispatch_clear(payload)
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_clear_emoji(self, payload: discord.RawReactionClearEmojiEvent) -> None:
-        await self.bot.reactions.dispatch_clear_emoji(payload)
-
-    @override
-    async def cog_unload(self) -> None:
-        await self.bot.reactions.close()
-
-
-async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    await bot.add_cog(ReactionRouterCog(bot))

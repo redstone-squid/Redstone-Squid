@@ -1,4 +1,4 @@
-"""Load all cogs together to detect command-name collisions across extensions.
+"""Load all cogs together to check reaction registration and command-name collisions.
 
 Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 """
@@ -6,22 +6,31 @@ Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
+from typing import cast
 
 import discord
 import pytest_asyncio
 from discord.ext import commands
 
 import squid_ui_discord as sd
-from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS, CatboxClient, MediaPreviewClient, PostReconciler
+from squid.bot.app import (
+    DEVELOPMENT_EXTENSIONS,
+    EXTENSIONS,
+    CatboxClient,
+    MediaPreviewClient,
+    PostReconciler,
+    RedstoneSquid,
+)
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
 from squid.bot.i18n import bind_command_messages
-from squid.bot.reactions import ReactionRouter, ReactionSubscription
+from squid.bot.reactions import ReactionRouter
 from squid.bot.utils.permissions import AccountIdCache
 from squid.config import BuildConfig, CommunityConfig
+from squid.runtime import BackgroundTaskSupervisor
 from squid.voting.application import VoteService
 from squid.voting.application.ports import VoteActorResolver
-from squid_reactivity import LocalTopicBus
+from squid_reactivity import EventLedger, LocalTopicBus
 from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services, unconfigured
 
@@ -42,27 +51,8 @@ class RegistrationVotes(VoteService):
         self.resolver = resolver
 
 
-class ReactionRegistrations(ReactionRouter):
-    """Record registration across extension reloads without dispatching gateway events."""
-
-    def __init__(self) -> None:
-        self.subscribers: dict[int, object] = {}
-        self.next_id = 0
-
-    def subscribe(self, subscriber: object) -> ReactionSubscription:
-        self.next_id += 1
-        self.subscribers[self.next_id] = subscriber
-        return ReactionSubscription(self, self.next_id)
-
-    def _detach(self, registration_id: int) -> None:
-        self.subscribers.pop(registration_id, None)
-
-    async def close(self) -> None:
-        self.subscribers.clear()
-
-
 class StubBot(commands.Bot):
-    """A real command registry with checked services and recorded reaction registration."""
+    """A real command registry with checked services and real reaction registration."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -71,11 +61,12 @@ class StubBot(commands.Bot):
             tree_cls=SquidCommandTree,
         )
         self.topic_bus = LocalTopicBus()
+        self.action_ledger = EventLedger(limit=200)
         self.ui = sd.install(self, sd.Config(bus=self.topic_bus))
         self.sessions = self.ui.sessions
         self.services = bot_services(votes=RegistrationVotes())
         self.background_tasks = SchedulingRecorder()
-        self.reactions = ReactionRegistrations()
+        self.reactions = ReactionRouter(cast(RedstoneSquid, self), BackgroundTaskSupervisor())
         self.post_reconciler = unconfigured(PostReconciler)
         self.account_ids = AccountIdCache()
         self.build_config = BuildConfig()

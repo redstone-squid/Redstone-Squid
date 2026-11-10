@@ -72,7 +72,7 @@ CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation"
 # write one merely by staying alive.
 
 EXTENSIONS = (
-    "squid.bot.reactions",
+    "squid.bot.reaction_events",
     "squid.bot.messages",
     "squid.bot.settings",
     "squid.bot.guild_state",
