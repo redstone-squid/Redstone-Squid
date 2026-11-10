@@ -19,7 +19,14 @@ from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import ConsentedAccountWork
 from squid.permissions.domain import PermissionNode
 from squid_ui.testing import RecordingResponder, choose, press_event
-from squid_ui_discord.testing import commit_render, delivered_to, http_error, interaction_harness, message_harness
+from squid_ui_discord.testing import (
+    AsyncCallRecorder,
+    commit_render,
+    delivered_to,
+    http_error,
+    interaction_harness,
+    message_harness,
+)
 from tests.support.discord import make_layout_bot
 
 AUTHOR_ID = 11
@@ -185,3 +192,32 @@ async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_
 
     assert harness.accounts.decisions == [("approve", 7, AUTHOR_ID, False)]
     assert "Take the name" in str(retry.response.edit_message.await_args.kwargs["view"].to_components())
+
+
+async def test_approving_through_the_panel_removes_the_claim(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def consented(event: sd.ActionEvent, accounts: AccountService, work: ConsentedAccountWork) -> None:
+        del accounts
+        await work(event, AUTHOR_ID)
+
+    monkeypatch.setattr(claims_view, "with_consented_account", consented)
+    harness = make_component((make_claim(7),))
+    on_error = AsyncCallRecorder()
+    message_root = make_layout_bot().ui.mount(
+        harness.component, access=sd.Owner(AUTHOR_ID), timeout=300, on_error=on_error
+    )
+    with sl.runtime.transaction():
+        harness.component.selected_id = 7
+    await message_root.send(delivered_to(message_harness()))
+    approve = next(key for key in message_root.snapshot().handler_keys if key.endswith("approve"))
+
+    async def nothing_pending(*, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        del with_claimants
+        return ()
+
+    # The approval resolves claim 7, so the reload after it finds nothing left to review.
+    monkeypatch.setattr(harness.accounts, "pending_alias_claims", nothing_pending)
+    await message_root.dispatch(approve, interaction_harness(AUTHOR_ID), generation=message_root.generation)
+
+    on_error.assert_not_awaited()
+    assert harness.accounts.decisions == [("approve", 7, AUTHOR_ID, False)]
+    assert harness.component.claims == ()

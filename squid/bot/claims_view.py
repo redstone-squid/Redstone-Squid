@@ -28,6 +28,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     selected_id: int | None = sl.state(None)
     reassign_armed: int | None = sl.state(None)
+    # Pending claims as last fetched from the account service. A decision reloads them inside
+    # its action, so they must be state to roll back with it and to trigger the repaint.
+    _claims: tuple[AliasClaim, ...] = sl.state((), persist=False)
 
     def __init__(
         self,
