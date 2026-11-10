@@ -8,7 +8,7 @@ from squid.api.contract import ANONYMOUS, cli_command, contract
 from squid.api.dependencies import ErrorReports
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
-from squid.api.pagination import Page, PageSizeParam, render_page
+from squid.api.pagination import Page, PageSizeParam
 from squid.api.security import requires
 from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportSummary
 from squid.core.pagination import offset_page
@@ -56,7 +56,9 @@ async def list_error_reports(
     only failures that permanently abandoned work, such as a dead-lettered job.
     """
     reports = await error_reports.recent(limit=page_size, work_lost_only=work_lost)
-    return render_page(offset_page(reports, offset=0, page_size=page_size), ErrorReportSummary.from_domain)
+    return Page[ErrorReportSummary].from_domain(
+        offset_page(reports, offset=0, page_size=page_size), ErrorReportSummary.from_domain
+    )
 
 
 @router.get(

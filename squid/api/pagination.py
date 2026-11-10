@@ -5,7 +5,7 @@ validates query parameters and converts those pages to JSON representations.
 """
 
 from collections.abc import Callable
-from typing import Annotated
+from typing import Annotated, Self
 
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict
@@ -39,6 +39,11 @@ class PageAnchor(BaseModel):
     after_id: int | None = None
     before_id: int | None = None
 
+    @classmethod
+    def from_domain(cls, value: ResultPageAnchor) -> Self:
+        """Serialize one adjacent-page address."""
+        return cls(offset=value.offset, after_id=value.after_id, before_id=value.before_id)
+
 
 class Page[ItemT](BaseModel):
     """One page of resource summaries and the parameters addressing its neighbours."""
@@ -49,6 +54,16 @@ class Page[ItemT](BaseModel):
     total: int
     next: PageAnchor | None
     prev: PageAnchor | None
+
+    @classmethod
+    def from_domain[ResultT](cls, page: ResultPage[ResultT], render: Callable[[ResultT], ItemT]) -> Self:
+        """Serialize an application page and its items as their REST representations."""
+        return cls(
+            items=[render(item) for item in page.items],
+            total=page.total,
+            next=PageAnchor.from_domain(page.next) if page.next is not None else None,
+            prev=PageAnchor.from_domain(page.prev) if page.prev is not None else None,
+        )
 
 
 def resolve_selector(
@@ -94,20 +109,3 @@ def parse_page_sort(value: str | None, *, allowed: frozenset[str], default: str)
             public_context={"field": "sort", "allowed": sorted(allowed)},
         )
     return field, raw.startswith("-")
-
-
-def anchor(value: ResultPageAnchor | None) -> PageAnchor | None:
-    """Serialize one adjacent-page address."""
-    return (
-        None if value is None else PageAnchor(offset=value.offset, after_id=value.after_id, before_id=value.before_id)
-    )
-
-
-def render_page[ResultT, ItemT](page: ResultPage[ResultT], render: Callable[[ResultT], ItemT]) -> Page[ItemT]:
-    """Serialize an application page as its REST representation."""
-    return Page[ItemT](
-        items=[render(item) for item in page.items],
-        total=page.total,
-        next=anchor(page.next),
-        prev=anchor(page.prev),
-    )

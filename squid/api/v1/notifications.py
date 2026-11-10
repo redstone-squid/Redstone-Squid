@@ -14,7 +14,6 @@ from squid.api.pagination import (
     OffsetParam,
     Page,
     PageSizeParam,
-    render_page,
     resolve_selector,
 )
 from squid.api.security import Caller, requires
@@ -160,7 +159,7 @@ async def list_inbox(
         page_size=page_size,
         visibility=visibility,
     )
-    return render_page(page, InboxNotificationDetail.from_domain)
+    return Page[InboxNotificationDetail].from_domain(page, InboxNotificationDetail.from_domain)
 
 
 @router.post(

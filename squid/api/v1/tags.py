@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import Tags
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page
+from squid.api.pagination import OffsetParam, Page, PageSizeParam
 from squid.api.v1.schemas.tags import TagDetail
 from squid.core.pagination import offset_page
 from squid.tags.errors import TagNotFoundError
@@ -28,7 +28,7 @@ async def list_tags(
     """List published tag definitions."""
     definitions = await tags.public_definitions()
     page = offset_page(definitions, offset=offset or 0, page_size=page_size)
-    return render_page(page, TagDetail.from_domain)
+    return Page[TagDetail].from_domain(page, TagDetail.from_domain)
 
 
 @router.get(

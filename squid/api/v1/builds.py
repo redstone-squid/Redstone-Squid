@@ -14,10 +14,9 @@ from squid.api.pagination import (
     BeforeIdParam,
     OffsetParam,
     Page,
+    PageAnchor,
     PageSizeParam,
-    anchor,
     parse_page_sort,
-    render_page,
     resolve_selector,
 )
 from squid.api.security import Caller, requires
@@ -147,8 +146,8 @@ async def list_builds(
                 summary for hit in result.hits if (summary := summaries.get(build_hit_id(hit.source_id))) is not None
             ],
             total=result.total,
-            next=anchor(result.next),
-            prev=anchor(result.prev),
+            next=PageAnchor.from_domain(result.next) if result.next is not None else None,
+            prev=PageAnchor.from_domain(result.prev) if result.prev is not None else None,
         )
 
     sort_field, descending = parse_page_sort(sort, allowed=BUILD_SORT_FIELDS, default="-id")
@@ -164,7 +163,7 @@ async def list_builds(
         selector=selector,
         page_size=page_size,
     )
-    return render_page(page, BuildSummary.from_domain)
+    return Page[BuildSummary].from_domain(page, BuildSummary.from_domain)
 
 
 async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:

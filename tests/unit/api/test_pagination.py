@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from squid.api.pagination import Page, PageAnchor, parse_page_sort, render_page, resolve_selector
+from squid.api.pagination import Page, PageAnchor, parse_page_sort, resolve_selector
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageSelector
 from squid.core.pagination import Page as ResultPage
@@ -46,7 +46,7 @@ def test_only_allowlisted_sort_fields_are_accepted() -> None:
 
 
 def test_rendering_carries_the_totals_and_anchors_through() -> None:
-    page = render_page(
+    page = Page[str].from_domain(
         ResultPage(items=(1, 2), total=7, next=ResultPageAnchor(after_id=2), prev=ResultPageAnchor(offset=0)),
         str,
     )

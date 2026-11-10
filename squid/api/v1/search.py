@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Search
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, Page, PageSizeParam, anchor
+from squid.api.pagination import OffsetParam, Page, PageAnchor, PageSizeParam
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.search import (
     BuildSearchResult,
@@ -107,8 +107,8 @@ async def search(
     return Page(
         items=items,
         total=result.total,
-        next=anchor(result.next),
-        prev=anchor(result.prev),
+        next=PageAnchor.from_domain(result.next) if result.next is not None else None,
+        prev=PageAnchor.from_domain(result.prev) if result.prev is not None else None,
     )
 
 

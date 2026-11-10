@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import Versions
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page
+from squid.api.pagination import OffsetParam, Page, PageSizeParam
 from squid.api.v1.schemas.versions import VersionDetail
 from squid.core.pagination import offset_page
 
@@ -27,4 +27,4 @@ async def list_versions(
     """List recognized Java and Bedrock releases."""
     versions = await versions_service.list_all()
     page = offset_page(versions, offset=offset or 0, page_size=page_size)
-    return render_page(page, VersionDetail.from_domain)
+    return Page[VersionDetail].from_domain(page, VersionDetail.from_domain)

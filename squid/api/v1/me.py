@@ -17,7 +17,6 @@ from squid.api.pagination import (
     OffsetParam,
     Page,
     PageSizeParam,
-    render_page,
     resolve_selector,
 )
 from squid.api.rate_limit import enforce_route_rate_limits
@@ -343,4 +342,4 @@ async def list_my_builds(
         selector=selector,
         page_size=page_size,
     )
-    return render_page(page, BuildSummary.from_domain)
+    return Page[BuildSummary].from_domain(page, BuildSummary.from_domain)

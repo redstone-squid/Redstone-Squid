@@ -231,7 +231,7 @@ class MockCliAuthorization(CliAuthorizationService):
 
 
 _EMPTY_PAGE: Page[object] = Page(items=(), total=0, next=None, prev=None)
-"""Empty query result with the pagination metadata required by ``render_page``."""
+"""Empty query result with the pagination metadata required by ``Page.from_domain``."""
 
 
 class MockBuilds(BuildService):

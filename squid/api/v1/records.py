@@ -14,7 +14,6 @@ from squid.api.pagination import (
     Page,
     PageSizeParam,
     parse_page_sort,
-    render_page,
     resolve_selector,
 )
 from squid.api.v1.schemas.builds import BuildSummary
@@ -64,4 +63,4 @@ async def list_records(
     _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await records.list_page(selector=selector, descending=descending, page_size=page_size)
-    return render_page(page, RecordSummary.from_domain)
+    return Page[RecordSummary].from_domain(page, RecordSummary.from_domain)

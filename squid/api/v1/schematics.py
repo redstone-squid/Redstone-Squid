@@ -8,7 +8,7 @@ from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Schematics
 from squid.api.errors import responses
 from squid.api.links import relative_url_for
-from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page, resolve_selector
+from squid.api.pagination import OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
 
@@ -42,7 +42,7 @@ async def list_build_schematics(
     # offset-only, like the ranked build search.
     selector = resolve_selector(offset=offset, after_id=None, before_id=None, keyset_allowed=False)
     page = await schematics.list_public_page(build_id, selector=selector, page_size=page_size)
-    return render_page(
+    return Page[SchematicSummary].from_domain(
         page,
         lambda schematic: SchematicSummary.from_domain(
             schematic,
