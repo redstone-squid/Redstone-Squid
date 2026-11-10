@@ -14072,7 +14072,7 @@
       }
     ],
     "locations": [
-      "squid/search/application/fields.py:173"
+      "squid/search/application/fields.py:179"
     ]
   },
   "search-boolean-minimum-operands": {
@@ -14105,7 +14105,7 @@
       }
     ],
     "locations": [
-      "squid/search/application/fields.py:56"
+      "squid/search/application/fields.py:62"
     ]
   },
   "search-embeddings-configured-embedding": {
@@ -14147,7 +14147,7 @@
       }
     ],
     "locations": [
-      "squid/search/application/fields.py:103"
+      "squid/search/application/fields.py:109"
     ]
   },
   "search-expects-iso-date": {
@@ -14162,7 +14162,7 @@
       }
     ],
     "locations": [
-      "squid/search/application/fields.py:95"
+      "squid/search/application/fields.py:101"
     ]
   },
   "search-expects-number": {
@@ -14177,7 +14177,7 @@
       }
     ],
     "locations": [
-      "squid/search/application/fields.py:87"
+      "squid/search/application/fields.py:93"
     ]
   },
   "search-k-positive": {
@@ -14195,7 +14195,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/search/application/fields.py:168"
+      "squid/search/application/fields.py:174"
     ]
   },
   "search-search-results-sorted": {

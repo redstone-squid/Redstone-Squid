@@ -4301,7 +4301,7 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/schematics/application/commands.py:61
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/search/application/fields.py:173
+# squid/search/application/fields.py:179
 search-align-increments = { $field_name } must align to increments of { $step }
 
 # squid/search/domain/query.py:81
@@ -4310,7 +4310,7 @@ search-boolean-minimum-operands = Boolean expressions require at least two opera
 # squid/search/application/ranking.py:79
 search-branch-limit-positive = branch_limit must be positive
 
-# squid/search/application/fields.py:56
+# squid/search/application/fields.py:62
 search-duplicate-search-field = duplicate search field or alias: { $name }
 
 # squid/search/application/embeddings.py:114
@@ -4322,19 +4322,19 @@ search-embeddings-embedding-claim = Embedding claim limit must be between 1 and 
 # squid/search/application/embeddings.py:65
 search-embeddings-embedding-max = Embedding max_attempts must be positive.
 
-# squid/search/application/fields.py:103
+# squid/search/application/fields.py:109
 search-expects-boolean = { $field_name } expects a boolean
 
-# squid/search/application/fields.py:95
+# squid/search/application/fields.py:101
 search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 
-# squid/search/application/fields.py:87
+# squid/search/application/fields.py:93
 search-expects-number = { $field_name } expects a number
 
 # squid/search/application/ranking.py:77
 search-k-positive = k must be positive
 
-# squid/search/application/fields.py:168
+# squid/search/application/fields.py:174
 search-search-numbers-finite = Search numbers must be finite
 
 # squid/search/infrastructure/repository.py:88
