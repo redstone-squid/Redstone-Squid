@@ -8,7 +8,7 @@ from discord.ext import commands
 
 import squid_ui as sl
 from squid.bot.layout_showcase import LayoutShowcaseCog
-from squid_ui_discord.testing import ContextHarness, MessageHarness
+from squid_ui_discord.testing import ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 
 
@@ -26,8 +26,37 @@ async def test_commands_deliver_live_panels(command: str, count: int) -> None:
 
 
 def test_only_two_subcommands_remain() -> None:
-    assert {entry.qualified_name for entry in LayoutShowcaseCog.__cog_commands__} == {
+    assert {entry.qualified_name for entry in cast(Any, LayoutShowcaseCog).__cog_commands__} == {
         "layout",
         "layout workbench",
         "layout review",
     }
+
+
+async def test_live_join_is_idempotent_and_host_close_finishes_children() -> None:
+    bot = make_layout_bot(topic_bus=sl.runtime.LocalTopicBus())
+    cog = LayoutShowcaseCog(cast(Any, bot))
+    ctx = cast(commands.Context[Any], ContextHarness(bot=bot, user_id=7).source)
+    entry = next(entry for entry in cog.__cog_commands__ if entry.name == "review")
+    await entry.callback(cog, ctx, "live")
+    session = next(bot.ui.sessions.active())
+    summary = session.root
+    join = InteractionHarness(user_id=8, client=bot)
+    await summary.dispatch("join", join.source)
+    panel = summary.component
+    assert len(panel.room.seats) == 1
+    reviewer = panel.panels[8]
+    await summary.dispatch("join", InteractionHarness(user_id=8, client=bot).source)
+    assert len(panel.room.seats) == 1
+    assert panel.panels[8] is reviewer
+    await reviewer.dispatch("approve", InteractionHarness(user_id=9, client=bot).source)
+    assert panel.room.seats[0].review.decision == "Pending"
+    await reviewer.dispatch("approve", InteractionHarness(user_id=8, client=bot).source)
+    assert panel.room.seats[0].review.decision == "Approved"
+    await summary.dispatch("close", InteractionHarness(user_id=8, client=bot).source)
+    assert not summary.finished
+    await summary.dispatch("close", InteractionHarness(user_id=7, client=bot).source)
+    await summary.wait()
+    assert reviewer.finished
+    assert reviewer.followed == ()
+    assert panel.room.closed

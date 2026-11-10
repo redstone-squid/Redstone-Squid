@@ -5,6 +5,7 @@ from typing import Literal, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.layout_inspector import InspectablePanel
 from squid.bot.layout_workbench import history_outcome
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, tr
 from squid_ui_discord.sessions import UserScope
@@ -76,7 +77,7 @@ class ReviewForm(sl.forms.Form):
         self.panel.record_activity(f"{self.panel.seat.name}: {self.decision}")
 
 
-class ReviewerPanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class ReviewerPanel(InspectablePanel):
     history: sl.runtime.History = sl.runtime.history(limit=10)
     outcome: str = sl.state("Submit a review, then undo it. The other reviewer's contribution stays.", persist=False)
 
@@ -88,8 +89,8 @@ class ReviewerPanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         review = self.seat.review
-        return sl.section(
-            sl.heading(f"{self.seat.name} · {'simulated reviewer' if self.simulated else 'reviewer'}"),
+        heading = sl.heading(f"{self.seat.name} · {'simulated reviewer' if self.simulated else 'reviewer'}")
+        children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(self.room.totals()),
             sl.fields(
                 sl.field(tr("Your decision"), review.decision), sl.field(tr("Your comment"), review.comment or "—")
@@ -106,7 +107,17 @@ class ReviewerPanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 key="review-actions",
             ),
             sl.note(self.outcome),
-            accent=DISCORD_GREEN,
+            self.inspector(),
+        )
+        return sl.section(heading, *children, accent=DISCORD_GREEN)
+
+    @override
+    def inspection_state(self) -> str:
+        return (
+            f"Seat: {self.seat.name} · decision={self.seat.review.decision}\n"
+            f"Local history: undo={self.history.can_undo}, redo={self.history.can_redo}\n"
+            f"Last outcome: {self.outcome}\nShared totals: {self.room.totals()}\n"
+            "Each seat owns a separate shared cell. Undo records that seat, not the room totals."
         )
 
     def record_activity(self, line: str) -> None:
@@ -117,25 +128,25 @@ class ReviewerPanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
         sl.runtime.on_action_commit(committed)
 
-    async def _approve(self, event: sl.PressEvent) -> None:
+    async def _approve(self, event: sl.PressEvent[sd.Request]) -> None:
         if self.room.closed:
             return
         self.seat.review = replace(self.seat.review, decision="Approved")
         self.history.record(tr("Approve build"))
         self.record_activity(f"{self.seat.name}: Approved")
 
-    async def _undo(self, event: sl.PressEvent) -> None:
+    async def _undo(self, event: sl.PressEvent[sd.Request]) -> None:
         if not self.room.closed:
             self.outcome = history_outcome("Undo", await self.history.undo())
             self.record_activity(f"{self.seat.name}: {self.outcome}")
 
-    async def _redo(self, event: sl.PressEvent) -> None:
+    async def _redo(self, event: sl.PressEvent[sd.Request]) -> None:
         if not self.room.closed:
             self.outcome = history_outcome("Redo", await self.history.redo())
             self.record_activity(f"{self.seat.name}: {self.outcome}")
 
 
-class ReviewSummary(sl.Component[sl.ComponentsV2Target, sd.Request]):
+class ReviewSummary(InspectablePanel):
     def __init__(
         self, room: ReviewRoom, bus: sl.runtime.TopicBus, host_id: int, mode: Literal["simulated", "live"]
     ) -> None:
@@ -147,8 +158,8 @@ class ReviewSummary(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
-        return sl.section(
-            sl.heading(tr("Review room · Flush piston door")),
+        heading = sl.heading(tr("Review room · Flush piston door"))
+        children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
             sl.paragraph(
                 tr("Disposable reviews of a 4x4x3 door opening in 16 ticks. This does not create a production vote.")
             ),
@@ -175,7 +186,15 @@ class ReviewSummary(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 ),
                 key="room-actions",
             ),
-            accent=DISCORD_BLUE,
+            self.inspector(),
+        )
+        return sl.section(heading, *children, accent=DISCORD_BLUE)
+
+    @override
+    def inspection_state(self) -> str:
+        return (
+            f"Mode: {self.mode} · closed={self.room.closed}\n{self.room.totals()}\n"
+            "Totals are derived from reviewer cells. These messages share local state, not network replicas."
         )
 
     async def _join(self, event: sl.PressEvent[sd.Request]) -> None:

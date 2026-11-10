@@ -42,3 +42,18 @@ use that exact version, so one environment cannot silently mix incompatible alph
 Portable component libraries should depend on `squid-ui` or `squid-ui-widgets`, never a frontend
 adapter. Discord and Slack are independent leaves; Slack deliberately contains no listener,
 delivery, or Bolt runtime. Architecture tests enforce those import boundaries.
+
+## Try the development showcase
+
+With the bot's development extensions enabled, `/layout workbench` opens an editor and a
+live preview. Edit the sample, undo the edit, and switch to the oversized preset to see
+pagination, truncation, and control adaptation. Publishing is simulated; arm a failure to
+try the retry path.
+
+`/layout review` opens Alice and Bob panels that you can operate yourself. Approve as both,
+then undo Alice: Bob's review remains. Use `mode:live` for real participants, each with an
+owner-controlled reviewer panel. The host closes the room and its attached panels together.
+
+Both apps use disposable in-memory data. **Inspect** captures application state and the
+latest committed layout report; refresh it after an action to compare. Start reading the
+examples in `squid/bot/layout_workbench.py` and `squid/bot/layout_review.py`.
