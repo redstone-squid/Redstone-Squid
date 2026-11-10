@@ -73,6 +73,13 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
         self.pending: _Candidate[RenderTargetT] | None = None
         self.dirty = False
         self.suppressed = 0
+        self.behind = False
+        """Whether a failed edit left the message showing older state than this root holds.
+
+        Set when delivering an application render fails, and cleared when any application
+        render commits, including one suppressed because the message already matched it.
+        While set, EXCLUSIVE presses repaint the message instead of running their handlers.
+        """
         self.assets: tuple[Asset, ...] = ()
         self.plan: PlanResult | None = None
         self.planned_tree: ComponentTree[RenderTargetT, Any] | None = None
@@ -114,6 +121,7 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
 
     def _commit_application(self, candidate: _ApplicationCandidate[RenderTargetT]) -> None:
         self._settle(candidate, "commit")
+        self.behind = False
         presentation = self._runtime.presentation
         presentation.apply_updates(candidate.session_updates)
         self._runtime.plan_memo.promote(presentation, presentation.revision)

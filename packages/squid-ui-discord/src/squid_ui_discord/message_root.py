@@ -430,11 +430,15 @@ class MessageRoot[
         self.nav = nav if nav is not None else default_nav
 
         def planned_nav(state: NavigationState) -> Sequence[NavNode]:
+            # Step from the page these buttons were drawn on, not from the stored cursor, so a
+            # press always means "the page next to the one on screen".
+            page = state.position.offset
+
             async def previous(_event: PressEvent) -> None:
-                await self._move_cursor(state.key, -1)
+                self._seek_cursor(state.key, page - 1)
 
             async def next_(_event: PressEvent) -> None:
-                await self._move_cursor(state.key, 1)
+                self._seek_cursor(state.key, page + 1)
 
             async def seek(page: int) -> None:
                 self._seek_cursor(state.key, page)
@@ -1161,12 +1165,6 @@ class MessageRoot[
         self.palette = palette
         self.invalidate()
 
-    async def _move_cursor(self, key: str, delta: int) -> None:
-        cursor = self.presentation.cursor(key)
-        if 0 <= cursor.position.offset + delta < cursor.extent:
-            self.presentation.move_cursor(key, Position(offset=cursor.position.offset + delta))
-            self.invalidate()
-
     def _seek_cursor(self, key: str, page: int) -> None:
         """Jump one cursor to a zero-based page, clamped to what it actually holds."""
         cursor = self.presentation.cursor(key)
@@ -1541,8 +1539,18 @@ class MessageRoot[
 
         `files=False` leaves the message's attachments alone; a terminal disable-edit changes
         only the controls, and an empty asset set would otherwise strip them.
+
+        A failed or cancelled write of an application render marks the message as behind its
+        state; see `_CandidateLifecycle.behind`.
         """
-        return await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
+        try:
+            return await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
+        except BaseException:
+            # A cancelled edit may still have landed. Assuming it did not costs the reader one
+            # press that repaints instead of acting; assuming it did can act on unseen state.
+            if isinstance(candidate, _Candidate):
+                self._candidates.behind = True
+            raise
 
     async def _write(
         self,
@@ -2172,6 +2180,13 @@ class MessageRoot[
             if binding.mode is ActionMode.EXCLUSIVE and generation not in {None, self._candidates.generation}:
                 await self._acknowledge(interaction, profile=profile, source="stale")
                 profile.presentation = PresentationStatus.ACKNOWLEDGED
+                profile.finish(DispatchDisposition.STALE)
+                return
+            if binding.mode is ActionMode.EXCLUSIVE and self._candidates.behind:
+                # The reader pressed a control on a message older than the state it would act
+                # on, for example a "Delete" whose "Really delete?" repaint Discord refused.
+                # Show them the current state instead; their next press acts on what they see.
+                profile.presentation = await self.refresh(interaction, profile=profile)
                 profile.finish(DispatchDisposition.STALE)
                 return
             rebased = binding.mode is ActionMode.REBASE and generation not in {None, self._candidates.generation}

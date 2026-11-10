@@ -48,6 +48,11 @@ class DispatchDisposition(StrEnum):
     MISSING = "missing"
     INVALID_SELECTION = "invalid_selection"
     STALE = "stale"
+    """The press came from a message older than the state it would act on, so nothing ran.
+
+    A press from a superseded render is only acknowledged. A press on a message that a
+    failed edit left behind is answered by repainting the current state.
+    """
     VALIDATION_RETRY = "validation_retry"
     COMPLETED = "completed"
     ACTION_FAILED = "action_failed"

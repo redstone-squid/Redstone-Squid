@@ -2016,7 +2016,112 @@ class TestDeliveryAtomicity:
         # Discarded planning updates must leave strategy state unchanged along with cursors.
         assert message_root.presentation.strategies == live_strategies
 
-    async def test_a_click_after_a_failed_edit_still_runs_and_repairs_the_message(self, monkeypatch):
+    async def test_a_press_after_a_refused_page_turn_shows_the_page_it_asked_for(self, monkeypatch):
+        message_root = MessageRoot(Panel([]), access=Everyone(), timeout=None)
+        commit_render(message_root)
+        live_generation = message_root.generation
+
+        monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
+        with pytest.raises(discord.HTTPException):
+            await message_root.dispatch("__cursor_next.entries", interaction_harness(), generation=live_generation)
+        monkeypatch.undo()
+
+        # The reader still sees page 1, so pressing Next again must show page 2, not page 3.
+        interaction = interaction_harness()
+        await message_root.dispatch("__cursor_next.entries", interaction, generation=live_generation)
+
+        assert message_root.presentation.cursor("entries").position.offset == 1
+        written = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        assert "Page 2 of 3" in written
+        assert not message_root.pending
+
+    async def test_a_page_turn_that_errors_after_committing_moves_one_page_on_the_next_press(self):
+        class FailAfter(ActionMiddleware):
+            @override
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                await proceed()
+                raise RuntimeError("policy rejected the press after it ran")
+
+        class FailOnce(FailAfter):
+            failed = False
+
+            @override
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                if self.failed:
+                    await proceed()
+                    return
+                self.failed = True
+                await super().dispatch(request, proceed)
+
+        message_root = MessageRoot(
+            Panel([]), access=Everyone(), middleware=(FailOnce(),), on_error=AsyncCallRecorder(), timeout=None
+        )
+        commit_render(message_root)
+        live_generation = message_root.generation
+
+        await message_root.dispatch("__cursor_next.entries", interaction_harness(), generation=live_generation)
+        interaction = interaction_harness()
+        await message_root.dispatch("__cursor_next.entries", interaction, generation=live_generation)
+
+        # The handler committed before the middleware failed, and nothing repainted the message.
+        # Pager buttons step from the page they were drawn on, so the next press cannot add a page.
+        written = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        assert "Page 2 of 3" in written
+
+    async def test_a_press_after_a_refused_disclosure_toggle_shows_it_open(self, monkeypatch):
+        class Report(Component[sl.ComponentsV2Target]):
+            @override
+            def render(self):
+                return sl.details(sl.summary("Debug details"), sl.paragraph("hidden body"), key="debug")
+
+        message_root = MessageRoot(Report(), access=Everyone(), timeout=None)
+        commit_render(message_root)
+        (toggle,) = message_root.snapshot().handler_keys
+
+        monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
+        with pytest.raises(discord.HTTPException):
+            await message_root.dispatch(toggle, interaction_harness())
+        monkeypatch.undo()
+        await message_root.dispatch(toggle, interaction_harness())
+
+        # A second toggle would close a section the reader never saw open.
+        assert message_root.presentation.disclosure("debug").open
+        assert not message_root.pending
+
+    async def test_a_two_press_confirmation_cannot_complete_on_a_refused_arm(self, monkeypatch):
+        class Danger(Component[sl.ComponentsV2Target]):
+            armed: bool = state(default=False)
+            deleted: bool = state(default=False)
+
+            @override
+            def render(self):
+                label = "Really delete?" if self.armed else "Delete"
+                return Row((Button(label=label, on_click=self.delete, key="delete"),))
+
+            async def delete(self, event: PressEvent) -> None:
+                if self.armed:
+                    self.deleted = True
+                else:
+                    self.armed = True
+
+        component = Danger()
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        live_generation = message_root.generation
+
+        monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
+        with pytest.raises(discord.HTTPException):
+            await message_root.dispatch("delete", interaction_harness(), generation=live_generation)
+        monkeypatch.undo()
+        interaction = interaction_harness()
+        await message_root.dispatch("delete", interaction, generation=live_generation)
+
+        assert not component.deleted
+        assert "Really delete?" in str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        await message_root.dispatch("delete", interaction_harness(), generation=message_root.generation)
+        assert component.deleted
+
+    async def test_a_click_after_a_failed_edit_repairs_the_message_before_acting(self, monkeypatch):
         mounted: list[str] = []
         panel = Panel(mounted)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
@@ -2029,16 +2134,45 @@ class TestDeliveryAtomicity:
             await message_root.refresh(interaction_harness())
         monkeypatch.undo()
 
-        # The stale-generation guard would silently defer this click if the message root had
-        # advanced past the generation the message is still showing.
+        # The click is answered with the state the failed edit did not show, not dropped.
         interaction = interaction_harness()
         await message_root.dispatch("add", interaction, generation=live_generation)
 
-        assert panel.entries[-1] == "added"
+        assert "added" not in panel.entries
         assert message_root.generation > live_generation
         assert not message_root.pending
         assert mounted == ["child"]
         interaction.response.edit_message.assert_awaited_once()
+
+        await message_root.dispatch("add", interaction_harness(), generation=message_root.generation)
+        assert panel.entries[-1] == "added"
+
+    async def test_a_rebase_press_still_acts_on_a_message_left_behind(self, monkeypatch):
+        class Rebasing(Component[sl.ComponentsV2Target]):
+            count: int = state(0)
+
+            @override
+            def render(self):
+                return [
+                    Text(f"count: {self.count}"),
+                    Row((Button(label="+1", on_click=self.increment, key="inc", mode=ActionMode.REBASE),)),
+                ]
+
+            async def increment(self, event: PressEvent) -> None:
+                self.count += 1
+
+        component = Rebasing()
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        component.count = 5
+
+        monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
+        with pytest.raises(discord.HTTPException):
+            await message_root.refresh(interaction_harness())
+        monkeypatch.undo()
+        await message_root.dispatch("inc", interaction_harness(), generation=message_root.generation)
+
+        assert component.count == 6
 
     async def test_failed_refresh_leaves_the_message_root_repairable(self, monkeypatch):
         component = Counter()
