@@ -14,3 +14,6 @@ build-backend = "uv_build"
 
 [tool.uv]
 cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]
+
+[project.scripts]
+squid-i18n = "squid_i18n.cli:main"
