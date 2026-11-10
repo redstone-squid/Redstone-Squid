@@ -453,6 +453,9 @@ class BuildBrowseScreen(sd.Screen):
 
     policy = sd.ResponseSpec(timeout=300, live_updates=True, session=sd.SessionSpec("build-browse"))
 
+    _selected: _BuildDetail | None = sl.state(None, opaque=True)
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(None, opaque=True)
+
     def __init__(
         self,
         queries: BuildQueryService,
@@ -493,8 +496,6 @@ class BuildBrowseScreen(sd.Screen):
             title=tr(t"bot-submission-build-browse-build-catalogue = Build catalogue"),
             empty=tr(t"build-list-empty = No builds are available."),
         )
-        self._selected: _BuildDetail | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
