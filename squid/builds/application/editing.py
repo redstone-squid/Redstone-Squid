@@ -2,28 +2,19 @@
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Final, Literal, Self, cast, override
+from typing import Literal, Self, cast
 
 from squid.builds.application.commands import Dimensions
 from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild
 
-
-class _Unset:
-    __slots__ = ()
-
-    @override
-    def __repr__(self) -> str:
-        return "UNSET"
-
-
-UNSET: Final = _Unset()
-type PatchValue[T] = T | _Unset
+UNSET = sentinel("UNSET")
+type PatchValue[T] = T | UNSET
 
 
 def _latest[T](current: PatchValue[T], incoming: PatchValue[T]) -> PatchValue[T]:
-    return current if isinstance(incoming, _Unset) else incoming
+    return current if incoming is UNSET else incoming
 
 
 @dataclass(slots=True, frozen=True)
@@ -150,7 +141,7 @@ class BuildEditPatch:
             if value is not UNSET:
                 setattr(build, name, value)
 
-        if not isinstance(self.door_type, _Unset):
+        if self.door_type is not UNSET:
             build.patterns = self.door_type
 
         media_fields: tuple[tuple[str, MediaTypeLiteral], ...] = (
@@ -162,14 +153,14 @@ class BuildEditPatch:
         )
         for name, media_type in media_fields:
             value = getattr(self, name)
-            if not isinstance(value, _Unset):
+            if value is not UNSET:
                 build.replace_links(media_type, value)
 
-        if not isinstance(self.dimensions, _Unset):
+        if self.dimensions is not UNSET:
             build.dimensions = self.dimensions
 
         door_fields = ("door_dimensions", "door_orientation_type", "normal_closing_time", "normal_opening_time")
-        patched_door_fields = [name for name in door_fields if not isinstance(getattr(self, name), _Unset)]
+        patched_door_fields = [name for name in door_fields if getattr(self, name) is not UNSET]
         if patched_door_fields:
             if not isinstance(build, DoorBuild):
                 msg = "Door fields can only be edited on door builds."
@@ -178,7 +169,7 @@ class BuildEditPatch:
                     context={"build_id": build.id, "category": build.category, "fields": patched_door_fields},
                     public_context={"fields": patched_door_fields},
                 )
-            if not isinstance(self.door_dimensions, _Unset):
+            if self.door_dimensions is not UNSET:
                 width, height, depth = self.door_dimensions
                 # Door width and height are required, so clearing restores their defaults.
                 door_fields_by_name = type(build).__dataclass_fields__
@@ -187,21 +178,21 @@ class BuildEditPatch:
                     height if height is not None else cast(int, door_fields_by_name["door_height"].default)
                 )
                 build.door_depth = depth
-            if not isinstance(self.door_orientation_type, _Unset) and self.door_orientation_type is not None:
+            if self.door_orientation_type is not UNSET and self.door_orientation_type is not None:
                 build.orientation = cast(DoorOrientationLiteral, self.door_orientation_type)
-            if not isinstance(self.normal_closing_time, _Unset):
+            if self.normal_closing_time is not UNSET:
                 build.normal_closing_time = self.normal_closing_time
-            if not isinstance(self.normal_opening_time, _Unset):
+            if self.normal_opening_time is not UNSET:
                 build.normal_opening_time = self.normal_opening_time
 
-        if not isinstance(self.locationality, _Unset):
+        if self.locationality is not UNSET:
             self._replace_reliability(
                 build.miscellaneous_restrictions,
                 ("Locational", "Locational with fixes"),
                 self.locationality,
                 "Not locational",
             )
-        if not isinstance(self.directionality, _Unset):
+        if self.directionality is not UNSET:
             self._replace_reliability(
                 build.miscellaneous_restrictions,
                 ("Directional", "Directional with fixes"),
@@ -209,12 +200,12 @@ class BuildEditPatch:
                 "Not directional",
             )
 
-        if not isinstance(self.extra_user_info, _Unset):
+        if self.extra_user_info is not UNSET:
             build.description = self.extra_user_info
 
         server_info = ServerInfo(**build.extra_info.get("server_info", {}))
         server_changed = any(
-            not isinstance(value, _Unset) for value in (self.server_ip, self.coordinates, self.command_to_get_to_build)
+            value is not UNSET for value in (self.server_ip, self.coordinates, self.command_to_get_to_build)
         )
         self._update_server_info(server_info)
         if server_changed:
@@ -240,7 +231,7 @@ class BuildEditPatch:
         key: Literal["server_ip", "coordinates", "command_to_build"],
         value: PatchValue[str | None],
     ) -> None:
-        if isinstance(value, _Unset):
+        if value is UNSET:
             return
         if value is None:
             if key == "server_ip":

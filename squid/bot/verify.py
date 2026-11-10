@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"):
+class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
     def __init__(self, bot: BotT):
         super().__init__(bot)
         self.account_service = bot.services.accounts

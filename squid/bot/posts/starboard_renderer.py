@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @final
-class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"](PostRenderer):
+class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     """Mirror a message into a starboard channel while its score warrants it."""
 
     resource_kind: ResourceKind = "starboard_entry"

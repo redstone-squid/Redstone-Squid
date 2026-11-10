@@ -94,7 +94,7 @@ def _jsonable(value: Any) -> Any:
             return value
 
 
-class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
+class SearchCog[BotT: squid.bot.app.RedstoneSquid](
     BuildEditCommands[BotT],
     BuildSubmitCommands[BotT],
 ):

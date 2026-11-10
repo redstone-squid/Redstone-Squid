@@ -5,8 +5,6 @@ anything at runtime (unlike class/function docstrings), so we recover them by
 parsing the class's own source with `ast`.
 """
 
-from __future__ import annotations
-
 import ast
 import inspect
 import textwrap

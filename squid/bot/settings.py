@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Settings"):
+class SettingsCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Settings"):
     """Open one capability-aware settings workspace per administrator and guild."""
 
     def __init__(self, bot: BotT):

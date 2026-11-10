@@ -120,7 +120,7 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
         event.finish_on_success()
 
 
-class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="VersionTracker"):
+class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="VersionTracker"):
     """Open the version catalogue and ingest configured channel announcements."""
 
     def __init__(self, bot: BotT):

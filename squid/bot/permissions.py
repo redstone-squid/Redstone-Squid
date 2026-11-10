@@ -37,7 +37,7 @@ ACCESS_NODES = (
 )
 
 
-class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Permissions"):
+class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permissions"):
     """Open one capability-aware access workspace per administrator and guild."""
 
     def __init__(self, bot: BotT) -> None:

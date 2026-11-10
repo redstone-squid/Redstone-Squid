@@ -1331,7 +1331,7 @@ _LEAVE_NOTICES = {
 }
 
 
-class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Public commands demonstrating the layout engine."""
 
     def __init__(self, bot: BotT) -> None:

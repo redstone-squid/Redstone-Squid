@@ -143,7 +143,7 @@ class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
         event.finish_on_success()
 
 
-class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     def __init__(self, bot: BotT):
         super().__init__(bot)
         self.service = bot.services.redstoner

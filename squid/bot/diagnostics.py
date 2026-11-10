@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Read stored error reports."""
 
     def __init__(self, bot: BotT):

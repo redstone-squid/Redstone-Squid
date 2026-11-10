@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Cog for admin commands."""
 
     def __init__(self, bot: BotT):

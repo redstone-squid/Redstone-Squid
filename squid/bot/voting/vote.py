@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Expose voting commands and own the reaction handler."""
 
     def __init__(self, bot: BotT):

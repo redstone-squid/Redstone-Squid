@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
+class BuildEditCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[BotT]):
     """A cog with commands for editing builds."""
 
     bot: BotT

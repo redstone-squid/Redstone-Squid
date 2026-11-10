@@ -26,7 +26,7 @@ CONSUMER = "discord"
 DELIVERY_REQUIRED_EVENTS = frozenset({"build.submitted"})
 
 
-class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class DomainEventCog[BotT: squid.bot.app.RedstoneSquid](Cog):
     """Deliver recorded transitions to Discord handlers with retries."""
 
     def __init__(self, bot: BotT) -> None:

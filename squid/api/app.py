@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+lazy import uvicorn
 
 from squid.api.contract import (
     ANONYMOUS,
@@ -222,8 +223,6 @@ app = create_api_app()
 
 def _run_api(config: ApiProcessConfig) -> None:
     """Serve the configured API process until uvicorn stops."""
-    import uvicorn
-
     uvicorn.run(
         create_api_app(config=config),
         host="0.0.0.0",

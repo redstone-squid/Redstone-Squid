@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @final
-class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"](PostRenderer):
+class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     """Keep a vote session's cards current wherever they were published.
 
     While open, build reviews and network polls request cards in configured vote

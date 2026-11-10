@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class GuildStateCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
+class GuildStateCog[BotT: squid.bot.app.RedstoneSquid](commands.Cog):
     """Apply guild and channel lifecycle events, and repair the ones that were missed."""
 
     def __init__(self, bot: BotT) -> None:

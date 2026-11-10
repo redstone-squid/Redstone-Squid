@@ -10,7 +10,6 @@ an identity that need their own acceptance and cleanup logic.
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, override
 
 import anyio
@@ -26,14 +25,8 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.bot.ui import CardField, text_node, tr
-from squid.bot.utils.sentinel import Sentinel
 
-
-class NotAskedType(Enum):
-    NOT_ASKED = Sentinel("NOT_ASKED")
-
-
-NOT_ASKED = NotAskedType.NOT_ASKED
+NOT_ASKED = sentinel("NOT_ASKED")
 """The question was never put to the user, and they have already been told why."""
 
 type ConsentContinuation = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
@@ -283,7 +276,7 @@ async def prompt_for_consent(
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
-) -> AccountConsent | NotAskedType | None:
+) -> AccountConsent | NOT_ASKED | None:
     """Present a notice and wait for the user's answer.
 
     Return consent on acceptance, None on cancellation, unmount, or wait timeout,

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class WelcomeRelay[BotT: squid.bot.app.RedstoneSquid](Cog):
     """Listens for built-in welcome messages and occasionally mirrors them elsewhere."""
 
     def __init__(self, bot: BotT):

@@ -24,7 +24,7 @@ from squid.bot.submission.ui.fields import (
 )
 from squid.bot.ui import DISCORD_YELLOW, tr
 from squid.bot.utils.permissions import subject_for_interaction
-from squid.bot.utils.sentinel import DEFAULT, DefaultType
+from squid.bot.utils.sentinel import DEFAULT
 from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
@@ -264,7 +264,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         self,
         build: Build,
         builds: BuildService,
-        items: Sequence[BoundBuildField[Any]] | DefaultType = DEFAULT,
+        items: Sequence[BoundBuildField[Any]] | DEFAULT = DEFAULT,
         *,
         node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None,
         authorize: Callable[[], Awaitable[bool]],

@@ -1,5 +1,7 @@
 """Profile field normalization and link validation."""
 
+from copy import deepcopy
+
 import pytest
 
 from squid.accounts.domain import (
@@ -100,3 +102,10 @@ class TestPatchSemantics:
     def test_hidden_flag_applies(self) -> None:
         profile = AccountProfile(account_id=1)
         assert ProfileUpdate(hidden=True).validated().apply(profile).hidden
+
+
+def test_copying_profile_patch_preserves_omitted_fields() -> None:
+    patch = deepcopy(ProfileUpdate(bio=None))
+
+    assert patch.display_name is UNSET
+    assert patch.validated().bio is None

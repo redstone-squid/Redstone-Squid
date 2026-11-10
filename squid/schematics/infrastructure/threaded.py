@@ -24,6 +24,9 @@ from squid.schematics.domain.models import (
 from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import SchematicRenderUnavailableError, SchematicSupportUnavailableError
 
+# Load the optional native engine only when a schematic operation needs it.
+lazy from squid.schematics.infrastructure import nucleation_adapter as engine
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,8 +41,6 @@ class ThreadedSchematicAnalyzer:
         )
 
     async def capabilities(self) -> AnalyzerCapabilities:
-        from squid.schematics.infrastructure import nucleation_adapter as engine
-
         reported = await asyncio.to_thread(engine.capabilities)
         return AnalyzerCapabilities(
             available=reported.available,
@@ -57,8 +58,6 @@ class ThreadedSchematicAnalyzer:
         with_lattice: bool = False,
         source_format: SchematicFormat | None = None,
     ) -> SchematicAnalysis:
-        from squid.schematics.infrastructure import nucleation_adapter as engine
-
         return await asyncio.to_thread(
             engine.analyze,
             data,
@@ -71,8 +70,6 @@ class ThreadedSchematicAnalyzer:
     async def convert(
         self, data: bytes, *, target: SchematicFormat, data_version: int | None = None
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
-        from squid.schematics.infrastructure import nucleation_adapter as engine
-
         return await asyncio.to_thread(engine.convert, data, target=target, data_version=data_version)
 
     async def compare(
@@ -84,13 +81,9 @@ class ThreadedSchematicAnalyzer:
         timeout_seconds: float | None = None,
     ) -> SchematicComparison:
         """Compare in a thread; timeout_seconds is ignored because the native call cannot be stopped."""
-        from squid.schematics.infrastructure import nucleation_adapter as engine
-
         return await asyncio.to_thread(engine.compare, left, right, preset=preset)
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:
-        from squid.schematics.infrastructure import nucleation_adapter as engine
-
         return await asyncio.to_thread(engine.autostack, data, lattice=lattice, counts=counts)
 
     async def render(

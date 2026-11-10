@@ -159,7 +159,7 @@ def _command_section(
     )
 
 
-class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Show help for a command or a group of commands."""
 
     def __init__(self, bot: BotT):

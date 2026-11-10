@@ -50,7 +50,7 @@ able to reach the group that contains it.
 """
 
 
-class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Mirror messages after their weighted reactions cross configured thresholds."""
 
     reaction_filter: ClassVar[ReactionFilter] = ReactionFilter(guild_only=True)

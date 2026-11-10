@@ -103,7 +103,7 @@ def _status_colour(status: Status | None, *, build_id: int | None) -> int:
             return DISCORD_GREY
 
 
-class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
+class BuildHandler[BotT: squid.bot.app.RedstoneSquid]:
     """Render one build snapshot and coordinate its review posts."""
 
     def __init__(self, bot: BotT, build: Build):

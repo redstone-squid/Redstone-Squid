@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
+class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
     """Diff the posts a resource wants against the posts it has."""
 
     def __init__(self, bot: BotT, renderers: Sequence[PostRenderer]) -> None:

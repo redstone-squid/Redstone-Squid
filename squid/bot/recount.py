@@ -38,7 +38,7 @@ _MESSAGE_LINK = re.compile(
 )
 
 
-class RecountCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
+class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     """Recount the reactions on one vote card or starboard source message."""
 
     def __init__(self, bot: BotT) -> None:

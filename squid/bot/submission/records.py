@@ -231,7 +231,7 @@ class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
         event.finish_on_success()
 
 
-class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
+class RecordCog[BotT: squid.bot.app.RedstoneSquid](Cog[BotT]):
     """Open the record diagnostics and maintenance workspace."""
 
     def __init__(self, bot: BotT) -> None:

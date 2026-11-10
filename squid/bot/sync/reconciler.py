@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class ReconciliationCog[BotT: squid.bot.app.RedstoneSquid](Cog):
     """Repair Discord views from durable database-triggered work."""
 
     def __init__(self, bot: BotT) -> None:

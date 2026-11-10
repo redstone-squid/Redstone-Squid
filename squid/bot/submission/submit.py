@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 CONSENT_STICKY_ENABLED: bool = False
 
 
-class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
+class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[BotT]):
     """A cog with commands to submit builds."""
 
     bot: BotT

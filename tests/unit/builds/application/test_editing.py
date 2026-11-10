@@ -1,5 +1,7 @@
 """Typed build-edit patch composition."""
 
+from copy import deepcopy
+
 from squid.builds.application import BuildEditPatch
 
 
@@ -42,3 +44,10 @@ def test_combine_prefers_the_latest_fragment() -> None:
     )
 
     assert combined == BuildEditPatch(version_spec="1.21", image_urls=["old"])
+
+
+def test_copied_patch_does_not_overwrite_omitted_fields() -> None:
+    original = BuildEditPatch(version_spec="1.21", normal_opening_time=8)
+    incoming = deepcopy(BuildEditPatch(normal_opening_time=None))
+
+    assert BuildEditPatch.combine([original, incoming]) == BuildEditPatch(version_spec="1.21", normal_opening_time=None)

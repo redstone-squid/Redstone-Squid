@@ -7,7 +7,7 @@ is exposed through any transport.
 
 import unicodedata
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Final, override
+from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -109,20 +109,10 @@ class ProfileLink:
         return cls(label=clean_label, url=clean_url)
 
 
-class _Unset:
-    """Sentinel type distinguishing "leave alone" from "set to null" in a patch."""
-
-    __slots__ = ()
-
-    @override
-    def __repr__(self) -> str:
-        return "UNSET"
-
-
-UNSET: Final = _Unset()
+UNSET = sentinel("UNSET")
 """`None` means "clear this field" in a `ProfileUpdate`, so absence needs its own value."""
 
-type Patch[T] = T | _Unset
+type Patch[T] = T | UNSET
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +130,7 @@ class ProfileUpdate:
     def is_empty(self) -> bool:
         """Whether this update would change nothing."""
         return all(
-            isinstance(value, _Unset)
+            value is UNSET
             for value in (self.display_name, self.bio, self.pronouns, self.links, self.hidden, self.avatar_identity_id)
         )
 
@@ -151,15 +141,15 @@ class ProfileUpdate:
         constructing a ProfileLink directly cannot bypass URL validation.
         """
         changes: dict[str, object] = {}
-        if not isinstance(self.display_name, _Unset):
+        if self.display_name is not UNSET:
             changes["display_name"] = _normalize_text(
                 self.display_name, field_name=tr("Display name"), limit=MAX_DISPLAY_NAME_LENGTH
             )
-        if not isinstance(self.bio, _Unset):
+        if self.bio is not UNSET:
             changes["bio"] = _normalize_text(self.bio, field_name=tr("Bio"), limit=MAX_BIO_LENGTH, allow_newlines=True)
-        if not isinstance(self.pronouns, _Unset):
+        if self.pronouns is not UNSET:
             changes["pronouns"] = _normalize_text(self.pronouns, field_name=tr("Pronouns"), limit=MAX_PRONOUNS_LENGTH)
-        if not isinstance(self.links, _Unset):
+        if self.links is not UNSET:
             links = tuple(self.links)
             if len(links) > MAX_PROFILE_LINKS:
                 limit = MAX_PROFILE_LINKS
@@ -180,7 +170,7 @@ class ProfileUpdate:
                 ("hidden", self.hidden),
                 ("avatar_identity_id", self.avatar_identity_id),
             )
-            if not isinstance(value, _Unset)
+            if value is not UNSET
         }
         for name, value in changes.items():
             setattr(profile, name, value)
