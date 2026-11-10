@@ -132,7 +132,7 @@ def test_process_entry_points_use_concrete_runtime_constructors() -> None:
         for call in ast.walk(owner)
         if isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "create_api_app"
     ]
-    assert len(production_calls) == 2
+    assert len(production_calls) == 1
     assert all(call.args == [] for call in production_calls)
     assert all({keyword.arg for keyword in call.keywords} <= {"config"} for call in production_calls)
 

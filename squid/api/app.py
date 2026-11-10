@@ -218,9 +218,6 @@ def create_api_app(
     return api
 
 
-app = create_api_app()
-
-
 def _run_api(config: ApiProcessConfig) -> None:
     """Serve the configured API process until uvicorn stops."""
     uvicorn.run(
