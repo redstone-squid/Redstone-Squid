@@ -693,8 +693,8 @@ class _Transaction:
     strong: dict[_Cell, int] = field(default_factory=dict)
     """The subset of `observed` taken inside `strong_read()`, which must still hold at commit."""
     preconditions: dict[_Cell, int] = field(default_factory=dict)
-    changed: dict[int, ReactiveOwner] = field(default_factory=dict)
-    changed_names: dict[int, set[str]] = field(default_factory=dict)
+    # Identity keys support unhashable owners; values retain them in first-write order.
+    changed: dict[int, tuple[ReactiveOwner, set[str]]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
     commit_hooks: list[tuple[object | None, Callable[[ActionCommit], None]]] = field(default_factory=list)
@@ -812,8 +812,8 @@ class _Transaction:
         else:
             entry.value = value
             entry.version += 1
-        self.changed[id(owner)] = owner
-        self.changed_names.setdefault(id(owner), set()).add(name)
+        _, names = self.changed.setdefault(id(owner), (owner, set()))
+        names.add(name)
         # The staged version is what a read inside this action reports, so a computed that
         # sampled it has to be told the world moved even though nothing is published yet.
         _bump_epoch()
@@ -933,9 +933,9 @@ class _Transaction:
         if not self.changed and not self.prepared_participants:
             return
         _checkpoint("continuation.before_notification")
-        for owner in self.changed.values():
+        for owner, names in self.changed.values():
             try:
-                owner._state_changed(frozenset(self.changed_names[id(owner)]))
+                owner._state_changed(frozenset(names))
             except Exception as error:
                 _log.exception("a reactive owner failed to process its committed state")
                 emit_continuation_failure(
@@ -972,7 +972,7 @@ class _Transaction:
                 report = ExceptionReport.capture(error)
                 self.cleanup_errors.append(report)
                 _log.exception("a transaction participant failed to abort")
-        for owner in reversed(tuple(self.changed.values())):
+        for owner, _ in reversed(tuple(self.changed.values())):
             try:
                 owner._state_rolled_back()
             except Exception as error:

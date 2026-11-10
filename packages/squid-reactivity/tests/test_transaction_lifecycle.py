@@ -2,6 +2,7 @@
 
 import asyncio
 from contextvars import Context, copy_context
+from typing import override
 
 import pytest
 
@@ -94,3 +95,54 @@ def test_inherited_transaction_is_closed_before_owner_notifications() -> None:
         model.value = 1
         inherited = copy_context()
     assert model.value == 1
+
+
+def test_owner_notifications_group_fields_by_identity_and_preserve_order() -> None:
+    commits: list[tuple[str, frozenset[str]]] = []
+    rollbacks: list[str] = []
+
+    class Model(Reactive):
+        first: int = state(0)
+        second: int = state(0)
+
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        @override
+        def __eq__(self, other: object) -> bool:
+            # Equal, unhashable owners must still receive separate notifications.
+            return isinstance(other, Model)
+
+        @override
+        def on_state_commit(self, names: frozenset[str]) -> None:
+            commits.append((self.label, names))
+
+        @override
+        def on_state_rollback(self) -> None:
+            rollbacks.append(self.label)
+
+    left, right = Model("left"), Model("right")
+    assert left == right
+    with pytest.raises(TypeError):
+        hash(left)
+
+    with transaction():
+        right.first = 1
+        left.second = 2
+        right.second = 3
+        right.first = 4
+    assert commits == [
+        ("right", frozenset({"__state_first", "__state_second"})),
+        ("left", frozenset({"__state_second"})),
+    ]
+    assert not rollbacks
+
+    with pytest.raises(ValueError, match="discard"), transaction():
+        right.first = 5
+        left.second = 6
+        right.second = 7
+        right.first = 8
+        raise ValueError("discard")
+    assert rollbacks == ["left", "right"]
+    assert len(commits) == 2
+    assert (right.first, right.second, left.second) == (4, 3, 2)
