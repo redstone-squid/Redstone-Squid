@@ -46,14 +46,13 @@ from squid_reactivity.core import (
     ReactiveWriteError,
     TransactionParticipant,
     TransactionView,
-    _Signal,
     apply_conditional_patches,
     enlist,
     fresh_action_transaction,
     has_action_hook,
     on_action_commit,
 )
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_reactivity.operations import OperationContext
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import SquidUiError
@@ -508,7 +507,7 @@ class History:
         if limit < 1:
             message = "a history needs room for at least one entry"
             raise ValueError(message)
-        self._signal = _Signal()
+        self._signal = Signal()
         self.limit = limit
         self._undone: list[HistoryEntry] = []
         self._redoable: list[HistoryEntry] = []

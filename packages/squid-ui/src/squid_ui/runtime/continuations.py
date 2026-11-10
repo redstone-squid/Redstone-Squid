@@ -13,8 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from squid_reactivity.actions import ActionCommit, ActionContinuation, ActionRollback
 from squid_reactivity.completion import Completion
-from squid_reactivity.core import _Signal
-from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
 from squid_reactivity.operations import (
     Failed,
     OperationContext,
@@ -57,7 +56,7 @@ class PostCommitOperation[ValueT]:
     def __init__(self, callback: Callable[[], Awaitable[ValueT]], *, name: str) -> None:
         self._callback: Callable[[], Awaitable[ValueT]] | None = callback
         self._name = name
-        self._signal = _Signal()
+        self._signal = Signal()
         self._execution: OperationExecution[ValueT, None] | None = None
         self._discarded = False
         self._start_error: Exception | None = None
