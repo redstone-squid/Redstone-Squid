@@ -10,16 +10,12 @@ from squid_ui.text import Message
 type JSONValue = bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
 
 
-def _source_text(value: str | Message) -> str:
-    return _source_message(value) if isinstance(value, Message) else value
-
-
 def _source_message(message: Message) -> str:
     template = message.template
     if message.plural is not None and message.params.get("count") != 1:
         template = message.plural
     params = {
-        key: _source_text(value) if isinstance(value, str | Message) else value for key, value in message.params.items()
+        key: _source_message(value) if isinstance(value, Message) else value for key, value in message.params.items()
     }
     return template.format_map(params)
 

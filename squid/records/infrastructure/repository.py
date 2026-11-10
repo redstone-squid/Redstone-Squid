@@ -229,8 +229,10 @@ class PostgresRecordRepository:
                 run_id=run.id,
                 definition_id=definition.id,
                 status=computed.resolution.status,
-                gap_reasons=_serialize_gaps(computed),
-                provisional_build_id=_provisional_build_id(computed),
+                gap_reasons={
+                    "missing": [{"build_id": gap.build_id, "field": gap.field} for gap in computed.resolution.gaps]
+                },
+                provisional_build_id=next(iter(computed.resolution.provisional_holder_ids), None),
                 history_complete=computed.history_complete,
             )
             session.add(result)
@@ -250,7 +252,7 @@ class PostgresRecordRepository:
                         metric_snapshot=_metric_snapshot(computed, candidate),
                         title=_holder_title(computed, build_id),
                         subtitle=computed.title.subtitle,
-                        completion_at=_as_instant(candidate.completion_at),
+                        completion_at=Instant(candidate.completion_at) if candidate.completion_at is not None else None,
                     )
                 )
 
@@ -880,17 +882,9 @@ def _door_size(door: DoorBuild) -> str:
     return f"{door.door_width}x{door.door_height}"
 
 
-def _serialize_gaps(computed: ComputedRecord) -> dict[str, object]:
-    return {"missing": [{"build_id": gap.build_id, "field": gap.field} for gap in computed.resolution.gaps]}
-
-
 def _holder_title(computed: ComputedRecord, build_id: int) -> str:
     suffix = " [BROKEN]" if build_id in computed.broken_holder_ids else ""
     return f"{computed.title.title}{suffix}"
-
-
-def _provisional_build_id(computed: ComputedRecord) -> int | None:
-    return next(iter(computed.resolution.provisional_holder_ids), None)
 
 
 def _metric_snapshot(computed: ComputedRecord, candidate: Candidate) -> dict[str, object]:
@@ -959,10 +953,6 @@ def parse_category_key(key: str) -> CategoryIdentity | None:
 
 def _as_datetime(value: Instant | None) -> datetime | None:
     return value.to_stdlib() if value is not None else None
-
-
-def _as_instant(value: datetime | None) -> Instant | None:
-    return Instant(value) if value is not None else None
 
 
 async def _advisory_lock(session: AsyncSession, key: str) -> None:

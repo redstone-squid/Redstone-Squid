@@ -242,7 +242,7 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
 
     # Audit the run before presenting its piston timing as usable evidence.
     summary = _json_array(simulation.events_summary_json(), "simulation event summary")
-    event_rows = tuple(_event_row(row) for row in summary)
+    event_rows = tuple(_object(row, "simulation event") for row in summary)
     piston_ticks = [
         _integer(row, "tick", "simulation event")
         for row in event_rows
@@ -762,10 +762,6 @@ def _integer(payload: Mapping[str, Any], key: str, what: str, *, default: int | 
         msg = f"The engine returned a non-integer {what} {key}."
         raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
     return value
-
-
-def _event_row(value: object) -> Mapping[str, Any]:
-    return _object(value, "simulation event")
 
 
 def _required_vector(value: object, what: str) -> Vector3:

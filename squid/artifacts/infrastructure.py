@@ -249,7 +249,7 @@ class S3ArtifactStore:
         return f"{self._prefix}/{relative}" if self._prefix else relative
 
     def _put_path(self, key: str, source: Path, content_type: str, max_bytes: int) -> ArtifactMetadata:
-        with _open_regular(source, max_bytes) as (stream, initial):
+        with _RegularSource(source, max_bytes) as (stream, initial):
             digest = _hash_stream(stream, max_bytes)
             stream.seek(0)
             self._client.put_object(
@@ -303,7 +303,7 @@ def _is_not_found(error: ClientError) -> bool:
 def _copy_regular_atomic(source: Path, destination: Path, max_bytes: int) -> ArtifactMetadata:
     """Copy and hash a file, replacing the destination only after validation succeeds."""
     _require_positive_budget(max_bytes)
-    with _open_regular(source, max_bytes) as (stream, initial):
+    with _RegularSource(source, max_bytes) as (stream, initial):
         destination.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary_name = tempfile.mkstemp(prefix=f".{destination.name}.", dir=destination.parent)
         temporary_path = Path(temporary_name)
@@ -367,10 +367,6 @@ class _RegularSource:
     def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
         if self._stream is not None:
             self._stream.close()
-
-
-def _open_regular(path: Path, max_bytes: int) -> _RegularSource:
-    return _RegularSource(path, max_bytes)
 
 
 def _hash_stream(stream: Any, max_bytes: int) -> str:

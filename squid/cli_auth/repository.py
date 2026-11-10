@@ -45,7 +45,7 @@ class PostgresCliAuthorizationRepository:
         for the same client instance cannot each consume the last available slot.
         """
         session = self._session()
-        await session.execute(select(func.pg_advisory_xact_lock(_uuid_lock_key(enrollment.client_instance_id))))
+        await session.execute(select(func.pg_advisory_xact_lock(_bytes_lock_key(enrollment.client_instance_id.bytes))))
         active = await session.scalar(
             select(func.count())
             .select_from(CliDeviceEnrollment)
@@ -274,10 +274,6 @@ class PostgresCliAuthorizationRepository:
             record.revoked_at = revoked_at
             await session.flush()
         return True
-
-
-def _uuid_lock_key(value: UUID) -> int:
-    return _bytes_lock_key(value.bytes)
 
 
 def _bytes_lock_key(value: bytes) -> int:

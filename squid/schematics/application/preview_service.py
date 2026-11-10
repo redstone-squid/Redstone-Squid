@@ -166,7 +166,7 @@ class SchematicPreviewService:
         if stored is None:
             raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
         if reason := self._render_skip_reason(stored):
-            raise _refused(reason)
+            raise SchematicRenderRefusedError(reason.value, reason.description)
 
         render_request = request or self._render_request
         resource_pack = await self._render_resources()
@@ -354,10 +354,6 @@ def _render_recipe_hash(stored: StoredSchematic, request: RenderRequest, pack_sh
     }
     encoded = json.dumps(recipe, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
-
-
-def _refused(reason: RenderSkipReason) -> SchematicRenderRefusedError:
-    return SchematicRenderRefusedError(reason.value, reason.description)
 
 
 def _log_fields(stored: StoredSchematic) -> dict[str, str | int]:
