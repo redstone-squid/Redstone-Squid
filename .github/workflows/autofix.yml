@@ -1,4 +1,4 @@
-name: Automatic formatting
+name: Automatic formatting and catalogs
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   format:
-    name: Format
+    name: Format and extract catalogs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -33,7 +33,7 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
 
       - name: Install uv and Python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: ${{ env.UV_VERSION }}
           python-version: "3.15"
@@ -53,6 +53,12 @@ jobs:
           uv run --locked prek run end-of-file-fixer trailing-whitespace --all-files ||
             uv run --locked prek run end-of-file-fixer trailing-whitespace --all-files
 
+      # Formatting can shift the source locations recorded in generated catalogs.
+      - name: Refresh Fluent catalogs
+        run: |
+          uv run --locked squid-i18n extract
+          uv run --locked squid-i18n check
+
       - name: Commit automatic fixes
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         shell: bash
@@ -67,7 +73,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --update
-          git commit -m "ci: apply automatic formatting"
+          git commit -m "ci: apply automatic formatting and catalog updates"
           gh auth setup-git
           git push origin "HEAD:${BRANCH}"
 
