@@ -211,16 +211,16 @@ account-credits-retained = You are still credited under: { $names }.
 # squid/bot/account_presentation.py:27
 account-discord-linked = Your Discord account is now linked to **{ $name }**.
 
-# squid/bot/account_view.py:459
+# squid/bot/account_view.py:455
 account-discord-unlink-warning = This is the Discord account you are using now. The bot will stop recognising you here.
 
-# squid/bot/account_view.py:468
+# squid/bot/account_view.py:464
 account-hidden-page-credit-note = A hidden page still lists the creator names you hold, because that credit is what attributes your builds.
 
-# squid/bot/account_view.py:246
+# squid/bot/account_view.py:242
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
-# squid/bot/account_view.py:454
+# squid/bot/account_view.py:450
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
 # squid/bot/account_workspace.py:187
@@ -247,100 +247,100 @@ account-refresh-forbidden = You are no longer allowed to refresh your Minecraft 
 # squid/bot/account_workspace.py:158
 account-refresh-member-identity = Refresh another member's Minecraft identity
 
-# squid/bot/account_view.py:276
+# squid/bot/account_view.py:272
 account-view-bio = Bio
 
-# squid/bot/account_view.py:131
+# squid/bot/account_view.py:127
 account-view-cancel = Cancel
 
-# squid/bot/account_view.py:183, squid/bot/account_view.py:419
+# squid/bot/account_view.py:179, squid/bot/account_view.py:415
 account-view-creator-page = Creator page
 
-# squid/bot/account_view.py:264
+# squid/bot/account_view.py:260
 account-view-display-name = Display name
 
-# squid/bot/account_view.py:202
+# squid/bot/account_view.py:198
 account-view-edit-page = Edit page
 
-# squid/bot/account_view.py:260
+# squid/bot/account_view.py:256
 account-view-edit-profile = Edit profile
 
-# squid/bot/account_view.py:315
+# squid/bot/account_view.py:311
 account-view-edit-your-creator-page = Edit your creator page
 
-# squid/bot/account_view.py:439
+# squid/bot/account_view.py:435
 account-view-hidden = hidden
 
-# squid/bot/account_view.py:187, squid/bot/account_view.py:420
+# squid/bot/account_view.py:183, squid/bot/account_view.py:416
 account-view-hidden-2 = Hidden
 
-# squid/bot/account_view.py:179
+# squid/bot/account_view.py:175
 account-view-hidden-from-page = Hidden from page
 
-# squid/bot/account_view.py:295
+# squid/bot/account_view.py:291
 account-view-https-url = HTTPS URL
 
-# squid/bot/account_view.py:290
+# squid/bot/account_view.py:286
 account-view-label = Label
 
-# squid/bot/account_view.py:413
+# squid/bot/account_view.py:409
 account-view-linked-accounts = Linked accounts
 
-# squid/bot/account_view.py:60
+# squid/bot/account_view.py:58
 account-view-links = { $count } links
 
-# squid/bot/account_view.py:284, squid/bot/account_view.py:307, squid/bot/account_view.py:432
+# squid/bot/account_view.py:280, squid/bot/account_view.py:303, squid/bot/account_view.py:428
 account-view-links-2 = Links
 
-# squid/bot/account_view.py:414
+# squid/bot/account_view.py:410
 account-view-none-yet = _None yet._
 
-# squid/bot/account_view.py:258
+# squid/bot/account_view.py:254
 account-view-profile = Profile
 
-# squid/bot/account_view.py:286
+# squid/bot/account_view.py:282
 account-view-profile-link = Profile link
 
-# squid/bot/account_view.py:376
+# squid/bot/account_view.py:372
 account-view-profile-saved = Profile saved.
 
-# squid/bot/account_view.py:270, squid/bot/account_view.py:429
+# squid/bot/account_view.py:266, squid/bot/account_view.py:425
 account-view-pronouns = Pronouns
 
-# squid/bot/account_view.py:420
+# squid/bot/account_view.py:416
 account-view-public = Public
 
-# squid/bot/account_view.py:452
+# squid/bot/account_view.py:448
 account-view-remove-this-linked-account = Remove this linked account?
 
-# squid/bot/account_view.py:318
+# squid/bot/account_view.py:314
 account-view-save-profile = Save profile
 
-# squid/bot/account_view.py:175
+# squid/bot/account_view.py:171
 account-view-selected-identity = Selected identity
 
-# squid/bot/account_view.py:186
+# squid/bot/account_view.py:182
 account-view-shown = Shown
 
-# squid/bot/account_view.py:178
+# squid/bot/account_view.py:174
 account-view-shown-on-page = Shown on page
 
-# squid/bot/account_view.py:437
+# squid/bot/account_view.py:433
 account-view-shown-publicly = shown publicly
 
-# squid/bot/account_view.py:444
+# squid/bot/account_view.py:440
 account-view-unknown = unknown
 
-# squid/bot/account_view.py:194
+# squid/bot/account_view.py:190
 account-view-unlink = Unlink
 
-# squid/bot/account_view.py:463
+# squid/bot/account_view.py:459
 account-view-value = { $warning } { $consequence }
 
-# squid/bot/account_view.py:446
+# squid/bot/account_view.py:442
 account-view-verified = { $visibility } · verified { $age }
 
-# squid/bot/account_view.py:144, squid/bot/account_view.py:362
+# squid/bot/account_view.py:140, squid/bot/account_view.py:358
 account-view-your-account = Your account
 
 # squid/bot/account_workspace.py:107
@@ -759,7 +759,7 @@ bot-build-field-door-type =
     .label = Door Type
     .placeholder = Full lamp, Funnel
 
-# squid/bot/submission/ui/views.py:672
+# squid/bot/submission/ui/views.py:673
 bot-build-field-error = **{ $label }:** { $detail }
 
 # squid/bot/submission/ui/views.py:319, squid/bot/submission/ui/views.py:324
@@ -1560,52 +1560,52 @@ bot-submission-ui-fields-invalid-value = Invalid value
 # squid/bot/submission/ui/opening.py:70
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
-# squid/bot/submission/ui/views.py:581
+# squid/bot/submission/ui/views.py:582
 bot-submission-ui-views-apply-changes = Apply changes
 
-# squid/bot/submission/ui/views.py:586
+# squid/bot/submission/ui/views.py:587
 bot-submission-ui-views-back = Back
 
-# squid/bot/submission/ui/views.py:541
+# squid/bot/submission/ui/views.py:542
 bot-submission-ui-views-changes-saved = Changes saved
 
-# squid/bot/submission/ui/views.py:604
+# squid/bot/submission/ui/views.py:605
 bot-submission-ui-views-close = Close
 
-# squid/bot/submission/ui/views.py:618
+# squid/bot/submission/ui/views.py:619
 bot-submission-ui-views-edit-build = Edit build
 
 # squid/bot/submission/ui/views.py:428
 bot-submission-ui-views-edit-build-section = Edit build, section { $page }
 
-# squid/bot/submission/ui/views.py:562
+# squid/bot/submission/ui/views.py:563
 bot-submission-ui-views-edit-this-section = Edit this section
 
-# squid/bot/submission/ui/views.py:622
+# squid/bot/submission/ui/views.py:623
 bot-submission-ui-views-fields-in-this-section = Fields in this section
 
 # squid/bot/submission/ui/views.py:422
 bot-submission-ui-views-invalid-value = Invalid value
 
-# squid/bot/submission/ui/views.py:547
+# squid/bot/submission/ui/views.py:548
 bot-submission-ui-views-loading-build = Loading build.
 
-# squid/bot/submission/ui/views.py:571
+# squid/bot/submission/ui/views.py:572
 bot-submission-ui-views-next = Next
 
-# squid/bot/submission/ui/views.py:699
+# squid/bot/submission/ui/views.py:700
 bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.
 
-# squid/bot/submission/ui/views.py:565
+# squid/bot/submission/ui/views.py:566
 bot-submission-ui-views-previous = Previous
 
-# squid/bot/submission/ui/views.py:644
+# squid/bot/submission/ui/views.py:645
 bot-submission-ui-views-reload-fresh-editor = Reload fresh editor
 
-# squid/bot/submission/ui/views.py:601
+# squid/bot/submission/ui/views.py:602
 bot-submission-ui-views-reload-latest = Reload latest
 
-# squid/bot/submission/ui/views.py:592
+# squid/bot/submission/ui/views.py:593
 bot-submission-ui-views-review-changes = Review changes
 
 # squid/bot/tags_view.py:246, squid/bot/tags_view.py:391
@@ -2001,16 +2001,16 @@ build-attachment-types-help = Attach an image, a video, or a Minecraft schematic
 # squid/bot/submission/ui/controls.py:38, squid/bot/submission/ui/controls.py:55
 build-editor-build-deleted = That build no longer exists.
 
-# squid/bot/submission/ui/views.py:542
+# squid/bot/submission/ui/views.py:543
 build-editor-card-refreshed = The build card has been refreshed.
 
-# squid/bot/submission/ui/views.py:734
+# squid/bot/submission/ui/views.py:735
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
 # squid/bot/submission/ui/opening.py:71
 build-editor-edit-access-required = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/views.py:766
+# squid/bot/submission/ui/views.py:768
 build-editor-edit-access-required-views = Only the pending build's submitter or a trusted staff member can edit it.
 
 # squid/bot/submission/edit.py:89
@@ -2019,21 +2019,21 @@ build-editor-fields-unavailable = This build has no { $fields }. Open the worksp
 # squid/bot/submission/edit.py:104, squid/bot/submission/edit.py:109, squid/bot/submission/edit.py:113
 build-editor-invalid-build = This does not look like a build.
 
-# squid/bot/submission/ui/views.py:627
+# squid/bot/submission/ui/views.py:628
 build-editor-reload-discards-staged-context = Reloading a fresh editor discards every staged context in this one.
 
-# squid/bot/submission/ui/views.py:609
+# squid/bot/submission/ui/views.py:610
 build-editor-reloaded-discarded-changes = Fresh editor loaded. Unsaved changes from the previous editor were discarded.
 
-# squid/bot/submission/ui/views.py:552
+# squid/bot/submission/ui/views.py:553
 build-editor-section-unsaved-indicator = Section { $page } of { $pages }. Filled dots have unsaved changes.
 
-# squid/bot/submission/ui/views.py:677
+# squid/bot/submission/ui/views.py:678
 build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
 
-# squid/bot/submission/ui/views.py:554
+# squid/bot/submission/ui/views.py:555
 build-editor-validation-errors =
     Fix these values before review:
     { $validation_error }
@@ -3270,28 +3270,28 @@ ingestion-consent-timestamp-notice = Notice { $version }, timed at the moment yo
 # squid/bot/submission/consent_banner.py:54
 ingestion-enable-automatic-action = Enable Automatic Build Ingestion
 
-# squid/bot/layout_inspector.py:42
+# squid/bot/layout_inspector.py:43
 layout-inspector-developer-snapshot = Developer snapshot
 
-# squid/bot/layout_inspector.py:29
+# squid/bot/layout_inspector.py:30
 layout-inspector-hide-inspector = Hide inspector
 
-# squid/bot/layout_inspector.py:22
+# squid/bot/layout_inspector.py:23
 layout-inspector-inspect = Inspect
 
-# squid/bot/layout_inspector.py:20
+# squid/bot/layout_inspector.py:21
 layout-inspector-refresh-inspector = Refresh inspector
 
-# squid/bot/layout_review.py:108, squid/bot/layout_review.py:49
+# squid/bot/layout_review.py:110, squid/bot/layout_review.py:49
 layout-review-approve = Approve
 
-# squid/bot/layout_review.py:153
+# squid/bot/layout_review.py:155
 layout-review-approve-build = Approve build
 
-# squid/bot/layout_review.py:253
+# squid/bot/layout_review.py:256
 layout-review-close-forbidden = Only the host can close this room.
 
-# squid/bot/layout_review.py:209
+# squid/bot/layout_review.py:215
 layout-review-close-room-host-only = Close room · host only
 
 # squid/bot/layout_review.py:55
@@ -3300,7 +3300,7 @@ layout-review-comment = Comment
 # squid/bot/layout_review.py:47
 layout-review-decision = Decision
 
-# squid/bot/layout_review.py:179
+# squid/bot/layout_review.py:185
 layout-review-demo-description = Disposable reviews of a 4x4x3 door opening in 16 ticks. This does not create a production vote.
 
 # squid/bot/layout_review.py:70
@@ -3309,25 +3309,25 @@ layout-review-describe-the-change-you-want = Describe the change you want.
 # squid/bot/layout_review.py:82
 layout-review-edit-review = Edit review
 
-# squid/bot/layout_review.py:187
+# squid/bot/layout_review.py:193
 layout-review-join-hint = Join to open your own reviewer panel. Invite someone else to review too.
 
-# squid/bot/layout_review.py:203
+# squid/bot/layout_review.py:209
 layout-review-join-review = Join review
 
-# squid/bot/layout_review.py:233
+# squid/bot/layout_review.py:239
 layout-review-panel-exists = You already have a reviewer panel in this room.
 
-# squid/bot/layout_review.py:199
+# squid/bot/layout_review.py:205
 layout-review-recent-activity = Recent activity
 
-# squid/bot/layout_review.py:120
+# squid/bot/layout_review.py:122
 layout-review-redo-mine = Redo mine
 
 # squid/bot/layout_review.py:51
 layout-review-request-changes = Request changes
 
-# squid/bot/layout_review.py:176
+# squid/bot/layout_review.py:182
 layout-review-review-room-flush-piston-door = Review room · Flush piston door
 
 # squid/bot/layout_review.py:45
@@ -3336,40 +3336,40 @@ layout-review-review-sample-build = Review sample build
 # squid/bot/layout_review.py:79
 layout-review-this-review-room-has-closed = This review room has closed.
 
-# squid/bot/layout_review.py:185
+# squid/bot/layout_review.py:191
 layout-review-undo-example = Approve as Alice and Bob, then undo Alice. Bob's approval stays.
 
-# squid/bot/layout_review.py:114
+# squid/bot/layout_review.py:116
 layout-review-undo-mine = Undo mine
 
-# squid/bot/layout_review.py:198
+# squid/bot/layout_review.py:204
 layout-review-waiting-for-reviewers = Waiting for reviewers.
 
-# squid/bot/layout_review.py:105
+# squid/bot/layout_review.py:107
 layout-review-write-review = Write review
 
-# squid/bot/layout_review.py:103
+# squid/bot/layout_review.py:105
 layout-review-your-comment = Your comment
 
-# squid/bot/layout_review.py:102
+# squid/bot/layout_review.py:104
 layout-review-your-decision = Your decision
 
 # squid/bot/layout_workbench.py:114
 layout-workbench-build-title = Build title
 
-# squid/bot/layout_workbench.py:168
+# squid/bot/layout_workbench.py:170
 layout-workbench-build-workbench = Build workbench
 
-# squid/bot/layout_workbench.py:301
+# squid/bot/layout_workbench.py:305
 layout-workbench-choose-a-tag = Choose a tag
 
-# squid/bot/layout_workbench.py:171
+# squid/bot/layout_workbench.py:173
 layout-workbench-demo-description = A form, an undo stack, and a live preview in another message. All data here is disposable.
 
 # squid/bot/layout_workbench.py:123
 layout-workbench-description = Description
 
-# squid/bot/layout_workbench.py:287
+# squid/bot/layout_workbench.py:291
 layout-workbench-dimensions = Dimensions
 
 # squid/bot/layout_workbench.py:116
@@ -3378,52 +3378,52 @@ layout-workbench-dimensions-hint = Dimensions (width x height x depth)
 # squid/bot/layout_workbench.py:140
 layout-workbench-dimensions-validation = Use three positive sizes, such as 4x4x3.
 
-# squid/bot/layout_workbench.py:177
+# squid/bot/layout_workbench.py:179
 layout-workbench-draft = Draft
 
-# squid/bot/layout_workbench.py:154, squid/bot/layout_workbench.py:181
+# squid/bot/layout_workbench.py:154, squid/bot/layout_workbench.py:183
 layout-workbench-edit-build = Edit build
 
 # squid/bot/layout_workbench.py:113
 layout-workbench-edit-sample-build = Edit sample build
 
-# squid/bot/layout_workbench.py:217
+# squid/bot/layout_workbench.py:219
 layout-workbench-fail-next-publish = Fail next publish
 
-# squid/bot/layout_workbench.py:215
+# squid/bot/layout_workbench.py:217
 layout-workbench-failure-armed = Failure armed
 
-# squid/bot/layout_workbench.py:288
+# squid/bot/layout_workbench.py:292
 layout-workbench-opening-time = Opening time
 
 # squid/bot/layout_workbench.py:120
 layout-workbench-opening-time-in-ticks = Opening time in ticks
 
-# squid/bot/layout_workbench.py:194
+# squid/bot/layout_workbench.py:196
 layout-workbench-oversized-sample = Oversized sample
 
-# squid/bot/layout_workbench.py:310
+# squid/bot/layout_workbench.py:314
 layout-workbench-pagination-hint = Try the oversized sample: records paginate, text shortens, and tag buttons become pickers.
 
-# squid/bot/layout_workbench.py:178
+# squid/bot/layout_workbench.py:180
 layout-workbench-publication = Publication
 
-# squid/bot/layout_workbench.py:209
+# squid/bot/layout_workbench.py:211
 layout-workbench-publish-sample = Publish sample
 
-# squid/bot/layout_workbench.py:203
+# squid/bot/layout_workbench.py:205
 layout-workbench-redo = Redo
 
-# squid/bot/layout_workbench.py:293
+# squid/bot/layout_workbench.py:297
 layout-workbench-related-sample-records = Related sample records
 
-# squid/bot/layout_workbench.py:188
+# squid/bot/layout_workbench.py:190
 layout-workbench-small-sample = Small sample
 
-# squid/bot/layout_workbench.py:289
+# squid/bot/layout_workbench.py:293
 layout-workbench-tag = Tag
 
-# squid/bot/layout_workbench.py:200
+# squid/bot/layout_workbench.py:202
 layout-workbench-undo = Undo
 
 # squid/media/application/jobs.py:191
