@@ -199,7 +199,6 @@ class ActionResponder:
         operation = PostCommitOperation(
             callback,
             name=name or getattr(callback, "__qualname__", type(callback).__qualname__),
-            owner=self.message_root,
         )
         on_action_commit(lambda commit, continuation: operation._commit(commit, continuation, host))
         on_action_rollback(operation._discard)

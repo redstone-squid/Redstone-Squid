@@ -225,7 +225,7 @@ class Workbench(InspectablePanel):
             return build
 
         self.draft.publication = sl.operations.OperationDefinition(
-            self, publish, name="Publish sample build", initial="queued"
+            publish, name="Publish sample build", initial="queued"
         ).start()
 
 

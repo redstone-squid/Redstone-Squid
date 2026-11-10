@@ -2,8 +2,8 @@
 
 An operation definition is reusable; each `start()` creates a separate execution,
 such as one export requested by a user. Awaiting the execution runs or joins its
-loader in the caller's task. Progress and terminal outcomes invalidate the owner
-so its next render can display them. Work that publishes reactive state can open
+loader in the caller's task. Progress and terminal outcomes notify every reader
+so separate components can display the same execution. Work that publishes reactive state can open
 a causally linked action through the execution's `start_action` method.
 """
 
@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, overload, override
+from typing import Any, overload, override
 
 from squid_reactivity.actions import (
     DEFAULT_REDACTION,
@@ -28,16 +28,8 @@ from squid_reactivity.actions import (
     emit_causal_event,
 )
 from squid_reactivity.completion import Completion
+from squid_reactivity.core import _Signal, fresh_action_transaction
 from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
-
-
-class OperationOwner(Protocol):
-    """An object that requests a render when an operation changes.
-
-    Descriptors also require an instance dictionary to cache the bound definition.
-    """
-
-    def invalidate(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,15 +105,14 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
 
     def __init__(
         self,
-        owner: OperationOwner,
         loader: Callable[[ProgressReporter[ProgressT]], Awaitable[ValueT]],
         *,
         context: OperationContext,
         initial: ProgressT,
     ) -> None:
-        self._owner = owner
         self._loader = loader
         self.context = context
+        self._signal = _Signal()
         self._status: OperationStatus[ValueT, ProgressT] = Pending(initial)
         self._completion: Completion[OperationStatus[ValueT, ProgressT]] = Completion()
         self._started = False
@@ -130,19 +121,21 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     def status(self) -> OperationStatus[ValueT, ProgressT]:
         """Return current progress or the terminal outcome and register observation."""
         _observe(self)
+        self._signal.track()
         return self._status
 
     @property
     @override
     def pending(self) -> bool:
         """Whether the execution has not yet succeeded, failed, or been cancelled."""
+        self._signal.track()
         return isinstance(self._status, Pending)
 
     def _set_progress(self, value: ProgressT) -> None:
         match self._status:
             case Pending():
                 self._status = Pending(value)
-                self._owner.invalidate()
+                self._signal.notify()
             case _:
                 message = f"operation execution {self.context.execution_id} has already settled"
                 raise RuntimeError(message)
@@ -179,7 +172,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             current = self._status
             assert isinstance(current, Pending)
             self._status = Cancelled(current.progress)
-            self._owner.invalidate()
+            self._signal.notify()
             self._completion.cancel()
             self._emit("cancelled")
             raise
@@ -187,12 +180,12 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             current = self._status
             assert isinstance(current, Pending)
             self._status = Failed(error, current.progress)
-            self._owner.invalidate()
+            self._signal.notify()
             self._completion.resolve(self._status)
             self._emit("failed", error)
         else:
             self._status = Succeeded(value)
-            self._owner.invalidate()
+            self._signal.notify()
             self._completion.resolve(self._status)
             self._emit("succeeded")
         return self._status
@@ -200,8 +193,6 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     @contextmanager
     def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.SYSTEM) -> Iterator[ActionContext]:
         """Start a fresh state-publishing action caused by this execution."""
-        from squid_reactivity.core import fresh_action_transaction
-
         context = ActionContext.create(
             name,
             kind=kind,
@@ -231,13 +222,11 @@ class OperationDefinition[ValueT, ProgressT]:
 
     def __init__(
         self,
-        owner: OperationOwner,
         loader: Callable[[ProgressReporter[ProgressT]], Awaitable[ValueT]],
         *,
         name: str,
         initial: ProgressT,
     ) -> None:
-        self._owner = owner
         self._loader = loader
         self.name = name
         self.initial = initial
@@ -258,12 +247,12 @@ class OperationDefinition[ValueT, ProgressT]:
             cause = cause or action.causal_ref()
             root_action_id = root_action_id or action.root_action_id
         context = OperationContext(uuid.uuid7(), cause, root_action_id, self.name)
-        execution = OperationExecution(self._owner, self._loader, context=context, initial=self.initial)
+        execution = OperationExecution(self._loader, context=context, initial=self.initial)
         execution._emit("started")
         return execution
 
 
-class _OperationDescriptor[OwnerT: OperationOwner, ValueT, ProgressT]:
+class _OperationDescriptor[OwnerT, ValueT, ProgressT]:
     """Bind one repeatable definition per owner instance."""
 
     def __init__(
@@ -295,7 +284,6 @@ class _OperationDescriptor[OwnerT: OperationOwner, ValueT, ProgressT]:
         bound = instance.__dict__.get(self._name)
         if bound is None:
             bound = OperationDefinition(
-                instance,
                 lambda progress: self.loader(instance, progress),
                 name=f"{type(instance).__name__}.{self.public_name}",
                 initial=self.initial,
@@ -304,7 +292,7 @@ class _OperationDescriptor[OwnerT: OperationOwner, ValueT, ProgressT]:
         return bound
 
 
-def operation[OwnerT: OperationOwner, ValueT, ProgressT](
+def operation[OwnerT, ValueT, ProgressT](
     *, initial: ProgressT
 ) -> Callable[
     [Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]]],

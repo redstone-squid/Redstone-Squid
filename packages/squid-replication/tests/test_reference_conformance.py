@@ -54,14 +54,6 @@ class LocalModel(Reactive):
     selected: bool = state(default=False)
 
 
-class HistoryOwner:
-    def __init__(self) -> None:
-        self.invalidations = 0
-
-    def invalidate(self) -> None:
-        self.invalidations += 1
-
-
 def _outside(callback, *args) -> None:
     # Observe or import committed state without joining the transaction under test.
     outside = contextvars.copy_context()
@@ -283,7 +275,7 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
     with transaction():
         local.set("tags").add("shared")
     remote.import_update(local.export_since())
-    history = History(HistoryOwner())
+    history = History()
     with transaction():
         history.record("drop the tag")
         local.set("tags").discard("shared")
@@ -310,7 +302,7 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
 
 async def test_undoing_a_discard_of_an_absent_value_adds_nothing() -> None:
     document = Replica("a").open("project")
-    history = History(HistoryOwner())
+    history = History()
     with transaction():
         history.record("drop a value that was never there")
         document.set("tags").discard("absent")
@@ -326,7 +318,7 @@ async def test_undo_and_redo_of_a_discard_round_trip() -> None:
     tags = document.set("tags")
     with transaction():
         tags.add("mine")
-    history = History(HistoryOwner())
+    history = History()
     with transaction():
         history.record("drop the tag")
         tags.discard("mine")
@@ -653,7 +645,7 @@ async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> Non
     local = Replica("a").open("project")
     remote = Replica("b").open("project")
     model = LocalModel()
-    history = History(HistoryOwner())
+    history = History()
     with transaction():
         history.record("vote and select")
         model.selected = True
@@ -676,7 +668,7 @@ async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> Non
 async def test_replicated_redo_and_second_undo_follow_fresh_semantic_tokens() -> None:
     local = Replica("a").open("project")
     remote = Replica("b").open("project")
-    history = History(HistoryOwner())
+    history = History()
     with transaction():
         history.record("vote and tag")
         local.counter("votes").increment(2)

@@ -308,7 +308,6 @@ require more exceptions than rules. New synonyms fail without constraining new c
 - `FrontendAddress` and `MessageAddress` stay separate because one is durable and
   frontend-neutral while the other carries typed Discord coordinates.
 - `BusySpec` is an interim-paint recipe, not a settled result.
-- `UndoMode` is an enum; `Policy` remains reserved for injected decision-makers.
 - `semantic.Summary` keeps the HTML `<summary>` term of art.
 - `PatternControls.content/action/choices/form` mirror the module-level factories.
 - The naming checks cover the seven packages. Application repositories keep their own domain

@@ -1,5 +1,4 @@
 import asyncio
-from typing import override
 
 import anyio
 import pytest
@@ -43,7 +42,7 @@ async def test_operation_reports_progress_and_succeeds_once() -> None:
     assert execution.status == Succeeded(42)
     assert await execution == 42
     assert owner.calls == 1
-    assert owner.invalidations == 2
+    assert owner.invalidations == 0
 
 
 async def test_operation_joins_one_in_flight_attempt() -> None:
@@ -147,10 +146,6 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
     class StatefulOwner(Reactive):
         value: int = state(0)
 
-        @override
-        def invalidate(self) -> None:
-            pass
-
         @operation(initial=None)
         async def work(self, progress: ProgressReporter[None]) -> int:
             return 42
@@ -175,10 +170,6 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
 async def test_action_operation_response_and_resource_generation_form_one_graph() -> None:
     class GraphOwner(Reactive):
         value: int = state(0)
-
-        @override
-        def invalidate(self) -> None:
-            pass
 
         @operation(initial=None)
         async def fetch(self, progress: ProgressReporter[None]) -> int:

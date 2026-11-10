@@ -17,11 +17,6 @@ from squid_replication import (
 from squid_ui.runtime import History, HistoryResultStatus
 
 
-class HistoryOwner:
-    def invalidate(self) -> None:
-        pass
-
-
 def _replica(name: str, peer_id: int) -> Replica:
     return Replica(name, backend=LoroBackend(peer_id=peer_id))
 
@@ -315,7 +310,7 @@ def test_compaction_preserves_leased_tokens_and_expires_released_tokens() -> Non
 @pytest.mark.asyncio
 async def test_history_automatically_leases_and_releases_replication_tokens() -> None:
     document = _replica("a", 1).open("project")
-    history = History(HistoryOwner(), limit=1)
+    history = History(limit=1)
     with transaction():
         history.record("insert")
         document.text("title").insert(0, "A")

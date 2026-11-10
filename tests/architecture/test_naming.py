@@ -157,7 +157,6 @@ ANNOTATION_VOCABULARY = {
     "SessionManager": frozenset({"registry"}),
     "SessionSpec": frozenset({"screen"}),
     "SessionSnapshot": frozenset({"summary"}),
-    "UndoMode": frozenset({"strategy"}),
 }
 """Forbidden identifier words for selected annotation or constructor names."""
 

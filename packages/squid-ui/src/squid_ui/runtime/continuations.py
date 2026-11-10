@@ -13,13 +13,13 @@ from typing import TYPE_CHECKING, Any
 
 from squid_reactivity.actions import ActionCommit, ActionContinuation, ActionRollback
 from squid_reactivity.completion import Completion
+from squid_reactivity.core import _Signal
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.operations import (
     Failed,
     OperationContext,
     OperationDefinition,
     OperationExecution,
-    OperationOwner,
     OperationStatus,
     Pending,
     ProgressReporter,
@@ -54,10 +54,10 @@ class PostCommitOperation[ValueT]:
     handler must return before the transaction can commit.
     """
 
-    def __init__(self, callback: Callable[[], Awaitable[ValueT]], *, name: str, owner: OperationOwner) -> None:
+    def __init__(self, callback: Callable[[], Awaitable[ValueT]], *, name: str) -> None:
         self._callback: Callable[[], Awaitable[ValueT]] | None = callback
         self._name = name
-        self._owner = owner
+        self._signal = _Signal()
         self._execution: OperationExecution[ValueT, None] | None = None
         self._discarded = False
         self._start_error: Exception | None = None
@@ -67,17 +67,22 @@ class PostCommitOperation[ValueT]:
     @property
     def context(self) -> OperationContext | None:
         """The committed operation's identity, or None before admission."""
+        self._signal.track()
         return None if self._execution is None else self._execution.context
 
     @property
     def status(self) -> OperationStatus[ValueT, None] | Discarded:
+        self._signal.track()
         if self._discarded:
             return Discarded()
         if self._start_error is not None:
             return Failed(self._start_error, None)
         # Observing the underlying AsyncBinding would let a renderer start its loader.
-        # This execution belongs exclusively to the host; its owner invalidates on change.
-        return Pending(None) if self._execution is None else self._execution._status
+        # Track status separately because this execution belongs exclusively to the host.
+        if self._execution is None:
+            return Pending(None)
+        self._execution._signal.track()
+        return self._execution._status
 
     def __await__(self) -> Generator[Any, None, ValueT]:
         return self.wait().__await__()
@@ -102,10 +107,11 @@ class PostCommitOperation[ValueT]:
         return await self._execution
 
     def _commit(self, commit: ActionCommit, continuation: ActionContinuation, host: UIExecutionHost) -> None:
-        definition = OperationDefinition(self._owner, self._invoke, name=self._name, initial=None)
+        definition = OperationDefinition(self._invoke, name=self._name, initial=None)
         self._execution = continuation.start_operation(
             lambda cause, root: definition.start(cause=cause, root_action_id=root)
         )
+        self._signal.notify()
         try:
             host.start_operation(self._run)
         except Exception as error:
@@ -113,10 +119,12 @@ class PostCommitOperation[ValueT]:
             self._callback = None
             self._execution._emit("failed", error)
             self._done.resolve(None)
+            self._signal.notify()
             _logger.exception("could not start after-commit operation %s", self._name)
 
     def _discard(self, rollback: ActionRollback, continuation: ActionContinuation) -> None:
         self._discarded = True
+        self._signal.notify()
         self._callback = None
         self._done.resolve(None)
 

@@ -159,7 +159,7 @@ class RecordingResponder:
     ) -> PostCommitOperation[ValueT]:
         """Record the callback without committing an action or executing the work."""
         self.on_success_callbacks.append(callback)
-        return PostCommitOperation(callback, name=name or "recorded operation", owner=self)
+        return PostCommitOperation(callback, name=name or "recorded operation")
 
     async def present_form(
         self,

@@ -693,7 +693,10 @@ class from `squid_reactivity`; UI code uses `sl.Reactive` alongside `sl.Componen
 
 A model can declare `@sl.resource` and `@sl.operation` too. Resources track the state their loaders
 read, and consumers observe pending, ready, failed, and replaced results. Operations remain
-explicitly started work. Reactive models do not acquire component lifecycle hooks or own background
+explicitly started work. Reading an execution's status subscribes to its progress and outcome,
+including through computed values. A model can also declare `edits: History = history()`; reading
+undo/redo availability or entries subscribes to that stack. Standalone histories use `History()`
+and need no component owner. Reactive models do not acquire component lifecycle hooks or own background
 tasks: use a `ManagedService` with an explicit owner for ongoing activity.
 
 `ComponentRuntime` keeps subscriptions for the delivered tree while it observes a prospective
@@ -1527,6 +1530,7 @@ the current panel's final view at commit; it does not wait for these callbacks f
 
 `on_success()` returns a `PostCommitOperation`. Its `status` uses the existing operation
 statuses, and its `context` identifies the operation and its originating action once admitted.
+Reading `status` subscribes to changes without starting the callback; the execution host owns that work.
 Use `await operation.wait()` outside the handler to observe completion. A rolled-back action
 leaves the handle `Discarded`; waiting then raises `ActionDiscardedError`. An operation failure
 is logged and available to waiters. The dispatcher observes all scheduled operations before

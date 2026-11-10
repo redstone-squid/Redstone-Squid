@@ -54,11 +54,7 @@ def test_descriptor_form_compiles_keys_labels_and_prefill() -> None:
 
 
 def test_parallel_read_form_cannot_declare_history_recording() -> None:
-    class Owner:
-        def invalidate(self) -> None:
-            pass
-
-    stack = sl.runtime.History(Owner())
+    stack = sl.runtime.History()
 
     with pytest.raises(ValueError, match="nothing to record"):
         sl.form(

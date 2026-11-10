@@ -137,7 +137,6 @@ class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
             vars(self)["_owned_services"] = owner
         return owner.own(service)
 
-    @override
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
         vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1

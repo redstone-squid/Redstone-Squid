@@ -323,6 +323,32 @@ class _Consumer(Protocol):
 _CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_reactivity_consumer", default=None)
 
 
+class _Signal:
+    """Observe framework-managed changes that do not belong to an action transaction.
+
+    Operation progress and history bookkeeping publish immediately. Keeping their
+    versions in the ordinary dependency graph makes computed values and renders
+    follow them without assigning either a component owner.
+    """
+
+    def __init__(self) -> None:
+        self.address = CellAddress(self, "revision")
+        self.version = 0
+
+    def track(self) -> None:
+        consumer = _CONSUMER.get()
+        if consumer is not None:
+            consumer.sources[self] = self.version
+
+    def settle(self) -> int:
+        return self.version
+
+    def notify(self) -> None:
+        self.version += 1
+        _bump_epoch()
+        publish(self.address)
+
+
 class _SettlingNode(Protocol):
     """A named derived value that can participate in cycle detection."""
 
@@ -1802,16 +1828,11 @@ class Observation:
                 if identity in seen:
                     continue
                 seen.add(identity)
-                if isinstance(source, _Cell):
-                    if source.address is not None:
-                        found.append(source.address)
-                elif (nested := getattr(source, "sources", None)) is not None:
-                    # An addressed source is followed *and* walked. A resource on a namespace
-                    # publishes its own address when it reloads, but it can also be re-pended
-                    # by a cell its loader read, and a reader depends on both routes.
-                    address = getattr(source, "address", None)
-                    if address is not None:
-                        found.append(address)
+                address = getattr(source, "address", None)
+                if address is not None:
+                    found.append(address)
+                if (nested := getattr(source, "sources", None)) is not None:
+                    # A resource publishes its own status and also depends on its loader's reads.
                     walk(nested)
 
         walk(self.sources)
@@ -1949,9 +1970,6 @@ class Reactive:
 
     def on_state_rollback(self) -> None:
         """React after an attempted transaction restores this owner."""
-
-    def invalidate(self) -> None:
-        """Invalidate projections owned by this object, if it has any."""
 
     def mutated(self, collaborator: object) -> None:
         """Signal an in-place change to the object held by one opaque state field.

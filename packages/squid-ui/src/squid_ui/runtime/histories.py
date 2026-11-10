@@ -46,6 +46,7 @@ from squid_reactivity.core import (
     ReactiveWriteError,
     TransactionParticipant,
     TransactionView,
+    _Signal,
     apply_conditional_patches,
     enlist,
     fresh_action_transaction,
@@ -88,18 +89,6 @@ class HistoryResultStatus(Enum):
     CONFLICT = "conflict"
     FAILED = "failed"
     NEEDS_RECONCILIATION = "needs_reconciliation"
-
-
-class HistoryOwner(Protocol):
-    """Receive invalidation when a history stack changes.
-
-    Descriptor-backed histories also require a writable instance dictionary for their
-    lazily created stack; it is accessed at runtime rather than declared in this protocol.
-    Declaring __dict__ here makes BasedPyright resolve it through Component's metaclass
-    as a read-only mapping, incorrectly rejecting Component as a history owner.
-    """
-
-    def invalidate(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -485,7 +474,7 @@ class HistoryEntrySnapshot:
 
 @dataclass(frozen=True, slots=True)
 class HistorySnapshot:
-    """A read-only view of one component-owned history stack."""
+    """A read-only view of one history stack."""
 
     name: str
     limit: int
@@ -494,7 +483,7 @@ class HistorySnapshot:
 
 
 class History:
-    """Keep a component's recent actions available for undo and redo.
+    """Keep recent actions available for undo and redo.
 
     Call record during an action handler to retain that action's committed changes.
     Failed actions add nothing. Undo reverses the recorded changes, and redo reverses
@@ -512,7 +501,6 @@ class History:
 
     def __init__(
         self,
-        owner: HistoryOwner,
         *,
         limit: int = 20,
         compensation_outbox: CompensationOutbox | None = None,
@@ -520,7 +508,7 @@ class History:
         if limit < 1:
             message = "a history needs room for at least one entry"
             raise ValueError(message)
-        self._owner = owner
+        self._signal = _Signal()
         self.limit = limit
         self._undone: list[HistoryEntry] = []
         self._redoable: list[HistoryEntry] = []
@@ -528,29 +516,36 @@ class History:
 
     @property
     def can_undo(self) -> bool:
+        self._signal.track()
         return bool(self._undone)
 
     @property
     def can_redo(self) -> bool:
+        self._signal.track()
         return bool(self._redoable)
 
     @property
     def undo_label(self) -> TextLike | None:
+        self._signal.track()
         return self._undone[-1].label if self._undone else None
 
     @property
     def redo_label(self) -> TextLike | None:
+        self._signal.track()
         return self._redoable[-1].label if self._redoable else None
 
     @property
     def entries(self) -> tuple[HistoryEntry, ...]:
+        self._signal.track()
         return tuple(self._undone)
 
     @property
     def redoable(self) -> tuple[HistoryEntry, ...]:
+        self._signal.track()
         return tuple(self._redoable)
 
     def snapshot(self, name: str) -> HistorySnapshot:
+        self._signal.track()
         return HistorySnapshot(
             name,
             self.limit,
@@ -644,14 +639,14 @@ class History:
                     if retain_redo:
                         entry.retentions = self._retain_plan(entry.redo_plan)
                         self._redoable.append(entry)
-                    self._owner.invalidate()
+                    self._signal.notify()
 
                 on_action_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
             entry.last_result = result
-            self._owner.invalidate()
+            self._signal.notify()
             return result
         except FrameworkIntegrityError, FreshActionError:
             # No inverse was admitted, so the entry is still whatever it was selected as.
@@ -661,7 +656,7 @@ class History:
             entry.state = HistoryEntryState.FAILED
             result = HistoryResult(HistoryResultStatus.FAILED, entry, context.action_id, error=error)
             entry.last_result = result
-            self._owner.invalidate()
+            self._signal.notify()
             return result
         assert entry.last_result is not None
         return entry.last_result
@@ -682,7 +677,7 @@ class History:
         previous = entry.state
         entry.compensation_execution = execution
         entry.state = HistoryEntryState.REVERSING
-        self._owner.invalidate()
+        self._signal.notify()
         intent_context = ActionContext.create(
             f"Begin compensation for {source_text(entry.label)}",
             kind=ActionPurpose.COMPENSATION,
@@ -703,19 +698,19 @@ class History:
         except asyncio.CancelledError:
             execution.transition(CompensationStatus.CANCELLED)
             entry.state = HistoryEntryState.FAILED
-            self._owner.invalidate()
+            self._signal.notify()
             raise
         except FrameworkIntegrityError, FreshActionError:
             # No compensation was admitted, so the entry is still whatever it was selected as.
             entry.state = previous
-            self._owner.invalidate()
+            self._signal.notify()
             raise
         except Exception as error:
             execution.transition(CompensationStatus.FAILED, error)
             entry.state = HistoryEntryState.FAILED
             result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
             entry.last_result = result
-            self._owner.invalidate()
+            self._signal.notify()
             return result
         if not claim.dispatch and claim.status is CompensationStatus.FAILED:
             error = RuntimeError("compensation retry limit exhausted")
@@ -723,7 +718,7 @@ class History:
             entry.state = HistoryEntryState.FAILED
             result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
             entry.last_result = result
-            self._owner.invalidate()
+            self._signal.notify()
             return result
         if claim.dispatch:
             try:
@@ -734,7 +729,7 @@ class History:
                 await self._compensation_outbox.update(
                     intent, CompensationStatus.CANCELLED, ExceptionReport.capture(error)
                 )
-                self._owner.invalidate()
+                self._signal.notify()
                 raise
             except Exception as error:
                 external_error = error
@@ -751,7 +746,7 @@ class History:
                 entry.state = HistoryEntryState.FAILED
                 result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
                 entry.last_result = result
-                self._owner.invalidate()
+                self._signal.notify()
                 return result
             execution.transition(CompensationStatus.EXTERNAL_SUCCEEDED)
             try:
@@ -761,7 +756,7 @@ class History:
                 entry.state = HistoryEntryState.NEEDS_RECONCILIATION
                 result = HistoryResult(HistoryResultStatus.NEEDS_RECONCILIATION, entry, error=error)
                 entry.last_result = result
-                self._owner.invalidate()
+                self._signal.notify()
                 return result
         compensation_context = ActionContext.create(
             f"Apply compensation for {source_text(entry.label)}",
@@ -803,7 +798,7 @@ class History:
                 entry.last_result = result
                 if not any(candidate is entry for candidate in self._undone):
                     self._undone.append(entry)
-        self._owner.invalidate()
+        self._signal.notify()
         return result
 
     async def redo(self) -> RedoResult:
@@ -849,14 +844,14 @@ class History:
                     entry.last_result = result
                     self._remove_identity(self._redoable, entry)
                     self._undone.append(entry)
-                    self._owner.invalidate()
+                    self._signal.notify()
 
                 on_action_commit(committed, key=self)
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
             entry.last_result = result
-            self._owner.invalidate()
+            self._signal.notify()
             return result
         except FrameworkIntegrityError, FreshActionError:
             # No inverse was admitted, so the entry is still whatever it was selected as.
@@ -866,7 +861,7 @@ class History:
             entry.state = HistoryEntryState.FAILED
             result = HistoryResult(HistoryResultStatus.FAILED, entry, context.action_id, error=error)
             entry.last_result = result
-            self._owner.invalidate()
+            self._signal.notify()
             return result
         assert entry.last_result is not None
         return entry.last_result
@@ -882,7 +877,7 @@ class History:
             if entry is not None and entry.state is HistoryEntryState.CONFLICTED:
                 self._remove_identity(stack, entry)
                 self._release_entry(entry)
-                self._owner.invalidate()
+                self._signal.notify()
                 return entry
         return None
 
@@ -894,7 +889,7 @@ class History:
             self._release_entry(entry)
         self._undone.clear()
         self._redoable.clear()
-        self._owner.invalidate()
+        self._signal.notify()
 
     def _reserve(self, callback: Callable[[ActionCommit, ActionContinuation], None]) -> None:
         current = CURRENT_TRANSACTION.get()
@@ -916,7 +911,7 @@ class History:
         for candidate in self._redoable:
             self._release_entry(candidate)
         self._redoable.clear()
-        self._owner.invalidate()
+        self._signal.notify()
 
     @staticmethod
     def _retain_plan(plan: UndoPlan) -> tuple[object, ...]:
@@ -969,23 +964,22 @@ class _HistoryField:
     def __get__(self, instance: None, owner: type | None = None) -> Self: ...
 
     @overload
-    def __get__(self, instance: HistoryOwner, owner: type | None = None) -> History: ...
+    def __get__(self, instance: object, owner: type | None = None) -> History: ...
 
-    def __get__(self, instance: HistoryOwner | None, owner: type | None = None) -> Self | History:
+    def __get__(self, instance: object | None, owner: type | None = None) -> Self | History:
         """Return the descriptor on the class, or lazily create the instance's history."""
         if instance is None:
             return self
-        # Straight into `__dict__`, not `setattr`: an owner that is a `Component` intercepts
-        # attribute writes for reactivity, and an undo stack is not reactive state.
+        # Cache outside declared state: history manages its own observation and transaction hooks.
         stack = instance.__dict__.get(self._slot)
         if stack is None:
-            stack = History(instance, limit=self._limit, compensation_outbox=self._compensation_outbox)
+            stack = History(limit=self._limit, compensation_outbox=self._compensation_outbox)
             instance.__dict__[self._slot] = stack
         return stack
 
 
 def history(*, limit: int = 20, compensation_outbox: CompensationOutbox | None = None) -> History:
-    """Declare a separate undo/redo stack for each component instance.
+    """Declare a separate undo/redo stack for each instance.
 
     Assign this at class scope, for example ``edits: History = history(limit=20)``.
     The stack is created on first access. Clear it when its retained backend undo
@@ -1010,7 +1004,7 @@ def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DE
     )
 
 
-def inspect_histories(owner: HistoryOwner) -> tuple[HistorySnapshot, ...]:
+def inspect_histories(owner: object) -> tuple[HistorySnapshot, ...]:
     """Snapshot declared histories, creating their per-instance stacks on first inspection."""
     snapshots: list[HistorySnapshot] = []
     for klass in reversed(type(owner).__mro__):
@@ -1044,7 +1038,6 @@ __all__ = [
     "HistoryEntrySnapshot",
     "HistoryEntryState",
     "HistoryError",
-    "HistoryOwner",
     "HistoryResult",
     "HistoryResultStatus",
     "HistorySnapshot",

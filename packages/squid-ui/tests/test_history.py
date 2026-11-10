@@ -647,7 +647,7 @@ async def test_outbox_claim_failure_is_a_truthful_compensation_failure() -> None
     async def compensate(key: str) -> None:
         raise AssertionError("claim failed, so external work must not start")
 
-    stack = History(subject, compensation_outbox=BrokenOutbox())
+    stack = History(compensation_outbox=BrokenOutbox())
     with transaction():
         stack.record("page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
         subject.page = 4
@@ -674,7 +674,7 @@ async def test_outbox_failure_after_external_success_needs_reconciliation_before
     async def compensate(key: str) -> None:
         calls.append(key)
 
-    stack = History(subject, compensation_outbox=BrokenUpdateOutbox())
+    stack = History(compensation_outbox=BrokenUpdateOutbox())
     with transaction():
         stack.record("page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
         subject.page = 4
