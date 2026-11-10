@@ -21,13 +21,13 @@ import squid_ui as sl
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_ui_discord
 from squid_reactivity.actions import ActionLedger
-from squid_reactivity.topics import BusSnapshot
 from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
+from squid_ui_discord.devtools_presentation import recovery_summary, scheduler_summary, topic_summary
 from squid_ui_discord.devtools_runtime import DevToolsAction, DevToolsRuntime, DurableRecordInspection
 
 if TYPE_CHECKING:
     # Annotations only; keep the optional `durable` extra out of runtime imports.
-    from squid_ui_discord.durability import DurableRuntimeSnapshot, RecoveryReport
+    from squid_ui_discord.durability import DurableRuntimeSnapshot
 
 
 SESSION_SECONDS = 300
@@ -279,8 +279,8 @@ class OperationalInspector(sl.Component):
         counts = [
             f"roots        {len(snapshot.message_roots)}",
             f"sessions     {len(snapshot.sessions)}",
-            f"scheduler     {_scheduler_summary(snapshot.scheduler)}",
-            f"topics      {_topic_summary(snapshot.topics)}",
+            f"scheduler     {scheduler_summary(snapshot.scheduler)}",
+            f"topics      {topic_summary(snapshot.topics)}",
             f"profile     {_profile_summary(snapshot.profiler)}",
             f"persistence {_durable_summary(snapshot.durable)}",
         ]
@@ -450,8 +450,8 @@ class OperationalInspector(sl.Component):
 
     def _queues(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         lines = [
-            f"scheduler  {_scheduler_summary(snapshot.scheduler)}",
-            f"topics   {_topic_summary(snapshot.topics)}",
+            f"scheduler  {scheduler_summary(snapshot.scheduler)}",
+            f"topics   {topic_summary(snapshot.topics)}",
         ]
         if snapshot.topics is not None:
             lines.extend(
@@ -511,7 +511,7 @@ class OperationalInspector(sl.Component):
                     f"running  {durable.running}",
                     f"active   {len(durable.active)}",
                     f"dirty    {len(durable.dirty)}",
-                    f"recovery {_recovery_summary(durable.last_recovery)}",
+                    f"recovery {recovery_summary(durable.last_recovery)}",
                 )
             )
             record_state = self.persistence_records.status
@@ -937,18 +937,6 @@ def _duration(seconds: float) -> str:
     return f"{total // 3600}h{total % 3600 // 60:02d}m"
 
 
-def _scheduler_summary(snapshot: squid_ui_discord.MessageRootSchedulerSnapshot | None) -> str:
-    if snapshot is None:
-        return "unconfigured"
-    return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
-
-
-def _topic_summary(snapshot: BusSnapshot | None) -> str:
-    if snapshot is None:
-        return "unconfigured"
-    return f"known={len(snapshot.topics)} queued={snapshot.queued} failed={snapshot.failed}"
-
-
 def _profile_summary(snapshot: RuntimeSnapshot) -> str:
     health = snapshot.health
     return f"active={health.active} failed={health.retained_failed}"
@@ -958,12 +946,6 @@ def _durable_summary(snapshot: DurableRuntimeSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"running={snapshot.running} active={len(snapshot.active)} dirty={len(snapshot.dirty)}"
-
-
-def _recovery_summary(report: RecoveryReport | None) -> str:
-    if report is None:
-        return "never"
-    return f"restored={len(report.restored)} failed={len(report.failed)}"
 
 
 def _exported_state(message_root: squid_ui_discord.MessageRoot) -> dict[str, object]:

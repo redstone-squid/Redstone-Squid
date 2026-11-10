@@ -10,7 +10,7 @@ import io
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, override
+from typing import override
 
 import discord
 from discord.ext import commands
@@ -26,13 +26,14 @@ from squid_reactivity.actions import (
     ResourceEventSnapshot,
     add_action_result_sink,
 )
-from squid_reactivity.topics import BusSnapshot, TopicBus
+from squid_reactivity.topics import TopicBus
 from squid_ui.document import InlineAsset
 from squid_ui.factories import code, paragraph, section
 from squid_ui.profiling import AttributeValue, OperationAggregate, OperationKind, Profiler, RuntimeTrace
 from squid_ui.runtime.histories import HistorySnapshot
 from squid_ui.semantic import LayoutNode
 from squid_ui_discord import delivery
+from squid_ui_discord.devtools_presentation import recovery_summary, scheduler_summary, topic_summary
 from squid_ui_discord.devtools_runtime import (
     ActionDisabled,
     ConfirmationRequired,
@@ -50,14 +51,9 @@ from squid_ui_discord.devtools_view import (
 from squid_ui_discord.live import find
 from squid_ui_discord.message_root import MessageRoot, owner_message_root
 from squid_ui_discord.message_root_contracts import MessageRootSnapshot
-from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
+from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.routing import routers
 from squid_ui_discord.sessions import SessionManager
-
-if TYPE_CHECKING:
-    # Annotation only; keep the optional `durable` extra out of runtime imports.
-    from squid_ui_discord.durability import RecoveryReport
-
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
@@ -205,8 +201,8 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         """Show queue pressure and subscriber registrations."""
         snapshot = self._runtime.snapshot()
         lines = [
-            f"scheduler  {_scheduler_text(snapshot.scheduler)}",
-            f"topics   {_topics_text(snapshot.topics)}",
+            f"scheduler  {scheduler_summary(snapshot.scheduler)}",
+            f"topics   {topic_summary(snapshot.topics)}",
         ]
         if snapshot.topics is not None:
             lines.extend(
@@ -312,7 +308,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             return
         lines = [
             f"running={durable.running} active={len(durable.active)} dirty={len(durable.dirty)}",
-            f"recovery={_recovery_text(durable.last_recovery)}",
+            f"recovery={recovery_summary(durable.last_recovery)}",
             "",
         ]
         lines.extend(
@@ -537,24 +533,6 @@ def _causal_event_text(event: CausalEventSnapshot) -> str:
                 f"continuation:{event.failure_id} failed {event.stage} {event.callback} "
                 f"cause={event.cause.kind}:{event.cause.identity}"
             )
-
-
-def _scheduler_text(snapshot: MessageRootSchedulerSnapshot | None) -> str:
-    if snapshot is None:
-        return "unconfigured"
-    return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
-
-
-def _topics_text(snapshot: BusSnapshot | None) -> str:
-    if snapshot is None:
-        return "unconfigured"
-    return f"known={len(snapshot.topics)} queued={snapshot.queued} failed={snapshot.failed}"
-
-
-def _recovery_text(report: RecoveryReport | None) -> str:
-    if report is None:
-        return "never"
-    return f"restored={len(report.restored)} failed={len(report.failed)}"
 
 
 def _trace_text(trace: RuntimeTrace) -> str:
