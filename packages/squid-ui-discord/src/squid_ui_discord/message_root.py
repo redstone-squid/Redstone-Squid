@@ -2186,6 +2186,11 @@ class MessageRoot[
                 # The reader pressed a control on a message older than the state it would act
                 # on, for example a "Delete" whose "Really delete?" repaint Discord refused.
                 # Show them the current state instead; their next press acts on what they see.
+                # TODO: Tell the reader why their press did nothing. A silent repaint looks like
+                # an ignored click, or like the panel changing under them, so they may press
+                # again without reading it. Consider framework-drawn status chrome on this
+                # repaint (as for "Live updates paused") or a short personal notice, and let a
+                # mount opt out for panels where the change is self-explanatory.
                 profile.presentation = await self.refresh(interaction, profile=profile)
                 profile.finish(DispatchDisposition.STALE)
                 return
