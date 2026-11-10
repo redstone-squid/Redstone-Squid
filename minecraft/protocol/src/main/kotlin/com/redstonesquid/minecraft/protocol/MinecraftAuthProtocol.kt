@@ -121,7 +121,7 @@ public class IssuedPlayerGrantResponse(
 ) {
     init {
         requireUuid(grantId, "grant_id")
-        require(validPlayerToken(token, UUID.fromString(grantId))) {
+        require(isValidPlayerToken(token, UUID.fromString(grantId))) {
             "token has an invalid format"
         }
         requireUuid(javaUuid, "java_uuid")
@@ -193,10 +193,9 @@ private fun requirePublicHttpsUri(value: String, name: String) {
     ) { "$name must be an absolute public HTTPS URI" }
 }
 
-private fun String.isVisibleAscii(): Boolean = all { it.code in 0x21..0x7e }
-
-private fun validPlayerToken(token: String, expectedGrantId: UUID): Boolean {
-    if (token.length !in 32..512 || !token.isVisibleAscii()) {
+/** Check the bearer-token grammar and bind its embedded identifier to the expected grant. */
+public fun isValidPlayerToken(token: String, expectedGrantId: UUID): Boolean {
+    if (token.length !in 32..512 || token.any { it.code !in 0x21..0x7e }) {
         return false
     }
     val parts = token.split('_', limit = 3)

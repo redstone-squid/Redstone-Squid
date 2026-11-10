@@ -1,6 +1,7 @@
 package com.redstonesquid.minecraft.core.auth
 
 import com.redstonesquid.minecraft.protocol.MinecraftOrigin
+import com.redstonesquid.minecraft.protocol.isValidPlayerToken
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
@@ -21,7 +22,9 @@ public class PaperInstallationCredential(
     secret: String,
 ) {
     private val secret: String = secret.also {
-        require(it.length in 32..512 && it.isVisibleAscii()) { "installation secret has an invalid format" }
+        require(it.length in 32..512 && it.all { character -> character.code in 0x21..0x7e }) {
+            "installation secret has an invalid format"
+        }
     }
 
     internal fun headers(): Map<String, String> = mapOf(
@@ -54,7 +57,7 @@ public class PlayerGrantCredential(
     public val expiresAt: Instant,
 ) {
     private val token: String = token.also {
-        require(validPlayerToken(it, grantId)) {
+        require(isValidPlayerToken(it, grantId)) {
             "player token has an invalid format"
         }
     }
@@ -173,25 +176,3 @@ public class MissingMinecraftCredentialException(kind: String) : IllegalStateExc
 )
 
 public class ExpiredMinecraftGrantException : IllegalStateException("The Minecraft player grant has expired")
-
-private fun String.isVisibleAscii(): Boolean = all { it.code in 0x21..0x7e }
-
-private fun validPlayerToken(token: String, expectedGrantId: UUID): Boolean {
-    if (token.length !in 32..512 || !token.isVisibleAscii()) {
-        return false
-    }
-    val parts = token.split('_', limit = 3)
-    return parts.size == 3 &&
-        parts[0] == "sqpt" &&
-        parseCompactUuid(parts[1]) == expectedGrantId &&
-        parts[2].length in 32..256 && parts[2].all { it.isLetterOrDigit() || it == '_' || it == '-' }
-}
-
-private fun parseCompactUuid(value: String): UUID? {
-    if (value.length != 32 || value.any { it.digitToIntOrNull(16) == null }) {
-        return null
-    }
-    val canonical = "${value.substring(0, 8)}-${value.substring(8, 12)}-${value.substring(12, 16)}-" +
-        "${value.substring(16, 20)}-${value.substring(20)}"
-    return runCatching { UUID.fromString(canonical) }.getOrNull()
-}

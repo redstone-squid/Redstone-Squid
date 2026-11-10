@@ -1,5 +1,6 @@
 package com.redstonesquid.minecraft.protocol
 
+import java.util.UUID
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -80,6 +81,28 @@ class MinecraftAuthProtocolTest {
                 }
                 """.trimIndent(),
             )
+        }
+    }
+
+    @Test
+    fun `player token grammar rejects malformed or differently bound grants`() {
+        val grantId = UUID.fromString("123e4567-e89b-12d3-a456-426614174001")
+        val prefix = "sqpt_123e4567e89b12d3a456426614174001_"
+        val secret = "a".repeat(32)
+        assertTrue(isValidPlayerToken(prefix + secret, grantId))
+        assertTrue(isValidPlayerToken(prefix + "A_9-".repeat(64), grantId))
+        val invalidTokens = listOf(
+            prefix + "a".repeat(31),
+            prefix + "a".repeat(257),
+            prefix + secret + " ",
+            prefix + secret + "é",
+            prefix + secret + ".",
+            prefix.replace("sqpt", "other") + secret,
+            prefix.replace("174001", "174002") + secret,
+            prefix.replace("174001", "17400z") + secret,
+        )
+        for (token in invalidTokens) {
+            assertFalse(isValidPlayerToken(token, grantId))
         }
     }
 }
