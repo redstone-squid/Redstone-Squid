@@ -950,7 +950,7 @@ retain the remaining idle timeout rather than restarting the message root's life
 
 | Policy | Concurrency | Stale control | State writes |
 |---|---|---|---|
-| EXCLUSIVE | serialized per message root | ignored and acknowledged | transactional |
+| EXCLUSIVE | serialized per message root | ignored; repaints a message left behind | transactional |
 | REBASE | serialized per message root | resolves newest binding | transactional |
 | PARALLEL_READ | may overlap | allowed | rejected and rolled back |
 | IMMEDIATE | may overlap | allowed | transactional; author accepts races |
@@ -986,6 +986,30 @@ typed. A form presented ad hoc from a handler has no render-declared binding, an
 newest render dropped has no newer one; both run what the reader submitted, since discarding a
 filled-in form is the worse surprise. Note that the presenting button and the submission answer
 to the same key in two different tables: `bindings` opens the form, `form_bindings` submits it.
+
+### What a press acts on
+
+Under EXCLUSIVE, a press never runs a handler against state the reader has not seen. A press
+from an older render than the one on the message is stale, as the table above describes.
+A refused edit creates the other case: the handler's state change commits before
+delivery, so the root's state moves ahead while the message still shows the previous
+render and its generation.
+
+`sd.MessageRoot` records that the message is behind when writing an application render
+fails or is cancelled, and clears the mark when any application render commits. While the
+message is behind, an EXCLUSIVE press does not run its handler. The root repaints the
+current state through that press's interaction and records the dispatch as `STALE`. For
+example:
+
+1. The reader presses "Delete", whose handler sets `armed`. Discord refuses the edit, so
+   the button still reads "Delete".
+2. The reader presses "Delete" again. The handler does not run; the message now shows
+   "Really delete?".
+3. The reader presses "Really delete?", and the handler deletes.
+
+The refused press still takes effect, only late, and the same rule covers pager cursors,
+disclosures, wizard steps, and any other state. Handlers can read state when the press
+arrives. REBASE presses keep acting on the newest state, which is what that policy asks for.
 
 ## Pagination
 
