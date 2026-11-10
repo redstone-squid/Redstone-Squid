@@ -1,10 +1,25 @@
 # Tiny-helper audit
 
-Audit baseline: `fa7d274c5`, 2026-11-10. Review in progress.
+Audit baseline: `fa7d274c5`, 2026-11-10. Findings are recommendations; no production code was changed.
 
 This audit follows [the small-helper guidance](../code-documentation-style.md#small-helpers).
 The question is whether an abstraction helps its callers, not whether it is short.
 Recommendations are recorded before implementation so unrelated changes can be reviewed separately.
+
+## Findings at a glance
+
+There are 24 finding groups, plus eight follow-ups requiring an API or policy decision.
+
+| Priority | Findings | Reason |
+| --- | --- | --- |
+| Correctness first | H19-H21 | Ambiguous content hashing, rounded pagination identifiers, and inaccurate error-envelope type guards. |
+| Ownership and dependency direction | H01-H03, H12-H13, H17 | Behavior detached from its type or a shared service depending on a transport renderer. |
+| Straightforward cleanup | H04-H11, H14-H16, H22-H24 | Redundant wrappers, dead helpers, same-domain duplication, and misleading names. |
+| Clarify effects | H18 | Mutation and account creation hidden behind value/accessor-like names. |
+
+H01 includes the original `require_consented_account` example and three related operations. H19 and H20
+were reproduced against the actual functions. H21 was reproduced by evaluating the existing guard bodies.
+The remaining findings come from definitions and call-site inspection, not observed production failures.
 
 ## Scope and method
 
@@ -17,6 +32,30 @@ The initial inventory contains 1,678 Python files and 9,965 functions with at mo
 (excluding test functions and empty bodies, but including methods, overloads, and protocol declarations).
 Those are screening candidates, not findings. Identifier occurrence counts only prioritize inspection;
 they are not resolved call graphs and cannot establish that a public API is unused.
+
+Coverage is repository-wide screening followed by definition/call-site review of candidates, rather than
+an exhaustive manual proof that each of the 9,965 functions should exist. Python screening used both a
+five-statement inventory and a wider twelve-statement top-level pass, plus same-module type ownership,
+identical-body, low-reference, and nested-wrapper searches. Shortness is a discovery aid, never a verdict.
+
+| Area | Review emphasis |
+| --- | --- |
+| `squid/accounts`, auth, API, permissions | Credential ownership, consent boundaries, alternate constructors, hydration, dependency callbacks. |
+| `squid/bot` | Accessors, callbacks, presentation policy, stale helper definitions, transport adapters. |
+| Builds, records, search, suggestions, tags | Normalization ownership, duplicate rules, ranking, conversions, transport coupling. |
+| Submissions, schematics, media | Queue/transaction boundaries, validation, hashing, resource lifetime, forwarding methods. |
+| Persistence, runtime, workers, observability | Session ownership, cancellation, task callbacks, clock accessors, retry/fencing rules. |
+| All seven Python workspace packages | Type-owned behavior, public factories/exports, callable accessors, nested helpers, duplicate rendering rules. |
+| Tests, scripts, benchmarks | Stale helpers, one-off setup, fixtures, callback roles, type-check-only probes. |
+| `web` | Handwritten TS/TSX helpers, Astro helper declarations, numeric parsing, error guards, retry-key lifetime. |
+| `cli` | Rust helper declarations and relevant consumers, terminal formatting, error policy, filesystem helper differences. |
+| `minecraft` | Kotlin function/extension declarations and relevant consumers, token grammar, protocol adapters, model methods. |
+
+The tracked non-Python inventory includes 70 TS/TSX, 50 Astro, 41 Kotlin, and 21 Rust files (including tests
+and generated files). Generated SDK implementations, SQL schema exports, historical migration bodies,
+vendored/dependency files, and completed design spikes are excluded from cleanup recommendations.
+No Rust or Kotlin behavioral change is claimed or tested. Public package functions may have consumers
+outside this repository; absence of local references alone is not permission to break those APIs.
 
 ## Issue classes
 
@@ -83,10 +122,261 @@ The wrapper does not translate errors, cache, or enforce another rule.
 ### H07: Unreferenced application helpers remain
 
 `collect_lookback` in `squid/bot/submission/message_context.py:137` and `utcnow` in `squid/core/time.py:6`
-have no references in the tracked Python source. Check all tracked text and dynamic entry points before
-removal. The latter also returns a formatted string despite its clock-like name; do not promote it into a
+have no references in executable tracked source after checking imports and all tracked-text matches.
+No dynamic registration or patch target was found; `collect_lookback` appears only in a historical plan. The latter also returns a formatted string despite its clock-like name; do not promote it into a
 replacement time API.
+
+### H08: A custom take loop duplicates itertools.islice
+
+`squid/suggestions/application/matching.py:116`: `_take` is called only by the empty-query branch of `rank`.
+That branch already returns early for a nonpositive limit. Replace the intermediate list and custom loop
+with `tuple(item.suggestion for item in islice(candidates, limit))`. Preserve lazy consumption: do not
+convert the entire iterable to a list and slice it.
+
+### H09: Singular NBT budget wrapper adds a second name for one operation
+
+`squid/schematics/infrastructure/java_structure.py:262`: `_claim_value()` only calls `_claim_values(1)`.
+Its sole caller at 164 can use the latter. Keep `_claim_values`, which enforces the decoding budget, and
+keep `_payload_without_claim`, which deliberately compensates the budget before recursive parsing.
+
+### H10: Preview lookup wraps session.get without adding behavior
+
+`squid/schematics/infrastructure/preview_publisher.py:392`: `_preview_object` obtains a session and calls
+`session.get(SchematicPreviewObject, object_key)`. Inline that lookup at its sole caller at 73, using the
+existing transaction session. Keep methods that express publication state changes or fencing predicates.
+
+### H11: MessageRoot returns a callable only to call it immediately
+
+`packages/squid-ui-discord/src/squid_ui_discord/message_root.py:1071`: `_render_message` returns
+`self._binding.render_message`. The sole call at 1017 spells this as `self._render_message()(...)`.
+Call `self._binding.render_message(...)` directly. This is an accessor, not the renderer-selection policy;
+that policy already lives in the binding. Check private patch targets when implementing.
+
+### H12: Entity behavior is detached from the entity vocabulary
+
+`packages/squid-ui/src/squid_ui/entity.py`: `encode_entity_ref` (63), `decode_entity_ref` (71), and
+`supports_entity` (92) belong on `EntityRef` and `EntityType`. Prefer `EntityRef.encode()`,
+`EntityRef.decode(value)`, and `EntityType.supports(kind)`. Preserve the distinction between integer and
+string identifiers and the existing decoding errors. These functions are exported, so change package
+exports, users, tests, and documentation together; do not leave permanent forwarding aliases by accident.
+
+### H13: PresentationState has an external mutator that reaches into its internals
+
+`packages/squid-ui/src/squid_ui/presentation.py:189`: `apply_updates(session, updates)` mutates three of
+`PresentationState`'s dictionaries and invokes its private `_touch()`. Move the operation onto
+`PresentationState`. Preserve ordered application, stale-cursor removal, and exactly one revision increment
+when anything changes. This operation is larger than a tiny helper, but it is the same ownership defect.
+It is also re-exported through the runtime modules; account for that public API change.
+
+### H14: More obsolete helpers survived the previous pass
+
+The following have no executable references or registrations in tracked source:
+
+- `squid/bot/help.py:177`, `HelpCog._root_commands`: the help implementation builds its command collections elsewhere.
+- `squid/schematics/infrastructure/wire.py:173`, `validate_request_payloads`: request decoding and durable request
+  validation use their own live entry points. Remove this obsolete entry point, not the shared arity validation.
+- `packages/squid-reactivity/src/squid_reactivity/actions.py:719`, `elapsed`, and 723, `monotonic_started`:
+  neither is called or re-exported. Removing the latter also removes this module's only use of `time`.
+- `tests/unit/bot/test_account_panel.py:275`, `text_of`: no test uses it.
+
+Together with H07 these are seven obsolete definitions. The only extra `collect_lookback` reference is an
+old completed plan, not live code. Public-looking service methods without in-repository consumers are
+listed separately below rather than declared dead solely from reference counts.
+
+### H15: Restriction normalization duplicates the owning domain rule
+
+`squid/builds/infrastructure/restrictions.py:89`, `_normalize`, duplicates
+`squid/builds/domain/taxonomy.py:36`, `normalize_tag_name`. Both casefold and collapse whitespace for the
+same tag names and aliases. Use the domain function in `add_alias` and `get_restriction_id`.
+Do not merge creator-name, title-token, or search-text normalization merely because parts look similar:
+they have different contracts, including Unicode compatibility normalization and hyphen treatment.
+
+### H16: Developer tools maintain duplicate display rules
+
+`packages/squid-ui-discord/src/squid_ui_discord/devtools.py` has `_scheduler_text` (542), `_topics_text` (548),
+and `_recovery_text` (554). The inspector repeats their exact bodies as `_scheduler_summary` (940),
+`_topic_summary` (946), and `_recovery_summary` (963) in `devtools_view.py`.
+Use one small presentation module for these shared developer-tool summaries. Keep command delivery and
+interactive layout construction separate. These functions are useful formatting operations; duplication,
+not their size, is the problem.
+
+### H17: A tiny suggestion helper hides a dependency on the Discord presentation layer
+
+`squid/suggestions/infrastructure/providers/records.py:93`, `_claimant_description`, forwards to
+`present_claimant(claim, mention=False)[:100]` imported from `squid.bot.profile_render`.
+The provider serves shared suggestions, yet its formatter lives in the bot and contains Discord mentions,
+Markdown, and localization. Move transport-neutral claimant labeling into the account presentation/application
+boundary, and keep Discord mentions in the bot. Apply Discord-specific limits at the Discord adapter unless
+100 characters is deliberately part of the shared suggestion contract. Simply inlining this wrapper would
+leave the actual dependency problem intact.
+
+### H18: Account helpers obscure mutation behind value-like names
+
+`squid/accounts/infrastructure/repository.py:67-83`: `_with_identities`, `_with_creator`, and `_with_claimant`
+mutate and return the same ORM object. `_with_identities` also resets and reconstructs `consent`, which is
+not suggested by its name. Keep repeated hydration together, but name it as mutation/materialization and
+state that the input object is modified. Inline the one-field assignment where that is clearer.
+Do not turn these into domain constructors that import the repository or silently copy ORM entities.
+
+`squid/bot/utils/accounts.py:12`, `account_id_for`, also creates an identity when absent. Its docstring is
+accurate, but the accessor-like name hides a database write at the two call sites. A name such as
+`get_or_create_discord_account_id` makes the effect visible. Keep this transport adapter outside AccountService:
+the service should not acquire a Discord dependency.
+
+### H19: Delimiter-based content hashes conflate different inputs
+
+Three small hash helpers encode structured content by joining unrestricted strings:
+
+- `packages/squid-ui/src/squid_ui/planning/cursors.py:47`, `content_fingerprint`, uses NUL between parts.
+- `squid/suggestions/application/services.py:164`, `content_revision`, uses NUL between value and label,
+  and newline between suggestions.
+- `squid/submissions/infrastructure/options.py:80`, `_content_revision`, repeats the latter encoding.
+
+These are deterministic encoding collisions, not probabilistic hash collisions. Verified against the actual
+functions: `['a\0b', 'c']` and `['a', 'b\0c']` get the same cursor fingerprint. A single suggestion/choice
+`('a', 'b\nc\0d')` and two entries `('a', 'b'), ('c', 'd')` get the same revision. Both `Suggestion` and
+`ChoiceOption` accept the example values. An empty sequence and a single empty string also collide in the
+cursor helper without needing embedded delimiters.
+
+Use an unambiguous encoding such as length-prefixed fields or JSON arrays before hashing. Preserve ordering,
+the nonzero revision convention, and the documented exclusion of description/kind from suggestion revisions.
+Keep subsystem-specific public interfaces; a shared encoding primitive is optional. Revisions/fingerprints
+will change once after deployment. The consequence is missed content-change detection; this audit did not
+establish a remotely exploitable path through every provider or renderer.
+
+### H20: Pagination's numeric helper accepts rounded identifiers
+
+`web/src/lib/pagination.ts:6`, `positiveInteger`, uses `Number.isInteger`, while
+`web/src/lib/search.ts:54`, `readPositiveInteger`, checks `Number.isSafeInteger` and decimal syntax.
+Verified against the actual pagination module:
+
+```text
+readPageParams(new URLSearchParams('after_id=9007199254740993'))
+=> { afterId: 9007199254740992 }
+```
+
+Reject unsafe integers before forwarding an anchor. All current `minimum` arguments are 1, so the options
+object is unnecessary generality. Do not silently unify syntax policies: pagination explicitly allows
+JavaScript numeric parsing, while search deliberately requires nonzero decimal text. Decide whether to keep
+that distinction and test it. The precision defect can be fixed independently of the syntax decision.
+
+### H21: Duplicate problem-detail type guards promise more than they validate
+
+`web/src/lib/api.ts:49` and `web/src/lib/submission-api.ts:123` each define `isProblemDetail`.
+They check only `title` and `status` before asserting the complete generated `ProblemDetail` type.
+Evaluating each existing guard with `{title: "Failure", status: 400, detail: 123, context: "not an object"}`
+returns true despite violating that type. The error
+constructors then consume `detail` under the stronger contract.
+
+Share a decoder for the error envelope that validates the fields actually exposed, or return a genuinely
+narrow partial type. Keep catalogue/submission-specific error mapping and network-failure semantics separate.
+Add malformed optional-field cases; do not replace a useful type boundary with unchecked casts.
+
+### H22: requestId is a misleading alias for randomUUID
+
+`web/src/lib/submission-api.ts:173`, `requestId`, only calls `crypto.randomUUID()`.
+Its eight call sites use the result as an idempotency key, not as the `Request-Id` correlation header.
+Use the native expression with a local `idempotencyKey` name, or a correctly named helper if it owns a future
+key policy. Preserve key creation outside retry callbacks so retries reuse the same key.
+
+### H23: Minecraft player-token validation is duplicated across modules
+
+`minecraft/protocol/.../MinecraftAuthProtocol.kt:196-219` and
+`minecraft/core/.../auth/MinecraftCredentials.kt:177-200` each implement visible-ASCII checking,
+`validPlayerToken`, and `parseCompactUuid`. They validate the same token grammar; one spells the secret rule
+with a regex, the other with length and character predicates after the ASCII check.
+Move the shared grammar into the protocol module and have both response validation and credential storage
+call it. Keep both validation entry points: deserialized responses and directly constructed credentials
+still need validation. Preserve compact UUID parsing, prefix, length, ASCII, and expected-grant matching.
+
+### H24: CLI terminal formatting duplicates the same sanitization pipeline
+
+`cli/crates/squid-cli-core/src/form.rs:581`, `single_line_terminal_text`, and
+`cli/crates/squid-cli-core/src/tui.rs:524`, `single_line`, have identical bodies: sanitize terminal text,
+then replace line breaks/tabs with spaces. Put that named operation beside `sanitize_terminal_text` in
+`terminal.rs` and use it from both renderers. Keep the distinction between multiline sanitization and
+single-line presentation. Error-enum-specific filesystem helpers need a more careful review and are not
+an automatic consequence of this straightforward consolidation.
+
+## Changes that need an API or policy decision
+
+These are follow-ups, not confirmed safe deletions:
+
+| Location | Evidence and decision |
+| --- | --- |
+| `squid/starboard/application/services.py:220`, `get_role_multipliers` | No tracked consumers. Decide whether this application service operation is still part of the supported surface before removing it. |
+| `squid/schematics/application/services.py:535`, `bytes_for` | No tracked consumers, but it is a public service operation with missing-file semantics. Check intended service API. |
+| `squid/persistence/engine.py:69`, `validate_database_consistency` | No tracked consumers; readiness now checks migration heads. Decide whether manual diagnostic use is supported. |
+| `squid-reactivity/shared_state.py:158`, `describe` | Only returns `str(address)`, but it is re-exported and tested as public API. Prefer `str` in a coordinated API cleanup, not an isolated deletion. |
+| `squid-ui-discord/classic.py:224`, `measure_host` | Forwarder to `measure_classic`, exported in `__all__`. Decide whether the domain-specific name is intentional or a stale compatibility alias. |
+| `squid-ui/planning/layout_measurement/diagnostics.py:80`, `note` | A direct `SolveNote` constructor wrapper. Consider using the class directly; weigh the established diagnostic authoring API and its many call sites. |
+| CLI `profile.rs`, `credential.rs`, `encrypted_state.rs` filesystem helpers | Similar symlink checks, atomic writes, directory syncing, and permissions, but error types and check order differ. Consolidate only after specifying the shared filesystem contract. |
+| CLI `lib.rs:1864-1880,2863-2891` error classifiers | Generic transport predicates could move to `TransportError`; CLI-specific authorization/retry policy can legitimately remain at the orchestration boundary. Avoid indiscriminate method conversion. |
+
+## Helpers to retain
+
+| Family | Why it earns an abstraction |
+| --- | --- |
+| `squid.api.dependencies.get_*`, consent dependency functions, route functions | FastAPI needs callable dependency/endpoint boundaries; annotations and override targets matter. |
+| `resource_topic` | Narrows generic Topic construction to `ResourceKind`, catching invalid application resources statically. |
+| `squid.bot.message_adapter.to_message_snapshot`, ORM-to-domain mappings | Keep transport/storage dependencies out of shared domain types. These are not misplaced constructors. |
+| `squid.api.v1.submissions._submission_actor` | Adapts HTTP credentials to application identity/provenance. Putting Caller dependencies on the domain actor would invert the boundary. |
+| `BuildEditScreen.may_edit`, typed UI factories, dynamic target factories | Public/component API or deliberate type boundary; a short forwarding body alone is insufficient evidence. |
+| `squid.bot.ui.render_payload`, `render_item`, error-card helpers | Apply shared chrome, localization, palette, and message conventions. |
+| Nested authorization callbacks, default factories, sort keys, event handlers | Their callers need functions, often with captured context or a precise callback signature. |
+| `squid.core.concurrency` helpers, worker task entry points | Own cancellation, settlement, capacity, tracing, or supervisor registration. Removing them changes lifetime semantics. |
+| Consent, permission, retry, fence, and queue predicates | Name meaningful rules and prevent drift between call sites. Review semantics, not line count. |
+| JSON/type guards and parser fragments with real validation | Preserve useful narrowing and error context. H21 is about an inaccurate guard, not about removing guards. |
+| Test fixtures, harnesses, reusable setup and semantic assertions | Keep scenario meaning and setup reuse. Uncalled public library testing tools and typing probes are not automatically dead. |
+| Kotlin transport extension functions, Rust error conversions | Adapt transport/domain errors or attach context; they are not empty pass-through layers. |
+| TypeScript URL encoding, CSRF extraction, storage-failure handling, locale conversion | Preserve protocol, security, fallback, and representation rules even when only a few lines long. |
+
+## Implementation order and verification
+
+1. Fix H19 and H20 with regression cases showing distinct content identities and exact/rejected numeric anchors.
+   Tighten H21 separately with malformed problem responses.
+2. Move Caller behavior (H01), covering anonymous and account-less service callers, account permission denial,
+   consent-pending callers, and browser-only restrictions. Then handle response/candidate ownership (H02-H03).
+3. Remove the forwarding/accessor wrappers and obsolete internal helpers (H04-H11, H14) in small subsystem commits.
+   Check patch targets and imports again at implementation time.
+4. Fix the cross-layer claimant formatter (H17), then same-domain duplication and naming (H15-H18, H22-H24).
+5. Coordinate library API changes (H12-H13) with exports, documentation, typing tests, and downstream callers.
+
+No blanket line-count rule or test asserting a fixed list of private helpers is recommended. Such a rule
+would reject useful callbacks and let larger ownership mistakes through. Review should require a concrete
+reason for each helper: policy, reuse, an interface/type boundary, or a cohesive operation.
+
+
+## Reproducing the content-hash findings
+
+Run from the repository root with the installed Python environment:
+
+```python
+from squid.suggestions.application.services import content_revision
+from squid.suggestions.domain import Suggestion
+from squid.submissions.infrastructure.options import _content_revision
+from squid.submissions.domain import ChoiceOption
+from squid_ui.planning.cursors import content_fingerprint
+
+assert content_fingerprint(["a\0b", "c"]) == content_fingerprint(["a", "b\0c"])
+assert content_fingerprint([]) == content_fingerprint([""])
+assert content_revision([Suggestion("a", "b\nc\0d")]) == content_revision(
+    [Suggestion("a", "b"), Suggestion("c", "d")]
+)
+assert _content_revision((ChoiceOption("a", "b\nc\0d"),)) == _content_revision(
+    (ChoiceOption("a", "b"), ChoiceOption("c", "d"))
+)
+```
+
+These assertions demonstrate the current defect; regression tests for the fix should assert inequality.
 
 ## Validation
 
-Pending completion of the audit. No production behavior has been changed.
+- `just typecheck`: passed, zero errors. Existing suppressions were not changed.
+- Focused Python tests with `--no-cov`: 44 passed across consent dependencies, suggestion matching, and suggestion services.
+- Focused Vitest tests with coverage disabled: 18 passed across pagination and search.
+- Actual-function hash and pagination reproducers confirmed H19-H20; isolated existing guard bodies confirmed H21.
+- Installed pre-commit hooks checked the report; `git diff --check` passed.
+
+Passing baseline tests do not refute the reproduced gaps: the existing cases do not cover these inputs.
+The full test suite was not run for this documentation-only audit. No refactors or fixes have been applied.
