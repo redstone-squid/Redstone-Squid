@@ -81,10 +81,23 @@ caller is cancelled; resource-specific timeouts belong in that cleanup.
 Components V2 uses
 `sd.DISCORD_V2_DPY27`; classic messages use `sd.DISCORD_V1_DPY27` through `sd.classic`.
 
-Named sessions can use `sd.UserSessionScreen`, `sd.UserGuildSessionScreen`, or
-`sd.SharedGuildSessionScreen` with a `session_name` class keyword. They preserve the typed
-request owner and accept an explicit `SessionSpec` for custom session policy. Exact Discord
-layouts have factories under `sd.v2` and `sd.classic`, returning the existing primitive nodes.
+Screens declare an immutable `policy = sd.ResponseSpec(...)`, including an optional
+`session=sd.SessionSpec(...)`. Omitted session names derive from the concrete screen class;
+explicit names preserve shared or durable identity. `Screen[ResultT, OwnerT]` exposes typed
+results and optional owner typing. Exact Discord layouts have factories under `sd.v2` and
+`sd.classic`, returning the existing primitive nodes.
+
+Use `self.open_child(event, child, on_result=...)` to open a child with its own admission
+policy and a lifetime bounded by the parent. Children call `self.complete(event, value)` or
+`self.cancel(event)`; completion reaches a fresh parent action after the child's action commits.
+A failed result callback leaves the child available for retry. `on_cancel` receives a `Cancelled`
+reason without interaction authority. Commands can await `screen.wait()` for `Completed(value)`
+or `Cancelled`; waiting inside an active UI action transaction is rejected.
+
+Migration: replace preset screen bases and class policy fields with `Screen` and a
+`ResponseSpec`. `Screen[Owner]` becomes `Screen[None, Owner]`. Access the live session through
+`screen.session`, and the declaration through `Screen.policy.session`. Inherited policy is an
+ordinary immutable value; use `Base.policy.overlay(...)` to extend it explicitly.
 
 Install `sd.devtools.DevTools` as a Cog for prefix `dev ui` and the hybrid `/dev ui` command tree,
 or call `await sd.open_devtools(ctx, runtime=devtools_runtime)` from an authorized host command.

@@ -21,12 +21,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 runtime = sd.install(bot)
 ```
 
-Then define a `Screen`. Its class variables are opening policy; its fields and `render()` are the
-portable component:
+Then define a `Screen`. It owns component state and opening policy; its `render()` describes
+the interface:
 
 ```python
 class Counter(sd.Screen):
-    audience = "personal"
     count: int = sl.state(0)
 
     def render(self) -> sl.LayoutNode:
@@ -57,21 +56,61 @@ Inside native commands, `await sd.request(ctx)` or `await sd.request(interaction
 Discord's command binding. In a cog listener without a command binding, use
 `await self.ui.request(source)` so the panel ends when that cog unloads. Component handlers use
 `sd.PressEvent` (or the matching event alias) and use `event.context`, whose request inherits the root's scope.
-For a common logical session policy, choose a named screen preset:
+Declare opening defaults in one immutable `policy` value:
 
 ```python
-class Lobby(sd.SharedGuildSessionScreen, session_name="lobby"):
-    pass
+class Lobby(sd.Screen):
+    policy = sd.ResponseSpec(
+        audience="public",
+        access=sd.Everyone(),
+        session=sd.SessionSpec(
+            scope=sd.ScopeKind.GUILD,
+            admission=sd.AdmissionSpec(collision=sd.Reject()),
+        ),
+    )
 ```
 
-`UserSessionScreen` opens one owner-only session per user; `UserGuildSessionScreen` opens one
-per user and guild. Both replace a previous session. `SharedGuildSessionScreen` is public,
-admits everyone, and rejects duplicate guild opens. All three preserve `Screen[OwnerT]` typing.
-For custom admission, capacity, quota, or scope, declare a complete `session = sd.SessionSpec(...)`
-instead of the `session_name` class keyword.
+An unnamed session uses the concrete screen class's module and qualified name. Supply
+`name="lobby"` when different screen classes intentionally share identity or when identity must
+survive a class rename. The default session scope is per user; `USER_GUILD` distinguishes guilds.
+Audience and access remain separate from session scope. Screens default to personal visibility
+and opener-only access, even when the session scope changes.
 
-Use `on_load()` for request-dependent loading before the first render; `opening` is available inside
-that hook. For one-off output, resolve a request once and use it for deferral and replies:
+`Screen[ResultT, OwnerT]` types a result and, optionally, its application owner. Use `on_load()`
+for loading before the first render. `opening` is the original request, or `None` for background
+delivery; current handlers use their event's request. `session` is the live session, not its recipe.
+
+For a dialog that returns a value, type its result and complete it from an action:
+
+```python
+class Confirmation(sd.Screen[bool]):
+    def render(self) -> sl.LayoutNode:
+        return sl.action_controls(sl.action_control("Confirm", self.confirm))
+
+    async def confirm(self, event: sd.PressEvent) -> None:
+        self.complete(event, True)
+
+
+class Settings(sd.Screen):
+    confirmed: bool = sl.state(False)
+
+    def render(self) -> sl.LayoutNode:
+        return sl.action_controls(sl.action_control("Review", self.review))
+
+    async def review(self, event: sd.PressEvent) -> None:
+        await self.open_child(event, Confirmation(), on_result=self.accept)
+
+    async def accept(self, event: sd.ScreenResultEvent[bool]) -> None:
+        self.confirmed = event.value
+```
+
+The opening action returns immediately. Acceptance runs in a fresh parent action; a failed callback
+leaves the child open for retry. Closing the parent closes its children. Use `on_cancel` for cleanup
+without an interaction, and handle a returned `Rejected` or `Abandoned` when opening reserves resources.
+Commands outside an action may instead present a screen and await `screen.wait()` for `Completed`
+or `Cancelled`; action handlers use `open_child` so they release their transaction and dispatch lock.
+
+For one-off output, resolve a request once and use it for deferral and replies:
 
 ```python
 request = await sd.request(interaction)

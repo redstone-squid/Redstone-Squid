@@ -93,7 +93,7 @@ type PanelPublisher = Callable[[], Awaitable[None]]
 
 
 class RedstonerScreen(sd.Screen):
-    """A Redstoner deployment screen that ends when replaced, or timed out."""
+    """A Redstoner deployment screen that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("redstoner", scope=sd.ScopeKind.USER_GUILD))
 

@@ -19,7 +19,8 @@ composition and adapter contracts.
 | Bind UI authority to an owner | `DiscordUIRuntime.scope`, `Scope` |
 | Resolve a native command or component event | `squid_ui_discord.request`, `Request` |
 | Resolve a listener in its cog scope | `Scope.request` |
-| Declare reusable opening policy | `squid_ui_discord.Screen` |
+| Declare opening policy and typed screen results | `squid_ui_discord.Screen`, `ResponseSpec` |
+| Open an owned child screen | `Screen.open_child`, `Screen.complete`, `Screen.cancel` |
 | Compose dynamic session policy | `SessionSpec`, `SessionManager` |
 | Own one live message | `MessageRoot` |
 | Render Components V2 | `render_static`, `render_message`, `DISCORD_V2_DPY27` |

@@ -42,7 +42,7 @@ type VersionAuthorizer = Callable[[], Awaitable[bool]]
 
 
 class VersionScreen(sd.Screen):
-    """A version catalogue that ends when replaced, or timed out."""
+    """A version catalogue that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("versions"))
 

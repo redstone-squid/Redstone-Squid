@@ -30,11 +30,13 @@ or closed expected scopes raise. `Screen` declares reusable opening policy.
 
 ::: squid_ui_discord.Screen
 
-::: squid_ui_discord.UserSessionScreen
+::: squid_ui_discord.Completed
 
-::: squid_ui_discord.UserGuildSessionScreen
+::: squid_ui_discord.Cancelled
 
-::: squid_ui_discord.SharedGuildSessionScreen
+::: squid_ui_discord.ScreenCancelReason
+
+::: squid_ui_discord.ScreenResultEvent
 
 ::: squid_ui_discord.Scope
 

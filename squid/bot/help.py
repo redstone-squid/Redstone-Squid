@@ -57,7 +57,7 @@ class HelpClient(Protocol):
 
 
 class HelpScreen(sd.Screen):
-    """A command browser that ends when replaced, or timed out."""
+    """A command browser that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=300, audience="public", session=sd.SessionSpec("help"))
 

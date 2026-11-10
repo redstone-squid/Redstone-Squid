@@ -283,16 +283,22 @@ belong in the application's authoritative service.
 
 ## Alpha policy and exact-layout conveniences
 
-Replace repeated `Screen` policy declarations with the closest preset while retaining a stable name:
+Replace individual class policy fields and preset bases with one `ResponseSpec` value:
 
 ```python
-class Settings(sd.UserGuildSessionScreen, session_name="settings"):
-    pass
+class Settings(sd.Screen):
+    policy = sd.ResponseSpec(
+        session=sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD),
+        timeout=300,
+    )
 ```
 
-`UserSessionScreen` and `UserGuildSessionScreen` are personal and owner-only. A
-`SharedGuildSessionScreen` is public, admits everyone, and rejects duplicate opens; migrating a shared
-guild screen therefore changes replacement into an explicit rejection.
+Screens default to personal visibility and opener-only access. Preserve shared guild behavior with
+`audience="public"`, `access=sd.Everyone()`, and a guild-scoped session with
+`admission=sd.AdmissionSpec(collision=sd.Reject())`. Session scope does not imply audience or access.
+Omit a session name to derive identity from the concrete screen class; retain explicit names when
+identity must survive a rename or be shared across classes. Replacing an inherited policy replaces
+the whole value; use `Base.policy.overlay(...)` when extending it.
 
 Use `sd.v2.panel(*children)` and `sd.classic.card(*children)` when exact Discord structure is needed.
 These factories promote bare text and omit `None`/`False`; primitive dataclass constructors are not
@@ -310,12 +316,20 @@ runtime = sd.devtools_runtime.DevToolsRuntime(
 The bundled Cog now exposes prefix `dev ui` and a hybrid `/dev ui` command tree. A custom command can call
 `sd.open_devtools(ctx, runtime=runtime)` instead of installing that Cog.
 
-Preset classes retain `Screen[OwnerT]` typing. For customized admission or membership limits,
-declare a complete `session = sd.SessionSpec(...)` instead of the `session_name` class keyword;
-that explicit recipe takes precedence over the preset's session defaults. Presentation still
-goes through `Request.respond(ScreenInstance())`, and `opening` is that same typed `Request`.
+`Screen[OwnerT]` becomes `Screen[None, OwnerT]`: the first type argument now describes the screen's
+result. Presentation still goes through `Request.respond(ScreenInstance())`. `opening` is that
+typed request, or `None` for `Scope.send` and `Scope.edit`; `owner` is available before loading in
+all three cases. `screen.session` is the live session; the recipe belongs in `Screen.policy.session`.
 The host must authorize callers of `open_devtools`; the opener restricts the resulting panel to
 that caller, while the bundled Cog defaults to bot-owner authorization.
+
+Use `self.open_child(event, child, on_result=...)` for dialogs opened inside actions, and
+`self.complete(event, value)` or `self.cancel(event)` inside the child. The result callback receives
+a typed `ScreenResultEvent` with fresh parent authority. Child sessions keep their own admission
+policy while their lifetime follows the parent. `on_cancel` receives a cancellation reason without
+an interaction; handle rejected opening separately. Replace bespoke answer events and unmount
+callbacks with `wait()` and `on_close(outcome)`. Only callers outside an active UI transaction may
+await a screen's result.
 
 ## Respond through a request
 

@@ -96,7 +96,7 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
 
 class TagsScreen(sd.Screen):
-    """A tag workspace that ends when replaced, or timed out."""
+    """A tag workspace that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("tags"))
 

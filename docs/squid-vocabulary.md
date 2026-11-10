@@ -75,6 +75,11 @@ resolved the former `ActionOutcome` homonym without a coin-flip: the reactive un
 `ActionCommit | ActionRollback` is an `ActionResult`, and profiling uses `ActionStatus`.
 They stopped sharing a word because they were never the same kind of thing.
 
+The ordinary property name `Screen.outcome` distinguishes `Completed(value)` from `Cancelled(reason)`;
+`ScreenResultEvent` carries only accepted values. This does not introduce an `Outcome` class suffix.
+Reactive operations and Discord screens both export `Cancelled` in their own namespaces: one retains
+operation progress, while the other describes why a screen closed.
+
 ### Identity and authority
 
 | Suffix | Means | Expires |

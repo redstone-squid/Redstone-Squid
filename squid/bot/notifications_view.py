@@ -39,7 +39,7 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
 
 
 class NotificationScreen(sd.Screen):
-    """A notification workspace that ends when replaced, or timed out."""
+    """A notification workspace that ends when replaced or timed out."""
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("notifications"))
 

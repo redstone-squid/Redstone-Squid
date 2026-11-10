@@ -259,14 +259,39 @@ pending commands and component failures. Component errors are rendered after the
 and observed even if delivery fails. The low-level `MessageRoot.on_error` hook remains available
 for standalone roots without an installed runtime; installed applications use `Config.errors`.
 
-`Screen` is declarative response policy over an ordinary component. A subclass places stable
-`audience`, `access`, `timeout`, `expiry`, `follow_topics`, `retain_routed_on_timeout`, `session`,
-`allowed_mentions`, and `chrome` values in class variables. Those values compile once into a
-`ResponseSpec`, layered over installation defaults and under the call's keyword policy.
-`Response(content, audience=..., timeout=...)` packages content with call policy for a return value.
-The facade claims one screen instance for one presentation and records its `opening` request before
-delivery. Request-dependent loading uses the ordinary component `on_load()` hook and therefore runs
-only when the screen reaches its first render.
+`Screen[ResultT, OwnerT]` is a Discord component with typed completion and owned child screens.
+A subclass declares `policy = ResponseSpec(...)` for audience, access, timeout, expiry,
+topic following, routed-control retention, session recipe, mentions, and chrome. Unspecified
+operational settings inherit installation defaults; explicit call keywords override the screen.
+Subclass policy values replace inherited values unless explicitly composed with `Base.policy.overlay`.
+Personal visibility and opener-only access are the screen defaults.
+
+An unnamed `SessionSpec` receives the concrete class's module and qualified name when its policy
+is compiled. This leaves the shared declaration unchanged and distinguishes subclasses. Explicit
+names keep shared identity and quota domains stable across renames. Standalone recipes still need
+an explicit name before constructing a session key.
+
+The facade claims each screen for one presentation attempt across respond, send, and edit. Its
+owner is available before `on_load`; `opening` is the original request or `None` for background
+presentation. `screen.session` resolves the actual live session, including during its first render.
+`Response(content, audience=..., timeout=...)` remains the command-return wrapper for call policy.
+
+`open_child(event, child, on_result=..., on_cancel=...)` opens without waiting for the user.
+Child lifetime follows the parent even when neither has a named session; an independently keyed
+child retains its own admission policy. Admission rejection is returned to the caller, not delivered
+as a cancellation callback. Callers must release reservations when an opening is rejected.
+
+`complete(event, value)` and `cancel(event)` stage intentions that a failed action discards.
+Result delivery releases the child's action lock before entering the parent's access checks,
+middleware, and fresh transaction. `ScreenResultEvent` supplies the accepted value and authority
+from the completing interaction. A failed parent callback leaves the child unresolved for retry;
+application database writes remain the application's responsibility. A successful callback commits
+before the outcome is published and child cleanup begins.
+
+`Cancelled` records user cancellation, timeout, parent or scope closure, replacement, or external
+closure. Cancellation callbacks carry no interaction authority. `on_close(outcome)` runs once after
+owned children close, under supervised cleanup. Commands may await `wait()`; active UI transactions
+cannot wait for another screen's answer. Waiting does not cancel the screen when the waiter ends.
 
 `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native modal API;
 layout nodes retain deferred `TextLike` values and resolve them when their root renders.
