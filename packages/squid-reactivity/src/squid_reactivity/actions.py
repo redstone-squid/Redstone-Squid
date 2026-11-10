@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
     # `core` imports this module at runtime, so the edge back has to stay type-only.
@@ -71,6 +71,14 @@ class ActorRef:
 
 
 @dataclass(frozen=True, slots=True)
+class ActionRelation:
+    """The history action this transaction reverses, reapplies, or compensates."""
+
+    kind: Literal["reverses", "reapplies", "compensates"]
+    action_id: ActionId
+
+
+@dataclass(frozen=True, slots=True)
 class ActionContext:
     """Immutable identity and causality assigned before an action begins."""
 
@@ -82,9 +90,7 @@ class ActionContext:
     actor: ActorRef | None
     started_at: datetime
     metadata: Mapping[str, str] = field(default_factory=lambda: _EMPTY_METADATA)
-    reverses_action_id: ActionId | None = None
-    reapplies_action_id: ActionId | None = None
-    compensates_action_id: ActionId | None = None
+    relation: ActionRelation | None = None
 
     @classmethod
     def create(
@@ -96,9 +102,7 @@ class ActionContext:
         root_action_id: ActionId | None = None,
         actor: ActorRef | None = None,
         metadata: Mapping[str, str] | None = None,
-        reverses_action_id: ActionId | None = None,
-        reapplies_action_id: ActionId | None = None,
-        compensates_action_id: ActionId | None = None,
+        relation: ActionRelation | None = None,
     ) -> ActionContext:
         action_id = uuid.uuid7()
         return cls(
@@ -110,9 +114,7 @@ class ActionContext:
             actor,
             datetime.now(UTC),
             _EMPTY_METADATA if not metadata else MappingProxyType(dict(metadata)),
-            reverses_action_id,
-            reapplies_action_id,
-            compensates_action_id,
+            relation,
         )
 
     def causal_ref(self) -> CausalRef:
@@ -240,9 +242,7 @@ class ActionResultSnapshot:
     tags: frozenset[str] = frozenset()
     actor: ActorRef | None = None
     metadata: tuple[tuple[str, str], ...] = ()
-    reverses_action_id: str | None = None
-    reapplies_action_id: str | None = None
-    compensates_action_id: str | None = None
+    relation: ActionRelation | None = None
     conflict: ConflictDetail | None = None
     exception: ExceptionReport | None = None
 
@@ -286,9 +286,7 @@ class ActionResultSnapshot:
             tags=tags,
             actor=context.actor if policy.include_actor else None,
             metadata=tuple(sorted(context.metadata.items())) if policy.include_metadata else (),
-            reverses_action_id=None if context.reverses_action_id is None else str(context.reverses_action_id),
-            reapplies_action_id=None if context.reapplies_action_id is None else str(context.reapplies_action_id),
-            compensates_action_id=None if context.compensates_action_id is None else str(context.compensates_action_id),
+            relation=context.relation,
             conflict=conflict,
             exception=exception,
         )
@@ -385,9 +383,10 @@ class ActionResultCodec:
             "actor": None if result.actor is None else {"kind": result.actor.kind, "identity": result.actor.identity},
             "metadata": dict(result.metadata),
             "relations": {
-                "reverses": result.reverses_action_id,
-                "reapplies": result.reapplies_action_id,
-                "compensates": result.compensates_action_id,
+                kind: str(result.relation.action_id)
+                if result.relation is not None and result.relation.kind == kind
+                else None
+                for kind in ("reverses", "reapplies", "compensates")
             },
             "conflict": None
             if result.conflict is None
@@ -428,6 +427,14 @@ class ActionResultCodec:
         sequence = payload["sequence"]
         actor = payload["actor"]
         relations = payload["relations"]
+        relation = None
+        kinds: tuple[Literal["reverses", "reapplies", "compensates"], ...] = ("reverses", "reapplies", "compensates")
+        for kind in kinds:
+            if relations[kind] is not None:
+                if relation is not None:
+                    message = "an action can have only one history relation"
+                    raise ValueError(message)
+                relation = ActionRelation(kind, uuid.UUID(relations[kind]))
         conflict = payload["conflict"]
         exception = payload["exception"]
         return ActionResultSnapshot(
@@ -444,9 +451,7 @@ class ActionResultCodec:
             frozenset(payload.get("tags", ())),
             None if actor is None else ActorRef(actor["kind"], actor["identity"]),
             tuple(sorted(payload["metadata"].items())),
-            relations["reverses"],
-            relations["reapplies"],
-            relations["compensates"],
+            relation,
             None
             if conflict is None
             else ConflictDetail(conflict["target_id"], conflict["expected_version"], conflict["actual_version"]),

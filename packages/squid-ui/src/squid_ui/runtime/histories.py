@@ -27,6 +27,7 @@ from squid_reactivity.actions import (
     ActionContext,
     ActionId,
     ActionPurpose,
+    ActionRelation,
     CausalRef,
     ChangeToken,
     ConflictDetail,
@@ -609,7 +610,7 @@ class History:
             kind=ActionPurpose.UNDO,
             cause=None if cause is None else cause.causal_ref(),
             root_action_id=None if cause is None else cause.root_action_id,
-            reverses_action_id=entry.original_action_id,
+            relation=ActionRelation("reverses", entry.original_action_id),
         )
         try:
             with fresh_action_transaction(action_context=context):
@@ -681,7 +682,7 @@ class History:
             kind=ActionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
             root_action_id=original.root_action_id,
-            compensates_action_id=original.action_id,
+            relation=ActionRelation("compensates", original.action_id),
         )
         try:
             with fresh_action_transaction(action_context=intent_context):
@@ -761,7 +762,7 @@ class History:
             kind=ActionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
             root_action_id=original.root_action_id,
-            compensates_action_id=original.action_id,
+            relation=ActionRelation("compensates", original.action_id),
         )
         result = self._undo_state(entry, retain_redo=False, action_context=compensation_context)
         if result.status in {HistoryResultStatus.CONFLICT, HistoryResultStatus.FAILED}:
@@ -816,7 +817,7 @@ class History:
             kind=ActionPurpose.REDO,
             cause=None if cause is None else cause.causal_ref(),
             root_action_id=None if cause is None else cause.root_action_id,
-            reapplies_action_id=entry.original_action_id,
+            relation=ActionRelation("reapplies", entry.original_action_id),
         )
         try:
             with fresh_action_transaction(action_context=context):
