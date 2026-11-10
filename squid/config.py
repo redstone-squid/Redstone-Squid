@@ -778,16 +778,18 @@ class SchematicConfig(_FrozenModel):
     duplicate_total_timeout_seconds: float = Field(default=15.0, gt=0)
     """Wall-clock budget shared by all pairwise comparisons for one submission."""
 
-    worker_memory_limit_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=1)
-    """`RLIMIT_AS` applied in the child before the engine is imported."""
+    # Nucleation 0.12.0 with Mesa lavapipe crashes under the previous 2 GiB / 64 MiB ceilings.
+    # https://github.com/Schem-at/Nucleation/issues/63
+    worker_memory_limit_bytes: int = Field(default=4 * 1024 * 1024 * 1024, ge=1)
+    """Additional virtual address space above the child's startup baseline, enforced by RLIMIT_AS."""
     worker_cpu_seconds: int = Field(default=900, ge=1)
     """Cumulative CPU-time limit for one worker process.
 
     Reaching it recycles the worker. Per-operation deadlines separately limit
     individual requests.
     """
-    worker_file_size_limit_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
-    """Maximum file size a worker may write, enforced by RLIMIT_FSIZE."""
+    worker_file_size_limit_bytes: int = Field(default=256 * 1024 * 1024, ge=1)
+    """Maximum file size, including the Vulkan driver's memory-backed files, enforced by RLIMIT_FSIZE."""
 
     restart_backoff_seconds: float = Field(default=1.0, gt=0)
     """Base delay for the exponential backoff between worker restarts."""

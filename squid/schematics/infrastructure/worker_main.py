@@ -286,9 +286,9 @@ def main() -> None:
     limits = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
     apply_guardrails(
         {
-            "memory_bytes": int(limits.get("memory_bytes", 2 * 1024 * 1024 * 1024)),
+            "memory_bytes": int(limits.get("memory_bytes", 4 * 1024 * 1024 * 1024)),
             "cpu_seconds": int(limits.get("cpu_seconds", 900)),
-            "file_size_bytes": int(limits.get("file_size_bytes", 64 * 1024 * 1024)),
+            "file_size_bytes": int(limits.get("file_size_bytes", 256 * 1024 * 1024)),
         }
     )
     # Not "worker": that is the supervising database worker, and sharing a service.name makes
