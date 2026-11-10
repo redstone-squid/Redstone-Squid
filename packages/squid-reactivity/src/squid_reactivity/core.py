@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from enum import Enum, auto
 from typing import Any, ClassVar, Protocol, Self, overload, override
 
 from squid_reactivity.actions import (
@@ -673,15 +674,26 @@ class Transaction:
             raise StaleReactiveContextError(message)
 
 
+class _Phase(Enum):
+    """Publication is terminal even if participant apply or later notifications fail."""
+
+    STAGING = auto()
+    PREPARING = auto()
+    COMMITTED = auto()
+    ABORTED = auto()
+
+
 @dataclass(slots=True)
 class _Transaction:
-    readonly: bool = False
-    closed: bool = False
-    """Whether this transaction has finished, successfully or not.
+    """Own an overlay until it is discarded or its patch plan is published.
 
-    Set once the commit or the rollback is done, so a task still holding an inherited copy
-    finds out rather than staging into an action nobody will publish.
+    Preparation freezes writes while retaining overlay reads. Publication closes
+    the read view before applying participants and notifying owners; failures
+    after that point cannot turn the committed action into a rollback.
     """
+
+    readonly: bool = False
+    phase: _Phase = _Phase.STAGING
     owner_task: object | None = None
     """The task that opened this transaction, or `None` outside a running loop."""
     read_view: object = field(default_factory=object)
@@ -706,18 +718,20 @@ class _Transaction:
     result_hooks: list[tuple[object | None, Callable[[ActionResult], None]]] = field(default_factory=list)
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
-    published: bool = False
-    """Whether the commit reached the point where this action's writes became visible."""
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
-    aborted: bool = False
     cleanup_errors: list[ExceptionReport] = field(default_factory=list)
-    prepared_participants: tuple[tuple[TransactionParticipant[Any], Any], ...] = ()
+    prepared_participants: list[tuple[TransactionParticipant[Any], Any]] = field(default_factory=list)
     commit_record: ActionCommit | None = None
     handle: Transaction = field(init=False)
 
     def __post_init__(self) -> None:
         self.handle = Transaction(self.context)
+
+    @property
+    def closed(self) -> bool:
+        """Terminal transactions no longer expose their overlay, including during notifications."""
+        return self.phase in (_Phase.COMMITTED, _Phase.ABORTED)
 
     def note_born(self, owner: object) -> None:
         """Record an object created after this transaction began."""
@@ -829,7 +843,7 @@ class _Transaction:
         for entry, patch in zip(self.writes.values(), patches, strict=True):
             entry.cell.value = patch.after.raw()
             entry.cell.version = patch.after_version
-        self.published = True
+        self.phase = _Phase.COMMITTED
         if patches:
             _bump_epoch()
 
@@ -893,22 +907,19 @@ class _Transaction:
 
     def commit(self) -> ActionCommit:
         """Prepare everything, publish synchronously, and return the immutable commit."""
+        self.phase = _Phase.PREPARING
         self.check_preconditions()
         view = _FrozenTransactionView(self)
-        prepared: list[tuple[TransactionParticipant[Any], Any]] = []
-        try:
-            with self.preparing():
-                for participant in self.participants.values():
-                    _checkpoint("commit.before_participant_prepare")
-                    prepared.append((participant, participant.prepare(view)))
-                    _checkpoint("commit.after_participant_prepare")
-        except BaseException as error:
-            self.abort(error, prepared)
-            raise
-        self.prepared_participants = tuple(prepared)
-        changes = tuple(
-            change for participant, value in prepared if (change := participant.describe_change(value)) is not None
-        )
+        with self.preparing():
+            for participant in self.participants.values():
+                _checkpoint("commit.before_participant_prepare")
+                self.prepared_participants.append((participant, participant.prepare(view)))
+                _checkpoint("commit.after_participant_prepare")
+            changes = tuple(
+                change
+                for participant, value in self.prepared_participants
+                if (change := participant.describe_change(value)) is not None
+            )
         committed_at = datetime.now(UTC)
         commit = ActionCommit(
             self.context,
@@ -927,7 +938,7 @@ class _Transaction:
         # from apply has violated the participant contract; rolling cells back could not undo
         # a participant that applied only partly, so preserve the committed diagnostic truth.
         try:
-            for participant, value in prepared:
+            for participant, value in self.prepared_participants:
                 participant.apply(value)
                 _checkpoint("commit.after_participant_apply")
         except BaseException:
@@ -966,26 +977,19 @@ class _Transaction:
                     error,
                 )
 
-    def abort(
-        self,
-        cause: BaseException,
-        prepared: Sequence[tuple[TransactionParticipant[Any], Any]] | None = None,
-    ) -> tuple[ExceptionReport, ...]:
-        if self.aborted:
+    def abort(self, cause: BaseException) -> tuple[ExceptionReport, ...]:
+        """Discard the overlay and abort each participant once, before publication only."""
+        assert self.phase is not _Phase.COMMITTED
+        if self.phase is _Phase.ABORTED:
             return tuple(self.cleanup_errors)
-        self.aborted = True
+        self.phase = _Phase.ABORTED
         _checkpoint("rollback.before_abort")
-        values = {
-            id(participant): value
-            for participant, value in (self.prepared_participants if prepared is None else prepared)
-        }
-        failures: list[ExceptionReport] = []
+        values = {id(participant): value for participant, value in self.prepared_participants}
         for participant in reversed(tuple(self.participants.values())):
             try:
                 participant.abort(values.get(id(participant)), cause)
             except Exception as error:
                 report = ExceptionReport.capture(error)
-                failures.append(report)
                 self.cleanup_errors.append(report)
                 _log.exception("a transaction participant failed to abort")
         for owner in reversed(tuple(self.changed.values())):
@@ -993,12 +997,11 @@ class _Transaction:
                 owner._state_rolled_back()
             except Exception as error:
                 report = ExceptionReport.capture(error)
-                failures.append(report)
                 self.cleanup_errors.append(report)
                 _log.exception("a reactive owner failed to process its rolled-back state")
         if self.writes:
             _bump_epoch()
-        return tuple(failures)
+        return tuple(self.cleanup_errors)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1115,6 +1118,47 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
 
 
 @contextmanager
+def _run_transaction(context: ActionContext, *, readonly: bool = False) -> Iterator[Transaction]:
+    """Own staging, the commit point, and outcome delivery for either action mode."""
+    current = _Transaction(readonly=readonly, owner_task=_current_task(), context=context)
+    with action_scope(context):
+        token = _CURRENT.set(current)
+        try:
+            _checkpoint("transaction.enter_body")
+            yield current.handle
+        except BaseException as error:
+            _CURRENT.reset(token)
+            _emit_rollback(current, error, during_commit=False)
+            raise
+        _CURRENT.reset(token)
+        try:
+            _checkpoint("transaction.close_staging")
+            with _COMMIT_GATE:
+                commit = current.commit()
+        except BaseException as error:
+            if current.phase is _Phase.COMMITTED:
+                # Publication is the commit point. An apply failure is an adapter integrity
+                # defect, not a user rollback; retain the commit truth and fail loudly.
+                assert current.commit_record is not None
+                integrity_commit = replace(
+                    current.commit_record,
+                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
+                )
+                current.handle._result = integrity_commit
+                emit_result(integrity_commit)
+                message = f"an infallible transaction adapter failed after the commit point: {error}"
+                raise FrameworkIntegrityError(message) from error
+            else:
+                _emit_rollback(current, error, during_commit=True)
+            raise
+        try:
+            _checkpoint("commit.gate_released")
+            current.finalize_commit()
+        finally:
+            _emit_commit(current, commit)
+
+
+@contextmanager
 def transaction(
     name: str | None = None,
     *,
@@ -1168,43 +1212,8 @@ def transaction(
             root_action_id=None if causality is None else causality[1],
         )
     )
-    current = _Transaction(owner_task=_current_task(), context=context)
-    with action_scope(context):
-        token = _CURRENT.set(current)
-        try:
-            _checkpoint("transaction.enter_body")
-            yield current.handle
-        except BaseException as error:
-            _CURRENT.reset(token)
-            current.closed = True
-            _emit_rollback(current, error, during_commit=False)
-            raise
-        _CURRENT.reset(token)
-        try:
-            _checkpoint("transaction.close_staging")
-            with _COMMIT_GATE:
-                commit = current.commit()
-        except BaseException as error:
-            current.closed = True
-            if current.published:
-                # Publication is the commit point. An apply failure is an adapter integrity
-                # defect, not a user rollback; retain the commit truth and fail loudly.
-                assert current.commit_record is not None
-                integrity_commit = replace(
-                    current.commit_record,
-                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
-                )
-                current.handle._result = integrity_commit
-                emit_result(integrity_commit)
-                message = f"an infallible transaction adapter failed after the commit point: {error}"
-                raise FrameworkIntegrityError(message) from error
-            else:
-                _emit_rollback(current, error, during_commit=True)
-            raise
-        _checkpoint("commit.gate_released")
-        current.finalize_commit()
-        current.closed = True
-        _emit_commit(current, commit)
+    with _run_transaction(context) as handle:
+        yield handle
 
 
 @contextmanager
@@ -1251,30 +1260,8 @@ def readonly_transaction(*, action_context: ActionContext | None = None) -> Iter
             root_action_id=None if causality is None else causality[1],
         )
     )
-    current = _Transaction(readonly=True, owner_task=_current_task(), context=context)
-    with action_scope(context):
-        token = _CURRENT.set(current)
-        try:
-            _checkpoint("transaction.enter_body")
-            yield current.handle
-        except BaseException as error:
-            _CURRENT.reset(token)
-            current.closed = True
-            _emit_rollback(current, error, during_commit=False)
-            raise
-        _CURRENT.reset(token)
-        try:
-            _checkpoint("transaction.close_staging")
-            with _COMMIT_GATE:
-                commit = current.commit()
-        except BaseException as error:
-            current.closed = True
-            _emit_rollback(current, error, during_commit=True)
-            raise
-        _checkpoint("commit.gate_released")
-        current.finalize_commit()
-        current.closed = True
-        _emit_commit(current, commit)
+    with _run_transaction(context, readonly=True) as handle:
+        yield handle
 
 
 def on_action_commit(callback: Callable[[ActionCommit], None], *, key: object | None = None) -> None:
