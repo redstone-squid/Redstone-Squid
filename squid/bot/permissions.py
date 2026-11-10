@@ -7,7 +7,7 @@ from discord import app_commands
 
 import squid_ui_discord as sd
 from squid.bot.access_view import AccessScreen
-from squid.bot.utils.accounts import account_id_for
+from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import allows, enforce, hide_unless, subject_for_interaction
 from squid.core.errors import ValidationError
 from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
@@ -61,7 +61,9 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         guild = request.guild
         assert guild is not None
         target = user or (None if role is not None else request.user)
-        account_id = await account_id_for(self.bot.services.accounts, target) if target is not None else None
+        account_id = (
+            await get_or_create_discord_account_id(self.bot.services.accounts, target) if target is not None else None
+        )
         role_id = role.id if role is not None else None
         label = role.name if role is not None else target.display_name if target is not None else "unknown"
         subject = await subject_for_interaction(request)

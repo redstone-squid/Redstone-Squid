@@ -92,7 +92,7 @@ def setup(monkeypatch: pytest.MonkeyPatch, candidates: tuple[InferenceCandidate,
     materialize = AsyncCallRecorder(result=draft)
     download = AsyncCallRecorder()
     monkeypatch.setattr(ingestion, "assemble_bundle", AsyncCallRecorder(result="input"))
-    monkeypatch.setattr(ingestion, "account_id_for", AsyncCallRecorder(result=7))
+    monkeypatch.setattr(ingestion, "get_or_create_discord_account_id", AsyncCallRecorder(result=7))
     monkeypatch.setattr(ingestion, "materialize_candidate", materialize)
     monkeypatch.setattr(ingestion, "receive_retained_file", download)
     inference = InferenceRecorder()

@@ -64,7 +64,8 @@ here is a count.
 """
 
 
-def _with_identities(model: Account, identities: Sequence[AccountIdentity]) -> Account:
+def _hydrate_account(model: Account, identities: Sequence[AccountIdentity]) -> Account:
+    """Populate identities and the consent receipt on the same loaded account."""
     model.identities = tuple(identities)
     model.consent = None
     if model.consent_version is not None and model.consented_at is not None:
@@ -72,12 +73,14 @@ def _with_identities(model: Account, identities: Sequence[AccountIdentity]) -> A
     return model
 
 
-def _with_creator(alias: CreatorAlias, public_creator_id: uuid.UUID | None = None) -> CreatorAlias:
+def _hydrate_creator(alias: CreatorAlias, public_creator_id: uuid.UUID | None = None) -> CreatorAlias:
+    """Populate the public creator ID on the same loaded alias."""
     alias.public_creator_id = public_creator_id
     return alias
 
 
-def _with_claimant(claim: AliasClaim, alias_name: str, claimant: Account | None = None) -> AliasClaim:
+def _hydrate_claim(claim: AliasClaim, alias_name: str, claimant: Account | None = None) -> AliasClaim:
+    """Populate the alias name and optional claimant on the same loaded claim."""
     claim.alias_name = alias_name
     claim.claimant = claimant
     return claim
@@ -142,7 +145,7 @@ class AccountRepository:
         rows = [self._attach_identity(account.id, identity) for identity in identities]
         session.add_all(rows)
         await session.flush()
-        return _with_identities(account, sorted(rows, key=lambda row: (row.provider, row.id)))
+        return _hydrate_account(account, sorted(rows, key=lambda row: (row.provider, row.id)))
 
     async def get_by_id(self, account_id: int) -> Account | None:
         """Return an account by internal identifier."""
@@ -399,7 +402,7 @@ class AccountRepository:
                 .where(CreatorAlias.normalized_name == fold_creator_name(name))
             )
         ).one_or_none()
-        return None if row is None else _with_creator(row[0], row[1])
+        return None if row is None else _hydrate_creator(row[0], row[1])
 
     async def get_creator_profile(self, public_id: uuid.UUID) -> CreatorProfile | None:
         """Return aliases for a public ID, including a permanent merge redirect."""
@@ -490,7 +493,7 @@ class AccountRepository:
             .returning(CreatorAlias)
         )
         public_id = await session.scalar(select(Account.public_creator_id).where(Account.id == account_id))
-        return None if alias is None else _with_creator(alias, public_id)
+        return None if alias is None else _hydrate_creator(alias, public_id)
 
     async def request_claim(self, *, name: str, account_id: int) -> AliasClaim:
         """Open a pending alias claim, reusing an existing matching request."""
@@ -514,11 +517,11 @@ class AccountRepository:
             )
         )
         if existing is not None:
-            return _with_claimant(existing, alias.name)
+            return _hydrate_claim(existing, alias.name)
         claim = AliasClaim(alias_id=alias.id, account_id=account_id)
         session.add(claim)
         await session.flush()
-        return _with_claimant(claim, alias.name)
+        return _hydrate_claim(claim, alias.name)
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
         """Return one claim by identifier."""
@@ -530,7 +533,7 @@ class AccountRepository:
                 .where(AliasClaim.id == claim_id)
             )
         ).one_or_none()
-        return None if row is None else _with_claimant(row[0], row[1])
+        return None if row is None else _hydrate_claim(row[0], row[1])
 
     async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
         """List pending claims oldest first.
@@ -555,7 +558,7 @@ class AccountRepository:
                 )
             ).all()
             claimants = await self._load_accounts(session, models)
-        return tuple(_with_claimant(claim, name, claimants.get(claim.account_id)) for claim, name in rows)
+        return tuple(_hydrate_claim(claim, name, claimants.get(claim.account_id)) for claim, name in rows)
 
     async def resolve_claim(
         self,
@@ -600,7 +603,7 @@ class AccountRepository:
         # instead of saying "the claimant"; one account, so `_load_accounts` costs two queries.
         claimant = await session.get(Account, claim.account_id)
         loaded = None if claimant is None else (await self._load_accounts(session, [claimant])).get(claim.account_id)
-        return _with_claimant(claim, alias.name, loaded)
+        return _hydrate_claim(claim, alias.name, loaded)
 
     # Verification-code reservations, attempt limits, and Java identity linking.
 
@@ -953,13 +956,13 @@ class AccountRepository:
             alias.account_id = account.id
             alias.claimed_at = now()
             alias.claim_method = ClaimMethod.VERIFIED_IGN
-            claimed = _with_creator(alias, account.public_creator_id)
+            claimed = _hydrate_creator(alias, account.public_creator_id)
         elif alias.account_id == account.id:
-            claimed = _with_creator(alias, account.public_creator_id)
+            claimed = _hydrate_creator(alias, account.public_creator_id)
         else:
             # Someone else is credited under this name. Never transfer on a rename; open a
             # claim so it lands in the staff queue instead of vanishing.
-            contested = _with_creator(alias)
+            contested = _hydrate_creator(alias)
             claim = await session.scalar(
                 insert(AliasClaim)
                 .values(alias_id=alias.id, account_id=account.id, status=ClaimStatus.PENDING)
@@ -978,7 +981,7 @@ class AccountRepository:
                     AliasClaim.status == ClaimStatus.PENDING,
                 )
             )
-            opened_claim = None if claim is None else _with_claimant(claim, alias.name)
+            opened_claim = None if claim is None else _hydrate_claim(claim, alias.name)
 
         await session.flush()
         retained = (
@@ -1071,4 +1074,4 @@ class AccountRepository:
         grouped: dict[int, list[AccountIdentity]] = {account_id: [] for account_id in account_ids}
         for identity in identities:
             grouped[identity.account_id].append(identity)
-        return {account.id: _with_identities(account, grouped[account.id]) for account in accounts}
+        return {account.id: _hydrate_account(account, grouped[account.id]) for account in accounts}

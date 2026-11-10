@@ -15,7 +15,7 @@ import discord
 
 from squid.bot.submission.draft_intake import receive_retained_file
 from squid.bot.submission.message_context import assemble_bundle
-from squid.bot.utils.accounts import account_id_for
+from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.core.errors import SquidError
 from squid.permissions.domain import Subject
 from squid.runtime import BotServices
@@ -44,7 +44,7 @@ async def ingest_message_bundle(
     complete drafts, while missing categories and ambiguous files remain for review.
     """
     run_id = uuid5(NAMESPACE_URL, "discord-inference:" + ":".join(str(message.id) for message in primary))
-    owner = await account_id_for(services.accounts, primary[0].author)
+    owner = await get_or_create_discord_account_id(services.accounts, primary[0].author)
     candidates = await services.submission_inference.resume(run_id, Subject(account_id=owner))
     if candidates is None:
         source_files = tuple(

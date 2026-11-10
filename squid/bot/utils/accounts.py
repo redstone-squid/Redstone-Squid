@@ -9,7 +9,9 @@ from squid.accounts.application.services import AccountService
 from squid.accounts.domain import IdentityProvider
 
 
-async def account_id_for(accounts: AccountService, user: discord.User | discord.Member | discord.abc.User | int) -> int:
+async def get_or_create_discord_account_id(
+    accounts: AccountService, user: discord.User | discord.Member | discord.abc.User | int
+) -> int:
     """Return a Discord user's account ID, creating the identity if needed.
 
     Accept a user object or a snowflake. This helper does not ask for consent;
