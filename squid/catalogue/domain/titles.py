@@ -8,9 +8,10 @@ class, such as Fastest, before the category title.
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
+from typing import Final, Self
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
@@ -97,6 +98,23 @@ class FormattedTitle:
     title_tokens: tuple[TitleToken, ...] = ()
     subtitle_tokens: tuple[TitleToken, ...] = ()
     diagnostics: tuple[TitleDiagnostic, ...] = ()
+
+    @classmethod
+    def from_tokens(
+        cls,
+        title_tokens: tuple[TitleToken, ...],
+        subtitle_tokens: tuple[TitleToken, ...],
+        diagnostics: Sequence[TitleDiagnostic],
+    ) -> Self:
+        """Render tokens with spaces, using None for an empty subtitle."""
+        subtitle = _render(subtitle_tokens)
+        return cls(
+            title=_render(title_tokens),
+            subtitle=subtitle or None,
+            title_tokens=title_tokens,
+            subtitle_tokens=subtitle_tokens,
+            diagnostics=tuple(diagnostics),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,7 +315,7 @@ class RulesTitleFormatter:
         subtitle_tokens = self._subtitle(
             category.component_restrictions, category.miscellaneous_restrictions, diagnostics
         )
-        return _formatted(title_tokens, subtitle_tokens, diagnostics)
+        return FormattedTitle.from_tokens(title_tokens, subtitle_tokens, diagnostics)
 
     def format_extender(self, category: ExtenderCategory) -> FormattedTitle:
         """Format wiring, orientation, length, and type before `Piston Extender`."""
@@ -315,7 +333,7 @@ class RulesTitleFormatter:
         subtitle_tokens = self._subtitle(
             category.component_restrictions, category.miscellaneous_restrictions, diagnostics
         )
-        return _formatted(title_tokens, subtitle_tokens, diagnostics)
+        return FormattedTitle.from_tokens(title_tokens, subtitle_tokens, diagnostics)
 
     def format_record(self, base_title: str, category: FormattedTitle) -> FormattedTitle:
         """Prefix the base title while preserving the category's subtitle and diagnostics."""
@@ -462,21 +480,6 @@ def _is_dynamic_known(value: str, section: TitleSection) -> bool:
 
 def _fixed_token(value: str, section: TitleSection) -> TitleToken:
     return TitleToken(value=value.strip(), section=section)
-
-
-def _formatted(
-    title_tokens: tuple[TitleToken, ...],
-    subtitle_tokens: tuple[TitleToken, ...],
-    diagnostics: list[TitleDiagnostic],
-) -> FormattedTitle:
-    subtitle = _render(subtitle_tokens)
-    return FormattedTitle(
-        title=_render(title_tokens),
-        subtitle=subtitle or None,
-        title_tokens=title_tokens,
-        subtitle_tokens=subtitle_tokens,
-        diagnostics=tuple(diagnostics),
-    )
 
 
 def _render(tokens: tuple[TitleToken, ...]) -> str:
