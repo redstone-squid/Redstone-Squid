@@ -851,6 +851,8 @@ class _Transaction:
 
     def patches(self) -> CellPatchSet:
         """Freeze the physical slot lineage written by this action."""
+        if not self.writes:
+            return CellPatchSet()
         return CellPatchSet(
             tuple(
                 CellPatch(
