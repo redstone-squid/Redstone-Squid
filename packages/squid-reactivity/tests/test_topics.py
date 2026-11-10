@@ -123,3 +123,44 @@ def test_reconciler_unwinds_a_partial_stage() -> None:
     assert subscriptions.staged is None
     assert subscriptions.followed == ()
     assert bus.snapshot().topics == ()
+
+
+def test_delivery_skips_removed_callbacks_and_defers_new_subscriptions() -> None:
+    bus = LocalTopicBus()
+    seen: list[str] = []
+
+    def replace_subscriber(_address: Address) -> None:
+        seen.append("first")
+        unsubscribe_first()
+        unsubscribe_second()
+        bus.subscribe(BUILD, lambda _: seen.append("new"))
+
+    unsubscribe_first = bus.subscribe(BUILD, replace_subscriber)
+    unsubscribe_second = bus.subscribe(BUILD, lambda _: seen.append("removed"))
+    bus.subscribe(BUILD, lambda _: seen.append("last"))
+
+    bus.publish(BUILD)
+    assert seen == ["first", "last"]
+    bus.publish(BUILD)
+    assert seen == ["first", "last", "last", "new"]
+    assert bus.snapshot().delivered == 4
+
+
+def test_duplicate_callbacks_have_independent_idempotent_subscriptions() -> None:
+    bus = LocalTopicBus()
+    seen: list[Address] = []
+    callback = seen.append
+    unsubscribe_first = bus.subscribe(BUILD, callback)
+    unsubscribe_second = bus.subscribe(BUILD, callback)
+
+    unsubscribe_second()
+    unsubscribe_second()
+    bus.publish(BUILD)
+    assert seen == [BUILD]
+    assert bus.snapshot().topics[0].subscribers == 1
+
+    unsubscribe_first()
+    bus.subscribe(BUILD, callback)
+    unsubscribe_first()
+    bus.publish(BUILD)
+    assert seen == [BUILD, BUILD]

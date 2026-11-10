@@ -2,7 +2,6 @@
 
 import logging
 from collections.abc import Callable, Sequence
-from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Protocol, override, runtime_checkable
 from weakref import WeakValueDictionary
@@ -30,32 +29,17 @@ type Subscriber = Callable[[Address], None]
 type SubscriberErrorHandler = Callable[[Address, Subscriber, Exception], None]
 
 
-class _TopicCell(_Cell):
-    __slots__ = ()
-
-
-_TOPIC_CELLS: WeakValueDictionary[Topic, _TopicCell] = WeakValueDictionary()
-
-
-def _topic_cell(topic: Topic) -> _TopicCell:
-    cell = _TOPIC_CELLS.get(topic)
-    if cell is None:
-        cell = _TopicCell(address=topic)
-        _TOPIC_CELLS[topic] = cell
-    return cell
+_TOPIC_CELLS: WeakValueDictionary[Topic, _Cell] = WeakValueDictionary()
 
 
 def watch(*topics: Topic) -> None:
     """Track these topics as dependencies of the current computation or render."""
     for topic in topics:
-        cell = _topic_cell(topic)
+        cell = _TOPIC_CELLS.get(topic)
+        if cell is None:
+            cell = _Cell(address=topic)
+            _TOPIC_CELLS[topic] = cell
         cell.track(cell.version)
-
-
-def _invalidate(topic: Topic) -> None:
-    cell = _TOPIC_CELLS.get(topic)
-    if cell is not None:
-        cell.touch()
 
 
 class TopicCodec(Protocol):
@@ -133,14 +117,8 @@ class BusSnapshot:
 
 
 @dataclass(slots=True)
-class _Subscription:
-    callback: Callable[[Any], None]
-    active: bool = True
-
-
-@dataclass(slots=True)
 class _AddressState:
-    subscriptions: list[_Subscription]
+    subscriptions: dict[object, Callable[[Any], None]]
     delivered: int = 0
     failed: int = 0
 
@@ -170,16 +148,13 @@ class LocalTopicBus:
     def subscribe[AddressT: Address](
         self, address: AddressT, callback: Callable[[AddressT], None]
     ) -> Callable[[], None]:
-        state = self._addresses.setdefault(address, _AddressState([]))
-        subscription = _Subscription(callback)
-        state.subscriptions.append(subscription)
+        state = self._addresses.setdefault(address, _AddressState({}))
+        token = object()
+        state.subscriptions[token] = callback
 
         def unsubscribe() -> None:
-            if not subscription.active:
+            if state.subscriptions.pop(token, None) is None:
                 return
-            subscription.active = False
-            with suppress(ValueError):
-                state.subscriptions.remove(subscription)
             if not state.subscriptions:
                 self._addresses.pop(address, None)
 
@@ -188,18 +163,20 @@ class LocalTopicBus:
     def publish(self, *addresses: Address) -> None:
         for address in addresses:
             if isinstance(address, Topic):
-                _invalidate(address)
+                cell = _TOPIC_CELLS.get(address)
+                if cell is not None:
+                    cell.touch()
             state = self._addresses.get(address)
             if state is None:
                 continue
-            for subscription in tuple(state.subscriptions):
-                if not subscription.active:
+            for token, callback in tuple(state.subscriptions.items()):
+                if token not in state.subscriptions:
                     continue
                 try:
-                    subscription.callback(address)
+                    callback(address)
                 except Exception as error:
                     state.failed += 1
-                    self._report(address, subscription.callback, error)
+                    self._report(address, callback, error)
                 else:
                     state.delivered += 1
 
@@ -290,8 +267,7 @@ class SubscriptionReconciler:
         self._staged = wanted
 
     def commit(self) -> None:
-        staged = self._require_staged()
-        self._committed = staged
+        self._committed = self._require_staged()
         self._staged = None
         self._retire_unneeded()
 
@@ -324,8 +300,6 @@ class SubscriptionReconciler:
 
     def _retire_unneeded(self) -> None:
         wanted = set(self._committed)
-        if self._staged is not None:
-            wanted.update(self._staged)
         for address, unsubscribe in tuple(self._follows.items()):
             if address not in wanted:
                 del self._follows[address]
