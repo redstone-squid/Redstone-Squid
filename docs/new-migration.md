@@ -10,16 +10,28 @@ Steps:
 1. Update the SQLAlchemy models in `squid/<context>/models.py` (or its `models/` package), then register the module in
    `squid/persistence/model_registry.py`. A new models module that is not registered there is invisible to
    `Base.metadata`, so `alembic autogenerate` emits a *drop* for its tables rather than a create.
-2. For a PostgreSQL function or trigger, update `squid/persistence/postgres_entities.sql`.
+2. For a PostgreSQL function or trigger, edit its SQL file under `squid/persistence/postgres_entities/`.
+   Put new functions in `functions/` and triggers in `triggers/`, with exactly one definition per `.sql` file.
+   Both directories support arbitrary subfolders; triggers are currently grouped by table.
 3. Run `just db-revision "<short description>"`.
 4. Review the generated revision. Data migrations and PostgreSQL procedures require explicit `op.execute(...)` SQL.
 5. Run `just db-upgrade`, then `just db-check`.
 6. Run `just test` and `just test-integration`.
 7. Deploy the revision with `alembic upgrade head`.
 
-`alembic-utils` declaratively compares the functions and triggers listed in `postgres_entities.sql`. The three
-PostgreSQL procedures captured by the baseline are not supported by `alembic-utils`; change those with explicit SQL in
-a normal Alembic revision.
+`alembic-utils` declaratively compares the functions and triggers loaded from these files. File names and subfolders
+organize the definitions; the SQL determines each entity's identity. Definitions can span multiple lines and start
+with `--` comments. Each file goes directly to `PGFunction.from_sql()` or `PGTrigger.from_sql()` after leading line
+comments are removed. These methods do not fully validate SQL or enforce the one-definition-per-file convention,
+so review the generated migration and check it against PostgreSQL.
+
+Queue triggers record background work in the same transaction as the source change. Workers later read those queues
+to update search documents, Discord messages, and records. Other functions enforce invariants even when writes bypass
+application services.
+
+`pre_schema_audit_entities/` contains frozen definitions used by older migrations. Do not edit these when changing
+the current schema. The three PostgreSQL procedures captured by the baseline are not supported by `alembic-utils`;
+change those with explicit SQL in a normal Alembic revision.
 
 ## Adopting the existing Supabase database
 

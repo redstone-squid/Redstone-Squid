@@ -19,8 +19,9 @@ to be.
 - **The consumer reads only `build_kind`.** `process_queue` claims rows, reduces them to a set of kinds, and rebuilds
   each kind in full. It never reads `scope_key`, `build_id` or `reasons`.
 - **There is effectively one row per kind.** The `enqueue_build_search_projection` trigger in
-  `squid/persistence/postgres_entities.sql` upserts with `scope_key` set to the kind. Each change overwrites `build_id`
-  with the most recent build, so the column records nothing useful. `active_rules_revision_id` enqueues the same keys.
+  `squid/persistence/postgres_entities/functions/enqueue_build_search_projection.sql` upserts with `scope_key` set to
+  the kind. Each change overwrites `build_id` with the most recent build, so the column records nothing useful.
+  `active_rules_revision_id` enqueues the same keys.
 - **Kinds succeed and fail together.** All claimed kinds are rebuilt under one lease, and `fail_batch` releases
   every row in it. An extender failure makes doors rebuild again for no reason.
 - **The lease can expire while a rebuild is still running.** Claiming, rebuilding and acknowledging use three
