@@ -159,7 +159,14 @@ def _entity_ref(value: object) -> EntityRef:
         return EntityRef(EntityKind.ROLE, value.id)
     if isinstance(value, discord.User | discord.Member):
         return EntityRef(EntityKind.USER, value.id)
-    if isinstance(value, discord.abc.GuildChannel | discord.Thread):
+    # Channel selects return application-command objects, independently of the guild cache.
+    if isinstance(
+        value,
+        discord.abc.GuildChannel
+        | discord.Thread
+        | discord.app_commands.AppCommandChannel
+        | discord.app_commands.AppCommandThread,
+    ):
         return EntityRef(EntityKind.CONVERSATION, value.id)
     message = f"unsupported resolved entity {type(value).__name__}"
     raise TypeError(message)

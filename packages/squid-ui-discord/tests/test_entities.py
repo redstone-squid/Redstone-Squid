@@ -1,7 +1,9 @@
 """Entity picker semantics, planning, and scene contracts."""
 
 from collections.abc import Awaitable, Callable
+from typing import override
 
+import discord
 import pytest
 
 import squid_ui as sl
@@ -12,7 +14,8 @@ from squid_ui.planning import measure
 from squid_ui.planning.limits import Axis
 from squid_ui.primitives import EntitySelect
 from squid_ui.runtime import PresentationState
-from squid_ui_discord.testing import without_capabilities
+from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord.testing import commit_render, interaction_harness, without_capabilities
 
 
 async def _select(_event: sl.EntitySelectionEvent) -> None: ...
@@ -111,6 +114,71 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
     assert second.scene.components_v2.children[0].default_values == (
         sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),
     )
+
+
+@pytest.mark.parametrize("channel_type", [discord.ChannelType.text, discord.ChannelType.public_thread])
+async def test_channel_select_dispatches_resolved_channels_and_threads(channel_type: discord.ChannelType) -> None:
+    client = discord.Client(intents=discord.Intents(guilds=True))
+    selected: discord.app_commands.AppCommandChannel | discord.app_commands.AppCommandThread
+    if channel_type is discord.ChannelType.public_thread:
+        selected = discord.app_commands.AppCommandThread(
+            state=client._connection,
+            guild_id=1,
+            data={
+                "id": "123456",
+                "type": 11,
+                "name": "review-thread",
+                "permissions": "0",
+                "parent_id": "2",
+                "owner_id": "3",
+                "member_count": 1,
+                "message_count": 0,
+                "rate_limit_per_user": 0,
+                "total_message_sent": 0,
+                "thread_metadata": {
+                    "archived": False,
+                    "auto_archive_duration": 1440,
+                    "archive_timestamp": "2026-11-10T22:13:40+00:00",
+                },
+            },
+        )
+    else:
+        selected = discord.app_commands.AppCommandChannel(
+            state=client._connection,
+            guild_id=1,
+            data={
+                "id": "123456",
+                "type": 0,
+                "name": "review",
+                "permissions": "0",
+                "position": 0,
+                "nsfw": False,
+                "flags": 0,
+                "rate_limit_per_user": 0,
+                "parent_id": None,
+                "last_message_id": None,
+            },
+        )
+    seen: list[sl.EntitySelectionEvent] = []
+
+    async def pick(event: sl.EntitySelectionEvent) -> None:
+        seen.append(event)
+
+    class Picker(sl.Component[sl.ComponentsV2Target]):
+        @override
+        def render(self) -> EntitySelect:
+            return EntitySelect(sl.entity.EntityType.CONVERSATION, pick, "channel")
+
+    root = MessageRoot(Picker(), access=Everyone(), timeout=None)
+    view = commit_render(root)
+    select = next(item for item in view.walk_children() if isinstance(item, discord.ui.ChannelSelect))
+    # Discord delivers partial application-command objects even for cached guild channels.
+    select._values = [selected]
+
+    await select.callback(interaction_harness())
+
+    assert len(seen) == 1
+    assert seen[0].values == (sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 123456),)
 
 
 def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
