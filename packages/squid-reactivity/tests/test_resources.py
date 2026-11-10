@@ -14,11 +14,12 @@ from squid_reactivity import (
     Topic,
     action_scope,
     add_action_result_sink,
+    observe_reads,
     state,
     transaction,
     watch,
 )
-from squid_reactivity.resources import Pending, Ready, abandon_superseded_loads, resource
+from squid_reactivity.resources import Pending, PendingMode, Ready, Resource, abandon_superseded_loads, resource
 
 
 class Source(Reactive):
@@ -301,3 +302,24 @@ async def test_an_installed_scope_does_not_swallow_a_cancellation_from_outside()
         assert await owner.value == "ready"
 
     assert attempts == 2
+
+
+async def test_standalone_resource_notifies_readers_without_an_owner_callback() -> None:
+    source = Source()
+
+    async def load() -> str:
+        return source.key
+
+    value = Resource(source, load, name="standalone", pending_mode=PendingMode.EXPLICIT)
+    with observe_reads() as observation:
+        assert value.status == Pending()
+    seen = []
+    subscriptions = SubscriptionReconciler(None, seen.append)
+    subscriptions.stage(observation.addresses())
+    subscriptions.commit()
+
+    assert await value == "first"
+    assert seen == [value.address]
+    assert source.invalidations == 0
+    assert not observation.current()
+    subscriptions.close()

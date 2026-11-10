@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, override, runtime_checkable
 from weakref import WeakValueDictionary
 
-from squid_reactivity.addresses import CellAddress
+from squid_reactivity.addresses import CellAddress, subscribe
 from squid_reactivity.core import _Cell
 
 logger = logging.getLogger(__name__)
@@ -276,8 +276,8 @@ class SubscriptionReconciler:
             for address in wanted:
                 if address in self._follows:
                     continue
-                if isinstance(address, CellAddress) and hasattr(address.owner, "_subscribe"):
-                    self._follows[address] = address.owner._subscribe(address.name, self.callback)
+                if isinstance(address, CellAddress):
+                    self._follows[address] = subscribe(address.owner, address.name, self.callback)
                 elif bus is not None:
                     self._follows[address] = bus.subscribe(address, self.callback)
                 else:

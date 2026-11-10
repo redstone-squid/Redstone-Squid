@@ -46,7 +46,7 @@ from squid_reactivity.actions import (
     in_continuation,
     next_commit_sequence,
 )
-from squid_reactivity.addresses import CellAddress, publish, subscribe
+from squid_reactivity.addresses import CellAddress, publish
 
 _log = logging.getLogger(__name__)
 
@@ -1350,19 +1350,11 @@ class _State:
             return self._default
         return self._factory()
 
-    def address(self, instance: ReactiveOwner) -> Any:
-        """Ask the owner for this field's publication address, or return None.
-
-        Reactive supplies identity addresses for both models and components.
-        """
-        binding = getattr(instance, "_state_binding", None)
-        return None if binding is None else binding(self.public_name)
-
     def cell(self, instance: ReactiveOwner) -> _Cell:
         """Return this field's storage on `instance`, empty until something assigns it."""
         cell = instance.__dict__.get(self._name)
         if cell is None:
-            cell = instance.__dict__[self._name] = _Cell(address=self.address(instance))
+            cell = instance.__dict__[self._name] = _Cell(address=CellAddress(instance, self.public_name))
         return cell
 
     def is_set(self, instance: ReactiveOwner) -> bool:
@@ -1985,15 +1977,6 @@ class Reactive:
         # No notification of its own: the staged write carries one, delivered at the commit
         # outside an action and at `finalize_commit` inside one.
         descriptor.mutated(self)
-
-    def _state_binding(self, name: str) -> CellAddress:
-        return CellAddress(self, name)
-
-    def _resource_binding(self, name: str) -> tuple[CellAddress, Callable[[CellAddress], None]]:
-        return CellAddress(self, name), publish
-
-    def _subscribe(self, name: str, callback: Callable[[CellAddress], None]) -> Callable[[], None]:
-        return subscribe(self, name, callback)
 
     def _state_changed(self, names: frozenset[str]) -> None:
         for descriptor in type(self)._state_descriptors.values():

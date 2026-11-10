@@ -30,6 +30,7 @@ from squid_reactivity.actions import (
     current_causality,
     emit_causal_event,
 )
+from squid_reactivity.addresses import CellAddress, publish
 from squid_reactivity.completion import Completion
 from squid_reactivity.core import (
     _CONSUMER,
@@ -45,16 +46,6 @@ from squid_reactivity.core import (
     enlist,
     settling,
 )
-from squid_reactivity.topics import Address
-
-
-class ResourceOwner(ReactiveOwner, Protocol):
-    """An owner that requests a render when its resource changes.
-
-    Descriptors also require an instance dictionary to cache bound resources.
-    """
-
-    def invalidate(self) -> None: ...
 
 
 class AsyncBinding(Protocol):
@@ -68,18 +59,6 @@ class AsyncBinding(Protocol):
     def pending(self) -> bool: ...
 
     async def _load(self) -> object: ...
-
-
-class AddressedOwner(Protocol):
-    """Publish resource changes to consumers other than the resource owner.
-
-    Resources on models and components use identity addresses so every runtime
-    that read them receives updates.
-    """
-
-    def _resource_binding(self, name: str) -> tuple[Address, Callable[[Address], None]]:
-        """The address this resource publishes under, and what to publish it with."""
-        ...
 
 
 class LoadScope(Protocol):
@@ -295,21 +274,17 @@ class Resource[ValueT](AsyncBinding):
 
     def __init__(
         self,
-        owner: ResourceOwner,
+        owner: ReactiveOwner,
         loader: Callable[[], Awaitable[ValueT]],
         *,
         name: str,
         pending_mode: PendingMode,
-        address: Address | None = None,
-        publish: Callable[[Address], None] | None = None,
+        address: CellAddress | None = None,
     ) -> None:
-        self._owner = owner
         self._loader = loader
         self._label = name
         self.pending_mode = pending_mode
-        self.address = address
-        """Publication address, or None for a custom owner without address support."""
-        self._publish = publish
+        self.address = address if address is not None else CellAddress(self, "status")
         self._status: ResourceStatus[ValueT] = Pending()
         self._loading: _Load[ValueT] | None = None
         self._request_token = 0
@@ -364,10 +339,7 @@ class Resource[ValueT](AsyncBinding):
 
     def _notify(self) -> None:
         """Notify readers of a status change, including an explicit reload becoming pending."""
-        if self.address is not None and self._publish is not None:
-            self._publish(self.address)
-        else:
-            self._owner.invalidate()
+        publish(self.address)
 
     def _moved(self) -> None:
         """Advance the resource version and the epoch used by computed caches."""
@@ -637,7 +609,7 @@ class AtomicResource[ValueT](Resource[ValueT]):
         return status
 
 
-class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
+class _ResourceDescriptor[OwnerT: ReactiveOwner, ValueT]:
     _reactive_resource_descriptor = True
 
     """Bind one loader per component instance."""
@@ -670,24 +642,19 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
             return self
         bound = instance.__dict__.get(self._name)
         if bound is None:
-            # Asked once per instance, on the binding that caches: an owner that addresses
-            # its resources says so, and a component simply does not have the hook.
-            binding = getattr(instance, "_resource_binding", None)
-            address, publish = binding(self.public_name) if binding is not None else (None, None)
             bound = Resource(
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
                 pending_mode=self.pending_mode,
-                address=address,
-                publish=publish,
+                address=CellAddress(instance, self.public_name),
             )
             instance.__dict__[self._name] = bound
         _observe(bound)
         return bound
 
 
-class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescriptor[OwnerT, ValueT]):
+class _AtomicResourceDescriptor[OwnerT: ReactiveOwner, ValueT](_ResourceDescriptor[OwnerT, ValueT]):
     """Bind an atomic resource while preserving its narrowed descriptor type."""
 
     @overload
@@ -704,15 +671,12 @@ class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescript
             return self
         bound = instance.__dict__.get(self._name)
         if bound is None:
-            binding = getattr(instance, "_resource_binding", None)
-            address, publish = binding(self.public_name) if binding is not None else (None, None)
             bound = AtomicResource(
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
                 pending_mode=self.pending_mode,
-                address=address,
-                publish=publish,
+                address=CellAddress(instance, self.public_name),
             )
             instance.__dict__[self._name] = bound
         _observe(bound)
@@ -720,7 +684,7 @@ class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescript
 
 
 @overload
-def resource[OwnerT: ResourceOwner, ValueT](
+def resource[OwnerT: ReactiveOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
@@ -729,7 +693,7 @@ def resource[OwnerT: ResourceOwner, ValueT](
 
 
 @overload
-def resource[OwnerT: ResourceOwner, ValueT](
+def resource[OwnerT: ReactiveOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
@@ -738,14 +702,14 @@ def resource[OwnerT: ResourceOwner, ValueT](
 
 
 @overload
-def resource[OwnerT: ResourceOwner, ValueT](
+def resource[OwnerT: ReactiveOwner, ValueT](
     *,
     pending: Literal[PendingMode.ATOMIC],
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _AtomicResourceDescriptor[OwnerT, ValueT]]: ...
 
 
 @overload
-def resource[OwnerT: ResourceOwner, ValueT](
+def resource[OwnerT: ReactiveOwner, ValueT](
     *,
     pending: PendingMode = PendingMode.EXPLICIT,
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _ResourceDescriptor[OwnerT, ValueT]]: ...
@@ -770,7 +734,7 @@ def resource(
 
     def decorate(
         function: Callable[[Any], Awaitable[Any]],
-    ) -> _ResourceDescriptor[ResourceOwner, Any] | _AtomicResourceDescriptor[ResourceOwner, Any]:
+    ) -> _ResourceDescriptor[ReactiveOwner, Any] | _AtomicResourceDescriptor[ReactiveOwner, Any]:
         descriptor = _AtomicResourceDescriptor if pending is PendingMode.ATOMIC else _ResourceDescriptor
         return descriptor(function, pending_mode=pending)
 
