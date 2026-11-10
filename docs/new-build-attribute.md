@@ -18,5 +18,5 @@ with `copy_for_edit()`, then apply edits through the build service, which rechec
 before committing. Replace JSON and array values when editing them so SQLAlchemy tracks the change.
 
 When adding a persisted build attribute, include it in the explicit build-history snapshot serializer and test its
-before/after values. Introduce a new snapshot schema version when changing existing payload meanings; historical
-snapshots remain immutable.
+before/after values. Update the capture trigger if the attribute belongs to a new table or an explicit column allowlist.
+Introduce a new snapshot schema version when changing existing payload meanings; historical snapshots remain immutable.

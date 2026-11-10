@@ -38,11 +38,16 @@ Use `uow.build_history.list_history(build_id)` for timeline metadata and `get_hi
 for detached before/after states. These internal queries do not authorize readers and can inspect deleted builds.
 Database triggers reject updates, deletes, and truncation of either history table.
 
-Build writers supply a `BuildChange` identifying the authenticated account or named system actor. Repository writes
-capture persisted state under the build lock and append history in the same transaction. To group nested repository
-writes, enclose them in `async with uow.builds.changes(change)` and commit only after that scope exits. Its attribution
-wins over nested contexts. New direct SQL or tracked-entity write paths must join a recording operation before mutation;
-manual SQL is outside the capture guarantee. Multi-build operations must acquire their complete build set in ID order.
+Build writers open `async with uow.builds.editing(actor=account_id, source="api")` before mutations.
+Use a named string actor for system work. Optional operation and correlation keywords describe the reason for the edit.
+Repository methods and tracked entities need no history arguments. PostgreSQL captures the first state under the build
+lock and records the final state at commit, producing at most one entry per changed build per transaction.
+Direct SQL uses the same triggers and must first call `begin_build_edit(jsonb)` with attribution.
+
+Only one editing scope is allowed per transaction; nested scopes and attribution replacement fail. Scope exit flushes
+pending ORM changes and closes the scope. Commit may happen inside the scope or afterward; exceptions roll back.
+Meaningful writes outside an open scope fail, including direct SQL. Multi-build operations should acquire their complete
+build set in ID order. History and build mutations commit or roll back together.
 
 Consecutive edits reuse their shared state. If the stored history no longer matches the actual pre-edit state, the
 recorder preserves that state separately rather than attributing the discrepancy to the editor. No-op saves and changes
@@ -51,7 +56,9 @@ and publication metadata, but not binary files or recomputable schematic analyse
 preserve precision. Extend the explicit snapshot serializer when adding build fields; retain old payload formats.
 
 Pause application writers before applying the build-history migration and deploy the recording code before restarting
-them. The migration takes one baseline of each existing build; it cannot recover prior edits. Retain history indefinitely.
+them. The initial history migration takes one baseline of each existing build; it cannot recover prior edits.
+The editing-scope migration preserves existing history and requires all writers to use scopes before restarting.
+Retain history indefinitely.
 Disabling the append-only guards is an explicit maintenance operation, not an application write path.
 
 Architecture tests cover entity equality, explicit relationship loading, model dependencies, and transaction ownership.

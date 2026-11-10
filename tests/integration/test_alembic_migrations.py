@@ -2007,6 +2007,7 @@ def test_starboard_message_migration_preserves_deletions_and_content(
                 text("SELECT id, deleted_at IS NOT NULL FROM starboard_origin_messages ORDER BY id")
             ).all() == [(100, True), (101, True), (102, False)]
         command.upgrade(config, revision)
+        command.upgrade(config, "head")
         command.check(config)
     finally:
         engine.dispose()
