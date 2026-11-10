@@ -322,6 +322,8 @@ def _safe_value(value: object, markup: Markup) -> str:
     temporal = _temporal_value(value, markup)
     if temporal is not None:
         return temporal
+    if markup is Markup.PLAIN:
+        return str(value)
     return _escape_markdown(str(value)).replace("@", "@\u200b")
 
 

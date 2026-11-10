@@ -189,3 +189,18 @@ def test_message_from_template_accepts_literal_text() -> None:
     assert message.template == "Saved."
     assert message.params == {}
     assert message.resolve() == "Saved."
+
+
+@pytest.mark.parametrize(
+    ("template", "value", "expected"),
+    [
+        ("{value}", "creator abc-def *literal* @here", "creator abc-def *literal* @here"),
+        ("{value:.1f}", 2.54, "2.5"),
+        ("{value!r}", "x_y", "'x_y'"),
+    ],
+)
+def test_plain_message_interpolation_preserves_literal_values(template: str, value: object, expected: str) -> None:
+    text = resolve_text(Message(template, {"value": value}, markup=Markup.PLAIN), Localization())
+
+    assert text.content == expected
+    assert text.markup is Markup.PLAIN
