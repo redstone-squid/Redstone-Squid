@@ -9,7 +9,7 @@ from typing import override
 
 import pytest
 
-from squid_reactivity import Address, SubscriptionReconciler, UndeclaredStateError, export_state
+from squid_reactivity import Address, SubscriptionReconciler, UndeclaredStateError, addresses, export_state
 from squid_ui import Component, DiscordTarget, Reactive, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, ReactiveConflictError, transaction
@@ -134,9 +134,9 @@ def test_models_and_components_have_identity_addresses(follow: Follow, here: Mem
             return Text(str(self.value))
 
     namespace = Namespace()
-    assert type(namespace)._state_descriptors["value"].address(namespace) == CellAddress(namespace, "value")
+    assert addresses(lambda: namespace.value) == (CellAddress(namespace, "value"),)
     panel = Panel()
-    assert Panel._state_descriptors["value"].address(panel) == CellAddress(panel, "value")
+    assert addresses(lambda: panel.value) == (CellAddress(panel, "value"),)
 
 
 def test_explicit_persistence_uses_declared_fields() -> None:
