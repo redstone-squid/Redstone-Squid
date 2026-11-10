@@ -686,11 +686,6 @@ def _index_assets(assets: Sequence[Asset]) -> tuple[dict[str, Asset], dict[str, 
     return by_name, by_reference
 
 
-def _width(item: Item) -> int:
-    """A select owns a whole row; a button costs one fifth of one."""
-    return _ROWS if isinstance(item, _SELECTS) else 1
-
-
 def _pack(children: Sequence[Item]) -> list[list[int]]:
     """Lay children out the way discord.py's `_ViewWeights` does, from public attributes.
 
@@ -702,7 +697,7 @@ def _pack(children: Sequence[Item]) -> list[list[int]]:
     rows: list[list[int]] = [[] for _ in range(_ROWS)]
     ordered = sorted(enumerate(children), key=lambda pair: (_ROWS if pair[1].row is None else pair[1].row, pair[0]))
     for index, item in ordered:
-        width = _width(item)
+        width = _ROWS if isinstance(item, _SELECTS) else 1
         if item.row is not None:
             row = item.row
             if weights[row] + width > _ROWS:

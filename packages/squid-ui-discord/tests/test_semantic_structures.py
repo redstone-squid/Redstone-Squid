@@ -31,9 +31,6 @@ from squid_ui.sources import Position
 from squid_ui_discord import DISCORD_V2_DPY27, render_static
 
 
-async def _change(_event) -> None: ...
-
-
 def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None:
     small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)))
     large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)))

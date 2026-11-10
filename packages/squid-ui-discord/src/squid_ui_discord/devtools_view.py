@@ -107,7 +107,7 @@ class MessageRootInspector(sl.Component):
                         sl.choice(
                             f"{snapshot.id} — {snapshot.component.rsplit('.', 1)[-1]}",
                             key=snapshot.id,
-                            description=_option_description(snapshot),
+                            description=f"gen {snapshot.generation} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}",
                         )
                         for snapshot in snapshots[:_SELECT_LIMIT]
                     ),
@@ -906,10 +906,6 @@ def _access_text(access: squid_ui_discord.AccessPolicy) -> str:
     if isinstance(access, squid_ui_discord.access.Check):
         return "Check"
     return type(access).__name__
-
-
-def _option_description(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
-    return f"gen {snapshot.generation} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}"
 
 
 def _flags(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:

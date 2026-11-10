@@ -316,6 +316,19 @@ class DeliveryResult:
     ephemeral: bool | None = None
     delete_handle: DeleteHandle | None = None
 
+    @classmethod
+    def from_callback(
+        cls,
+        response: discord.InteractionCallbackResponse[Any],
+        handle: EditHandle,
+        *,
+        fallback: discord.Message | None = None,
+    ) -> DeliveryResult:
+        """Keep callback metadata, using the fallback when Discord returns no message."""
+        resource = response.resource
+        message = resource if isinstance(resource, discord.Message) else fallback
+        return cls(message, handle, response.message_id, response.is_ephemeral())
+
     def __post_init__(self) -> None:
         """Fill metadata available on ordinary message-returning delivery paths."""
         if self.delete_handle is None and self.handle is not None and hasattr(self.handle, "delete"):
@@ -329,18 +342,6 @@ class DeliveryResult:
             ephemeral = getattr(flags, "ephemeral", None)
             if isinstance(ephemeral, bool):
                 object.__setattr__(self, "ephemeral", ephemeral)
-
-
-def _callback_result(
-    response: discord.InteractionCallbackResponse[Any],
-    handle: EditHandle,
-    *,
-    fallback: discord.Message | None = None,
-) -> DeliveryResult:
-    """Keep the message metadata Discord returned with an interaction callback."""
-    resource = response.resource
-    message = resource if isinstance(resource, discord.Message) else fallback
-    return DeliveryResult(message, handle, response.message_id, response.is_ephemeral())
 
 
 async def respond_text(interaction: discord.Interaction[Any], content: str, *, ephemeral: bool = True) -> None:
@@ -559,7 +560,7 @@ def respond_to(
         callback_message = response.resource if isinstance(response.resource, discord.Message) else None
         message = await interaction.original_response() if wait and callback_message is None else callback_message
         handle = _OriginalResponseHandle(interaction, message, mode=mode)
-        return _callback_result(response, handle, fallback=message)
+        return DeliveryResult.from_callback(response, handle, fallback=message)
 
     return send
 

@@ -505,10 +505,6 @@ class Panel(Component[sl.ComponentsV2Target]):
         self.show_child = True
 
 
-async def _refuse_edit(*args: Any, **kwargs: Any) -> None:
-    raise sd.http_error(message="edit refused")
-
-
 class _RefusingHandle:
     """An edit handle Discord rejects for a reason that is not staleness."""
 

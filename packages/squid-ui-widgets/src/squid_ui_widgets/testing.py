@@ -18,7 +18,7 @@ from typing import overload
 
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.document import DocumentLike, as_document
+from squid_ui.document import as_document
 from squid_ui.semantic import ActionControl, AnyLayoutNode, LayoutNode, RoutedActionControl, RoutedChoices
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets.drivers import (
@@ -224,14 +224,7 @@ def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
     driver: RouteDriver[StateT, RenderTargetT, ContextT] = RouteDriver(recorder, chrome)
     result = driver.render(machine, machine.initial_state if isinstance(state, _MissingInitialState) else state)
-    return RoutedRender(_as_nodes(result), tuple(recorder.routes))
-
-
-def _as_nodes[RenderTargetT: RenderTarget, ContextT = object](
-    result: DocumentLike[RenderTargetT, ContextT],
-) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
-    """A `DocumentLike` is one node, a sequence of them, or a document; queries want a tuple."""
-    return as_document(result).children
+    return RoutedRender(as_document(result).children, tuple(recorder.routes))
 
 
 __all__ = [

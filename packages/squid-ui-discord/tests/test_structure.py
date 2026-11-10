@@ -153,10 +153,6 @@ def _ladder_document(count: int, *, priorities: list[int] | None = None) -> list
     ]
 
 
-def _steps(solved) -> int:
-    return sum(1 for note in solved.notes if note.code is SolveNoteCode.VARIANT_STEP)
-
-
 class TestVariants:
     def test_a_document_that_fits_keeps_every_first_rung(self):
         result = _planned(_ladder_document(3))

@@ -217,7 +217,11 @@ def fragment(
     fragment composition cannot repair arbitrary host content or choose which of its items
     should be lost.
     """
-    host = measure(alongside, attachments=attachments) if alongside is not None else _empty_reservation(attachments)
+    host = (
+        measure(alongside, attachments=attachments)
+        if alongside is not None
+        else measure(discord.ui.LayoutView(timeout=None), attachments=attachments)
+    )
     host.raise_if_invalid()
 
     trailing = tuple(followed_by)
@@ -281,10 +285,6 @@ def contribute(
         positions=positions,
     )
     return planned.attach(to, attachments=attachments)
-
-
-def _empty_reservation(attachments: int) -> MessageReservation:
-    return measure(discord.ui.LayoutView(timeout=None), attachments=attachments)
 
 
 def _preflight(

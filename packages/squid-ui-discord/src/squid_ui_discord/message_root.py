@@ -15,7 +15,6 @@ those views; successful replacement stops the old view and retires its dispatch 
 import asyncio
 import logging
 import secrets
-import time
 import weakref
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import asynccontextmanager, contextmanager, nullcontext
@@ -208,10 +207,6 @@ _MAX_LOAD_PASSES = 16
 Each loaded tier can reveal another, so very deep finite trees and recursive loading
 can both exceed this bound. Failed loads are not retried within the same delivery.
 """
-
-
-def _monotonic() -> float:
-    return time.monotonic()
 
 
 def _needs_load(component: Component[Any, Any]) -> bool:

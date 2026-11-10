@@ -113,11 +113,6 @@ class RoleCategory:
         object.__setattr__(self, "roles", roles)
 
 
-def _role_ids(value: Sequence[int] | frozenset[int]) -> frozenset[int]:
-    """Freeze role-id collections stored in transition outcomes."""
-    return frozenset(value)
-
-
 @dataclass(frozen=True, slots=True)
 class RolesUpdated:
     """A category changed from ``before`` to ``after``."""
@@ -127,8 +122,8 @@ class RolesUpdated:
     after: frozenset[int]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "before", _role_ids(self.before))
-        object.__setattr__(self, "after", _role_ids(self.after))
+        object.__setattr__(self, "before", frozenset(self.before))
+        object.__setattr__(self, "after", frozenset(self.after))
 
     @property
     def added(self) -> frozenset[int]:
@@ -159,7 +154,7 @@ class RolesUnchanged:
     roles: frozenset[int]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "roles", _role_ids(self.roles))
+        object.__setattr__(self, "roles", frozenset(self.roles))
 
     @property
     def before(self) -> frozenset[int]:
@@ -192,8 +187,8 @@ class RoleSelectionInvalid:
     reason: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "current", _role_ids(self.current))
-        object.__setattr__(self, "requested", _role_ids(self.requested))
+        object.__setattr__(self, "current", frozenset(self.current))
+        object.__setattr__(self, "requested", frozenset(self.requested))
 
     @property
     def candidate(self) -> frozenset[int]:
@@ -211,8 +206,8 @@ class RoleConfigurationUnavailable:
     reason: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "current", _role_ids(self.current))
-        object.__setattr__(self, "missing_role_ids", _role_ids(self.missing_role_ids))
+        object.__setattr__(self, "current", frozenset(self.current))
+        object.__setattr__(self, "missing_role_ids", frozenset(self.missing_role_ids))
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,9 +221,9 @@ class RoleMutationForbidden:
     reason: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "current", _role_ids(self.current))
-        object.__setattr__(self, "candidate", _role_ids(self.candidate))
-        object.__setattr__(self, "role_ids", _role_ids(self.role_ids))
+        object.__setattr__(self, "current", frozenset(self.current))
+        object.__setattr__(self, "candidate", frozenset(self.candidate))
+        object.__setattr__(self, "role_ids", frozenset(self.role_ids))
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,8 +236,8 @@ class RoleMutationFailed:
     reason: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "current", _role_ids(self.current))
-        object.__setattr__(self, "candidate", _role_ids(self.candidate))
+        object.__setattr__(self, "current", frozenset(self.current))
+        object.__setattr__(self, "candidate", frozenset(self.candidate))
 
 
 type RoleTransitionResult = (
@@ -310,14 +305,9 @@ class RoleLike(Protocol):
     def is_default(self) -> bool: ...
 
 
-def _role_is_default(role: RoleLike) -> bool:
-    """Whether a role is the guild's @everyone role."""
-    return role.is_default()
-
-
 def _role_is_editable(role: RoleLike, guild: Any) -> bool:
     """Apply Discord's role-management and hierarchy rules without mutating anything."""
-    if _role_is_default(role) or role.managed:
+    if role.is_default() or role.managed:
         return False
     bot = getattr(guild, "me", None)
     permissions = getattr(bot, "guild_permissions", None)
@@ -579,7 +569,7 @@ class RolePanel(Component[DiscordTarget, Any]):
         role_by_id = {role_id: guild.get_role(role_id) for role_id in configured_ids}
         missing = frozenset(role_id for role_id, role in role_by_id.items() if role is None)
         member_roles = tuple(member.roles)
-        held_ids = frozenset(int(role.id) for role in member_roles if not _role_is_default(role))
+        held_ids = frozenset(int(role.id) for role in member_roles if not role.is_default())
         current = held_ids & {role.role_id for role in category.roles}
         if missing:
             return RoleConfigurationUnavailable(
@@ -614,7 +604,7 @@ class RolePanel(Component[DiscordTarget, Any]):
         seen: set[int] = set()
         for role in member_roles:
             role_id = int(role.id)
-            if _role_is_default(role) or role_id in category_ids or role_id in seen:
+            if role.is_default() or role_id in category_ids or role_id in seen:
                 continue
             complete_roles.append(role)
             seen.add(role_id)

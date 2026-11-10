@@ -208,6 +208,11 @@ class LoroOperation:
     path: str
     data: Mapping[str, Any]
 
+    @classmethod
+    def create(cls, kind: str, path: str, **data: Any) -> LoroOperation:
+        """Create a new mutation identity and freeze its payload recursively."""
+        return cls(str(uuid.uuid7()), kind, path, _immutable_json_object(data))
+
 
 @dataclass(frozen=True, slots=True)
 class LoroDocumentToken:
@@ -240,20 +245,12 @@ class LoroDocumentInverse:
     safe_containers: tuple[tuple[str, str], ...]
 
 
-def _operation(kind: str, path: str, **data: Any) -> LoroOperation:
-    return LoroOperation(str(uuid.uuid7()), kind, path, _immutable_json_object(data))
-
-
 def _json_value(value: object) -> Any:
     if isinstance(value, Mapping):
         return {str(key): _json_value(item) for key, item in value.items()}
     if isinstance(value, tuple | list):
         return [_json_value(item) for item in value]
     return value
-
-
-def _json_object(value: Mapping[str, object]) -> dict[str, Any]:
-    return {key: _json_value(item) for key, item in value.items()}
 
 
 def _immutable_json(value: object) -> Any:
@@ -888,7 +885,7 @@ class LoroDocumentBranch:
                 raise ReplicationBackendIntegrityError(message) from error
             raise
         for kind, path in inverse.safe_containers:
-            self._operations.append(_operation(f"{kind}_diff", path))
+            self._operations.append(LoroOperation.create(f"{kind}_diff", path))
         for operation in inverse.operations:
             self.apply(operation)
 
@@ -1107,13 +1104,13 @@ class LoroEngine:
             data["tags"] = [str(tag) for tag in tags]
         if undoes is not None:
             data["undoes"] = str(undoes)
-        return _operation(kind, path, **data)
+        return LoroOperation.create(kind, path, **data)
 
     def make_operation(self, kind: str, path: str, **data: Any) -> LoroOperation:
         if not isinstance(path, str) or len(path.encode()) > _MAX_PATH_BYTES:
             message = "replicated paths must be strings no longer than 512 encoded bytes"
             raise ValueError(message)
-        return _operation(kind, path, **data)
+        return LoroOperation.create(kind, path, **data)
 
     def visible_tags(
         self,
@@ -1236,7 +1233,7 @@ class LoroEngine:
             "before": base64.b64encode(token.before).decode(),
             "operations": [
                 {
-                    "data": _json_object(operation.data),
+                    "data": {key: _json_value(item) for key, item in operation.data.items()},
                     "id": operation.identity,
                     "kind": operation.kind,
                     "path": operation.path,
@@ -1340,12 +1337,14 @@ class LoroEngine:
                 amount = data.get("value")
                 if isinstance(amount, bool) or not isinstance(amount, int):
                     return ConflictDetail(f"replicated:{operation.path}", 0, 0)
-                inverse.append(_operation("increment", operation.path, value=-amount))
+                inverse.append(LoroOperation.create("increment", operation.path, value=-amount))
             elif operation.kind == "add":
-                inverse.append(_operation("remove", operation.path, value=data["value"], tags=[operation.identity]))
+                inverse.append(
+                    LoroOperation.create("remove", operation.path, value=data["value"], tags=[operation.identity])
+                )
             elif operation.kind == "remove":
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "restore",
                         operation.path,
                         value=data["value"],
@@ -1354,21 +1353,23 @@ class LoroEngine:
                     )
                 )
             elif operation.kind == "restore":
-                inverse.append(_operation("remove", operation.path, value=data["value"], tags=list(data["tags"])))
+                inverse.append(
+                    LoroOperation.create("remove", operation.path, value=data["value"], tags=list(data["tags"]))
+                )
             elif operation.kind.startswith("text_"):
                 safe.add(("text", operation.path))
             elif operation.kind == "list_insert":
                 conflict = self._authority_conflict("list", operation, [data["item_id"]], present=True)
                 if conflict is not None:
                     return conflict
-                inverse.append(_operation("list_delete_ids", operation.path, item_ids=[data["item_id"]]))
+                inverse.append(LoroOperation.create("list_delete_ids", operation.path, item_ids=[data["item_id"]]))
             elif operation.kind in {"list_delete", "list_delete_ids"}:
                 item_ids = [item[0] for item in data["items"]]
                 conflict = self._authority_conflict("list", operation, item_ids, present=False)
                 if conflict is not None:
                     return conflict
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "list_restore",
                         operation.path,
                         items=data["items"],
@@ -1380,13 +1381,13 @@ class LoroEngine:
                 conflict = self._authority_conflict("list", operation, data["item_ids"], present=True)
                 if conflict is not None:
                     return conflict
-                inverse.append(_operation("list_delete_ids", operation.path, item_ids=data["item_ids"]))
+                inverse.append(LoroOperation.create("list_delete_ids", operation.path, item_ids=data["item_ids"]))
             elif operation.kind in {"list_replace", "list_replace_by_id"}:
                 conflict = self._authority_conflict("list", operation, [data["item_id"]], present=True)
                 if conflict is not None:
                     return conflict
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "list_replace_by_id",
                         operation.path,
                         item_id=data["item_id"],
@@ -1397,13 +1398,13 @@ class LoroEngine:
                 conflict = self._authority_conflict("movable", operation, [data["item_id"]], present=True)
                 if conflict is not None:
                     return conflict
-                inverse.append(_operation("movable_delete_ids", operation.path, item_ids=[data["item_id"]]))
+                inverse.append(LoroOperation.create("movable_delete_ids", operation.path, item_ids=[data["item_id"]]))
             elif operation.kind in {"movable_delete", "movable_delete_ids"}:
                 conflict = self._authority_conflict("movable", operation, data["item_ids"], present=False)
                 if conflict is not None:
                     return conflict
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "movable_restore",
                         operation.path,
                         items=data["items"],
@@ -1415,7 +1416,7 @@ class LoroEngine:
                 conflict = self._authority_conflict("movable", operation, data["item_ids"], present=True)
                 if conflict is not None:
                     return conflict
-                inverse.append(_operation("movable_delete_ids", operation.path, item_ids=data["item_ids"]))
+                inverse.append(LoroOperation.create("movable_delete_ids", operation.path, item_ids=data["item_ids"]))
             elif operation.kind in {"movable_move", "movable_move_between"}:
                 conflict = self._authority_conflict(
                     "movable",
@@ -1427,7 +1428,7 @@ class LoroEngine:
                 if conflict is not None:
                     return conflict
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "movable_move_between",
                         operation.path,
                         item_id=data["item_id"],
@@ -1440,7 +1441,7 @@ class LoroEngine:
                 if conflict is not None:
                     return conflict
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "movable_replace_by_id",
                         operation.path,
                         item_id=data["item_id"],
@@ -1458,7 +1459,7 @@ class LoroEngine:
                         _lineage(actual),
                     )
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "map_restore",
                         operation.path,
                         key=data["key"],
@@ -1470,13 +1471,13 @@ class LoroEngine:
                 conflict = self._tree_authority_conflict(operation, present=True)
                 if conflict is not None:
                     return conflict
-                inverse.append(_operation("tree_delete", operation.path, node_id=data["node_id"]))
+                inverse.append(LoroOperation.create("tree_delete", operation.path, node_id=data["node_id"]))
             elif operation.kind in {"tree_move", "tree_move_between"}:
                 conflict = self._tree_authority_conflict(operation, present=True)
                 if conflict is not None:
                     return conflict
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "tree_move_between",
                         operation.path,
                         node_id=data["node_id"],
@@ -1500,7 +1501,7 @@ class LoroEngine:
                         _lineage(actual),
                     )
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "tree_metadata_restore",
                         operation.path,
                         node_id=data["node_id"],
@@ -1514,7 +1515,7 @@ class LoroEngine:
                 if conflict is not None:
                     return conflict
                 inverse.append(
-                    _operation(
+                    LoroOperation.create(
                         "tree_restore",
                         operation.path,
                         node_id=data["node_id"],
@@ -1525,7 +1526,7 @@ class LoroEngine:
                 conflict = self._tree_authority_conflict(operation, present=True)
                 if conflict is not None:
                     return conflict
-                inverse.append(_operation("tree_delete", operation.path, node_id=data["node_id"]))
+                inverse.append(LoroOperation.create("tree_delete", operation.path, node_id=data["node_id"]))
             else:
                 return ConflictDetail(f"replicated:{operation.path}", 0, 0)
         try:

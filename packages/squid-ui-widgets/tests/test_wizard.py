@@ -101,16 +101,6 @@ def _labels(rendered) -> list[object]:
     ]
 
 
-def _unused(node):
-    yield node
-    for child in getattr(node, "children", ()) or ():
-        yield from engine.walk(child)
-    for item in getattr(node, "items", ()) or ():
-        yield from engine.walk(item)
-    for entry in getattr(node, "fields", ()) or ():
-        yield from engine.walk(entry)
-
-
 def test_a_final_submit_lands_on_review_instead_of_completing() -> None:
     wizard = WizardMachine("Build", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")

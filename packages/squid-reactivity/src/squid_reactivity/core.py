@@ -607,18 +607,6 @@ def apply_local_overwrite_patches(patches: Sequence[ConditionalCellPatch]) -> No
         _write(owner, patch.target.name, cell, patch.value.raw())
 
 
-def _cell_for(owner: ReactiveOwner, name: str) -> _Cell:
-    """Return the cell behind one state slot, empty until something assigns it.
-
-    The cell outlives every value it holds, so a reader that recorded it keeps seeing this
-    field even across a restore that puts the field back to unassigned.
-    """
-    cell = owner.__dict__.get(name)
-    if cell is None:
-        cell = owner.__dict__[name] = _Cell()
-    return cell
-
-
 def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     """Stage a write into the action in flight, or land it now if there is none.
 
