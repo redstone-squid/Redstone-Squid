@@ -7,7 +7,7 @@ recent report IDs and offer refresh without replacing the report being read.
 import dataclasses
 import io
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Protocol, override
+from typing import Protocol, cast, override
 
 import discord
 
@@ -142,8 +142,8 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
         )
 
 
-class ErrorReportScreen(sd.Screen):
-    """An error browser that ends when cleared, replaced, or timed out."""
+class ErrorReportScreen(sd.Screen[int]):
+    """Browse reports and complete with the number removed when clearing them."""
 
     policy = sd.ResponseSpec(
         timeout=SESSION_SECONDS,
@@ -326,7 +326,7 @@ class ErrorReportScreen(sd.Screen):
             return
         self.cleared_count = await self._operations.clear_all()
         self.confirming_clear = False
-        event.source.finish_on_success()
+        self.complete(cast(sd.ActionEvent, event.source), self.cleared_count)
 
     async def _cancel_clear(self, _event: sp.TransitionEvent[sp.DecisionState]) -> None:
         self.confirming_clear = False

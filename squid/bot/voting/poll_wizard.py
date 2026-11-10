@@ -297,8 +297,8 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, s
     return sl.section(sl.heading(draft.question), sl.paragraph(options), sl.fields(*fields))
 
 
-class PollScreen(sd.Screen):
-    """A poll wizard that ends when published, cancelled, replaced, or timed out."""
+class PollScreen(sd.Screen[str]):
+    """Compose a poll and complete with its published message URL."""
 
     policy = sd.ResponseSpec(
         timeout=900,
@@ -363,8 +363,9 @@ class PollScreen(sd.Screen):
             self.driver.machine_state = replace(event.state, complete=False)
             await event.source.notice(error.message)
             return
-        event.source.finish_on_success()
+        # Widget transitions erase the context type; this driver belongs to a Discord screen.
+        self.complete(cast(sd.ActionEvent, event.source), self.published_url)
 
-    async def _cancel(self, event: sl.PressEvent) -> None:
+    async def _cancel(self, event: sd.PressEvent) -> None:
         self.cancelled = True
-        event.finish_on_success()
+        self.cancel(event)

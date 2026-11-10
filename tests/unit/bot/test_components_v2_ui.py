@@ -27,7 +27,6 @@ from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, Sea
 from squid.sponsors import PublicSponsor
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition
-from squid_ui.testing import RecordingResponder, press_event
 from squid_ui.text import source_text
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import (
@@ -244,10 +243,33 @@ async def test_build_editor_commits_against_the_revision_it_presented(
         refresh_posts=AsyncCallRecorder(),
     )
 
-    await component._apply(press_event(responder=RecordingResponder()))
+    async with sd.testing.stage(component, owner=object()) as ui:
+        await ui.press("review")
+        await ui.press("apply")
+        assert await component.wait() == sd.Completed(display_build.id)
+        assert ui.root.finished
 
     assert builds.expected_revision == display_build.revision
     assert component.saved is True
+
+
+async def test_closing_build_editor_cancels_without_saving(display_build: Build) -> None:
+    builds = EditRecorder(display_build)
+    component = BuildEditScreen(
+        display_build,
+        builds,
+        authorize=AsyncCallRecorder(result=True),
+        render_build=AsyncCallRecorder(result=sl.status("card")),
+        refresh_posts=AsyncCallRecorder(),
+    )
+
+    async with sd.testing.stage(component, owner=object()) as ui:
+        await ui.press("close")
+        assert await component.wait() == sd.Cancelled(sd.ScreenCancelReason.USER)
+        assert ui.root.finished
+
+    assert builds.expected_revision is None
+    assert not component.saved
 
 
 async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
@@ -266,13 +288,16 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
         refresh_posts=AsyncCallRecorder(),
     )
 
-    await component._apply(press_event(responder=RecordingResponder()))
-    await component.projection.reload()
+    async with sd.testing.stage(component, owner=object()) as ui:
+        await ui.press("review")
+        await ui.press("apply")
 
-    assert component.saved is False
-    assert component.validation_error is not None
-    assert "changed while you were editing" in source_text(component.validation_error)
-    assert "Reload latest" in str(component.render())
+        assert component.saved is False
+        assert component.validation_error is not None
+        assert "changed while you were editing" in source_text(component.validation_error)
+        assert "Reload latest" in str(component.render())
+        assert component.outcome is None
+        assert not ui.root.finished
 
 
 @pytest.mark.asyncio

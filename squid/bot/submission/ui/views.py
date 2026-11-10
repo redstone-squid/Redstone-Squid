@@ -431,12 +431,13 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
     )
 
 
-class BuildEditScreen(sd.Screen):
+class BuildEditScreen(sd.Screen[int]):
     """Stage local field changes, review them, and save one combined build patch.
 
     The build preview follows topic updates, while staged fields remain local.
     Reloading or opening a fresh editor discards those fields. Saving checks current
-    authority and supplies the displayed build revision to the edit service.
+    authority and supplies the displayed build revision to the edit service. Completion
+    returns the saved build ID; closing without saving cancels the screen.
     """
 
     policy = sd.ResponseSpec(
@@ -557,7 +558,7 @@ class BuildEditScreen(sd.Screen):
                     {validation_error}
                 """)
         )
-        controls: list[sl.semantic.ActionControl] = [
+        controls: list[sl.semantic.ActionControl[sd.Request]] = [
             sl.action_control(
                 tr(t"bot-submission-ui-views-edit-this-section = Edit this section"), self._open, key="open"
             ),
@@ -703,7 +704,7 @@ class BuildEditScreen(sd.Screen):
     async def _unconfirm(self, event: sl.PressEvent) -> None:
         self.confirming = False
 
-    async def _apply(self, event: sl.PressEvent) -> None:
+    async def _apply(self, event: sd.PressEvent) -> None:
         if not await self._may_event(event):
             return
         changed = [item for item in self.items if item.modified]
@@ -742,12 +743,13 @@ class BuildEditScreen(sd.Screen):
         self.saved = True
         self.confirming = False
         self._replace(build, await self._render_build(build))
-        event.finish_on_success()
         if edited_build_id is not None:
             await self._refresh_posts(edited_build_id)
+        assert build.id is not None
+        self.complete(event, build.id)
 
-    async def _close(self, event: sl.PressEvent) -> None:
-        event.finish_on_success()
+    async def _close(self, event: sd.PressEvent) -> None:
+        self.cancel(event)
 
     async def _reload(self, event: sl.PressEvent) -> None:
         await self.projection.reload()

@@ -77,10 +77,14 @@ async def test_scheduler_backed_wizard_renews_its_private_session() -> None:
 
 async def test_wizard_finishes_publication_once() -> None:
     screen = make_screen()
-    harness = await complete_wizard(screen)
+    await complete_wizard(screen)
 
-    await harness.press("poll.finish")
-    await harness.press("poll.finish")
+    async with sd.testing.stage(screen, owner=object()) as ui:
+        key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("poll.finish"))
+        await ui.press(key)
+        assert await screen.wait() == sd.Completed("https://discord.invalid/channels/1/2/3")
+        assert ui.root.finished
+        await ui.root.dispatch(key, interaction_harness(user_id=1))
 
     cast(AsyncCallRecorder, screen._resolve_options).assert_awaited_once_with(("One", "Two"))
     cast(AsyncCallRecorder, screen._publish).assert_awaited_once_with(
@@ -100,11 +104,19 @@ async def test_invalid_options_return_the_wizard_to_review() -> None:
     screen = make_screen(failure=InvalidVoteConfigurationError("bad options"))
     harness = await complete_wizard(screen)
 
-    await harness.press("poll.finish")
+    async with sd.testing.stage(screen, owner=object()) as ui:
+        key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("poll.finish"))
+        await ui.press(key)
 
-    assert harness.state.current == sp.REVIEW_STEP
-    assert harness.state.complete is False
-    cast(AsyncCallRecorder, screen._publish).assert_not_awaited()
+        assert harness.state.current == sp.REVIEW_STEP
+        assert harness.state.complete is False
+        assert screen.outcome is None
+        assert not ui.root.finished
+        cast(AsyncCallRecorder, screen._publish).assert_not_awaited()
+
+        cast(AsyncCallRecorder, screen._resolve_options).error = None
+        await ui.press(key)
+        assert await screen.wait() == sd.Completed("https://discord.invalid/channels/1/2/3")
 
 
 def test_settings_step_uses_typed_portable_fields() -> None:
@@ -121,9 +133,11 @@ def test_settings_step_uses_typed_portable_fields() -> None:
 
 
 async def test_cancelling_finishes_with_a_terminal_screen() -> None:
-    screen, message_root, _opening = await open_screen(make_screen())
+    screen = make_screen()
+    async with sd.testing.stage(screen, owner=object()) as ui:
+        await ui.press("cancel")
 
-    await message_root.dispatch("cancel", interaction_harness(user_id=OWNER_ID))
-
-    assert screen.cancelled is True
-    assert labels(screen.render()) == []
+        assert screen.cancelled is True
+        assert labels(screen.render()) == []
+        assert await screen.wait() == sd.Cancelled(sd.ScreenCancelReason.USER)
+        assert ui.root.finished

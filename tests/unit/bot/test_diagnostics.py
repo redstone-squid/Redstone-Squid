@@ -10,6 +10,7 @@ import discord
 import pytest
 from whenever import Instant
 
+import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.diagnostics_view import ERROR_CHROME, ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
@@ -312,13 +313,17 @@ async def test_filtering_reloads_from_the_service() -> None:
 
 async def test_clear_finishes_once_with_a_terminal_count() -> None:
     screen = make_screen((make_report(),), can_clear=True)
-    await screen.on_load()
-    responder = RecordingResponder()
-
-    await screen._clear(decision_event(responder))
+    async with sd.testing.stage(screen, owner=object()) as ui:
+        await ui.press("clear")
+        key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("clear-errors.confirm"))
+        await ui.press(key)
+        assert await screen.wait() == sd.Completed(3)
+        assert ui.root.finished
+        await ui.root.dispatch(key, interaction_harness(user_id=1))
 
     assert screen.cleared_count == 3
-    assert responder.finished is True
+    assert isinstance(screen._operations, ErrorReportRecorder)
+    assert screen._operations.clear_calls == 1
 
 
 async def test_clear_rechecks_permission_before_deleting() -> None:
