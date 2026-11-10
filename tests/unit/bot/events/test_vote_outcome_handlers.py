@@ -75,7 +75,14 @@ async def test_a_decided_build_vote_applies_its_outcome(result: VoteSessionResul
 
     await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
-    getattr(bot.services.builds, expected).assert_awaited_once_with(42)
+    getattr(bot.services.builds, expected).assert_awaited_once_with(
+        42,
+        actor="vote_worker",
+        operation="moderation",
+        source="vote_outcome",
+        correlation_kind="domain_event",
+        correlation_id="1",
+    )
 
 
 @pytest.mark.parametrize("result", [VoteSessionResult.CANCELLED, VoteSessionResult.PENDING])

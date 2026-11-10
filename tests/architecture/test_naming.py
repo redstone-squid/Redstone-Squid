@@ -232,6 +232,9 @@ SAME_CONCEPT_TWO_LAYERS = {
     "Code",
     "Heading",
     "Section",
+    # Widget components wrap the same-named state machines in the machines namespace.
+    "Tabs",
+    "Wizard",
     # Parallel settled-state vocabularies for the two async primitives.
     "Failed",
     "Pending",

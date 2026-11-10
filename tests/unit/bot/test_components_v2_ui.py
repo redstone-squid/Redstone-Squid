@@ -191,7 +191,7 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())
     assert "Reload fresh editor" in str(component.render())
-    assert "discards every staged change" in str(component.render())
+    assert "discards every staged context" in str(component.render())
     assert component._current()[0] is display_build
 
 
