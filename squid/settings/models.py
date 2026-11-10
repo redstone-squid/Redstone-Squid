@@ -1,12 +1,9 @@
 """SQLAlchemy server settings models."""
 
-from datetime import datetime
-
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
-    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -17,8 +14,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.types import InstantUTC
 
 
 class ServerSetting(Base):
@@ -86,8 +85,6 @@ class RuntimeSettingChange(Base):
         index=True,
     )
     """Internal account that made the edit; retained as null if that account is deleted."""
-    changed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, init=False
-    )
+    changed_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), nullable=False, init=False)
     before: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     after: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
