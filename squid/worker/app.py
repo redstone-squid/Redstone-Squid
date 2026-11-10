@@ -150,6 +150,13 @@ class DatabaseWorker:
         maintenance_interval = self._config.maintenance_interval_seconds
         jobs = [
             job("core-domain-events", event_interval, self._process_events),
+            job(
+                "submission-schematics",
+                5,
+                self._services.process_submission_schematics,
+                # Analysis waits on the independently supervised native job runner.
+                critical=False,
+            ),
             job("schematic-jobs", self._config.schematic_job_interval_seconds, self._process_schematic_jobs),
             job(
                 "schematic-renders",

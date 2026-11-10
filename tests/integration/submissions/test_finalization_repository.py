@@ -54,6 +54,7 @@ from squid.submissions.models.finalization import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
+from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 
@@ -66,6 +67,8 @@ _TABLES = model_tables(
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
+    DraftSchematicSource,
+    DraftSchematicLink,
     MediaUploadRecord,
     MediaNormalizationJobRecord,
     MediaDraftReference,

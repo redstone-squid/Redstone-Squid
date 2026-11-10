@@ -153,6 +153,7 @@ def worker_services(**overrides: object) -> WorkerServices:
         "purge_idempotency": _unconfigured_job,
         "expire_submission_drafts": _unconfigured_job,
         "cleanup_submission_schematics": _unconfigured_job,
+        "process_submission_schematics": _unconfigured_job,
         "cleanup_submission_inference": _unconfigured_job,
     }
     return _build(WorkerServices, defaults, overrides)

@@ -182,6 +182,7 @@ class WorkerServices:
     record_queue_health: Callable[[], Awaitable[None]]
     purge_idempotency: Callable[[], Awaitable[int]]
     expire_submission_drafts: Callable[[], Awaitable[int]]
+    process_submission_schematics: Callable[[], Awaitable[None]]
     cleanup_submission_schematics: Callable[[], Awaitable[None]]
     cleanup_submission_inference: Callable[[], Awaitable[None]]
 

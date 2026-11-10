@@ -95,3 +95,17 @@ async def test_preview_cleanup_is_registered_with_worker_maintenance() -> None:
 
     assert cleanup.interval_seconds == 300
     assert previews.calls == 1
+
+
+async def test_draft_schematic_processing_runs_independently_of_native_jobs() -> None:
+    calls: list[str] = []
+
+    async def process() -> None:
+        calls.append("processed")
+
+    worker = make_worker(replace(worker_services(), process_submission_schematics=process))
+    processing = next(spec for spec in worker.job_specs if spec.name == "submission-schematics")
+    assert not processing.critical
+    assert "schematic-jobs" in {spec.name for spec in worker.job_specs}
+    await processing.run()
+    assert calls == ["processed"]

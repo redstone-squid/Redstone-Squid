@@ -13,6 +13,10 @@ from squid.media.domain.jobs import MediaJobStatus
 from squid.media.infrastructure.references import media_for_draft
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
+from squid.schematics.application import SchematicPublication
+from squid.schematics.domain.models import SchematicLicense, SchematicVisibility
+from squid.schematics.infrastructure.repository import PostgresSchematicRepository
+from squid.schematics.infrastructure.wire import decode_analysis
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
     MAX_FINALIZATION_JOB_CLAIM,
@@ -31,6 +35,7 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
 )
+from squid.submissions.domain.schematics import DraftSchematicState
 from squid.submissions.errors import DraftAccessDeniedError, DraftArtifactsChangedError, DraftNotFoundError
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.submissions.infrastructure.issues import decode_issues, encode_issues
@@ -42,6 +47,7 @@ from squid.submissions.models.finalization import (
     SubmissionFinalizationResult,
     SubmissionReceiptMedia,
 )
+from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 from squid.submissions.payload_integrity import submission_payload_digest
 
 _CLAIM_MINUTES = 5
@@ -108,6 +114,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         draft_model = await _locked_draft(session, draft.snapshot.id)
         _require_expected_draft(draft_model, draft)
         await _require_current_media(session, draft.snapshot.id, payload.artifacts.normalized_media_upload_ids)
+        await _current_schematics(session, draft.snapshot.id, payload.artifacts.schematic_id)
         job = await _locked_job(session, draft.snapshot.id)
         status = draft_model.status
         if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
@@ -382,6 +389,31 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
     async def require_current_media(self, draft_id: UUID, upload_ids: tuple[UUID, ...]) -> None:
         await _require_current_media(self._session(), draft_id, upload_ids)
 
+    async def attach_schematics(self, job: ClaimedFinalizationJob, build_id: int, *, now: Instant) -> None:
+        """Attach original files and queue the primary preview within the build transaction."""
+        rows = await _current_schematics(self._session(), job.draft_id, job.payload.artifacts.schematic_id)
+        policy = job.payload.schematic_policy
+        publication = SchematicPublication(
+            visibility=SchematicVisibility(policy.visibility.value),
+            license=SchematicLicense(policy.license.value) if policy.license is not None else None,
+            rights_attested_at=now if policy.rights_attested else None,
+            rights_attested_by_account_id=job.payload.owner_account_id if policy.rights_attested else None,
+            published_at=now if policy.rights_attested else None,
+        )
+        repository = PostgresSchematicRepository(self._session)
+        # Process the primary last: duplicate source files share a build attachment row.
+        for source, _link in sorted(rows, key=lambda row: row[1].is_primary):
+            assert source.sha256 is not None and source.analysis is not None
+            await repository.record_analysis(
+                build_id,
+                source.sha256,
+                decode_analysis(source.analysis),
+                primary=source.id == job.payload.artifacts.schematic_id,
+                original_filename=source.filename,
+                uploaded_by_account_id=source.uploaded_by_account_id,
+                publication=publication,
+            )
+
     async def complete(self, job: ClaimedFinalizationJob, result: FinalizedBuild, *, now: Instant) -> bool:
         """Record the result and retain its media, or return False if the claim was replaced."""
         session = self._session()
@@ -568,3 +600,25 @@ async def _complete(
     draft.status = DraftStatus.SUBMITTED
     draft.updated_at = now
     return True
+
+
+async def _current_schematics(
+    session: AsyncSession, draft_id: UUID, expected_primary: UUID | None
+) -> list[tuple[DraftSchematicSource, DraftSchematicLink]]:
+    """Recheck all retained sources while the caller holds the draft lifecycle lock."""
+    result = await session.execute(
+        select(DraftSchematicSource, DraftSchematicLink)
+        .join(DraftSchematicLink, DraftSchematicLink.source_id == DraftSchematicSource.id)
+        .where(DraftSchematicLink.draft_id == draft_id, DraftSchematicLink.discarded.is_(False))
+        .order_by(DraftSchematicSource.id)
+        .with_for_update(of=DraftSchematicSource)
+    )
+    rows = [(source, link) for source, link in result]
+    primary = [source.id for source, link in rows if link.is_primary]
+    if (
+        any(source.state is not DraftSchematicState.READY or source.analysis is None for source, _ in rows)
+        or primary != ([expected_primary] if expected_primary is not None else [])
+        or bool(rows) != (expected_primary is not None)
+    ):
+        raise DraftArtifactsChangedError
+    return rows

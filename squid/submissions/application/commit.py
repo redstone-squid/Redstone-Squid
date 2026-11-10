@@ -117,6 +117,7 @@ class BuildSubmissionExecutor:
                     candidate,
                 )
             assert candidate.id is not None
+            await uow.finalization_jobs.attach_schematics(job, candidate.id, now=now)
             result = FinalizedBuild(candidate.id)
             if not await uow.finalization_jobs.complete(job, result, now=now):
                 message = "Submission authority changed inside its locked transaction."
@@ -139,6 +140,8 @@ class BuildSubmissionExecutor:
 
 
 class SubmissionCommitRepository(Protocol):
+    async def attach_schematics(self, job: ClaimedFinalizationJob, build_id: int, *, now: Instant) -> None: ...
+
     async def lock_claim(self, job: ClaimedFinalizationJob) -> StoredDraft | None: ...
     async def require_current_media(self, draft_id: UUID, upload_ids: tuple[UUID, ...]) -> None: ...
     async def complete(self, job: ClaimedFinalizationJob, result: FinalizedBuild, *, now: Instant) -> bool: ...

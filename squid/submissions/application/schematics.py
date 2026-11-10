@@ -1,20 +1,22 @@
-"""Retain schematic uploads privately while sanitization is unavailable.
+"""Retain original uploads and validate them before submission finalization.
 
-An upload stores the original bytes and links them to a submission draft. A
-source can be shared by several drafts, each with its own primary selection
-and discard state. Stored sources remain waiting for sanitization rather than
-becoming ready artifacts; see Schem-at/Nucleation#39 in the repository adapter.
+Sources survive process restarts and can be shared by several drafts. The worker
+analyzes pending sources without modifying their contents; finalization uses the
+persisted analysis and the original content-addressed file.
 """
 
 import hashlib
+import logging
 from typing import Protocol
 from uuid import UUID, uuid4
 
 import anyio
 
 from squid.artifacts import ArtifactStore
-from squid.core.errors import InvalidStateError, NotFoundError, ValidationError
+from squid.core.errors import DataIntegrityError, InvalidStateError, NotFoundError, ValidationError
+from squid.schematics.application import IngestedSchematic, IngestRequest
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError, SchematicWorkerCrashedError
 from squid.submissions.application.artifact_readiness import DraftSchematicSnapshot
 from squid.submissions.application.drafts import (
     DraftActor,
@@ -26,11 +28,23 @@ from squid.submissions.application.drafts import (
 from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
 from squid.unit_of_work import UnitOfWorkFactory
 
+logger = logging.getLogger(__name__)
+
+
+class DraftSchematicIngestor(Protocol):
+    async def ingest(self, request: IngestRequest) -> IngestedSchematic: ...
+
 
 class DraftSchematicRepository(Protocol):
     """Persist source identity and draft references before accepting storage side effects."""
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot: ...
+
+    async def pending(self, *, limit: int) -> tuple[DraftSchematic, ...]: ...
+
+    async def finish_analysis(
+        self, source: DraftSchematic, result: IngestedSchematic | None, *, error: str | None = None, retry: bool = False
+    ) -> None: ...
 
     async def register(self, draft: StoredDraft, source: DraftSchematic, actor_id: int) -> DraftSchematic: ...
 
@@ -59,10 +73,12 @@ class DraftSchematicService:
         *,
         uow_factory: UnitOfWorkFactory[DraftSchematicUnitOfWork],
         max_bytes: int = SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
+        ingestor: DraftSchematicIngestor | None = None,
     ) -> None:
         if not 0 < max_bytes <= SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
             message = "Schematic upload limit exceeds the supported range."
             raise InvalidStateError(message)
+        self._ingestor = ingestor
         self._drafts = drafts
         self._uow_factory = uow_factory
         self._artifacts = artifacts
@@ -121,7 +137,7 @@ class DraftSchematicService:
             draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
             retained = await uow.draft_schematics.register(draft, source, draft_actor_id(actor))
             await uow.commit()
-        if retained.state is not DraftSchematicState.PENDING:
+        if retained.state not in {DraftSchematicState.PENDING, DraftSchematicState.READY, DraftSchematicState.REJECTED}:
             try:
                 # The cleanup grace period is longer than this bounded storage operation.
                 with anyio.fail_after(60):
@@ -159,6 +175,45 @@ class DraftSchematicService:
             destination = await self._drafts.get_accessible_in(uow, destination_id, actor)
             await uow.draft_schematics.attach(source, destination, upload_id)
             await uow.commit()
+
+    async def process_pending(self, *, limit: int = 4) -> None:
+        """Analyze retained uploads outside transactions, including uploads from older releases.
+
+        Pending rows are durable work. A cancelled worker leaves them pending; duplicate
+        analysis by multiple workers is harmless because source identity is immutable and
+        completion only updates pending rows. Invalid files become actionable rejections.
+        Infrastructure failures remain pending and do not prevent later files progressing.
+        """
+        if self._ingestor is None:
+            return
+        async with self._uow_factory() as uow:
+            sources = await uow.draft_schematics.pending(limit=limit)
+        for source in sources:
+            result = None
+            error = None
+            retry = False
+            try:
+                data = await self._source_bytes(source)
+                result = await self._ingestor.ingest(IngestRequest(data, source.filename))
+            except (InvalidSchematicError, SchematicTooLargeError, SchematicWorkerCrashedError) as exc:
+                error = str(exc)
+                logger.warning("Rejected draft schematic %s: %s", source.id, error)
+            except Exception as exc:
+                logger.exception("Could not process draft schematic %s; will retry", source.id)
+                error = str(exc)
+                retry = True
+            async with self._uow_factory() as uow:
+                await uow.draft_schematics.finish_analysis(source, result, error=error, retry=retry)
+                await uow.commit()
+            if result is not None:
+                logger.info("Processed draft schematic %s", source.id)
+
+    async def _source_bytes(self, source: DraftSchematic) -> bytes:
+        data = await self._artifacts.get(source.object_key, max_bytes=self.max_bytes)
+        if data is None or len(data) != source.byte_size or hashlib.sha256(data).hexdigest() != source.sha256:
+            message = "Stored schematic source is missing or corrupt."
+            raise DataIntegrityError(message)
+        return data
 
     async def cleanup(self, *, limit: int = 20) -> None:
         """Delete unreferenced quarantine objects, retaining failed deletions for the next pass."""

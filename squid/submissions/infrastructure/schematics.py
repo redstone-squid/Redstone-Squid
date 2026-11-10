@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.selectable import Exists
 from whenever import Instant
 
-from squid.core.errors import ConflictError, NotFoundError, ValidationError
+from squid.core.errors import ConflictError, DataIntegrityError, NotFoundError, ValidationError
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
+from squid.schematics.application import IngestedSchematic
+from squid.schematics.infrastructure.wire import encode_analysis
 from squid.submissions.application.artifact_readiness import DraftSchematicSnapshot
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.domain import DraftStatus
@@ -60,7 +62,11 @@ class PostgresDraftSchematics:
             if existing.state in {DraftSchematicState.DELETING, DraftSchematicState.DELETED}:
                 msg = "This schematic source has expired; upload it with a new identifier."
                 raise ConflictError(msg)
-            if existing.state is not DraftSchematicState.PENDING:
+            if existing.state not in {
+                DraftSchematicState.PENDING,
+                DraftSchematicState.READY,
+                DraftSchematicState.REJECTED,
+            }:
                 existing.state = DraftSchematicState.UPLOADING
                 existing.updated_at = Instant.now()
         else:
@@ -176,7 +182,13 @@ class PostgresDraftSchematics:
         if not retained:
             return DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
         if any(
-            item.state in {DraftSchematicState.FAILED, DraftSchematicState.DELETING, DraftSchematicState.DELETED}
+            item.state
+            in {
+                DraftSchematicState.FAILED,
+                DraftSchematicState.REJECTED,
+                DraftSchematicState.DELETING,
+                DraftSchematicState.DELETED,
+            }
             for item in retained
         ):
             return DraftSchematicSnapshot(SchematicArtifactState.REJECTED)
@@ -185,8 +197,46 @@ class PostgresDraftSchematics:
             if len(retained) == 1 or any(item.primary for item in retained)
             else (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PRIMARY_REQUIRED),)
         )
-        # Schem-at/Nucleation#39: quarantine is retained, never treated as sanitized output.
-        return DraftSchematicSnapshot(SchematicArtifactState.PROCESSING, issues=issues)
+        if any(item.state is not DraftSchematicState.READY for item in retained) or issues:
+            return DraftSchematicSnapshot(SchematicArtifactState.PROCESSING, issues=issues)
+        primary = next(item for item in retained if item.primary or len(retained) == 1)
+        return DraftSchematicSnapshot(SchematicArtifactState.READY, artifact_id=primary.id)
+
+    async def pending(self, *, limit: int) -> tuple[DraftSchematic, ...]:
+        rows = await self._session().scalars(
+            select(DraftSchematicSource)
+            .where(DraftSchematicSource.state == DraftSchematicState.PENDING, _has_retained_reference())
+            .order_by(DraftSchematicSource.updated_at, DraftSchematicSource.id)
+            .limit(limit)
+        )
+        return tuple(DraftSchematic(row.id, row.filename, row.sha256, row.byte_size, row.state) for row in rows)
+
+    async def finish_analysis(
+        self, source: DraftSchematic, result: IngestedSchematic | None, *, error: str | None = None, retry: bool = False
+    ) -> None:
+        if result is not None and result.sha256 != source.sha256:
+            message = "Analysis does not match the retained schematic bytes."
+            raise DataIntegrityError(message)
+        await self._session().execute(
+            update(DraftSchematicSource)
+            .where(
+                DraftSchematicSource.id == source.id,
+                DraftSchematicSource.sha256 == source.sha256,
+                DraftSchematicSource.state == DraftSchematicState.PENDING,
+            )
+            .values(
+                state=(
+                    DraftSchematicState.PENDING
+                    if retry
+                    else DraftSchematicState.READY
+                    if result is not None
+                    else DraftSchematicState.REJECTED
+                ),
+                analysis=dict(encode_analysis(result.analysis)) if result is not None else None,
+                last_error=error[:4000] if error is not None else None,
+                updated_at=func.now(),
+            )
+        )
 
     async def cleanup_candidates(self, *, limit: int) -> tuple[UUID, ...]:
         """Mark old unreferenced sources for deletion and return their IDs.

@@ -3,6 +3,7 @@
 import json
 from collections.abc import Iterator
 from io import StringIO
+from uuid import uuid4
 
 import psycopg2
 import pytest
@@ -2009,5 +2010,65 @@ def test_starboard_message_migration_preserves_deletions_and_content(
         command.upgrade(config, revision)
         command.upgrade(config, "head")
         command.check(config)
+    finally:
+        engine.dispose()
+
+
+def test_draft_schematic_migration_recovers_waiting_uploads(
+    migration_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "b2c7d0e5f8a1")
+    draft_id, source_id = uuid4(), uuid4()
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            owner = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text("""
+                INSERT INTO submission_drafts
+                  (id, owner_account_id, schema_id, schema_revision, category, status, answers,
+                   origin, expires_at, preparation_issues)
+                VALUES (:draft, :owner, 'build_submission.v1', 2, 'other', 'needs_attention', '{}',
+                        'discord', now() + interval '7 days',
+                        '[{"field_id":"schematic","reason":"schematic_processing"}]')
+            """),
+                {"draft": draft_id, "owner": owner},
+            )
+            connection.execute(
+                text("""
+                INSERT INTO submission_schematic_sources
+                  (id, owner_account_id, uploaded_by_account_id, filename, sha256, byte_size, state)
+                VALUES (:source, :owner, :owner, 'original.schem', :sha, 3, 'waiting_sanitizer')
+            """),
+                {"source": source_id, "owner": owner, "sha": "a" * 64},
+            )
+            connection.execute(
+                text("""
+                INSERT INTO submission_draft_schematics (draft_id, source_id, is_primary)
+                VALUES (:draft, :source, true)
+            """),
+                {"draft": draft_id, "source": source_id},
+            )
+        command.upgrade(config, "c9d2e5f8a1b4")
+        with engine.connect() as connection:
+            row = connection.execute(
+                text("SELECT state, sha256, analysis FROM submission_schematic_sources WHERE id = :id"),
+                {"id": source_id},
+            ).one()
+            assert tuple(row) == ("pending", "a" * 64, None)
+            assert connection.execute(
+                text("SELECT preparation_retry_at IS NOT NULL FROM submission_drafts WHERE id = :id"), {"id": draft_id}
+            ).scalar_one()
+        command.downgrade(config, "b2c7d0e5f8a1")
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text("SELECT state FROM submission_schematic_sources WHERE id = :id"), {"id": source_id}
+                ).scalar_one()
+                == "waiting_sanitizer"
+            )
+        command.upgrade(config, "head")
     finally:
         engine.dispose()

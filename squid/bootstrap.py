@@ -450,7 +450,13 @@ class _ServiceGraph:
 
     @cached_property
     def submission_schematics(self) -> DraftSchematicService:
-        return DraftSchematicService(self.submission_drafts, self.artifacts, uow_factory=self.uow_factory)
+        return DraftSchematicService(
+            self.submission_drafts,
+            self.artifacts,
+            uow_factory=self.uow_factory,
+            ingestor=self.schematics,
+            max_bytes=self.config.schematics.max_upload_bytes,
+        )
 
     @cached_property
     def submission_finalization(self) -> SubmissionFinalizationService:
@@ -788,6 +794,7 @@ def create_worker_services(
         purge_idempotency=idempotency.purge_expired,
         expire_submission_drafts=graph.submission_drafts.expire_due,
         cleanup_submission_schematics=graph.submission_schematics.cleanup,
+        process_submission_schematics=graph.submission_schematics.process_pending,
         cleanup_submission_inference=graph.submission_inference.cleanup,
     )
 

@@ -10,6 +10,7 @@ from whenever import Instant
 
 from squid.core.errors import ConflictError
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.schematics.application import IngestedSchematic
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.domain.finalization import SchematicArtifactState, SubmissionAttentionReason
@@ -17,6 +18,7 @@ from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicSt
 from squid.submissions.models.schematics import DraftSchematicSource
 from tests.support.submission_targets import seed_account_and_version
 from tests.support.unit_of_work import transact
+from tests.unit.schematics.fakes import make_analysis
 
 
 async def create_draft(sessions: async_sessionmaker[AsyncSession], owner: int) -> StoredDraft:
@@ -41,7 +43,7 @@ async def reload(sessions: async_sessionmaker[AsyncSession], draft: StoredDraft)
     return current
 
 
-async def test_schematics_require_explicit_primary_and_never_bypass_sanitizer(
+async def test_schematics_require_explicit_primary_and_completed_analysis(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory
@@ -72,6 +74,16 @@ async def test_schematics_require_explicit_primary_and_never_bypass_sanitizer(
     assert state.state is SchematicArtifactState.PROCESSING
     assert state.artifact_id is None
     assert state.issues == ()
+    for source in (first, second):
+        assert source.sha256 is not None
+        async with repo() as uow:
+            await uow.draft_schematics.finish_analysis(
+                source, IngestedSchematic(source.sha256, make_analysis(sha256=source.sha256))
+            )
+            await uow.commit()
+    state = await transact(repo, lambda uow: uow.draft_schematics.read_for_draft(draft.snapshot.id))
+    assert state.state is SchematicArtifactState.READY
+    assert state.artifact_id == second.id
     current = await reload(sessions, draft)
     await transact(
         repo,
