@@ -1,5 +1,7 @@
 """Private manifest-driven editing of persisted submission drafts."""
 
+from collections.abc import Mapping
+from functools import partial
 from typing import Any, cast, override
 from uuid import UUID, uuid4
 
@@ -18,6 +20,7 @@ from squid.submissions.domain import (
     FieldOperationKind,
     FormField,
     FormManifest,
+    FormSection,
     ValueKind,
 )
 from squid.submissions.domain.intake import IntakeStatus
@@ -27,13 +30,12 @@ from squid_reactivity import TopicHandle
 class DraftEditorScreen(sd.Screen):
     """Edit a saved draft using its pinned form manifest.
 
-    Each field change is persisted immediately through the draft service, which
+    Each form saves its fields together through the draft service, which
     checks access and revision. Submission requests finalization; the same screen
     reloads attachment and job state to show progress or issues needing correction.
     """
 
     policy = sd.ResponseSpec(audience="personal", timeout=600)
-    page: int = sl.state(0)
     selected: str | None = sl.state(None)
     option_page: int = sl.state(0)
     notice: sl.TextLike = sl.state("")
@@ -69,6 +71,24 @@ class DraftEditorScreen(sd.Screen):
     def field(self) -> FormField | None:
         return next((field for field in self.fields if field.id == self.selected), None)
 
+    @property
+    def groups(self) -> tuple[FormSection, ...]:
+        """Group visible fields into modals; keep dynamic catalogues in paged pickers."""
+        visible = {field.id for field in self.fields}
+        sections = (*self.manifest.common_sections, *self.manifest.category(self.draft.snapshot.category).sections)
+        groups: list[FormSection] = []
+        for section in sections:
+            fields = tuple(field for field in section.fields if field.id in visible and field.option_source is None)
+            for offset in range(0, len(fields), 5):
+                title = section.title if len(fields) <= 5 else f"{section.title} ({offset // 5 + 1})"
+                groups.append(FormSection(f"{section.id}_{offset}", title, fields[offset : offset + 5]))
+            groups.extend(
+                FormSection(field.id, field.label, (field,))
+                for field in section.fields
+                if field.id in visible and field.option_source is not None
+            )
+        return tuple(groups)
+
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         state = self.projection.status
@@ -84,79 +104,81 @@ class DraftEditorScreen(sd.Screen):
             for issue in self.draft.preparation_issues
         )
         editable = draft.status in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}
-        fields = self.fields[self.page * 20 : (self.page + 1) * 20]
+        errors = self.manifest.validate_answers(draft.category, draft.answers, origin=self.draft.origin)
+        required = tuple(field for field in self.fields if field.required)
+        missing = tuple(field for field in required if field.id in errors)
+        progress = (
+            "Required fields still needed: " + ", ".join(field.label for field in missing)
+            if missing
+            else "Required fields complete. Submit when you are ready; files and build details will be checked."
+        )
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
-            sl.section(
-                sl.heading("Submission draft"),
-                sl.paragraph(status),
-                sl.note(str(draft.id)),
-                sl.paragraph(self.notice or issues or "Changes are saved to this draft."),
-            ),
+            sl.paragraph(progress if editable else status),
         ]
-        if editable and fields:
-            nodes.append(
-                sl.choices(
-                    *(sl.choice(field.label[:100], key=field.id) for field in fields),
-                    key="field",
-                    selection=sl.controlled(
-                        (self.selected,)
-                        if self.selected is not None and self.selected in {f.id for f in fields}
-                        else (),
-                        self._select_field,
+        if self.notice:
+            nodes.append(sl.paragraph(self.notice))
+        if issues:
+            nodes.append(sl.paragraph(issues))
+        if editable:
+            groups = self.groups
+            answers = self.manifest.apply_defaults(draft.category, draft.answers, origin=self.draft.origin)
+            summary: list[str] = []
+            for group in groups:
+                needed = [field.label for field in group.fields if field.required and field.id in errors]
+                supplied = [
+                    f"{field.label}: {_display(answers.get(field.id)).replace(chr(10), ', ')[:60]}"
+                    for field in group.fields
+                    if answers.get(field.id) is not None and answers.get(field.id) != []
+                ]
+                detail = "Needs " + ", ".join(needed) if needed else "; ".join(supplied) or "Optional"
+                summary.append(f"**{group.title}** — {detail}")
+            nodes.append(sl.paragraph("\n".join(summary)))
+            nodes.extend(
+                sl.action_controls(
+                    *(
+                        sl.action_control(group.title[:80], partial(self._edit_group, group.id), key=f"edit_{group.id}")
+                        for group in groups[offset : offset + 5]
                     ),
+                    key=f"groups_{offset}",
                 )
+                for offset in range(0, len(groups), 5)
             )
-            if (field := self.field) is not None:
-                value = draft.answers.get(field.id, field.default)
+            if (field := self.field) is not None and self.options:
+                value = answers.get(field.id)
+                page = self.options[self.option_page * 25 : (self.option_page + 1) * 25]
+                selected = value if isinstance(value, list) else [value]
+                nodes.append(sl.paragraph(f"**{field.label}** ({'required' if field.required else 'optional'})"))
                 nodes.append(
-                    sl.section(sl.heading(field.label), sl.paragraph(_display(value)[:1500] or "Not supplied"))
+                    sl.choices(
+                        *(sl.choice(option.label[:100], key=option.value) for option in page),
+                        key="value",
+                        selection=sl.controlled(
+                            tuple(option.value for option in page if option.value in selected), self._select_value
+                        ),
+                        minimum=0 if not field.required or field.value_kind is ValueKind.STRING_LIST else 1,
+                        maximum=min(25, len(page)) if field.value_kind is ValueKind.STRING_LIST else 1,
+                    )
                 )
-                if self.options:
-                    page = self.options[self.option_page * 25 : (self.option_page + 1) * 25]
-                    selected = (
-                        value
-                        if isinstance(value, list)
-                        else ([str(value).lower()] if isinstance(value, bool) else [value])
-                    )
-                    nodes.append(
-                        sl.choices(
-                            *(sl.choice(option.label[:100], key=option.value) for option in page),
-                            key="value",
-                            selection=sl.controlled(
-                                tuple(option.value for option in page if option.value in selected), self._select_value
-                            ),
-                            minimum=0 if not field.required or field.value_kind is ValueKind.STRING_LIST else 1,
-                            maximum=min(25, len(page)) if field.value_kind is ValueKind.STRING_LIST else 1,
-                        )
-                    )
-                    if len(self.options) > 25:
-                        nodes.append(
-                            sl.action_controls(
-                                sl.action_control("Previous choices", self._previous_options, key="previous_options"),
-                                sl.action_control("More choices", self._next_options, key="next_options"),
-                                key="option_pages",
-                            )
-                        )
-                else:
+                if len(self.options) > 25:
                     nodes.append(
                         sl.action_controls(
-                            sl.action_control("Edit value", self._edit_value, key="edit_value"), key="edit"
+                            sl.action_control("Previous choices", self._previous_options, key="previous_options"),
+                            sl.action_control("More choices", self._next_options, key="next_options"),
+                            key="option_pages",
                         )
                     )
             nodes.append(
                 sl.action_controls(
-                    sl.action_control("Previous fields", self._previous, key="previous"),
-                    sl.action_control("More fields", self._next, key="next"),
                     sl.action_control("Submit for review", self._submit, key="submit"),
+                    sl.action_control("Refresh status", self._refresh, key="refresh"),
                     key="draft_actions",
                 )
             )
         files = tuple(item for item in self.attachments if item.status is not IntakeStatus.DISCARDED)
         if editable and files:
             nodes.append(
-                sl.section(
-                    sl.heading("Supplied files"),
-                    sl.paragraph("\n".join(f"{item.filename}: {item.status.value}" for item in files)),
+                sl.paragraph(
+                    "**Supplied files**\n" + "\n".join(f"{item.filename}: {item.status.value}" for item in files)
                 )
             )
             nodes.append(
@@ -198,27 +220,50 @@ class DraftEditorScreen(sd.Screen):
                         key="attachment_actions",
                     )
                 )
-        nodes.append(
-            sl.action_controls(sl.action_control("Refresh status", self._refresh, key="refresh"), key="status")
-        )
-        return tuple(nodes)
+        if not editable:
+            nodes.append(
+                sl.action_controls(sl.action_control("Refresh status", self._refresh, key="refresh"), key="status")
+            )
+        return (sl.section(sl.heading("Submit a build"), *nodes),)
 
-    async def _select_field(self, event: sl.ChoiceEvent) -> None:
-        self.selected = event.selected[0]
-        self.option_page = 0
-        field = self.field
-        if field is None:
-            return
-        if field.value_kind is ValueKind.BOOLEAN:
-            self.options = (ChoiceOption("true", "Yes"), ChoiceOption("false", "No"))
-        elif field.option_source is not None:
+    async def _edit_group(self, group_id: str, event: sl.PressEvent) -> None:
+        group = next(group for group in self.groups if group.id == group_id)
+        field = group.fields[0]
+        if field.option_source is not None:
+            self.selected = field.id
+            self.option_page = 0
             self.options = (
                 await self.services.submission_forms.options(
                     field.option_source, self.draft.snapshot.category, locale=None
                 )
             ).options
-        else:
-            self.options = field.options
+            if not self.options:
+                self.notice = f"No choices are currently available for {field.label}."
+            return
+        self.selected = None
+        self.options = ()
+        base_revision = self.draft.snapshot.revision
+        answers = self.manifest.apply_defaults(
+            self.draft.snapshot.category, self.draft.snapshot.answers, origin=self.draft.origin
+        )
+
+        async def submitted(event: sl.SubmitEvent) -> None:
+            values: dict[str, JSONValue] = {}
+            for field in group.fields:
+                raw = event.values.get(field.id)
+                if field.value_kind is ValueKind.STRING_LIST:
+                    values[field.id] = [line.strip() for line in str(raw or "").splitlines() if line.strip()]
+                else:
+                    values[field.id] = cast(JSONValue, raw)
+            await self._save_values(values, base_revision=base_revision)
+
+        await event.present_form(
+            sl.forms.FormSpec(
+                group.title[:45], tuple(_form_entry(field, answers.get(field.id)) for field in group.fields)
+            ),
+            key=f"draft-{group.id}",
+            on_submit=submitted,
+        )
 
     async def _select_value(self, event: sl.ChoiceEvent) -> None:
         field = self.field
@@ -237,54 +282,20 @@ class DraftEditorScreen(sd.Screen):
             value = event.selected[0] if event.selected else None
         await self._save(field.id, value)
 
-    async def _edit_value(self, event: sl.PressEvent) -> None:
-        field = self.field
-        if field is None:
-            return
-        field_id = field.id
-        # Hold the revision seen when the modal opened so a later edit cannot be overwritten silently.
-        base_revision = self.draft.snapshot.revision
-        value = self.draft.snapshot.answers.get(field_id, field.default)
-
-        async def submitted(event: sl.SubmitEvent) -> None:
-            raw = event.values.get("value")
-            if field.value_kind is ValueKind.STRING_LIST:
-                parsed: JSONValue = [line.strip() for line in str(raw or "").splitlines() if line.strip()]
-            else:
-                parsed = cast(JSONValue, raw)
-            await self._save(field_id, parsed, base_revision=base_revision)
-
-        entry: sl.forms.FormField[Any]
-        if field.value_kind in {ValueKind.INTEGER, ValueKind.GAME_TICKS}:
-            entry = sl.forms.IntField(
-                key="value", label=field.label[:45], required=False, default=cast(int | None, value)
-            )
-        elif field.value_kind is ValueKind.NUMBER:
-            entry = sl.forms.FloatField(
-                key="value", label=field.label[:45], required=False, default=cast(float | None, value)
-            )
-        else:
-            entry = sl.forms.TextAreaField(
-                key="value",
-                label=field.label[:45],
-                required=False,
-                maximum=4000,
-                default=_display(value),
-                placeholder="One value per line" if field.repeatable else None,
-            )
-        await event.present_form(
-            sl.forms.FormSpec(field.label[:45], (entry,)), key=f"draft-{field_id}", on_submit=submitted
-        )
-
     async def _save(self, field_id: str, value: JSONValue, *, base_revision: int | None = None) -> None:
+        await self._save_values({field_id: value}, base_revision=base_revision)
+
+    async def _save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
+        # Save a whole modal against the revision it opened with, without partial writes.
         change = DraftChange(
             self.draft.snapshot.revision if base_revision is None else base_revision,
             "discord-editor",
             DraftChangeKey(str(uuid4())),
-            (
+            tuple(
                 FieldOperation(
                     uuid4(), field_id, FieldOperationKind.UNSET if value is None else FieldOperationKind.SET, value
-                ),
+                )
+                for field_id, value in values.items()
             ),
         )
         try:
@@ -418,17 +429,55 @@ class DraftEditorScreen(sd.Screen):
         self.notice = ""
         await self._reload()
 
-    async def _previous(self, event: sl.PressEvent) -> None:
-        self.page = max(0, self.page - 1)
-
-    async def _next(self, event: sl.PressEvent) -> None:
-        self.page = min((len(self.fields) - 1) // 20, self.page + 1)
-
     async def _previous_options(self, event: sl.PressEvent) -> None:
         self.option_page = max(0, self.option_page - 1)
 
     async def _next_options(self, event: sl.PressEvent) -> None:
         self.option_page = min((len(self.options) - 1) // 25, self.option_page + 1)
+
+
+def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any]:
+    label = f"{field.label[:34]} ({'required' if field.required else 'optional'})"
+    help_text = field.help_text or (field.label if len(field.label) > 34 else None)
+    description = help_text[:100] if help_text else None
+    if field.options or field.value_kind is ValueKind.BOOLEAN:
+        options = (
+            tuple(sl.forms.ChoiceOption(option.value, option.label[:100], option.value) for option in field.options)
+            if field.options
+            else (sl.forms.ChoiceOption("true", "Yes", value=True), sl.forms.ChoiceOption("false", "No", value=False))
+        )
+        return sl.forms.ChoiceField[JSONValue, Any](
+            key=field.id, label=label, description=description, required=field.required, default=value, options=options
+        )
+    if field.value_kind in {ValueKind.INTEGER, ValueKind.GAME_TICKS}:
+        return sl.forms.IntField[Any](
+            key=field.id,
+            label=label,
+            description=description,
+            required=field.required,
+            default=cast(int | None, value),
+            minimum=cast(int | None, field.constraints.minimum),
+            maximum=cast(int | None, field.constraints.maximum),
+        )
+    if field.value_kind is ValueKind.NUMBER:
+        return sl.forms.FloatField[Any](
+            key=field.id,
+            label=label,
+            description=description,
+            required=field.required,
+            default=cast(float | None, value),
+            minimum=field.constraints.minimum,
+            maximum=field.constraints.maximum,
+        )
+    return sl.forms.TextAreaField[Any](
+        key=field.id,
+        label=label,
+        description=description,
+        required=field.required,
+        maximum=4000 if field.repeatable else min(4000, field.constraints.max_length or 4000),
+        default=_display(value),
+        placeholder="One value per line" if field.repeatable else None,
+    )
 
 
 def _display(value: JSONValue) -> str:

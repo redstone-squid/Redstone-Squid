@@ -5,10 +5,13 @@ The editor uses the draft's pinned form schema; concurrent answer edits must not
 
 from dataclasses import replace
 from typing import override
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
+import pytest
 from whenever import Instant
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.ui.drafts import DraftEditorScreen, draft_editor
 from squid.runtime import BotServices
@@ -33,9 +36,10 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from squid_reactivity import LocalTopicBus
-from squid_ui.testing import labels
+from squid_ui.testing import labels, texts
 from squid_ui.text import source_text
-from squid_ui_discord.testing import commit_render
+from squid_ui_discord.modal import build_form_modal
+from squid_ui_discord.testing import commit_render, payload_problems
 from tests.support.services import bot_services
 
 
@@ -181,7 +185,37 @@ def test_every_visible_field_comes_from_the_manifest() -> None:
     assert "rights_attestation" not in {field.id for field in editor.fields}
 
 
-async def test_manifest_pages_fit_discord_component_limits() -> None:
+@pytest.mark.parametrize("category", ["door", "extender", "utility", "entrance", "other"])
+async def test_grouped_editor_uses_one_card_within_discord_limits(category: str) -> None:
+    services, drafts = setup()
+    drafts.current = replace(drafts.current, snapshot=replace(drafts.current.snapshot, category=category))
+    editor = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
+    await editor.projection.reload()
+    root = sd.MessageRoot(editor, access=sd.Owner(7), timeout=None)
+    payload = commit_render(root).to_components()
+    assert len(payload) == 1
+    assert payload[0]["type"] == 17
+    assert not payload_problems(payload)
+    assert "Required fields still needed: Creators, Build width, Build height, Build depth" in "\n".join(
+        texts(editor.render())
+    )
+    assert "Edit value" not in labels(editor.render())
+    for group in editor.groups:
+        if group.fields[0].option_source is not None:
+            continue
+        event = Mock(spec=sl.PressEvent, present_form=AsyncMock())
+        await editor._edit_group(group.id, event)
+        spec = event.present_form.call_args.args[0]
+        modal = build_form_modal(spec, on_submit=AsyncMock())
+        assert 1 <= len(modal.children) <= 5
+
+
+async def test_dimension_modal_saves_together_and_rejects_stale_edits() -> None:
     services, drafts = setup()
     editor = await draft_editor(
         services,
@@ -189,10 +223,40 @@ async def test_manifest_pages_fit_discord_component_limits() -> None:
         drafts.current.snapshot.id,
         changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
     )
-    root = sd.MessageRoot(editor, access=sd.Owner(7), timeout=None)
-    commit_render(root)
-    editor.selected = "creators"
-    commit_render(root)
+    event = Mock(spec=sl.PressEvent, present_form=AsyncMock())
+    await editor._edit_group("dimensions_versions_0", event)
+    spec = event.present_form.call_args.args[0]
+    entries = {entry.key: entry for entry in spec.items}
+    assert entries["capture_depth"].required
+    assert not entries["version_compatibility"].required
+    submit = event.present_form.call_args.kwargs["on_submit"]
+    values = {"capture_width": 3, "capture_height": 4, "capture_depth": 5, "version_compatibility": None}
+    await submit(Mock(spec=sl.SubmitEvent, values=values))
+    assert len(drafts.changes) == 1
+    assert editor.draft.snapshot.answers["capture_depth"] == 5
+    await editor.projection.reload()
+    assert "Build depth" not in texts(editor.render())[1]
+
+    await submit(Mock(spec=sl.SubmitEvent, values={**values, "capture_width": 9, "capture_depth": 9}))
+    assert editor.draft.snapshot.answers["capture_width"] == 3
+    assert editor.draft.snapshot.answers["capture_depth"] == 5
+    assert source_text(editor.notice) == DraftRevisionConflictError(expected=0, actual=1).public_detail()
+
+
+async def test_public_visibility_reveals_required_license_and_permission() -> None:
+    services, drafts = setup()
+    editor = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+    )
+    assert "rights_attestation" not in {field.id for group in editor.groups for field in group.fields}
+    await editor._save("schematic_visibility", "public_download")
+    rights = next(group for group in editor.groups if group.id == "rights_privacy_0")
+    assert {field.id for field in rights.fields} == {"schematic_visibility", "schematic_license", "rights_attestation"}
+    await editor.projection.reload()
+    assert "Public schematic license" in texts(editor.render())[1]
 
 
 async def test_live_projection_refreshes_saved_state() -> None:
