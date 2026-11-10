@@ -31,7 +31,15 @@ format conversion, piston simulation, and worker recovery passed integration tes
 
 ## Deployment and stored data
 
-Apply Alembic migrations before starting the updated application and workers. The migrations remove retired certificate
+Stop old application and worker containers, then apply Alembic migrations before starting the updated services.
+Migration `c9d2e5f8a1b4` moves retained `waiting_sanitizer` uploads to pending analysis and reschedules drafts whose
+only preparation issue was schematic processing. The worker's `submission-schematics` job validates original bytes
+through the native job queue and retains the analysis. Invalid files become rejected attachments; infrastructure
+failures remain pending with a stored error and are retried. Finalization attaches all retained ready schematics,
+preserves the selected primary and explicit publication grant, and queues its preview in the build transaction.
+Uploads are not content-filtered or rewritten. Existing source object keys remain valid, so recovery requires no reupload.
+
+ The migrations remove retired certificate
 columns, migrate stored draft answers to form revision 2, and migrate queued normalized payloads to payload schema 2.
 Draft revisions advance to invalidate stale client edits; matching job revision fences and payload digests are updated.
 Original artifact IDs and publication grants are preserved. Historical change logs and completed provenance remain audit

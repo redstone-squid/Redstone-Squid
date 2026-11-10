@@ -20822,13 +20822,15 @@
         "type": "string",
         "enum": [
           "uploading",
-          "waiting_sanitizer",
+          "pending",
+          "ready",
+          "rejected",
           "failed",
           "deleting",
           "deleted"
         ],
         "title": "DraftSchematicState",
-        "description": "Source-storage state; quarantine is never evidence of successful sanitization."
+        "description": "Progress from retained original bytes to validated schematic analysis."
       },
       "DraftStatus": {
         "type": "string",

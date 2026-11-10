@@ -1267,9 +1267,9 @@ export type DraftSchematicResponse = {
 /**
  * DraftSchematicState
  *
- * Source-storage state; quarantine is never evidence of successful sanitization.
+ * Progress from retained original bytes to validated schematic analysis.
  */
-export type DraftSchematicState = 'uploading' | 'waiting_sanitizer' | 'failed' | 'deleting' | 'deleted';
+export type DraftSchematicState = 'uploading' | 'pending' | 'ready' | 'rejected' | 'failed' | 'deleting' | 'deleted';
 
 /**
  * DraftStatus
