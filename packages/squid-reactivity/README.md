@@ -47,8 +47,12 @@ The package is layered:
   outcomes, and the current causal context.
 - `squid_reactivity.diagnostics` provides scoped diagnostic observers, redaction, event
   ledgers, and portable event encoding.
-- `squid_reactivity.core` provides state cells, computed values, full strong-read OCC,
-  version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
+- `squid_reactivity.core` provides state and computed descriptors, the reusable `Reactive`
+  owner, inspection, and state export/restore.
+- `squid_reactivity.tracking` owns versioned cells, dependency capture, and read scopes.
+- `squid_reactivity.transactions` provides optimistic conflict checks, version-conditional
+  patches, staged participants, and transaction result hooks.
+- `squid_reactivity.errors` defines the errors shared by these layers.
 - Every `Reactive` field has an identity address. Consumers subscribe directly without a host-supplied bus.
 - `squid_reactivity.topics` provides portable `Topic` names, bus-owned `TopicHandle` dependencies, and the small
   synchronous `TopicBus` protocol, `LocalTopicBus`, and committed/staged subscription

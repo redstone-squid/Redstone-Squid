@@ -19,14 +19,16 @@ from squid_reactivity.actions import (
     ConflictDetail,
     TransactionContribution,
 )
-from squid_reactivity.core import (
+from squid_reactivity.errors import (
     ReactiveConflictError,
+)
+from squid_reactivity.internals import Cell as _Cell
+from squid_reactivity.transactions import (
     TransactionView,
     action_participant,
     enlist,
     transaction,
 )
-from squid_reactivity.internals import Cell as _Cell
 from squid_replication.engine import ReplicationBackend, ReplicationEngine
 from squid_replication.model import (
     ReplicatedItem,

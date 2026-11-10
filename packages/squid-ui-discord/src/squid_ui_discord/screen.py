@@ -5,8 +5,11 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack, cast
 
 from squid_reactivity.completion import Completion
-from squid_reactivity.core import on_action_commit, on_action_rollback
 from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.transactions import (
+    on_action_commit,
+    on_action_rollback,
+)
 from squid_ui.interactions import ActionEvent as PortableActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.tasks import anyio, task_is_within

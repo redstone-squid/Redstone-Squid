@@ -4,7 +4,9 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, override
 
-from squid_reactivity.core import state
+from squid_reactivity.core import (
+    state,
+)
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, bullet, bullets, stack, status

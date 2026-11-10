@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-import squid_reactivity.core as core
+import squid_reactivity.tracking as tracking
 
 
 class InterleavingHarness:
@@ -28,13 +28,13 @@ class InterleavingHarness:
     @contextmanager
     def installed(self) -> Iterator[InterleavingHarness]:
         """Use this harness until the context exits, then restore the previous one."""
-        token = core._INTERLEAVER.set(self.checkpoint)
-        core._INTERLEAVER_USERS += 1
+        token = tracking._INTERLEAVER.set(self.checkpoint)
+        tracking._INTERLEAVER_USERS += 1
         try:
             yield self
         finally:
-            core._INTERLEAVER_USERS -= 1
-            core._INTERLEAVER.reset(token)
+            tracking._INTERLEAVER_USERS -= 1
+            tracking._INTERLEAVER.reset(token)
 
 
 __all__ = ["InterleavingHarness"]

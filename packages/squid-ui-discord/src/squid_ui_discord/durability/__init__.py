@@ -15,7 +15,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
-from squid_reactivity.core import export_state, restore_state
+from squid_reactivity.core import (
+    export_state,
+    restore_state,
+)
 from squid_storage import (
     AdmissionToken,
     ClaimToken,

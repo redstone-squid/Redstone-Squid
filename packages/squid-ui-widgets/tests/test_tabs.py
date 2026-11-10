@@ -6,7 +6,9 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_reactivity.core import transaction
+from squid_reactivity.transactions import (
+    transaction,
+)
 from squid_ui import testing as engine
 from squid_ui.semantic import Choices
 from squid_ui_widgets import testing as wt

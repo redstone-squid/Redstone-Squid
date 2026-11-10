@@ -25,13 +25,18 @@ from squid_reactivity.actions import (
     current_action,
 )
 from squid_reactivity.completion import Completion
-from squid_reactivity.core import _Signal, fresh_action_transaction
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     emit_causal_event,
     has_event_observers,
 )
 from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
+from squid_reactivity.tracking import (
+    _Signal,
+)
+from squid_reactivity.transactions import (
+    fresh_action_transaction,
+)
 
 
 @dataclass(frozen=True, slots=True)

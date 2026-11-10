@@ -18,8 +18,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
-    # `core` imports this module at runtime, so the edge back has to stay type-only.
-    from squid_reactivity.core import CellPatchSet
+    # Transactions import action results at runtime; their patch type is annotation-only here.
+    from squid_reactivity.transactions import (
+        CellPatchSet,
+    )
 
 type ActionId = uuid.UUID
 _EMPTY_METADATA: Mapping[str, str] = MappingProxyType({})

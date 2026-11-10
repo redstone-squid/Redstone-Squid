@@ -17,7 +17,9 @@ import squid_ui as sl
 import squid_ui.runtime.expansion as expansion_module
 import squid_ui.runtime.owner as owner_module
 import squid_ui_discord as sd
-from squid_reactivity.core import Reactive
+from squid_reactivity.core import (
+    Reactive,
+)
 from squid_reactivity.topics import CellAddress
 from squid_ui import Component, ContextKey, PressEvent, state
 from squid_ui.document import Asset, Document, InlineAsset

@@ -13,7 +13,10 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_reactivity.core import readonly_transaction, transaction
+from squid_reactivity.transactions import (
+    readonly_transaction,
+    transaction,
+)
 from squid_ui import ActionEvent, Component, state
 from squid_ui import form as sl_form
 from squid_ui.forms import FormSpec, TextField

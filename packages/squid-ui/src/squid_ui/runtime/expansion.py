@@ -8,10 +8,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Any
 
-from squid_reactivity.core import capture_reads, read_only
 from squid_reactivity.internals import AtomicResourcePending
 from squid_reactivity.resources import AsyncBinding, observe_async_bindings, unique_async_bindings
 from squid_reactivity.topics import Address
+from squid_reactivity.tracking import (
+    capture_reads,
+    read_only,
+)
 from squid_ui.context import ContextKey
 from squid_ui.document import Asset, Document, DocumentLike
 from squid_ui.errors import LayoutInvariantError

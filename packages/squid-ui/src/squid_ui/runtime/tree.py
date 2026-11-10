@@ -7,9 +7,11 @@ lifetime and reconciles candidate trees only after successful delivery.
 from dataclasses import dataclass, field
 from typing import Any, Generic
 
-from squid_reactivity.core import Dependencies
 from squid_reactivity.resources import AsyncBinding
 from squid_reactivity.topics import Address
+from squid_reactivity.tracking import (
+    Dependencies,
+)
 from squid_ui.context import ContextKey
 from squid_ui.document import Asset
 from squid_ui.runtime._tree import _LayoutRoute

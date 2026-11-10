@@ -8,7 +8,9 @@ from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Protocol, Self, TypeVar, cast, overload, override
 
-from squid_reactivity.core import Reactive
+from squid_reactivity.core import (
+    Reactive,
+)
 from squid_ui.context import ContextKey
 from squid_ui.document import DocumentLike
 from squid_ui.errors import LayoutInvariantError

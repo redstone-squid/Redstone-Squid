@@ -12,8 +12,10 @@ from squid_reactivity import (
     state,
     transaction,
 )
-from squid_reactivity.core import _CURRENT
 from squid_reactivity.topics import Address, CellAddress
+from squid_reactivity.tracking import (
+    _CURRENT,
+)
 
 
 class Preferences(Reactive):

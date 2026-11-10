@@ -12,7 +12,11 @@ reads so changes can trigger another render. Frontends, such as squid-ui-discord
 deliver the result and dispatch interactions to the bound handlers.
 """
 
-from squid_reactivity.core import Reactive, computed, state
+from squid_reactivity.core import (
+    Reactive,
+    computed,
+    state,
+)
 from squid_reactivity.operations import operation
 from squid_reactivity.resources import resource
 from squid_ui import (

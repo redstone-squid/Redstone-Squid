@@ -25,8 +25,10 @@ from squid_reactivity import (
     strong_read,
     transaction,
 )
-from squid_reactivity.core import _CURRENT
 from squid_reactivity.testing import InterleavingHarness
+from squid_reactivity.tracking import (
+    _CURRENT,
+)
 from squid_replication import (
     PreparedReplicationInverse,
     ReferenceBackend,

@@ -15,7 +15,9 @@ from squid.settings.application import SettingsService
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
 from squid.voting.application import VoteService
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
-from squid_reactivity.core import readonly_transaction
+from squid_reactivity.transactions import (
+    readonly_transaction,
+)
 from squid_ui.testing import submit_event
 from squid_ui_discord.testing import commit_render, http_error, interaction_harness
 from tests.support.discord import make_layout_bot

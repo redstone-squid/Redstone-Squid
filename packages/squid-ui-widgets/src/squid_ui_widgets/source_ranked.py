@@ -3,7 +3,9 @@
 from collections.abc import Callable
 from typing import override
 
-from squid_reactivity.core import state
+from squid_reactivity.core import (
+    state,
+)
 from squid_reactivity.resources import Failed, Pending, Ready, resource
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
