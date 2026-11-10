@@ -9,7 +9,7 @@ import squid_ui_discord
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_ui.runtime import PresentationState, apply_updates
+from squid_ui.runtime import PresentationState
 from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.presentation_state import StrategyUpdate
 
@@ -108,7 +108,7 @@ def test_semantic_grid_strategy_remains_sticky_while_available() -> None:
         target=squid_ui_discord.DISCORD_V2_DPY27,
         session=session,
     )
-    apply_updates(session, first.session_updates)
+    session.apply_updates(first.session_updates)
 
     second = sl.planning.plan(
         sl.grid(*_cells(5), key="board", columns=5, on_pick=_pick),

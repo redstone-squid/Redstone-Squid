@@ -148,6 +148,31 @@ class PresentationState:
             self.strategies[key] = value
             self._touch()
 
+    def apply_updates(self, updates: Sequence[SessionUpdate]) -> None:
+        """Apply staged writes in order and increment revision once if any stored value changes."""
+        changed = False
+        for update in updates:
+            match update:
+                case CursorUpdate(key=key, state=cursor):
+                    if self.cursors.get(key) != cursor:
+                        self.cursors[key] = cursor
+                        changed = True
+                case StrategyUpdate(key=key, state=strategy):
+                    if self.strategies.get(key) != strategy:
+                        self.strategies[key] = strategy
+                        changed = True
+                case ToggleUpdate(key=key, state=toggle):
+                    if self.toggles.get(key) != toggle:
+                        self.toggles[key] = toggle
+                        changed = True
+                case ActivePagers(keys=keys):
+                    for stale in tuple(self.cursors):
+                        if stale not in keys:
+                            del self.cursors[stale]
+                            changed = True
+        if changed:
+            self._touch()
+
 
 # --- Planning's writes, staged ------------------------------------------------------------
 
@@ -184,29 +209,3 @@ Planning only reads the session, and returns what it would have written. A front
 applies these once its render has actually reached the user, so a failed delivery leaves
 the reader exactly where the message still shows them.
 """
-
-
-def apply_updates(session: PresentationState, updates: Sequence[SessionUpdate]) -> None:
-    """Apply staged writes in order and increment revision once if any stored value changes."""
-    changed = False
-    for update in updates:
-        match update:
-            case CursorUpdate(key=key, state=cursor):
-                if session.cursors.get(key) != cursor:
-                    session.cursors[key] = cursor
-                    changed = True
-            case StrategyUpdate(key=key, state=strategy):
-                if session.strategies.get(key) != strategy:
-                    session.strategies[key] = strategy
-                    changed = True
-            case ToggleUpdate(key=key, state=toggle):
-                if session.toggles.get(key) != toggle:
-                    session.toggles[key] = toggle
-                    changed = True
-            case ActivePagers(keys=keys):
-                for stale in tuple(session.cursors):
-                    if stale not in keys:
-                        del session.cursors[stale]
-                        changed = True
-    if changed:
-        session._touch()

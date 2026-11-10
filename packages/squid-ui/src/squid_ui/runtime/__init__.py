@@ -86,7 +86,6 @@ from squid_ui.presentation import (
     StrategyUpdate,
     ToggleState,
     ToggleUpdate,
-    apply_updates,
 )
 from squid_ui.runtime.continuations import ActionDiscardedError, Discarded, PostCommitOperation
 from squid_ui.runtime.definition import Component
@@ -214,7 +213,6 @@ __all__ = [
     "addresses",
     "apply_conditional_patches",
     "apply_local_overwrite_patches",
-    "apply_updates",
     "batch",
     "block_writes",
     "computed",

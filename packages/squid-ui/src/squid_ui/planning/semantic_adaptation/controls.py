@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 
 from squid_ui.capabilities import Capability
-from squid_ui.entity import decode_entity_ref, encode_entity_ref
+from squid_ui.entity import EntityRef
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.planning.semantic_adaptation.common import (
@@ -204,9 +204,9 @@ def _entities(node: Entities, path: str, context: LoweringContext) -> list[Node]
         case Controlled(value=value):
             previous = tuple(value)
         case Uncontrolled(initial=initial):
-            initial_keys = tuple(encode_entity_ref(value) for value in initial)
+            initial_keys = tuple(value.encode() for value in initial)
             stored = context.session.selection(node.key, initial=initial_keys).selected
-            previous = tuple(decode_entity_ref(key) for key in stored)
+            previous = tuple(EntityRef.decode(key) for key in stored)
 
     commit = EntityCommit(node.selection, node.key, previous, context.session)
 
@@ -228,18 +228,17 @@ def _entities(node: Entities, path: str, context: LoweringContext) -> list[Node]
         raise LayoutInvariantError(message)
 
     available = tuple(choice for choice in node.choices if choice.available)
-    by_key = {encode_entity_ref(choice.ref): choice.ref for choice in available}
-    previous = tuple(value for value in previous if encode_entity_ref(value) in by_key)
+    by_key = {choice.ref.encode(): choice.ref for choice in available}
+    previous = tuple(value for value in previous if value.encode() in by_key)
     commit = EntityCommit(node.selection, node.key, previous, context.session)
 
     fallback = Choices(
         key=node.key,
         choices=tuple(
-            Choice(encode_entity_ref(choice.ref), choice.label, choice.description, choice.available)
-            for choice in node.choices
+            Choice(choice.ref.encode(), choice.label, choice.description, choice.available) for choice in node.choices
         ),
         selection=Controlled(
-            tuple(encode_entity_ref(value) for value in previous),
+            tuple(value.encode() for value in previous),
             SelectEntityFallback(commit, by_key),
         ),
         minimum=node.minimum,

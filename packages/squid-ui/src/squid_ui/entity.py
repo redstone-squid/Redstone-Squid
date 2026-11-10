@@ -13,6 +13,12 @@ class EntityType(StrEnum):
     CONVERSATION = "conversation"
     MENTIONABLE = "mentionable"
 
+    def supports(self, kind: EntityKind) -> bool:
+        """Whether a picker family may contain a concrete entity kind."""
+        return (self is EntityType.MENTIONABLE and kind in {EntityKind.USER, EntityKind.ROLE}) or (
+            self.value == kind.value
+        )
+
 
 class EntityKind(StrEnum):
     """Concrete entity kinds carried by selections and defaults."""
@@ -59,41 +65,33 @@ class EntityRef:
             message = "string entity ids cannot be empty"
             raise ValueError(message)
 
+    def encode(self) -> str:
+        """Encode a reference without conflating integer and string identifiers."""
+        if isinstance(self.id, int):
+            return f"{self.kind.value}:i:{self.id}"
+        encoded = base64.urlsafe_b64encode(self.id.encode()).decode().rstrip("=")
+        return f"{self.kind.value}:s:{encoded}"
 
-def encode_entity_ref(ref: EntityRef) -> str:
-    """Encode a reference without conflating integer and string identifiers."""
-    if isinstance(ref.id, int):
-        return f"{ref.kind.value}:i:{ref.id}"
-    encoded = base64.urlsafe_b64encode(ref.id.encode()).decode().rstrip("=")
-    return f"{ref.kind.value}:s:{encoded}"
-
-
-def decode_entity_ref(value: str) -> EntityRef:
-    """Decode one tagged presentation-state reference."""
-    kind, separator, encoded = value.partition(":")
-    if not separator:
-        message = "entity reference is missing its kind separator"
+    @classmethod
+    def decode(cls, value: str) -> EntityRef:
+        """Decode one tagged presentation-state reference."""
+        kind, separator, encoded = value.partition(":")
+        if not separator:
+            message = "entity reference is missing its kind separator"
+            raise ValueError(message)
+        if encoded.startswith("i:"):
+            return cls(EntityKind(kind), int(encoded[2:]))
+        if encoded.startswith("s:"):
+            raw = encoded[2:]
+            padded = raw + "=" * (-len(raw) % 4)
+            try:
+                identifier = base64.urlsafe_b64decode(padded.encode()).decode()
+            except (UnicodeDecodeError, ValueError) as error:
+                message = "entity reference contains an invalid string identifier"
+                raise ValueError(message) from error
+            return cls(EntityKind(kind), identifier)
+        message = "entity reference identifier must use an i or s tag"
         raise ValueError(message)
-    if encoded.startswith("i:"):
-        return EntityRef(EntityKind(kind), int(encoded[2:]))
-    if encoded.startswith("s:"):
-        raw = encoded[2:]
-        padded = raw + "=" * (-len(raw) % 4)
-        try:
-            identifier = base64.urlsafe_b64decode(padded.encode()).decode()
-        except (UnicodeDecodeError, ValueError) as error:
-            message = "entity reference contains an invalid string identifier"
-            raise ValueError(message) from error
-        return EntityRef(EntityKind(kind), identifier)
-    message = "entity reference identifier must use an i or s tag"
-    raise ValueError(message)
-
-
-def supports_entity(entity_type: EntityType, kind: EntityKind) -> bool:
-    """Whether a picker family may contain a concrete entity kind."""
-    return (entity_type is EntityType.MENTIONABLE and kind in {EntityKind.USER, EntityKind.ROLE}) or (
-        entity_type.value == kind.value
-    )
 
 
 __all__ = [
@@ -101,7 +99,4 @@ __all__ = [
     "EntityKind",
     "EntityRef",
     "EntityType",
-    "decode_entity_ref",
-    "encode_entity_ref",
-    "supports_entity",
 ]

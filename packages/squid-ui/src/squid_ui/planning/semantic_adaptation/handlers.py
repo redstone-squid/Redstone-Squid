@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Self, override
 
-from squid_ui.entity import EntityRef, encode_entity_ref
+from squid_ui.entity import EntityRef
 from squid_ui.forms import FormSpec, SubmitHandler
 from squid_ui.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions import (
@@ -167,7 +167,7 @@ class EntityCommit(_HandlerComposition):
                 )
             case Uncontrolled():
                 await event.acknowledge()
-                self.session.select(self.key, tuple(encode_entity_ref(value) for value in selected))
+                self.session.select(self.key, tuple(value.encode() for value in selected))
                 event.invalidate()
 
 

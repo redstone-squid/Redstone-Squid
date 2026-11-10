@@ -9,7 +9,7 @@ from squid_ui.document import Asset, InlineAsset
 from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.planning import plan
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
-from squid_ui.runtime import PresentationState, apply_updates
+from squid_ui.runtime import PresentationState
 from squid_ui.runtime.presentation_state import StrategyState
 from squid_ui.semantic import (
     ActionControl,
@@ -187,7 +187,7 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     session = PresentationState()
     first = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
-    apply_updates(session, first.session_updates)
+    session.apply_updates(first.session_updates)
     second = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
     assert first.report.events[0].code == "actions.grouped"
@@ -217,7 +217,7 @@ def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
 def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: int, expected: str) -> None:
     session = PresentationState()
     first = plan(ActionControls(_actions(initial), key="demo"), target=DISCORD_V2_DPY27, session=session)
-    apply_updates(session, first.session_updates)
+    session.apply_updates(first.session_updates)
 
     result = plan(ActionControls(_actions(changed), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
@@ -228,7 +228,7 @@ def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
     session = PresentationState()
     actions = _actions(36)
     first = plan(ActionControls(actions, key="demo"), target=DISCORD_V2_DPY27, session=session)
-    apply_updates(session, first.session_updates)
+    session.apply_updates(first.session_updates)
 
     result = plan(ActionControls(tuple(reversed(actions)), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
@@ -239,7 +239,7 @@ def test_adapter_version_change_resets_only_that_strategy() -> None:
     session = PresentationState(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
 
     result = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
-    apply_updates(session, result.session_updates)
+    session.apply_updates(result.session_updates)
 
     assert result.report.events[0].code == "actions.grouped"
     assert session.strategies["demo"].adapter_version == 1
@@ -249,7 +249,7 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     session = PresentationState()
     document = ActionControls(_actions(76), key="demo")
     first = plan(document, target=DISCORD_V2_DPY27, session=session)
-    apply_updates(session, first.session_updates)
+    session.apply_updates(first.session_updates)
     session.move_cursor("demo.default", Position(offset=1))
     second = plan(document, target=DISCORD_V2_DPY27, session=session)
 

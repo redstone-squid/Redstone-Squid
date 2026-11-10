@@ -48,13 +48,13 @@ def test_entity_reference_round_trips_integer_and_string_ids_without_ambiguity()
     integer = sl.entity.EntityRef(sl.entity.EntityKind.USER, 42)
     string = sl.entity.EntityRef(sl.entity.EntityKind.USER, "42")
 
-    assert sl.entity.decode_entity_ref(sl.entity.encode_entity_ref(integer)) == integer
-    assert sl.entity.decode_entity_ref(sl.entity.encode_entity_ref(string)) == string
+    assert sl.entity.EntityRef.decode(integer.encode()) == integer
+    assert sl.entity.EntityRef.decode(string.encode()) == string
 
 
 def test_entity_reference_rejects_legacy_presentation_state() -> None:
     with pytest.raises(ValueError, match="tag"):
-        sl.entity.decode_entity_ref("user:42")
+        sl.entity.EntityRef.decode("user:42")
 
 
 def test_picker_rejects_incompatible_defaults_and_channel_filters() -> None:
@@ -132,7 +132,7 @@ def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
     session = PresentationState()
     session.select(
         "users",
-        (sl.entity.encode_entity_ref(sl.entity.EntityRef(sl.entity.EntityKind.USER, 999)),),
+        (sl.entity.EntityRef(sl.entity.EntityKind.USER, 999).encode(),),
     )
     node = sl.entities(
         sl.entity_choice(sl.entity.EntityRef(sl.entity.EntityKind.USER, 1), "Ada"),

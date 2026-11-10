@@ -13,7 +13,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast, overload
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
-from squid_ui.entity import ConversationType, EntityRef, EntityType, supports_entity
+from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.extensions import ExtensionKind
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
@@ -240,7 +240,7 @@ class EntitySelect[ContextT = object](Renderable[DiscordTarget, ContextT]):
         if self.conversation_types and self.entity_type is not EntityType.CONVERSATION:
             message = "conversation_types is only valid for conversation entity selects"
             raise ValueError(message)
-        if any(not supports_entity(self.entity_type, value.kind) for value in self.default_values):
+        if any(not self.entity_type.supports(value.kind) for value in self.default_values):
             message = f"default value is incompatible with {self.entity_type.value} entity select"
             raise ValueError(message)
 

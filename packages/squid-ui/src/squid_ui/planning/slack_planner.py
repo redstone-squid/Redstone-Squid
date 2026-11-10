@@ -17,7 +17,7 @@ from typing import Any, cast
 from squid_ui import forms, scene
 from squid_ui import semantic as sem
 from squid_ui.document import DocumentLike, as_document
-from squid_ui.entity import ConversationType, EntityType, decode_entity_ref
+from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
 from squid_ui.factories import is_portable_node
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
@@ -624,7 +624,7 @@ class _Lowerer:
         identifiers: list[str] = []
         for value in values:
             try:
-                identifiers.append(str(decode_entity_ref(value).id))
+                identifiers.append(str(EntityRef.decode(value).id))
             except ValueError as error:
                 message = f"{path}: invalid entity selector state"
                 raise LayoutInvariantError(message) from error

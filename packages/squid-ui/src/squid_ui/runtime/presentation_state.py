@@ -11,4 +11,3 @@ from squid_ui.presentation import StrategyState as StrategyState
 from squid_ui.presentation import StrategyUpdate as StrategyUpdate
 from squid_ui.presentation import ToggleState as ToggleState
 from squid_ui.presentation import ToggleUpdate as ToggleUpdate
-from squid_ui.presentation import apply_updates as apply_updates

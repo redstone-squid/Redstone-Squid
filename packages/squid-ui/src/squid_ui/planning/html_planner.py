@@ -20,7 +20,7 @@ from squid_ui import semantic as sem
 from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome
 from squid_ui.document import DocumentLike, as_document
-from squid_ui.entity import EntityRef, encode_entity_ref
+from squid_ui.entity import EntityRef
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.factories import is_builtin_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
@@ -132,7 +132,7 @@ def _attributes(
 
 def _entity_key(ref: object) -> str:
     if isinstance(ref, EntityRef):
-        return encode_entity_ref(ref)
+        return ref.encode()
     kind = getattr(getattr(ref, "kind", None), "value", "entity")
     return f"{kind}:{getattr(ref, 'id', '')}"
 

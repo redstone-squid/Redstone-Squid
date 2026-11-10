@@ -20,7 +20,6 @@ from squid_ui.planning.result import PlanResult
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import ComponentTree
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.runtime.presentation_state import apply_updates
 from squid_ui.target_types import DiscordTarget
 from squid_ui_discord.message_root_candidates import (
     _ApplicationCandidate,
@@ -116,7 +115,7 @@ class _CandidateLifecycle[RenderTargetT: DiscordTarget]:
     def _commit_application(self, candidate: _ApplicationCandidate[RenderTargetT]) -> None:
         self._settle(candidate, "commit")
         presentation = self._runtime.presentation
-        apply_updates(presentation, candidate.session_updates)
+        presentation.apply_updates(candidate.session_updates)
         self._runtime.plan_memo.promote(presentation, presentation.revision)
         self._subscriptions.commit()
         # Component hooks can invalidate or raise after reconciling the delivered tree.

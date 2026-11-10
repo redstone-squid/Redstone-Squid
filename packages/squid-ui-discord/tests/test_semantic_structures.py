@@ -7,7 +7,7 @@ import squid_ui as sl
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import plan
-from squid_ui.runtime import PresentationState, apply_updates
+from squid_ui.runtime import PresentationState
 from squid_ui.semantic import (
     Choice,
     Choices,
@@ -123,10 +123,10 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
         Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36)
     )
     first = plan(Items("catalog", original), target=DISCORD_V2_DPY27, session=session)
-    apply_updates(session, first.session_updates)
+    session.apply_updates(first.session_updates)
     session.move_cursor("catalog.items", Position(offset=1))
     second_page = plan(Items("catalog", original), target=DISCORD_V2_DPY27, session=session)
-    apply_updates(session, second_page.session_updates)
+    session.apply_updates(second_page.session_updates)
     assert (
         "25"
         in next(node for node in second_page.scene.components_v2.children if isinstance(node, scene.Select))
