@@ -8,7 +8,8 @@ from discord import app_commands
 import squid_ui_discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.bot.utils.accounts import get_or_create_discord_account_id
-from squid.bot.utils.permissions import actor_for_interaction, allows, enforce, hide_unless
+from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor, enforce, hide_unless
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
 from squid.permissions.domain import Effect, PermissionNode, Reason, TraceStep
@@ -85,14 +86,15 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
                 capability_list.append(node)  # noqa: PERF401 - await comprehensions confuse Pyrefly.
         capabilities = frozenset(capability_list)
 
-        async def actor():
-            return await self.admin.resolve_actor(await actor_for_interaction(request))
+        async def actor() -> Actor:
+            return await current_edit_actor(request)
 
         async def authorize(node: PermissionNode) -> bool:
             return await allows(request, node)
 
         return AccessScreen(
             self.admin,
+            self.bot.services.edits,
             guild_id=guild.id,
             account_id=account_id,
             discord_role_id=role_id,

@@ -1,19 +1,40 @@
 """Canonical permission and internal-role administration workspace."""
 
 from collections.abc import Awaitable, Callable
+from functools import partial
 from typing import Any, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
 from squid.core.actors import Actor
+from squid.edits.application import EditRunner
 from squid.permissions.application.administration import (
     EXCLUDE_MODE,
     INCLUDE_MODE,
     PermissionAdministrationService,
     effect_label,
     scope_label,
+)
+from squid.permissions.application.edits import (
+    ASSIGNMENT_EDIT,
+    GRANT_EDIT,
+    INCLUDE_EDIT,
+    PATTERN_EDIT,
+    PERMISSION_GRAPH,
+    RANK_EDIT,
+    ROLE_CREATE,
+    ROLE_DELETE,
+    AssignmentValues,
+    GrantValues,
+    IncludeValues,
+    PatternValues,
+    PermissionValues,
+    RankValues,
+    RoleDeletionValues,
+    RolePresenceValues,
 )
 from squid.permissions.domain import CATALOGUE, Effect, PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -40,10 +61,20 @@ class AccessScreen(sd.Screen):
     """
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("access"))
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    _revision: int = sl.state(default=0, persist=False)
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+    _pending_delete: tuple[str, int, int] | None = sl.state(default=None, persist=False)
+    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
 
     def __init__(
         self,
         admin: PermissionAdministrationService,
+        runner: EditRunner,
         *,
         guild_id: int,
         account_id: int | None,
@@ -59,17 +90,15 @@ class AccessScreen(sd.Screen):
         self._discord_role_id = discord_role_id
         self._subject_label = subject_label
         self._capabilities = capabilities
-        self._actor = actor
         self._authorize = authorize
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
-        self._pending_delete: str | None = None
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
+        self.edits = EditController(runner, actor, self._refresh, history=self.history)
 
     @override
     async def on_load(self) -> None:
         await self._refresh()
 
     async def _refresh(self) -> None:
+        self._revision = await self._admin.revision()
         tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
         if PERM_SUBJECT_INSPECT in self._capabilities:
             rules = await self._admin.rules_for(
@@ -85,15 +114,15 @@ class AccessScreen(sd.Screen):
             tabs.append(
                 sp.Tab("subject", tr(t"access-view-subject = Subject"), self._subject_browser(rules, assignments))
             )
-            subject_forms = self._subject_forms()
-            if subject_forms:
-                tabs.append(
-                    sp.Tab(
-                        "assignments",
-                        tr(t"access-view-rules-and-assignments = Rules and assignments"),
-                        subject_forms,
-                    )
+        subject_forms = self._subject_forms()
+        if subject_forms:
+            tabs.append(
+                sp.Tab(
+                    "assignments",
+                    tr(t"access-view-rules-and-assignments = Rules and assignments"),
+                    subject_forms,
                 )
+            )
         if self._may_manage_roles:
             roles = await self._admin.roles(guild_id=self._guild_id)
             tabs.append(sp.Tab("roles", tr(t"access-view-internal-roles = Internal roles"), self._role_browser(roles)))
@@ -117,7 +146,7 @@ class AccessScreen(sd.Screen):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._pending_delete is not None and self._decision is not None:
-            slug = self._pending_delete
+            slug = self._pending_delete[0]
             return (
                 sl.section(
                     sl.heading(tr(t"access-view-delete-internal-role = Delete internal role")),
@@ -129,7 +158,7 @@ class AccessScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"access-view-loading-access-controls = Loading access controls.")),)
-        return (self._tabs,)
+        return (self._tabs, *self.edits.controls())
 
     def _subject_browser(
         self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]
@@ -154,7 +183,7 @@ class AccessScreen(sd.Screen):
                     tr(t"access-view-change-direct-rule = Change direct rule"),
                     self._rule_form(),
                     key="rule",
-                    on_submit=self._change_rule,
+                    on_submit=partial(self._change_rule, base_revision=self._revision),
                 )
             )
         if self._may_manage_roles:
@@ -163,7 +192,7 @@ class AccessScreen(sd.Screen):
                     tr(t"access-view-change-role-assignment = Change role assignment"),
                     self._assignment_form(),
                     key="assignment",
-                    on_submit=self._change_assignment,
+                    on_submit=partial(self._change_assignment, base_revision=self._revision),
                 )
             )
         return tuple(nodes)
@@ -198,13 +227,13 @@ class AccessScreen(sd.Screen):
                 tr(t"access-view-create-internal-role = Create internal role"),
                 self._create_role_form(),
                 key="create-role",
-                on_submit=self._create_role,
+                on_submit=partial(self._create_role, base_revision=self._revision),
             ),
             sl.form(
                 tr(t"access-view-edit-internal-role = Edit internal role"),
                 self._edit_role_form(),
                 key="edit-role",
-                on_submit=self._edit_role,
+                on_submit=partial(self._edit_role, base_revision=self._revision),
             ),
         )
 
@@ -251,93 +280,83 @@ class AccessScreen(sd.Screen):
             empty=tr(t"access-audit-empty = No permission changes are recorded for this server."),
         )
 
-    async def _change_rule(self, event: sl.SubmitEvent) -> None:
+    async def _save(self, kind: str, values: PermissionValues, revision: int | None, label: sl.TextLike) -> None:
+        await self.edits.bind(kind, PERMISSION_GRAPH, self._revision if revision is None else revision).save(
+            values.edit_values(), label
+        )
+
+    async def _change_rule(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
         if not await self._authorize_mutation(event, PERM_GRANT_GUILD, PERM_GRANT_GLOBAL):
             return
         form = _RuleForm.from_submission(event)
-        operation = form.operation
-        pattern = form.pattern
-        scope = _scope(form.scope, self._guild_id)
-        actor = await self._actor()
-        if operation == "revoke":
-            await self._admin.revoke(
-                actor,
-                pattern=pattern,
-                account_id=self._account_id,
-                discord_role_id=self._discord_role_id,
-                scope_guild_id=scope,
-            )
-        else:
-            effect = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}[operation]
-            await self._admin.grant(
-                actor,
-                pattern=pattern,
+        effect = {"allow": Effect.ALLOW, "deny": Effect.DENY, "forbid": Effect.FORBID}.get(form.operation)
+        label = tr(t"access-view-direct-permission-rule-updated = Direct permission rule updated.")
+        await self._save(
+            GRANT_EDIT,
+            GrantValues(
+                pattern=form.pattern,
                 effect=effect,
                 account_id=self._account_id,
                 discord_role_id=self._discord_role_id,
                 guild_id=self._guild_id,
-                scope_guild_id=scope,
+                scope_guild_id=_scope(form.scope, self._guild_id),
                 reason=form.reason or None,
-            )
-        await self._refresh()
-        await event.notice(tr(t"access-view-direct-permission-rule-updated = Direct permission rule updated."))
+            ),
+            base_revision,
+            label,
+        )
+        await event.notice(label)
 
-    async def _change_assignment(self, event: sl.SubmitEvent) -> None:
+    async def _change_assignment(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
         form = _AssignmentForm.from_submission(event)
-        operation = form.operation
-        slug = form.slug
-        scope = _scope(form.scope, self._guild_id)
-        actor = await self._actor()
-        role = await self._admin.role(slug, guild_id=self._guild_id)
-        if operation == "assign":
-            await self._admin.assign(
-                actor,
-                role,
+        role = await self._admin.role(form.slug, guild_id=self._guild_id)
+        label = tr(t"access-view-internal-role-assignment-updated = Internal role assignment updated.")
+        await self._save(
+            ASSIGNMENT_EDIT,
+            AssignmentValues(
+                role_id=role.id,
+                present=form.operation == "assign",
                 account_id=self._account_id,
                 discord_role_id=self._discord_role_id,
                 guild_id=self._guild_id,
-                scope_guild_id=scope,
+                scope_guild_id=_scope(form.scope, self._guild_id),
                 reason=form.reason or None,
-            )
-        else:
-            await self._admin.unassign(
-                actor,
-                role,
-                account_id=self._account_id,
-                discord_role_id=self._discord_role_id,
-                scope_guild_id=scope,
-            )
-        await self._refresh()
-        await event.notice(tr(t"access-view-internal-role-assignment-updated = Internal role assignment updated."))
+            ),
+            base_revision,
+            label,
+        )
+        await event.notice(label)
 
-    async def _create_role(self, event: sl.SubmitEvent) -> None:
+    async def _create_role(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
         form = _CreateRoleForm.from_submission(event)
         slug = form.slug
-        await self._admin.create_role(
-            await self._actor(),
-            slug=slug,
-            name=form.name,
-            rank=form.rank,
-            guild_id=_scope(form.scope, self._guild_id),
+        label = tr(t"access-view-created-internal-role = Created internal role **{slug}**.")
+        await self._save(
+            ROLE_CREATE,
+            RolePresenceValues(
+                role_id=await self._admin.reserve_role_identity(),
+                slug=slug,
+                name=form.name,
+                rank=form.rank,
+                guild_id=_scope(form.scope, self._guild_id),
+            ),
+            base_revision,
+            label,
         )
-        await self._refresh()
-        await event.notice(tr(t"access-view-created-internal-role = Created internal role **{slug}**."))
+        await event.notice(label)
 
-    async def _edit_role(self, event: sl.SubmitEvent) -> None:
+    async def _edit_role(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
         form = _EditRoleForm.from_submission(event)
-        operation = form.operation
-        slug = form.slug
-        value = form.value or ""
-        actor = await self._actor()
+        operation, slug, value = form.operation, form.slug, form.value or ""
         role = await self._admin.role(slug, guild_id=self._guild_id)
         if operation == "delete":
-            self._pending_delete = slug
+            self._pending_delete = (slug, role.id, self._revision if base_revision is None else base_revision)
             self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
                 tr(t"access-role-delete-warning = Deleting an internal role removes every assignment of it."),
                 (
@@ -350,36 +369,42 @@ class AccessScreen(sd.Screen):
         if not value:
             await event.notice(tr(t"access-value-required = This operation needs a value."))
             return
-        if operation in {"include", "exclude"}:
-            await self._admin.add_pattern(
-                actor, role, value, mode=INCLUDE_MODE if operation == "include" else EXCLUDE_MODE
+        label = tr(t"access-view-internal-role-updated = Internal role updated.")
+        if operation in {"include", "exclude", "remove-pattern"}:
+            await self._save(
+                PATTERN_EDIT,
+                PatternValues(
+                    role_id=role.id,
+                    pattern=value,
+                    mode={"include": INCLUDE_MODE, "exclude": EXCLUDE_MODE}.get(operation),
+                ),
+                base_revision,
+                label,
             )
-        elif operation == "remove-pattern":
-            await self._admin.remove_pattern(actor, role, value)
         elif operation in {"compose", "decompose"}:
             included = await self._admin.role(value, guild_id=self._guild_id)
-            if operation == "compose":
-                await self._admin.add_include(actor, role, included)
-            else:
-                await self._admin.remove_include(actor, role, included)
+            await self._save(
+                INCLUDE_EDIT,
+                IncludeValues(role_id=role.id, included_id=included.id, present=operation == "compose"),
+                base_revision,
+                label,
+            )
         elif operation == "rank":
-            await self._admin.set_rank(actor, role, int(value))
-        await self._refresh()
-        await event.notice(tr(t"access-view-internal-role-updated = Internal role updated."))
+            await self._save(RANK_EDIT, RankValues(role_id=role.id, rank=int(value)), base_revision, label)
+        await event.notice(label)
 
     async def _decide_delete(self, event: sp.TransitionEvent[sp.DecisionState], choice: str) -> None:
-        """Recheck authority and reload the role after the user confirms deletion."""
-        slug = self._pending_delete
+        pending = self._pending_delete
         self._pending_delete = None
         self._decision = None
-        if slug is None or choice == "cancel":
+        if pending is None or choice == "cancel":
             return
         if not await self._authorize_mutation(event.source, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        role = await self._admin.role(slug, guild_id=self._guild_id)
-        await self._admin.delete_role(await self._actor(), role)
-        await self._refresh()
-        await event.source.notice(tr(t"access-view-deleted-internal-role = Deleted internal role **{slug}**."))
+        slug, identity, revision = pending
+        label = tr(t"access-view-deleted-internal-role = Deleted internal role **{slug}**.")
+        await self._save(ROLE_DELETE, RoleDeletionValues(role_id=identity), revision, label)
+        await event.source.notice(label)
 
     async def _authorize_mutation(self, event: sl.ActionEvent, *nodes: PermissionNode) -> bool:
         for node in nodes:
