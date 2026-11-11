@@ -139,6 +139,7 @@ from squid.suggestions.application.queries import SuggestionQueryService
 from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
 from squid.sync import DiscordReconciliationService
 from squid.tags.application import TagService
+from squid.tags.application.edits import SHOWCASE_EDIT, ShowcaseAssignmentEdit
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
@@ -344,6 +345,7 @@ class _ServiceGraph:
             self.uow_factory,
             {
                 DRAFT_ANSWERS: DraftAnswersEdit(self.submission_drafts),
+                SHOWCASE_EDIT: ShowcaseAssignmentEdit(),
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),

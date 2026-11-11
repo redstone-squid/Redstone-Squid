@@ -40,6 +40,8 @@ class TagDefinitionRepository(Protocol):
 
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
 
+    async def build_revision(self, build_id: int) -> int: ...
+
     async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None: ...
 
     async def replace_assignment(
@@ -77,7 +79,7 @@ class TagService:
 
     Callers must authorize moderation requests. Status changes do not require a
     particular previous status, so an archived or rejected tag can be approved
-    again. Assigning a showcase tag separately checks build ownership.
+    again. ShowcaseAssignmentEdit owns revisioned build assignments.
     """
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[TagUnitOfWork]) -> None:
@@ -128,6 +130,10 @@ class TagService:
         async with self._uow_factory() as uow:
             return await uow.tags.approved()
 
+    async def build_revision(self, build_id: int) -> int:
+        async with self._uow_factory() as uow:
+            return await uow.tags.build_revision(build_id)
+
     async def public_definition(self, tag_id: int) -> TagDefinition | None:
         """Return an approved tag, or None if it is missing or has another status."""
         async with self._uow_factory() as uow:
@@ -148,90 +154,6 @@ class TagService:
         """Hide a published tag while retaining assignments and history."""
         return await self._set_status(tag_id, TagModerationStatus.ARCHIVED)
 
-    async def assign_showcase(
-        self,
-        build_id: int,
-        tag_id: int,
-        raw_value: str | None,
-        *,
-        actor_account_id: int,
-    ) -> TagDefinition:
-        """Attach an approved showcase tag to a build submitted by the caller."""
-        definition, _, _ = await self.edit_showcase(build_id, tag_id, raw_value, actor_account_id=actor_account_id)
-        return definition
-
-    async def edit_showcase(
-        self,
-        build_id: int,
-        tag_id: int,
-        raw_value: str | None,
-        *,
-        actor_account_id: int,
-    ) -> tuple[TagDefinition, AssignmentSnapshot | None, AssignmentSnapshot]:
-        """Attach an approved showcase tag to a build submitted by the caller."""
-        async with (
-            self._uow_factory() as uow,
-            uow.builds.editing(actor=actor_account_id, operation="edit", source="showcase_assignment"),
-        ):
-            definition = await uow.tags.get(tag_id)
-            if (
-                definition is None
-                or definition.authority.value != "user"
-                or definition.semantic_kind.value != "showcase"
-                or definition.moderation_status is not TagModerationStatus.APPROVED
-            ):
-                msg = tr(t"tags-approved-user-showcase = An approved user showcase tag is required.")
-                raise ValidationError(msg)
-            value = _coerce_assignment_value(definition, raw_value)
-            before = await uow.tags.assignment(build_id, tag_id)
-            assigned = await uow.tags.assign_showcase(
-                build_id=build_id,
-                tag_id=tag_id,
-                value=value,
-                actor_account_id=actor_account_id,
-            )
-            if not assigned:
-                msg = tr(t"tags-build-not-exist = The build does not exist or was not submitted by you.")
-                raise ValidationError(msg)
-            after = await uow.tags.assignment(build_id, tag_id)
-            assert after is not None
-            await uow.commit()
-            return definition, before, after
-
-    async def replace_assignment(
-        self,
-        build_id: int,
-        tag_id: int,
-        expected: AssignmentSnapshot | None,
-        replacement: AssignmentSnapshot | None,
-        *,
-        actor_account_id: int,
-    ) -> bool:
-        """Reverse one assignment while rechecking ownership and publication status."""
-        async with (
-            self._uow_factory() as uow,
-            uow.builds.editing(actor=actor_account_id, operation="edit", source="showcase_history"),
-        ):
-            definition = await uow.tags.get(tag_id)
-            if (
-                definition is None
-                or definition.authority.value != "user"
-                or definition.semantic_kind.value != "showcase"
-                or definition.moderation_status is not TagModerationStatus.APPROVED
-            ):
-                return False
-            if replacement is not None and replacement.value_type != definition.value_type:
-                return False
-            changed = await uow.tags.replace_assignment(
-                build_id,
-                tag_id,
-                expected,
-                replacement,
-                actor_account_id=actor_account_id,
-            )
-            await uow.commit()
-            return changed
-
     async def _set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition:
         async with self._uow_factory() as uow:
             definition = await uow.tags.set_status(tag_id, status)
@@ -241,7 +163,7 @@ class TagService:
             return definition
 
 
-def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -> TagValue:
+def coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -> TagValue:
     """Parse a tag value without converting units.
 
     Numeric values must be finite decimals in the tag's canonical unit. Boolean
@@ -274,3 +196,15 @@ def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -
     if not numeric.is_finite():
         raise ValidationError(tr(t"tags-expects-finite-number = {display_name} expects a finite number."))
     return numeric
+
+
+def require_showcase(definition: TagDefinition | None) -> TagDefinition:
+    if (
+        definition is None
+        or definition.authority.value != "user"
+        or definition.semantic_kind.value != "showcase"
+        or definition.moderation_status is not TagModerationStatus.APPROVED
+    ):
+        msg = tr(t"tags-approved-user-showcase = An approved user showcase tag is required.")
+        raise ValidationError(msg)
+    return definition

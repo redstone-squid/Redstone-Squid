@@ -4,12 +4,14 @@ from collections.abc import Callable, Sequence
 from decimal import Decimal
 from typing import override
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build
+from squid.edits.domain import Revision, RevisionConflictError
 from squid.tags.application import TagDefinitionRepository
 from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
@@ -74,6 +76,26 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         session = self._session()
         row = await session.get(TagDefinition, tag_id)
         return None if row is None else row
+
+    async def get_for_update(self, tag_id: int) -> TagDefinition | None:
+        return await self._session().get(TagDefinition, tag_id, with_for_update=True)
+
+    async def build_revision(self, build_id: int) -> int:
+        revision = await self._session().scalar(select(Build.revision).where(Build.id == build_id))
+        if revision is None:
+            raise BuildNotFoundError(build_id)
+        return revision
+
+    async def advance_build_revision(self, build_id: int, expected: Revision) -> Revision:
+        revision = await self._session().scalar(
+            update(Build)
+            .where(Build.id == build_id, Build.revision == expected.value)
+            .values(revision=Build.revision + 1)
+            .returning(Build.revision)
+        )
+        if revision is None:
+            raise RevisionConflictError(expected, await self.build_revision(build_id))
+        return Revision(expected.target, revision)
 
     @override
     async def approved(self) -> Sequence[TagDefinition]:
@@ -156,7 +178,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                 definition = await session.get(TagDefinition, tag_id)
                 if definition is None:
                     return False
-                row = TagAssignment(definition)
+                row = TagAssignment(definition, replacement.value)
                 row.build_id = build_id
                 session.add(row)
             row.value_type = replacement.value_type

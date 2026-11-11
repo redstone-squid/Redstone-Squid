@@ -2,6 +2,7 @@
 
 import json
 import re
+from functools import partial
 from typing import TYPE_CHECKING, Literal, Self
 
 import discord
@@ -16,7 +17,7 @@ from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import actor_for_interaction, allows, enforce, requires
+from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor, enforce, requires
 from squid.core.i18n import tr
 from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.permissions.domain import PermissionNode
@@ -81,6 +82,8 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         return TagsScreen(
             self.tags,
             self.restrictions,
+            self.bot.services.edits,
+            partial(current_edit_actor, request),
             build_id=build_id,
             actor_account_id=account_id,
             capabilities=capabilities,

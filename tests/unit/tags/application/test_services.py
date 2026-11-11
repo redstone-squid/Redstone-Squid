@@ -10,6 +10,7 @@ from whenever import Instant
 
 from squid.tags.application import TagService
 from squid.tags.application.history import AssignmentSnapshot
+from squid.tags.application.services import coerce_assignment_value, require_showcase
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagDefinition
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
@@ -60,6 +61,9 @@ class FakeRepository:
             return None
         self.definition = replace(self.definition, moderation_status=status)
         return self.definition
+
+    async def build_revision(self, build_id: int) -> int:
+        return 1
 
     async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None:
         return self.snapshot
@@ -176,7 +180,7 @@ async def test_invalid_public_query_name_is_rejected_before_persistence() -> Non
 
 
 @pytest.mark.asyncio
-async def test_submitter_can_attach_approved_typed_showcase_tag() -> None:
+async def test_approved_showcase_values_are_coerced_to_the_declared_type() -> None:
     service = _service()
     proposed = await service.propose_showcase(
         "Closing showcase",
@@ -184,8 +188,5 @@ async def test_submitter_can_attach_approved_typed_showcase_tag() -> None:
         query_name="closing_showcase",
         created_by_account_id=42,
     )
-    await service.approve(proposed.id)
-
-    assigned = await service.assign_showcase(10, proposed.id, "0.4", actor_account_id=42)
-
-    assert assigned.id == proposed.id
+    approved = await service.approve(proposed.id)
+    assert coerce_assignment_value(require_showcase(approved), "0.4") == Decimal("0.4")

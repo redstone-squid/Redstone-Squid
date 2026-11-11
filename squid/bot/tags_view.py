@@ -1,15 +1,20 @@
 """Canonical tag catalogue, contribution, and moderation workspace."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import replace
+from functools import partial
 from typing import Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.edit_history import history_controls, record_edit
+from squid.bot.edit_controller import EditController
+from squid.bot.edit_history import record_edit
 from squid.bot.ui import tr
+from squid.builds.application.edits import build_target
 from squid.builds.errors import AliasAlreadyAddedError
+from squid.core.actors import Actor
+from squid.edits.application import EditRunner
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
@@ -18,7 +23,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid.tags.application.history import AssignmentSnapshot
+from squid.tags.application.edits import SHOWCASE_EDIT, ShowcaseValues
 from squid.tags.domain import TagValueType
 from squid.tags.models import TagDefinition
 
@@ -39,33 +44,7 @@ class TagOperations(Protocol):
         created_by_account_id: int,
     ) -> TagDefinition: ...
 
-    async def assign_showcase(
-        self,
-        build_id: int,
-        tag_id: int,
-        raw_value: str | None,
-        *,
-        actor_account_id: int,
-    ) -> TagDefinition: ...
-
-    async def edit_showcase(
-        self,
-        build_id: int,
-        tag_id: int,
-        raw_value: str | None,
-        *,
-        actor_account_id: int,
-    ) -> tuple[TagDefinition, AssignmentSnapshot | None, AssignmentSnapshot]: ...
-
-    async def replace_assignment(
-        self,
-        build_id: int,
-        tag_id: int,
-        expected: AssignmentSnapshot | None,
-        replacement: AssignmentSnapshot | None,
-        *,
-        actor_account_id: int,
-    ) -> bool: ...
+    async def build_revision(self, build_id: int) -> int: ...
 
     async def approve(self, tag_id: int) -> TagDefinition: ...
 
@@ -122,6 +101,8 @@ class TagsScreen(sd.Screen):
     """A tag workspace that ends when replaced or timed out."""
 
     history: sl.runtime.History = sl.runtime.history(limit=20)
+    _build_revision: int | None = sl.state(default=None, persist=False)
+    _tag_names: Mapping[int, str] = sl.state(factory=dict, persist=False)
     _catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
     )
@@ -142,12 +123,15 @@ class TagsScreen(sd.Screen):
         self,
         tags: TagOperations,
         restrictions: RestrictionOperations,
+        edits: EditRunner,
+        actor: Callable[[], Awaitable[Actor]],
         *,
         build_id: int | None,
         actor_account_id: int | None,
         capabilities: frozenset[PermissionNode],
         authorize: TagAuthorizer,
     ) -> None:
+        self.edits = EditController(edits, actor, self._refresh, history=self.history)
         self._tags = tags
         self._restrictions = restrictions
         self._build_id = build_id
@@ -160,7 +144,10 @@ class TagsScreen(sd.Screen):
         await self._refresh()
 
     async def _refresh(self) -> None:
+        if self._build_id is not None:
+            self._build_revision = await self._tags.build_revision(self._build_id)
         definitions = tuple(await self._tags.public_definitions())
+        self._tag_names = {tag.id: tag.display_name for tag in definitions}
         self._catalogue = sp.Browser(
             sl.sources.list_source(definitions),
             key="tag-catalogue",
@@ -232,7 +219,7 @@ class TagsScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-tags-view-loading-build-tags = Loading build tags.")),)
-        return (self._tabs, *history_controls(self.history))
+        return (self._tabs, *self.edits.controls())
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:
@@ -265,7 +252,7 @@ class TagsScreen(sd.Screen):
                 tr(t"bot-tags-view-apply-tag-to-build = Apply tag to build"),
                 assignment,
                 key="apply",
-                on_submit=self._apply,
+                on_submit=partial(self._apply, base_revision=self._build_revision),
             ),
         )
 
@@ -306,7 +293,7 @@ class TagsScreen(sd.Screen):
             )
         )
 
-    async def _apply(self, event: sl.SubmitEvent) -> None:
+    async def _apply(self, event: sl.SubmitEvent, *, base_revision: int | None = None) -> None:
         account_id = self._actor_account_id
         if account_id is None:
             await event.notice(tr(t"tags-account-consent-required = A linked, consented account is required."))
@@ -316,30 +303,15 @@ class TagsScreen(sd.Screen):
         tag_id = form.tag_id
         assert build_id is not None and tag_id is not None
         value = form.value
-        tag, before, after = await self._tags.edit_showcase(build_id, tag_id, value, actor_account_id=account_id)
-
-        async def authorize() -> bool:
-            # Ownership and tag publication are rechecked inside the conditional write.
-            return self._actor_account_id == account_id
-
-        async def replace_assignment(
-            expected: AssignmentSnapshot | None, replacement: AssignmentSnapshot | None
-        ) -> bool:
-            return await self._tags.replace_assignment(
-                build_id, tag_id, expected, replacement, actor_account_id=account_id
-            )
-
-        record_edit(
-            self.history,
+        revision = base_revision if base_revision is not None else self._build_revision
+        if self._build_id is None:
+            revision = await self._tags.build_revision(build_id)
+        assert revision is not None
+        await self.edits.bind(SHOWCASE_EDIT, build_target(build_id), revision).save(
+            ShowcaseValues(tag_id=tag_id, value=value).edit_values(),
             tr(t"tags-history-assignment = Edit showcase tag"),
-            before,
-            after,
-            target=f"build:{build_id}:tag:{tag_id}",
-            authorize=authorize,
-            replace=replace_assignment,
-            refresh=self._refresh,
         )
-        tag_name = tag.display_name
+        tag_name = self._tag_names.get(tag_id, str(tag_id))
         await event.notice(
             tr(
                 t"bot-tags-view-attached-to-build = Attached **{tag_name}** to build #{(build_id_text := str(build_id))}."  # noqa: F841

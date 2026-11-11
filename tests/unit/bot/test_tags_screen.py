@@ -2,13 +2,25 @@
 
 from collections.abc import Sequence
 from typing import Any, cast, override
+from unittest.mock import AsyncMock
 
-from whenever import Instant
+import pytest
 
 import squid_ui as sl
 from squid.bot.admin import Admin
 from squid.bot.tags_view import TagsScreen
 from squid.builds.application.restrictions import RestrictionService
+from squid.core.actors import Actor
+from squid.edits.application import EditRunner
+from squid.edits.domain import (
+    EditAttempt,
+    EditCommand,
+    EditOutcome,
+    EditReceipt,
+    EditResult,
+    Revision,
+    RevisionConflictError,
+)
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
@@ -16,7 +28,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
 )
 from squid.tags.application import TagService
-from squid.tags.application.history import AssignmentSnapshot
+from squid.tags.application.edits import ShowcaseValues
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_ui.runtime import transaction
@@ -43,6 +55,11 @@ class FakeTagService(TagService):
         self.proposals: list[tuple[str, TagValueType, str | None, int]] = []
         self.assignments: list[tuple[int, int, str | None, int]] = []
         self.approvals: list[int] = []
+        self.revision = 1
+
+    @override
+    async def build_revision(self, build_id: int) -> int:
+        return self.revision
 
     @override
     async def public_definitions(self) -> Sequence[TagDefinition]:
@@ -66,24 +83,6 @@ class FakeTagService(TagService):
         return self.proposal
 
     @override
-    async def assign_showcase(
-        self, build_id: int, tag_id: int, raw_value: str | None, *, actor_account_id: int
-    ) -> TagDefinition:
-        self.assignments.append((build_id, tag_id, raw_value, actor_account_id))
-        return self.published
-
-    @override
-    async def edit_showcase(
-        self, build_id: int, tag_id: int, raw_value: str | None, *, actor_account_id: int
-    ) -> tuple[TagDefinition, AssignmentSnapshot | None, AssignmentSnapshot]:
-        definition = await self.assign_showcase(build_id, tag_id, raw_value, actor_account_id=actor_account_id)
-        return (
-            definition,
-            None,
-            AssignmentSnapshot(TagValueType.NONE, None, None, None, None, "user", actor_account_id, Instant.now()),
-        )
-
-    @override
     async def approve(self, tag_id: int) -> TagDefinition:
         self.approvals.append(tag_id)
         return self.proposal
@@ -95,6 +94,31 @@ class FakeTagService(TagService):
     @override
     async def archive(self, tag_id: int) -> TagDefinition:
         return self.published
+
+
+class TagEditRecorder(EditRunner):
+    def __init__(self, tags: FakeTagService) -> None:
+        self.tags = tags
+
+    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+        values = ShowcaseValues.model_validate_json(command.values.encoded)
+        self.tags.assignments.append(
+            (int(command.expected[0].target.key), values.tag_id, values.value, actor.require_account_id())
+        )
+        self.tags.revision += 1
+        revisions = (Revision(command.expected[0].target, self.tags.revision),)
+        receipt = EditReceipt(
+            command, ShowcaseValues(tag_id=values.tag_id, assigned=False).edit_values(), command.values, revisions
+        )
+        if attempt is not None:
+            attempt.receipt = receipt
+        return EditResult(
+            EditOutcome(command.operation_id, actor.key, command.fingerprint, revisions, changed=True, final=False),
+            receipt,
+        )
+
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
+        raise NotImplementedError
 
 
 class FakeRestrictionService(RestrictionService):
@@ -149,6 +173,8 @@ def make_screen(
         TagsScreen(
             tags,
             restrictions,
+            TagEditRecorder(tags),
+            AsyncMock(return_value=Actor(account_id=account_id)),
             build_id=build_id,
             actor_account_id=account_id,
             capabilities=capabilities,
@@ -182,6 +208,17 @@ async def test_seeded_build_application_uses_the_opening_build() -> None:
 
     assert tags.assignments == [(42, 1, None, 7)]
     assert len(event.notices) == 1
+
+
+async def test_open_assignment_form_keeps_its_displayed_build_revision() -> None:
+    screen, tags, _ = make_screen()
+    await screen.on_load()
+    opening_revision = tags.revision
+    with transaction():
+        await screen._apply(cast(sl.SubmitEvent, NoticeEvent(tag_id=1, value=None)))
+    with transaction(), pytest.raises(RevisionConflictError):
+        await screen._apply(cast(sl.SubmitEvent, NoticeEvent(tag_id=1, value=None)), base_revision=opening_revision)
+    assert len(tags.assignments) == 1
 
 
 async def test_proposal_refreshes_the_service_backed_browsers() -> None:
