@@ -120,13 +120,14 @@ class StarboardOperations:
 
     async def row(
         self, uow: StarboardEditUnitOfWork, command: EditCommand, *, missing: bool = False
-    ) -> StarboardConfig | None:
+    ) -> tuple[StarboardConfig | None, Revision]:
+        """Lock the board and check its revision. A board that does not exist yet has revision 0."""
         row = await uow.starboards.get_by_id(self.identity(command), for_update=True, include_archived=True)
-        require_revision(command.expected[0], 0 if row is None else row.revision)
+        revision = require_revision(command.expected[0], 0 if row is None else row.revision)
         if row is None and not missing:
             msg = "Starboard not found."
             raise NotFoundError(msg)
-        return row
+        return row, revision
 
     async def authorize_board(
         self, uow: StarboardEditUnitOfWork, actor: Actor, guild_id: int, nodes: set[PermissionNode]
@@ -210,7 +211,7 @@ class StarboardEdit(FieldCommand[StarboardEditUnitOfWork, StarboardConfig, Board
 
 class StarboardCreation(StarboardOperations):
     async def prepare(self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
-        row = await self.row(uow, command, missing=True)
+        row, revision = await self.row(uow, command, missing=True)
         after = BoardPresence.model_validate(command.values.unpack())
         normalized = after.config(self.identity(command))
         after = after.model_copy(update={"settings": after.settings | {"name": normalized.name}})
@@ -234,12 +235,12 @@ class StarboardCreation(StarboardOperations):
             if collision is not None and collision.id != self.identity(command):
                 msg = "A starboard with this name already exists."
                 raise ConflictError(msg)
-        return PreparedEdit(before.values(), after.values())
+        return PreparedEdit(before.values(), after.values(), revisions=(revision,))
 
     async def apply(
         self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
-        row = await self.row(uow, command, missing=True)
+        row, _ = await self.row(uow, command, missing=True)
         after = BoardPresence.model_validate(prepared.after.unpack())
         if row is None:
             row = after.config(self.identity(command))
@@ -248,21 +249,23 @@ class StarboardCreation(StarboardOperations):
                 await uow.starboards.set_role_multiplier(row.id, role_id, weight)
         else:
             row.archived = not after.present
-        return (await uow.starboards.flush_revision(row, command.checked_revisions[0]),)
+        return (await uow.starboards.flush_revision(row, prepared.revisions[0]),)
 
 
 class StarboardDeletion(StarboardOperations):
     async def prepare(self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
-        row = await self.row(uow, command)
+        row, revision = await self.row(uow, command)
         assert row is not None
         await self.authorize_board(uow, actor, row.guild_id, {STARBOARD_BOARD_DELETE})
         before = BoardPresence(**(await self.board_values(uow, row)).model_dump(), present=not row.archived)
-        return PreparedEdit(before.values(), before.model_copy(update={"present": False}).values(), final=True)
+        return PreparedEdit(
+            before.values(), before.model_copy(update={"present": False}).values(), final=True, revisions=(revision,)
+        )
 
     async def apply(
         self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
-        row = await self.row(uow, command)
+        row, _ = await self.row(uow, command)
         assert row is not None
         row.archived = True
-        return (await uow.starboards.flush_revision(row, command.checked_revisions[0]),)
+        return (await uow.starboards.flush_revision(row, prepared.revisions[0]),)

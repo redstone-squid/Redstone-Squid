@@ -39,6 +39,7 @@ from squid_reactivity.transactions import (
 from squid_ui.testing import submit_event
 from squid_ui_discord.testing import commit_render, http_error, interaction_harness
 from tests.support.discord import make_layout_bot
+from tests.support.edits import bound_revisions
 
 GUILD_ID = 7
 EVERYTHING = SettingsCapabilities(view_server=True, edit_server=True, edit_voting=True)
@@ -185,8 +186,8 @@ def make_component_panel(
     async def execute(command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
         if not await panel.settings.authorize(SETTINGS_SERVER_EDIT):
             raise AuthorizationError
-        if command.checked_revisions[0].value != settings.revision:
-            raise RevisionConflictError(command.checked_revisions[0], settings.revision)
+        if bound_revisions(command)[0].value != settings.revision:
+            raise RevisionConflictError(bound_revisions(command)[0], settings.revision)
         current, _ = await settings.guild_snapshot(GUILD_ID)
         before = EditValues.of(current.model_dump(mode="json"))
         after = before.patch(command.values)
@@ -203,7 +204,7 @@ def make_component_panel(
         voting = GuildSettings.model_validate(values).voting
         votes.role_weights = tuple(weight for configuration in voting.values() for weight in configuration.weights)
         settings.revision += int(before != after)
-        versions = (Revision(command.checked_revisions[0].target, settings.revision),)
+        versions = (Revision(bound_revisions(command)[0].target, settings.revision),)
         receipt = EditReceipt(command, before, after, versions)
         if attempt is not None:
             attempt.receipt = receipt

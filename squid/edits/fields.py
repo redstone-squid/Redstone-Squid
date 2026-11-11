@@ -100,4 +100,4 @@ class FieldCommand[UowT: EditUnitOfWork, RootT, ValuesT: BaseModel]:
         await self.write(uow, prepared.root, prepared.previous, prepared.desired)
         if self.audit is not None:
             await self.audit(uow, actor, prepared.previous, prepared.desired)
-        return (await self.aggregate.flush(uow, prepared.root, command.checked_revisions[0]),)
+        return (await self.aggregate.flush(uow, prepared.root, prepared.revisions[0]),)

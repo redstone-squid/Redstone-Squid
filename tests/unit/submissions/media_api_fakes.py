@@ -30,6 +30,7 @@ from squid.submissions.application import DraftAttachmentService, StoredDraft
 from squid.submissions.application.attachment_edits import AttachmentValues
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.errors import DraftAccessDeniedError
+from tests.support.edits import bound_revisions
 
 ACCOUNT_ID = 42
 DRAFT_ID = UUID("84ab2da9-c27e-4d37-98c6-973bcc92f5e4")
@@ -184,7 +185,7 @@ class MediaEditRecorder(EditRunner):
         self.media = media
 
     async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
-        version = command.checked_revisions[0]
+        version = bound_revisions(command)[0]
         draft_id = UUID(version.target.key)
         await self.drafts.get_accessible(draft_id, actor.require_account_id())
         values = AttachmentValues.model_validate_json(command.values.encoded)

@@ -2,7 +2,6 @@
 
 import logging
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
@@ -23,6 +22,7 @@ from squid.edits.domain import (
     OperationReuseError,
     PreparedEdit,
     Revision,
+    RevisionConflictError,
 )
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
@@ -54,13 +54,16 @@ class EditUnitOfWork(UnitOfWork, Protocol):
 
 
 class EditHandler[UowT: EditUnitOfWork](Protocol):
-    """Domain behavior shared by ordinary edits and their reversals.
+    """Domain behavior for one kind of edit, used for ordinary edits, undo, and redo.
 
-    Lock targets in stable order and check every expected revision in prepare.
-    Resolve latest-state preconditions into PreparedEdit.revisions under those locks.
-    Authorization and normalization belong there too. Apply advances the revisions
-    and flushes the writes, but never commits. Final projections must describe the
-    normalized values actually written, rather than the user's unvalidated input.
+    `prepare` locks the targets in a stable order, checks permissions, and validates
+    and normalizes the requested values. It reports the current revision of every
+    guarded target in `PreparedEdit.revisions` and raises `RevisionConflictError` if
+    one differs from the command's expectation. Its `after` values must be the
+    normalized values `apply` will write, not the caller's raw input.
+
+    `apply` runs only if the values changed. It writes them, flushes, and returns each
+    target's revision after the write; it never commits.
     """
 
     async def prepare(self, uow: UowT, actor: Actor, command: EditCommand) -> PreparedEdit: ...
@@ -116,9 +119,8 @@ class EditExecutor[UowT: EditUnitOfWork]:
             prepared = await handler.prepare(uow, actor, command)
         except SchemaValidationError as error:
             raise ValidationError(str(error)) from error
-        resolved = replace(command, expected=prepared.revisions or command.expected)
-        base = resolved.checked_revisions
-        versions = (await handler.apply(uow, actor, resolved, prepared)) if prepared.changed else base
+        base = self._current_revisions(command, prepared.revisions)
+        versions = (await handler.apply(uow, actor, command, prepared)) if prepared.changed else base
         if len(versions) != len(command.expected) or {v.target for v in versions} != {
             v.target for v in command.expected
         }:
@@ -160,6 +162,18 @@ class EditExecutor[UowT: EditUnitOfWork]:
                 return None
             self._check_replay(existing, command, actor.key)
             return EditResult(existing, self._receipt(attempt, command, existing), replayed=True)
+
+    @staticmethod
+    def _current_revisions(command: EditCommand, revisions: tuple[Revision, ...]) -> tuple[Revision, ...]:
+        """Check the handler's reported revisions against the command's expectations."""
+        current = {version.target: version.value for version in revisions}
+        if len(current) != len(revisions) or current.keys() != {version.target for version in command.expected}:
+            message = "prepare must report the current revision of every guarded target"
+            raise InvalidStateError(message)
+        for version in command.expected:
+            if isinstance(version, Revision) and current[version.target] != version.value:
+                raise RevisionConflictError(version, current[version.target])
+        return revisions
 
     @staticmethod
     def _check_deadline(command: EditCommand) -> None:

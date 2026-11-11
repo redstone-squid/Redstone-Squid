@@ -17,6 +17,7 @@ from squid.edits.domain import (
 from squid.submissions.application.drafts import AppliedDraftChange, DraftActor, StoredDraft
 from squid.submissions.application.edits import answer_change, captured_answers
 from squid.submissions.domain import DraftChange
+from tests.support.edits import bound_revisions
 
 
 class RecordedDrafts(Protocol):
@@ -32,12 +33,12 @@ class DraftEditRecorder(EditRunner):
         self.drafts = drafts
 
     async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
-        draft_id = UUID(command.checked_revisions[0].target.key)
+        expected = bound_revisions(command)[0]
+        draft_id = UUID(expected.target.key)
         current = await self.drafts.get_accessible(draft_id, actor)
-        expected = command.checked_revisions[0]
         if expected.value != current.snapshot.revision:
             raise RevisionConflictError(expected, current.snapshot.revision)
-        change = answer_change(command)
+        change = answer_change(command, expected.value)
         fields = tuple(op.field_id for op in change.operations)
         before = captured_answers(current.snapshot.answers, fields)
         result = await self.drafts.apply_change(draft_id, actor, change, locale=None)

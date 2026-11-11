@@ -22,6 +22,7 @@ from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_ui.runtime import transaction
 from squid_ui.testing import labels
+from tests.support.edits import bound_revisions
 
 
 def board(name: str = "main") -> StarboardConfig:
@@ -98,10 +99,10 @@ class EditRecorder:
                 if command.kind == STARBOARD_CREATE
                 else BoardValues.model_validate(command.values.unpack())
             )
-            self.operations.config = values.config(int(command.checked_revisions[0].target.key))
+            self.operations.config = values.config(int(bound_revisions(command)[0].target.key))
             before = values.model_copy(update={"present": False}).values()
             after = command.values
-        revisions = tuple(Revision(version.target, version.value + 1) for version in command.checked_revisions)
+        revisions = tuple(Revision(version.target, version.value + 1) for version in bound_revisions(command))
         self.operations.config.revision = revisions[0].value
         receipt = EditReceipt(command, before, after, revisions, final=command.kind == STARBOARD_DELETE)
         if attempt is not None:

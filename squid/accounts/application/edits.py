@@ -162,4 +162,4 @@ class AccountUnlinkEdit(AccountEdits):
         identity_id = prepared.before.unpack()["identity_id"]
         assert isinstance(identity_id, int)
         await uow.accounts.unlink_identity(account.id, identity_id)
-        return (await uow.accounts.flush_edit_revision(account, command.checked_revisions[0]),)
+        return (await uow.accounts.flush_edit_revision(account, prepared.revisions[0]),)

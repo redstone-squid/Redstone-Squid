@@ -10,7 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from squid.core.actors import Actor
 from squid.core.errors import JSONValue, ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.persistence.revisions import require_revision
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.domain import DraftChange, DraftChangeKey, FieldOperation, FieldOperationKind
 
@@ -68,7 +69,8 @@ def change_command(draft_id: UUID, change: DraftChange) -> EditCommand:
     )
 
 
-def answer_change(command: EditCommand) -> DraftChange:
+def answer_change(command: EditCommand, base_revision: int) -> DraftChange:
+    """Decode an answer command into a draft change against the given draft revision."""
     patch = AnswerPatch.model_validate_json(command.values.encoded)
     if set(patch.unset).intersection(patch.answers):
         raise ValidationError
@@ -79,7 +81,7 @@ def answer_change(command: EditCommand) -> DraftChange:
         FieldOperation(patch.operation_ids.get(key, uuid4()), key, FieldOperationKind.UNSET) for key in patch.unset
     )
     return DraftChange(
-        command.checked_revisions[0].value,
+        base_revision,
         patch.client_instance_id,
         DraftChangeKey(patch.change_key or str(command.operation_id)),
         operations,
@@ -105,11 +107,9 @@ class DraftAnswersEdit:
     async def prepare(self, uow: DraftEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedAnswers:
         if len(command.expected) != 1 or command.expected[0].target.kind != "draft":
             raise ValidationError
-        expected = command.checked_revisions[0]
-        current = await self._drafts.get_accessible_in(uow, UUID(expected.target.key), actor)
-        if current.snapshot.revision != expected.value:
-            raise RevisionConflictError(expected, current.snapshot.revision)
-        change = answer_change(command)
+        current = await self._drafts.get_accessible_in(uow, UUID(command.expected[0].target.key), actor)
+        revision = require_revision(command.expected[0], current.snapshot.revision)
+        change = answer_change(command, revision.value)
         candidate = await self._drafts.validate_change(current, change, locale=None)
         fields = tuple(operation.field_id for operation in change.operations)
         return PreparedAnswers(
@@ -117,6 +117,7 @@ class DraftAnswersEdit:
             captured_answers(candidate.answers, fields),
             draft=current,
             change=change,
+            revisions=(revision,),
         )
 
     async def apply(

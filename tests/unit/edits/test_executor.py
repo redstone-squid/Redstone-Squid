@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.errors import AuthorizationError, ValidationError
+from squid.core.errors import AuthorizationError, InvalidStateError, ValidationError
 from squid.edits.application import EditExecutor
 from squid.edits.domain import (
     EditAttempt,
@@ -22,6 +22,7 @@ from squid.edits.domain import (
     EditValues,
     LatestRevision,
     OperationReuseError,
+    PreparedEdit,
     Revision,
     RevisionConflictError,
 )
@@ -221,3 +222,36 @@ async def test_unconditional_edits_capture_latest_state_and_replay_without_reapp
 def test_unconditional_undo_is_rejected() -> None:
     with pytest.raises(ValidationError):
         EditCommand("example", (LatestRevision(TARGET),), EditValues.of({}), purpose="undo")
+
+
+class ReportingHandler:
+    """Prepare an edit without checking revisions, reporting a fixed current revision."""
+
+    def __init__(self, revisions: tuple[Revision, ...]) -> None:
+        self.revisions = revisions
+        self.applied = False
+
+    async def prepare(self, uow: Work, actor: Actor, command: EditCommand) -> PreparedEdit:
+        return PreparedEdit(EditValues.of({}), command.values, revisions=self.revisions)
+
+    async def apply(
+        self, uow: Work, actor: Actor, command: EditCommand, prepared: PreparedEdit
+    ) -> tuple[Revision, ...]:
+        self.applied = True
+        return tuple(Revision(version.target, version.value + 1) for version in prepared.revisions)
+
+
+async def test_executor_checks_reported_revisions_before_applying() -> None:
+    state = CommittedState(Store())
+    edit = EditCommand("example", (Revision(TARGET, 1),), EditValues.of({"name": "Changed"}))
+
+    stale = ReportingHandler((Revision(TARGET, 2),))
+    with pytest.raises(RevisionConflictError):
+        await EditExecutor(partial(Work, state), {"example": stale}).execute(edit, ACTOR)
+    assert not stale.applied
+
+    missing = ReportingHandler(())
+    with pytest.raises(InvalidStateError):
+        await EditExecutor(partial(Work, state), {"example": missing}).execute(edit, ACTOR)
+    assert not missing.applied
+    assert not state.value.outcomes

@@ -26,13 +26,18 @@ class EditTarget:
 
 @dataclass(frozen=True, slots=True)
 class Revision:
+    """A target's revision counter: the value a writer expects, or the value after a write."""
+
     target: EditTarget
     value: int
 
 
 @dataclass(frozen=True, slots=True)
 class LatestRevision:
-    """Apply to the current state, resolved while the handler holds the target lock."""
+    """Expect whatever revision the target has when the handler locks it.
+
+    HTTP requests without If-Match use this to apply a change to the current state.
+    """
 
     target: EditTarget
     value: None = field(default=None, init=False)
@@ -64,6 +69,14 @@ class EditValues:
 
 @dataclass(frozen=True, slots=True)
 class EditCommand:
+    """A requested change to one or more targets, named by the handler `kind`.
+
+    `expected` lists every target the edit may change, with the revision the caller
+    displayed or `LatestRevision`. The command is never rewritten during execution;
+    the handler reports the revisions it found in `PreparedEdit.revisions`.
+    `operation_id` identifies the edit across retries.
+    """
+
     kind: str
     expected: tuple[Revision | LatestRevision, ...]
     values: EditValues
@@ -86,14 +99,6 @@ class EditCommand:
             raise ValidationError(message)
 
     @property
-    def checked_revisions(self) -> tuple[Revision, ...]:
-        """Return concrete preconditions after preparation has resolved current versions."""
-        if any(not isinstance(version, Revision) for version in self.expected):
-            message = "The handler must resolve every unconditional target under its lock"
-            raise InvalidStateError(message)
-        return tuple(version for version in self.expected if isinstance(version, Revision))
-
-    @property
     def fingerprint(self) -> bytes:
         """Hash edit meaning, excluding the retry's transport-specific issue time."""
         content = json.dumps(
@@ -111,13 +116,22 @@ class EditCommand:
 
 @dataclass(frozen=True, slots=True)
 class PreparedEdit:
-    """Validated domain projections, captured before any write."""
+    """A handler's validated view of an edit, captured before any write.
+
+    Attributes:
+        before: The current values of the fields the edit touches.
+        after: The normalized values the edit will write.
+        final: The edit cannot be undone, for example a deletion.
+        resources: Lease identities, such as `attachment:<uuid>`, that undo would need.
+        revisions: The current revision of every target in the command, read under the
+            handler's lock. `apply` advances these.
+    """
 
     before: EditValues
     after: EditValues
     final: bool = False
     resources: tuple[str, ...] = ()
-    revisions: tuple[Revision, ...] = field(default=(), kw_only=True)
+    revisions: tuple[Revision, ...] = field(kw_only=True)
 
     @property
     def changed(self) -> bool:

@@ -46,8 +46,10 @@ An edit moves through these steps:
 2. `EditExecutor.execute` opens a transaction and takes an advisory lock on the
    operation ID. If an `edit_operations` row already exists for that ID, the command
    is a retry: the executor returns the stored outcome instead of applying it again.
-3. The handler's `prepare` locks the targets, checks the expected revisions, checks
-   permissions, and returns the values before and after the change.
+3. The handler's `prepare` locks the targets, checks permissions, and returns the
+   values before and after the change with the current revision of each target. The
+   executor rejects the edit if a revision differs from the command's expectation;
+   for `LatestRevision`, any current value is accepted.
 4. If the values differ, `apply` writes them and returns the new revisions.
 5. The executor stores an `EditOutcome` (operation ID, actor, new revisions) in
    `edit_operations` and commits.
@@ -128,7 +130,5 @@ These are current limitations, not intended design:
 - Builds declare their own revision column instead of using `Revisioned`.
 - Draft revisions start at 0; other revisions start at 1.
 - Several repositories increase revision counters by hand instead of through one helper.
-- `EditCommand.expected` can contain unresolved `LatestRevision` values until the handler
-  prepares the edit, so code reading a command must check which form it has.
 - Resource leases are managed by the generic `EditController`, although only draft
   attachments use them.
