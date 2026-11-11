@@ -844,7 +844,7 @@ export const notificationPreferencesGet = <ThrowOnError extends boolean = false>
 /**
  * Update Preferences
  *
- * Update web and DM channels independently after consent.
+ * Update both channels against the notification revision read by the caller.
  */
 export const notificationPreferencesUpdate = <ThrowOnError extends boolean = false>(options: Options<NotificationPreferencesUpdateData, ThrowOnError>): RequestResult<NotificationPreferencesUpdateResponses, NotificationPreferencesUpdateErrors, ThrowOnError> => (options.client ?? client).patch<NotificationPreferencesUpdateResponses, NotificationPreferencesUpdateErrors, ThrowOnError>({
     security: [{
@@ -878,7 +878,7 @@ export const notificationSubscriptionsList = <ThrowOnError extends boolean = fal
 /**
  * Create Subscription
  *
- * Subscribe to a public creator, record title, or structured filter.
+ * Follow a creator, record, or filter against the notification settings revision.
  */
 export const notificationSubscriptionCreate = <ThrowOnError extends boolean = false>(options: Options<NotificationSubscriptionCreateData, ThrowOnError>): RequestResult<NotificationSubscriptionCreateResponses, NotificationSubscriptionCreateErrors, ThrowOnError> => (options.client ?? client).post<NotificationSubscriptionCreateResponses, NotificationSubscriptionCreateErrors, ThrowOnError>({
     security: [{
@@ -897,7 +897,7 @@ export const notificationSubscriptionCreate = <ThrowOnError extends boolean = fa
 /**
  * Delete Subscription
  *
- * Remove one caller-owned subscription.
+ * Disable one caller-owned subscription, retaining its identity for history.
  */
 export const notificationSubscriptionDelete = <ThrowOnError extends boolean = false>(options: Options<NotificationSubscriptionDeleteData, ThrowOnError>): RequestResult<NotificationSubscriptionDeleteResponses, NotificationSubscriptionDeleteErrors, ThrowOnError> => (options.client ?? client).delete<NotificationSubscriptionDeleteResponses, NotificationSubscriptionDeleteErrors, ThrowOnError>({
     security: [{
@@ -927,7 +927,7 @@ export const notificationInboxList = <ThrowOnError extends boolean = false>(opti
 /**
  * Mark Read
  *
- * Mark one visible inbox item as read.
+ * Mark one visible inbox item as read, checking its own revision.
  */
 export const notificationInboxMarkRead = <ThrowOnError extends boolean = false>(options: Options<NotificationInboxMarkReadData, ThrowOnError>): RequestResult<NotificationInboxMarkReadResponses, NotificationInboxMarkReadErrors, ThrowOnError> => (options.client ?? client).post<NotificationInboxMarkReadResponses, NotificationInboxMarkReadErrors, ThrowOnError>({
     security: [{
@@ -942,7 +942,7 @@ export const notificationInboxMarkRead = <ThrowOnError extends boolean = false>(
 /**
  * Mark Unread
  *
- * Mark one visible inbox item as unread.
+ * Mark one visible inbox item as unread, checking its own revision.
  */
 export const notificationInboxMarkUnread = <ThrowOnError extends boolean = false>(options: Options<NotificationInboxMarkUnreadData, ThrowOnError>): RequestResult<NotificationInboxMarkUnreadResponses, NotificationInboxMarkUnreadErrors, ThrowOnError> => (options.client ?? client).post<NotificationInboxMarkUnreadResponses, NotificationInboxMarkUnreadErrors, ThrowOnError>({
     security: [{

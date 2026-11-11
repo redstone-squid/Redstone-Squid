@@ -27,6 +27,7 @@ from whenever import Instant
 from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
 from squid.persistence.base import Base
 from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
+from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC, StrEnumText
 
 
@@ -47,10 +48,11 @@ class RecordFilterJSON(TypeDecorator[RecordSubscriptionFilter]):
         return None if value is None else RecordSubscriptionFilter.from_dict(value)
 
 
-class NotificationProfile(Base, kw_only=True):
+class NotificationProfile(Revisioned, Base, kw_only=True):
     """Channel preferences for an account. Consent is recorded on the account itself."""
 
     __tablename__ = "notification_profiles"
+    __table_args__ = (CheckConstraint("revision > 0", name="notification_profiles_revision_positive"),)
 
     account_id: Mapped[int] = mapped_column(
         Integer,
@@ -120,11 +122,12 @@ class NotificationSubscription(Base, kw_only=True):
     )
 
 
-class InboxNotification(Base, kw_only=True):
+class InboxNotification(Revisioned, Base, kw_only=True):
     """An event-derived message for one recipient, shared by the web inbox and DM delivery."""
 
     __tablename__ = "notifications"
     __table_args__ = (
+        CheckConstraint("revision > 0", name="notifications_revision_positive"),
         CheckConstraint(
             "kind IN ('build_confirmed', 'build_denied', 'creator_build_confirmed', "
             "'record_gained', 'staff_build_submitted')",

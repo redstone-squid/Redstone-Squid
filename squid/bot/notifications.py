@@ -9,8 +9,9 @@ import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
 from squid.bot.notifications_view import NotificationScreen
-from squid.bot.utils.permissions import allows
+from squid.bot.utils.permissions import allows, subject_for_interaction
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
+from squid.edits.domain import EditActor
 from squid.notifications import (
     InboxVisibility,
     PendingNotificationDelivery,
@@ -56,16 +57,22 @@ class NotificationCog(sd.Cog[Any]):
         account_id = await self._account_id(request)
         if account_id is None:
             return None
+
+        async def actor() -> EditActor:
+            return EditActor(await subject_for_interaction(request), discord_user_id=request.user.id)
+
+        async def visibility() -> InboxVisibility:
+            return await self._inbox_visibility(request)
+
         return NotificationScreen(
             notifications=self.bot.services.notifications,
+            edits=self.bot.services.edits,
+            actor=actor,
             account_id=account_id,
             author_id=request.user.id,
             visibility=await self._inbox_visibility(request),
-            visibility_resolver=self._event_visibility,
+            visibility_resolver=visibility,
         )
-
-    async def _event_visibility(self, event: sd.ActionEvent) -> InboxVisibility:
-        return await self._inbox_visibility(event.context)
 
     @staticmethod
     async def _inbox_visibility(caller: sd.Request[Any]) -> InboxVisibility:

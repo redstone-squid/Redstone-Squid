@@ -1,12 +1,15 @@
 """Notification REST orchestration contracts."""
 
-from typing import override
-from uuid import UUID
+from types import SimpleNamespace
+from typing import cast, override
+from uuid import UUID, uuid4
 
 import pytest
+from fastapi import Response
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
+from squid.api.revisions import RevisionRequiredError
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.notifications import (
     create_subscription,
@@ -31,6 +34,8 @@ from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
+from squid.runtime import ApiServices
+from tests.support.notification_edits import NotificationEditRecorder
 
 ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
@@ -44,6 +49,10 @@ class NotificationRecorder(NotificationService):
         self.subscription_calls: list[tuple[int, SubscriptionKind, UUID | None, RecordSubscriptionFilter | None]] = []
         self.inbox_reads: list[tuple[int, PageSelector, int, InboxVisibility]] = []
         self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
+
+    @override
+    async def preferences(self, account_id: int) -> NotificationPreferences:
+        return self.preferences_result
 
     @override
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
@@ -105,6 +114,10 @@ async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:
         NotificationPreferenceUpdate(),
         notifications,
         ACCOUNT,
+        cast(ApiServices, SimpleNamespace(edits=NotificationEditRecorder(notifications))),
+        Response(),
+        uuid4(),
+        '"notification-settings-7-r0"',
     )
 
     assert response.consent_pending is False
@@ -136,7 +149,15 @@ async def test_record_filter_subscription_preserves_presence_and_exact_predicate
         }
     )
 
-    response = await create_subscription(request, notifications, ACCOUNT)
+    response = await create_subscription(
+        request,
+        notifications,
+        ACCOUNT,
+        cast(ApiServices, SimpleNamespace(edits=NotificationEditRecorder(notifications))),
+        Response(),
+        uuid4(),
+        '"notification-settings-7-r0"',
+    )
 
     assert response.filter == record_filter.as_dict()
     assert notifications.subscription_calls == [(7, SubscriptionKind.RECORD_FILTER, None, record_filter)]
@@ -175,10 +196,21 @@ async def test_read_and_unread_routes_share_the_resolved_visibility() -> None:
     notifications = NotificationRecorder()
     visibility = InboxVisibility(include_staff=True)
 
-    assert (await mark_read(3, notifications, ACCOUNT, visibility)).status_code == 204
-    assert (await mark_unread(3, notifications, ACCOUNT, visibility)).status_code == 204
+    recorder = NotificationEditRecorder(notifications, visibility)
+    services = cast(ApiServices, SimpleNamespace(edits=recorder))
+    assert (await mark_read(3, services, ACCOUNT, uuid4(), '"inbox-3-r1"')).status_code == 204
+    assert (await mark_unread(3, services, ACCOUNT, uuid4(), '"inbox-3-r2"')).status_code == 204
+    assert [command.expected[0].value for command in recorder.commands] == [1, 2]
 
     assert notifications.read_changes == [
         (7, 3, True, visibility),
         (7, 3, False, visibility),
     ]
+
+
+async def test_notification_writes_require_the_revision_the_caller_read() -> None:
+    recorder = NotificationEditRecorder(NotificationRecorder())
+    services = cast(ApiServices, SimpleNamespace(edits=recorder))
+    with pytest.raises(RevisionRequiredError):
+        await mark_read(3, services, ACCOUNT, uuid4())
+    assert recorder.commands == []

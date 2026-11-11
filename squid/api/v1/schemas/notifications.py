@@ -19,6 +19,7 @@ class NotificationPreferencesDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    revision: int
     consent_pending: bool
     web_enabled: bool
     dm_enabled: bool
@@ -27,6 +28,7 @@ class NotificationPreferencesDetail(BaseModel):
     @classmethod
     def from_domain(cls, preferences: NotificationPreferences) -> NotificationPreferencesDetail:
         return cls(
+            revision=preferences.revision,
             consent_pending=preferences.consent_pending,
             web_enabled=preferences.web_enabled,
             dm_enabled=preferences.dm_enabled,
@@ -137,6 +139,7 @@ class InboxNotificationDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
+    revision: int
     kind: str
     payload: dict[str, object]
     created_at: datetime
@@ -146,6 +149,7 @@ class InboxNotificationDetail(BaseModel):
     def from_domain(cls, notification: InboxNotification) -> InboxNotificationDetail:
         return cls(
             id=notification.id,
+            revision=notification.revision,
             kind=notification.kind.value,
             payload=notification.payload,
             created_at=notification.created_at.to_stdlib(),

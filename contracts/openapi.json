@@ -8987,7 +8987,7 @@
           "notifications"
         ],
         "summary": "Update Preferences",
-        "description": "Update web and DM channels independently after consent.",
+        "description": "Update both channels against the notification revision read by the caller.",
         "operationId": "notification_preferences_update",
         "security": [
           {
@@ -8996,6 +8996,22 @@
           }
         ],
         "parameters": [
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -9118,6 +9134,46 @@
               }
             },
             "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -9288,7 +9344,7 @@
           "notifications"
         ],
         "summary": "Create Subscription",
-        "description": "Subscribe to a public creator, record title, or structured filter.",
+        "description": "Follow a creator, record, or filter against the notification settings revision.",
         "operationId": "notification_subscription_create",
         "security": [
           {
@@ -9297,6 +9353,22 @@
           }
         ],
         "parameters": [
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -9465,6 +9537,26 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -9479,6 +9571,26 @@
               }
             },
             "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -9517,7 +9629,7 @@
           "notifications"
         ],
         "summary": "Delete Subscription",
-        "description": "Remove one caller-owned subscription.",
+        "description": "Disable one caller-owned subscription, retaining its identity for history.",
         "operationId": "notification_subscription_delete",
         "security": [
           {
@@ -9533,6 +9645,22 @@
             "schema": {
               "type": "integer",
               "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
             }
           },
           {
@@ -9660,6 +9788,46 @@
               }
             },
             "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -9937,7 +10105,7 @@
           "notifications"
         ],
         "summary": "Mark Read",
-        "description": "Mark one visible inbox item as read.",
+        "description": "Mark one visible inbox item as read, checking its own revision.",
         "operationId": "notification_inbox_mark_read",
         "security": [
           {
@@ -9953,6 +10121,22 @@
             "schema": {
               "type": "integer",
               "title": "Notification Id"
+            }
+          },
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
             }
           },
           {
@@ -10080,6 +10264,46 @@
               }
             },
             "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -10133,7 +10357,7 @@
           "notifications"
         ],
         "summary": "Mark Unread",
-        "description": "Mark one visible inbox item as unread.",
+        "description": "Mark one visible inbox item as unread, checking its own revision.",
         "operationId": "notification_inbox_mark_unread",
         "security": [
           {
@@ -10149,6 +10373,22 @@
             "schema": {
               "type": "integer",
               "title": "Notification Id"
+            }
+          },
+          {
+            "name": "if-match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
             }
           },
           {
@@ -10276,6 +10516,46 @@
               }
             },
             "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -21957,6 +22237,10 @@
             "type": "integer",
             "title": "Id"
           },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
           "kind": {
             "type": "string",
             "title": "Kind"
@@ -21988,6 +22272,7 @@
         "type": "object",
         "required": [
           "id",
+          "revision",
           "kind",
           "payload",
           "created_at",
@@ -22541,6 +22826,10 @@
       },
       "NotificationPreferencesDetail": {
         "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
           "consent_pending": {
             "type": "boolean",
             "title": "Consent Pending"
@@ -22561,6 +22850,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "revision",
           "consent_pending",
           "web_enabled",
           "dm_enabled",

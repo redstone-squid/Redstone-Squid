@@ -1,6 +1,7 @@
 """Notification preference, subscription, and inbox orchestration."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
@@ -23,25 +24,16 @@ from squid.settings.domain.runtime import RuntimeSettings
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
+@dataclass(frozen=True, slots=True)
+class NotificationEditorSnapshot:
+    preferences: NotificationPreferences
+    subscriptions: tuple[NotificationSubscription, ...]
+
+
 class NotificationRepository(Protocol):
     """Persistence needed by the notification application service."""
 
-    async def replace_preferences(
-        self, account_id: int, expected: tuple[bool, bool], replacement: tuple[bool, bool]
-    ) -> bool: ...
-
-    async def replace_read_states(
-        self,
-        account_id: int,
-        expected: tuple[tuple[int, bool], ...],
-        replacement: tuple[tuple[int, bool], ...],
-        *,
-        visibility: InboxVisibility,
-    ) -> bool: ...
-
-    async def replace_subscription_states(
-        self, account_id: int, expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
-    ) -> bool: ...
+    async def lock_settings(self, account_id: int) -> int: ...
 
     async def get_preferences(self, account_id: int) -> NotificationPreferences: ...
 
@@ -121,39 +113,13 @@ class NotificationService:
         self._retention_days = retention_days
         self._runtime_settings = runtime_settings
 
-    async def replace_preferences(
-        self, account_id: int, expected: tuple[bool, bool], replacement: tuple[bool, bool]
-    ) -> bool:
+    async def editor_snapshot(self, account_id: int) -> NotificationEditorSnapshot:
         async with self._uow_factory() as uow:
-            changed = await uow.notifications.replace_preferences(account_id, expected, replacement)
-            if changed:
-                await uow.commit()
-            return changed
-
-    async def replace_read_states(
-        self,
-        account_id: int,
-        expected: tuple[tuple[int, bool], ...],
-        replacement: tuple[tuple[int, bool], ...],
-        *,
-        visibility: InboxVisibility,
-    ) -> bool:
-        async with self._uow_factory() as uow:
-            changed = await uow.notifications.replace_read_states(
-                account_id, expected, replacement, visibility=visibility
+            await uow.notifications.lock_settings(account_id)
+            return NotificationEditorSnapshot(
+                await uow.notifications.get_preferences(account_id),
+                tuple(await uow.notifications.list_subscriptions(account_id)),
             )
-            if changed:
-                await uow.commit()
-            return changed
-
-    async def replace_subscription_states(
-        self, account_id: int, expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
-    ) -> bool:
-        async with self._uow_factory() as uow:
-            changed = await uow.notifications.replace_subscription_states(account_id, expected, replacement)
-            if changed:
-                await uow.commit()
-            return changed
 
     async def preferences(self, account_id: int) -> NotificationPreferences:
         """Return preferences, including an implicit disabled profile when absent."""
@@ -216,7 +182,7 @@ class NotificationService:
             return await uow.notifications.list_subscriptions(account_id)
 
     async def unsubscribe(self, account_id: int, subscription_id: int) -> None:
-        """Delete one caller-owned subscription."""
+        """Disable one caller-owned subscription while retaining its stable ID."""
         async with self._uow_factory() as uow:
             if not await uow.notifications.delete_subscription(account_id, subscription_id):
                 raise NotificationSubscriptionNotFoundError(public_context={"subscription_id": subscription_id})

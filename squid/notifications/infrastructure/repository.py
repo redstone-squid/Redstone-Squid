@@ -114,86 +114,78 @@ class PostgresNotificationRepository:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
-    async def replace_preferences(
-        self, account_id: int, expected: tuple[bool, bool], replacement: tuple[bool, bool]
-    ) -> bool:
+    async def lock_settings(self, account_id: int) -> int:
         session = self._session()
         await session.get(Account, account_id, with_for_update=True)
-        await session.get(NotificationProfile, account_id, with_for_update=True)
-        current = await self.get_preferences(account_id)
-        if not current.has_current_consent or (current.web_enabled, current.dm_enabled) != expected:
-            return False
-        return (
-            await self.update_preferences(account_id, web_enabled=replacement[0], dm_enabled=replacement[1]) is not None
+        row = await session.get(NotificationProfile, account_id, with_for_update=True)
+        return 0 if row is None else row.revision
+
+    async def advance_settings(self, account_id: int) -> int:
+        row = await self._session().scalar(
+            insert(NotificationProfile)
+            .values(account_id=account_id)
+            .on_conflict_do_update(
+                index_elements=[NotificationProfile.account_id], set_={"revision": NotificationProfile.revision + 1}
+            )
+            .returning(NotificationProfile)
+            .execution_options(populate_existing=True)
+        )
+        assert row is not None
+        return row.revision
+
+    async def subscription(self, account_id: int, subscription_id: int) -> NotificationSubscription | None:
+        return await self._session().scalar(
+            select(NotificationSubscription).where(
+                NotificationSubscription.account_id == account_id, NotificationSubscription.id == subscription_id
+            )
         )
 
-    async def replace_read_states(
+    async def matching_subscription(
         self,
         account_id: int,
-        expected: tuple[tuple[int, bool], ...],
-        replacement: tuple[tuple[int, bool], ...],
         *,
-        visibility: InboxVisibility,
-    ) -> bool:
-        session = self._session()
-        if {key for key, _ in expected} != {key for key, _ in replacement}:
-            message = "history must replace the same notification targets"
-            raise ValueError(message)
-        rows = (
-            await session.scalars(
+        kind: SubscriptionKind,
+        subject_id: UUID | None,
+        record_filter: RecordSubscriptionFilter | None,
+    ) -> NotificationSubscription | None:
+        return await self._session().scalar(
+            select(NotificationSubscription)
+            .where(
+                NotificationSubscription.account_id == account_id,
+                NotificationSubscription.kind == kind,
+                NotificationSubscription.subject_id.is_not_distinct_from(subject_id),
+                NotificationSubscription.record_filter.is_not_distinct_from(record_filter),
+            )
+            .order_by(NotificationSubscription.enabled.desc(), NotificationSubscription.id)
+            .limit(1)
+        )
+
+    async def reserve_subscription_id(self) -> int:
+        result = await self._session().scalar(
+            select(func.nextval(func.pg_get_serial_sequence("notification_subscriptions", "id")))
+        )
+        assert isinstance(result, int)
+        return result
+
+    async def save_subscription(self, row: NotificationSubscription) -> None:
+        await self.lock_settings(row.account_id)
+        self._session().add(row)
+        await self._session().flush()
+
+    async def lock_inbox(
+        self, account_id: int, ids: tuple[int, ...], *, visibility: InboxVisibility
+    ) -> Sequence[InboxNotification]:
+        return (
+            await self._session().scalars(
                 select(InboxNotification)
-                .where(
-                    InboxNotification.id.in_([key for key, _ in expected]), *_inbox_predicates(account_id, visibility)
-                )
+                .where(InboxNotification.id.in_(ids), *_inbox_predicates(account_id, visibility))
                 .order_by(InboxNotification.id)
                 .with_for_update()
             )
         ).all()
-        if {row.id: row.read_at is not None for row in rows} != dict(expected):
-            return False
-        for notification_id, read in replacement:
-            await self._set_read_state(account_id, notification_id, visibility=visibility, read=read)
-        return True
 
-    async def replace_subscription_states(
-        self, account_id: int, expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
-    ) -> bool:
-        session = self._session()
-        await session.get(Account, account_id, with_for_update=True)
-        if await self._consent_pending(session, account_id):
-            return False
-        if {key for key, _ in expected} != {key for key, _ in replacement}:
-            message = "history must replace the same subscription targets"
-            raise ValueError(message)
-        rows = (
-            await session.scalars(
-                select(NotificationSubscription)
-                .where(
-                    NotificationSubscription.account_id == account_id,
-                    NotificationSubscription.id.in_([key for key, _ in expected]),
-                )
-                .order_by(NotificationSubscription.id)
-                .with_for_update()
-            )
-        ).all()
-        if {row.id: row.enabled for row in rows} != dict(expected):
-            return False
-        desired = dict(replacement)
-        active = await self.list_subscriptions(account_id)
-        for row in rows:
-            if desired[row.id] and not row.enabled:
-                if any(
-                    other.id != row.id
-                    and (other.kind, other.subject_id, other.record_filter)
-                    == (row.kind, row.subject_id, row.record_filter)
-                    for other in active
-                ):
-                    return False
-                if row.subject_id is not None and not await self.subscription_target_exists(row.kind, row.subject_id):
-                    return False
-        for row in rows:
-            row.enabled = desired[row.id]
-        return True
+    async def flush_inbox(self) -> None:
+        await self._session().flush()
 
     async def get_preferences(self, account_id: int) -> NotificationPreferences:
         session = self._session()
@@ -237,9 +229,11 @@ class PostgresNotificationRepository:
                         # so a bounce is not forgotten by an unrelated web-inbox toggle.
                         "dm_suspended_at": None if dm_enabled else NotificationProfile.dm_suspended_at,
                         "updated_at": func.now(),
+                        "revision": NotificationProfile.revision + 1,
                     },
                 )
                 .returning(NotificationProfile)
+                .execution_options(populate_existing=True)
             )
         ).one()
         if not dm_enabled:
@@ -267,44 +261,22 @@ class PostgresNotificationRepository:
         subject_id: UUID | None,
         record_filter: RecordSubscriptionFilter | None,
     ) -> NotificationSubscription:
-        self._session()
-        filter_value = record_filter
-        session = self._session()
-        await session.get(Account, account_id, with_for_update=True)
-        predicates = [
-            NotificationSubscription.account_id == account_id,
-            NotificationSubscription.kind == kind,
-            NotificationSubscription.enabled.is_(True),
-        ]
-        if subject_id is None:
-            predicates.extend(
-                [
-                    NotificationSubscription.subject_id.is_(None),
-                    NotificationSubscription.record_filter == filter_value,
-                ]
-            )
-        else:
-            predicates.append(NotificationSubscription.subject_id == subject_id)
-        existing = await session.scalar(select(NotificationSubscription).where(*predicates))
-        if existing is not None:
-            return existing
-        row = await session.scalar(
-            insert(NotificationSubscription)
-            .values(
-                account_id=account_id,
-                kind=kind,
-                subject_id=subject_id,
-                record_filter=filter_value,
-            )
-            .on_conflict_do_nothing()
-            .returning(NotificationSubscription)
+        await self.lock_settings(account_id)
+        existing = await self.matching_subscription(
+            account_id, kind=kind, subject_id=subject_id, record_filter=record_filter
         )
-        if row is None:
-            row = await session.scalar(select(NotificationSubscription).where(*predicates))
-        if row is None:
-            msg = "notification subscription conflict did not resolve to an equivalent row"
-            raise RuntimeError(msg)
-        return row
+        if existing is not None and existing.enabled:
+            return existing
+        if existing is None:
+            existing = NotificationSubscription(
+                account_id=account_id, kind=kind, subject_id=subject_id, record_filter=record_filter
+            )
+            self._session().add(existing)
+        else:
+            existing.enabled = True
+        await self.advance_settings(account_id)
+        await self._session().flush()
+        return existing
 
     async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         session = self._session()
@@ -321,16 +293,13 @@ class PostgresNotificationRepository:
         return tuple(row for row in rows)
 
     async def delete_subscription(self, account_id: int, subscription_id: int) -> bool:
-        session = self._session()
-        removed = await session.scalar(
-            delete(NotificationSubscription)
-            .where(
-                NotificationSubscription.id == subscription_id,
-                NotificationSubscription.account_id == account_id,
-            )
-            .returning(NotificationSubscription.id)
-        )
-        return removed is not None
+        await self.lock_settings(account_id)
+        row = await self.subscription(account_id, subscription_id)
+        if row is None or not row.enabled:
+            return False
+        row.enabled = False
+        await self.advance_settings(account_id)
+        return True
 
     async def list_inbox(
         self,
@@ -389,7 +358,10 @@ class PostgresNotificationRepository:
         updated = await session.scalar(
             update(InboxNotification)
             .where(InboxNotification.id == notification_id, *_inbox_predicates(account_id, visibility))
-            .values(read_at=func.coalesce(InboxNotification.read_at, func.now()) if read else None)
+            .values(
+                read_at=func.coalesce(InboxNotification.read_at, func.now()) if read else None,
+                revision=InboxNotification.revision + 1,
+            )
             .returning(InboxNotification.id)
         )
         return updated is not None
@@ -505,6 +477,14 @@ class PostgresNotificationRepository:
 
     async def suspend_dm(self, delivery: PendingNotificationDelivery, error: str) -> bool:
         session = self._session()
+        # Settings changes lock the account before delivery rows. Follow that order,
+        # then recheck the claim: an account merge may have moved it while we waited.
+        account_id = await session.scalar(
+            select(NotificationDeliveryRecord.account_id).where(*_delivery_claim(delivery))
+        )
+        if account_id is None:
+            return False
+        await self.lock_settings(account_id)
         account_id = await self._settle_delivery(
             session, delivery, error=error, attempts=delivery.attempts + 1, dead_at=func.now()
         )
@@ -513,7 +493,12 @@ class PostgresNotificationRepository:
         await session.execute(
             update(NotificationProfile)
             .where(NotificationProfile.account_id == account_id)
-            .values(dm_enabled=False, dm_suspended_at=func.now(), updated_at=func.now())
+            .values(
+                dm_enabled=False,
+                dm_suspended_at=func.now(),
+                updated_at=func.now(),
+                revision=NotificationProfile.revision + 1,
+            )
         )
         return True
 
@@ -898,6 +883,7 @@ def _preferences(
         return NotificationPreferences(account_id=account_id, consent_pending=consent_pending)
     return NotificationPreferences(
         account_id=account_id,
+        revision=profile.revision,
         consent_pending=consent_pending,
         web_enabled=profile.web_enabled,
         dm_enabled=profile.dm_enabled,

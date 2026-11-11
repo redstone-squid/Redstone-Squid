@@ -1772,6 +1772,10 @@ export type InboxNotificationDetail = {
      */
     id: number;
     /**
+     * Revision
+     */
+    revision: number;
+    /**
      * Kind
      */
     kind: string;
@@ -2112,6 +2116,10 @@ export type NotificationPreferenceUpdate = {
  * a separate consent notice.
  */
 export type NotificationPreferencesDetail = {
+    /**
+     * Revision
+     */
+    revision: number;
     /**
      * Consent Pending
      */
@@ -6573,6 +6581,10 @@ export type NotificationPreferencesUpdateData = {
     body: NotificationPreferenceUpdate;
     headers?: {
         /**
+         * If-Match
+         */
+        'if-match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -6598,9 +6610,17 @@ export type NotificationPreferencesUpdateErrors = {
      */
     403: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Validation Error
      */
     422: HttpValidationError;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6665,6 +6685,10 @@ export type NotificationSubscriptionCreateData = {
     body: NotificationSubscriptionCreate;
     headers?: {
         /**
+         * If-Match
+         */
+        'if-match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -6698,9 +6722,17 @@ export type NotificationSubscriptionCreateErrors = {
      */
     409: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ProblemDetail;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6725,6 +6757,10 @@ export type NotificationSubscriptionCreateResponse = NotificationSubscriptionCre
 export type NotificationSubscriptionDeleteData = {
     body?: never;
     headers?: {
+        /**
+         * If-Match
+         */
+        'if-match'?: string | null;
         /**
          * Idempotency-Key
          *
@@ -6760,9 +6796,17 @@ export type NotificationSubscriptionDeleteErrors = {
      */
     409: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Validation Error
      */
     422: HttpValidationError;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6858,6 +6902,10 @@ export type NotificationInboxMarkReadData = {
     body?: never;
     headers?: {
         /**
+         * If-Match
+         */
+        'if-match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -6892,9 +6940,17 @@ export type NotificationInboxMarkReadErrors = {
      */
     409: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Validation Error
      */
     422: HttpValidationError;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6919,6 +6975,10 @@ export type NotificationInboxMarkReadResponse = NotificationInboxMarkReadRespons
 export type NotificationInboxMarkUnreadData = {
     body?: never;
     headers?: {
+        /**
+         * If-Match
+         */
+        'if-match'?: string | null;
         /**
          * Idempotency-Key
          *
@@ -6954,9 +7014,17 @@ export type NotificationInboxMarkUnreadErrors = {
      */
     409: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Validation Error
      */
     422: HttpValidationError;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */

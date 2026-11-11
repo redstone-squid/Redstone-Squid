@@ -63,6 +63,14 @@ from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.notifications import NotificationService
+from squid.notifications.edits import (
+    INBOX_EDIT,
+    PREFERENCES_EDIT,
+    SUBSCRIPTIONS_EDIT,
+    InboxReadEdit,
+    NotificationPreferencesEdit,
+    NotificationSubscriptionsEdit,
+)
 from squid.permissions.application import (
     PermissionAdministrationService,
     PermissionEpochWatcher,
@@ -330,6 +338,9 @@ class _ServiceGraph:
                 PROFILE_EDIT: AccountProfileEdit(self.permissions),
                 VISIBILITY_EDIT: AccountVisibilityEdit(self.permissions),
                 UNLINK_EDIT: AccountUnlinkEdit(self.permissions),
+                PREFERENCES_EDIT: NotificationPreferencesEdit(self.permissions),
+                SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(self.permissions),
+                INBOX_EDIT: InboxReadEdit(self.permissions),
             },
         )
 

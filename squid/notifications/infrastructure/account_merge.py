@@ -52,6 +52,7 @@ def _merge_notification_profile_statement(*, survivor: int, absorbed: int) -> In
     return statement.on_conflict_do_update(
         index_elements=[NotificationProfile.account_id],
         set_={
+            "revision": NotificationProfile.revision + 1,
             "web_enabled": or_(NotificationProfile.web_enabled, statement.excluded.web_enabled),
             "dm_enabled": or_(NotificationProfile.dm_enabled, statement.excluded.dm_enabled),
             "dm_suspended_at": case(
@@ -88,6 +89,13 @@ async def merge_account_notifications(session: AsyncSession, *, survivor: int, a
     The caller locks both account rows first. Notification and delivery rows are then
     locked in ID order; no independent transaction or commit may split these writes.
     """
+    await session.execute(
+        insert(NotificationProfile)
+        .values(account_id=survivor)
+        .on_conflict_do_update(
+            index_elements=[NotificationProfile.account_id], set_={"revision": NotificationProfile.revision + 1}
+        )
+    )
     await session.execute(_merge_notification_profile_statement(survivor=survivor, absorbed=absorbed))
     await session.execute(delete(NotificationProfile).where(NotificationProfile.account_id == absorbed))
     await session.execute(_collapse_notification_subscriptions_statement(survivor=survivor, absorbed=absorbed))

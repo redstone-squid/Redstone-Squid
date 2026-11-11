@@ -1,13 +1,14 @@
 """Authenticated notification management and inbox routes."""
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Header, Response, status
 
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
-from squid.api.dependencies import Notifications, Permissions
+from squid.api.dependencies import Notifications, Permissions, Services
 from squid.api.errors import responses
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import edit_operation_id, reserve_idempotent_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -16,6 +17,7 @@ from squid.api.pagination import (
     PageSizeParam,
     resolve_selector,
 )
+from squid.api.revisions import expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.notifications import (
     InboxNotificationDetail,
@@ -25,7 +27,17 @@ from squid.api.v1.schemas.notifications import (
     NotificationSubscriptionDetail,
 )
 from squid.core.errors import AuthenticationError
+from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
 from squid.notifications import InboxVisibility
+from squid.notifications.edits import (
+    INBOX_EDIT,
+    PREFERENCES_EDIT,
+    SUBSCRIPTIONS_EDIT,
+    SubscriptionsValues,
+    inbox_target,
+    notification_target,
+)
+from squid.notifications.errors import NotificationSubscriptionNotFoundError
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 
 router = APIRouter(prefix="/users/me/notifications", tags=["notifications"])
@@ -49,15 +61,21 @@ type InboxAccess = Annotated[InboxVisibility, Depends(resolve_inbox_visibility)]
     operation_id="notification_preferences_get",
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
-async def get_preferences(notifications: Notifications, caller: UserCaller) -> NotificationPreferencesDetail:
+async def get_preferences(
+    notifications: Notifications, caller: UserCaller, response: Response
+) -> NotificationPreferencesDetail:
     """Return channel preferences, with disabled defaults until privacy consent is accepted."""
-    return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(caller)))
+    preferences = await notifications.preferences(_account_id(caller))
+    response.headers["ETag"] = revision_etag(
+        Revision(notification_target(preferences.account_id), preferences.revision)
+    )
+    return NotificationPreferencesDetail.from_domain(preferences)
 
 
 @router.patch(
     "/preferences",
     response_model=NotificationPreferencesDetail,
-    responses=responses(400, 401, 403, 503),
+    responses=responses(400, 401, 403, 412, 428, 503),
     dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_preferences_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -66,14 +84,23 @@ async def update_preferences(
     request: NotificationPreferenceUpdate,
     notifications: Notifications,
     caller: UserCaller,
+    services: Services,
+    response: Response,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> NotificationPreferencesDetail:
-    """Update web and DM channels independently after consent."""
-    preferences = await notifications.set_preferences(
-        _account_id(caller),
-        web_enabled=request.web_enabled,
-        dm_enabled=request.dm_enabled,
+    """Update both channels against the notification revision read by the caller."""
+    account_id = _account_id(caller)
+    await services.edits.execute(
+        EditCommand(
+            PREFERENCES_EDIT,
+            (expected_revision(notification_target(account_id), if_match),),
+            EditValues.of(request.model_dump(mode="json")),
+            operation_id,
+        ),
+        EditActor(caller.permission_subject()),
     )
-    return NotificationPreferencesDetail.from_domain(preferences)
+    return await get_preferences(notifications, caller, response)
 
 
 @router.get(
@@ -86,17 +113,21 @@ async def update_preferences(
 async def list_subscriptions(
     notifications: Notifications,
     caller: UserCaller,
+    response: Response,
 ) -> list[NotificationSubscriptionDetail]:
     """List enabled subscriptions owned by the caller."""
-    found = await notifications.subscriptions(_account_id(caller))
-    return [NotificationSubscriptionDetail.from_domain(item) for item in found]
+    snapshot = await notifications.editor_snapshot(_account_id(caller))
+    response.headers["ETag"] = revision_etag(
+        Revision(notification_target(snapshot.preferences.account_id), snapshot.preferences.revision)
+    )
+    return [NotificationSubscriptionDetail.from_domain(item) for item in snapshot.subscriptions]
 
 
 @router.post(
     "/subscriptions",
     response_model=NotificationSubscriptionDetail,
     status_code=status.HTTP_201_CREATED,
-    responses=responses(400, 401, 403, 404, 409, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
     dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_subscription_create",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -105,33 +136,73 @@ async def create_subscription(
     request: NotificationSubscriptionCreate,
     notifications: Notifications,
     caller: UserCaller,
+    services: Services,
+    response: Response,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> NotificationSubscriptionDetail:
-    """Subscribe to a public creator, record title, or structured filter."""
-    subscription = await notifications.subscribe(
-        _account_id(caller),
-        kind=request.kind,
-        subject_id=request.subject_id,
-        record_filter=None if request.filter is None else request.filter.to_domain(),
+    """Follow a creator, record, or filter against the notification settings revision."""
+    account_id = _account_id(caller)
+    values = request.model_dump(mode="json")
+    values["record_filter"] = values.pop("filter")
+    result = await services.edits.execute(
+        EditCommand(
+            SUBSCRIPTIONS_EDIT,
+            (expected_revision(notification_target(account_id), if_match),),
+            EditValues.of({"create": values}),
+            operation_id,
+        ),
+        EditActor(caller.permission_subject()),
     )
-    return NotificationSubscriptionDetail.from_domain(subscription)
+    if result.receipt is not None:
+        subscription = SubscriptionsValues.model_validate(result.receipt.after.unpack()).subscriptions[0]
+        response.headers["ETag"] = revision_etag(result.outcome.revisions[0])
+        return NotificationSubscriptionDetail(
+            id=subscription.id,
+            kind=subscription.kind,
+            subject_id=subscription.subject_id,
+            filter=None if subscription.record_filter is None else dict(subscription.record_filter),
+        )
+    snapshot = await notifications.editor_snapshot(account_id)
+    response.headers["ETag"] = revision_etag(Revision(notification_target(account_id), snapshot.preferences.revision))
+    for row in snapshot.subscriptions:
+        if (row.kind, row.subject_id, row.record_filter) == (
+            request.kind,
+            request.subject_id,
+            None if request.filter is None else request.filter.to_domain(),
+        ):
+            return NotificationSubscriptionDetail.from_domain(row)
+    raise NotificationSubscriptionNotFoundError
 
 
 @router.delete(
     "/subscriptions/{subscription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 404, 409, 503),
+    responses=responses(401, 403, 404, 409, 412, 428, 503),
     dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_subscription_delete",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def delete_subscription(
     subscription_id: int,
-    notifications: Notifications,
+    services: Services,
     caller: UserCaller,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> Response:
-    """Remove one caller-owned subscription."""
-    await notifications.unsubscribe(_account_id(caller), subscription_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    """Disable one caller-owned subscription, retaining its identity for history."""
+    result = await services.edits.execute(
+        EditCommand(
+            SUBSCRIPTIONS_EDIT,
+            (expected_revision(notification_target(_account_id(caller)), if_match),),
+            EditValues.of({"states": {str(subscription_id): False}}),
+            operation_id,
+        ),
+        EditActor(caller.permission_subject()),
+    )
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
+    )
 
 
 @router.get(
@@ -165,39 +236,63 @@ async def list_inbox(
 @router.post(
     "/inbox/{notification_id}/read",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 404, 409, 503),
+    responses=responses(401, 403, 404, 409, 412, 428, 503),
     dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_inbox_mark_read",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def mark_read(
     notification_id: int,
-    notifications: Notifications,
+    services: Services,
     caller: UserCaller,
-    visibility: InboxAccess,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> Response:
-    """Mark one visible inbox item as read."""
-    await notifications.mark_read(_account_id(caller), notification_id, visibility=visibility)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    """Mark one visible inbox item as read, checking its own revision."""
+    _account_id(caller)
+    result = await services.edits.execute(
+        EditCommand(
+            INBOX_EDIT,
+            (expected_revision(inbox_target(notification_id), if_match),),
+            EditValues.of({"states": {str(notification_id): True}}),
+            operation_id,
+        ),
+        EditActor(caller.permission_subject()),
+    )
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
+    )
 
 
 @router.post(
     "/inbox/{notification_id}/unread",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 404, 409, 503),
+    responses=responses(401, 403, 404, 409, 412, 428, 503),
     dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_inbox_mark_unread",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def mark_unread(
     notification_id: int,
-    notifications: Notifications,
+    services: Services,
     caller: UserCaller,
-    visibility: InboxAccess,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> Response:
-    """Mark one visible inbox item as unread."""
-    await notifications.mark_unread(_account_id(caller), notification_id, visibility=visibility)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    """Mark one visible inbox item as unread, checking its own revision."""
+    _account_id(caller)
+    result = await services.edits.execute(
+        EditCommand(
+            INBOX_EDIT,
+            (expected_revision(inbox_target(notification_id), if_match),),
+            EditValues.of({"states": {str(notification_id): False}}),
+            operation_id,
+        ),
+        EditActor(caller.permission_subject()),
+    )
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
+    )
 
 
 def _account_id(caller: Caller) -> int:

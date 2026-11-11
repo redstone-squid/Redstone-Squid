@@ -307,6 +307,7 @@ async def test_forbidden_delivery_suspends_only_the_dm_channel(
         assert profile.web_enabled is True
         assert profile.dm_enabled is False
         assert profile.dm_suspended_at is not None
+        assert profile.revision == 2
 
 
 async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox(
@@ -865,30 +866,3 @@ async def test_expired_claim_does_not_consume_a_failure_attempt(
         assert row is not None
         assert row.attempts == 1
         assert row.dead_at is not None
-
-
-async def test_conditional_notification_edits_refuse_stale_values(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    await _seed_delivery(async_session_factory)
-    async with async_session_factory() as session:
-        account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
-        notification_id = (await session.scalars(select(InboxNotification.id))).one()
-    async with repository() as uow:
-        assert await uow.notifications.replace_preferences(account_id, (True, True), (False, True))
-        await uow.commit()
-    async with repository() as uow:
-        assert not await uow.notifications.replace_preferences(account_id, (True, True), (False, False))
-    async with repository() as uow:
-        assert await uow.notifications.replace_preferences(account_id, (False, True), (True, True))
-        await uow.commit()
-    async with repository() as uow:
-        assert await uow.notifications.replace_read_states(
-            account_id, ((notification_id, False),), ((notification_id, True),), visibility=InboxVisibility()
-        )
-        await uow.commit()
-    async with repository() as uow:
-        assert not await uow.notifications.replace_read_states(
-            account_id, ((notification_id, False),), ((notification_id, True),), visibility=InboxVisibility()
-        )

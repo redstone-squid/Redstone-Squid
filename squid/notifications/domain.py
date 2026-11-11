@@ -132,6 +132,7 @@ class NotificationPreferences:
     web_enabled: bool = False
     dm_enabled: bool = False
     dm_suspended_at: Instant | None = None
+    revision: int = 0
 
     @property
     def has_current_consent(self) -> bool:

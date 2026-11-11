@@ -868,130 +868,130 @@ bot-help-usable-subcommands-2 =
 
     { $more_information }
 
-# squid/bot/notifications.py:116
+# squid/bot/notifications.py:123
 bot-notifications-a-credited-build-gained-record =
     { $count ->
         [one] A credited build gained { $count } record.
        *[other] A credited build gained { $count } records.
     }
 
-# squid/bot/notifications_view.py:483
+# squid/bot/notifications_view.py:470
 bot-notifications-remainder = …and { $hidden } more.
 
-# squid/bot/notifications_view.py:474
+# squid/bot/notifications_view.py:461
 bot-notifications-subscription =
     { "*" }*{ $label }**
     { $detail }
 
-# squid/bot/notifications_view.py:445
+# squid/bot/notifications_view.py:432
 bot-notifications-view-base-title = Base title
 
-# squid/bot/notifications_view.py:498
+# squid/bot/notifications_view.py:485
 bot-notifications-view-build-awaiting-review = Build awaiting review
 
-# squid/bot/notifications_view.py:490
+# squid/bot/notifications_view.py:477
 bot-notifications-view-build-confirmed = Build confirmed
 
-# squid/bot/notifications_view.py:492
+# squid/bot/notifications_view.py:479
 bot-notifications-view-build-denied = Build denied
 
-# squid/bot/notifications_view.py:439
+# squid/bot/notifications_view.py:426
 bot-notifications-view-build-kind = Build kind
 
-# squid/bot/notifications_view.py:502
+# squid/bot/notifications_view.py:489
 bot-notifications-view-build-notification = Build notification
 
-# squid/bot/notifications_view.py:35
+# squid/bot/notifications_view.py:46
 bot-notifications-view-creator = Creator
 
-# squid/bot/notifications_view.py:494
+# squid/bot/notifications_view.py:481
 bot-notifications-view-creator-build-confirmed = Creator build confirmed
 
-# squid/bot/notifications_view.py:200
+# squid/bot/notifications_view.py:213
 bot-notifications-view-creator-profile-id = Creator profile ID
 
-# squid/bot/notifications_view.py:120, squid/bot/notifications_view.py:184
+# squid/bot/notifications_view.py:133, squid/bot/notifications_view.py:197
 bot-notifications-view-discord-dms = Discord DMs
 
-# squid/bot/notifications_view.py:463
+# squid/bot/notifications_view.py:450
 bot-notifications-view-exact-tag-value = Exact tag value
 
-# squid/bot/notifications_view.py:196
+# squid/bot/notifications_view.py:209
 bot-notifications-view-follow-a-creator = Follow a creator
 
-# squid/bot/notifications_view.py:211
+# squid/bot/notifications_view.py:224
 bot-notifications-view-follow-a-record = Follow a record
 
-# squid/bot/notifications_view.py:194
+# squid/bot/notifications_view.py:207
 bot-notifications-view-follow-creator = Follow creator
 
-# squid/bot/notifications_view.py:224, squid/bot/notifications_view.py:435
+# squid/bot/notifications_view.py:237, squid/bot/notifications_view.py:422
 bot-notifications-view-follow-matching-records = Follow matching records
 
-# squid/bot/notifications_view.py:209
+# squid/bot/notifications_view.py:222
 bot-notifications-view-follow-record = Follow record
 
-# squid/bot/notifications_view.py:121
+# squid/bot/notifications_view.py:134
 bot-notifications-view-following = Following
 
-# squid/bot/notifications_view.py:351
+# squid/bot/notifications_view.py:359
 bot-notifications-view-following-that-creator = Following that creator.
 
-# squid/bot/notifications_view.py:366
+# squid/bot/notifications_view.py:371
 bot-notifications-view-following-that-record = Following that record.
 
-# squid/bot/notifications_view.py:241
+# squid/bot/notifications_view.py:254
 bot-notifications-view-mark-selected-read = Mark selected read
 
-# squid/bot/notifications_view.py:247
+# squid/bot/notifications_view.py:260
 bot-notifications-view-mark-selected-unread = Mark selected unread
 
-# squid/bot/notifications_view.py:472
+# squid/bot/notifications_view.py:459
 bot-notifications-view-nothing-yet = _Nothing yet._
 
-# squid/bot/notifications_view.py:133
+# squid/bot/notifications_view.py:146
 bot-notifications-view-notifications = Notifications
 
-# squid/bot/notifications_view.py:117
+# squid/bot/notifications_view.py:130
 bot-notifications-view-off = Off
 
-# squid/bot/notifications_view.py:117
+# squid/bot/notifications_view.py:130
 bot-notifications-view-on = On
 
-# squid/bot/notifications_view.py:165
+# squid/bot/notifications_view.py:178
 bot-notifications-view-read = Read
 
-# squid/bot/notifications_view.py:37
+# squid/bot/notifications_view.py:48
 bot-notifications-view-record = Record
 
-# squid/bot/notifications_view.py:39
+# squid/bot/notifications_view.py:50
 bot-notifications-view-record-filter = Record filter
 
-# squid/bot/notifications_view.py:496
+# squid/bot/notifications_view.py:483
 bot-notifications-view-record-gained = Record gained
 
-# squid/bot/notifications_view.py:215
+# squid/bot/notifications_view.py:228
 bot-notifications-view-record-title-id = Record title ID
 
-# squid/bot/notifications_view.py:457
+# squid/bot/notifications_view.py:444
 bot-notifications-view-showcase-tag-id = Showcase tag ID
 
-# squid/bot/notifications_view.py:234
+# squid/bot/notifications_view.py:247
 bot-notifications-view-unfollow-selected = Unfollow selected
 
-# squid/bot/notifications_view.py:123, squid/bot/notifications_view.py:163
+# squid/bot/notifications_view.py:136, squid/bot/notifications_view.py:176
 bot-notifications-view-unread = Unread
 
-# squid/bot/notifications_view.py:451
+# squid/bot/notifications_view.py:438
 bot-notifications-view-version-scope = Version scope
 
-# squid/bot/notifications_view.py:119, squid/bot/notifications_view.py:178
+# squid/bot/notifications_view.py:132, squid/bot/notifications_view.py:191
 bot-notifications-view-web-inbox = Web inbox
 
-# squid/bot/notifications.py:123
+# squid/bot/notifications.py:130
 bot-notifications-your-build-was-confirmed = Your build was confirmed.
 
-# squid/bot/notifications.py:125
+# squid/bot/notifications.py:132
 bot-notifications-your-build-was-denied = Your build was denied.
 
 # squid/bot/profile_render.py:102
@@ -4081,108 +4081,108 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/notifications_view.py:402
+# squid/bot/notifications_view.py:347
 notification-history-follow = Follow
 
-# squid/bot/notifications_view.py:320
+# squid/bot/notifications_view.py:315
 notification-history-preferences = Change notification preferences
 
-# squid/bot/notifications_view.py:284
+# squid/bot/notifications_view.py:294
 notification-history-read = Change read state
 
-# squid/bot/notifications_view.py:336
+# squid/bot/notifications_view.py:324
 notification-history-unfollow = Unfollow
 
-# squid/bot/notifications.py:112
+# squid/bot/notifications.py:119
 notifications-build-awaiting-review = A new build is awaiting staff review.
 
-# squid/bot/notifications.py:128
+# squid/bot/notifications.py:135
 notifications-build-ready = A build notification is available.
 
-# squid/bot/notifications.py:107
+# squid/bot/notifications.py:114
 notifications-build-review-link =
     A new build is awaiting staff review.
     Open it in Discord with `/build browse id:{ $build_id_text }`.
 
-# squid/bot/notifications_view.py:126
+# squid/bot/notifications_view.py:139
 notifications-channel-and-follow-help = Toggle where notifications arrive, and unfollow what you no longer want.
 
-# squid/bot/notifications.py:51
+# squid/bot/notifications.py:52
 notifications-channel-preferences = Manage notification channels and subscriptions
 
-# squid/notifications/application.py:197
+# squid/notifications/application.py:163
 notifications-creator-record-subscriptions = creator and record subscriptions require only a subject_id
 
-# squid/notifications/application.py:311
+# squid/notifications/application.py:277
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
-# squid/bot/notifications_view.py:515
+# squid/bot/notifications_view.py:502
 notifications-dm-delivery-suspended = Discord rejected a DM, so DMs are suspended until you re-enable them.
 
-# squid/notifications/domain.py:228
+# squid/notifications/domain.py:229
 notifications-domain-invalid-tag-predicate = invalid tag predicate
 
-# squid/notifications/domain.py:296
+# squid/notifications/domain.py:297
 notifications-domain-unsupported = unsupported { $name }: { $value }
 
-# squid/notifications/domain.py:163
+# squid/notifications/domain.py:164
 notifications-exact-predicate-value-required = exact predicates require a value
 
-# squid/bot/notifications_view.py:394
+# squid/bot/notifications_view.py:396
 notifications-follow-filter-confirmation = Following records matching that filter.
 
-# squid/bot/notifications.py:127
+# squid/bot/notifications.py:134
 notifications-followed-creator-build = A creator you follow has a newly confirmed build.
 
-# squid/bot/notifications_view.py:342
+# squid/bot/notifications_view.py:353
 notifications-invalid-creator-uuid = Enter a creator profile ID in UUID form.
 
-# squid/notifications/domain.py:230
+# squid/notifications/domain.py:231
 notifications-invalid-exact-tag-value = invalid exact tag value
 
-# squid/bot/notifications_view.py:357
+# squid/bot/notifications_view.py:365
 notifications-invalid-record-title-uuid = Enter a record title ID in UUID form.
 
-# squid/notifications/domain.py:282, squid/notifications/domain.py:287
+# squid/notifications/domain.py:283, squid/notifications/domain.py:288
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
-# squid/notifications/application.py:236
+# squid/notifications/application.py:202
 notifications-page-size = page_size must be between 1 and 100
 
-# squid/notifications/domain.py:249
+# squid/notifications/domain.py:250
 notifications-persisted-record-filter = persisted record filter violates the notification contract
 
-# squid/notifications/domain.py:235
+# squid/notifications/domain.py:236
 notifications-persisted-tag-predicate = persisted tag predicate violates the notification contract
 
-# squid/notifications/domain.py:159
+# squid/notifications/domain.py:160
 notifications-presence-predicates-include = presence predicates cannot include a value
 
-# squid/notifications/domain.py:190
+# squid/notifications/domain.py:191
 notifications-record-filter-predicate-limit = a record filter must contain at least one predicate
 
-# squid/bot/notifications_view.py:375
+# squid/bot/notifications_view.py:380
 notifications-record-filter-required = Choose at least one record filter.
 
-# squid/notifications/domain.py:197
+# squid/notifications/domain.py:198
 notifications-record-filter-single-predicate = record filters may contain only one predicate per tag
 
-# squid/notifications/application.py:191
+# squid/notifications/application.py:157
 notifications-record-filter-structured-only = record_filter subscriptions require only a structured filter
 
-# squid/notifications/application.py:118
+# squid/notifications/application.py:110
 notifications-retention-days-positive = retention_days must be positive
 
-# squid/notifications/domain.py:152
+# squid/notifications/domain.py:153
 notifications-tag-id-positive = tag_id must be positive
 
-# squid/notifications/domain.py:155
+# squid/notifications/domain.py:156
 notifications-tag-predicate-operator = tag predicate operator must be 'present' or 'exact'
 
-# squid/notifications/domain.py:222
+# squid/notifications/domain.py:223
 notifications-tag-predicates-objects = tag predicates must be objects
 
-# squid/notifications/domain.py:217
+# squid/notifications/domain.py:218
 notifications-tags-list = tags must be a list
 
 # squid/permissions/domain/catalogue.py:250
