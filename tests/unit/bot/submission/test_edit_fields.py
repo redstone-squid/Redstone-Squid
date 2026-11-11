@@ -118,10 +118,9 @@ async def test_empty_optional_modal_fields_clear_staged_text_and_numbers() -> No
     assert parsed.errors == ()
     assert parsed.values == {"version_spec": None, "normal_opening_time": None}
 
-    await screen._edited(submit_event(parsed.values))
+    await screen._edited(tuple(parsed.values), submit_event(parsed.values))
 
-    assert version.value is None
-    assert timing.value is None
+    assert all(item.value is None for item in screen.items)
     assert screen.validation_error is None
 
 
@@ -179,7 +178,7 @@ async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -
     commit_render(root)
 
     opened = interaction_harness(7)
-    await root.dispatch("open", opened)
+    await root.dispatch("edit_files", opened)
     modal = opened.response.send_modal.await_args.args[0]
     assert isinstance(modal, discord.ui.Modal)
     attempted = {

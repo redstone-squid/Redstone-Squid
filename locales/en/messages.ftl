@@ -709,85 +709,85 @@ artifacts-artifactstore-requires-object = S3ArtifactStore requires an S3 object-
 # squid/auth/application/services.py:65
 auth-key-pepper-required = API key pepper must not be empty.
 
-# squid/bot/submission/ui/views.py:154, squid/bot/submission/ui/views.py:159
+# squid/bot/submission/ui/views.py:158, squid/bot/submission/ui/views.py:163
 bot-build-field-animated-restrictions =
     .label = Animated Restrictions
     .placeholder = Symmetrical, Full Sync
 
-# squid/bot/submission/ui/views.py:368, squid/bot/submission/ui/views.py:373
+# squid/bot/submission/ui/views.py:372, squid/bot/submission/ui/views.py:377
 bot-build-field-command-to-get-to-build =
     .label = Command To Get To Build
     .placeholder = /warp door
 
-# squid/bot/submission/ui/views.py:303, squid/bot/submission/ui/views.py:308
+# squid/bot/submission/ui/views.py:307, squid/bot/submission/ui/views.py:312
 bot-build-field-completion-time =
     .label = Completion Time
     .placeholder = Any time format works
 
-# squid/bot/submission/ui/views.py:170, squid/bot/submission/ui/views.py:175
+# squid/bot/submission/ui/views.py:174, squid/bot/submission/ui/views.py:179
 bot-build-field-component-restrictions =
     .label = Component Restrictions
     .placeholder = Observerless
 
-# squid/bot/submission/ui/views.py:352, squid/bot/submission/ui/views.py:357
+# squid/bot/submission/ui/views.py:356, squid/bot/submission/ui/views.py:361
 bot-build-field-coordinates =
     .label = Coordinates
     .placeholder = x y z
 
-# squid/bot/submission/ui/views.py:236, squid/bot/submission/ui/views.py:241
+# squid/bot/submission/ui/views.py:240, squid/bot/submission/ui/views.py:245
 bot-build-field-creators-ign =
     .label = Creators Ign
     .placeholder = Me, My Dog
 
-# squid/bot/submission/ui/views.py:54, squid/bot/submission/ui/views.py:59
+# squid/bot/submission/ui/views.py:58, squid/bot/submission/ui/views.py:63
 bot-build-field-dimensions =
     .label = Dimensions
     .placeholder = Width x Height x Depth
 
-# squid/bot/submission/ui/views.py:71, squid/bot/submission/ui/views.py:76
+# squid/bot/submission/ui/views.py:75, squid/bot/submission/ui/views.py:80
 bot-build-field-door-dimensions =
     .label = Door Dimensions
     .placeholder = 2x2
 
-# squid/bot/submission/ui/views.py:121, squid/bot/submission/ui/views.py:126
+# squid/bot/submission/ui/views.py:125, squid/bot/submission/ui/views.py:130
 bot-build-field-door-orientation-type =
     .label = Door Orientation Type
     .placeholder = Door, Trapdoor, Skydoor
 
-# squid/bot/submission/ui/views.py:105, squid/bot/submission/ui/views.py:110
+# squid/bot/submission/ui/views.py:109, squid/bot/submission/ui/views.py:114
 bot-build-field-door-type =
     .label = Door Type
     .placeholder = Full lamp, Funnel
 
-# squid/bot/submission/ui/views.py:675
+# squid/bot/submission/ui/views.py:718
 bot-build-field-error = **{ $label }:** { $detail }
 
-# squid/bot/submission/ui/views.py:319, squid/bot/submission/ui/views.py:324
+# squid/bot/submission/ui/views.py:323, squid/bot/submission/ui/views.py:328
 bot-build-field-extra-user-info =
     .label = Extra User Info
     .placeholder = Anything a reader should know
 
-# squid/bot/submission/ui/views.py:252, squid/bot/submission/ui/views.py:257
+# squid/bot/submission/ui/views.py:256, squid/bot/submission/ui/views.py:261
 bot-build-field-image-urls =
     .label = Image Urls
     .placeholder = any urls, comma separated
 
-# squid/bot/submission/ui/views.py:186, squid/bot/submission/ui/views.py:191
+# squid/bot/submission/ui/views.py:190, squid/bot/submission/ui/views.py:195
 bot-build-field-miscellaneous-restrictions =
     .label = Miscellaneous Restrictions
     .placeholder = Directional, Locational
 
-# squid/bot/submission/ui/views.py:202, squid/bot/submission/ui/views.py:207
+# squid/bot/submission/ui/views.py:206, squid/bot/submission/ui/views.py:211
 bot-build-field-normal-closing-time =
     .label = Normal Closing Time
     .placeholder = in gameticks
 
-# squid/bot/submission/ui/views.py:219, squid/bot/submission/ui/views.py:224
+# squid/bot/submission/ui/views.py:223, squid/bot/submission/ui/views.py:228
 bot-build-field-normal-opening-time =
     .label = Normal Opening Time
     .placeholder = in gameticks
 
-# squid/bot/submission/ui/views.py:336, squid/bot/submission/ui/views.py:341
+# squid/bot/submission/ui/views.py:340, squid/bot/submission/ui/views.py:345
 bot-build-field-server-ip =
     .label = Server Ip
     .placeholder = play.example.com
@@ -795,22 +795,22 @@ bot-build-field-server-ip =
 # squid/bot/submission/ui/fields.py:93
 bot-build-field-summary = { $label }: { $value }
 
-# squid/bot/submission/ui/views.py:89, squid/bot/submission/ui/views.py:94
+# squid/bot/submission/ui/views.py:93, squid/bot/submission/ui/views.py:98
 bot-build-field-version-spec =
     .label = Version Spec
     .placeholder = 1.16 - 1.17.3
 
-# squid/bot/submission/ui/views.py:269, squid/bot/submission/ui/views.py:274
+# squid/bot/submission/ui/views.py:273, squid/bot/submission/ui/views.py:278
 bot-build-field-video-urls =
     .label = Video Urls
     .placeholder = any urls, comma separated
 
-# squid/bot/submission/ui/views.py:138, squid/bot/submission/ui/views.py:143
+# squid/bot/submission/ui/views.py:142, squid/bot/submission/ui/views.py:147
 bot-build-field-wiring-placement-restrictions =
     .label = Wiring Placement Restrictions
     .placeholder = Seamless, Full Flush
 
-# squid/bot/submission/ui/views.py:286, squid/bot/submission/ui/views.py:291
+# squid/bot/submission/ui/views.py:290, squid/bot/submission/ui/views.py:295
 bot-build-field-world-download-urls =
     .label = World Download Urls
     .placeholder = any urls, comma separated
@@ -1563,49 +1563,37 @@ bot-submission-ui-fields-invalid-value = Invalid value
 # squid/bot/submission/ui/opening.py:70
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
-# squid/bot/submission/ui/views.py:601
+# squid/bot/submission/ui/views.py:613
 bot-submission-ui-views-apply-changes = Apply changes
 
-# squid/bot/submission/ui/views.py:606
+# squid/bot/submission/ui/views.py:618
 bot-submission-ui-views-back = Back
 
-# squid/bot/submission/ui/views.py:624
+# squid/bot/submission/ui/views.py:636
 bot-submission-ui-views-cancel = Cancel
 
-# squid/bot/submission/ui/views.py:542
+# squid/bot/submission/ui/views.py:580
 bot-submission-ui-views-changes-saved = Changes saved
 
-# squid/bot/submission/ui/views.py:638
+# squid/bot/submission/ui/views.py:674
 bot-submission-ui-views-edit-build = Edit build
 
-# squid/bot/submission/ui/views.py:428
+# squid/bot/submission/ui/views.py:432
 bot-submission-ui-views-edit-build-section = Edit build, section { $page }
 
-# squid/bot/submission/ui/views.py:582
-bot-submission-ui-views-edit-this-section = Edit this section
-
-# squid/bot/submission/ui/views.py:642
-bot-submission-ui-views-fields-in-this-section = Fields in this section
-
-# squid/bot/submission/ui/views.py:422
+# squid/bot/submission/ui/views.py:426
 bot-submission-ui-views-invalid-value = Invalid value
 
-# squid/bot/submission/ui/views.py:567
+# squid/bot/submission/ui/views.py:605
 bot-submission-ui-views-loading-build = Loading build.
 
-# squid/bot/submission/ui/views.py:591
-bot-submission-ui-views-next = Next
-
-# squid/bot/submission/ui/views.py:702
+# squid/bot/submission/ui/views.py:738
 bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.
 
-# squid/bot/submission/ui/views.py:585
-bot-submission-ui-views-previous = Previous
-
-# squid/bot/submission/ui/views.py:621
+# squid/bot/submission/ui/views.py:633
 bot-submission-ui-views-reload-latest = Reload latest
 
-# squid/bot/submission/ui/views.py:612
+# squid/bot/submission/ui/views.py:624
 bot-submission-ui-views-review-changes = Review changes
 
 # squid/bot/tags_view.py:246, squid/bot/tags_view.py:391
@@ -2031,19 +2019,19 @@ build-drafts-state-waiting = Waiting for files
 # squid/bot/submission/ui/controls.py:30, squid/bot/submission/ui/controls.py:44
 build-editor-build-deleted = That build no longer exists.
 
-# squid/bot/submission/ui/views.py:543
+# squid/bot/submission/ui/views.py:581
 build-editor-card-refreshed = The build card has been refreshed.
 
-# squid/bot/submission/ui/views.py:737
+# squid/bot/submission/ui/views.py:775
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
 # squid/bot/submission/ui/opening.py:71
 build-editor-edit-access-required = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/views.py:770
+# squid/bot/submission/ui/views.py:808
 build-editor-edit-access-required-views = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/views.py:549
+# squid/bot/submission/ui/views.py:587
 build-editor-expired = This editor expired. Unsaved changes were discarded.
 
 # squid/bot/submission/edit.py:89
@@ -2052,24 +2040,43 @@ build-editor-fields-unavailable = This build has no { $fields }. Open the worksp
 # squid/bot/submission/edit.py:104, squid/bot/submission/edit.py:109, squid/bot/submission/edit.py:113
 build-editor-invalid-build = This does not look like a build.
 
-# squid/bot/submission/ui/views.py:557
+# squid/bot/submission/ui/views.py:595
 build-editor-open-new-editor = Open new editor
 
-# squid/bot/submission/ui/views.py:629
+# squid/bot/submission/ui/views.py:641
 build-editor-reloaded-discarded-changes = Fresh editor loaded. Unsaved changes from the previous editor were discarded.
 
-# squid/bot/submission/ui/views.py:572
-build-editor-section-unsaved-indicator = Section { $page } of { $pages }. Filled dots have unsaved changes.
+# squid/bot/submission/ui/views.py:649
+build-editor-review-hint = Review the changed values below, then apply them.
 
-# squid/bot/submission/ui/views.py:680
+# squid/bot/submission/ui/views.py:446
+build-editor-section-dimensions-versions = Build size and versions
+
+# squid/bot/submission/ui/views.py:451
+build-editor-section-door = Door size and type
+
+# squid/bot/submission/ui/views.py:465
+build-editor-section-files = Files
+
+# squid/bot/submission/ui/views.py:441
+build-editor-section-identity = Name and creators
+
+# squid/bot/submission/ui/views.py:457
+build-editor-section-restrictions = Restrictions
+
+# squid/bot/submission/ui/views.py:468
+build-editor-section-server = Server location
+
+# squid/bot/submission/ui/views.py:454
+build-editor-section-timing = Timing
+
+# squid/bot/submission/ui/views.py:651
+build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet.
+
+# squid/bot/submission/ui/views.py:724
 build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
-
-# squid/bot/submission/ui/views.py:574
-build-editor-validation-errors =
-    Fix these values before review:
-    { $validation_error }
 
 # squid/bot/submission/build_browse.py:575
 build-id-not-visible = No visible build has that ID.
@@ -3085,7 +3092,7 @@ draft-editor-detail-closed = Changes saved. You can dismiss this message.
 # squid/bot/submission/ui/drafts.py:842
 draft-editor-detail-locked = This draft can no longer be edited here.
 
-# squid/bot/submission/ui/drafts.py:849
+# squid/bot/submission/ui/drafts.py:849, squid/bot/submission/ui/views.py:829
 draft-editor-done = Done
 
 # squid/bot/submission/ui/drafts.py:117
@@ -3211,7 +3218,7 @@ draft-editor-picker-pages-multiple = -# Page { $page_number } of { $pages }. Cho
 # squid/bot/submission/ui/drafts.py:582
 draft-editor-picker-required = **{ $label }** · Required
 
-# squid/bot/submission/ui/drafts.py:432
+# squid/bot/submission/ui/drafts.py:432, squid/bot/submission/ui/views.py:607
 draft-editor-preview = Preview
 
 # squid/bot/submission/ui/drafts.py:826

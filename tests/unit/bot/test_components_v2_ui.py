@@ -188,8 +188,8 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
     # so this touches no service.
     await component.projection.reload()
 
-    assert component.max_pages == 1
-    assert "Edit this section" in str(component.render())
+    assert len(component.sections()) == 1
+    assert "Build size and versions" in str(component.render())
     assert "Open new editor" not in str(component.render())
     assert "build-edit-recovery" not in str(component.render())
     assert component._current()[0] is display_build
@@ -254,6 +254,8 @@ async def test_build_editor_commits_against_the_revision_it_presented(
     )
 
     async with sd.testing.stage(component, owner=object()) as ui:
+        # A topic refresh must not advance the revision of the values being edited.
+        component.projection.replace((replace(display_build, revision=99), sl.status("Latest card")))
         await ui.press("review")
         await ui.press("apply")
         assert await component.wait() == sd.Completed(display_build.id)

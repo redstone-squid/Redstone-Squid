@@ -1,17 +1,21 @@
 """Stage and review patches to existing builds in a Discord editor.
 
 BuildEditScreen keeps field changes local until the user saves one combined patch.
-New submissions use DraftEditorScreen in drafts.py instead: its answers are saved
-as a retained submission draft after each context and later finalized into a build.
+It shares the submission editor's section overview and modal navigation. Submission
+drafts save answers as they go; existing builds retain a review step before saving.
 """
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from copy import deepcopy
+from dataclasses import replace
+from functools import partial
 from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.input import parse_web_urls
 from squid.bot.submission.ui import controls as build_controls
+from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.fields import (
     DIMENSIONS_FORMAT,
     OPTIONAL_INT_FORMAT,
@@ -22,7 +26,7 @@ from squid.bot.submission.ui.fields import (
     FieldDisplay,
     field_spec,
 )
-from squid.bot.ui import DISCORD_YELLOW, tr
+from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, tr
 from squid.bot.utils.permissions import subject_for_interaction
 from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
 from squid.builds.domain import BuildCategory
@@ -31,7 +35,7 @@ from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import DEFAULT
 from squid_reactivity import TopicHandle
-from squid_ui.text import Message
+from squid_ui.text import Message, md
 
 _DOOR_ONLY = frozenset({BuildCategory.DOOR})
 
@@ -431,12 +435,48 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
     )
 
 
-class BuildEditScreen(sd.Screen[int]):
+EDIT_SECTIONS: tuple[tuple[str, sl.TextLike, tuple[str, ...]], ...] = (
+    (
+        "identity",
+        tr(t"build-editor-section-identity = Name and creators"),
+        ("creators_ign", "extra_user_info", "completion_time"),
+    ),
+    (
+        "dimensions_versions",
+        tr(t"build-editor-section-dimensions-versions = Build size and versions"),
+        ("dimensions", "version_spec"),
+    ),
+    (
+        "door",
+        tr(t"build-editor-section-door = Door size and type"),
+        ("door_dimensions", "door_orientation_type", "door_type"),
+    ),
+    ("timing", tr(t"build-editor-section-timing = Timing"), ("normal_opening_time", "normal_closing_time")),
+    (
+        "restrictions",
+        tr(t"build-editor-section-restrictions = Restrictions"),
+        (
+            "wiring_placement_restrictions",
+            "animated_restrictions",
+            "component_restrictions",
+            "miscellaneous_restrictions",
+        ),
+    ),
+    ("files", tr(t"build-editor-section-files = Files"), ("image_urls", "video_urls", "world_download_urls")),
+    (
+        "server",
+        tr(t"build-editor-section-server = Server location"),
+        ("server_ip", "coordinates", "command_to_get_to_build"),
+    ),
+)
+
+
+class BuildEditScreen(BuildEditorScreen[int]):
     """Stage local field changes, review them, and save one combined build patch.
 
-    The build preview follows topic updates, while staged fields remain local.
-    Reloading or opening a fresh editor discards those fields. Saving checks current
-    authority and supplies the displayed build revision to the edit service. Completion
+    The loaded build follows topic updates, while staged fields keep their original
+    revision. Reloading or opening a fresh editor discards those fields. Saving checks
+    current authority and the revision those values came from. Completion
     returns the saved build ID; closing without saving cancels the screen.
     """
 
@@ -444,7 +484,7 @@ class BuildEditScreen(sd.Screen[int]):
         timeout=900, live_updates=True, retain_routed_on_timeout=True, session=sd.SessionSpec("build-edit")
     )
 
-    page: int = sl.state(1)
+    _base_revision: int = sl.state(0)
     confirming: bool = sl.state(default=False)
     saved: bool = sl.state(default=False)
     validation_error: sl.TextLike | None = sl.state(None)
@@ -465,6 +505,7 @@ class BuildEditScreen(sd.Screen[int]):
         self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None] | None = (build, node)
         self._changes = changes
         self._build_id = build.id
+        self._base_revision = build.revision
         self.builds = builds
         self._authorize = authorize
         self._render_build = render_build
@@ -508,14 +549,11 @@ class BuildEditScreen(sd.Screen[int]):
         return self._current()[0]
 
     def _replace(self, build: Build, node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None) -> None:
+        self._base_revision = build.revision
         if self._seed is not None:
             self._seed = (build, node)
         else:
             self.projection.replace((build, node))
-
-    @property
-    def max_pages(self) -> int:
-        return max(1, (len(self.items) + 4) // 5)
 
     def stage(self, key: str, text: str) -> bool:
         """Stage an applicable field and return whether its key exists.
@@ -565,34 +603,8 @@ class BuildEditScreen(sd.Screen[int]):
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-ui-views-loading-build = Loading build.")),)
-        page = self.page
-        pages = self.max_pages
-        validation_error = self.validation_error
-        description = (
-            tr(t"build-editor-section-unsaved-indicator = Section {page} of {pages}. Filled dots have unsaved changes.")
-            if not validation_error
-            else tr(t"""
-                build-editor-validation-errors =
-                    Fix these values before review:
-                    {validation_error}
-                """)
-        )
         controls: list[sl.semantic.ActionControl[sd.Request]] = [
-            sl.action_control(
-                tr(t"bot-submission-ui-views-edit-this-section = Edit this section"), self._open, key="open"
-            ),
-            sl.action_control(
-                tr(t"bot-submission-ui-views-previous = Previous"),
-                self._previous,
-                key="previous",
-                available=self.page != 1,
-            ),
-            sl.action_control(
-                tr(t"bot-submission-ui-views-next = Next"),
-                self._next,
-                key="next",
-                available=self.page != self.max_pages,
-            ),
+            sl.action_control(tr(t"draft-editor-preview = Preview"), self._preview, key="preview"),
         ]
         if self.confirming:
             controls.extend(
@@ -633,46 +645,78 @@ class BuildEditScreen(sd.Screen[int]):
                     tone=sl.Tone.WARNING,
                 )
             )
-        nodes.append(
-            sl.section(
-                sl.heading(tr(t"bot-submission-ui-views-edit-build = Edit build")),
-                sl.truncate(sl.paragraph(description)),
-                sl.fields(
-                    sl.field(
-                        tr(t"bot-submission-ui-views-fields-in-this-section = Fields in this section") + "\n",
-                        self.summary_text(),
+        description = self.validation_error or (
+            tr(t"build-editor-review-hint = Review the changed values below, then apply them.")
+            if self.confirming
+            else tr(t"build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet.")
+        )
+        sections = []
+        for key, title, items in self.sections():
+            shown = tuple(item for item in items if item.modified) if self.confirming else items
+            if not shown:
+                continue
+            lines = Message.join(
+                "\n",
+                (
+                    Message.join(
+                        "",
+                        (
+                            item.spec.label,
+                            ": ",
+                            md(t"{item.current_text[:100] + ('…' if len(item.current_text) > 100 else '')}"),
+                        ),
                     )
+                    for item in shown
                 ),
-                accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
-        )
-        if (node := self._current()[1]) is not None:
-            nodes.append(node)
-        nodes.append(
-            sl.action_controls(*controls, key="build-edit-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
-        )
+            sections.append(EditorSection(key, Message.join("\n", (Message.join("", ("**", title, "**")), lines))))
+        children: list[Any] = [
+            sd.v2.heading(tr(t"bot-submission-ui-views-edit-build = Edit build")),
+            sd.v2.text(description),
+            sd.v2.separator(),
+            *self.section_overview(sections),
+            sd.v2.separator(),
+            sl.action_controls(*controls, key="build-edit-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL),
+        ]
+        nodes.append(sd.v2.panel(*children, accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE))
         return tuple(nodes)
 
-    def summary_text(self) -> sl.TextLike:
-        page_items = self.items[5 * (self.page - 1) : 5 * self.page]
-        return Message.join("\n", (("● " if item.modified else "○ ") + item.summary for item in page_items))
+    def sections(self) -> tuple[tuple[str, sl.TextLike, tuple[BoundBuildField[Any], ...]], ...]:
+        by_key = {item.key: item for item in self.items}
+        return tuple(
+            (key, title, tuple(by_key[field] for field in fields if field in by_key))
+            for key, title, fields in EDIT_SECTIONS
+            if any(field in by_key for field in fields)
+        )
 
-    async def _open(self, event: sl.PressEvent) -> None:
-        if await self._may_event(event):
-            await event.present_form(
-                _edit_form(self.items, self.page),
-                key="edit",
-                on_submit=self._edited,
-            )
+    async def _edit_section(self, section_id: str, event: sd.PressEvent) -> None:
+        if not await self._may_event(event):
+            return
+        section = next((section for section in self.sections() if section[0] == section_id), None)
+        if section is None:
+            return
+        _, title, items = section
+        form = replace(_edit_form(items, 1), title=title)
+        await event.present_form(
+            form, key=f"edit-{section_id}", on_submit=partial(self._edited, tuple(item.key for item in items))
+        )
 
-    async def _edited(self, event: sl.SubmitEvent) -> None:
+    async def _preview(self, event: sd.PressEvent) -> None:
+        preview = deepcopy(self.build)
+        BuildEditPatch.combine(item.to_patch() for item in self.items if item.modified).apply(preview)
+        await self.open_child(event, BuildEditPreview(await self._render_build(preview)), on_result=self._child_closed)
+
+    async def _edited(self, keys: tuple[str, ...], event: sl.SubmitEvent) -> None:
         errors: list[sl.TextLike] = []
-        for item in self.items[5 * (self.page - 1) : 5 * self.page]:
+        for item in self.items:
+            if item.key not in keys:
+                continue
             item.stage(_submitted_text(event.values, item.key))
             if item.validation_error:
                 label = item.spec.label
                 detail = item.validation_error
                 errors.append(tr(t"bot-build-field-error = **{label}:** {detail}"))
+        self.confirming = False
         self.validation_error = Message.join("\n", errors) if errors else None
         if errors:
             error_text = Message.join("\n", errors)
@@ -684,14 +728,6 @@ class BuildEditScreen(sd.Screen[int]):
                 """)
             )
         self.invalidate()
-
-    async def _previous(self, event: sl.PressEvent) -> None:
-        if self.page > 1:
-            self.page -= 1
-
-    async def _next(self, event: sl.PressEvent) -> None:
-        if self.page < self.max_pages:
-            self.page += 1
 
     async def _review(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event):
@@ -710,6 +746,8 @@ class BuildEditScreen(sd.Screen[int]):
         if not await self._may_event(event):
             return
         changed = [item for item in self.items if item.modified]
+        if not changed:
+            return
         await event.acknowledge()
         patch = BuildEditPatch.combine(item.to_patch() for item in changed)
         edited_build_id: int | None = None
@@ -731,7 +769,7 @@ class BuildEditScreen(sd.Screen[int]):
                 actor = BuildEditor(
                     await subject_for_interaction(cast(sd.Request[Any], event.context)), source="discord_editor"
                 )
-                build = await self.builds.apply_edit(actor, build.id, patch, expected_revision=build.revision)
+                build = await self.builds.apply_edit(actor, build.id, patch, expected_revision=self._base_revision)
             except BuildRevisionMismatchError:
                 self.confirming = False
                 self.validation_error = tr(
@@ -774,3 +812,22 @@ class BuildEditScreen(sd.Screen[int]):
             )
             return False
         return True
+
+
+class BuildEditPreview(sd.Screen[None]):
+    """Show the staged build without saving it."""
+
+    policy = sd.ResponseSpec(audience="personal", timeout=600, session=sd.SessionSpec("build-preview"))
+
+    def __init__(self, node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request]) -> None:
+        self.node = node
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        return (
+            self.node,
+            sd.v2.row(sd.v2.button(tr(t"draft-editor-done = Done"), self._done, key="done")),
+        )
+
+    async def _done(self, event: sd.PressEvent) -> None:
+        self.complete(event, None)
