@@ -620,7 +620,7 @@ class BuildEditScreen(sd.Screen[int]):
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(
                     sl.field(
-                        tr(t"bot-submission-ui-views-fields-in-this-section = Fields in this section"),
+                        tr(t"bot-submission-ui-views-fields-in-this-section = Fields in this section") + "\n",
                         self.summary_text(),
                     )
                 ),
