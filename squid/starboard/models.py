@@ -32,16 +32,24 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.messages.models import Message
 from squid.persistence.base import Base
+from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC
 from squid.starboard.domain.models import StarboardDirection
 
 
-class StarboardConfig(Base, kw_only=True):
+class StarboardConfig(Revisioned, Base, kw_only=True):
     """A named weighted-message board owned by one Discord guild."""
 
     __tablename__ = "starboards"
     __table_args__ = (
-        Index("starboards_guild_name_key", "guild_id", func.lower(text("name")), unique=True),
+        Index(
+            "starboards_guild_name_key",
+            "guild_id",
+            func.lower(text("name")),
+            unique=True,
+            postgresql_where=text("NOT archived"),
+        ),
+        CheckConstraint("revision > 0", name="starboards_revision_positive"),
         CheckConstraint("btrim(name) != ''", name="starboards_name_check"),
         CheckConstraint(
             "required > required_remove "
@@ -67,6 +75,8 @@ class StarboardConfig(Base, kw_only=True):
     )
     channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    """Hidden boards retain their ID and revision through creation undo and final deletion."""
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     required: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("3.0"), default=3.0)
     """Score at or above which an unposted entry qualifies for publication."""

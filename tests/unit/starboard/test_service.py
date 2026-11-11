@@ -71,14 +71,14 @@ def make_origin() -> OriginMessage:
     )
 
 
-async def test_service_caches_relevant_emojis() -> None:
+async def test_service_reads_current_emojis_across_edits() -> None:
     repository = FakeRepository(make_config())
     committed = CommittedState(repository, clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
     assert await service.is_relevant_emoji(10, "⭐")
     assert await service.is_relevant_emoji(10, "⭐")
-    assert len(repository.relevant_calls) == 1
+    assert len(repository.relevant_calls) == 2
 
 
 async def test_service_combines_highest_role_and_emoji_multiplier() -> None:

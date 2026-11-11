@@ -12,9 +12,10 @@ import squid_ui_discord as sd
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
-from squid.bot.utils.permissions import allows, enforce, hide_unless
+from squid.bot.utils.permissions import allows, current_edit_actor, enforce, hide_unless
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.edits.domain import EditActor
 from squid.messages.models import Message
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -28,7 +29,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.posts.domain import starboard_entry_key
 from squid.reactions.domain import ReactionActor
-from squid.starboard.models import OriginMessage, StarboardConfig
+from squid.starboard.models import OriginMessage
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -210,7 +211,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             if await authorize(node):
                 granted.add(node)
 
-        async def create_board(channel_id: int, name: str, required: float) -> StarboardConfig:
+        async def validate_channel(channel_id: int) -> None:
             channel = guild.get_channel(channel_id)
             if not isinstance(channel, discord.TextChannel):
                 raise ValidationError(
@@ -224,14 +225,18 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                         t"Messages, and Read Message History there."
                     )
                 )
-            return await self.service.create_starboard(guild.id, channel.id, name, required=required)
+
+        async def actor() -> EditActor:
+            return await current_edit_actor(request)
 
         return StarboardScreen(
             self.service,
             guild_id=guild.id,
             capabilities=frozenset(granted),
             authorize=authorize,
-            create_board=create_board,
+            edits=self.bot.services.edits,
+            actor=actor,
+            validate_channel=validate_channel,
         )
 
 

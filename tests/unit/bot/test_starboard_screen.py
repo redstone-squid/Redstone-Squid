@@ -6,7 +6,17 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.starboard import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
-from squid.permissions.domain import PermissionNode
+from squid.edits.domain import (
+    EditActor,
+    EditAttempt,
+    EditCommand,
+    EditOutcome,
+    EditReceipt,
+    EditResult,
+    EditValues,
+    Revision,
+)
+from squid.permissions.domain import PermissionNode, Subject
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
@@ -15,6 +25,8 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_WEIGHT_EDIT,
 )
 from squid.starboard.application import StarboardService
+from squid.starboard.application.edits import STARBOARD_CREATE, STARBOARD_DELETE, BoardPresence, BoardValues
+from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_ui.runtime import transaction
 from squid_ui.testing import labels
@@ -31,6 +43,14 @@ class FakeStarboardService(StarboardService):
         self.config = board()
         self.list_reads = 0
         self.deletions: list[tuple[int, str]] = []
+
+    @override
+    async def reserve_id(self) -> int:
+        return 2
+
+    @override
+    async def snapshot(self, starboard_id: int) -> StarboardSnapshot:
+        return StarboardSnapshot.capture(self.config, {})
 
     @override
     async def list_for_guild(self, guild_id: int) -> tuple[StarboardConfig, ...]:
@@ -62,14 +82,49 @@ class FakeStarboardService(StarboardService):
         del config, role_id, multiplier
 
 
-class BoardCreator:
-    def __init__(self, config: StarboardConfig) -> None:
-        self.config = config
-        self.calls: list[tuple[int, str, float]] = []
+class ChannelValidator:
+    def __init__(self) -> None:
+        self.calls: list[int] = []
 
-    async def __call__(self, channel_id: int, name: str, required: float) -> StarboardConfig:
-        self.calls.append((channel_id, name, required))
-        return self.config
+    async def __call__(self, channel_id: int) -> None:
+        self.calls.append(channel_id)
+
+
+class EditRecorder:
+    def __init__(self, operations: FakeStarboardService) -> None:
+        self.operations = operations
+        self.commands: list[EditCommand] = []
+
+    async def execute(
+        self, command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None
+    ) -> EditResult:
+        self.commands.append(command)
+        if command.kind == STARBOARD_DELETE:
+            await self.operations.delete_starboard(7, self.operations.config.name)
+            before, after = EditValues.of({"present": True}), EditValues.of({"present": False})
+        else:
+            values = (
+                BoardPresence.model_validate(command.values.unpack())
+                if command.kind == STARBOARD_CREATE
+                else BoardValues.model_validate(command.values.unpack())
+            )
+            self.operations.config = values.config(int(command.expected[0].target.key))
+            before = values.model_copy(update={"present": False}).values()
+            after = command.values
+        revisions = tuple(Revision(version.target, version.value + 1) for version in command.expected)
+        self.operations.config.revision = revisions[0].value
+        receipt = EditReceipt(command, before, after, revisions, final=command.kind == STARBOARD_DELETE)
+        if attempt is not None:
+            attempt.receipt = receipt
+        return EditResult(
+            EditOutcome(
+                command.operation_id, actor.key, command.fingerprint, revisions, changed=True, final=receipt.final
+            ),
+            receipt,
+        )
+
+    async def reconcile(self, command: EditCommand, actor: EditActor, attempt: EditAttempt) -> EditResult | None:
+        raise NotImplementedError
 
 
 class NoticeEvent:
@@ -91,12 +146,15 @@ def make_screen(
     *,
     capabilities: frozenset[PermissionNode] = frozenset(),
     allowed: bool = True,
-) -> tuple[StarboardScreen, FakeStarboardService, BoardCreator]:
+) -> tuple[StarboardScreen, FakeStarboardService, ChannelValidator]:
     operations = FakeStarboardService()
-    creator = BoardCreator(operations.config)
+    creator = ChannelValidator()
 
     async def authorize(_node: PermissionNode) -> bool:
         return allowed
+
+    async def actor() -> EditActor:
+        return EditActor(Subject(account_id=1, guild_id=7))
 
     return (
         StarboardScreen(
@@ -104,7 +162,9 @@ def make_screen(
             guild_id=7,
             capabilities=capabilities,
             authorize=authorize,
-            create_board=creator,
+            validate_channel=creator,
+            edits=EditRecorder(operations),
+            actor=actor,
         ),
         operations,
         creator,
@@ -140,7 +200,7 @@ async def test_create_uses_injected_discord_operation_and_refreshes() -> None:
     with transaction():
         await screen._create(cast(sl.SubmitEvent, event))
 
-    assert creator.calls == [(11, "main", 4.0)]
+    assert creator.calls == [11]
     assert operations.list_reads == 2
     assert len(event.notices) == 1
 

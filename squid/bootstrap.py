@@ -104,6 +104,14 @@ from squid.settings.application import SettingsService
 from squid.settings.application.edits import GUILD_EDIT, RUNTIME_EDIT, GuildSettingsEdit, RuntimeSettingsEdit
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.starboard.application import StarboardService
+from squid.starboard.application.edits import (
+    STARBOARD_CREATE,
+    STARBOARD_DELETE,
+    STARBOARD_EDIT,
+    StarboardCreation,
+    StarboardDeletion,
+    StarboardEdit,
+)
 from squid.submissions.application import (
     CheckedInFormManifestRegistry,
     SubmissionDraftService,
@@ -338,6 +346,9 @@ class _ServiceGraph:
                 PROFILE_EDIT: AccountProfileEdit(self.permissions),
                 VISIBILITY_EDIT: AccountVisibilityEdit(self.permissions),
                 UNLINK_EDIT: AccountUnlinkEdit(self.permissions),
+                STARBOARD_EDIT: StarboardEdit(self.permissions),
+                STARBOARD_CREATE: StarboardCreation(self.permissions),
+                STARBOARD_DELETE: StarboardDeletion(self.permissions),
                 PREFERENCES_EDIT: NotificationPreferencesEdit(self.permissions),
                 SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(self.permissions),
                 INBOX_EDIT: InboxReadEdit(self.permissions),

@@ -45,7 +45,6 @@ class StarboardService:
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[StarboardUnitOfWork]) -> None:
         self._uow_factory = uow_factory
-        self._emoji_cache: dict[int, frozenset[str]] = {}
 
     @staticmethod
     def _weight_policy(repository: StarboardRepository) -> RoleWeightPolicy:
@@ -56,12 +55,9 @@ class StarboardService:
         return RoleWeightPolicy(multipliers, staff_multiplier=1.0)
 
     async def is_relevant_emoji(self, guild_id: int, emoji: str) -> bool:
-        configured = self._emoji_cache.get(guild_id)
-        if configured is None:
-            async with self._uow_factory() as uow:
-                configured = await uow.starboards.relevant_emojis(guild_id)
-            self._emoji_cache[guild_id] = configured
-        return emoji in configured
+        # Every process observes committed alias changes, including edits whose UI refresh failed.
+        async with self._uow_factory() as uow:
+            return emoji in await uow.starboards.relevant_emojis(guild_id)
 
     async def record_vote(self, origin: OriginMessage, actor: ReactionActor, emoji: str) -> StarboardVoteResult:
         """Record accepted votes across matching boards in one transaction.
@@ -152,45 +148,10 @@ class StarboardService:
                 return None
             return StarboardSnapshot.capture(config, dict(await uow.starboards.role_multipliers(starboard_id)))
 
-    async def replace_snapshot(self, expected: StarboardSnapshot | None, replacement: StarboardSnapshot | None) -> bool:
-        target = expected or replacement
-        if target is None:
-            return True
-        if replacement is not None:
-            if (replacement.id, replacement.guild_id) != (target.id, target.guild_id):
-                msg = "A starboard edit cannot change its identity"
-                raise ValueError(msg)
-            if any(not isfinite(weight) or weight <= 0 for _, weight in replacement.weights):
-                msg = "Role weights must be positive and finite"
-                raise ValueError(msg)
+    async def reserve_id(self) -> int:
+        """Allocate an unused identity before issuing a creation command."""
         async with self._uow_factory() as uow:
-            config = await uow.starboards.get_by_id(target.id, for_update=True)
-            current = (
-                None
-                if config is None
-                else StarboardSnapshot.capture(config, dict(await uow.starboards.role_multipliers(target.id)))
-            )
-            if current != expected:
-                return False
-            if replacement is None:
-                if not await uow.starboards.delete_unused(target.id):
-                    return False
-            elif config is None:
-                restored = replacement.config()
-                if await uow.starboards.get(restored.guild_id, restored.name) is not None:
-                    return False
-                await uow.starboards.restore_unused(restored)
-            else:
-                replacement.config()  # Validate using the same rules as an ordinary edit.
-                for key, value in replacement.settings:
-                    setattr(config, key, value)
-                await uow.starboards.set_emojis(target.id, replacement.aliases())
-            if replacement is not None:
-                for role_id in dict(current.weights if current else ()) | dict(replacement.weights):
-                    await uow.starboards.set_role_multiplier(target.id, role_id, dict(replacement.weights).get(role_id))
-            await uow.commit()
-        self.invalidate_cache(target.guild_id)
-        return True
+            return await uow.starboards.reserve_id()
 
     async def create_starboard(
         self, guild_id: int, channel_id: int, name: str = "main", *, required: float = 3.0
@@ -209,14 +170,12 @@ class StarboardService:
             )
             created = await uow.starboards.create(config)
             await uow.commit()
-            self.invalidate_cache(guild_id)
             return created
 
     async def delete_starboard(self, guild_id: int, name: str) -> bool:
         async with self._uow_factory() as uow:
             deleted = await uow.starboards.delete(guild_id, name)
             await uow.commit()
-            self.invalidate_cache(guild_id)
             return deleted
 
     async def list_for_guild(self, guild_id: int) -> tuple[StarboardConfig, ...]:
@@ -235,11 +194,12 @@ class StarboardService:
             current = await uow.starboards.get(guild_id, name, for_update=True)
             if current is None:
                 return None
+            if "name" in settings:
+                await uow.starboards.lock_names(guild_id)
             for key, value in settings.items():
                 setattr(current, key, value)
             current.validate()
             await uow.commit()
-        self.invalidate_cache(guild_id)
         return current
 
     async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None:
@@ -255,7 +215,6 @@ class StarboardService:
             )
             await uow.starboards.set_emojis(config.id, emojis)
             await uow.commit()
-            self.invalidate_cache(config.guild_id)
 
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
         async with self._uow_factory() as uow:
@@ -294,13 +253,5 @@ class StarboardService:
         is removed from every board that read from it.
         """
         async with self._uow_factory() as uow:
-            changed = await uow.starboards.forget_channels(guild_id, channel_ids)
+            await uow.starboards.forget_channels(guild_id, channel_ids)
             await uow.commit()
-        if changed:
-            # A disabled board stops counting reactions in every guild it reads from, so any
-            # guild's cached emoji set may now be too large.
-            self._emoji_cache.clear()
-
-    def invalidate_cache(self, guild_id: int) -> None:
-        """Discard this service instance's cached reaction aliases for one source guild."""
-        self._emoji_cache.pop(guild_id, None)

@@ -1,14 +1,16 @@
 """Canonical starboard configuration workspace."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.edit_history import history_controls, record_edit, save_edit
+from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
+from squid.edits.application import EditRunner
+from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -17,12 +19,20 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
+from squid.starboard.application.edits import (
+    STARBOARD_CREATE,
+    STARBOARD_DELETE,
+    STARBOARD_EDIT,
+    BoardPresence,
+    BoardValues,
+    starboard_target,
+)
 from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 
 type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
-type BoardCreator = Callable[[int, str, float], Awaitable[StarboardConfig]]
+type ChannelValidator = Callable[[int], Awaitable[None]]
 
 
 class StarboardOperations(Protocol):
@@ -30,21 +40,9 @@ class StarboardOperations(Protocol):
 
     async def snapshot(self, starboard_id: int) -> StarboardSnapshot | None: ...
 
-    async def replace_snapshot(
-        self, expected: StarboardSnapshot | None, replacement: StarboardSnapshot | None
-    ) -> bool: ...
+    async def reserve_id(self) -> int: ...
 
     async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
-
-    async def get(self, guild_id: int, name: str) -> StarboardConfig | None: ...
-
-    async def delete_starboard(self, guild_id: int, name: str) -> bool: ...
-
-    async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None: ...
-
-    async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None: ...
-
-    async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None: ...
 
 
 class StarboardScreen(sd.Screen):
@@ -55,6 +53,7 @@ class StarboardScreen(sd.Screen):
     """
 
     history: sl.runtime.History = sl.runtime.history(limit=20)
+    _snapshots: Mapping[str, StarboardSnapshot] = sl.state({}, persist=False)
     _browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
     )
@@ -75,20 +74,29 @@ class StarboardScreen(sd.Screen):
         guild_id: int,
         capabilities: frozenset[PermissionNode],
         authorize: StarboardAuthorizer,
-        create_board: BoardCreator,
+        edits: EditRunner,
+        actor: Callable[[], Awaitable[EditActor]],
+        validate_channel: ChannelValidator,
     ) -> None:
         self._operations = operations
         self._guild_id = guild_id
         self._capabilities = capabilities
         self._authorize = authorize
-        self._create_board = create_board
+        self._validate_channel = validate_channel
+        self.edits = EditController(edits, actor, self._refresh, history=self.history)
 
     @override
     async def on_load(self) -> None:
         await self._refresh()
 
     async def _refresh(self) -> None:
-        boards = tuple(await self._operations.list_for_guild(self._guild_id))
+        snapshots = {}
+        for board in await self._operations.list_for_guild(self._guild_id):
+            snapshot = await self._operations.snapshot(board.id)
+            if snapshot is not None:
+                snapshots[str(dict(snapshot.settings)["name"]).casefold()] = snapshot
+        self._snapshots = snapshots
+        boards = tuple(snapshot.config() for snapshot in snapshots.values())
         self._browser = sp.Browser(
             sl.sources.list_source(boards),
             key="boards",
@@ -132,7 +140,7 @@ class StarboardScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-starboard-screen-loading-starboards = Loading starboards.")),)
-        return (self.boundary(self._tabs, key="tabs"), *history_controls(self.history))
+        return (self.boundary(self._tabs, key="tabs"), *self.edits.controls())
 
     def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
@@ -193,18 +201,24 @@ class StarboardScreen(sd.Screen):
         channel_id = form.channel_id
         name = form.name
         required = form.required
-        created = await self._create_board(channel_id, name, required)
-        record_edit(
-            self.history,
-            tr(t"starboard-history-create = Create starboard"),
-            None,
-            StarboardSnapshot.capture(created, {}),
-            target=f"starboard:{created.id}",
-            authorize=lambda: self._authorize(STARBOARD_BOARD_CREATE),
-            replace=self._operations.replace_snapshot,
-            refresh=self._refresh,
+        await self._validate_channel(channel_id)
+        identity = await self._operations.reserve_id()
+        created = StarboardConfig(
+            id=identity,
+            guild_id=self._guild_id,
+            channel_id=channel_id,
+            name=name,
+            required=required,
+            emojis=(
+                StarboardEmoji(emoji="⭐", direction="up", position=0),
+                StarboardEmoji(emoji="💩", direction="down", position=1),
+            ),
         )
-        await self._refresh()
+        values = BoardPresence(**BoardValues.capture(StarboardSnapshot.capture(created, {})).model_dump(), present=True)
+        await self.edits.execute(
+            EditCommand(STARBOARD_CREATE, (Revision(starboard_target(identity), 0),), values.values()),
+            tr(t"starboard-history-create = Create starboard"),
+        )
         created_name = created.name
         await event.notice(tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
 
@@ -215,26 +229,27 @@ class StarboardScreen(sd.Screen):
         name = form.name
         setting = form.setting
         value = _parse_setting(setting, form.value)
+        if setting == "channel_id":
+            assert isinstance(value, int)
+            await self._validate_channel(value)
         config = await self._named(event, name)
         if config is None:
             return
-        before = await self._operations.snapshot(config.id)
+        before = self._snapshots[config.name.casefold()]
         if before is not None:
             after = replace(
                 before, settings=tuple((key, value if key == setting else old) for key, old in before.settings)
             )
-            await self._save(before, after, STARBOARD_BOARD_EDIT)
+            await self._save(before, after)
 
-    async def _save(self, before: StarboardSnapshot, after: StarboardSnapshot, permission: PermissionNode) -> None:
-        await save_edit(
-            self.history,
+    async def _save(self, before: StarboardSnapshot, after: StarboardSnapshot) -> None:
+        await self.edits.execute(
+            EditCommand(
+                STARBOARD_EDIT,
+                (Revision(starboard_target(before.id), before.revision),),
+                BoardValues.capture(after).values(),
+            ),
             tr(t"starboard-history-edit = Edit starboard"),
-            before,
-            after,
-            target=f"starboard:{before.id}",
-            authorize=lambda: self._authorize(permission),
-            replace=self._operations.replace_snapshot,
-            refresh=self._refresh,
         )
 
     async def _edit_emoji(self, event: sl.SubmitEvent) -> None:
@@ -247,7 +262,7 @@ class StarboardScreen(sd.Screen):
             return
         emoji = form.emoji
         operation = form.operation
-        before = await self._operations.snapshot(config.id)
+        before = self._snapshots[config.name.casefold()]
         if before is None:
             return
         aliases = tuple(item for item in before.aliases() if item.emoji != emoji)
@@ -259,7 +274,7 @@ class StarboardScreen(sd.Screen):
             after = replace(
                 before, emojis=tuple((item.emoji, item.direction, item.multiplier, item.position) for item in aliases)
             )
-            await self._save(before, after, STARBOARD_EMOJI_EDIT)
+            await self._save(before, after)
 
     async def _edit_weight(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_WEIGHT_EDIT):
@@ -270,14 +285,14 @@ class StarboardScreen(sd.Screen):
             return
         role_id = form.role_id
         multiplier = form.multiplier
-        before = await self._operations.snapshot(config.id)
+        before = self._snapshots[config.name.casefold()]
         if before is not None:
             weights = dict(before.weights)
             if multiplier is None:
                 weights.pop(role_id, None)
             else:
                 weights[role_id] = multiplier
-            await self._save(before, replace(before, weights=tuple(sorted(weights.items()))), STARBOARD_WEIGHT_EDIT)
+            await self._save(before, replace(before, weights=tuple(sorted(weights.items()))))
 
     async def _request_delete(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_DELETE):
@@ -303,12 +318,17 @@ class StarboardScreen(sd.Screen):
             self._deleting = None
             self._decision = None
             return
-        deleted = await self._operations.delete_starboard(self._guild_id, name)
-        if deleted:
-            self.history.clear()
+        snapshot = self._snapshots.get(name.casefold())
+        deleted = snapshot is not None
+        if snapshot is not None:
+            await self.edits.execute(
+                EditCommand(
+                    STARBOARD_DELETE, (Revision(starboard_target(snapshot.id), snapshot.revision),), EditValues.of({})
+                ),
+                tr(t"bot-starboard-screen-delete-starboard = Delete starboard"),
+            )
         self._deleting = None
         self._decision = None
-        await self._refresh()
         await event.source.notice(
             tr(t"bot-starboard-screen-starboard-deleted = Starboard deleted.")
             if deleted
@@ -316,7 +336,8 @@ class StarboardScreen(sd.Screen):
         )
 
     async def _named(self, event: sl.ActionEvent, name: str) -> StarboardConfig | None:
-        config = await self._operations.get(self._guild_id, name)
+        snapshot = self._snapshots.get(name.casefold())
+        config = None if snapshot is None else snapshot.config()
         if config is None:
             await event.notice(tr(t"starboard-not-found = No starboard with that name exists."))
         return config

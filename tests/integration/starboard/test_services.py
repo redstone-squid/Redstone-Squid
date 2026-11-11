@@ -124,21 +124,3 @@ async def test_shared_deletion_survives_reactions_and_recounts(
         assert after.origin.has_image
         assert not after.origin.present
         await uow.commit()
-
-
-async def test_configuration_history_rejects_stale_values_and_restores_unused_board(
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    service = StarboardService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    board = await service.create_starboard(10, 20)
-    original = await service.snapshot(board.id)
-    assert original is not None
-    await service.update_settings(10, "main", required=5.0)
-    changed = await service.snapshot(board.id)
-    assert changed is not None
-    assert not await service.replace_snapshot(original, None)
-    assert await service.replace_snapshot(changed, original)
-    assert await service.replace_snapshot(original, None)
-    assert await service.snapshot(board.id) is None
-    assert await service.replace_snapshot(None, original)
-    assert await service.snapshot(board.id) == original
