@@ -20,8 +20,8 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_WEIGHT_EDIT,
 )
 from squid.persistence.revisions import require_revision
-from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.application.ports import StarboardUnitOfWork
+from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 

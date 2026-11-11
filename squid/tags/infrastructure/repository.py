@@ -14,7 +14,7 @@ from squid.builds.models import Build
 from squid.edits.domain import Revision, RevisionConflictError
 from squid.persistence.revisions import flush_revision
 from squid.tags.application import TagDefinitionRepository
-from squid.tags.application.history import AssignmentSnapshot
+from squid.tags.application.snapshots import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
 

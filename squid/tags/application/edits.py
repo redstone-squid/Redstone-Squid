@@ -25,13 +25,13 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_ARCHIVE,
     TAG_PROPOSAL_REJECT,
 )
-from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.application.services import (
     TagDefinitionRepository,
     coerce_assignment_value,
     normalize_proposal,
     require_showcase,
 )
+from squid.tags.application.snapshots import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagDefinition
 

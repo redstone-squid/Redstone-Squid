@@ -1,4 +1,4 @@
-"""Immutable configuration values retained by an editing session."""
+"""Detached copies of starboard configuration, compared and restored by the starboard editor."""
 
 from dataclasses import dataclass
 

@@ -8,7 +8,7 @@ from typing import Protocol
 from squid.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-from squid.tags.application.history import AssignmentSnapshot
+from squid.tags.application.snapshots import AssignmentSnapshot
 from squid.tags.domain import TagModerationStatus, TagValue, TagValueType
 from squid.tags.models import TagDefinition
 from squid.unit_of_work import UnitOfWorkFactory

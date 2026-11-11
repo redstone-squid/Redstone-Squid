@@ -9,7 +9,6 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import RoleMultiplier, WeightScope
-from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.application.ports import (
     EntryKey,
     EntryState,
@@ -17,6 +16,7 @@ from squid.starboard.application.ports import (
     StarboardRepository,
     StarboardUnitOfWork,
 )
+from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import evaluate_vote
 from squid.starboard.domain.models import EDITABLE_SETTINGS
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji

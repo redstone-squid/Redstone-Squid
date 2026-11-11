@@ -28,7 +28,7 @@ from squid.starboard.application.edits import (
     BoardValues,
     starboard_target,
 )
-from squid.starboard.application.history import StarboardSnapshot
+from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 

@@ -25,8 +25,8 @@ from squid.starboard.application.edits import (
     StarboardEdit,
     starboard_target,
 )
-from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.application.services import StarboardService
+from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 
 ACTOR = Actor(guild_id=10, is_bot_owner=True, discord_user_id=42)

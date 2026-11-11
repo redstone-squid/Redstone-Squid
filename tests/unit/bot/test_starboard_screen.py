@@ -18,7 +18,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.starboard.application import StarboardService
 from squid.starboard.application.edits import STARBOARD_CREATE, STARBOARD_DELETE, BoardPresence, BoardValues
-from squid.starboard.application.history import StarboardSnapshot
+from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_ui.runtime import transaction
 from squid_ui.testing import labels

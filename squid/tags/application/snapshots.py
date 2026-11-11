@@ -1,4 +1,4 @@
-"""Values retained when reversing a showcase assignment."""
+"""Detached copies of a tag assignment. Showcase edits replace an assignment only while it still matches one."""
 
 from dataclasses import dataclass
 
