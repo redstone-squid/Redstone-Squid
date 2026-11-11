@@ -16,5 +16,6 @@ repo = "local"
 hooks = [
     { id = "ruff-check", name = "ruff check", entry = "uv run --locked ruff check --fix --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
     { id = "ruff-format", name = "ruff format", entry = "uv run --locked ruff format --force-exclude", language = "system", types = ["python"], stages = ["pre-commit"] },
+    { id = "i18n-check", name = "validate Fluent catalogs", entry = "uv run --locked squid-i18n check", language = "system", pass_filenames = false, files = '^(squid/.*\.py$|packages/.*\.py$|locales/|packages/[^/]+/src/[^/]+/locales/|(?:packages/[^/]+/)?pyproject\.toml$|uv\.lock$|prek\.toml$)', stages = ["pre-commit"] },
     { id = "pyrefly", name = "pyrefly", entry = "uv run --locked pyrefly check --config pyproject.toml", language = "system", pass_filenames = false, always_run = true, stages = ["pre-push"] },
 ]

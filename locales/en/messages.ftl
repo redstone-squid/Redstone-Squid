@@ -1280,91 +1280,91 @@ bot-starboard-screen-up = Up
 # squid/bot/starboard/screen.py:331
 bot-starboard-screen-value = Value
 
-# squid/bot/submission/build_browse.py:184
+# squid/bot/submission/build_browse.py:187
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/submission/build_browse.py:519
+# squid/bot/submission/build_browse.py:523
 bot-submission-build-browse-back-to-builds = Back to builds
 
-# squid/bot/submission/build_browse.py:505
+# squid/bot/submission/build_browse.py:509
 bot-submission-build-browse-browse = Browse
 
-# squid/bot/submission/build_browse.py:271
+# squid/bot/submission/build_browse.py:274
 bot-submission-build-browse-build = { $action } build #{ $build_id_text }?
 
-# squid/bot/submission/build_browse.py:493
+# squid/bot/submission/build_browse.py:499
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:615
+# squid/bot/submission/build_browse.py:619
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/submission/build_browse.py:509
+# squid/bot/submission/build_browse.py:513
 bot-submission-build-browse-builds = Builds
 
-# squid/bot/submission/build_browse.py:287
+# squid/bot/submission/build_browse.py:290
 bot-submission-build-browse-cancel = Cancel
 
-# squid/bot/submission/build_browse.py:286
+# squid/bot/submission/build_browse.py:289
 bot-submission-build-browse-confirm = Confirm
 
-# squid/bot/submission/build_browse.py:396
+# squid/bot/submission/build_browse.py:399
 bot-submission-build-browse-conversion-report = Conversion report: { $loss_summary }
 
-# squid/bot/submission/build_browse.py:240, squid/bot/submission/build_browse.py:582
+# squid/bot/submission/build_browse.py:243, squid/bot/submission/build_browse.py:586
 bot-submission-build-browse-convert-schematic = Convert schematic
 
-# squid/bot/submission/build_browse.py:202
+# squid/bot/submission/build_browse.py:205
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:622
+# squid/bot/submission/build_browse.py:626
 bot-submission-build-browse-description-or-title = Description or title
 
-# squid/bot/submission/build_browse.py:230
+# squid/bot/submission/build_browse.py:233
 bot-submission-build-browse-detect-lattice = Detect lattice
 
-# squid/bot/submission/build_browse.py:162
+# squid/bot/submission/build_browse.py:165
 bot-submission-build-browse-download-result = Download result
 
-# squid/bot/submission/build_browse.py:217
+# squid/bot/submission/build_browse.py:220
 bot-submission-build-browse-download-schematic = Download schematic
 
-# squid/bot/submission/build_browse.py:178
+# squid/bot/submission/build_browse.py:181
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/build_browse.py:506, squid/bot/submission/build_browse.py:619
+# squid/bot/submission/build_browse.py:510, squid/bot/submission/build_browse.py:623
 bot-submission-build-browse-find-build = Find build
 
-# squid/bot/submission/build_browse.py:606
+# squid/bot/submission/build_browse.py:610
 bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 
-# squid/bot/submission/build_browse.py:144
+# squid/bot/submission/build_browse.py:147
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:525
+# squid/bot/submission/build_browse.py:529
 bot-submission-build-browse-loading-builds = Loading builds.
 
-# squid/bot/submission/build_browse.py:249
+# squid/bot/submission/build_browse.py:252
 bot-submission-build-browse-measure-timing = Measure timing
 
-# squid/bot/submission/build_browse.py:613
+# squid/bot/submission/build_browse.py:617
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:531
+# squid/bot/submission/build_browse.py:535
 bot-submission-build-browse-open-by-id = Open by ID
 
-# squid/bot/submission/build_browse.py:585
+# squid/bot/submission/build_browse.py:589
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/submission/build_browse.py:193
+# squid/bot/submission/build_browse.py:196
 bot-submission-build-browse-reject = Reject
 
-# squid/bot/submission/build_browse.py:222
+# squid/bot/submission/build_browse.py:225
 bot-submission-build-browse-render-schematic = Render schematic
 
-# squid/bot/submission/build_browse.py:212
+# squid/bot/submission/build_browse.py:215
 bot-submission-build-browse-schematic-info = Schematic info
 
-# squid/bot/submission/build_browse.py:537
+# squid/bot/submission/build_browse.py:541
 bot-submission-build-browse-search-by-meaning = Search by meaning
 
 # squid/bot/submission/consent_banner.py:70
@@ -2038,46 +2038,46 @@ build-editor-validation-errors =
     Fix these values before review:
     { $validation_error }
 
-# squid/bot/submission/build_browse.py:569
+# squid/bot/submission/build_browse.py:573
 build-id-not-visible = No visible build has that ID.
 
-# squid/bot/submission/build_browse.py:411
+# squid/bot/submission/build_browse.py:414
 build-input-position-invalid = Input position must contain three integers, for example `12 5 -3`.
 
-# squid/bot/submission/build_browse.py:494
+# squid/bot/submission/build_browse.py:500
 build-list-empty = No builds are available.
 
-# squid/bot/submission/build_browse.py:593
+# squid/bot/submission/build_browse.py:597
 build-minecraft-data-version-label = Minecraft data version
 
-# squid/bot/submission/build_browse.py:596
+# squid/bot/submission/build_browse.py:600
 build-minecraft-version-label = Minecraft version name
 
-# squid/bot/submission/build_browse.py:327
+# squid/bot/submission/build_browse.py:330
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:446
+# squid/bot/submission/build_browse.py:449
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/submission/build_browse.py:269
+# squid/bot/submission/build_browse.py:272
 build-review-confirmation-title = Confirm review decision
 
-# squid/bot/submission/build_browse.py:310
+# squid/bot/submission/build_browse.py:313
 build-review-state-updated = Build review state updated.
 
-# squid/bot/submission/build_browse.py:284
+# squid/bot/submission/build_browse.py:287
 build-review-state-warning = This changes the build's review state.
 
-# squid/bot/submission/build_browse.py:429
+# squid/bot/submission/build_browse.py:432
 build-schematic-lattice-not-detected = No repeating lattice was detected in this schematic.
 
-# squid/bot/submission/build_browse.py:345
+# squid/bot/submission/build_browse.py:348
 build-schematic-missing = This build has no schematic attached.
 
-# squid/bot/submission/build_browse.py:349
+# squid/bot/submission/build_browse.py:352
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/submission/build_browse.py:603
+# squid/bot/submission/build_browse.py:607
 build-schematic-timing-action = Measure schematic timing
 
 # squid/bot/submission/search_view.py:123, squid/bot/submission/search_view.py:127
@@ -2095,7 +2095,7 @@ build-search-matching-mode-help = Use keyword matching or smart meaning-based ma
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/build_browse.py:575
+# squid/bot/submission/build_browse.py:579
 build-search-no-visible-match = No visible build matches that search.
 
 # squid/bot/submission/search.py:121
