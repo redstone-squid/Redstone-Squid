@@ -1,5 +1,6 @@
 """Durable build-workspace actions and their custom IDs."""
 
+from functools import partial
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -11,7 +12,7 @@ from squid.bot.routes._root import _feature_group
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import drafts, inference, opening, revisions
 from squid.bot.ui import text_node
-from squid.bot.utils.permissions import actor_for_interaction
+from squid.bot.utils.permissions import actor_for_interaction, current_edit_actor
 from squid.core.i18n import tr
 
 if TYPE_CHECKING:
@@ -61,6 +62,7 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
         actor,
         UUID(draft_id),
         changes=interaction.client.topic_bus.topic("submission_draft", draft_id),
+        resolve_actor=partial(current_edit_actor, request),
         render_card=lambda build: render_build_card(build, interaction.client.media_previews),
     )
     await request.respond(

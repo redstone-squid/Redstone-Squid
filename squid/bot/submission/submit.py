@@ -8,6 +8,7 @@ input and presents progress while those services decide when a build is ready.
 
 import logging
 from collections.abc import Sequence
+from functools import partial
 from typing import TYPE_CHECKING, Self
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
@@ -30,7 +31,7 @@ from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import draft_editor, field_names
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.permissions import actor_for_interaction, enforce
+from squid.bot.utils.permissions import actor_for_interaction, current_edit_actor, enforce
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
     BuildInferenceService,
@@ -280,6 +281,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             uploader_account_id,
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
+            resolve_actor=partial(current_edit_actor, request),
             render_card=lambda build: render_build_card(build, self.bot.media_previews),
             notice=_unused_values_notice(unresolved, manifest, category_code),
         )

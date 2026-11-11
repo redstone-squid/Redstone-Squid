@@ -29,6 +29,8 @@ from squid.bot.submission.ui.drafts import (
 )
 from squid.builds.application.input import parse_build_ticks
 from squid.builds.models import Build
+from squid.core.actors import Actor
+from squid.edits.domain import Revision, RevisionConflictError
 from squid.runtime import BotServices
 from squid.submissions.application import (
     AppliedDraftChange,
@@ -41,13 +43,13 @@ from squid.submissions.application import (
     build_submission_manifest,
 )
 from squid.submissions.application.drafts import DraftActor
+from squid.submissions.application.edits import draft_target
 from squid.submissions.application.finalization import SubmissionRequestResult
 from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.domain import (
     ChoiceOption,
     DraftChange,
-    DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
     FormManifest,
@@ -71,6 +73,7 @@ from squid_ui.testing import find_all, labels, texts
 from squid_ui.text import source_text
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.testing import commit_render, payload_problems
+from tests.support.draft_edits import DraftEditRecorder
 from tests.support.services import bot_services
 
 
@@ -171,6 +174,7 @@ def setup(category: str = "other") -> tuple[BotServices, Drafts]:
     drafts = Drafts(draft)
     services = bot_services(
         submission_drafts=drafts,
+        edits=DraftEditRecorder(drafts),
         submission_forms=Forms(),
         submission_finalization=Finalization(),
         submission_intake=Intake(),
@@ -225,8 +229,28 @@ async def test_staff_writes_use_actor_and_preserve_owner() -> None:
     with transaction():
         await editor.workspace.save_values({"description": "Staff correction"})
     assert editor.workspace.draft.snapshot.owner_account_id == 7
-    assert all(actor == 99 for actor in drafts.actors)
-    assert drafts.changes[0].client_instance_id == "discord-editor"
+    assert all((actor.account_id if isinstance(actor, Actor) else actor) == 99 for actor in drafts.actors)
+    assert drafts.changes[0].client_instance_id == "versioned-editor"
+
+
+async def test_undo_resolves_the_current_actor() -> None:
+    services, drafts = setup()
+    resolve_actor = AsyncMock(side_effect=[Actor(account_id=7), Actor(account_id=99)])
+    editor = await draft_editor(
+        services,
+        7,
+        drafts.current.snapshot.id,
+        changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
+        resolve_actor=resolve_actor,
+    )
+    await editor.workspace.projection.reload()
+    with transaction():
+        await editor.workspace.save_values({"description": "Correction"})
+    with transaction():
+        await editor.workspace.history.undo()
+    assert resolve_actor.await_count == 2
+    assert Actor(account_id=99) in drafts.actors
+    assert "description" not in drafts.current.snapshot.answers
 
 
 async def test_stale_modal_does_not_overwrite_a_newer_edit() -> None:
@@ -238,7 +262,10 @@ async def test_stale_modal_does_not_overwrite_a_newer_edit() -> None:
     with transaction():
         await ws.save_values({"display_name": "Stale modal"}, base_revision=base_revision)
     assert ws.draft.snapshot.answers["display_name"] == "Newer value"
-    assert source_text(ws.notice) == DraftRevisionConflictError(expected=0, actual=1).public_detail()
+    assert (
+        source_text(ws.notice)
+        == RevisionConflictError(Revision(draft_target(drafts.current.snapshot.id), 0), 1).public_detail()
+    )
 
 
 async def test_discord_drafts_do_not_ask_for_the_exported_version() -> None:
@@ -315,7 +342,10 @@ async def test_modal_sections_open_in_place_and_keep_the_overview() -> None:
     # The modal was opened at revision 0, so a second submission from it is stale.
     await submit_modal(event, {"capture_size": "9x9x9", "version_compatibility": None})
     assert editor.workspace.draft.snapshot.answers["capture_width"] == 3
-    assert source_text(editor.workspace.notice) == DraftRevisionConflictError(expected=0, actual=1).public_detail()
+    assert (
+        source_text(editor.workspace.notice)
+        == RevisionConflictError(Revision(draft_target(drafts.current.snapshot.id), 0), 1).public_detail()
+    )
 
 
 async def test_catalogue_sections_open_a_separate_editor_message() -> None:

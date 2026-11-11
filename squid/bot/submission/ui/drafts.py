@@ -36,7 +36,7 @@ from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.edit_history import history_controls, save_edit
+from squid.bot.edit_controller import EditController
 from squid.bot.submission import draft_intake
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui import controls as build_controls
@@ -44,10 +44,12 @@ from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW
 from squid.builds.application.input import parse_build_ticks
 from squid.builds.models import Build
+from squid.core.actors import Actor
 from squid.core.errors import JSONValue, SquidError
 from squid.core.i18n import tr
 from squid.runtime import BotServices
 from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
+from squid.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
 from squid.submissions.application.intake import SuppliedAttachment
 from squid.submissions.domain import (
     ChoiceOption,
@@ -57,7 +59,6 @@ from squid.submissions.domain import (
     FormSection,
     ValueKind,
 )
-from squid.submissions.domain.drafts import DraftRevisionConflictError
 from squid.submissions.domain.finalization import (
     FinalizationJobStatus,
     SubmissionAttentionIssue,
@@ -167,8 +168,14 @@ class DraftWorkspace(sl.Reactive):
         *,
         changes: TopicHandle,
         render_card: CardRenderer | None = None,
+        resolve_actor: Callable[[], Awaitable[Actor]] | None = None,
     ) -> None:
         self.services = services
+
+        async def actor() -> Actor:
+            return Actor(account_id=actor_id) if resolve_actor is None else await resolve_actor()
+
+        self.edits = EditController(services.edits, actor, self.reload, history=self.history)
         self.actor_id = actor_id
         self.manifest = manifest
         self.render_card = render_card
@@ -305,37 +312,14 @@ class DraftWorkspace(sl.Reactive):
 
     async def save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
         """Save several answers as one change; a failure saves none of them and sets the notice."""
-        before = {key: self.draft.snapshot.answers.get(key) for key in values}
-
-        async def replace_values(expected: Mapping[str, JSONValue], replacement: Mapping[str, JSONValue]) -> bool:
-            return await self.services.submission_drafts.replace_answers(
-                self._draft_id, self.actor_id, expected, replacement
-            )
-
-        async def write() -> bool:
-            return await self.services.submission_drafts.replace_answers(
-                self._draft_id, self.actor_id, before, values, base_revision=base_revision
-            )
-
-        # A modal also guards the revision it displayed, even when the changed field stayed equal.
-        if base_revision is not None and base_revision != self.draft.snapshot.revision:
-            self.notice = DraftRevisionConflictError(
-                expected=base_revision, actual=self.draft.snapshot.revision
-            ).public_text()
-            await self.reload()
+        if not values:
             return
         try:
-            await save_edit(
-                self.history,
-                tr(t"draft-history-answers = Edit submission answers"),
-                before,
-                dict(values),
-                target=f"draft:{self._draft_id}:answers",
-                authorize=self.may_edit,
-                replace=replace_values,
-                refresh=self.reload,
-                write=write,
-            )
+            await self.edits.bind(
+                DRAFT_ANSWERS,
+                draft_target(self._draft_id),
+                self.draft.snapshot.revision if base_revision is None else base_revision,
+            ).save(answer_values(values), tr(t"draft-history-answers = Edit submission answers"))
         except SquidError as error:
             self.notice = error.public_text()
         else:
@@ -349,13 +333,14 @@ class DraftWorkspace(sl.Reactive):
         return current.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
 
     async def submit(self) -> None:
+        self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
         try:
             await self.services.submission_finalization.submit(self._draft_id, self.actor_id, locale=None)
         except SquidError as error:
             self.notice = error.public_text()
         else:
             self.notice = ""
-            self.history.clear()
+            self.history.discard_targets(frozenset({draft_target(self._draft_id).identity}))
         await self.reload()
 
     async def add_files(self, files: Sequence[sl.forms.UploadedFile]) -> None:
@@ -448,7 +433,7 @@ class DraftEditorScreen(BuildEditorScreen[None]):
             Phase.DONE: DISCORD_GREEN,
             Phase.EXPIRED: DISCORD_RED,
         }[phase]
-        return (sd.v2.panel(*children, accent=accent), *history_controls(ws.history))
+        return (sd.v2.panel(*children, accent=accent), *ws.edits.controls())
 
     def _overview(self, phase: Phase) -> list[Any]:
         """One row per section and the Files row, then the Submit row."""
@@ -609,7 +594,7 @@ class SectionEditorScreen(sd.Screen[None]):
                     )
                 )
         children.extend((sd.v2.separator(), _done_row(self._done)))
-        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *history_controls(self.workspace.history))
+        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *self.workspace.edits.controls())
 
     def _picker(self, field: FormField, value: JSONValue) -> list[Any]:
         """A catalogue field's current choice and one page of its options."""
@@ -769,7 +754,7 @@ class FilesEditorScreen(sd.Screen[None]):
                 ),
             )
         )
-        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *history_controls(self.workspace.history))
+        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *self.workspace.edits.controls())
 
     def _selected_id(self) -> UUID | None:
         """The selected file, if it is still on the draft."""
@@ -1409,6 +1394,7 @@ async def draft_editor(
     *,
     changes: TopicHandle,
     render_card: CardRenderer | None = None,
+    resolve_actor: Callable[[], Awaitable[Actor]] | None = None,
     notice: sl.TextLike = "",
 ) -> DraftEditorScreen:
     """Open a saved draft with the form revision it was created under.
@@ -1430,7 +1416,9 @@ async def draft_editor(
     if manifest is None:
         message = "This draft's form revision is unavailable."
         raise ValueError(message)
-    workspace = DraftWorkspace(services, actor_id, draft, manifest, changes=changes, render_card=render_card)
+    workspace = DraftWorkspace(
+        services, actor_id, draft, manifest, changes=changes, render_card=render_card, resolve_actor=resolve_actor
+    )
     await workspace.reload()
     await workspace.load_options(workspace.fields)
     workspace.notice = notice

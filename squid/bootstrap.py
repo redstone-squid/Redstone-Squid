@@ -125,6 +125,7 @@ from squid.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
 from squid.submissions.application.commit import BuildSubmissionExecutor
+from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
@@ -342,6 +343,7 @@ class _ServiceGraph:
         return EditExecutor(
             self.uow_factory,
             {
+                DRAFT_ANSWERS: DraftAnswersEdit(self.submission_drafts),
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),

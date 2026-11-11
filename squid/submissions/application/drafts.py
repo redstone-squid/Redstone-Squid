@@ -20,12 +20,9 @@ from squid.submissions.domain import (
     DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
-    FieldOperation,
-    FieldOperationKind,
     FormManifest,
     SubmissionOrigin,
 )
-from squid.submissions.domain.drafts import DraftRevisionConflictError
 from squid.submissions.domain.finalization import SubmissionAttentionIssue
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import (
@@ -402,41 +399,6 @@ class SubmissionDraftService:
             await uow.commit()
             return result
 
-    async def replace_answers(
-        self,
-        draft_id: UUID,
-        actor: DraftActor,
-        expected: Mapping[str, JSONValue],
-        replacement: Mapping[str, JSONValue],
-        *,
-        base_revision: int | None = None,
-    ) -> bool:
-        """Reverse only the supplied answers, with normal manifest, authority, and revision checks."""
-        current = await self.get_accessible(draft_id, actor)
-        if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}:
-            return False
-        if any(current.snapshot.answers.get(key) != value for key, value in expected.items()):
-            return False
-        if set(expected) != set(replacement):
-            message = "A conditional answer edit must replace the same fields."
-            raise ValidationError(message)
-        change = DraftChange(
-            current.snapshot.revision if base_revision is None else base_revision,
-            "discord-editor",
-            DraftChangeKey(str(uuid4())),
-            tuple(
-                FieldOperation(
-                    uuid4(), key, FieldOperationKind.UNSET if value is None else FieldOperationKind.SET, value
-                )
-                for key, value in replacement.items()
-            ),
-        )
-        try:
-            await self.apply_change(draft_id, actor, change, locale=None)
-        except DraftRevisionConflictError, DraftStateConflictError:
-            return False
-        return True
-
     async def apply_change(
         self,
         draft_id: UUID,
@@ -458,29 +420,46 @@ class SubmissionDraftService:
             replayed = await uow.submission_drafts.replayed_change(draft_id, owner_id, change.idempotency_key)
             if replayed is not None:
                 return replayed
+        await self.validate_change(current, change, locale=locale)
+        async with self._uow_factory() as uow:
+            result = await self.persist_change_in(uow, current, account_id, change, now=now)
+            await uow.commit()
+            return result
+
+    async def validate_change(self, current: StoredDraft, change: DraftChange, *, locale: str | None) -> DraftSnapshot:
+        """Validate a candidate against its pinned manifest without writing."""
         manifest = await self._pinned_manifest(current, locale)
         candidate = current.snapshot.apply(change)
         errors = manifest.validate_answers(
-            candidate.category,
-            candidate.answers,
-            origin=current.origin,
-            require_complete=False,
+            candidate.category, candidate.answers, origin=current.origin, require_complete=False
         )
         if errors:
             raise DraftValidationError(errors)
+        return candidate
+
+    async def persist_change_in(
+        self,
+        uow: DraftUnitOfWork,
+        current: StoredDraft,
+        actor: DraftActor,
+        change: DraftChange,
+        *,
+        now: Instant | None = None,
+    ) -> AppliedDraftChange:
+        """Persist a validated change with current authority and repository revision checks.
+
+        The transaction owner commits this together with any operation outcome.
+        """
+        await self.get_accessible_in(uow, current.snapshot.id, actor)
         touched_at = now or self._now()
-        async with self._uow_factory() as uow:
-            await self.get_accessible_in(uow, draft_id, account_id)
-            result = await uow.submission_drafts.apply_change(
-                draft_id,
-                owner_id,
-                change,
-                updated_at=touched_at,
-                expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
-                actor_account_id=draft_actor_id(account_id),
-            )
-            await uow.commit()
-            return result
+        return await uow.submission_drafts.apply_change(
+            current.snapshot.id,
+            current.snapshot.owner_account_id,
+            change,
+            updated_at=touched_at,
+            expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
+            actor_account_id=draft_actor_id(actor),
+        )
 
     async def upgrade_manifest(
         self,
