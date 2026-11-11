@@ -6,7 +6,7 @@ its UI action transaction open while the user reads the notice.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
-from dataclasses import fields
+from dataclasses import fields, replace
 from typing import Protocol, cast, override
 
 import discord
@@ -30,7 +30,7 @@ from squid.accounts.domain import (
 )
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import AccountIdentity, AccountProfile
-from squid.bot.edit_history import history_controls, save_edit
+from squid.bot.edit_history import history_controls, save_edit, track_local_edits
 from squid.bot.profile_render import identity_label as _identity_label
 from squid.bot.profile_render import own_profile_avatar
 from squid.bot.ui import CardField, tr
@@ -68,6 +68,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     saved immediately; profile fields stay in the editor until Save profile.
     """
 
+    profile_history: sl.runtime.History = sl.runtime.history(limit=20)
     history: sl.runtime.History = sl.runtime.history(limit=20)
 
     selected_id: int | None = sl.state(None)
@@ -127,6 +128,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         if self._profile_editor is not None:
             return (
                 self.boundary(self._profile_editor, key="profile-editor"),
+                *history_controls(self.profile_history),
                 sl.action_controls(
                     sl.action_control(
                         tr(t"account-view-cancel = Cancel"),
@@ -342,7 +344,23 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
             },
             "links": tuple({"label": link.label, "url": link.url} for link in self._profile.links),
         }
-        return editor.build_component(initial=initial, on_commit=self._profile_committed)
+        self.profile_history.clear()
+        driver = editor.build_component(initial=initial, on_commit=self._profile_committed)
+        track_local_edits(
+            self.profile_history,
+            driver,
+            tr(t"account-history-profile-draft = Edit profile draft"),
+            select=editor.values,
+            restore=lambda state, values: replace(
+                state,
+                sections=tuple(
+                    replace(old, state=new.state)
+                    for old, new in zip(state.sections, editor.initial_from(values).sections, strict=True)
+                ),
+            ),
+            enabled=lambda: self._profile_editor is driver,
+        )
+        return driver
 
     def _validate_link(self, values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
         try:
@@ -387,6 +405,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         _changed: frozenset[str],
     ) -> None:
         await self._save_profile(self._profile_update(values))
+        self.profile_history.clear()
         self._profile_editor = None
         await event.source.notice(tr(t"account-view-profile-saved = Profile saved."))
 

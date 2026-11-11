@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import squid_ui as sl
 import squid_ui_discord as sd
+import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid_reactivity.actions import ConflictDetail
@@ -49,6 +50,7 @@ async def save_edit[ValueT](
     authorize: Callable[[], Awaitable[bool]],
     replace: Callable[[ValueT, ValueT], Awaitable[bool]],
     refresh: Callable[[], Awaitable[None]],
+    write: Callable[[], Awaitable[bool]] | None = None,
 ) -> bool:
     """Authorize, conditionally save, retain an inverse, and refresh one user edit.
 
@@ -63,7 +65,7 @@ async def save_edit[ValueT](
         raise ReactiveWriteError(message)
     if not await authorize():
         raise AuthorizationError
-    if not await replace(before, after):
+    if not (await write() if write is not None else await replace(before, after)):
         await refresh()
         raise InvalidStateError(
             tr(t"edit-history-save-conflict = This value changed elsewhere. Review it and try again.")
@@ -123,3 +125,45 @@ def history_controls(stack: sl.runtime.History) -> tuple[sl.LayoutNode[sl.Compon
             key="edit-history",
         ),
     )
+
+
+def track_local_edits[StateT, ValueT](
+    stack: sl.runtime.History,
+    driver: sp.ComponentDriver[StateT, sl.ComponentsV2Target, sd.Request],
+    label: sl.TextLike,
+    *,
+    select: Callable[[StateT], ValueT],
+    restore: Callable[[StateT, ValueT], StateT],
+    enabled: Callable[[], bool],
+) -> None:
+    """Retain widget values while leaving its navigation state outside history."""
+    original = driver.on_change
+
+    async def allowed() -> bool:
+        return enabled()
+
+    async def replace_values(expected: ValueT, replacement: ValueT) -> bool:
+        if select(driver.machine_state) != expected:
+            return False
+        driver.machine_state = restore(driver.machine_state, replacement)
+        return True
+
+    async def refresh() -> None:
+        driver.invalidate()
+
+    async def changed(event: sp.TransitionEvent[StateT]) -> None:
+        if original is not None:
+            await original(event)
+        if enabled():
+            record_edit(
+                stack,
+                label,
+                select(event.previous),
+                select(event.state),
+                target="local-editor",
+                authorize=allowed,
+                replace=replace_values,
+                refresh=refresh,
+            )
+
+    driver.on_change = changed

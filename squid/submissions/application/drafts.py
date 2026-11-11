@@ -19,9 +19,12 @@ from squid.submissions.domain import (
     DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
+    FieldOperation,
+    FieldOperationKind,
     FormManifest,
     SubmissionOrigin,
 )
+from squid.submissions.domain.drafts import DraftRevisionConflictError
 from squid.submissions.domain.finalization import SubmissionAttentionIssue
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import (
@@ -397,6 +400,41 @@ class SubmissionDraftService:
             result = await uow.submission_drafts.expire_due(now=now or self._now(), limit=limit)
             await uow.commit()
             return result
+
+    async def replace_answers(
+        self,
+        draft_id: UUID,
+        actor: DraftActor,
+        expected: Mapping[str, JSONValue],
+        replacement: Mapping[str, JSONValue],
+        *,
+        base_revision: int | None = None,
+    ) -> bool:
+        """Reverse only the supplied answers, with normal manifest, authority, and revision checks."""
+        current = await self.get_accessible(draft_id, actor)
+        if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}:
+            return False
+        if any(current.snapshot.answers.get(key) != value for key, value in expected.items()):
+            return False
+        if set(expected) != set(replacement):
+            message = "A conditional answer edit must replace the same fields."
+            raise ValidationError(message)
+        change = DraftChange(
+            current.snapshot.revision if base_revision is None else base_revision,
+            "discord-editor",
+            DraftChangeKey(str(uuid4())),
+            tuple(
+                FieldOperation(
+                    uuid4(), key, FieldOperationKind.UNSET if value is None else FieldOperationKind.SET, value
+                )
+                for key, value in replacement.items()
+            ),
+        )
+        try:
+            await self.apply_change(draft_id, actor, change, locale=None)
+        except DraftRevisionConflictError, DraftStateConflictError:
+            return False
+        return True
 
     async def apply_change(
         self,

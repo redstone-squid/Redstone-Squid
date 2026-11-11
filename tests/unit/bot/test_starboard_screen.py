@@ -16,6 +16,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.starboard.application import StarboardService
 from squid.starboard.models import StarboardConfig, StarboardEmoji
+from squid_ui.runtime import transaction
 from squid_ui.testing import labels
 
 
@@ -136,7 +137,8 @@ async def test_create_uses_injected_discord_operation_and_refreshes() -> None:
     await screen.on_load()
     event = NoticeEvent(channel_id=11, name="main", required=4.0)
 
-    await screen._create(cast(sl.SubmitEvent, event))
+    with transaction():
+        await screen._create(cast(sl.SubmitEvent, event))
 
     assert creator.calls == [(11, "main", 4.0)]
     assert operations.list_reads == 2

@@ -25,6 +25,8 @@ class RestrictionRepository(Protocol):
 
     async def add_alias(self, restriction: str, alias: str) -> None: ...
 
+    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool: ...
+
 
 class RestrictionService:
     """Application operations for restriction names and aliases."""
@@ -38,6 +40,15 @@ class RestrictionService:
             await uow.restrictions.add_alias(restriction, alias)
             await uow.commit()
         self.fetch_all_restrictions.cache_clear()
+
+    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool:
+        """Conditionally reverse alias membership without touching a different restriction."""
+        async with self._uow_factory() as uow:
+            changed = await uow.restrictions.replace_alias(restriction, alias, expected, replacement)
+            await uow.commit()
+        if changed:
+            self.fetch_all_restrictions.cache_clear()
+        return changed
 
     async def names(self) -> list[str]:
         return [restriction.name for restriction in await self.fetch_all_restrictions()]

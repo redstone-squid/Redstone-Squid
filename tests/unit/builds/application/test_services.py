@@ -73,6 +73,9 @@ class FakeRestrictionRepository:
     async def add_alias(self, restriction: str, alias: str) -> None:
         return None
 
+    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool:
+        raise NotImplementedError
+
 
 class EmptyPermissions:
     async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:

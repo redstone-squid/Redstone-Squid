@@ -8,6 +8,7 @@ from typing import cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.edit_history import history_controls, track_local_edits
 from squid.bot.ui import tr
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
@@ -307,6 +308,8 @@ class PollScreen(sd.Screen[str]):
         session=sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD),
     )
 
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+
     published_url: str | None = sl.state(None)
     cancelled: bool = sl.state(default=False)
 
@@ -328,6 +331,14 @@ class PollScreen(sd.Screen[str]):
         )
         self.wizard = wizard.machine
         self.driver = wizard
+        track_local_edits(
+            self.history,
+            wizard,
+            tr(t"poll-history-edit = Edit poll"),
+            select=lambda state: state.answers,
+            restore=lambda state, answers: replace(state, answers=answers),
+            enabled=lambda: self.published_url is None and not self.cancelled,
+        )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
@@ -342,6 +353,8 @@ class PollScreen(sd.Screen[str]):
             return (sl.status(tr(t"bot-voting-poll-wizard-poll-cancelled = Poll cancelled.")),)
         return (
             self.boundary(self.driver, key="wizard"),
+            *history_controls(self.history),
+            sl.note(tr(t"poll-publish-final = Publishing is final and cannot be undone here.")),
             sl.action_controls(
                 sl.action_control(
                     tr(t"bot-voting-poll-wizard-cancel = Cancel"), self._cancel, key="cancel", tone=sl.Tone.DANGER
@@ -364,6 +377,7 @@ class PollScreen(sd.Screen[str]):
             await event.source.notice(error.message)
             return
         # Widget transitions erase the context type; this driver belongs to a Discord screen.
+        self.history.clear()
         self.complete(cast(sd.ActionEvent, event.source), self.published_url)
 
     async def _cancel(self, event: sd.PressEvent) -> None:

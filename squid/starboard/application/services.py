@@ -8,6 +8,7 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
+from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.application.ports import (
     EntryKey,
     EntryState,
@@ -143,6 +144,53 @@ class StarboardService:
             result = tuple(await uow.starboards.mark_origin_deleted(origin_message_id))
             await uow.commit()
             return result
+
+    async def snapshot(self, starboard_id: int) -> StarboardSnapshot | None:
+        async with self._uow_factory() as uow:
+            config = await uow.starboards.get_by_id(starboard_id, for_update=True)
+            if config is None:
+                return None
+            return StarboardSnapshot.capture(config, dict(await uow.starboards.role_multipliers(starboard_id)))
+
+    async def replace_snapshot(self, expected: StarboardSnapshot | None, replacement: StarboardSnapshot | None) -> bool:
+        target = expected or replacement
+        if target is None:
+            return True
+        if replacement is not None:
+            if (replacement.id, replacement.guild_id) != (target.id, target.guild_id):
+                msg = "A starboard edit cannot change its identity"
+                raise ValueError(msg)
+            if any(not isfinite(weight) or weight <= 0 for _, weight in replacement.weights):
+                msg = "Role weights must be positive and finite"
+                raise ValueError(msg)
+        async with self._uow_factory() as uow:
+            config = await uow.starboards.get_by_id(target.id, for_update=True)
+            current = (
+                None
+                if config is None
+                else StarboardSnapshot.capture(config, dict(await uow.starboards.role_multipliers(target.id)))
+            )
+            if current != expected:
+                return False
+            if replacement is None:
+                if not await uow.starboards.delete_unused(target.id):
+                    return False
+            elif config is None:
+                restored = replacement.config()
+                if await uow.starboards.get(restored.guild_id, restored.name) is not None:
+                    return False
+                await uow.starboards.restore_unused(restored)
+            else:
+                replacement.config()  # Validate using the same rules as an ordinary edit.
+                for key, value in replacement.settings:
+                    setattr(config, key, value)
+                await uow.starboards.set_emojis(target.id, replacement.aliases())
+            if replacement is not None:
+                for role_id in dict(current.weights if current else ()) | dict(replacement.weights):
+                    await uow.starboards.set_role_multiplier(target.id, role_id, dict(replacement.weights).get(role_id))
+            await uow.commit()
+        self.invalidate_cache(target.guild_id)
+        return True
 
     async def create_starboard(
         self, guild_id: int, channel_id: int, name: str = "main", *, required: float = 3.0

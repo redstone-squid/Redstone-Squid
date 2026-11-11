@@ -1,11 +1,13 @@
 """Canonical starboard configuration workspace."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from typing import Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.edit_history import history_controls, record_edit, save_edit
 from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -15,6 +17,7 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
+from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
 from squid.starboard.models import StarboardConfig, StarboardEmoji
 
@@ -24,6 +27,12 @@ type BoardCreator = Callable[[int, str, float], Awaitable[StarboardConfig]]
 
 class StarboardOperations(Protocol):
     """Starboard reads and writes used by the configuration screen."""
+
+    async def snapshot(self, starboard_id: int) -> StarboardSnapshot | None: ...
+
+    async def replace_snapshot(
+        self, expected: StarboardSnapshot | None, replacement: StarboardSnapshot | None
+    ) -> bool: ...
 
     async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
 
@@ -45,6 +54,18 @@ class StarboardScreen(sd.Screen):
     permission when an action is submitted, including deletion confirmation.
     """
 
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    _browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+    _deleting: str | None = sl.state(default=None, persist=False)
+    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD))
 
     def __init__(
@@ -61,10 +82,6 @@ class StarboardScreen(sd.Screen):
         self._capabilities = capabilities
         self._authorize = authorize
         self._create_board = create_board
-        self._browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
-        self._deleting: str | None = None
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
@@ -115,7 +132,7 @@ class StarboardScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-starboard-screen-loading-starboards = Loading starboards.")),)
-        return (self.boundary(self._tabs, key="tabs"),)
+        return (self.boundary(self._tabs, key="tabs"), *history_controls(self.history))
 
     def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
@@ -177,6 +194,16 @@ class StarboardScreen(sd.Screen):
         name = form.name
         required = form.required
         created = await self._create_board(channel_id, name, required)
+        record_edit(
+            self.history,
+            tr(t"starboard-history-create = Create starboard"),
+            None,
+            StarboardSnapshot.capture(created, {}),
+            target=f"starboard:{created.id}",
+            authorize=lambda: self._authorize(STARBOARD_BOARD_CREATE),
+            replace=self._operations.replace_snapshot,
+            refresh=self._refresh,
+        )
         await self._refresh()
         created_name = created.name
         await event.notice(tr(t"bot-starboard-screen-created-starboard = Created starboard **{created_name}**."))
@@ -188,12 +215,27 @@ class StarboardScreen(sd.Screen):
         name = form.name
         setting = form.setting
         value = _parse_setting(setting, form.value)
-        updated = await self._operations.update_settings(self._guild_id, name, **{setting: value})
-        if updated is None:
-            await event.notice(tr(t"starboard-not-found = No starboard with that name exists."))
+        config = await self._named(event, name)
+        if config is None:
             return
-        await self._refresh()
-        await event.notice(tr(t"bot-starboard-screen-starboard-updated = Starboard updated."))
+        before = await self._operations.snapshot(config.id)
+        if before is not None:
+            after = replace(
+                before, settings=tuple((key, value if key == setting else old) for key, old in before.settings)
+            )
+            await self._save(before, after, STARBOARD_BOARD_EDIT)
+
+    async def _save(self, before: StarboardSnapshot, after: StarboardSnapshot, permission: PermissionNode) -> None:
+        await save_edit(
+            self.history,
+            tr(t"starboard-history-edit = Edit starboard"),
+            before,
+            after,
+            target=f"starboard:{before.id}",
+            authorize=lambda: self._authorize(permission),
+            replace=self._operations.replace_snapshot,
+            refresh=self._refresh,
+        )
 
     async def _edit_emoji(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_EMOJI_EDIT):
@@ -205,14 +247,19 @@ class StarboardScreen(sd.Screen):
             return
         emoji = form.emoji
         operation = form.operation
-        aliases = tuple(item for item in config.emojis if item.emoji != emoji)
+        before = await self._operations.snapshot(config.id)
+        if before is None:
+            return
+        aliases = tuple(item for item in before.aliases() if item.emoji != emoji)
         if operation == "add":
             direction = form.direction
             multiplier = form.multiplier
             aliases += (StarboardEmoji(emoji=emoji, direction=direction, multiplier=multiplier, position=len(aliases)),)
-        await self._operations.set_emojis(config, aliases)
-        await self._refresh()
-        await event.notice(tr(t"bot-starboard-screen-starboard-emojis-updated = Starboard emojis updated."))
+        if before is not None:
+            after = replace(
+                before, emojis=tuple((item.emoji, item.direction, item.multiplier, item.position) for item in aliases)
+            )
+            await self._save(before, after, STARBOARD_EMOJI_EDIT)
 
     async def _edit_weight(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_WEIGHT_EDIT):
@@ -223,8 +270,14 @@ class StarboardScreen(sd.Screen):
             return
         role_id = form.role_id
         multiplier = form.multiplier
-        await self._operations.set_role_multiplier(config, role_id, multiplier)
-        await event.notice(tr(t"starboard-role-weight-updated = Starboard role weight updated."))
+        before = await self._operations.snapshot(config.id)
+        if before is not None:
+            weights = dict(before.weights)
+            if multiplier is None:
+                weights.pop(role_id, None)
+            else:
+                weights[role_id] = multiplier
+            await self._save(before, replace(before, weights=tuple(sorted(weights.items()))), STARBOARD_WEIGHT_EDIT)
 
     async def _request_delete(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_DELETE):
@@ -232,10 +285,7 @@ class StarboardScreen(sd.Screen):
         form = _DeleteBoardForm.from_submission(event)
         self._deleting = form.name
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-            tr(
-                t"starboard-delete-audit-retention = Deleting a starboard "
-                t"keeps its audit history but disables its configuration."
-            ),
+            tr(t"starboard-delete-audit-retention = Deleting a starboard cannot be undone from this session."),
             (
                 sp.DecisionOption("confirm", tr(t"bot-starboard-screen-delete = Delete"), sl.Tone.DANGER),
                 sp.DecisionOption("cancel", tr(t"bot-starboard-screen-cancel = Cancel")),
@@ -254,6 +304,8 @@ class StarboardScreen(sd.Screen):
             self._decision = None
             return
         deleted = await self._operations.delete_starboard(self._guild_id, name)
+        if deleted:
+            self.history.clear()
         self._deleting = None
         self._decision = None
         await self._refresh()

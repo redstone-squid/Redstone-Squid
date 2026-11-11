@@ -33,10 +33,11 @@ from decimal import Decimal
 from enum import Enum, auto
 from functools import partial
 from typing import Any, cast, override
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.edit_history import history_controls, save_edit
 from squid.bot.submission import draft_intake
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui import controls as build_controls
@@ -51,16 +52,13 @@ from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
 from squid.submissions.application.intake import SuppliedAttachment
 from squid.submissions.domain import (
     ChoiceOption,
-    DraftChange,
-    DraftChangeKey,
     DraftStatus,
-    FieldOperation,
-    FieldOperationKind,
     FormField,
     FormManifest,
     FormSection,
     ValueKind,
 )
+from squid.submissions.domain.drafts import DraftRevisionConflictError
 from squid.submissions.domain.finalization import (
     FinalizationJobStatus,
     SubmissionAttentionIssue,
@@ -153,6 +151,8 @@ class DraftWorkspace(sl.Reactive):
     when the draft's topic publishes a change, for example when a background worker finishes
     the build. Every message that reads it redraws after a save, whichever message made it.
     """
+
+    history: sl.runtime.History = sl.runtime.history(limit=20)
 
     notice: sl.TextLike = sl.state("")
     """An error from the last action, shown until the next action replaces it."""
@@ -306,24 +306,48 @@ class DraftWorkspace(sl.Reactive):
 
     async def save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
         """Save several answers as one change; a failure saves none of them and sets the notice."""
-        change = DraftChange(
-            self.draft.snapshot.revision if base_revision is None else base_revision,
-            "discord-editor",
-            DraftChangeKey(str(uuid4())),
-            tuple(
-                FieldOperation(
-                    uuid4(), field_id, FieldOperationKind.UNSET if value is None else FieldOperationKind.SET, value
-                )
-                for field_id, value in values.items()
-            ),
-        )
+        before = {key: self.draft.snapshot.answers.get(key) for key in values}
+
+        async def replace_values(expected: Mapping[str, JSONValue], replacement: Mapping[str, JSONValue]) -> bool:
+            return await self.services.submission_drafts.replace_answers(
+                self._draft_id, self.actor_id, expected, replacement
+            )
+
+        async def write() -> bool:
+            return await self.services.submission_drafts.replace_answers(
+                self._draft_id, self.actor_id, before, values, base_revision=base_revision
+            )
+
+        # A modal also guards the revision it displayed, even when the changed field stayed equal.
+        if base_revision is not None and base_revision != self.draft.snapshot.revision:
+            self.notice = DraftRevisionConflictError(
+                expected=base_revision, actual=self.draft.snapshot.revision
+            ).public_text()
+            await self.reload()
+            return
         try:
-            await self.services.submission_drafts.apply_change(self._draft_id, self.actor_id, change, locale=None)
+            await save_edit(
+                self.history,
+                tr(t"draft-history-answers = Edit submission answers"),
+                before,
+                dict(values),
+                target=f"draft:{self._draft_id}:answers",
+                authorize=self.may_edit,
+                replace=replace_values,
+                refresh=self.reload,
+                write=write,
+            )
         except SquidError as error:
             self.notice = error.public_text()
         else:
             self.notice = ""
-        await self.reload()
+
+    async def may_edit(self) -> bool:
+        try:
+            current = await self.services.submission_drafts.get_accessible(self._draft_id, self.actor_id)
+        except SquidError:
+            return False
+        return current.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
 
     async def submit(self) -> None:
         try:
@@ -332,6 +356,7 @@ class DraftWorkspace(sl.Reactive):
             self.notice = error.public_text()
         else:
             self.notice = ""
+            self.history.clear()
         await self.reload()
 
     async def add_files(self, files: Sequence[sl.forms.UploadedFile]) -> None:
@@ -424,7 +449,7 @@ class DraftEditorScreen(BuildEditorScreen[None]):
             Phase.DONE: DISCORD_GREEN,
             Phase.EXPIRED: DISCORD_RED,
         }[phase]
-        return (sd.v2.panel(*children, accent=accent),)
+        return (sd.v2.panel(*children, accent=accent), *history_controls(ws.history))
 
     def _overview(self, phase: Phase) -> list[Any]:
         """One row per section and the Files row, then the Submit row."""
@@ -585,7 +610,7 @@ class SectionEditorScreen(sd.Screen[None]):
                     )
                 )
         children.extend((sd.v2.separator(), _done_row(self._done)))
-        return (sd.v2.panel(*children, accent=DISCORD_BLUE),)
+        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *history_controls(self.workspace.history))
 
     def _picker(self, field: FormField, value: JSONValue) -> list[Any]:
         """A catalogue field's current choice and one page of its options."""
@@ -745,7 +770,7 @@ class FilesEditorScreen(sd.Screen[None]):
                 ),
             )
         )
-        return (sd.v2.panel(*children, accent=DISCORD_BLUE),)
+        return (sd.v2.panel(*children, accent=DISCORD_BLUE), *history_controls(self.workspace.history))
 
     def _selected_id(self) -> UUID | None:
         """The selected file, if it is still on the draft."""

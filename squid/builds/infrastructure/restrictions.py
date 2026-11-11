@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import cast
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,11 @@ class RestrictionRepository:
         """Add a normalized alias in a savepoint; the caller commits the transaction."""
         normalized_alias = normalize_tag_name(alias)
         session = self._session()
+        await session.execute(
+            select(
+                func.pg_advisory_xact_lock(func.hashtextextended("restriction-alias:" + normalize_tag_name(alias), 0))
+            )
+        )
         restriction_id = await get_restriction_id(session, restriction)
         alias_restriction_id = await get_restriction_id(session, alias)
         if restriction_id is None:
@@ -54,7 +59,7 @@ class RestrictionRepository:
         if alias_restriction_id is not None:
             raise AliasInUseError(alias, alias_restriction_id)
 
-        definition = await session.get(TagDefinition, restriction_id)
+        definition = await session.get(TagDefinition, restriction_id, with_for_update=True)
         assert definition is not None
         try:
             async with session.begin_nested():
@@ -62,6 +67,32 @@ class RestrictionRepository:
                 await session.flush()
         except IntegrityError as error:
             raise AliasAlreadyAddedError(alias, restriction_id) from error
+
+    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool:
+        session = self._session()
+        await session.execute(
+            select(
+                func.pg_advisory_xact_lock(func.hashtextextended("restriction-alias:" + normalize_tag_name(alias), 0))
+            )
+        )
+        restriction_id = await get_restriction_id(session, restriction)
+        if restriction_id is None:
+            return False
+        await session.get(TagDefinition, restriction_id, with_for_update=True)
+        normalized = normalize_tag_name(alias)
+        rows = (
+            await session.scalars(select(TagAlias).where(TagAlias.normalized_alias == normalized).with_for_update())
+        ).all()
+        if any(row.tag_id != restriction_id for row in rows):
+            return False
+        row = next(iter(rows), None)
+        if (row is not None) != expected:
+            return False
+        if replacement and row is None:
+            await self.add_alias(restriction, alias)
+        elif not replacement and row is not None:
+            await session.delete(row)
+        return True
 
 
 async def get_restriction_id(session: AsyncSession, name_or_alias: str) -> int | None:

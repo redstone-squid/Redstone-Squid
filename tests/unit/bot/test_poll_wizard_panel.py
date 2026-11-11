@@ -11,6 +11,7 @@ import squid_ui_widgets as sp
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui.runtime import transaction
 from squid_ui.testing import labels
 from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
 from squid_ui_widgets import testing as wt
@@ -54,15 +55,17 @@ async def open_screen(
 
 async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target, sd.Request]:
     harness = wt.driving(screen.driver)
-    await harness.submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
-    await harness.submit(
-        "poll.settings",
-        {
-            "visibility": VoteVisibility.ANONYMOUS_LIVE,
-            "duration": 12 * 3600,
-            "scope": PollScope.GUILD,
-        },
-    )
+    with transaction():
+        await harness.submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
+    with transaction():
+        await harness.submit(
+            "poll.settings",
+            {
+                "visibility": VoteVisibility.ANONYMOUS_LIVE,
+                "duration": 12 * 3600,
+                "scope": PollScope.GUILD,
+            },
+        )
     assert harness.state.current == sp.REVIEW_STEP
     return harness
 
@@ -141,3 +144,13 @@ async def test_cancelling_finishes_with_a_terminal_screen() -> None:
         assert labels(screen.render()) == []
         assert await screen.wait() == sd.Cancelled(sd.ScreenCancelReason.USER)
         assert ui.root.finished
+
+
+async def test_history_restores_answers_without_rewinding_wizard_navigation() -> None:
+    screen = make_screen()
+    harness = await complete_wizard(screen)
+    assert len(screen.history.entries) == 2
+    assert (await screen.history.undo()).applied
+    assert harness.state.current == sp.REVIEW_STEP
+    assert (await screen.history.redo()).applied
+    assert harness.state.current == sp.REVIEW_STEP

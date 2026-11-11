@@ -7,6 +7,7 @@ from typing import Protocol, override
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.edit_history import history_controls, record_edit
 from squid.bot.ui import tr
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.permissions.domain import PermissionNode
@@ -58,6 +59,8 @@ class RestrictionOperations(Protocol):
 
     async def add_alias(self, restriction: str, alias: str) -> None: ...
 
+    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool: ...
+
 
 type TagAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ModerationRequest = Callable[[sl.PressEvent, TagDefinition, str], Awaitable[None]]
@@ -98,6 +101,21 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
 class TagsScreen(sd.Screen):
     """A tag workspace that ends when replaced or timed out."""
 
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    _catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+    _pending: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+    _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+    _decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        default=None, persist=False
+    )
+    _pending_action: tuple[TagDefinition, str] | None = sl.state(default=None, persist=False)
+
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("tags"))
 
     def __init__(
@@ -116,11 +134,6 @@ class TagsScreen(sd.Screen):
         self._actor_account_id = actor_account_id
         self._capabilities = capabilities
         self._authorize = authorize
-        self._catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = None
-        self._pending: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
-        self._pending_action: tuple[TagDefinition, str] | None = None
 
     @override
     async def on_load(self) -> None:
@@ -199,7 +212,7 @@ class TagsScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-tags-view-loading-build-tags = Loading build tags.")),)
-        return (self.boundary(self._tabs, key="tabs"),)
+        return (self.boundary(self._tabs, key="tabs"), *history_controls(self.history))
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:
@@ -302,6 +315,20 @@ class TagsScreen(sd.Screen):
         except AliasAlreadyAddedError:
             await event.notice(tr(t"tags-alias-already-exists = That alias is already on this restriction."))
             return
+
+        async def replace_alias(expected: bool, replacement: bool) -> bool:
+            return await self._restrictions.replace_alias(restriction, alias, expected, replacement)
+
+        record_edit(
+            self.history,
+            tr(t"tags-history-alias = Add restriction alias"),
+            before=False,
+            after=True,
+            target=f"restriction:{restriction}:alias:{alias}",
+            authorize=lambda: self._authorize(RESTRICTION_ALIAS_CREATE),
+            replace=replace_alias,
+            refresh=self._refresh,
+        )
         await event.notice(tr(t"bot-tags-view-restriction-alias-added = Restriction alias added."))
 
     async def _request_moderation(
@@ -312,7 +339,7 @@ class TagsScreen(sd.Screen):
     ) -> None:
         self._pending_action = (tag, action)
         self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
-            tr(t"tags-public-catalogue-warning = This changes the public tag catalogue."),
+            tr(t"tags-public-catalogue-warning = This changes the public tag catalogue and cannot be undone here."),
             (
                 sp.DecisionOption("confirm", tr(t"bot-tags-view-confirm = Confirm"), sl.Tone.DANGER),
                 sp.DecisionOption("cancel", tr(t"bot-tags-view-cancel = Cancel")),
@@ -338,6 +365,7 @@ class TagsScreen(sd.Screen):
             return
         mutation = {"approve": self._tags.approve, "reject": self._tags.reject, "archive": self._tags.archive}[action]
         changed = await mutation(tag.id)
+        self.history.clear()
         tag_name = changed.display_name
         action_label = _action_label(action)
         self._pending_action = None

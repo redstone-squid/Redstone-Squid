@@ -16,6 +16,7 @@ from squid.permissions.domain.catalogue import (
 from squid.tags.application import TagService
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
+from squid_ui.runtime import transaction
 from squid_ui.testing import labels
 
 
@@ -89,6 +90,17 @@ class FakeRestrictionService(RestrictionService):
     @override
     async def add_alias(self, restriction: str, alias: str) -> None:
         self.aliases.append((restriction, alias))
+
+    @override
+    async def replace_alias(self, restriction: str, alias: str, expected: bool, replacement: bool) -> bool:
+        item = (restriction, alias)
+        if (item in self.aliases) != expected:
+            return False
+        if replacement:
+            self.aliases.append(item)
+        else:
+            self.aliases.remove(item)
+        return True
 
 
 class NoticeEvent:
@@ -207,3 +219,15 @@ def test_tags_are_one_app_only_workspace() -> None:
     cog = cast(Any, Admin)
     assert all(command.name != "tag" for command in cog.__cog_commands__)
     assert "tags" in {command.name for command in cog.__cog_app_commands__}
+
+
+async def test_alias_history_rechecks_authority_and_reverses_membership() -> None:
+    screen, _, restrictions = make_screen(capabilities=frozenset({RESTRICTION_ALIAS_CREATE}))
+    await screen.on_load()
+    with transaction():
+        await screen._add_alias(cast(sl.SubmitEvent, NoticeEvent(restriction="locational", alias="location")))
+    assert restrictions.aliases == [("locational", "location")]
+    assert (await screen.history.undo()).applied
+    assert restrictions.aliases == []
+    assert (await screen.history.redo()).applied
+    assert restrictions.aliases == [("locational", "location")]

@@ -66,6 +66,7 @@ from squid.tags.models import TagDefinition
 from squid_reactivity import LocalTopicBus
 from squid_ui.forms import FormValueError
 from squid_ui.primitives import Button, RoutedButton, SelectMenu
+from squid_ui.runtime import transaction
 from squid_ui.testing import find_all, labels, texts
 from squid_ui.text import source_text
 from squid_ui_discord.modal import build_form_modal
@@ -201,13 +202,15 @@ def press() -> Mock:
 
 
 async def submit_modal(event: Mock, values: dict[str, Any]) -> None:
-    await event.present_form.call_args.kwargs["on_submit"](Mock(spec=sl.SubmitEvent, values=values))
+    with transaction():
+        await event.present_form.call_args.kwargs["on_submit"](Mock(spec=sl.SubmitEvent, values=values))
 
 
 async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
     services, drafts = setup()
     first = await open_editor(services, drafts)
-    await first.workspace.save_values({"display_name": "Saved name"})
+    with transaction():
+        await first.workspace.save_values({"display_name": "Saved name"})
     reopened = await open_editor(services, drafts)
     assert reopened.workspace is not first.workspace
     assert reopened.workspace.draft.snapshot.answers["display_name"] == "Saved name"
@@ -219,7 +222,8 @@ async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
 async def test_staff_writes_use_actor_and_preserve_owner() -> None:
     services, drafts = setup()
     editor = await open_editor(services, drafts, actor=99)
-    await editor.workspace.save_values({"description": "Staff correction"})
+    with transaction():
+        await editor.workspace.save_values({"description": "Staff correction"})
     assert editor.workspace.draft.snapshot.owner_account_id == 7
     assert all(actor == 99 for actor in drafts.actors)
     assert drafts.changes[0].client_instance_id == "discord-editor"
@@ -229,8 +233,10 @@ async def test_stale_modal_does_not_overwrite_a_newer_edit() -> None:
     services, drafts = setup()
     ws = (await open_editor(services, drafts)).workspace
     base_revision = ws.draft.snapshot.revision
-    await ws.save_values({"display_name": "Newer value"})
-    await ws.save_values({"display_name": "Stale modal"}, base_revision=base_revision)
+    with transaction():
+        await ws.save_values({"display_name": "Newer value"})
+    with transaction():
+        await ws.save_values({"display_name": "Stale modal"}, base_revision=base_revision)
     assert ws.draft.snapshot.answers["display_name"] == "Newer value"
     assert source_text(ws.notice) == DraftRevisionConflictError(expected=0, actual=1).public_detail()
 
@@ -275,15 +281,16 @@ async def test_required_fields_are_counted_until_the_draft_is_ready() -> None:
     (submit,) = (button for button in find_all(editor.render(), Button) if button.key == "submit")
     assert submit.disabled
 
-    await editor.workspace.save_values(
-        {
-            "creators": ["Alice"],
-            "schematic_visibility": "reviewer_only",
-            "opening_width": 2,
-            "opening_height": 2,
-            "door_orientation": "door",
-        }
-    )
+    with transaction():
+        await editor.workspace.save_values(
+            {
+                "creators": ["Alice"],
+                "schematic_visibility": "reviewer_only",
+                "opening_width": 2,
+                "opening_height": 2,
+                "door_orientation": "door",
+            }
+        )
     assert "Ready to submit." in rendered_text(editor)
     (submit,) = (button for button in find_all(editor.render(), Button) if button.key == "submit")
     assert not submit.disabled
@@ -335,7 +342,8 @@ async def test_a_choice_in_an_editor_message_redraws_the_panel() -> None:
 
     assert not panel.runtime.dirty
 
-    await child._select_value("patterns", Mock(spec=sd.SelectionEvent, values=("full_lamp",)))
+    with transaction():
+        await child._select_value("patterns", Mock(spec=sd.SelectionEvent, values=("full_lamp",)))
 
     # The save went through the shared workspace, so the panel's message is scheduled to redraw.
     assert panel.runtime.dirty
@@ -381,7 +389,8 @@ def test_timings_reject_missing_units_and_nonsense(text: str) -> None:
 async def test_saved_ticks_show_as_seconds_and_prefill_the_modal_losslessly() -> None:
     services, drafts = setup("door")
     editor = await open_editor(services, drafts)
-    await editor.workspace.save_values({"opening_time": 7})
+    with transaction():
+        await editor.workspace.save_values({"opening_time": 7})
     assert "Opening time: 0\\.35s" in rendered_text(editor)
     event = press()
     await editor._edit_section("door_timing", event)
@@ -396,7 +405,8 @@ async def test_public_visibility_reveals_required_license_and_permission() -> No
     rights = ws.section("rights_privacy")
     assert rights is not None
     assert [field.id for field in rights.fields] == ["schematic_visibility"]
-    await ws.save_values({"schematic_visibility": "public_download"})
+    with transaction():
+        await ws.save_values({"schematic_visibility": "public_download"})
     rights = ws.section("rights_privacy")
     assert rights is not None
     assert [field.id for field in rights.fields] == ["schematic_visibility", "schematic_license", "rights_attestation"]
@@ -408,14 +418,16 @@ async def test_picker_opens_on_the_page_of_the_current_choice() -> None:
     drafts.current = replace(drafts.current, origin=SubmissionOrigin.WEB)
     editor = await open_editor(services, drafts)
     # The stub catalogue lists Java 1.30 down to 1.1, so 1.2 is on the second page.
-    await editor.workspace.save_values({"source_version": "Java 1.2"})
+    with transaction():
+        await editor.workspace.save_values({"source_version": "Java 1.2"})
     child = SectionEditorScreen(editor.workspace, "dimensions_versions")
     text = rendered_text(child)
     assert "Page 2 of 2." in text
     assert "Choices on other pages are kept" not in text
     (select,) = find_all(child.render(), SelectMenu)
     assert [option.label for option in select.options if option.default] == ["Java 1.2"]
-    await child._select_value("source_version", Mock(spec=sd.SelectionEvent, values=("Java 1.1",)))
+    with transaction():
+        await child._select_value("source_version", Mock(spec=sd.SelectionEvent, values=("Java 1.1",)))
     assert editor.workspace.draft.snapshot.answers["source_version"] == "Java 1.1"
     assert "Minecraft version: Java 1\\.1" in rendered_text(editor)
 
@@ -463,9 +475,10 @@ async def test_preview_draws_the_card_once_its_title_can_be_formed() -> None:
     await preview.card.reload()
     assert "Fill in Door size, Door type to see the preview." in rendered_text(preview)
 
-    await editor.workspace.save_values(
-        {"opening_width": 2, "opening_height": 3, "door_orientation": "trapdoor", "patterns": ["full_lamp"]}
-    )
+    with transaction():
+        await editor.workspace.save_values(
+            {"opening_width": 2, "opening_height": 3, "door_orientation": "trapdoor", "patterns": ["full_lamp"]}
+        )
     await preview.card.reload()
     assert "card" in rendered_text(preview)
     assert drawn[-1].patterns == ["Full Lamp"]
@@ -559,7 +572,8 @@ async def test_changes_made_elsewhere_redraw_the_panel_message() -> None:
     services, drafts = setup("door")
     editor = await open_editor(services, drafts)
     async with sd.testing.stage(editor, owner=object()) as ui:
-        await editor.workspace.save_values({"display_name": "Changed elsewhere"})
+        with transaction():
+            await editor.workspace.save_values({"display_name": "Changed elsewhere"})
         assert isinstance(ui.root.scheduler, sd.MessageRootScheduler)
         with anyio.fail_after(2):
             await ui.root.scheduler.wait_idle()
@@ -592,3 +606,15 @@ async def test_an_expired_panel_offers_to_reopen_the_draft(monkeypatch: pytest.M
     assert rendered_text(editor) == "This panel has closed. Your answers are saved."
     (reopen,) = find_all(editor.render(), sl.semantic.RoutedActionControl)
     assert reopen.route_id == f"r:builds:draft:{drafts.current.snapshot.id}:reopen"
+
+
+async def test_answer_history_reverses_saved_values_without_reverting_other_fields() -> None:
+    services, drafts = setup()
+    editor = await open_editor(services, drafts)
+    with transaction():
+        await editor.workspace.save_values({"display_name": "Saved name"})
+    assert len(editor.workspace.history.entries) == 1
+    assert (await editor.workspace.history.undo()).applied
+    assert drafts.current.snapshot.answers.get("display_name") is None
+    assert (await editor.workspace.history.redo()).applied
+    assert drafts.current.snapshot.answers["display_name"] == "Saved name"

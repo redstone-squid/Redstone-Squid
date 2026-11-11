@@ -235,6 +235,40 @@ class PostgresStarboardRepository:
         )
         return bool(disabled.all()) | bool(removed.all())
 
+    async def get_by_id(self, starboard_id: int, *, for_update: bool = False) -> StarboardConfig | None:
+        session = self._session()
+        statement = select(StarboardConfig).where(StarboardConfig.id == starboard_id)
+        if for_update:
+            statement = statement.with_for_update()
+        row = await session.scalar(statement)
+        return None if row is None else await self._with_emojis(session, row)
+
+    async def restore_unused(self, config: StarboardConfig) -> None:
+        session = self._session()
+        session.add(config)
+        await session.flush()
+        await session.execute(
+            pg_insert(StarboardSource).values(starboard_id=config.id, guild_id=config.guild_id, channel_id=0)
+        )
+        await self._replace_emojis(session, config.id, config.emojis)
+
+    async def delete_unused(self, starboard_id: int) -> bool:
+        session = self._session()
+        if (
+            await session.scalar(
+                select(StarboardEntry.starboard_id).where(StarboardEntry.starboard_id == starboard_id).limit(1)
+            )
+            is not None
+        ):
+            return False
+        sources = (
+            await session.scalars(select(StarboardSource).where(StarboardSource.starboard_id == starboard_id))
+        ).all()
+        if len(sources) != 1 or sources[0].channel_id != 0:
+            return False
+        await session.execute(delete(StarboardConfig).where(StarboardConfig.id == starboard_id))
+        return True
+
     async def create(self, config: StarboardConfig) -> StarboardConfig:
         """Assign an ID and subscribe the new board to all channels in its guild."""
         session = self._session()
@@ -279,10 +313,12 @@ class PostgresStarboardRepository:
 
     async def set_emojis(self, starboard_id: int, emojis: Sequence[StarboardEmoji]) -> None:
         session = self._session()
+        await session.get(StarboardConfig, starboard_id, with_for_update=True)
         await self._replace_emojis(session, starboard_id, emojis)
 
     async def set_role_multiplier(self, starboard_id: int, role_id: int, multiplier: float | None) -> None:
         session = self._session()
+        await session.get(StarboardConfig, starboard_id, with_for_update=True)
         if multiplier is None:
             await session.execute(
                 delete(StarboardRoleMultiplier).where(
