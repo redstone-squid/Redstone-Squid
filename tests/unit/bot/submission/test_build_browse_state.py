@@ -101,14 +101,14 @@ async def test_find_build_actions_can_select_inside_a_transaction(search: bool) 
 @pytest.mark.parametrize("action", ["approve", "reject"])
 async def test_review_confirmation_can_open_and_cancel(action: str) -> None:
     async with stage(_screen(status=Status.PENDING), owner=object()) as ui:
-        await ui.press(f"selected-build.{action}")
+        await ui.press(ui.key_for(action))
 
         assert "## Confirm review decision" in ui.texts()
 
-        await ui.press("selected-build.review-decision.build-review.cancel")
+        await ui.press(ui.key_for("build-review.cancel"))
 
         assert "## Confirm review decision" not in ui.texts()
-        ui.control(f"selected-build.{action}")
+        ui.control(ui.key_for(action))
 
 
 async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
@@ -131,7 +131,7 @@ async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
 async def test_schematic_controls_survive_opening_and_cancelling_review() -> None:
     screen = _screen(status=Status.PENDING, schematics_available=True)
     async with stage(screen, owner=object()) as ui:
-        ui.control("selected-build.schematics.schematic-info")
-        await ui.press("selected-build.approve")
-        await ui.press("selected-build.review-decision.build-review.cancel")
-        ui.control("selected-build.schematics.schematic-info")
+        ui.control(ui.key_for("schematic-info"))
+        await ui.press(ui.key_for("approve"))
+        await ui.press(ui.key_for("build-review.cancel"))
+        ui.control(ui.key_for("schematic-info"))

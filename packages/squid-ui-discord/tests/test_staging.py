@@ -3,6 +3,7 @@
 from typing import Self, cast, override
 
 import discord
+import pytest
 from discord.ext import commands
 
 import squid_ui as sl
@@ -105,3 +106,26 @@ async def test_invoke_uses_the_real_slash_and_prefix_wrappers() -> None:
     assert isinstance(prefix, ContextHarness)
     assert cog.request is not None and cog.request.user.id == 10
     prefix.send.assert_awaited_once()
+
+
+async def test_local_control_lookup_requires_a_unique_suffix() -> None:
+    class Parent(sd.Screen):
+        def __init__(self) -> None:
+            self.first = Editor()
+            self.second = Editor()
+
+        @override
+        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+            return sl.stack(self.first, self.second)
+
+    async with sd.testing.stage(Editor(), owner=object()) as ui:
+        assert ui.key_for("add") == "editor.add"
+        assert ui.key_for("editor.add") == "editor.add"
+        with pytest.raises(KeyError, match="found "):
+            ui.key_for("missing")
+        with pytest.raises(KeyError, match="found "):
+            ui.key_for("ditor.add")
+
+    async with sd.testing.stage(Parent(), owner=object()) as ui:
+        with pytest.raises(KeyError, match="expected one control"):
+            ui.key_for("editor.add")

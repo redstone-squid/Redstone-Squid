@@ -705,6 +705,20 @@ class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
         """Return display texts from the current serialized Discord payload."""
         return payload_texts(self._view())
 
+    def key_for(self, local_key: str) -> str:
+        """Resolve a unique local control key without depending on component namespaces.
+
+        Match a complete key or a dot-delimited suffix. Ambiguous matches raise;
+        pass a longer suffix or use control() with an exact key to disambiguate.
+        """
+        matches = [
+            key for key in self.root.snapshot().handler_keys if key == local_key or key.endswith(f".{local_key}")
+        ]
+        if len(matches) != 1:
+            message = f"expected one control matching {local_key!r}, found {matches!r}"
+            raise KeyError(message)
+        return matches[0]
+
     def control(self, key: str) -> StagedControl:
         """Select one currently rendered control by stable semantic key."""
         expected = _custom_id(self.root, key)

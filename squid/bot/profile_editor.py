@@ -49,7 +49,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
-            self.editor.keyed("editor"),
+            self.editor,
             *history_controls(self.history),
             sl.action_controls(
                 sl.action_control(

@@ -352,7 +352,7 @@ class PollScreen(sd.Screen[str]):
         if self.cancelled:
             return (sl.status(tr(t"bot-voting-poll-wizard-poll-cancelled = Poll cancelled.")),)
         return (
-            self.driver.keyed("wizard"),
+            self.driver,
             *history_controls(self.history),
             sl.note(tr(t"poll-publish-final = Publishing is final and cannot be undone here.")),
             sl.action_controls(

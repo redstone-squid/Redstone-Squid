@@ -228,11 +228,11 @@ class TagsScreen(sd.Screen):
                     sl.heading(tr(t"bot-tags-view-confirm-tag-moderation = Confirm tag moderation")),
                     sl.paragraph(tr(t"bot-tags-view-value-3 = {action_label} **{tag_name}**?")),
                 ),
-                self._decision.keyed("moderation-decision"),
+                self._decision,
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-tags-view-loading-build-tags = Loading build tags.")),)
-        return (self._tabs.keyed("tabs"), *history_controls(self.history))
+        return (self._tabs, *history_controls(self.history))
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:

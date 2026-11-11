@@ -149,7 +149,7 @@ class RecordsScreen(sd.Screen):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._tabs is None:
             return (sl.status(tr(t"records-diagnostics-loading = Loading record diagnostics.")),)
-        return (self._tabs.keyed("tabs"),)
+        return (self._tabs,)
 
     def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []

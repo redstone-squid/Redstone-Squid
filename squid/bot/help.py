@@ -119,7 +119,7 @@ class HelpScreen(sd.Screen):
         elif self._focused is not None:
             body = self._detail(self._focused)
         else:
-            body = self._browser.keyed("browser")
+            body = self._browser
         project_url = self._bot.source_code_url or PROJECT_URL
         links: list[sl.semantic.Link] = [
             sl.link(tr(t"help-source = Source"), project_url, key="source"),

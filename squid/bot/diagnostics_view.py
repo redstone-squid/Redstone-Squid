@@ -77,7 +77,7 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         self.provide(_REPORT_MONITOR, self.monitor)
-        return self._notice.keyed("notice"), self._controls.keyed("controls")
+        return self._notice, self._controls
 
 
 _REPORT_MONITOR = sl.runtime.ContextKey[ErrorReportRefresh]("report-monitor")
@@ -235,7 +235,7 @@ class ErrorReportScreen(sd.Screen[int]):
                 )
             )
         if self.confirming_clear:
-            return sl.Document((self._clear_decision.keyed("clear-decision"),))
+            return sl.Document((self._clear_decision,))
         if self._detail is not None:
             return sl.Document((self._render_report(self._detail, self._matches),))
         if self._browser is None:
@@ -243,8 +243,8 @@ class ErrorReportScreen(sd.Screen[int]):
         assert self._updates is not None
         return sl.Document(
             (
-                self._browser.keyed("browser"),
-                self._updates.keyed("updates"),
+                self._browser,
+                self._updates,
                 sl.action_controls(
                     sl.action_control(
                         tr(t"diagnostics-view-show-all = Show all")

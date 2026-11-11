@@ -116,11 +116,12 @@ async def test_lookup_materializes_and_refreshes_diagnostics() -> None:
     screen = harness.screen
     await screen.on_load()
     responder = RecordingResponder()
-    await press(screen, "tabs.records-tabs.maintenance")
+    assert screen._tabs is not None
+    await press(screen._tabs, "records-tabs.maintenance")
 
     await submit(
-        screen,
-        "tabs.lookup",
+        screen._tabs,
+        "lookup",
         {"kind": BuildKind.DOOR, "base_key": "42", "restrictions": None, "version_id": 3},
         responder=responder,
     )
@@ -134,9 +135,10 @@ async def test_rebuild_uses_the_existing_default_kinds() -> None:
     harness = make_screen()
     screen = harness.screen
     await screen.on_load()
-    await press(screen, "tabs.records-tabs.maintenance")
+    assert screen._tabs is not None
+    await press(screen._tabs, "records-tabs.maintenance")
 
-    await submit(screen, "tabs.rebuild", {"kind": None, "version_id": None})
+    await submit(screen._tabs, "rebuild", {"kind": None, "version_id": None})
 
     assert harness.computation.rebuild_calls == [(None, (BuildKind.DOOR, BuildKind.EXTENDER))]
 

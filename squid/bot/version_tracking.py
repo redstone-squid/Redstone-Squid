@@ -88,7 +88,7 @@ class VersionScreen(sd.Screen):
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.status(tr(t"bot-version-tracking-loading-versions = Loading versions."))
             if self._browser is None
-            else self._browser.keyed("browser")
+            else self._browser
         ]
         if self._can_create:
             nodes.append(

@@ -116,7 +116,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._profile_editor is not None:
-            return (self._profile_editor.keyed("profile-editor"),)
+            return (self._profile_editor,)
         fields = tuple(sl.field(field.name, field.value) for field in self._fields())
         footer = self._footer()
         media = own_profile_avatar(self._profile, self._identities)
