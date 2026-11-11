@@ -299,7 +299,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   on 2026-08-24 for exactly that reason, then adopted days later by Plan 68, which had the piece
   the first attempt lacked: weak versus strong targets, so an undo conflicts on what the author
   said matters and stays blind on what it does not. `StateDelta` is gone; see
-  [the Plan 68 migration guide](../../plan68-migration.md).
+  [the Plan 68 migration guide](https://github.com/redstone-squid/Redstone-Squid/blob/4b31ebd3d5fbdd0bc5adc8ce35448e1825916a00/docs/plan68-migration.md).
 - **Ephemeral session handoff** *(resolved — shipped as plan 39)* — (Cascade-style: arm a refresh control before token
   expiry, rebuild the session from the fresh interaction). Mostly retired: plan 07's
   `EditHandle` renews on every click, so an ephemeral panel in use stays writable
@@ -321,7 +321,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   one multi-actor site, `BuildEditComponent._may_event`, needs an async permission check with
   its own wording, which a static set cannot express.
   **Revisited 2026-08-22**: [31](../completed/squid-layouts-redesign/31-action-ergonomics.md)'s `guards.permission` serves the
-  `_may_event` case named here; per-actor state arrives as [32](32-demand-driven.md)'s
+  `_may_event` case named here; per-actor state arrives as [32](../completed/squid-layouts-redesign/32-demand-driven.md)'s
   `Agreement` component state. The participant *lifecycle* model is now
   [34](../completed/squid-layouts-redesign/34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
   entry's remaining removal condition.
@@ -340,16 +340,16 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   plans [18](../completed/squid-layouts-redesign/18-forms.md)/[19](../completed/squid-layouts-redesign/19-patterns.md) now cover Form, Wizard and
   MultiChoicePanel; Tabs/Menu/RankedList were also migrated under 19's two-shell rule.
   **Revisited 2026-08-22**: continued by the survey batches
-  [29](../completed/squid-layouts-redesign/29-control-vocabulary.md)–[32](32-demand-driven.md), including the richer
+  [29](../completed/squid-layouts-redesign/29-control-vocabulary.md)–[32](../completed/squid-layouts-redesign/32-demand-driven.md), including the richer
   table/list browser this entry originally named (30's `Browser`). Batch D (roster, tally,
-  grid, `Agreement`) shipped under [32](32-demand-driven.md) on 2026-08-24; this entry is closed.
+  grid, `Agreement`) shipped under [32](../completed/squid-layouts-redesign/32-demand-driven.md) on 2026-08-24; this entry is closed.
 - **Grid / matrix interaction** *(closed — shipped as batch D of plan 32)* — (added 2026-08-21) — content grids are a `Table`
   display strategy (`MATRIX`), not a new node; interactive grids start as an
   `sl.discord.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
   non-degradability free. The degradation ladder (button grid → text grid +
   coordinate select → paged select) is the semantic-node promotion, and it waits for
   a real consumer.
-  **Revisited 2026-08-22**: promoted by [32](32-demand-driven.md); the recorded three-tier
+  **Revisited 2026-08-22**: promoted by [32](../completed/squid-layouts-redesign/32-demand-driven.md); the recorded three-tier
   shape was adopted and shipped on 2026-08-24 with a variadic cell API; this entry is closed.
 - **`sl.resource` descriptor** *(resolved — shipped as plan 33)* — resolved 2026-08-22 by [33](../completed/squid-layouts-redesign/33-resources.md). Explicit
   `depends=(kind,)` state descriptors provide the missing dependency model; render-observed

@@ -240,4 +240,4 @@ summary-only in schema 1.
 DevTools owns a bounded ledger and exposes it with `dev ui actions [limit]`; it remains available when
 profiler sampling is disabled or detailed traces have been evicted.
 
-See [the breaking migration](plan68-migration.md) for direct old/new call-site examples.
+See [the breaking migration](https://github.com/redstone-squid/Redstone-Squid/blob/4b31ebd3d5fbdd0bc5adc8ce35448e1825916a00/docs/plan68-migration.md) for direct old/new call-site examples.

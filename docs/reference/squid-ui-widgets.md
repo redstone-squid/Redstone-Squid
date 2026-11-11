@@ -89,8 +89,6 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.PageDirection
 
-::: squid_ui_widgets.PagePosition
-
 ## Decisions and votes
 
 ::: squid_ui_widgets.Decision

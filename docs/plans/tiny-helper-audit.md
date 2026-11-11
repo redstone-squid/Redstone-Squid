@@ -48,7 +48,7 @@ interpolation still escapes as before. Shared claimant labels no longer include 
 Discord autocomplete truncation; the Discord adapter retains mention formatting and its display limit.
 
 Package API replacements are documented in
-[the migration guide](../../packages/squid-ui-discord/docs/migrating.md#updating-helper-based-calls).
+[the migration guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/migrating.md#updating-helper-based-calls).
 No forwarding compatibility aliases were left behind. Existing cursor fingerprints and option revisions
 will change once with the new encoding; callers should treat them as opaque content identities.
 

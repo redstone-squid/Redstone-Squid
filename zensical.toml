@@ -45,7 +45,6 @@ Bot = [
     { "Media normalization" = "media-normalization.md" },
     { "Adding a build attribute" = "new-build-attribute.md" },
     { "Writing a migration" = "new-migration.md" },
-    { "Plan 68 migration" = "plan68-migration.md" },
 ]
 
 [project.theme]
@@ -102,7 +101,7 @@ paths = [
 
 [project.plugins.mkdocstrings.handlers.python.options]
 # Resolve adapter re-exports independently of the order pages are rendered.
-preload_modules = ["squid_ui"]
+preload_modules = ["squid_i18n", "squid_reactivity", "squid_ui"]
 docstring_style = "google"
 heading_level = 3
 merge_init_into_class = true
