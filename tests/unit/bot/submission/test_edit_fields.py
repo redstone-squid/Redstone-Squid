@@ -271,3 +271,20 @@ async def test_optional_lists_allow_empty_modal_values_and_clear_existing_entrie
         item.stage("")
         item.to_patch().apply(build)
         assert item.spec.reader(build) == []
+
+
+def test_edit_fields_include_retained_taxonomy_proposals() -> None:
+    build = DoorBuild(
+        component_restrictions=["Observerless"],
+        extra_info={
+            "unknown_restrictions": {"component_restrictions": ["New component"]},
+            "unknown_patterns": ["New pattern"],
+        },
+    )
+    fields = {field.key: field.bind(build) for field in EDIT_FIELDS}
+    assert fields["component_restrictions"].value == ["Observerless", "New component"]
+    assert fields["door_type"].value == ["New pattern"]
+    fields["component_restrictions"].stage("")
+    fields["component_restrictions"].to_patch().apply(build)
+    assert "unknown_restrictions" not in build.extra_info
+    assert build.extra_info["unknown_patterns"] == ["New pattern"]

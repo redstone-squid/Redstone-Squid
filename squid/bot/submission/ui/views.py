@@ -29,7 +29,7 @@ from squid.bot.submission.ui.fields import (
 from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, tr
 from squid.bot.utils.permissions import subject_for_interaction
 from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
-from squid.builds.domain import BuildCategory
+from squid.builds.domain import BuildCategory, UnresolvedTaxonomy
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
@@ -125,7 +125,9 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
                 .label = Patterns
                 .placeholder = Full lamp, Funnel
             """).attribute("label"),
-        reader=lambda build: list(build.patterns),
+        reader=lambda build: list(
+            dict.fromkeys([*build.patterns, *UnresolvedTaxonomy.read(build.extra_info).patterns])
+        ),
         patch=lambda value: BuildEditPatch(door_type=value),
     ),
     field_spec(
@@ -158,7 +160,14 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
                 .label = Wiring Placement Restrictions
                 .placeholder = Seamless, Full Flush
             """).attribute("label"),
-        reader=lambda build: list(build.wiring_placement_restrictions),
+        reader=lambda build: list(
+            dict.fromkeys(
+                [
+                    *build.wiring_placement_restrictions,
+                    *UnresolvedTaxonomy.read(build.extra_info).restriction_names("wiring_placement_restrictions"),
+                ]
+            )
+        ),
         patch=lambda value: BuildEditPatch(wiring_placement_restrictions=value),
     ),
     field_spec(
@@ -174,7 +183,14 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
                 .label = Animated Restrictions
                 .placeholder = Symmetrical, Full Sync
             """).attribute("label"),
-        reader=lambda build: list(build.animated_restrictions),
+        reader=lambda build: list(
+            dict.fromkeys(
+                [
+                    *build.animated_restrictions,
+                    *UnresolvedTaxonomy.read(build.extra_info).restriction_names("animated_restrictions"),
+                ]
+            )
+        ),
         patch=lambda value: BuildEditPatch(animated_restrictions=value),
     ),
     field_spec(
@@ -190,7 +206,14 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
                 .label = Component Restrictions
                 .placeholder = Observerless
             """).attribute("label"),
-        reader=lambda build: list(build.component_restrictions),
+        reader=lambda build: list(
+            dict.fromkeys(
+                [
+                    *build.component_restrictions,
+                    *UnresolvedTaxonomy.read(build.extra_info).restriction_names("component_restrictions"),
+                ]
+            )
+        ),
         patch=lambda value: BuildEditPatch(component_restrictions=value),
     ),
     field_spec(
@@ -206,7 +229,14 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
                 .label = Miscellaneous Restrictions
                 .placeholder = Directional, Locational
             """).attribute("label"),
-        reader=lambda build: list(build.miscellaneous_restrictions),
+        reader=lambda build: list(
+            dict.fromkeys(
+                [
+                    *build.miscellaneous_restrictions,
+                    *UnresolvedTaxonomy.read(build.extra_info).restriction_names("miscellaneous_restrictions"),
+                ]
+            )
+        ),
         patch=lambda value: BuildEditPatch(miscellaneous_restrictions=value),
     ),
     field_spec(

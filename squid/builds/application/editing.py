@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from typing import Literal, Self, cast
 
 from squid.builds.application.commands import Dimensions
-from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
+from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo, UnresolvedTaxonomy
+from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild
 from squid.core.sentinel import UNSET
@@ -150,6 +151,18 @@ class BuildEditPatch:
 
         if self.door_type is not UNSET:
             build.patterns = self.door_type
+
+        # Explicit taxonomy replacements also replace retained proposals for those fields.
+        # Otherwise persistence would merge a removed proposal back into the edited build.
+        replaced_restrictions = {name for name in RESTRICTION_FIELDS if getattr(self, name) is not UNSET}
+        if replaced_restrictions or self.door_type is not UNSET:
+            unresolved = UnresolvedTaxonomy.read(build.extra_info)
+            info = build.extra_info.copy()
+            UnresolvedTaxonomy(
+                restrictions=tuple(pair for pair in unresolved.restrictions if pair[0] not in replaced_restrictions),
+                patterns=unresolved.patterns if self.door_type is UNSET else (),
+            ).write(info)
+            build.extra_info = info
 
         media_fields: tuple[tuple[str, MediaTypeLiteral], ...] = (
             ("image_urls", "image"),

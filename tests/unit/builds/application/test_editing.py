@@ -75,3 +75,21 @@ def test_name_and_visible_timings_preserve_omissions_and_allow_clears() -> None:
 def test_visible_timings_reject_non_door_builds() -> None:
     with pytest.raises(InvalidBuildError, match="Door fields"):
         BuildEditPatch(visible_closing_time=3).apply(UtilityBuild())
+
+
+def test_taxonomy_replacements_remove_only_the_replaced_fields_proposals() -> None:
+    build = DoorBuild(
+        extra_info={
+            "unknown_restrictions": {
+                "component_restrictions": ["New component"],
+                "animated_restrictions": ["New motion"],
+            },
+            "unknown_patterns": ["New pattern"],
+        }
+    )
+    BuildEditPatch(component_restrictions=[]).apply(build)
+    assert build.extra_info["unknown_restrictions"] == {"animated_restrictions": ["New motion"]}
+    assert build.extra_info["unknown_patterns"] == ["New pattern"]
+    BuildEditPatch(door_type=[]).apply(build)
+    assert "unknown_patterns" not in build.extra_info
+    assert build.extra_info["unknown_restrictions"] == {"animated_restrictions": ["New motion"]}
