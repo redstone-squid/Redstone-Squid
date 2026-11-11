@@ -5,9 +5,8 @@ need current consent continue from a separate prompt so the panel does not hold
 its UI action transaction open while the user reads the notice.
 """
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
-from dataclasses import replace
-from typing import Protocol, cast, override
+from collections.abc import Awaitable, Callable
+from typing import Protocol, override
 
 import discord
 
@@ -17,25 +16,17 @@ import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.application.edits import PROFILE_EDIT, UNLINK_EDIT, VISIBILITY_EDIT, ProfileValues, account_target
 from squid.accounts.domain import (
-    MAX_BIO_LENGTH,
-    MAX_DISPLAY_NAME_LENGTH,
-    MAX_LINK_LABEL_LENGTH,
-    MAX_LINK_URL_LENGTH,
-    MAX_PROFILE_LINKS,
-    MAX_PRONOUNS_LENGTH,
     AccountConsent,
     IdentityProvider,
     LinkPreview,
-    ProfileLink,
     ProfileUpdate,
 )
 from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.bot.edit_controller import EditController
-from squid.bot.edit_history import history_controls, track_local_edits
+from squid.bot.profile_editor import ProfileEditor
 from squid.bot.profile_render import identity_label as _identity_label
-from squid.bot.profile_render import own_profile_avatar
+from squid.bot.profile_render import own_profile_avatar, own_profile_fields
 from squid.bot.ui import CardField, tr
-from squid.core.errors import ValidationError
 from squid.edits.application import EditRunner
 from squid.edits.domain import EditActor, EditCommand, EditValues, Revision, RevisionConflictError
 
@@ -59,10 +50,6 @@ class ConsentRequest(Protocol):
     ) -> Awaitable[bool]: ...
 
 
-def _link_count(count: int) -> sl.text.Message:
-    return tr(t"account-view-links = {count} links")
-
-
 class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Edit one account's profile and choose which linked identities appear publicly.
 
@@ -70,7 +57,6 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     saved immediately; profile fields stay in the editor until Save profile.
     """
 
-    profile_history: sl.runtime.History = sl.runtime.history(limit=20)
     history: sl.runtime.History = sl.runtime.history(limit=20)
 
     selected_id: int | None = sl.state(None)
@@ -80,9 +66,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
-        None, persist=False, opaque=True
-    )
+    _profile_editor: ProfileEditor | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -131,18 +115,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._profile_editor is not None:
-            return (
-                self.boundary(self._profile_editor, key="profile-editor"),
-                *history_controls(self.profile_history),
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"account-view-cancel = Cancel"),
-                        self._cancel_profile_edit,
-                        key="cancel-profile-edit",
-                    ),
-                    key="profile-editor-actions",
-                ),
-            )
+            return (self.boundary(self._profile_editor, key="profile-editor"),)
         fields = tuple(sl.field(field.name, field.value) for field in self._fields())
         footer = self._footer()
         media = own_profile_avatar(self._profile, self._identities)
@@ -268,148 +241,14 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     async def _edit_page(self, event: sd.PressEvent) -> None:
         async def apply() -> None:
-            self._profile_editor = self._build_profile_editor()
+            self._profile_editor = ProfileEditor(
+                self._profile, save=self._save_profile, close=self._close_profile_editor
+            )
 
         await self._with_consent(event, apply)
 
-    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target, sd.Request]:
-        profile_section = sp.EditorSection.from_form(
-            "profile",
-            tr(t"account-view-profile = Profile"),
-            sl.forms.FormSpec(
-                tr(t"account-view-edit-profile = Edit profile"),
-                (
-                    sl.forms.TextField(
-                        key="display_name",
-                        label=tr(t"account-view-display-name = Display name"),
-                        required=False,
-                        maximum=MAX_DISPLAY_NAME_LENGTH,
-                    ),
-                    sl.forms.TextField(
-                        key="pronouns",
-                        label=tr(t"account-view-pronouns = Pronouns"),
-                        required=False,
-                        maximum=MAX_PRONOUNS_LENGTH,
-                    ),
-                    sl.forms.TextAreaField(
-                        key="bio",
-                        label=tr(t"account-view-bio = Bio"),
-                        required=False,
-                        maximum=MAX_BIO_LENGTH,
-                    ),
-                ),
-            ),
-        )
-        links = sp.CollectionEditor(
-            tr(t"account-view-links-2 = Links"),
-            create=sl.forms.FormSpec(
-                tr(t"account-view-profile-link = Profile link"),
-                (
-                    sl.forms.TextField(
-                        key="label",
-                        label=tr(t"account-view-label = Label"),
-                        maximum=MAX_LINK_LABEL_LENGTH,
-                    ),
-                    sl.forms.TextField(
-                        key="url",
-                        label=tr(t"account-view-https-url = HTTPS URL"),
-                        maximum=MAX_LINK_URL_LENGTH,
-                    ),
-                ),
-                validator=self._validate_link,
-            ),
-            label=lambda value: str(value["label"]),
-            minimum=0,
-            maximum=MAX_PROFILE_LINKS,
-        )
-        links_section = sp.EditorSection.from_pattern(
-            "links",
-            tr(t"account-view-links-2 = Links"),
-            links,
-            load=lambda value: links.initial_from(cast(Iterable[Mapping[str, object]], value)),
-            dump=links.values,
-            summary=lambda value: _link_count(len(value)),
-            issues=lambda state: (sl.forms.FormError(message) for message in links.errors(state)),
-        )
-        editor = sp.Editor[sl.ComponentsV2Target, sd.Request](
-            tr(t"account-view-edit-your-creator-page = Edit your creator page"),
-            (profile_section, links_section),
-            preview=self._profile_preview,
-            commit_label=tr(t"account-view-save-profile = Save profile"),
-            validate=self._validate_profile_editor,
-        )
-        initial: sp.EditorValues = {
-            "profile": {
-                "display_name": self._profile.display_name,
-                "pronouns": self._profile.pronouns,
-                "bio": self._profile.bio,
-            },
-            "links": tuple({"label": link.label, "url": link.url} for link in self._profile.links),
-        }
-        self.profile_history.clear()
-        driver = editor.build_component(initial=initial, on_commit=self._profile_committed)
-        track_local_edits(
-            self.profile_history,
-            driver,
-            tr(t"account-history-profile-draft = Edit profile draft"),
-            select=editor.values,
-            restore=lambda state, values: replace(
-                state,
-                sections=tuple(
-                    replace(old, state=new.state)
-                    for old, new in zip(state.sections, editor.initial_from(values).sections, strict=True)
-                ),
-            ),
-            enabled=lambda: self._profile_editor is driver,
-        )
-        return driver
-
-    def _validate_link(self, values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
-        try:
-            ProfileLink.parse(str(values["label"]), str(values["url"]))
-        except ValidationError as error:
-            return (sl.forms.FormError(error.public_text()),)
-        return ()
-
-    def _raw_profile_update(self, values: sp.EditorValues) -> ProfileUpdate:
-        profile = cast(Mapping[str, object], values["profile"])
-        links = cast(Iterable[Mapping[str, object]], values["links"])
-        return ProfileUpdate(
-            display_name=cast(str | None, profile["display_name"]),
-            pronouns=cast(str | None, profile["pronouns"]),
-            bio=cast(str | None, profile["bio"]),
-            links=tuple(ProfileLink(str(link["label"]), str(link["url"])) for link in links),
-        )
-
-    def _profile_update(self, values: sp.EditorValues) -> ProfileUpdate:
-        return self._raw_profile_update(values).validated()
-
-    def _validate_profile_editor(self, values: sp.EditorValues) -> tuple[sl.forms.FormIssue, ...]:
-        try:
-            self._profile_update(values)
-        except ValidationError as error:
-            return (sl.forms.FormError(error.public_text()),)
-        return ()
-
-    def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
-        draft = self._raw_profile_update(values).apply(self._profile)
-        fields = tuple(sl.field(field.name, field.value) for field in self._profile_fields(draft))
-        return sl.section(
-            sl.heading(draft.display_name or tr(t"account-view-your-account = Your account")),
-            draft.bio and sl.truncate(sl.paragraph(draft.bio)),
-            sl.fields(*fields) if fields else None,
-        )
-
-    async def _profile_committed(
-        self,
-        event: sp.TransitionEvent[sp.EditorState],
-        values: sp.EditorValues,
-        _changed: frozenset[str],
-    ) -> None:
-        await self._save_profile(self._profile_update(values))
-        self.profile_history.clear()
+    def _close_profile_editor(self) -> None:
         self._profile_editor = None
-        await event.source.notice(tr(t"account-view-profile-saved = Profile saved."))
 
     async def _save_profile(self, update: ProfileUpdate) -> None:
         await self.edits.execute(
@@ -420,9 +259,6 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
             ),
             tr(t"account-history-profile = Edit profile"),
         )
-
-    async def _cancel_profile_edit(self, _event: sd.PressEvent) -> None:
-        self._profile_editor = None
 
     async def _with_consent(self, event: sd.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
         """Run the change immediately or after acceptance in a separate consent prompt.
@@ -457,7 +293,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self.invalidate()
 
     def _fields(self) -> list[CardField]:
-        fields = self._profile_fields(self._profile)
+        fields = own_profile_fields(self._profile)
         fields += [CardField(_identity_label(identity), self.identity_detail(identity)) for identity in self.identities]
         if not fields:
             fields.append(
@@ -472,16 +308,6 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 tr(t"account-view-hidden-2 = Hidden") if self.page_hidden else tr(t"account-view-public = Public"),
             )
         )
-        return fields
-
-    @staticmethod
-    def _profile_fields(profile: AccountProfile) -> list[CardField]:
-        fields: list[CardField] = []
-        if profile.pronouns:
-            fields.append(CardField(tr(t"account-view-pronouns = Pronouns"), profile.pronouns))
-        if profile.links:
-            links = "\n".join(f"[{link.label}]({link.url})" for link in profile.links)
-            fields.append(CardField(tr(t"account-view-links-2 = Links"), links))
         return fields
 
     def identity_detail(self, identity: AccountIdentity) -> sl.TextLike:

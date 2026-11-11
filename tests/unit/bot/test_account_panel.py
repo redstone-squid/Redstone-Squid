@@ -32,6 +32,7 @@ from squid.bot.account_presentation import refresh_message
 from squid.bot.account_view import AccountOverview, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import ConsentPrompt, request_consent
+from squid.bot.profile_editor import ProfileEditor
 from squid.bot.verify import VerifyCog
 from squid.edits.domain import EditActor
 from squid.permissions.domain import PermissionNode, Subject
@@ -758,7 +759,8 @@ def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
         )
     )
 
-    component = panel._build_profile_editor()
+    draft = ProfileEditor(panel._profile, save=panel._save_profile, close=panel._close_profile_editor)
+    component = draft.editor
     editor = cast(sp.Editor, component.machine)
     values = editor.values(component.machine_state)
 
@@ -771,7 +773,8 @@ def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
 def test_profile_editor_rejects_non_https_links_before_staging() -> None:
     panel = _account_panel(AccountProfile.empty(ACCOUNT_ID))
 
-    issues = panel._validate_link({"label": "Bad", "url": "http://example.com"})
+    draft = ProfileEditor(panel._profile, save=panel._save_profile, close=panel._close_profile_editor)
+    issues = draft._validate_link({"label": "Bad", "url": "http://example.com"})
 
     assert len(issues) == 1
     assert isinstance(issues[0], sl.forms.FormError)
@@ -780,8 +783,9 @@ def test_profile_editor_rejects_non_https_links_before_staging() -> None:
 async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> None:
     panel = _account_panel(AccountProfile.empty(ACCOUNT_ID))
     panel._refresh = no_refresh  # type: ignore[method-assign]
-    component = panel._build_profile_editor()
-    panel._profile_editor = component
+    draft = ProfileEditor(panel._profile, save=panel._save_profile, close=panel._close_profile_editor)
+    component = draft.editor
+    panel._profile_editor = draft
     editor = cast(sp.Editor, component.machine)
     staged = editor.transition(
         component.machine_state,
@@ -1085,3 +1089,14 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
         assert overview._profile_editor is not None
         assert not ui.root.finished
         assert child_root.finished
+
+        draft = overview._profile_editor
+        cancel_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("cancel-profile-edit"))
+        await ui.press(cancel_key)
+        assert overview._profile_editor is None
+        assert accounts.profile_updates == []
+
+        await ui.press(edit_key)
+        assert overview._profile_editor is not None
+        assert overview._profile_editor is not draft
+        assert not overview._profile_editor.history.entries
