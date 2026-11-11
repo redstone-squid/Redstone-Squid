@@ -32,22 +32,27 @@ type ServiceFailure = Callable[[Exception], Awaitable[None]]
 
 
 class ManagedService(Reactive, ABC):
-    """A service that runs until ``run`` returns or its owner cancels it.
+    """A reactive model with a framework-managed execution lifecycle.
 
-    Declare observable fields with state(), computed values, and resources directly
-    on the service. State remains readable between runs. Inside transactions, writes
-    must target declared state; ordinary resource handles belong in run(). Readiness
-    and current_run are execution signals and do not notify reactive readers.
+    Like any Reactive subclass, a service can declare state, computed values, and
+    resources for consumers to observe. It also implements ``run``, which the
+    framework starts and cancels through an explicit owner. Constructing or reading
+    the service does not start its work.
 
-    Keep construction cheap and put subscriptions, connections, and background work in
-    ``run``. The owner starts that work when it's needed and cancels it when it's done.
+    Register the service with ``Component.own`` to tie its work to the component's
+    mounted lifetime, or with a ``ServiceOwner`` for an application or session.
+    Each instance belongs to one owner for life, but any number of consumers can
+    share it. A run ends when ``run`` returns or its owner cancels it. On remount,
+    the same instance starts a new run after the previous run finishes cleaning up.
 
-    Each instance belongs to one owner for life. You can pass it around freely to share
-    its state. On remount, the same instance gets a new run, with fresh resources.
-    Service methods check that the resources they need are available; retaining the
-    object or observing readiness does not keep those resources open. The author
-    registers cleanup during acquisition, shields awaited cleanup from cancellation,
-    and bounds resource operations that could stall. See ``run`` for an example.
+    Reactive state remains readable between runs and follows the usual transaction
+    rules: writes inside transactions must target declared state. Readiness and
+    ``current_run`` are execution signals; they do not notify reactive readers.
+
+    Keep construction cheap. Acquire subscriptions and connections in ``run`` and
+    release them when that run ends. Methods using those resources must check that
+    they are available: retaining the service or awaiting readiness does not keep
+    them open. See ``run`` for readiness and cancellation-safe cleanup conventions.
     """
 
     # Ownership and activation are runtime bookkeeping, outside state transactions.
