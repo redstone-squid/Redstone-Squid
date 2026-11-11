@@ -121,23 +121,96 @@ UNRATED: ScaleOwnership = Uncontrolled(None)
 FIRST_OPTION: NavOwnership = Uncontrolled(None)
 
 
+# --- Nodes --------------------------------------------------------------------------------
+
+
+class Adaptable[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+    """A framework node that offers the adaptation wrappers as methods.
+
+    Each method builds the same node as the function of the same name, so
+    ``sl.paragraph(text).truncate()`` equals ``sl.truncate(sl.paragraph(text))``. Chained calls
+    apply in reading order: ``node.truncate().budget(min=100, prefer=350)`` budgets the
+    truncated node. Around a multi-line subtree, prefer the function: a trailing method would
+    put the decision about how the region may shrink after everything it governs.
+
+    Semantic nodes and the adaptation wrappers inherit this; a custom ``Renderable`` does not,
+    so these names stay free for its own fields. ``fallback`` has no method because its
+    candidates are peers rather than one node and its modifiers.
+    """
+
+    __slots__ = ()
+
+    def truncate(self, *, keep: Literal["head", "tail"] = "head") -> Truncated[RenderTargetT, ContextT]:
+        """Same as ``truncate(self, keep=keep)``."""
+        return truncate(self, keep=keep)
+
+    def spill(self) -> Spilled[RenderTargetT, ContextT]:
+        """Same as ``spill(self)``."""
+        return spill(self)
+
+    def optional(self, *, importance: Importance = Importance.LOW) -> OptionalContent[RenderTargetT, ContextT]:
+        """Same as ``optional(self, importance=importance)``."""
+        return optional(self, importance=importance)
+
+    def best_effort(self) -> BestEffort[RenderTargetT, ContextT]:
+        """Same as ``best_effort(self)``."""
+        return best_effort(self)
+
+    def budget(self, *, min: int, prefer: int, stretch: int = 0) -> Budgeted[RenderTargetT, ContextT]:
+        """Same as ``budget(self, min=min, prefer=prefer, stretch=stretch)``."""
+        return budget(self, min=min, prefer=prefer, stretch=stretch)
+
+    def unbreakable(self) -> Unbreakable[RenderTargetT, ContextT]:
+        """Same as ``unbreakable(self)``."""
+        return unbreakable(self)
+
+    def keep_with_next(self) -> KeepWithNext[RenderTargetT, ContextT]:
+        """Same as ``keep_with_next(self)``."""
+        return keep_with_next(self)
+
+    def paged(
+        self,
+        *,
+        key: str,
+        chars: int,
+        min: int = 0,
+        stretch: int = 0,
+        min_fill: int = 0,
+        widows: int = 1,
+        initial: Literal["start", "end"] = "start",
+        footer: Callable[[int, int], TextLike] | None = None,
+    ) -> Budgeted[RenderTargetT, ContextT]:
+        """Same as ``paged(self, ...)`` with the same keyword arguments."""
+        return paged(
+            self,
+            key=key,
+            chars=chars,
+            min=min,
+            stretch=stretch,
+            min_fill=min_fill,
+            widows=widows,
+            initial=initial,
+            footer=footer,
+        )
+
+
 @dataclass(frozen=True, slots=True)
-class Group[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Group[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Stack[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Stack[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Cluster[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Cluster[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Themed[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Themed[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A subtree planned with a presentation palette override."""
 
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -145,7 +218,7 @@ class Themed[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderT
 
 
 @dataclass(frozen=True, slots=True)
-class Block[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Block[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """An untitled semantic region with an exact or inherited accent."""
 
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -153,7 +226,7 @@ class Block[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTa
 
 
 @dataclass(frozen=True, slots=True)
-class Section[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Section[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A titled block of related content.
 
     ``accent`` is an exact colour override, not a semantic fact. Omit it to inherit the
@@ -172,7 +245,7 @@ class Section[RenderTargetT = RenderTarget, ContextT = object](Renderable[Render
 
 
 @dataclass(frozen=True, slots=True)
-class Article[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Article[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """A self-contained block that stands on its own; see `Section` for the extras."""
 
     heading: Heading
@@ -182,20 +255,20 @@ class Article[RenderTargetT = RenderTarget, ContextT = object](Renderable[Render
 
 
 @dataclass(frozen=True, slots=True)
-class Aside[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Aside[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     tone: Tone = Tone.NEUTRAL
 
 
 @dataclass(frozen=True, slots=True)
-class Heading(Renderable[RenderTarget]):
+class Heading(Adaptable[RenderTarget]):
     content: TextLike
     level: int = 2
     importance: Importance = Importance.HIGH
 
 
 @dataclass(frozen=True, slots=True)
-class Paragraph(Renderable[RenderTarget]):
+class Paragraph(Adaptable[RenderTarget]):
     content: TextLike
     importance: Importance = Importance.NORMAL
 
@@ -208,7 +281,7 @@ class ListItem:
 
 
 @dataclass(frozen=True, slots=True)
-class List(Renderable[RenderTarget]):
+class List(Adaptable[RenderTarget]):
     items: tuple[ListItem, ...]
     key: str
     ordered: bool = False
@@ -232,7 +305,7 @@ class Field:
 
 
 @dataclass(frozen=True, slots=True)
-class Fields(Renderable[RenderTarget]):
+class Fields(Adaptable[RenderTarget]):
     fields: tuple[Field, ...]
 
 
@@ -254,7 +327,7 @@ class TableRow:
 
 
 @dataclass(frozen=True, slots=True)
-class Table(Renderable[RenderTarget]):
+class Table(Adaptable[RenderTarget]):
     columns: Columns
     rows: tuple[TableRow, ...]
     key: str
@@ -272,7 +345,7 @@ class Table(Renderable[RenderTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Note(Renderable[RenderTarget]):
+class Note(Adaptable[RenderTarget]):
     """Small print: an id, a timestamp, a caveat the reader may skip."""
 
     content: TextLike
@@ -280,13 +353,13 @@ class Note(Renderable[RenderTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Quote(Renderable[RenderTarget]):
+class Quote(Adaptable[RenderTarget]):
     content: TextLike
     attribution: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Code(Renderable[RenderTarget]):
+class Code(Adaptable[RenderTarget]):
     content: str
     language: str = ""
 
@@ -300,13 +373,13 @@ class MediaItem:
 
 
 @dataclass(frozen=True, slots=True)
-class Figure(Renderable[RenderTarget]):
+class Figure(Adaptable[RenderTarget]):
     media: MediaItem
     caption: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Media(Renderable[RenderTarget]):
+class Media(Adaptable[RenderTarget]):
     items: tuple[MediaItem, ...]
     key: str
     display: MediaDisplay = MediaDisplay.AUTO
@@ -319,7 +392,7 @@ class Summary:
 
 
 @dataclass(frozen=True, slots=True)
-class Details[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Details[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     key: str
     summary: Summary
     children: tuple[LayoutNode[RenderTargetT, ContextT], ...]
@@ -334,7 +407,7 @@ class ToggleEvent[ContextT = object](ActionEvent[ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Toggle[ContextT = object](Renderable[RenderTarget, ContextT]):
+class Toggle[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """One keyed boolean control with explicit state ownership."""
 
     key: str
@@ -347,7 +420,7 @@ class Toggle[ContextT = object](Renderable[RenderTarget, ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Download(Renderable[RenderTarget]):
+class Download(Adaptable[RenderTarget]):
     """A visible file control whose asset is declared at its point of use."""
 
     key: str
@@ -359,21 +432,21 @@ class Download(Renderable[RenderTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Status(Renderable[RenderTarget]):
+class Status(Adaptable[RenderTarget]):
     content: TextLike
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
 
 @dataclass(frozen=True, slots=True)
-class ProgressBar(Renderable[RenderTarget]):
+class ProgressBar(Adaptable[RenderTarget]):
     value: float
     label: TextLike | None = None
     maximum: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
-class Roster[ContextT = object](Renderable[RenderTarget, ContextT]):
+class Roster[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A host-owned roster allocation rendered with active localized chrome."""
 
     key: str
@@ -397,7 +470,7 @@ class Roster[ContextT = object](Renderable[RenderTarget, ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Grid[ContextT = object](Renderable[RenderTarget, ContextT]):
+class Grid[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A selectable spatial collection with target-shaped fallback strategies."""
 
     key: str
@@ -414,14 +487,14 @@ class Grid[ContextT = object](Renderable[RenderTarget, ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Metric(Renderable[RenderTarget]):
+class Metric(Adaptable[RenderTarget]):
     value: int | float | str
     label: TextLike
     unit: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Timestamp(Renderable[RenderTarget]):
+class Timestamp(Adaptable[RenderTarget]):
     """An aware instant plus a portable display preference."""
 
     instant: datetime
@@ -442,7 +515,7 @@ class Timestamp(Renderable[RenderTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class ZonedTimestamp(Renderable[RenderTarget]):
+class ZonedTimestamp(Adaptable[RenderTarget]):
     """An exact instant rendered visibly in its named timezone."""
 
     value: ZonedDateTime
@@ -450,7 +523,7 @@ class ZonedTimestamp(Renderable[RenderTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class FormTrigger[ContextT = object](Renderable[RenderTarget, ContextT]):
+class FormTrigger[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A content entry point that presents a portable form."""
 
     key: str
@@ -519,7 +592,7 @@ class ControlGroup[ContextT = object]:
 
 
 @dataclass(frozen=True, slots=True)
-class ActionControls[ContextT = object](Renderable[RenderTarget, ContextT]):
+class ActionControls[ContextT = object](Adaptable[RenderTarget, ContextT]):
     items: tuple[ActionControl[ContextT] | Link | RoutedActionControl | ControlGroup[ContextT], ...]
     key: str
     display: ControlDisplay = ControlDisplay.AUTO
@@ -571,7 +644,7 @@ class ScaleEvent[ContextT = object](ActionEvent[ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Choices[ContextT = object](Renderable[RenderTarget, ContextT]):
+class Choices[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """Let the reader select between minimum and maximum options.
 
     The selection uses Controlled or Uncontrolled to decide who stores the selected
@@ -589,7 +662,7 @@ class Choices[ContextT = object](Renderable[RenderTarget, ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Entities[ContextT = object](Renderable[RenderTarget, ContextT]):
+class Entities[ContextT = object](Adaptable[RenderTarget, ContextT]):
     """A picker over frontend-resolved entities with an optional enumerated fallback."""
 
     key: str
@@ -612,7 +685,7 @@ class Entities[ContextT = object](Renderable[RenderTarget, ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class RoutedChoices(Renderable[RenderTarget]):
+class RoutedChoices(Adaptable[RenderTarget]):
     """An explicitly stateless picker whose values are submitted to one route."""
 
     key: str
@@ -638,7 +711,7 @@ class Item[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTar
 
 
 @dataclass(frozen=True, slots=True)
-class Items[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Items[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     key: str
     items: tuple[Item[RenderTargetT, ContextT], ...]
     opened: ItemOwnership[ContextT] = UNOPENED
@@ -659,7 +732,7 @@ class NavigateEvent[ContextT = object](ActionEvent[ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Navigation[ContextT = object](Renderable[RenderTarget, ContextT]):
+class Navigation[ContextT = object](Adaptable[RenderTarget, ContextT]):
     key: str
     options: tuple[NavOption, ...]
     current: NavOwnership[ContextT] = FIRST_OPTION
@@ -669,24 +742,24 @@ class Navigation[ContextT = object](Renderable[RenderTarget, ContextT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Truncated[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Truncated[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
     keep: Literal["head", "tail"] = "head"
 
 
 @dataclass(frozen=True, slots=True)
-class Spilled[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Spilled[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @dataclass(frozen=True, slots=True)
-class OptionalContent[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class OptionalContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
     importance: Importance = Importance.LOW
 
 
 @dataclass(frozen=True, slots=True)
-class FallbackContent[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class FallbackContent[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Complete author-supplied representations of one region, best first."""
 
     primary: LayoutNode[RenderTargetT, ContextT]
@@ -699,12 +772,12 @@ class FallbackContent[RenderTargetT = RenderTarget, ContextT = object](Renderabl
 
 
 @dataclass(frozen=True, slots=True)
-class BestEffort[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class BestEffort[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @dataclass(frozen=True, slots=True)
-class Budgeted[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Budgeted[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Reserve and cap the character grant for one logical region."""
 
     node: LayoutNode[RenderTargetT, ContextT]
@@ -722,21 +795,21 @@ class Budgeted[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rende
 
 
 @dataclass(frozen=True, slots=True)
-class Unbreakable[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Unbreakable[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Keep every primitive produced by ``node`` together on a region page."""
 
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @dataclass(frozen=True, slots=True)
-class KeepWithNext[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class KeepWithNext[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Forbid a region page break immediately after ``node``."""
 
     node: LayoutNode[RenderTargetT, ContextT]
 
 
 @dataclass(frozen=True, slots=True)
-class Paged[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+class Paged[RenderTargetT = RenderTarget, ContextT = object](Adaptable[RenderTargetT, ContextT]):
     """Paginate the direct children of a keyed heterogeneous region."""
 
     node: LayoutNode[RenderTargetT, ContextT]
@@ -979,6 +1052,7 @@ __all__ = [
     "UNSELECTED",
     "ActionControl",
     "ActionControls",
+    "Adaptable",
     "Adaptation",
     "AnyLayoutNode",
     "Article",

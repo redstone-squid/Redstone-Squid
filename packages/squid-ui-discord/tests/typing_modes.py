@@ -29,6 +29,8 @@ assert_type(classic_only, Stack[ClassicTarget])
 
 assert_type(sl.stack(sl.stack(sl.stack(Panel(())), "text"), None), Stack[ComponentsV2Target])
 assert_type(sl.truncate(sl.stack(Panel(()))), sl.semantic.Truncated[ComponentsV2Target])
+assert_type(sl.stack(Panel(())).truncate(), sl.semantic.Truncated[ComponentsV2Target])
+assert_type(sl.stack(Panel(())).truncate().budget(min=1, prefer=2), sl.semantic.Budgeted[ComponentsV2Target])
 assert_type(sl.section(sl.heading("h"), sl.aside(Panel(()))), sl.semantic.Section[ComponentsV2Target])
 
 # --- which makes the mismatch a type error where the author wrote it ----------------------
@@ -45,6 +47,8 @@ plan(classic_only, target=v2())  # pyright: ignore[reportArgumentType]  # pyrefl
 buried = sl.stack(sl.section(sl.heading("h"), sl.aside(sl.stack(Panel(())))))
 plan(buried, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 plan(buried, target=v2())
+# The method form of a wrapper keeps the restriction too.
+plan(sl.stack(Panel(())).optional(), target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 
 
 def boundaries(

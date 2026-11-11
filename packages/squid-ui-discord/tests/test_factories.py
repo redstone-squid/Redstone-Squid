@@ -67,6 +67,25 @@ class TestNormalization:
         assert result.scene.components_v2.children == ()
 
 
+class TestAdaptationMethods:
+    def test_methods_build_the_same_nodes_as_the_functions(self) -> None:
+        body = sl.paragraph("body")
+
+        assert body.truncate(keep="tail") == sl.truncate(body, keep="tail")
+        assert body.optional() == sl.optional(body)
+        assert body.paged(key="p", chars=100) == sl.paged(body, key="p", chars=100)
+
+    def test_chained_methods_apply_in_reading_order(self) -> None:
+        body = sl.paragraph("body")
+
+        assert body.truncate().budget(min=10, prefer=20) == sl.budget(sl.truncate(body), min=10, prefer=20)
+
+    def test_nodes_stay_slotted(self) -> None:
+        # A base class without `__slots__` would give every dataclass node a `__dict__`.
+        assert not hasattr(sl.paragraph("body"), "__dict__")
+        assert not hasattr(sl.paragraph("body").truncate(), "__dict__")
+
+
 class TestRefusals:
     def test_true_is_rejected_rather_than_skipped(self) -> None:
         with pytest.raises(TypeError, match="True is not content"):
