@@ -10,7 +10,7 @@ import logging
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4, uuid5
 
 import anyio
 import discord
@@ -72,6 +72,31 @@ async def _download_and_register(
         await services.submission_intake.register_file(draft_id, actor_id, source_id, path, attachment.content_type)
 
 
+async def add_uploaded_files(
+    services: BotServices, draft_id: UUID, actor_id: int, sources: Sequence[UploadedFile]
+) -> int:
+    """Attach files uploaded through a modal after the draft was created.
+
+    Like receive_attachments, every file is reserved before any is read, and a failed file
+    stays on the draft as failed so the submitter can replace or remove it.
+
+    Returns:
+        The number of files that could not be registered.
+    """
+    source_ids = [uuid4() for _ in sources]
+    for source_id, source in zip(source_ids, sources, strict=True):
+        await services.submission_intake.reserve(draft_id, actor_id, source_id, source.name, source.media_type)
+    failed = 0
+    for source_id, source in zip(source_ids, sources, strict=True):
+        try:
+            await _register_uploaded_file(services, draft_id, actor_id, source_id, source)
+        except Exception:
+            await services.submission_intake.fail(draft_id, actor_id, source_id)
+            logger.warning("Submission file upload failed for source %s", source_id, exc_info=True)
+            failed += 1
+    return failed
+
+
 async def retry_uploaded_file(
     services: BotServices, draft_id: UUID, actor_id: int, original_id: UUID, source: UploadedFile
 ) -> UUID:
@@ -80,8 +105,6 @@ async def retry_uploaded_file(
     Registration failures are retained on the new attempt and re-raised; the original
     source remains required until its replacement has registered successfully.
     """
-    from uuid import uuid4
-
     new_id = uuid4()
     await services.submission_intake.reserve(draft_id, actor_id, new_id, source.name, source.media_type)
     try:
