@@ -12,17 +12,13 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.i18n import to_locale_str
-from squid.bot.ui import card_node, error_node, render_payload, tr
-from squid.config import BuildConfig
+from squid.bot.ui import tr
 from squid.suggestions.application import Candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
-from squid_ui.text import Message, TextLike
-from squid_ui_discord import send_to
+from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
     import squid.bot.app
-
-MORE_INFORMATION = tr(t"help-details-hint = Use `/help <command>` to get more information.")
 
 DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     (tr(t"help-build = Build"), frozenset({"build"})),
@@ -153,7 +149,9 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     def __init__(self, bot: BotT):
         super().__init__(bot)
-        self.bot.help_command = Help()
+        help_command = Help()
+        help_command.cog = self
+        self.bot.help_command = help_command
 
     # /help [command]
     @sd.command(
@@ -209,132 +207,48 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         ]
 
 
-class Help(commands.MinimalHelpCommand):
-    """Show help for a command or a group of commands."""
+class Help(commands.HelpCommand):
+    """Adapt prefix and internal help requests to the shared command browser."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
 
-    @property
-    def _bot(self) -> squid.bot.app.RedstoneSquid:
-        # discord.py's HelpCommand.context is generically typed as Context[Bot | AutoShardedBot];
-        # the bot is always the concrete RedstoneSquid at runtime.
-        return cast("squid.bot.app.RedstoneSquid", self.context.bot)
+    async def _show(self, command: str | None = None, *, commands_: Sequence[AnyCommand] | None = None) -> None:
+        cog = self.cog
+        assert isinstance(cog, HelpCog)
+        # Internal send_help calls retain the invoking command's UI scope.
+        request = await sd.request(cast(commands.Context[commands.Bot], self.context))
+        await request.respond(HelpScreen(cog.bot, cog._all_commands() if commands_ is None else commands_, command))
 
-    # !help
+    @override
+    async def command_callback(self, ctx: commands.Context, /, *, command: str | None = None) -> None:
+        await self.prepare_help_command(ctx, command)
+        if command is not None:
+            cog = ctx.bot.get_cog(command)
+            if cog is not None:
+                await self.send_cog_help(cog)
+                return
+            # Resolve prefix aliases before looking up the shared prefix and slash directory.
+            resolved = ctx.bot.get_command(command)
+            if resolved is not None:
+                command = resolved.qualified_name
+        await self._show(command)
+
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
-        commands_ = list(self.context.bot.commands)
+        await self._show()
 
-        # Avoid running each command's authorization checks just to render the directory.
-        description = sl.raw_md(self.context.bot.description)
-        commands = self.get_commands_brief_details(commands_)
-        more_information = MORE_INFORMATION
-        desc = tr(t"""
-            bot-help-commands =
-                {description}
-
-                Commands:{commands}
-
-                {more_information}{{ "\\u000A" }}
-            """)
-        footer: str | None = None
-        build_config = getattr(self.context.bot, "build_config", None)
-        if (
-            isinstance(build_config, BuildConfig)
-            and build_config.commit_hash is not None
-            and build_config.commit_message is not None
-        ):
-            footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await send_to(self.get_destination())(render_payload([card_node(tr(t"help-help = Help"), desc, footer=footer)]))
-
-    # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
-        name = command.qualified_name
-        await send_to(self.get_destination())(
-            render_payload(
-                [
-                    card_node(
-                        tr(t"help-command-help = Command Help - `{name}`"),
-                        command.help or tr(t"help-no-details-provided = No details provided"),
-                    )
-                ]
-            )
-        )
+        await self._show(command.qualified_name)
 
-    @staticmethod
-    def get_commands_brief_details(commands_: Sequence[Command[Any, Any, Any]]) -> Message:
-        """Format names, signatures, and short descriptions in input order, each on a new line."""
-        no_details = tr(t"help-no-details-provided = No details provided")
-        details: list[TextLike] = []
-        for command in commands_:
-            signature = f" {command.signature}" if command.signature else ""
-            details.append(f"\n`{command.qualified_name}{signature}` - " + (command.short_doc or no_details))
-        return Message.join("", details)
-
-    # Group help lists immediate children; cog help below walks all of the cog's commands.
     @override
     async def send_group_help(self, group: Group[Any, ..., Any], /) -> None:
-        """Sends help for a group command."""
-        commands_ = group.commands
+        await self._show(group.qualified_name)
 
-        if len(commands_) == 0:
-            # Group is a subclass of Command
-            # noinspection PyTypeChecker
-            return await self.send_command_help(group)
-
-        listed = list(commands_)
-        description = sl.raw_md(group.cog.description)
-        commands = self.get_commands_brief_details(listed) if listed else tr(t"help-none = None")
-        more_information = MORE_INFORMATION
-        desc = tr(t"""
-            bot-help-usable-subcommands =
-                {description}
-
-                Usable Subcommands: {commands}
-
-                {more_information}
-            """)
-        await send_to(self.get_destination())(
-            render_payload([card_node(tr(t"help-command-help-2 = Command Help"), desc)])
-        )
-        return None
-
-    # !help <cog>
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
-        """Sends help for a cog."""
-        commands_ = cog.walk_commands()
-        listed = list(commands_)
-        description = sl.raw_md(cog.description)
-        commands = self.get_commands_brief_details(listed) if listed else tr(t"help-none = None")
-        more_information = MORE_INFORMATION
-        desc = tr(t"""
-            bot-help-usable-subcommands-2 =
-                {description}
-
-                Usable Subcommands:{commands}
-
-                {more_information}
-            """)
-        await send_to(self.get_destination())(
-            render_payload([card_node(tr(t"help-command-help-2 = Command Help"), desc)])
-        )
-
-    @override
-    async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
-        name = string
-        # discord.py passes this string straight to send_error_message.
-        return tr(
-            t"help-command-lookup-failed = Unable to find command `{name}`. Use /help to get "
-            t"a list of available commands."
-        ).resolve()
-
-    @override
-    async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
-        # TODO: error can be a custom Error too
-        await send_to(self.get_destination())(render_payload([error_node(tr(t"help-error = Error."), error)]))
+        await self._show(commands_=[*cog.walk_commands(), *cog.walk_app_commands()])
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

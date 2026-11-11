@@ -3,12 +3,17 @@
 from dataclasses import dataclass
 from typing import Any, cast
 
+import discord
+import pytest
 from discord import app_commands
+from discord.ext import commands
 
 import squid_ui as sl
-from squid.bot.help import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpScreen
+import squid_ui_discord as sd
+from squid.bot.help import REGULATIONS_URL, SUBMISSION_FORM_URL, HelpCog, HelpScreen
 from squid_ui.testing import labels, texts, walk
 from squid_ui_discord import SessionSpec
+from squid_ui_discord.testing import ContextHarness, InteractionHarness
 
 
 @app_commands.command()
@@ -57,3 +62,54 @@ def test_help_screen_renders_focused_and_missing_commands() -> None:
 
     assert "/example" in texts(focused)
     assert any("No command named `missing`" in text for text in texts(missing))
+
+
+@pytest.mark.parametrize("entrypoint", ["prefix", "slash", "internal"])
+@pytest.mark.parametrize("query", [None, "build", "build show"])
+async def test_help_entrypoints_share_the_screen(entrypoint: str, query: str | None) -> None:
+    bot = commands.Bot(command_prefix="!", intents=discord.Intents.none())
+    cast(Any, bot).source_code_url = None
+    runtime = sd.install(bot)
+    cog = HelpCog(cast(Any, bot))
+
+    class Builds(sd.Cog[commands.Bot]):
+        @commands.group(aliases=["b"])
+        async def build(self, ctx: commands.Context) -> None:
+            """Work with builds."""
+
+        @build.command()
+        async def show(self, ctx: commands.Context) -> None:
+            """Show a build."""
+
+    builds = Builds(bot)
+    await bot.add_cog(builds)
+    await bot.add_cog(cog)
+    try:
+        if entrypoint == "slash":
+            interaction = InteractionHarness(client=bot)
+            await cast(Any, cog.help).callback(cog, interaction.source, query)
+        else:
+            context = ContextHarness(bot=bot)
+            context.command = builds.build if entrypoint == "internal" else bot.get_command("help")
+            if entrypoint == "internal":
+                await commands.Context.send_help(context.source, *(() if query is None else (query,)))
+            else:
+                assert bot.help_command is not None
+                help_command = bot.help_command.copy()
+                help_command.context = context.source
+                await help_command.command_callback(context.source, command=query)
+            context.send.assert_awaited_once()
+
+        (session,) = runtime.sessions.active()
+        (root,) = session.message_roots
+        screen = root.component
+        assert isinstance(screen, HelpScreen)
+        assert screen.owner is (builds if entrypoint == "internal" else cog)
+        if query is None:
+            window = await screen._browser.source.fetch(sl.sources.ORIGIN, 100)
+            assert {item.qualified_name for item in window.items} == {"build", "help"}
+        else:
+            assert f"/{query}" in texts(screen.render())
+    finally:
+        await runtime.close()
+        await bot.close()
