@@ -50,8 +50,10 @@ renders. It composes with `all_of` and `any_of` like any other guard.
 
 ## Mounting Tabs and Wizard
 
-`Tabs` and `Wizard` are components. Construct a tab component once and place it with
-`self.boundary(tabs, key="tabs")`.
+`Tabs` and `Wizard` are components. Construct and retain them once, then return them
+directly or include them in a layout container, for example `sl.stack(self.tabs)`.
+Child components in tab content retain their own instance namespaces; moving them between
+tabs does not assign a new namespace based on the tab or their position.
 Pass `on_change` and optional `initial_state` to its constructor. Each instance owns its
 selection; `machine_state` is nonpersistent reactive state.
 

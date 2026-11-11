@@ -34,7 +34,6 @@ from squid_ui.semantic import (
 )
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentItem, render_content
 
 type FormValues = Mapping[str, object]
 """Values submitted by a heterogeneous form schema."""
@@ -126,7 +125,7 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
     def chrome(self) -> Chrome: ...
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+        self, content: Sequence[LayoutNode[RenderTargetT, ContextT]]
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]: ...
 
     def action_control(
@@ -262,10 +261,10 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
         self.chrome = chrome
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+        self, content: Sequence[LayoutNode[RenderTargetT, ContextT]]
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
-        """Embed child components under stable keys."""
-        return render_content(content, prefix=prefix)
+        """Pass layout children through for normal component expansion."""
+        return tuple(content)
 
     def action_control(
         self,
@@ -386,10 +385,9 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         self.chrome = chrome
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+        self, content: Sequence[LayoutNode[RenderTargetT, ContextT]]
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Return portable content and reject mounted child components."""
-        del prefix
         nodes: list[LayoutNode[RenderTargetT, ContextT]] = []
         for item in content:
             if isinstance(item, Component):

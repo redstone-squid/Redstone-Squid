@@ -30,7 +30,7 @@ from squid_ui.sources import (
 )
 from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
@@ -124,7 +124,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Resolve and normalize source-aware header or footer content."""
         value = hook(total) if callable(hook) else hook
-        return render_content(normalize_content(value, name=name), prefix=name)
+        return normalize_content(value, name=name)
 
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:

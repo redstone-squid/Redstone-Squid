@@ -832,15 +832,20 @@ so a subclass may assign after calling `super().__init__()`, and a class that ha
 implemented `render` yet is exempt — it is a base to build on, and its subclasses do the
 assigning.
 
-Children appear through explicit keyed boundaries:
+Retain child instances during setup or actions, then place them directly:
 
     def render(self):
         return sl.group(
-            self.embed(self.filters, key="filters"),
-            self.embed(self.results, key="results"),
+            self.filters,
+            self.results,
         )
 
-`sl.runtime.ComponentRuntime`, not `sd.MessageRoot`, owns rendering, keyed component identity, lifecycle,
+Each instance keeps its implicit namespace when reordered or temporarily hidden under
+that parent. Use `child.keyed("name")` only when a placement needs the same namespace across
+replacement instances, such as a persisted component path. A key never transfers state to
+a replacement instance. Ordinary tabs, editors, and confirmation dialogs need no explicit key.
+
+`sl.runtime.ComponentRuntime`, not `sd.MessageRoot`, owns rendering, component identity, lifecycle,
 invalidation, injected context, presentation state, and the bounded plan cache. Expansion
 scopes action keys and pager keys, detects cycles and duplicate instances, and gives the
 runtime deterministic `on_mount`/`on_unmount` ownership. Components have no message-root reference;

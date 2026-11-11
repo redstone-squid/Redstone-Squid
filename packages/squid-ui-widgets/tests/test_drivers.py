@@ -46,9 +46,7 @@ class Probe:
         state: sp.TabsState,
         controls: sp.MachineControls[sp.TabsState, sl.ComponentsV2Target],
     ) -> sl.DocumentLike[sl.ComponentsV2Target]:
-        content = controls.content(
-            [self.child] if self.child is not None else [sl.paragraph(state.selected)], prefix="body"
-        )
+        content = controls.content([self.child] if self.child is not None else [sl.paragraph(state.selected)])
         # Mounted forms are layout nodes; routed forms belong inside action controls.
         trigger = controls.form(_form(), "edit", key="probe.edit", label="Edit")
         return sl.stack(
@@ -176,7 +174,7 @@ class TestRoutePhases:
 
 
 class TestEmbeddedContent:
-    def test_the_component_shell_embeds_a_component_through_a_keyed_boundary(self) -> None:
+    def test_the_component_shell_embeds_a_component_directly(self) -> None:
         assert "embedded" in wt.mounted(Probe(embed=True)).texts()
 
     def test_the_routed_shell_refuses_a_component_and_says_what_to_do_instead(self) -> None:

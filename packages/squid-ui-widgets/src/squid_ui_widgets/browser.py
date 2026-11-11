@@ -40,7 +40,7 @@ from squid_ui.sources import (
 )
 from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
     LoadingCopy,
@@ -249,11 +249,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         """Render overview content, item selection, and navigation."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
-        extra = (
-            render_content(normalize_content(self.overview(loaded), name="Browser.overview"), prefix="overview")
-            if self.overview is not None
-            else ()
-        )
+        extra = normalize_content(self.overview(loaded), name="Browser.overview") if self.overview is not None else ()
         if items:
             listing = (
                 bullets(
@@ -269,7 +265,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
                 maximum=1,
             )
         else:
-            listing = render_content(self.empty, prefix="empty")
+            listing = self.empty
             picker = None
         return stack(
             heading(self.title) if self.title is not None else None,
@@ -324,14 +320,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))
         detail_value = self._detail_value
         assert detail_value is not None
-        detail = (
-            (detail_value.keyed(f"detail-{self.identity(item)}"),)
-            if isinstance(detail_value, Component)
-            else render_content(
-                normalize_content(detail_value, name="Browser.detail"),
-                prefix=f"detail-{self.identity(item)}",
-            )
-        )
+        detail = normalize_content(detail_value, name="Browser.detail")
         entry_actions = tuple(self.entry_actions(item)) if self.entry_actions is not None else ()
         return stack(
             heading(self.title) if self.title is not None else None,

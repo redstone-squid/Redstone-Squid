@@ -4,16 +4,12 @@ import re
 from collections.abc import Iterable, Mapping
 
 from squid_ui.factories import is_layout_node, paragraph
-from squid_ui.runtime.component import Component
 from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, ResolvedText, TextLike, source_text
 
-type ContentItem[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
-    LayoutNode[RenderTargetT, ContextT] | Component[RenderTargetT, ContextT]
-)
 type ContentLike[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
-    ContentItem[RenderTargetT, ContextT] | TextLike | Iterable[ContentItem[RenderTargetT, ContextT] | TextLike]
+    LayoutNode[RenderTargetT, ContextT] | TextLike | Iterable[LayoutNode[RenderTargetT, ContextT] | TextLike]
 )
 """Text, layout nodes, components, or a flat iterable of them.
 
@@ -24,13 +20,11 @@ V2-only as well, so embedding it cannot silently erase that restriction.
 
 def normalize_content[RenderTargetT: RenderTarget, ContextT = object](
     value: ContentLike[RenderTargetT, ContextT], *, name: str
-) -> tuple[ContentItem[RenderTargetT, ContextT], ...]:
+) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
     """Normalize text, nodes, components, or a flat iterable into a tuple.
 
     Iterables are consumed immediately. Mappings and nested iterables are rejected.
     """
-    if isinstance(value, Component):
-        return (value,)
     if isinstance(value, str | ResolvedText | Message):
         return (paragraph(value),)
     if is_layout_node(value):
@@ -45,26 +39,15 @@ def normalize_content[RenderTargetT: RenderTarget, ContextT = object](
 
 
 def _normalize_item[RenderTargetT: RenderTarget, ContextT = object](
-    value: ContentItem[RenderTargetT, ContextT] | TextLike, *, name: str
-) -> ContentItem[RenderTargetT, ContextT]:
+    value: LayoutNode[RenderTargetT, ContextT] | TextLike, *, name: str
+) -> LayoutNode[RenderTargetT, ContextT]:
     """Normalize one member of an iterable content slot."""
-    if isinstance(value, Component):
-        return value
     if isinstance(value, str | ResolvedText | Message):
         return paragraph(value)
     if is_layout_node(value):
         return value
     message = f"{name} is not a layout node, text value, or Component"
     raise TypeError(message)
-
-
-def render_content[RenderTargetT: RenderTarget, ContextT = object](
-    content: Iterable[ContentItem[RenderTargetT, ContextT]], *, prefix: str
-) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
-    """Embed component children under stable boundary keys and pass layout nodes through."""
-    return tuple(
-        item.keyed(f"{prefix}-{index}") if isinstance(item, Component) else item for index, item in enumerate(content)
-    )
 
 
 def require_key(value: str, *, name: str) -> str:

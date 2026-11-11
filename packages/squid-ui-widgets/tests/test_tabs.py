@@ -10,6 +10,7 @@ from squid_reactivity.transactions import (
     transaction,
 )
 from squid_ui import testing as engine
+from squid_ui.runtime import ComponentRuntime
 from squid_ui.semantic import Choices
 from squid_ui_widgets import testing as wt
 
@@ -131,3 +132,30 @@ async def test_callback_failure_rolls_back_selection_in_a_host_transaction() -> 
     with pytest.raises(ValueError, match="save failed"), transaction():
         await harness.press("tabs.two")
     assert tabs.machine_state == sp.TabsState("one")
+
+
+async def test_shared_child_keeps_its_namespace_when_tab_and_position_change() -> None:
+    child = Screen("shared")
+    tabs = sp.Tabs(
+        (
+            sp.Tab("first", "First", child),
+            sp.Tab("second", "Second", (sl.paragraph("Before"), child)),
+        ),
+        key="tabs",
+    )
+    runtime = ComponentRuntime(tabs)
+    before = runtime.render()
+    runtime.commit(before)
+    child_path = next(path for path, component in before.components.items() if component is child)
+
+    await wt.driving(tabs).press("tabs.second")
+    after = runtime.render(reuse_committed=True)
+    runtime.commit(after)
+
+    assert after.components[child_path] is child
+    assert "Before" in engine.texts(after.nodes)
+    assert "screen: shared" in engine.texts(after.nodes)
+
+    await wt.driving(tabs).press("tabs.first")
+    restored = runtime.render(reuse_committed=True)
+    assert restored.components[child_path] is child

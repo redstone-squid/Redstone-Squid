@@ -15,7 +15,7 @@ from squid_ui.runtime.component import Component
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike, tr
-from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +116,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](C
                 )
             )
         return stack(
-            *render_content(self.prompt, prefix=f"{self.key}.prompt"),
+            *self.prompt,
             bullets(*participant_rows, key=f"{self.key}.participants"),
             status(
                 chrome.approved_count(len(self.approved), self.required),

@@ -112,7 +112,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Resolve and normalize header or footer content."""
         value = hook(total) if callable(hook) else hook
-        return controls.content(normalize_content(value, name=name), prefix=name)
+        return controls.content(normalize_content(value, name=name))
 
     def render(
         self, state: RankedListState, controls: MachineControls[RankedListState, RenderTargetT, ContextT]
@@ -133,7 +133,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
             )
         page = position.index
         offset = page * (self.page_size or max(1, total))
-        body = (Lines(self.rows.lines(visible, offset)),) if visible else controls.content(self.empty, prefix="empty")
+        body = (Lines(self.rows.lines(visible, offset)),) if visible else controls.content(self.empty)
         pager = (
             action_controls(
                 controls.action_control(

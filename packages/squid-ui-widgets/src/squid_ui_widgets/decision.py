@@ -110,7 +110,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         options = self._options(controls)
         selected = next((option for option in options if option.key == state.decided), None)
         return stack(
-            *controls.content(self.prompt, prefix=f"{self.key}.prompt"),
+            *controls.content(self.prompt),
             action_controls(
                 *(
                     controls.action_control(

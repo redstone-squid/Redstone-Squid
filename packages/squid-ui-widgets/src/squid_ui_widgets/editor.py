@@ -23,7 +23,7 @@ from squid_ui.semantic import (
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._actions import MachineKeySegment, NestedAction, keyed_action, match_keyed_action
-from squid_ui_widgets._content import ContentItem, ContentLike, display_text, normalize_content, require_key
+from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import (
     ComponentDriver,
@@ -451,10 +451,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
 
         current_values = self.values(state)
         preview = (
-            controls.content(
-                normalize_content(self.preview(current_values), name="Editor.preview"),
-                prefix=f"{self.key}.preview",
-            )
+            controls.content(normalize_content(self.preview(current_values), name="Editor.preview"))
             if self.preview is not None
             else ()
         )
@@ -539,10 +536,10 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, Co
         return f"{self.editor_key}.{self.section_key}.{key}"
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+        self, content: Sequence[LayoutNode[RenderTargetT, ContextT]]
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
-        """Delegate child content through the namespaced prefix."""
-        return self.parent.content(content, prefix=self._key(prefix))
+        """Delegate content validation without changing child identity."""
+        return self.parent.content(content)
 
     def action_control(
         self,

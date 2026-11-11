@@ -5,10 +5,10 @@ from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.semantic import ControlDisplay
+from squid_ui.semantic import ControlDisplay, LayoutNode
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import FormValues, MachineControls
 
 
@@ -18,7 +18,7 @@ class Tab[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
 
     key: str
     label: TextLike
-    content: tuple[ContentItem[RenderTargetT, ContextT], ...]
+    content: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     def __init__(self, key: str, label: TextLike, content: ContentLike[RenderTargetT, ContextT]) -> None:
         require_key(key, name="Tab.key")
@@ -118,5 +118,5 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         return stack(
             heading(self.title) if self.title is not None else None,
             selector,
-            *controls.content(current.content, prefix=f"tab-{current.key}"),
+            *controls.content(current.content),
         )

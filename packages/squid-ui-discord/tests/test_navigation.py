@@ -4,7 +4,9 @@ from typing import override
 
 import squid_ui as sl
 from squid_ui import Component
+from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.primitives import Heading, Text
+from squid_ui.runtime import ComponentRuntime
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord import testing as sd
 from squid_ui_discord.navigation import StackNavigator
@@ -80,3 +82,22 @@ async def test_close_finishes_the_root():
     await message_root.dispatch("__nav_close", interaction_harness())
 
     assert message_root.finished
+
+
+async def test_same_screen_keeps_its_namespace_at_a_different_depth() -> None:
+    child = Screen("retained")
+    navigator = StackNavigator(child)
+    runtime = ComponentRuntime(navigator, context={CHROME_CONTEXT: DEFAULT_CHROME})
+    before = runtime.render()
+    runtime.commit(before)
+    child_path = next(path for path, component in before.components.items() if component is child)
+
+    navigator.push(Screen("middle"))
+    runtime.commit(runtime.render(reuse_committed=True))
+    navigator.push(child)
+    after = runtime.render(reuse_committed=True)
+    runtime.commit(after)
+
+    assert after.components[child_path] is child
+    navigator.home()
+    assert runtime.render(reuse_committed=True).components[child_path] is child

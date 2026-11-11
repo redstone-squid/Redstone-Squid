@@ -5,10 +5,10 @@ from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.semantic import ControlDisplay
+from squid_ui.semantic import ControlDisplay, LayoutNode
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, ResolvedText, TextLike
-from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key, slug
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key, slug
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
 
 
@@ -30,7 +30,7 @@ class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
 
     key: str
     label: TextLike
-    content: tuple[ContentItem[RenderTargetT, ContextT], ...]
+    content: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     entries: tuple[MenuEntry[RenderTargetT, ContextT], ...]
 
     def __init__(
@@ -207,7 +207,7 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         return stack(
             heading(self.title),
             heading(current.label, level=3) if current is not None else None,
-            *(controls.content(current.content, prefix="content") if current is not None else ()),
+            *(controls.content(current.content) if current is not None else ()),
             destinations,
             chrome,
         )

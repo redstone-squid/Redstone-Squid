@@ -10,7 +10,7 @@ from squid_ui.forms import Form, FormField, FormLike, FormSpec
 from squid_ui.semantic import ActionControl, ControlDisplay, FormTrigger, LayoutNode, RoutedActionControl, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import FormValues, MachineControls, TransitionEvent
 
 REVIEW_STEP = "@review"
@@ -59,13 +59,13 @@ class WizardStep[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     key: str
     label: TextLike
     form: FormSpec | None
-    content: tuple[ContentItem[RenderTargetT, ContextT], ...]
+    content: tuple[LayoutNode[RenderTargetT, ContextT], ...]
 
     def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike[RenderTargetT, ContextT]) -> None:
         require_key(key, name="WizardStep.key")
         if isinstance(body, Form):
             form_spec: FormSpec | None = body.spec()
-            content: tuple[ContentItem[RenderTargetT, ContextT], ...] = ()
+            content: tuple[LayoutNode[RenderTargetT, ContextT], ...] = ()
         elif isinstance(body, FormSpec):
             form_spec = body
             content = ()
@@ -276,8 +276,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         steps = tuple(step for step in live if step.form is not None)
         if review.summarize is not None:
             body: tuple[LayoutNode[RenderTargetT, ContextT], ...] = controls.content(
-                normalize_content(review.summarize(self.live_answers(state)), name=f"Wizard {self.key!r} review"),
-                prefix=f"{self.key}-review",
+                normalize_content(review.summarize(self.live_answers(state)), name=f"Wizard {self.key!r} review")
             )
         else:
             body = (
@@ -364,7 +363,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             heading(self.title),
             progress(index + 1, maximum=len(live), label=f"Step {index + 1} of {len(live)}"),
             heading(current.label, level=3),
-            *controls.content(current.content, prefix=f"step-{current.key}"),
+            *controls.content(current.content),
             primary if isinstance(primary, FormTrigger) else None,
             action_controls(
                 controls.action_control(
