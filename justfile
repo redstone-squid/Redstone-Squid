@@ -133,9 +133,6 @@ fuzz-cursor seconds="20":
 fuzz-search-parser seconds="20":
     uv run --locked --group fuzz python -m scripts.run_fuzz_target target=search_parser seconds={{seconds}}
 
-backdate start_commit:
-    git backdate --no-business-hours {{start_commit}}..
-
 i18n-extract:
     uv run pybabel extract -F babel.cfg -o locales/squid.pot --sort-output --project=redstone-squid --version=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])") --msgid-bugs-address=https://github.com/redstone-squid/Redstone-Squid/issues .
 
