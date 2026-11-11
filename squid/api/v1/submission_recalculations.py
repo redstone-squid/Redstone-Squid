@@ -1,4 +1,8 @@
-"""Retained recalculation proposals and explicit build revision approval."""
+"""HTTP access to recalculation proposals: inferred changes to an existing build, held for review.
+
+The routes live under `/submissions/revisions` and their operation IDs say `submission_revision_*`
+because clients already call them by those names. They serve the same recalculation proposals.
+"""
 
 from typing import Annotated
 from uuid import UUID
@@ -10,17 +14,17 @@ from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services
 from squid.api.idempotency import reserve_idempotent_request
 from squid.core.errors import JSONValue
-from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
-from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.application.recalculation import RecalculationProposalService
+from squid.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
 
 
-class RevisionProposalResponse(BaseModel):
+class RecalculationProposalResponse(BaseModel):
     """A private candidate, its retained diff, and any committed approval receipt."""
 
     id: UUID
     run_id: UUID
     source_message_id: int
-    facts: RevisionFacts
+    facts: RecalculationFacts
     build_id: int | None
     expected_revision: int | None
     before: dict[str, JSONValue]
@@ -29,7 +33,7 @@ class RevisionProposalResponse(BaseModel):
     applied_revision: int | None
 
     @classmethod
-    def from_domain(cls, proposal: RevisionProposal) -> RevisionProposalResponse:
+    def from_domain(cls, proposal: RecalculationProposal) -> RecalculationProposalResponse:
         return cls(
             id=proposal.id,
             run_id=proposal.run_id,
@@ -44,18 +48,18 @@ class RevisionProposalResponse(BaseModel):
         )
 
 
-class RevisionMatchRequest(BaseModel):
+class RecalculationMatchRequest(BaseModel):
     """Choose a source-linked build; renewing review retains the old proposal."""
 
     build_id: int = Field(gt=0)
     renew: bool = False
 
 
-def revisions(services: Services) -> RevisionProposalService:
-    return services.submission_revisions
+def recalculation_proposals(services: Services) -> RecalculationProposalService:
+    return services.submission_recalculations
 
 
-Proposals = Annotated[RevisionProposalService, Depends(revisions)]
+Proposals = Annotated[RecalculationProposalService, Depends(recalculation_proposals)]
 router = APIRouter(
     prefix="/submissions/revisions", tags=["submissions"], dependencies=[Depends(reserve_idempotent_request)]
 )
@@ -64,41 +68,43 @@ _WRITE = contract(security=[WEB_WRITE, DEVICE], cli=transport_only())
 
 
 @router.get("/source/{message_id}", operation_id="submission_revision_history", openapi_extra=_READ)
-async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) -> list[RevisionProposalResponse]:
-    """List revision proposals for a source message after checking the caller's access."""
+async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) -> list[RecalculationProposalResponse]:
+    """List recalculation proposals for a source message after checking the caller's access."""
     caller.require_consented_account()
     return [
-        RevisionProposalResponse.from_domain(item)
+        RecalculationProposalResponse.from_domain(item)
         for item in await proposals.list_for_source(message_id, caller.to_actor())
     ]
 
 
 @router.get("/{proposal_id}", operation_id="submission_revision_get", openapi_extra=_READ)
-async def get_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RevisionProposalResponse:
-    """Return a revision proposal after checking the caller's access."""
+async def get_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RecalculationProposalResponse:
+    """Return a recalculation proposal after checking the caller's access."""
     caller.require_consented_account()
-    return RevisionProposalResponse.from_domain(await proposals.get(proposal_id, caller.to_actor()))
+    return RecalculationProposalResponse.from_domain(await proposals.get(proposal_id, caller.to_actor()))
 
 
 @router.post("/{proposal_id}/match", operation_id="submission_revision_match", openapi_extra=_WRITE)
 async def match_proposal(
-    proposal_id: UUID, payload: RevisionMatchRequest, caller: CurrentCaller, proposals: Proposals
-) -> RevisionProposalResponse:
+    proposal_id: UUID, payload: RecalculationMatchRequest, caller: CurrentCaller, proposals: Proposals
+) -> RecalculationProposalResponse:
     """Match a proposal to a source-linked build and capture the diff for review.
 
     With renew set, create a new proposal and retain the previous review.
     """
     caller.require_consented_account()
-    return RevisionProposalResponse.from_domain(
+    return RecalculationProposalResponse.from_domain(
         await proposals.match(proposal_id, payload.build_id, caller.to_actor(), renew=payload.renew)
     )
 
 
 @router.post("/{proposal_id}/approve", operation_id="submission_revision_approve", openapi_extra=_WRITE)
-async def approve_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RevisionProposalResponse:
+async def approve_proposal(
+    proposal_id: UUID, caller: CurrentCaller, proposals: Proposals
+) -> RecalculationProposalResponse:
     """Apply the reviewed diff if the build still matches its expected revision.
 
     An already applied proposal returns its existing approval result.
     """
     caller.require_consented_account()
-    return RevisionProposalResponse.from_domain(await proposals.approve(proposal_id, caller.to_actor()))
+    return RecalculationProposalResponse.from_domain(await proposals.approve(proposal_id, caller.to_actor()))

@@ -2588,6 +2588,148 @@ export type PublicIdentityDetail = {
 };
 
 /**
+ * RecalculationFacts
+ *
+ * Retained inferred facts, before a reviewer chooses a target build.
+ */
+export type RecalculationFacts = {
+    category?: BuildCategory | null;
+    /**
+     * Version Spec
+     */
+    version_spec?: string | null;
+    /**
+     * Width
+     */
+    width?: number | null;
+    /**
+     * Height
+     */
+    height?: number | null;
+    /**
+     * Depth
+     */
+    depth?: number | null;
+    /**
+     * Door Width
+     */
+    door_width?: number | null;
+    /**
+     * Door Height
+     */
+    door_height?: number | null;
+    /**
+     * Door Depth
+     */
+    door_depth?: number | null;
+    /**
+     * Door Orientation
+     */
+    door_orientation?: string | null;
+    /**
+     * Normal Opening Time
+     */
+    normal_opening_time?: number | null;
+    /**
+     * Normal Closing Time
+     */
+    normal_closing_time?: number | null;
+    /**
+     * Patterns
+     */
+    patterns?: Array<string>;
+    /**
+     * Creators Ign
+     */
+    creators_ign?: Array<string>;
+    /**
+     * Wiring Placement Restrictions
+     */
+    wiring_placement_restrictions?: Array<string>;
+    /**
+     * Animated Restrictions
+     */
+    animated_restrictions?: Array<string>;
+    /**
+     * Component Restrictions
+     */
+    component_restrictions?: Array<string>;
+    /**
+     * Miscellaneous Restrictions
+     */
+    miscellaneous_restrictions?: Array<string>;
+    /**
+     * Description
+     */
+    description?: string | null;
+};
+
+/**
+ * RecalculationMatchRequest
+ *
+ * Choose a source-linked build; renewing review retains the old proposal.
+ */
+export type RecalculationMatchRequest = {
+    /**
+     * Build Id
+     */
+    build_id: number;
+    /**
+     * Renew
+     */
+    renew?: boolean;
+};
+
+/**
+ * RecalculationProposalResponse
+ *
+ * A private candidate, its retained diff, and any committed approval receipt.
+ */
+export type RecalculationProposalResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Run Id
+     */
+    run_id: string;
+    /**
+     * Source Message Id
+     */
+    source_message_id: number;
+    facts: RecalculationFacts;
+    /**
+     * Build Id
+     */
+    build_id: number | null;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number | null;
+    /**
+     * Before
+     */
+    before: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * After
+     */
+    after: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Applied Revision
+     */
+    applied_revision: number | null;
+};
+
+/**
  * RecordDetail
  *
  * One published record result with its ordered holder builds.
@@ -2802,148 +2944,6 @@ export type RendererCapabilities = {
 };
 
 export type RendererControl = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
-
-/**
- * RevisionFacts
- *
- * Retained inferred facts, before a reviewer chooses a target build.
- */
-export type RevisionFacts = {
-    category?: BuildCategory | null;
-    /**
-     * Version Spec
-     */
-    version_spec?: string | null;
-    /**
-     * Width
-     */
-    width?: number | null;
-    /**
-     * Height
-     */
-    height?: number | null;
-    /**
-     * Depth
-     */
-    depth?: number | null;
-    /**
-     * Door Width
-     */
-    door_width?: number | null;
-    /**
-     * Door Height
-     */
-    door_height?: number | null;
-    /**
-     * Door Depth
-     */
-    door_depth?: number | null;
-    /**
-     * Door Orientation
-     */
-    door_orientation?: string | null;
-    /**
-     * Normal Opening Time
-     */
-    normal_opening_time?: number | null;
-    /**
-     * Normal Closing Time
-     */
-    normal_closing_time?: number | null;
-    /**
-     * Patterns
-     */
-    patterns?: Array<string>;
-    /**
-     * Creators Ign
-     */
-    creators_ign?: Array<string>;
-    /**
-     * Wiring Placement Restrictions
-     */
-    wiring_placement_restrictions?: Array<string>;
-    /**
-     * Animated Restrictions
-     */
-    animated_restrictions?: Array<string>;
-    /**
-     * Component Restrictions
-     */
-    component_restrictions?: Array<string>;
-    /**
-     * Miscellaneous Restrictions
-     */
-    miscellaneous_restrictions?: Array<string>;
-    /**
-     * Description
-     */
-    description?: string | null;
-};
-
-/**
- * RevisionMatchRequest
- *
- * Choose a source-linked build; renewing review retains the old proposal.
- */
-export type RevisionMatchRequest = {
-    /**
-     * Build Id
-     */
-    build_id: number;
-    /**
-     * Renew
-     */
-    renew?: boolean;
-};
-
-/**
- * RevisionProposalResponse
- *
- * A private candidate, its retained diff, and any committed approval receipt.
- */
-export type RevisionProposalResponse = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Run Id
-     */
-    run_id: string;
-    /**
-     * Source Message Id
-     */
-    source_message_id: number;
-    facts: RevisionFacts;
-    /**
-     * Build Id
-     */
-    build_id: number | null;
-    /**
-     * Expected Revision
-     */
-    expected_revision: number | null;
-    /**
-     * Before
-     */
-    before: {
-        [key: string]: JsonValue;
-    };
-    /**
-     * After
-     */
-    after: {
-        [key: string]: JsonValue;
-    };
-    /**
-     * Expires At
-     */
-    expires_at: string;
-    /**
-     * Applied Revision
-     */
-    applied_revision: number | null;
-};
 
 /**
  * RuntimeSettingsDetail
@@ -8927,7 +8927,7 @@ export type SubmissionRevisionHistoryResponses = {
      *
      * Successful Response
      */
-    200: Array<RevisionProposalResponse>;
+    200: Array<RecalculationProposalResponse>;
 };
 
 export type SubmissionRevisionHistoryResponse = SubmissionRevisionHistoryResponses[keyof SubmissionRevisionHistoryResponses];
@@ -8969,13 +8969,13 @@ export type SubmissionRevisionGetResponses = {
     /**
      * Successful Response
      */
-    200: RevisionProposalResponse;
+    200: RecalculationProposalResponse;
 };
 
 export type SubmissionRevisionGetResponse = SubmissionRevisionGetResponses[keyof SubmissionRevisionGetResponses];
 
 export type SubmissionRevisionMatchData = {
-    body: RevisionMatchRequest;
+    body: RecalculationMatchRequest;
     headers?: {
         /**
          * Idempotency-Key
@@ -9011,7 +9011,7 @@ export type SubmissionRevisionMatchResponses = {
     /**
      * Successful Response
      */
-    200: RevisionProposalResponse;
+    200: RecalculationProposalResponse;
 };
 
 export type SubmissionRevisionMatchResponse = SubmissionRevisionMatchResponses[keyof SubmissionRevisionMatchResponses];
@@ -9053,7 +9053,7 @@ export type SubmissionRevisionApproveResponses = {
     /**
      * Successful Response
      */
-    200: RevisionProposalResponse;
+    200: RecalculationProposalResponse;
 };
 
 export type SubmissionRevisionApproveResponse = SubmissionRevisionApproveResponses[keyof SubmissionRevisionApproveResponses];

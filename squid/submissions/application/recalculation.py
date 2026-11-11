@@ -16,22 +16,26 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
-from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal, revision_values
+from squid.submissions.application.recalculation_values import (
+    RecalculationFacts,
+    RecalculationProposal,
+    recalculation_values,
+)
 from squid.unit_of_work import UnitOfWorkFactory
 
 
-class RevisionProposalRepository(Protocol):
+class RecalculationProposalRepository(Protocol):
     """Retain candidates and atomically commit their approved build revision."""
 
-    async def create(self, proposal: RevisionProposal) -> RevisionProposal: ...
-    async def get(self, proposal_id: UUID) -> RevisionProposal | None: ...
-    async def list_for_source(self, source_message_id: int, *, limit: int) -> tuple[RevisionProposal, ...]: ...
-    async def match(self, proposal: RevisionProposal) -> RevisionProposal: ...
-    async def get_for_update(self, proposal_id: UUID) -> RevisionProposal | None: ...
-    async def mark_approved(self, proposal_id: UUID, *, account_id: int, revision: int) -> RevisionProposal: ...
+    async def create(self, proposal: RecalculationProposal) -> RecalculationProposal: ...
+    async def get(self, proposal_id: UUID) -> RecalculationProposal | None: ...
+    async def list_for_source(self, source_message_id: int, *, limit: int) -> tuple[RecalculationProposal, ...]: ...
+    async def match(self, proposal: RecalculationProposal) -> RecalculationProposal: ...
+    async def get_for_update(self, proposal_id: UUID) -> RecalculationProposal | None: ...
+    async def mark_approved(self, proposal_id: UUID, *, account_id: int, revision: int) -> RecalculationProposal: ...
 
 
-class RevisionProposalService:
+class RecalculationProposalService:
     """Review new inference results as proposed edits to an existing build.
 
     First retain the inferred candidate, then match it to a build from the same
@@ -61,20 +65,20 @@ class RevisionProposalService:
         actor: Actor,
         source_message_id: int,
         candidate: BuildDraft,
-    ) -> RevisionProposal:
+    ) -> RecalculationProposal:
         """Retain one stable candidate; inference alone never writes the target build."""
         async with self._uow_factory() as uow:
             if actor.account_id is None or not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_RECALC):
                 raise AuthorizationError
             now = Instant.now()
-            result = await uow.revision_proposals.create(
-                RevisionProposal(
+            result = await uow.recalculation_proposals.create(
+                RecalculationProposal(
                     uuid5(run_id, str(index)),
                     run_id,
                     owner_account_id,
                     actor.account_id,
                     source_message_id,
-                    RevisionFacts.from_draft(candidate),
+                    RecalculationFacts.from_draft(candidate),
                     None,
                     None,
                     {},
@@ -86,24 +90,24 @@ class RevisionProposalService:
             await uow.commit()
             return result
 
-    async def get(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
+    async def get(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
         """Read a retained proposal under current owner or staff authority."""
         async with self._uow_factory() as uow:
-            proposal = await uow.revision_proposals.get(proposal_id)
+            proposal = await uow.recalculation_proposals.get(proposal_id)
             if proposal is None:
                 raise NotFoundError
             await self._require_read_access(uow, (proposal,), actor)
             return proposal
 
-    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RevisionProposal, ...]:
+    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RecalculationProposal, ...]:
         """Return a bounded history with the same visibility policy as individual reads."""
         async with self._uow_factory() as uow:
-            rows = await uow.revision_proposals.list_for_source(source_message_id, limit=20)
+            rows = await uow.recalculation_proposals.list_for_source(source_message_id, limit=20)
             await self._require_read_access(uow, rows, actor)
             return rows
 
     async def _require_read_access(
-        self, uow: RevisionUnitOfWork, proposals: Sequence[RevisionProposal], actor: Actor
+        self, uow: RevisionUnitOfWork, proposals: Sequence[RecalculationProposal], actor: Actor
     ) -> None:
         if any(
             actor.account_id not in {proposal.owner_account_id, proposal.requested_by_account_id}
@@ -111,7 +115,9 @@ class RevisionProposalService:
         ) and not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT):
             raise AuthorizationError
 
-    async def match(self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False) -> RevisionProposal:
+    async def match(
+        self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False
+    ) -> RecalculationProposal:
         """Capture a fresh diff; renewed review creates a new immutable proposal identity."""
         proposal = await self.get(proposal_id, actor)
         self._require_pending(proposal)
@@ -124,23 +130,27 @@ class RevisionProposalService:
         if build_id not in await self._builds.list_ids_for_source_message(proposal.source_message_id):
             message = "Choose a build linked to this source message."
             raise ValidationError(message)
-        before = revision_values(build)
+        before = recalculation_values(build)
         await self._builds.prepare_edit(BuildEditor(actor), build, proposal.facts.patch(build))
         matched = replace(
-            proposal, build_id=build_id, expected_revision=build.revision, before=before, after=revision_values(build)
+            proposal,
+            build_id=build_id,
+            expected_revision=build.revision,
+            before=before,
+            after=recalculation_values(build),
         )
         async with self._uow_factory() as uow:
             await self._require_read_access(uow, (proposal,), actor)
             await self._builds.authorize_edit_in(uow, BuildEditor(actor), build)
             if renew:
                 matched = replace(matched, id=uuid4(), approved_by_account_id=None, applied_revision=None)
-                result = await uow.revision_proposals.create(matched)
+                result = await uow.recalculation_proposals.create(matched)
             else:
-                result = await uow.revision_proposals.match(matched)
+                result = await uow.recalculation_proposals.match(matched)
             await uow.commit()
             return result
 
-    async def approve(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
+    async def approve(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
         """Apply the reviewed changes after rechecking access and the build revision.
 
         An already applied proposal returns its receipt. A changed build or newly
@@ -168,12 +178,14 @@ class RevisionProposalService:
         prepared = await self._builds.prepare_edit(
             BuildEditor(actor), build.copy_for_edit(), proposal.facts.patch(build)
         )
-        if revision_values(prepared) != proposal.after:
+        if recalculation_values(prepared) != proposal.after:
             message = "Resolved build facts changed since review; renew the proposal before approving. "
             raise ConflictError(message)
         return await self._approve_prepared(proposal, prepared, BuildEditor(actor))
 
-    async def _approve_prepared(self, proposal: RevisionProposal, build: Build, actor: BuildEditor) -> RevisionProposal:
+    async def _approve_prepared(
+        self, proposal: RecalculationProposal, build: Build, actor: BuildEditor
+    ) -> RecalculationProposal:
         if actor.subject.account_id is None:
             raise AuthorizationError
         async with (
@@ -181,6 +193,7 @@ class RevisionProposalService:
             uow.builds.editing(
                 actor=actor.subject.account_id,
                 operation="recalculation",
+                # Build history stores these values, so they keep the proposal's original name.
                 source="revision_proposal",
                 correlation_kind="revision_proposal",
                 correlation_id=str(proposal.id),
@@ -190,7 +203,7 @@ class RevisionProposalService:
             current = await uow.builds.get_for_update(proposal.build_id or 0)
             if current is None:
                 raise BuildNotFoundError(proposal.build_id or 0)
-            retained = await uow.revision_proposals.get_for_update(proposal.id)
+            retained = await uow.recalculation_proposals.get_for_update(proposal.id)
             if retained is None:
                 raise NotFoundError
             await self._require_read_access(uow, (retained,), actor.subject)
@@ -219,14 +232,14 @@ class RevisionProposalService:
             await uow.builds.save(
                 build,
             )
-            result = await uow.revision_proposals.mark_approved(
+            result = await uow.recalculation_proposals.mark_approved(
                 proposal.id, account_id=actor.subject.account_id, revision=build.revision
             )
             await uow.commit()
             return result
 
     @staticmethod
-    def _require_pending(proposal: RevisionProposal) -> None:
+    def _require_pending(proposal: RecalculationProposal) -> None:
         if proposal.expires_at <= Instant.now() or proposal.applied_revision is not None:
             message = "This proposal is no longer pending review."
             raise ConflictError(message)
@@ -234,4 +247,4 @@ class RevisionProposalService:
 
 class RevisionUnitOfWork(BuildUnitOfWork, Protocol):
     @property
-    def revision_proposals(self) -> RevisionProposalRepository: ...
+    def recalculation_proposals(self) -> RecalculationProposalRepository: ...

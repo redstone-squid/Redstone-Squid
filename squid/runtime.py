@@ -66,7 +66,7 @@ from squid.submissions.application import (
 from squid.submissions.application.attachment_uploads import DraftAttachmentUploads
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
-from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.application.recalculation import RecalculationProposalService
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.suggestions.application import SuggestionService
 from squid.sync import DiscordReconciliationService
@@ -108,7 +108,7 @@ class ApiServices:
     submission_drafts: SubmissionDraftService
     submission_finalization: SubmissionFinalizationService
     submission_schematics: DraftSchematicService
-    submission_revisions: RevisionProposalService
+    submission_recalculations: RecalculationProposalService
     submission_intake: SubmissionAttachmentIntake
     submission_inference: SubmissionInferenceRuns
     suggestions: SuggestionService
@@ -132,7 +132,7 @@ class BotServices:
     submission_drafts: SubmissionDraftService
     submission_finalization: SubmissionFinalizationService
     submission_schematics: DraftSchematicService
-    submission_revisions: RevisionProposalService
+    submission_recalculations: RecalculationProposalService
     submission_uploads: DraftAttachmentUploads
     submission_intake: SubmissionAttachmentIntake
     submission_inference: SubmissionInferenceRuns

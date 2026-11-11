@@ -91,8 +91,8 @@ from squid.submissions.application.finalization import (
 )
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
-from squid.submissions.application.revision_values import RevisionProposal
-from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.application.recalculation import RecalculationProposalService
+from squid.submissions.application.recalculation_values import RecalculationProposal
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.domain.schematics import DraftSchematic
 from squid.submissions.errors import DraftNotFoundError
@@ -736,26 +736,28 @@ class MockSubmissionSchematics(DraftSchematicService):
         raise DraftNotFoundError(destination_id)
 
 
-class MockSubmissionRevisions(RevisionProposalService):
+class MockSubmissionRevisions(RecalculationProposalService):
     """Retains no proposals, so listings are empty and every proposal id is unknown."""
 
     def __init__(self) -> None:
         """Hold no repository; nothing here reaches one."""
 
     @override
-    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RevisionProposal, ...]:
+    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RecalculationProposal, ...]:
         return ()
 
     @override
-    async def get(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
+    async def get(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
         raise NotFoundError
 
     @override
-    async def match(self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False) -> RevisionProposal:
+    async def match(
+        self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False
+    ) -> RecalculationProposal:
         raise NotFoundError
 
     @override
-    async def approve(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
+    async def approve(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
         raise NotFoundError
 
 
@@ -854,7 +856,7 @@ def build_services(
         submission_drafts=MockSubmissionDrafts(),
         submission_finalization=MockSubmissionFinalization(),
         submission_schematics=MockSubmissionSchematics(),
-        submission_revisions=MockSubmissionRevisions(),
+        submission_recalculations=MockSubmissionRevisions(),
         submission_intake=MockSubmissionIntake(),
         submission_inference=MockSubmissionInference(),
         media_jobs=MockMediaJobs(),

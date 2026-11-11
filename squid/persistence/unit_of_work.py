@@ -46,8 +46,8 @@ from squid.submissions.infrastructure.attachment_edits import PostgresAttachment
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
+from squid.submissions.infrastructure.recalculation import PostgresRecalculationProposals
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
-from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
 from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
@@ -90,7 +90,7 @@ class SqlAlchemyUnitOfWork:
         self._build_locks = PostgresBuildLockRepository(self._active_session)
         self._submission_drafts = PostgresDraftRepository(self._active_session)
         self._finalization_jobs = PostgresFinalizationJobRepository(self._active_session)
-        self._revision_proposals = PostgresRevisionProposals(self._active_session)
+        self._recalculation_proposals = PostgresRecalculationProposals(self._active_session)
         self._attachment_edits = PostgresAttachmentEdits(self._active_session)
         self._attachment_intake = PostgresAttachmentIntake(self._active_session)
         self._draft_schematics = PostgresDraftSchematics(self._active_session)
@@ -266,9 +266,9 @@ class SqlAlchemyUnitOfWork:
         return self._finalization_jobs
 
     @property
-    def revision_proposals(self) -> PostgresRevisionProposals:
+    def recalculation_proposals(self) -> PostgresRecalculationProposals:
         self._active_session()
-        return self._revision_proposals
+        return self._recalculation_proposals
 
     @property
     def attachment_edits(self) -> PostgresAttachmentEdits:

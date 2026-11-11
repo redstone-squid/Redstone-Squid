@@ -1719,7 +1719,7 @@ export const submissionSchematicAttach = <ThrowOnError extends boolean = false>(
 /**
  * History
  *
- * List revision proposals for a source message after checking the caller's access.
+ * List recalculation proposals for a source message after checking the caller's access.
  */
 export const submissionRevisionHistory = <ThrowOnError extends boolean = false>(options: Options<SubmissionRevisionHistoryData, ThrowOnError>): RequestResult<SubmissionRevisionHistoryResponses, SubmissionRevisionHistoryErrors, ThrowOnError> => (options.client ?? client).get<SubmissionRevisionHistoryResponses, SubmissionRevisionHistoryErrors, ThrowOnError>({
     security: [{
@@ -1738,7 +1738,7 @@ export const submissionRevisionHistory = <ThrowOnError extends boolean = false>(
 /**
  * Get Proposal
  *
- * Return a revision proposal after checking the caller's access.
+ * Return a recalculation proposal after checking the caller's access.
  */
 export const submissionRevisionGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionRevisionGetData, ThrowOnError>): RequestResult<SubmissionRevisionGetResponses, SubmissionRevisionGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionRevisionGetResponses, SubmissionRevisionGetErrors, ThrowOnError>({
     security: [{

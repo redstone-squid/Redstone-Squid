@@ -24,8 +24,8 @@ from squid.permissions.domain import Decision, PermissionNode, Reason
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
-from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
-from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.application.recalculation import RecalculationProposalService
+from squid.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui_discord.testing import (
     AsyncCallRecorder,
@@ -253,8 +253,8 @@ class RetainedInference(SubmissionInferenceRuns):
         )
 
 
-class Proposals(RevisionProposalService):
-    def __init__(self, proposal: RevisionProposal) -> None:
+class Proposals(RecalculationProposalService):
+    def __init__(self, proposal: RecalculationProposal) -> None:
         self.create_calls: AsyncCallRecorder = AsyncCallRecorder(result=proposal)
 
     async def create(
@@ -266,7 +266,7 @@ class Proposals(RevisionProposalService):
         actor: Actor,
         source_message_id: int,
         candidate: BuildDraft,
-    ) -> RevisionProposal:
+    ) -> RecalculationProposal:
         return await self.create_calls(
             run_id=run_id,
             index=index,
@@ -282,12 +282,12 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
     run_id = uuid4()
     inference = RetainedInference(InferenceCandidate(uuid4(), run_id, 1, candidate))
     now = Instant.now()
-    proposal = RevisionProposal(
-        uuid4(), run_id, 1, 7, 123, RevisionFacts.from_draft(candidate), None, None, {}, {}, now, now.add(hours=1)
+    proposal = RecalculationProposal(
+        uuid4(), run_id, 1, 7, 123, RecalculationFacts.from_draft(candidate), None, None, {}, {}, now, now.add(hours=1)
     )
     proposals = Proposals(proposal)
     cog = _cog()
-    cog.bot.services = bot_services(submission_inference=inference, submission_revisions=proposals)
+    cog.bot.services = bot_services(submission_inference=inference, submission_recalculations=proposals)
     cog.bot.inference_model = "test-model"
     cog.bot.inference_reasoning_effort = None
     monkeypatch.setattr("squid.bot.submission.submit.assemble_bundle", AsyncCallRecorder(result="retained-input"))

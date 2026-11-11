@@ -22,9 +22,13 @@ from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.permissions.models import PermissionGrant
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal, revision_values
-from squid.submissions.application.revisions import RevisionProposalService
-from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
+from squid.submissions.application.recalculation import RecalculationProposalService
+from squid.submissions.application.recalculation_values import (
+    RecalculationFacts,
+    RecalculationProposal,
+    recalculation_values,
+)
+from squid.submissions.infrastructure.recalculation import PostgresRecalculationProposals
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
@@ -44,7 +48,7 @@ class EditPolicy(BuildService):
 
 async def prepared_proposal(
     sessions: async_sessionmaker[AsyncSession],
-) -> tuple[UnitOfWorkFactory[SqlAlchemyUnitOfWork], RevisionProposal, Build, BuildEditor, EditPolicy]:
+) -> tuple[UnitOfWorkFactory[SqlAlchemyUnitOfWork], RecalculationProposal, Build, BuildEditor, EditPolicy]:
     owner = await seed_account_and_version(sessions)
     builds = partial(SqlAlchemyUnitOfWork, sessions)
     build = submission_build(BuildCategory.DOOR, owner)
@@ -53,11 +57,11 @@ async def prepared_proposal(
         lambda uow: uow.builds.save(build),
         commit=True,
     )
-    before = revision_values(build)
-    facts = RevisionFacts(category=BuildCategory.DOOR, width=9)
+    before = recalculation_values(build)
+    facts = RecalculationFacts(category=BuildCategory.DOOR, width=9)
     facts.patch(build).apply(build)
     now = Instant.now()
-    proposal = RevisionProposal(
+    proposal = RecalculationProposal(
         uuid4(),
         uuid4(),
         owner,
@@ -67,13 +71,13 @@ async def prepared_proposal(
         build.id,
         build.revision,
         before,
-        revision_values(build),
+        recalculation_values(build),
         now,
         now.add(days=7, days_assumed_24h_ok=True),
     )
     policy = EditPolicy()
     repository = partial(SqlAlchemyUnitOfWork, sessions)
-    await transact(repository, lambda uow: uow.revision_proposals.create(proposal), commit=True)
+    await transact(repository, lambda uow: uow.recalculation_proposals.create(proposal), commit=True)
     return repository, proposal, build, BuildEditor(Actor(account_id=owner)), policy
 
 
@@ -111,7 +115,7 @@ async def test_stale_approval_retains_the_unapplied_proposal(
     )
     with pytest.raises(BuildRevisionMismatchError):
         await revision_service(repository, policy)._approve_prepared(proposal, build, actor)
-    retained = await transact(repository, lambda uow: uow.revision_proposals.get(proposal.id))
+    retained = await transact(repository, lambda uow: uow.recalculation_proposals.get(proposal.id))
     assert retained is not None
     assert retained.applied_revision is None
 
@@ -136,14 +140,14 @@ async def test_failed_receipt_rolls_back_the_build_edit(
 ) -> None:
     repository, proposal, build, actor, policy = await prepared_proposal(migrated_session_factory)
     # The receipt's account FK fails after the build write, exercising the enclosing transaction.
-    original = PostgresRevisionProposals.mark_approved
+    original = PostgresRecalculationProposals.mark_approved
 
     async def invalid_receipt(
-        self: PostgresRevisionProposals, proposal_id: UUID, *, account_id: int, revision: int
-    ) -> RevisionProposal:
+        self: PostgresRecalculationProposals, proposal_id: UUID, *, account_id: int, revision: int
+    ) -> RecalculationProposal:
         return await original(self, proposal_id, account_id=999999, revision=revision)
 
-    monkeypatch.setattr(PostgresRevisionProposals, "mark_approved", invalid_receipt)
+    monkeypatch.setattr(PostgresRecalculationProposals, "mark_approved", invalid_receipt)
 
     with pytest.raises(IntegrityError):
         await revision_service(repository, policy)._approve_prepared(proposal, build, actor)
@@ -152,7 +156,7 @@ async def test_failed_receipt_rolls_back_the_build_edit(
     )
     assert saved is not None
     assert saved.width == 3
-    retained = await transact(repository, lambda uow: uow.revision_proposals.get(proposal.id))
+    retained = await transact(repository, lambda uow: uow.recalculation_proposals.get(proposal.id))
     assert retained is not None
     assert retained.applied_revision is None
 
@@ -163,7 +167,7 @@ async def test_first_target_match_is_immutable(migrated_session_factory: async_s
     with pytest.raises(ConflictError):
         await transact(
             repository,
-            lambda uow: uow.revision_proposals.match(
+            lambda uow: uow.recalculation_proposals.match(
                 replace(proposal, expected_revision=(proposal.expected_revision or 0) + 1)
             ),
             commit=True,
@@ -185,7 +189,7 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
         [
             await transact(
                 repository,
-                lambda uow, index=index: uow.revision_proposals.create(
+                lambda uow, index=index: uow.recalculation_proposals.create(
                     replace(
                         original,
                         id=uuid4(),
@@ -204,7 +208,7 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
         "requester": Actor(account_id=requester.id),
         "staff": Actor(account_id=staff.id),
     }[role]
-    service = RevisionProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
+    service = RecalculationProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
 
     with record_queries(migrated_session_factory) as statements:
         history = await service.list_for_source(456, actor)
@@ -225,12 +229,12 @@ async def test_history_refuses_a_list_containing_another_accounts_proposal(
         await session.flush()
     foreign = await transact(
         repository,
-        lambda uow: uow.revision_proposals.create(
+        lambda uow: uow.recalculation_proposals.create(
             replace(proposal, id=uuid4(), owner_account_id=other.id, requested_by_account_id=other.id)
         ),
         commit=True,
     )
-    service = RevisionProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
+    service = RecalculationProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
 
     assert (await service.get(proposal.id, owner.subject)).id == proposal.id
     with pytest.raises(AuthorizationError):
@@ -240,5 +244,7 @@ async def test_history_refuses_a_list_containing_another_accounts_proposal(
     assert await service.list_for_source(999, owner.subject) == ()
 
 
-def revision_service(factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork], builds: BuildService) -> RevisionProposalService:
-    return RevisionProposalService(builds, PermissionService(uow_factory=factory), uow_factory=factory)
+def revision_service(
+    factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork], builds: BuildService
+) -> RecalculationProposalService:
+    return RecalculationProposalService(builds, PermissionService(uow_factory=factory), uow_factory=factory)

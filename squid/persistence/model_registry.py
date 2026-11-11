@@ -24,7 +24,7 @@ from squid.starboard import models as starboard_models
 from squid.submissions.models import entities as submission_models
 from squid.submissions.models import finalization as submission_finalization_models
 from squid.submissions.models import intake as submission_intake_models
-from squid.submissions.models import revisions as submission_revision_models
+from squid.submissions.models import recalculation as submission_recalculation_models
 from squid.submissions.models import schematics as submission_schematic_models
 from squid.sync import models as sync_models
 from squid.tags import models as tag_models
@@ -57,7 +57,7 @@ __all__ = [
     "submission_inference_models",
     "submission_intake_models",
     "submission_models",
-    "submission_revision_models",
+    "submission_recalculation_models",
     "submission_schematic_models",
     "sync_models",
     "tag_models",

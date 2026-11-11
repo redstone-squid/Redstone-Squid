@@ -10,7 +10,7 @@ import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.routes._root import _feature_group
 from squid.bot.submission.build_card import render_build_card
-from squid.bot.submission.ui import drafts, inference, opening, revisions
+from squid.bot.submission.ui import drafts, inference, opening, recalculation
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import actor_for_interaction, current_edit_actor
 from squid.core.i18n import tr
@@ -74,7 +74,7 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
 async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: str) -> None:
     """Reopen a retained diff under the caller's current edit authority."""
     request = await sd.request(interaction)
-    screen = await revisions.proposal_screen(interaction.client.services, UUID(proposal_id), request)
+    screen = await recalculation.proposal_screen(interaction.client.services, UUID(proposal_id), request)
     await request.respond(screen, audience="personal")
 
 

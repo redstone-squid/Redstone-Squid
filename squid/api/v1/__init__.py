@@ -22,7 +22,7 @@ from squid.api.v1.search import router as search_router
 from squid.api.v1.settings import router as settings_router
 from squid.api.v1.submission_intake import router as submission_intake_router
 from squid.api.v1.submission_media import router as submission_media_router
-from squid.api.v1.submission_revisions import router as submission_revisions_router
+from squid.api.v1.submission_recalculations import router as submission_recalculations_router
 from squid.api.v1.submission_schematics import router as submission_schematics_router
 from squid.api.v1.submissions import router as submissions_router
 from squid.api.v1.suggest import router as suggest_router
@@ -52,7 +52,7 @@ router.include_router(settings_router)
 router.include_router(submissions_router)
 router.include_router(submission_media_router)
 router.include_router(submission_schematics_router)
-router.include_router(submission_revisions_router)
+router.include_router(submission_recalculations_router)
 router.include_router(submission_intake_router)
 router.include_router(suggest_router)
 router.include_router(tags_router)

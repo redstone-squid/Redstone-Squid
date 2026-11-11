@@ -8,10 +8,10 @@ import squid_ui_discord as sd
 from squid.bot.utils.permissions import actor_for_interaction
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
-from squid.submissions.application.revision_values import RevisionProposal
+from squid.submissions.application.recalculation_values import RecalculationProposal
 
 
-class RevisionProposalScreen(sd.Screen):
+class RecalculationProposalScreen(sd.Screen):
     """Review inferred corrections against an existing build before applying them.
 
     Choosing a target records the build revision shown in the diff. Approval may
@@ -20,10 +20,10 @@ class RevisionProposalScreen(sd.Screen):
     """
 
     policy = sd.ResponseSpec(audience="personal", timeout=600)
-    proposal: RevisionProposal = sl.state(opaque=True)
+    proposal: RecalculationProposal = sl.state(opaque=True)
     notice: sl.TextLike = sl.state("")
 
-    def __init__(self, services: BotServices, proposal: RevisionProposal, targets: tuple[int, ...]) -> None:
+    def __init__(self, services: BotServices, proposal: RecalculationProposal, targets: tuple[int, ...]) -> None:
         self.services = services
         self.proposal = proposal
         self.targets = targets
@@ -72,7 +72,7 @@ class RevisionProposalScreen(sd.Screen):
     async def _match(self, event: sd.ChoiceEvent) -> None:
         actor = await actor_for_interaction(event.context)
         try:
-            self.proposal = await self.services.submission_revisions.match(
+            self.proposal = await self.services.submission_recalculations.match(
                 self.proposal.id, int(event.selected[0]), actor
             )
         except SquidError as error:
@@ -82,22 +82,22 @@ class RevisionProposalScreen(sd.Screen):
         await event.acknowledge()
         actor = await actor_for_interaction(event.context)
         try:
-            self.proposal = await self.services.submission_revisions.approve(self.proposal.id, actor)
+            self.proposal = await self.services.submission_recalculations.approve(self.proposal.id, actor)
         except SquidError as error:
             self.notice = error.public_text()
 
     async def _renew(self, event: sd.PressEvent) -> None:
         actor = await actor_for_interaction(event.context)
         if self.proposal.build_id is not None:
-            self.proposal = await self.services.submission_revisions.match(
+            self.proposal = await self.services.submission_recalculations.match(
                 self.proposal.id, self.proposal.build_id, actor, renew=True
             )
             self.notice = "Review the refreshed diff before approving."
 
 
-async def proposal_screen(services: BotServices, proposal_id: UUID, request: sd.Request) -> RevisionProposalScreen:
+async def proposal_screen(services: BotServices, proposal_id: UUID, request: sd.Request) -> RecalculationProposalScreen:
     """Reload retained review state and current target choices after restart."""
     actor = await actor_for_interaction(request)
-    proposal = await services.submission_revisions.get(proposal_id, actor)
+    proposal = await services.submission_recalculations.get(proposal_id, actor)
     targets = tuple(await services.builds.list_ids_for_source_message(proposal.source_message_id))
-    return RevisionProposalScreen(services, proposal, targets)
+    return RecalculationProposalScreen(services, proposal, targets)

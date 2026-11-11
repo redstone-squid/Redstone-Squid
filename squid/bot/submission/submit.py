@@ -439,7 +439,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             reasoning_effort=self.bot.inference_reasoning_effort,
         )
         proposals = [
-            await self.bot.services.submission_revisions.create(
+            await self.bot.services.submission_recalculations.create(
                 run_id=run_id,
                 index=index,
                 owner_account_id=owner_account_id,

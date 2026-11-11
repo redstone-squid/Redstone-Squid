@@ -13,7 +13,7 @@ from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
 
-class SubmissionRevisionProposal(Base, kw_only=True):
+class SubmissionRecalculationProposal(Base, kw_only=True):
     """A retained inference candidate, review snapshot, and atomic build revision receipt."""
 
     __tablename__ = "submission_revision_proposals"

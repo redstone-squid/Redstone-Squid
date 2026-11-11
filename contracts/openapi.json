@@ -16572,7 +16572,7 @@
           "submissions"
         ],
         "summary": "History",
-        "description": "List revision proposals for a source message after checking the caller's access.",
+        "description": "List recalculation proposals for a source message after checking the caller's access.",
         "operationId": "submission_revision_history",
         "security": [
           {
@@ -16622,7 +16622,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RevisionProposalResponse"
+                    "$ref": "#/components/schemas/RecalculationProposalResponse"
                   },
                   "title": "Response Submission Revision History"
                 }
@@ -16681,7 +16681,7 @@
           "submissions"
         ],
         "summary": "Get Proposal",
-        "description": "Return a revision proposal after checking the caller's access.",
+        "description": "Return a recalculation proposal after checking the caller's access.",
         "operationId": "submission_revision_get",
         "security": [
           {
@@ -16730,7 +16730,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RevisionProposalResponse"
+                  "$ref": "#/components/schemas/RecalculationProposalResponse"
                 }
               }
             },
@@ -16836,7 +16836,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RevisionMatchRequest"
+                "$ref": "#/components/schemas/RecalculationMatchRequest"
               }
             }
           }
@@ -16847,7 +16847,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RevisionProposalResponse"
+                  "$ref": "#/components/schemas/RecalculationProposalResponse"
                 }
               }
             },
@@ -16954,7 +16954,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RevisionProposalResponse"
+                  "$ref": "#/components/schemas/RecalculationProposalResponse"
                 }
               }
             },
@@ -23488,6 +23488,299 @@
         "title": "PublicIdentityDetail",
         "description": "A linked identity the creator has chosen to publish.\n\nInternal identity IDs and verification timestamps are omitted from this public\nrepresentation."
       },
+      "RecalculationFacts": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BuildCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version_spec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Spec"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "depth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depth"
+          },
+          "door_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Door Width"
+          },
+          "door_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Door Height"
+          },
+          "door_depth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Door Depth"
+          },
+          "door_orientation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Door Orientation"
+          },
+          "normal_opening_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normal Opening Time"
+          },
+          "normal_closing_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normal Closing Time"
+          },
+          "patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Patterns",
+            "default": []
+          },
+          "creators_ign": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Creators Ign",
+            "default": []
+          },
+          "wiring_placement_restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Wiring Placement Restrictions",
+            "default": []
+          },
+          "animated_restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Animated Restrictions",
+            "default": []
+          },
+          "component_restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Component Restrictions",
+            "default": []
+          },
+          "miscellaneous_restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Miscellaneous Restrictions",
+            "default": []
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "RecalculationFacts",
+        "description": "Retained inferred facts, before a reviewer chooses a target build."
+      },
+      "RecalculationMatchRequest": {
+        "properties": {
+          "build_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Build Id"
+          },
+          "renew": {
+            "type": "boolean",
+            "title": "Renew",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id"
+        ],
+        "title": "RecalculationMatchRequest",
+        "description": "Choose a source-linked build; renewing review retains the old proposal."
+      },
+      "RecalculationProposalResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "source_message_id": {
+            "type": "integer",
+            "title": "Source Message Id"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/RecalculationFacts"
+          },
+          "build_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Id"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
+          },
+          "before": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JSONValue"
+            },
+            "type": "object",
+            "title": "Before"
+          },
+          "after": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JSONValue"
+            },
+            "type": "object",
+            "title": "After"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          },
+          "applied_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "source_message_id",
+          "facts",
+          "build_id",
+          "expected_revision",
+          "before",
+          "after",
+          "expires_at",
+          "applied_revision"
+        ],
+        "title": "RecalculationProposalResponse",
+        "description": "A private candidate, its retained diff, and any committed approval receipt."
+      },
       "RecordDetail": {
         "properties": {
           "id": {
@@ -23855,299 +24148,6 @@
           "duration",
           "boolean"
         ]
-      },
-      "RevisionFacts": {
-        "properties": {
-          "category": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BuildCategory"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "version_spec": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version Spec"
-          },
-          "width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Width"
-          },
-          "height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Height"
-          },
-          "depth": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Depth"
-          },
-          "door_width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Door Width"
-          },
-          "door_height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Door Height"
-          },
-          "door_depth": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Door Depth"
-          },
-          "door_orientation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Door Orientation"
-          },
-          "normal_opening_time": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Normal Opening Time"
-          },
-          "normal_closing_time": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Normal Closing Time"
-          },
-          "patterns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Patterns",
-            "default": []
-          },
-          "creators_ign": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Creators Ign",
-            "default": []
-          },
-          "wiring_placement_restrictions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Wiring Placement Restrictions",
-            "default": []
-          },
-          "animated_restrictions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Animated Restrictions",
-            "default": []
-          },
-          "component_restrictions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Component Restrictions",
-            "default": []
-          },
-          "miscellaneous_restrictions": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Miscellaneous Restrictions",
-            "default": []
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          }
-        },
-        "type": "object",
-        "title": "RevisionFacts",
-        "description": "Retained inferred facts, before a reviewer chooses a target build."
-      },
-      "RevisionMatchRequest": {
-        "properties": {
-          "build_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Build Id"
-          },
-          "renew": {
-            "type": "boolean",
-            "title": "Renew",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "build_id"
-        ],
-        "title": "RevisionMatchRequest",
-        "description": "Choose a source-linked build; renewing review retains the old proposal."
-      },
-      "RevisionProposalResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "run_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Run Id"
-          },
-          "source_message_id": {
-            "type": "integer",
-            "title": "Source Message Id"
-          },
-          "facts": {
-            "$ref": "#/components/schemas/RevisionFacts"
-          },
-          "build_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Id"
-          },
-          "expected_revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Revision"
-          },
-          "before": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JSONValue"
-            },
-            "type": "object",
-            "title": "Before"
-          },
-          "after": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JSONValue"
-            },
-            "type": "object",
-            "title": "After"
-          },
-          "expires_at": {
-            "type": "string",
-            "title": "Expires At"
-          },
-          "applied_revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Applied Revision"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "run_id",
-          "source_message_id",
-          "facts",
-          "build_id",
-          "expected_revision",
-          "before",
-          "after",
-          "expires_at",
-          "applied_revision"
-        ],
-        "title": "RevisionProposalResponse",
-        "description": "A private candidate, its retained diff, and any committed approval receipt."
       },
       "RuntimeSettingsDetail": {
         "properties": {

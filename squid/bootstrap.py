@@ -148,7 +148,7 @@ from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
-from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.application.recalculation import RecalculationProposalService
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
@@ -544,8 +544,8 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def submission_revisions(self) -> RevisionProposalService:
-        return RevisionProposalService(
+    def submission_recalculations(self) -> RecalculationProposalService:
+        return RecalculationProposalService(
             self.builds,
             self.permissions,
             uow_factory=self.uow_factory,
@@ -809,7 +809,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
         submission_schematics=graph.submission_schematics,
-        submission_revisions=graph.submission_revisions,
+        submission_recalculations=graph.submission_recalculations,
         submission_intake=graph.submission_intake,
         submission_inference=graph.submission_inference,
         suggestions=graph.suggestions,
@@ -834,7 +834,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
         submission_schematics=graph.submission_schematics,
-        submission_revisions=graph.submission_revisions,
+        submission_recalculations=graph.submission_recalculations,
         submission_intake=graph.submission_intake,
         submission_uploads=graph.submission_uploads,
         submission_inference=graph.submission_inference,

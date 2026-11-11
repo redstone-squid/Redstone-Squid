@@ -13,7 +13,7 @@ from squid.core.errors import JSONValue, ValidationError
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class RevisionFacts:
+class RecalculationFacts:
     """Retained inferred facts, before a reviewer chooses a target build."""
 
     category: BuildCategory | None = None
@@ -36,7 +36,7 @@ class RevisionFacts:
     description: str | None = None
 
     @classmethod
-    def from_draft(cls, draft: BuildDraft) -> RevisionFacts:
+    def from_draft(cls, draft: BuildDraft) -> RecalculationFacts:
         """Copy inference facts without finalizing or applying category defaults."""
         return cls(
             category=draft.category,
@@ -112,7 +112,7 @@ class RevisionFacts:
 
 
 @dataclass(frozen=True, slots=True)
-class RevisionProposal:
+class RecalculationProposal:
     """An inferred candidate and its retained review snapshot, optionally matched to a build."""
 
     id: UUID
@@ -120,7 +120,7 @@ class RevisionProposal:
     owner_account_id: int
     requested_by_account_id: int
     source_message_id: int
-    facts: RevisionFacts
+    facts: RecalculationFacts
     build_id: int | None
     expected_revision: int | None
     before: dict[str, JSONValue]
@@ -131,7 +131,7 @@ class RevisionProposal:
     applied_revision: int | None = None
 
 
-def revision_values(build: Build) -> dict[str, JSONValue]:
+def recalculation_values(build: Build) -> dict[str, JSONValue]:
     """Select editable facts for a diff, excluding identity and moderation metadata."""
     values: dict[str, JSONValue] = {
         "dimensions": list(build.dimensions),
