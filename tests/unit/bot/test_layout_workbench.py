@@ -10,6 +10,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.layout_workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
 from squid_reactivity import transaction
+from squid_replication import LoroBackend, Replica
 from squid_ui_discord import MessageRoot, MessageRootScheduler, Owner
 from squid_ui_discord.testing import (
     assert_within_limits,
@@ -173,17 +174,25 @@ async def test_invalid_form_keeps_draft_and_offers_prefilled_retry() -> None:
         assert values["name"] == "Vault door"
 
 
-async def test_tag_picker_undo_and_redo_preserve_build_fields() -> None:
+@pytest.mark.parametrize("oversized", [False, True])
+async def test_tag_picker_undo_and_redo_preserve_build_fields(oversized: bool) -> None:
     draft = BuildDraft()
+    draft.build = replace(draft.build, oversized=oversized)
     preview = BuildPreview(draft)
     async with sd.testing.stage(preview, owner=object()) as ui:
-        await ui.press("tag-2")
+        if oversized:
+            choices = ui.control("tags.default.0").payload["options"]
+            value = next(option["value"] for option in choices if option["label"] == "Seamless")
+            await ui.select("tags.default.0", [value])
+        else:
+            await ui.press("tag-2")
         assert draft.tags.value == {"Flush", "Seamless"}
         with transaction():
             draft.build = replace(draft.build, title="New title")
         await ui.press("edit-undo")
         assert draft.tags.value == {"Flush"}
         assert draft.build.title == "New title"
+        assert_within_limits(commit_render(ui.root))
         await ui.press("edit-redo")
         assert draft.tags.value == {"Flush", "Seamless"}
         await ui.press("tag-1")
@@ -192,3 +201,59 @@ async def test_tag_picker_undo_and_redo_preserve_build_fields() -> None:
         assert draft.tags.value == {"Flush", "Seamless"}
     assert not preview.history.can_undo
     draft.close()
+
+
+@pytest.mark.parametrize("remote_tag", ["Compact", "Seamless"])
+async def test_tag_undo_preserves_remote_additions(remote_tag: str) -> None:
+    draft = BuildDraft()
+    remote = Replica("remote", backend=LoroBackend())
+    document = remote.open(draft.document.document_id)
+    document.import_update(draft.document.export_since())
+    preview = BuildPreview(draft)
+    try:
+        async with sd.testing.stage(preview, owner=object()) as ui:
+            await ui.press("tag-2")
+            with transaction():
+                document.set("tags").add(remote_tag)
+            update = document.export_since()
+            draft.document.import_update(update)
+            draft.document.import_update(update)
+            await ui.press("edit-undo")
+            assert draft.tags.value == {"Flush", remote_tag}
+            await ui.press("edit-redo")
+            assert draft.tags.value == {"Flush", "Seamless", remote_tag}
+            document.import_update(draft.document.export_since())
+            assert document.set("tags").value == draft.tags.value
+    finally:
+        remote.close()
+        draft.close()
+
+
+async def test_tag_undo_does_not_reverse_another_replicas_removal() -> None:
+    draft = BuildDraft()
+    remote = Replica("remote", backend=LoroBackend())
+    document = remote.open(draft.document.document_id)
+    document.import_update(draft.document.export_since())
+    preview = BuildPreview(draft)
+    try:
+        async with sd.testing.stage(preview, owner=object()) as ui:
+            await ui.press("tag-1")
+            with transaction():
+                document.set("tags").discard("Flush")
+            draft.document.import_update(document.export_since())
+            await ui.press("edit-undo")
+            assert not draft.tags.value
+    finally:
+        remote.close()
+        draft.close()
+
+
+async def test_workbench_closes_its_replica() -> None:
+    draft = BuildDraft()
+    editor = Workbench(draft)
+    async with sd.testing.stage(editor, owner=object()) as ui:
+        await ui.press("large")
+        assert editor.history.can_undo
+        assert not draft.replica.closed
+    assert not editor.history.can_undo
+    assert draft.replica.closed
