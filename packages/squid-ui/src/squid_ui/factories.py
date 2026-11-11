@@ -131,10 +131,12 @@ type TextValue = TextLike | Template
 type Conditional[ItemT] = ItemT | Literal[False] | None
 """One value, or an omitted one.
 
-``None`` and ``False`` are skipped so ``cond and node`` composes directly. ``True`` is
-deliberately *not* accepted: ``x and y`` evaluates to ``y`` or to the falsy ``x``, so a bare
-``True`` can only come from a mistake. The same narrowness makes ``count and node`` — which
-would render a literal ``0`` in looser designs — a type error rather than a surprise.
+``None`` and ``False`` are skipped so ``cond and node`` composes directly. In a container's
+child position an empty string is skipped too, because ``text and sl.paragraph(text)``
+evaluates to ``""`` when the text is empty. ``True`` is deliberately *not* accepted:
+``x and y`` evaluates to ``y`` or to the falsy ``x``, so a bare ``True`` can only come from a
+mistake. The same narrowness makes ``count and node`` — which would render a literal ``0`` in
+looser designs — a type error rather than a surprise.
 """
 
 type ChildLike[RenderTargetT = RenderTarget, ContextT = object] = Conditional[
@@ -231,7 +233,7 @@ def _children[RenderTargetT = RenderTarget, ContextT = object](
 ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
     collected: list[LayoutNode[RenderTargetT, ContextT]] = []
     for index, value in enumerate(values):
-        if value is None or value is False:
+        if value is None or value is False or value == "":
             continue
         if isinstance(value, str | ResolvedText | Message | Template):
             # A paragraph renders on every target, but its own annotation names the base

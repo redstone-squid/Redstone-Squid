@@ -52,6 +52,13 @@ class TestNormalization:
 
         assert sl.section(sl.heading(t"{name}")).heading == sl.semantic.Heading(sl.md(t"{name}"))
 
+    def test_an_empty_string_condition_is_skipped_rather_than_promoted(self) -> None:
+        description = ""
+
+        node = sl.section(sl.heading("H"), description and sl.paragraph(description))
+
+        assert node.children == ()
+
     def test_empty_containers_are_pruned_by_the_planner(self) -> None:
         shown = False
 

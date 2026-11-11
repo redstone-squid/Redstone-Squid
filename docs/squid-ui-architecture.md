@@ -318,9 +318,9 @@ stable string keys, not which Discord widget must appear.
 
 Author them through the lowercase factories — `sl.section(sl.heading(...), *children)`,
 `sl.action_controls(*entries, key=...)`, `sl.action_control(label, handler, key=...)`. Semantic identity comes
-first in reading order; runtime identity and configuration are keyword-only. `None`/`False`
-children are skipped so `cond and node` composes, and bare strings or t-strings in a child
-position become a `Paragraph`. Collections are unpacked by the caller. The dataclasses remain
+first in reading order; runtime identity and configuration are keyword-only. `None`, `False`,
+and `""` children are skipped so `cond and node` composes, and other bare strings or t-strings
+in a child position become a `Paragraph`. Collections are unpacked by the caller. The dataclasses remain
 the IR and remain public; the factories only normalize what authors write.
 
 `Choices`, `Items`, `Details`, and `Navigation` each hold a value, and one rule says who
