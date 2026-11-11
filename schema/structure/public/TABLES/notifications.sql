@@ -8,7 +8,9 @@ CREATE TABLE public.notifications (
     web_visible boolean NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     read_at timestamp with time zone,
-    CONSTRAINT notifications_kind_check CHECK ((kind = ANY (ARRAY['build_confirmed'::text, 'build_denied'::text, 'creator_build_confirmed'::text, 'record_gained'::text, 'staff_build_submitted'::text])))
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT notifications_kind_check CHECK ((kind = ANY (ARRAY['build_confirmed'::text, 'build_denied'::text, 'creator_build_confirmed'::text, 'record_gained'::text, 'staff_build_submitted'::text]))),
+    CONSTRAINT notifications_revision_positive CHECK ((revision > 0))
 );
 
 COMMENT ON TABLE public.notifications IS 'An event-derived message for one recipient, shared by the web inbox and DM delivery.';

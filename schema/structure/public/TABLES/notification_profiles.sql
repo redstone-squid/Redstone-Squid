@@ -4,7 +4,9 @@ CREATE TABLE public.notification_profiles (
     dm_enabled boolean DEFAULT false NOT NULL,
     dm_suspended_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT notification_profiles_revision_positive CHECK ((revision > 0))
 );
 
 COMMENT ON TABLE public.notification_profiles IS 'Channel preferences for an account. Consent is recorded on the account itself.';

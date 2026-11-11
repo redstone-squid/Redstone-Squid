@@ -16,6 +16,12 @@ BEGIN
     final_snapshot := public.build_history_snapshot_v1(pending.build_id);
     SELECT revision INTO final_revision FROM public.builds WHERE id = pending.build_id;
     IF pending.before_snapshot IS DISTINCT FROM final_snapshot THEN
+        -- Child-only and direct SQL writes must invalidate aggregate editors too.
+        -- ORM saves already advance the root, so do not advance it a second time.
+        IF final_snapshot IS NOT NULL AND final_revision <= pending.before_revision THEN
+            UPDATE public.builds SET revision = pending.before_revision + 1
+            WHERE id = pending.build_id RETURNING revision INTO final_revision;
+        END IF;
         IF pending.before_snapshot IS NOT NULL THEN
             SELECT s.id INTO before_id FROM public.build_edit_history h
             JOIN public.build_history_states s ON s.id = h.after_state_id

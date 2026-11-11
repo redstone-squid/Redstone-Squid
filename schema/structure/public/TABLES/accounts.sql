@@ -4,7 +4,9 @@ CREATE TABLE public.accounts (
     consent_version text,
     consented_at timestamp with time zone,
     public_creator_id uuid DEFAULT gen_random_uuid() NOT NULL,
-    CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL)))
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL))),
+    CONSTRAINT accounts_revision_positive CHECK ((revision > 0))
 );
 
 COMMENT ON TABLE public.accounts IS 'An internal caller independent of every external identity provider.';

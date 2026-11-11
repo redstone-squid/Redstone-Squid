@@ -23,9 +23,12 @@ CREATE TABLE public.starboards (
     replied_to boolean DEFAULT true NOT NULL,
     ping_author boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    archived boolean DEFAULT false NOT NULL,
     CONSTRAINT starboards_age_check CHECK (((min_age_seconds >= 0) AND (max_age_seconds >= 0) AND ((max_age_seconds = 0) OR (min_age_seconds <= max_age_seconds)))),
     CONSTRAINT starboards_colour_check CHECK (((colour >= 0) AND (colour <= 16777215))),
     CONSTRAINT starboards_name_check CHECK ((btrim(name) <> ''::text)),
+    CONSTRAINT starboards_revision_positive CHECK ((revision > 0)),
     CONSTRAINT starboards_thresholds_check CHECK (((required > required_remove) AND (required <> 'Infinity'::double precision) AND (required <> '-Infinity'::double precision) AND (required <> 'NaN'::double precision) AND (required_remove <> 'Infinity'::double precision) AND (required_remove <> '-Infinity'::double precision) AND (required_remove <> 'NaN'::double precision)))
 );
 
@@ -42,7 +45,7 @@ COMMENT ON COLUMN public.starboards.max_age_seconds IS 'Maximum source-message a
 ALTER TABLE ONLY public.starboards
     ADD CONSTRAINT starboards_pkey PRIMARY KEY (id);
 
-CREATE UNIQUE INDEX starboards_guild_name_key ON public.starboards USING btree (guild_id, lower(name));
+CREATE UNIQUE INDEX starboards_guild_name_key ON public.starboards USING btree (guild_id, lower(name)) WHERE (NOT archived);
 
 CREATE TRIGGER starboards_enqueue_discord_sync AFTER UPDATE ON public.starboards FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
 

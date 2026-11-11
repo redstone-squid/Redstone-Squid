@@ -971,6 +971,12 @@ BEGIN
     final_snapshot := public.build_history_snapshot_v1(pending.build_id);
     SELECT revision INTO final_revision FROM public.builds WHERE id = pending.build_id;
     IF pending.before_snapshot IS DISTINCT FROM final_snapshot THEN
+        -- Child-only and direct SQL writes must invalidate aggregate editors too.
+        -- ORM saves already advance the root, so do not advance it a second time.
+        IF final_snapshot IS NOT NULL AND final_revision <= pending.before_revision THEN
+            UPDATE public.builds SET revision = pending.before_revision + 1
+            WHERE id = pending.build_id RETURNING revision INTO final_revision;
+        END IF;
         IF pending.before_snapshot IS NOT NULL THEN
             SELECT s.id INTO before_id FROM public.build_edit_history h
             JOIN public.build_history_states s ON s.id = h.after_state_id
@@ -1286,7 +1292,9 @@ CREATE TABLE public.accounts (
     consent_version text,
     consented_at timestamp with time zone,
     public_creator_id uuid DEFAULT gen_random_uuid() NOT NULL,
-    CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL)))
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL))),
+    CONSTRAINT accounts_revision_positive CHECK ((revision > 0))
 );
 
 
@@ -2648,6 +2656,23 @@ COMMENT ON TABLE public.doors IS 'A door build with specific dimensions and timi
 
 
 --
+-- Name: edit_operations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.edit_operations (
+    id uuid NOT NULL,
+    actor text NOT NULL,
+    fingerprint bytea NOT NULL,
+    revisions jsonb NOT NULL,
+    changed boolean NOT NULL,
+    final boolean NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    CONSTRAINT edit_operations_fingerprint_length CHECK ((octet_length(fingerprint) = 32))
+);
+
+
+--
 -- Name: entrances; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3385,7 +3410,9 @@ CREATE TABLE public.notification_profiles (
     dm_enabled boolean DEFAULT false NOT NULL,
     dm_suspended_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT notification_profiles_revision_positive CHECK ((revision > 0))
 );
 
 
@@ -3449,7 +3476,9 @@ CREATE TABLE public.notifications (
     web_visible boolean NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     read_at timestamp with time zone,
-    CONSTRAINT notifications_kind_check CHECK ((kind = ANY (ARRAY['build_confirmed'::text, 'build_denied'::text, 'creator_build_confirmed'::text, 'record_gained'::text, 'staff_build_submitted'::text])))
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT notifications_kind_check CHECK ((kind = ANY (ARRAY['build_confirmed'::text, 'build_denied'::text, 'creator_build_confirmed'::text, 'record_gained'::text, 'staff_build_submitted'::text]))),
+    CONSTRAINT notifications_revision_positive CHECK ((revision > 0))
 );
 
 
@@ -4113,8 +4142,10 @@ CREATE TABLE public.runtime_settings (
     welcome_relay_channel_id bigint NOT NULL,
     version_tracker_channel_id bigint NOT NULL,
     build_log_channel_ids bigint[] NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
     CONSTRAINT runtime_settings_chance CHECK (((welcome_forward_chance >= (0)::double precision) AND (welcome_forward_chance <= (1)::double precision))),
     CONSTRAINT runtime_settings_retention CHECK (((notification_retention_days >= 1) AND (notification_retention_days <= 3650))),
+    CONSTRAINT runtime_settings_revision_positive CHECK ((revision > 0)),
     CONSTRAINT runtime_settings_singleton CHECK ((id = 1)),
     CONSTRAINT runtime_settings_thresholds CHECK (((build_vote_pass_threshold > 0) AND (build_vote_fail_threshold < 0) AND (delete_vote_pass_threshold > 0) AND (delete_vote_fail_threshold < 0)))
 );
@@ -4567,7 +4598,9 @@ CREATE TABLE public.server_settings (
     builds_channel_id bigint,
     voting_channel_id bigint,
     in_server boolean DEFAULT true NOT NULL,
-    locale text
+    locale text,
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT server_settings_revision_positive CHECK ((revision > 0))
 );
 
 
@@ -4751,9 +4784,12 @@ CREATE TABLE public.starboards (
     replied_to boolean DEFAULT true NOT NULL,
     ping_author boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    revision bigint DEFAULT 1 NOT NULL,
+    archived boolean DEFAULT false NOT NULL,
     CONSTRAINT starboards_age_check CHECK (((min_age_seconds >= 0) AND (max_age_seconds >= 0) AND ((max_age_seconds = 0) OR (min_age_seconds <= max_age_seconds)))),
     CONSTRAINT starboards_colour_check CHECK (((colour >= 0) AND (colour <= 16777215))),
     CONSTRAINT starboards_name_check CHECK ((btrim(name) <> ''::text)),
+    CONSTRAINT starboards_revision_positive CHECK ((revision > 0)),
     CONSTRAINT starboards_thresholds_check CHECK (((required > required_remove) AND (required <> 'Infinity'::double precision) AND (required <> '-Infinity'::double precision) AND (required <> 'NaN'::double precision) AND (required_remove <> 'Infinity'::double precision) AND (required_remove <> '-Infinity'::double precision) AND (required_remove <> 'NaN'::double precision)))
 );
 
@@ -6244,6 +6280,14 @@ ALTER TABLE ONLY public.doors
 
 
 --
+-- Name: edit_operations edit_operations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.edit_operations
+    ADD CONSTRAINT edit_operations_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: entrances entrances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7561,6 +7605,13 @@ CREATE INDEX domain_events_aggregate_idx ON public.domain_events USING btree (ag
 
 
 --
+-- Name: edit_operations_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX edit_operations_expiry_idx ON public.edit_operations USING btree (expires_at);
+
+
+--
 -- Name: error_reports_correlation_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8173,7 +8224,7 @@ CREATE INDEX starboard_votes_target_author_created_idx ON public.starboard_votes
 -- Name: starboards_guild_name_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX starboards_guild_name_key ON public.starboards USING btree (guild_id, lower(name));
+CREATE UNIQUE INDEX starboards_guild_name_key ON public.starboards USING btree (guild_id, lower(name)) WHERE (NOT archived);
 
 
 --

@@ -6,7 +6,9 @@ CREATE TABLE public.server_settings (
     builds_channel_id bigint,
     voting_channel_id bigint,
     in_server boolean DEFAULT true NOT NULL,
-    locale text
+    locale text,
+    revision bigint DEFAULT 1 NOT NULL,
+    CONSTRAINT server_settings_revision_positive CHECK ((revision > 0))
 );
 
 COMMENT ON TABLE public.server_settings IS 'Settings for a Discord server.';
