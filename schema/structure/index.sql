@@ -77,7 +77,6 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/SEQUENCES/door_timing_variants_id_seq.sql
 \ir public/TABLES/doors.sql
 \ir public/TABLES/edit_operations.sql
-\ir public/TABLES/edit_resource_leases.sql
 \ir public/TABLES/entrances.sql
 \ir public/TABLES/error_reports.sql
 \ir public/TABLES/extender_timing_variants.sql

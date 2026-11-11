@@ -21,8 +21,8 @@ meantime, and the write fails with `RevisionConflictError` instead of overwritin
 their change.
 
 An *edit target* (`EditTarget`) names one versioned record, such as
-`EditTarget("build", "42")`. Its `identity` string, `"build:42"`, appears in session
-history and resource leases. A `Revision` pairs a target with a counter value.
+`EditTarget("build", "42")`. Its `identity` string, `"build:42"`, identifies the target in session
+history. A `Revision` pairs a target with a counter value.
 
 Revisions advance in one of three ways:
 
@@ -98,16 +98,13 @@ Forms with unsaved widget values also record them in a `History`, using a differ
 operation that restores the widget state (`track_local_edits` in
 `squid/bot/edit_history.py`).
 
-### Resource leases
+### Removed files
 
-Removing an attachment from a draft lets cleanup delete its stored file, and an undo
-would then have nothing to restore. To prevent that, the attachment handler records
-an *edit resource lease* (`edit_resource_leases`) for each attachment it removes. While
-a lease is current, media cleanup skips the file (`retained_resource`). The draft
-editor's `EditHistoryRetention` service observes its `EditController`, renews leases for
-receipts still in session history, and releases the rest, including all of its leases
-when the editor closes.
-A lease lasts 120 seconds without renewal, so a crashed editor holds files only briefly.
+Removing an attachment from a draft only marks the draft's reference as discarded, so
+undo can restore it. Cleanup keeps any file that an open draft references, even
+through a discarded reference (`draft_keeps_file`). Staged uploads, which are hidden
+until an attachment edit accepts them, are kept the same way. Once a draft is submitted
+or expires, files it no longer lists become deletable.
 
 ## Build history
 

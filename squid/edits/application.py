@@ -136,7 +136,7 @@ class EditExecutor[UowT: EditUnitOfWork]:
         ):
             message = "Changed edits must advance revisions; revisions must never decrease"
             raise InvalidStateError(message)
-        receipt = EditReceipt(command, prepared.before, prepared.after, versions, prepared.final, prepared.resources)
+        receipt = EditReceipt(command, prepared.before, prepared.after, versions, prepared.final)
         outcome = EditOutcome(
             command.operation_id, actor_key, command.fingerprint, versions, prepared.changed, prepared.final
         )

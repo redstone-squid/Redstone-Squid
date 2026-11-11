@@ -1,4 +1,4 @@
-"""Tables for edit outcomes, kept 24 hours for retries, and resource leases.
+"""Edit outcomes, kept 24 hours so a retried command returns its first result.
 
 The values needed for undo are not stored; they stay in the editor's receipts.
 """
@@ -29,15 +29,4 @@ class EditOperation(Base, kw_only=True):
     changed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     final: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
-    expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
-
-
-class EditResourceLease(Base, kw_only=True):
-    """Resource identities only; inverse values remain in the mounted editor."""
-
-    __tablename__ = "edit_resource_leases"
-    __table_args__ = (Index("edit_resource_leases_resource_expiry_idx", "resource", "expires_at"),)
-
-    operation_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
-    resource: Mapped[str] = mapped_column(Text, primary_key=True)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)

@@ -51,6 +51,13 @@ async def test_shared_media_is_normalized_once_and_discarded_independently(
     assert shared.upload.id == source.id
     assert shared.upload.draft_id == second
     assert await transact(jobs, lambda uow: uow.media_jobs.discard(second, source.id), commit=True)
+    # Open drafts keep files they have removed, so undo can restore them.
+    kept = await transact(jobs, lambda uow: uow.media_jobs.get(source.id))
+    assert kept is not None
+    assert kept.status is MediaJobStatus.COMPLETED
+    async with sessions.begin() as session:
+        await session.execute(update(SubmissionDraft).values(status=DraftStatus.EXPIRED))
+    await transact(jobs, lambda uow: uow.media_jobs.terminal_sources(limit=10), commit=True)
     final = await transact(jobs, lambda uow: uow.media_jobs.get(source.id))
     assert final is not None
     assert final.status is MediaJobStatus.DISCARDED

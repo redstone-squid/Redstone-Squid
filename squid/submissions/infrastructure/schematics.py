@@ -9,7 +9,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from whenever import Instant
 
 from squid.core.errors import ConflictError, DataIntegrityError, NotFoundError, ValidationError
-from squid.edits.infrastructure import retained_resource
+from squid.media.infrastructure.references import draft_keeps_file
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.schematics.application import IngestedSchematic
 from squid.schematics.infrastructure.wire import encode_analysis
@@ -314,14 +314,12 @@ class PostgresDraftSchematics:
 
 
 def _has_retained_reference() -> ColumnElement[bool]:
-    return retained_resource("attachment", DraftSchematicSource.id) | exists(
+    return exists(
         select(DraftSchematicLink.source_id)
         .join(SubmissionDraft, SubmissionDraft.id == DraftSchematicLink.draft_id)
         .where(
             DraftSchematicLink.source_id == DraftSchematicSource.id,
-            DraftSchematicLink.discarded.is_(False),
-            (SubmissionDraft.status == DraftStatus.SUBMITTED)
-            | ((SubmissionDraft.status != DraftStatus.EXPIRED) & (SubmissionDraft.expires_at > func.now())),
+            draft_keeps_file(DraftSchematicLink.discarded),
         )
     )
 

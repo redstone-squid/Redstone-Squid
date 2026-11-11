@@ -10,7 +10,6 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.edits.infrastructure import retained_resource
 from squid.media.application.jobs import (
     MEDIA_VIDEO_THUMBNAIL_ROLES,
     ArtifactCleanupClaim,
@@ -529,7 +528,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         return MediaJobFailureOutcome(applied=applied, dead=dead and applied)
 
     async def _discard_unreferenced(self, *, limit: int) -> None:
-        """End jobs whose last draft reference and history lease have both gone away."""
+        """End jobs whose file no draft keeps any more (see `draft_keeps_file`)."""
         session = self._session()
         unreferenced = select(MediaUploadRecord.id).where(
             exists(select(MediaDraftReference.upload_id).where(MediaDraftReference.upload_id == MediaUploadRecord.id)),
@@ -548,7 +547,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             )
         )
         for job in jobs:
-            # A reference or lease may have committed while we waited for the job lock.
+            # A reference may have committed while we waited for the job lock.
             if await session.scalar(unreferenced.where(MediaUploadRecord.id == job.upload_id)) is None:
                 continue
             job.status = MediaJobStatus.DISCARDED
@@ -574,7 +573,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 )
                 .where(
                     MediaUploadRecord.raw_deleted_at.is_(None),
-                    ~retained_resource("attachment", MediaUploadRecord.id),
                     MediaNormalizationJobRecord.status.in_(
                         (
                             MediaJobStatus.COMPLETED,

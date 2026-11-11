@@ -8,9 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
-from squid.edits.application import EditStore, EditUnitOfWork
+from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditValues, PreparedEdit, Revision, require_revision
-from squid.edits.retention import EditRetentionStore
 from squid.media.domain import MediaLimits
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 
@@ -47,16 +46,9 @@ class AttachmentEditStore(Protocol):
     async def write(self, draft: StoredDraft, values: AttachmentValues) -> int: ...
 
 
-class RetainedEditStore(EditStore, EditRetentionStore, Protocol):
-    pass
-
-
 class AttachmentEditUnitOfWork(DraftUnitOfWork, EditUnitOfWork, Protocol):
     @property
     def attachment_edits(self) -> AttachmentEditStore: ...
-
-    @property
-    def edits(self) -> RetainedEditStore: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -95,13 +87,9 @@ class DraftAttachmentsEdit:
             }
         )
         after = await uow.attachment_edits.validate(draft, desired, self._limits)
-        resources = tuple(f"attachment:{source}" for source in sources)
-        if before != after:
-            await uow.edits.retain(command.operation_id, resources)
         return PreparedAttachments(
             before.edit_values(),
             after.edit_values(),
-            resources=resources,
             draft=draft,
             values=after,
             revisions=(revision,),

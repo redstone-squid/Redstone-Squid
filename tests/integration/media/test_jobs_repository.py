@@ -18,7 +18,6 @@ from whenever import Instant
 
 from squid.accounts.models import Account
 from squid.artifacts.infrastructure import LocalArtifactStore
-from squid.edits.models import EditResourceLease
 from squid.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
@@ -55,7 +54,6 @@ OTHER_DRAFT_ID = UUID("95bc3eba-d38f-4e48-a9d7-a84cda03f6e5")
 UPLOAD_ID = UUID("75043a53-05ae-4097-bbf4-4eae1d6b088c")
 LIMITS = MediaLimits()
 _TABLES = model_tables(
-    EditResourceLease,
     Account,
     SubmissionDraft,
     SubmissionSuppliedAttachment,

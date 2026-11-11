@@ -52,7 +52,6 @@ from squid.community.domain import WelcomeRelayPolicy
 from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
 from squid.edits.application import EditExecutor
-from squid.edits.retention import EditRetentionService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -362,10 +361,6 @@ class _ServiceGraph:
                 notification_retention_days=self.config.notifications.retention_days,
             ),
         )
-
-    @cached_property
-    def edit_retention(self) -> EditRetentionService:
-        return EditRetentionService(self.uow_factory)
 
     @cached_property
     def edits(self) -> EditExecutor[SqlAlchemyUnitOfWork]:
@@ -852,7 +847,6 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         tags=graph.tags,
         settings=graph.settings,
         edits=graph.edits,
-        edit_retention=graph.edit_retention,
         starboards=graph.starboards,
         suggestions=graph.bot_suggestions,
         accounts=graph.accounts,

@@ -27,6 +27,7 @@ from squid.submissions.application import CheckedInFormManifestRegistry, Submiss
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.application.finalization import ClaimedFinalizationJob
 from squid.submissions.application.schematics import DraftSchematicService
+from squid.submissions.domain import DraftStatus
 from squid.submissions.domain.finalization import (
     FinalizedBuild,
     SchematicArtifactState,
@@ -36,6 +37,7 @@ from squid.submissions.domain.finalization import (
 )
 from squid.submissions.domain.schematics import DraftSchematicState
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.models.entities import SubmissionDraft
 from squid.submissions.models.schematics import DraftSchematicSource
 from tests.integration.submissions.test_commit import PreparedBuilds
 from tests.integration.submissions.test_schematics import create_draft, reload
@@ -199,7 +201,9 @@ async def test_late_analysis_cannot_resurrect_a_deleted_source(
     uploads = DraftSchematicService(drafts, artifacts, uow_factory=uows)
     source = await uploads.upload(draft.snapshot.id, owner, filename="source.schem", data=b"original bytes")
     await uploads.discard(draft.snapshot.id, owner, source.id)
+    # Open drafts keep files they have removed, so undo can restore them.
     async with sessions.begin() as session:
+        await session.execute(update(SubmissionDraft).values(status=DraftStatus.EXPIRED))
         await session.execute(update(DraftSchematicSource).values(updated_at=Instant.now().subtract(minutes=10)))
     await uploads.cleanup()
     assert source.sha256 is not None

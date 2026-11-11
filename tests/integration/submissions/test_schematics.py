@@ -12,9 +12,10 @@ from squid.core.errors import ConflictError
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.application import IngestedSchematic
 from squid.submissions.application import StoredDraft
-from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
+from squid.submissions.domain import DraftSnapshot, DraftStatus, SubmissionOrigin
 from squid.submissions.domain.finalization import SchematicArtifactState, SubmissionAttentionReason
 from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.submissions.models.entities import SubmissionDraft
 from squid.submissions.models.schematics import DraftSchematicSource
 from tests.support.submission_targets import seed_account_and_version
 from tests.support.unit_of_work import transact
@@ -170,6 +171,9 @@ async def test_cleanup_preserves_shared_source_until_every_reference_is_discarde
         lambda uow: uow.draft_schematics.discard(current, source.id),
         commit=True,
     )
+    # Open drafts keep files they have removed, so undo can restore them.
+    async with sessions.begin() as session:
+        await session.execute(update(SubmissionDraft).values(status=DraftStatus.EXPIRED))
     assert await transact(repo, lambda uow: uow.draft_schematics.cleanup_candidates(limit=20), commit=True) == (
         source.id,
     )

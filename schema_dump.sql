@@ -2673,17 +2673,6 @@ CREATE TABLE public.edit_operations (
 
 
 --
--- Name: edit_resource_leases; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.edit_resource_leases (
-    operation_id uuid NOT NULL,
-    resource text NOT NULL,
-    expires_at timestamp with time zone NOT NULL
-);
-
-
---
 -- Name: entrances; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6312,14 +6301,6 @@ ALTER TABLE ONLY public.edit_operations
 
 
 --
--- Name: edit_resource_leases edit_resource_leases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.edit_resource_leases
-    ADD CONSTRAINT edit_resource_leases_pkey PRIMARY KEY (operation_id, resource);
-
-
---
 -- Name: entrances entrances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7641,13 +7622,6 @@ CREATE INDEX domain_events_aggregate_idx ON public.domain_events USING btree (ag
 --
 
 CREATE INDEX edit_operations_expiry_idx ON public.edit_operations USING btree (expires_at);
-
-
---
--- Name: edit_resource_leases_resource_expiry_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX edit_resource_leases_resource_expiry_idx ON public.edit_resource_leases USING btree (resource, expires_at);
 
 
 --

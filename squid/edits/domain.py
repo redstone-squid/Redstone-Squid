@@ -122,7 +122,6 @@ class PreparedEdit:
         before: The current values of the fields the edit touches.
         after: The normalized values the edit will write.
         final: The edit cannot be undone, for example a deletion.
-        resources: Lease identities, such as `attachment:<uuid>`, that undo would need.
         revisions: The current revision of every target in the command, read under the
             handler's lock. `apply` advances these.
     """
@@ -130,7 +129,6 @@ class PreparedEdit:
     before: EditValues
     after: EditValues
     final: bool = False
-    resources: tuple[str, ...] = ()
     revisions: tuple[Revision, ...] = field(kw_only=True)
 
     @property
@@ -145,7 +143,6 @@ class EditReceipt:
     after: EditValues
     revisions: tuple[Revision, ...]
     final: bool = False
-    resources: tuple[str, ...] = ()
 
     @property
     def targets(self) -> frozenset[str]:

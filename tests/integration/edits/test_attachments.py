@@ -1,4 +1,4 @@
-"""Attachment inverses keep identities and processing results until their leases expire."""
+"""Undoing attachment edits restores files, which open drafts keep until they end."""
 
 from functools import partial
 from uuid import uuid4
@@ -12,7 +12,6 @@ from squid.core.actors import Actor
 from squid.core.errors import ConflictError
 from squid.edits.application import EditExecutor
 from squid.edits.domain import EditCommand, LatestRevision, Revision, RevisionConflictError
-from squid.edits.models import EditResourceLease
 from squid.media.application.jobs import MediaUploadMetadata
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaJobStatus
@@ -30,8 +29,10 @@ from squid.submissions.application.drafts import SubmissionDraftService
 from squid.submissions.application.edits import draft_target
 from squid.submissions.application.forms import CheckedInFormManifestRegistry
 from squid.submissions.application.intake import SuppliedAttachment
+from squid.submissions.domain import DraftStatus
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
+from squid.submissions.models.entities import SubmissionDraft
 from squid.submissions.models.schematics import DraftSchematicSource
 from tests.integration.submissions.test_schematics import create_draft, reload
 from tests.support.submission_targets import seed_account_and_version
@@ -39,7 +40,7 @@ from tests.unit.schematics.fakes import make_analysis
 
 
 @pytest.mark.parametrize("latest", [False, True])
-async def test_schematic_removal_restores_analysis_and_primary_and_expires_safely(
+async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_ends(
     latest: bool,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -104,7 +105,7 @@ async def test_schematic_removal_restores_analysis_and_primary_and_expires_safel
     redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
     assert redone.receipt is not None
     async with sessions.begin() as session:
-        await session.execute(update(EditResourceLease).values(expires_at=Instant.now().subtract(seconds=1)))
+        await session.execute(update(SubmissionDraft).values(status=DraftStatus.SUBMITTED))
     async with factory() as uow:
         assert await uow.draft_schematics.cleanup_candidates(limit=10) == (first.id,)
         await uow.commit()
@@ -158,7 +159,7 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
     redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
     assert redone.receipt is not None
     async with sessions.begin() as session:
-        await session.execute(update(EditResourceLease).values(expires_at=Instant.now().subtract(seconds=1)))
+        await session.execute(update(SubmissionDraft).values(status=DraftStatus.SUBMITTED))
     async with factory() as uow:
         assert len(await uow.media_jobs.terminal_sources(limit=10)) == 1
         await uow.commit()
@@ -190,27 +191,25 @@ async def test_staged_replacement_commits_once_and_redo_reuses_sources(
         await uow.commit()
     draft = await reload(sessions, draft)
     replacement = FileMembership(source_id=uuid4(), present=True, filename="new.schem", kind="schematic")
-    async with uploads.staging(draft.snapshot.id, actor, draft.snapshot.revision, (replacement,)):
-        source = DraftSchematic(replacement.source_id, "new.schem", "b" * 64, 3, DraftSchematicState.UPLOADING)
-        async with factory() as uow:
-            hidden = await uow.draft_schematics.register(draft, source, owner)
-            assert hidden.discarded
-            await uow.draft_schematics.finish_upload(source.id, succeeded=True)
-            await uow.draft_schematics.finish_analysis(
-                source, IngestedSchematic("b" * 64, make_analysis(sha256="b" * 64))
-            )
-            await uow.attachment_intake.set_status(draft.snapshot.id, source.id, IntakeStatus.READY)
-            await uow.commit()
-        assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision
-        values = AttachmentValues(files=(FileMembership(source_id=original.id, present=False), replacement))
-        result = await executor.execute(
-            EditCommand(
-                DRAFT_ATTACHMENTS,
-                (Revision(draft_target(draft.snapshot.id), draft.snapshot.revision),),
-                values.edit_values(),
-            ),
-            actor,
-        )
+    await uploads.stage(draft.snapshot.id, actor, draft.snapshot.revision, (replacement,))
+    source = DraftSchematic(replacement.source_id, "new.schem", "b" * 64, 3, DraftSchematicState.UPLOADING)
+    async with factory() as uow:
+        hidden = await uow.draft_schematics.register(draft, source, owner)
+        assert hidden.discarded
+        await uow.draft_schematics.finish_upload(source.id, succeeded=True)
+        await uow.draft_schematics.finish_analysis(source, IngestedSchematic("b" * 64, make_analysis(sha256="b" * 64)))
+        await uow.attachment_intake.set_status(draft.snapshot.id, source.id, IntakeStatus.READY)
+        await uow.commit()
+    assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision
+    values = AttachmentValues(files=(FileMembership(source_id=original.id, present=False), replacement))
+    result = await executor.execute(
+        EditCommand(
+            DRAFT_ATTACHMENTS,
+            (Revision(draft_target(draft.snapshot.id), draft.snapshot.revision),),
+            values.edit_values(),
+        ),
+        actor,
+    )
     assert result.receipt is not None
     assert result.outcome.revisions[0].value == draft.snapshot.revision + 1
     undone = await executor.execute(result.receipt.inverse(result.outcome.revisions), actor)
@@ -227,16 +226,9 @@ async def test_staged_replacement_commits_once_and_redo_reuses_sources(
         assert restored.state is DraftSchematicState.READY
         assert restored.primary
         assert not restored.discarded
-    async with sessions() as session:
-        assert (
-            await session.scalar(
-                select(EditResourceLease.operation_id).where(EditResourceLease.operation_id == replacement.source_id)
-            )
-            is None
-        )
 
 
-async def test_failed_staging_preserves_visible_membership_and_releases_its_lease(
+async def test_staged_files_stay_hidden_until_a_membership_edit_accepts_them(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory
@@ -247,19 +239,10 @@ async def test_failed_staging_preserves_visible_membership_and_releases_its_leas
     service = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=factory)
     uploads = DraftAttachmentUploads(service, factory)
     replacement = FileMembership(source_id=uuid4(), present=True, filename="failed.png", kind="image")
-    with pytest.raises(ConflictError):
-        async with uploads.staging(draft.snapshot.id, actor, draft.snapshot.revision, (replacement,)):
-            raise ConflictError
+    await uploads.stage(draft.snapshot.id, actor, draft.snapshot.revision, (replacement,))
     assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision
     async with factory() as uow:
         assert (await uow.attachment_intake.list(draft.snapshot.id))[0].status is IntakeStatus.DISCARDED
-    async with sessions() as session:
-        assert (
-            await session.scalar(
-                select(EditResourceLease.operation_id).where(EditResourceLease.operation_id == replacement.source_id)
-            )
-            is None
-        )
 
 
 async def test_media_writers_without_intake_still_advance_the_draft_revision(

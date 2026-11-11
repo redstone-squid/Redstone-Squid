@@ -37,7 +37,6 @@ from uuid import UUID, uuid4
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
-from squid.bot.edit_retention import EditHistoryRetention
 from squid.bot.submission import draft_intake
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui import controls as build_controls
@@ -359,20 +358,18 @@ class DraftWorkspace(sl.Reactive):
         )
         self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
         failed = 0
-        async with self.services.submission_uploads.staging(
-            self._draft_id, await self.resolve_actor(), revision, memberships
-        ):
-            for item, file in zip(memberships, files, strict=True):
-                try:
-                    await draft_intake.register_uploaded_file(
-                        self.services, self._draft_id, self.actor_id, item.source_id, file
-                    )
-                except Exception:
-                    await self.services.submission_intake.fail(self._draft_id, self.actor_id, item.source_id)
-                    failed += 1
-            await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
-                AttachmentValues(files=memberships).edit_values(), tr(t"draft-history-add-files = Add submission files")
-            )
+        await self.services.submission_uploads.stage(self._draft_id, await self.resolve_actor(), revision, memberships)
+        for item, file in zip(memberships, files, strict=True):
+            try:
+                await draft_intake.register_uploaded_file(
+                    self.services, self._draft_id, self.actor_id, item.source_id, file
+                )
+            except Exception:
+                await self.services.submission_intake.fail(self._draft_id, self.actor_id, item.source_id)
+                failed += 1
+        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
+            AttachmentValues(files=memberships).edit_values(), tr(t"draft-history-add-files = Add submission files")
+        )
         self.notice = (
             tr(
                 t"draft-editor-files-failed = {failed} of the files could not be added. "
@@ -416,22 +413,22 @@ class DraftWorkspace(sl.Reactive):
             kind=classify_supplied_file(source.name, source.media_type),
         )
         self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
-        async with self.services.submission_uploads.staging(
+        await self.services.submission_uploads.stage(
             self._draft_id, await self.resolve_actor(), revision, (replacement,)
-        ):
-            try:
-                await draft_intake.register_uploaded_file(
-                    self.services, self._draft_id, self.actor_id, replacement.source_id, source
-                )
-            except Exception:
-                self.notice = tr(
-                    t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it."
-                )
-                return None
-            await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
-                AttachmentValues(files=(FileMembership(source_id=file_id, present=False), replacement)).edit_values(),
-                tr(t"draft-history-replace-file = Replace submission file"),
+        )
+        try:
+            await draft_intake.register_uploaded_file(
+                self.services, self._draft_id, self.actor_id, replacement.source_id, source
             )
+        except Exception:
+            self.notice = tr(
+                t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it."
+            )
+            return None
+        await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
+            AttachmentValues(files=(FileMembership(source_id=file_id, present=False), replacement)).edit_values(),
+            tr(t"draft-history-replace-file = Replace submission file"),
+        )
         self.notice = ""
         return replacement.source_id
 
@@ -449,7 +446,6 @@ class DraftEditorScreen(BuildEditorScreen[None]):
 
     def __init__(self, workspace: DraftWorkspace) -> None:
         self.workspace = workspace
-        self.own(EditHistoryRetention(workspace.edits, workspace.services.edit_retention))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
