@@ -8,13 +8,11 @@ import pytest
 from whenever import Instant
 
 import squid_ui as sl
-from squid.bot.submission.build_browse import _BuildDetail  # pyright: ignore[reportPrivateUsage]
-from squid.builds.models import DoorBuild
+from squid.bot.submission.schematic_tools import SchematicTools
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
-from squid_reactivity import LocalTopicBus
 from squid_ui.testing import press_event
 from tests.unit.schematics.fakes import make_analysis
 
@@ -69,21 +67,16 @@ class FeaturedSchematics(SchematicService):
         return self.stored
 
 
-def _detail(stored: StoredSchematic | None, *, actor: int | None, held: set[str]) -> _BuildDetail:
+def _detail(stored: StoredSchematic | None, *, actor: int | None, held: set[str]) -> SchematicTools:
     async def authorize(node: PermissionNode) -> bool:
         return node.name in held
 
-    return _BuildDetail(
-        DoorBuild(id=7),
-        changes=LocalTopicBus().topic("build", "1"),
-        queries=cast(Any, None),
-        builds=cast(Any, None),
+    return SchematicTools(
+        7,
         schematics=FeaturedSchematics(stored),
-        render_build=cast(Any, None),
-        capabilities=cast(Any, None),
+        measure_timing=False,
         actor_account_id=actor,
         authorize=authorize,
-        refresh_posts=cast(Any, None),
     )
 
 

@@ -19,13 +19,15 @@ from squid_ui.testing import press_event, submit_event
 from squid_ui_discord.testing import stage
 
 
-def _screen(*, initial_id: int | None = 7, status: Status = Status.CONFIRMED) -> BuildBrowseScreen:
+def _screen(
+    *, initial_id: int | None = 7, status: Status = Status.CONFIRMED, schematics_available: bool = False
+) -> BuildBrowseScreen:
     build = DoorBuild(id=7, submission_status=status)
     queries = AsyncMock(spec=BuildQueryService)
     queries.get.return_value = build
     queries.semantic.return_value = build
     queries.list_page.return_value = Page(items=(build,), total=1, next=None, prev=None)
-    schematics = Mock(spec=SchematicService, available=False)
+    schematics = Mock(spec=SchematicService, available=schematics_available)
 
     async def render_build(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         return sl.paragraph(f"Build #{build.id}")
@@ -124,3 +126,12 @@ async def test_a_failed_review_request_does_not_leave_a_confirmation() -> None:
 
     assert detail._decision is None
     assert detail._pending_review is None
+
+
+async def test_schematic_controls_survive_opening_and_cancelling_review() -> None:
+    screen = _screen(status=Status.PENDING, schematics_available=True)
+    async with stage(screen, owner=object()) as ui:
+        ui.control("selected-build.schematics.schematic-info")
+        await ui.press("selected-build.approve")
+        await ui.press("selected-build.review-decision.build-review.cancel")
+        ui.control("selected-build.schematics.schematic-info")
