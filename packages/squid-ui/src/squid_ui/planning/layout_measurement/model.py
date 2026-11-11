@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from squid_ui.ownership import FIRST_PAGE, PageOwnership
 from squid_ui.planning.limits import Axis
 from squid_ui.primitives.nodes import (
     Button,
@@ -145,8 +146,8 @@ class Pager:
     footer: Callable[[int, int], str]
     axis: Axis = Axis.DISPLAY_TEXT
     """The text pool this pager's body and footer draw from."""
-    initial: int = 0
-    """The page to open on; a mount adopts this before its first render."""
+    owner: PageOwnership = FIRST_PAGE
+    """Who keeps this pager's page, copied from its `Paginate` policy."""
     page: int = 0
     nav_host: list[Realized] | None = None
     """The realized list holding this pager's navigation, replaced in place when repositioning."""

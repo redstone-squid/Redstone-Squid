@@ -26,7 +26,7 @@ from squid_ui.planning.layout_measurement.solver import (
     measure,
 )
 from squid_ui.planning.limits import LIMITS, Axis, V2Limits
-from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.planning.resolved import text as resolved_text
@@ -58,7 +58,6 @@ from squid_ui.primitives.nodes import (
     Variant,
     Variants,
 )
-from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target
 
 if TYPE_CHECKING:
@@ -313,7 +312,7 @@ def _paginate_v2(
     capacities: Mapping[Axis, int],
     limits: V2Limits,
     chrome: Chrome,
-    nav: PlannedNav,
+    nav: PagerNav,
     broker: CursorCoordinator,
 ) -> tuple[MeasuredLayout, int]:
     maximum_pages = max(1, len(nodes))
@@ -321,7 +320,7 @@ def _paginate_v2(
     def measure_page(children: Sequence[Node], index: int, pages: int) -> MeasuredLayout:
         chrome_nodes: tuple[Node, ...] = (
             Footer(chrome.page_footer(index + 1, pages), overflow=Never()),
-            *nav(materialized_navigation_state(key, Position(offset=index), pages, chrome)),
+            *nav(key, index, pages, chrome),
         )
         return measure(
             (*children, *chrome_nodes),
@@ -410,7 +409,7 @@ class V2Dialect:
         capacities: Mapping[Axis, int],
         limits: V2Limits,
         chrome: Chrome,
-        nav: PlannedNav,
+        nav: PagerNav,
         broker: CursorCoordinator,
     ) -> tuple[MeasuredLayout, int]:
         return _paginate_v2(nodes, key=key, capacities=capacities, limits=limits, chrome=chrome, nav=nav, broker=broker)

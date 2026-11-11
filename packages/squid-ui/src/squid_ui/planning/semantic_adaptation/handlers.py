@@ -21,6 +21,7 @@ from squid_ui.interactions import (
     PressEvent,
     SelectionEvent,
 )
+from squid_ui.ownership import bind_ownership
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState
 from squid_ui.semantic import (
@@ -34,7 +35,6 @@ from squid_ui.semantic import (
     NavigateEvent,
     NavOwnership,
     OpenEvent,
-    Ownership,
     Toggle,
     ToggleEvent,
     Uncontrolled,
@@ -85,7 +85,7 @@ class ChoiceCommit(_HandlerComposition):
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
-        ownership = _bind_ownership(self.ownership, binder)
+        ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, selected: tuple[str, ...]) -> None:
@@ -147,7 +147,7 @@ class EntityCommit(_HandlerComposition):
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
-        ownership = _bind_ownership(self.ownership, binder)
+        ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
@@ -208,7 +208,7 @@ class ItemCommit(_HandlerComposition):
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
-        ownership = _bind_ownership(self.ownership, binder)
+        ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, opened: str | None) -> None:
@@ -261,7 +261,7 @@ class NavigationCommit(_HandlerComposition):
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
-        ownership = _bind_ownership(self.ownership, binder)
+        ownership = bind_ownership(self.ownership, binder)
         return replace(self, ownership=ownership) if ownership is not self.ownership else self
 
     async def commit(self, event: ActionEvent, destination: str) -> None:
@@ -317,7 +317,7 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
         def bind_node() -> Details:
-            ownership = _bind_ownership(self.node.open, binder)
+            ownership = bind_ownership(self.node.open, binder)
             return replace(self.node, open=ownership) if ownership is not self.node.open else self.node
 
         node = binder.cached(self.node, bind_node)
@@ -353,7 +353,7 @@ class FlipToggle(GeneratedHandler[PressEvent]):
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
         def bind_node() -> Toggle:
-            ownership = _bind_ownership(self.node.on, binder)
+            ownership = bind_ownership(self.node.on, binder)
             return replace(self.node, on=ownership) if ownership is not self.node.on else self.node
 
         node = binder.cached(self.node, bind_node)
@@ -408,16 +408,3 @@ class RouteSelection(GeneratedHandler[SelectionEvent]):
         binding = self.routes.get(event.values[0]) if len(event.values) == 1 else None
         if binding is not None:
             await binding.handler(event)
-
-
-def _bind_ownership[ValueT, EventT](
-    ownership: Ownership[ValueT, EventT], binder: _HandlerBinder
-) -> Ownership[ValueT, EventT]:
-    def bind() -> Ownership[ValueT, EventT]:
-        if isinstance(ownership, Controlled):
-            callback = binder.callback(ownership.on_change)
-            if callback is not ownership.on_change:
-                return replace(ownership, on_change=callback)
-        return ownership
-
-    return binder.cached(ownership, bind)

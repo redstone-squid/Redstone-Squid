@@ -128,6 +128,7 @@ from squid_ui.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
+from squid_ui.ownership import PageEvent
 from squid_ui.palette import Palette, PaletteRegistry
 from squid_ui.runtime.definition import Component
 from squid_ui.semantic import (
@@ -193,6 +194,7 @@ __all__ = [
     "LimitViolationError",
     "NavigateEvent",
     "OpenEvent",
+    "PageEvent",
     "Palette",
     "PaletteRegistry",
     "PressEvent",

@@ -175,8 +175,16 @@ def test_form_invalid_callback_is_validated_for_both_binding_paths(present: bool
             bind_handlers({}, {"form": FormBinding("form", spec, portable)}, "html")
 
 
-def test_integer_seek_callback_is_opaque() -> None:
-    callback = ApplicationCallback[int]({"unrelated": registration("elsewhere")})
+@dataclass(frozen=True, slots=True)
+class SeekCallback:
+    metadata: object
+
+    async def __call__(self, event: ActionEvent, page: int) -> None:
+        pass
+
+
+def test_component_seek_callback_is_opaque() -> None:
+    callback = SeekCallback({"unrelated": registration("elsewhere")})
     adapter = _SeekSelection(callback)
     actions = {"seek": ActionBinding("seek", adapter)}
     selected, _ = bind_handlers(actions, {}, "html")

@@ -10,9 +10,11 @@ from time import perf_counter
 from squid_i18n import tr
 from squid_ui import Palette, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
+from squid_ui.ownership import Controlled, PageEvent
 from squid_ui.planning import PlanCache, PlanMemo, plan
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import CachedPlan
+from squid_ui.planning.navigation import TurnPage, default_nav
 from squid_ui.planning.result import PlanMetrics, PlanReport, PlanReuse
 from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
 from squid_ui.primitives import (
@@ -255,17 +257,39 @@ def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     assert len(cache) == 2
 
 
+def test_cache_hit_sends_controlled_page_turns_to_the_current_render(monkeypatch) -> None:
+    import squid_ui.planning.discord_planner as planner_module
+
+    cache = PlanCache()
+
+    async def first(event: PageEvent) -> None: ...
+
+    async def second(event: PageEvent) -> None: ...
+
+    def document(on_change):
+        return Code("x" * 9000, overflow=Paginate(key="traceback", page=Controlled(1, on_change)))
+
+    plan(document(first), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache)
+    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
+    cached = plan(document(second), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache)
+
+    assert cached.metrics.cache_hit
+    handler = cached.bindings["__cursor_next.traceback"].handler
+    assert isinstance(handler, TurnPage)
+    assert handler.commit.owner == Controlled(1, second)
+
+
 def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
     import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
 
-    def nav(state):
+    def nav(context):
         return (
             Row(
                 (
-                    Button("Previous", _previous, f"prev.{state.key}"),
-                    Button("Next", _next, f"next.{state.key}"),
+                    Button("Previous", _previous, f"prev.{context.key}"),
+                    Button("Next", _next, f"next.{context.key}"),
                 )
             ),
         )

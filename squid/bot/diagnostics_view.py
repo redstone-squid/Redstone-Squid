@@ -274,7 +274,7 @@ class ErrorReportScreen(sd.Screen[int]):
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sd.v2.heading(tr(t"diagnostics-view-error = Error {reference}")),
             # Opens at the end because the failing frame is the last one.
-            sd.v2.code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
+            sd.v2.code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", page=sl.primitives.LAST_PAGE)),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the

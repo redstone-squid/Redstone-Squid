@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
+from squid_ui.ownership import FIRST_PAGE, Controlled, PageOwnership
 from squid_ui.text import TextLike
 
 
@@ -29,7 +30,12 @@ class Paginate:
 
     `boundary` chooses preferred split points; oversized segments are split to fit.
     Supply a stable `key` when planning so this paginator has independent state.
-    `initial="end"` starts at the final page, useful for a traceback or activity log.
+
+    `page` says who keeps the visible page. By default the runtime remembers it and opens
+    on the first page; `LAST_PAGE` opens on the final page instead, useful for a traceback
+    or activity log. `Controlled(page, on_change)` lets the application keep the page, for
+    example to return to the first page when a filter changes. A controlled pager needs an
+    explicit `key`, and its page is clamped to the pages the content has.
 
     For `Lines`, `per` groups that many entries per page even when space remains.
     Pages that exceed the text budget are split further. `footer` receives the
@@ -42,13 +48,16 @@ class Paginate:
 
     key: str | None = None
     boundary: str = "\n"
-    initial: Literal["start", "end"] = "start"
+    page: PageOwnership = FIRST_PAGE
     per: int | None = None
     footer: Callable[[int, int], TextLike] | None = None
     min_fill: int = 0
     widows: int = 1
 
     def __post_init__(self) -> None:
+        if isinstance(self.page, Controlled) and not self.key:
+            message = "a controlled Paginate needs a key"
+            raise ValueError(message)
         if self.per is not None and self.per < 1:
             message = "Paginate(per=...) must be at least 1"
             raise ValueError(message)

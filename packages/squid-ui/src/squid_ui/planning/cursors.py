@@ -3,18 +3,20 @@
 A materialized pager already has all its content, so its cursor offset is a page
 index. Each pager asks the coordinator to resolve its remembered position, then
 records the page it actually displays. The resulting updates accompany the scene;
-the frontend applies them after delivery succeeds.
+the frontend applies them after delivery succeeds. A controlled pager takes its
+page from the application instead, so the coordinator neither reads nor stores a
+cursor for it.
 """
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from hashlib import blake2s
-from typing import Literal
 
 from squid_ui import scene
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.ownership import FIRST_PAGE, Controlled, PageOwnership, resolve_page
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.presentation import (
     ActivePagers,
     CursorState,
@@ -35,7 +37,7 @@ class MaterializedCursorRequest:
     extent: int
     fingerprint: str
     anchors: Mapping[str, int] | None = None
-    initial: Literal["start", "end"] = "start"
+    owner: PageOwnership = FIRST_PAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +66,7 @@ class CursorCoordinator:
 
     session: PresentationState
     chrome: Chrome
-    nav: PlannedNav | None = None
+    nav: PagerNav | None = None
     overrides: Mapping[str, Position] | None = None
     policy: PositionResolver = POSITION_RESOLVER
     _pagers: list[scene.Pager] = field(default_factory=list, init=False)
@@ -72,8 +74,14 @@ class CursorCoordinator:
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)
 
     def grant(self, request: MaterializedCursorRequest) -> CursorGrant:
-        """Resolve one keyed position through the shared precedence policy."""
+        """Resolve one keyed position through the shared precedence policy.
+
+        A controlled page skips that policy: the application's value wins, clamped to the extent.
+        """
         extent = max(1, request.extent)
+        owner = request.owner
+        if isinstance(owner, Controlled):
+            return CursorGrant(Position(offset=resolve_page(owner.value, extent)), extent)
         cursor = self.session.cursor(request.key)
         anchor = cursor.position.anchor
         anchored_offset = None if request.anchors is None or anchor is None else request.anchors.get(anchor)
@@ -82,7 +90,7 @@ class CursorCoordinator:
             anchored=Position(anchor, anchored_offset) if anchored_offset is not None else None,
             stale=bool(cursor.fingerprint and cursor.fingerprint != request.fingerprint),
             stored=cursor.position if request.key in self.session.cursors else None,
-            initial=Position(offset=extent - 1 if request.initial == "end" else 0),
+            initial=Position(offset=resolve_page(owner.initial, extent)),
             upper_bound=extent - 1,
         )
         return CursorGrant(position, extent)
@@ -104,7 +112,8 @@ class CursorCoordinator:
             return
         resolved = Position(anchor, position.offset, Direction.AROUND)
         self._pagers.append(scene.Pager(request.key, resolved.offset, extent, request.fingerprint))
-        self._updates.append(CursorUpdate(request.key, CursorState(resolved, extent, request.fingerprint)))
+        if not isinstance(request.owner, Controlled):
+            self._updates.append(CursorUpdate(request.key, CursorState(resolved, extent, request.fingerprint)))
 
     def controls(self, key: str, position: Position, extent: int) -> list[Node]:
         """Build mandatory numeric chrome and optional navigation for a cursor."""
@@ -112,7 +121,7 @@ class CursorCoordinator:
             return []
         result: list[Node] = [Footer(self.chrome.page_footer(position.offset + 1, extent), overflow=Never())]
         if self.nav is not None:
-            result.extend(self.nav(materialized_navigation_state(key, position, extent, self.chrome)))
+            result.extend(self.nav(key, position.offset, extent, self.chrome))
         return result
 
     @property
@@ -121,5 +130,10 @@ class CursorCoordinator:
 
     @property
     def updates(self) -> tuple[SessionUpdate, ...]:
-        """Return staged writes followed by garbage collection of absent cursors."""
-        return (*self._updates, ActivePagers(frozenset(pager.key for pager in self._pagers)))
+        """Return staged writes followed by garbage collection of absent cursors.
+
+        Controlled pagers have no stored cursor, so a cursor left from when one was
+        uncontrolled is collected too.
+        """
+        kept = frozenset(update.key for update in self._updates if isinstance(update, CursorUpdate))
+        return (*self._updates, ActivePagers(kept))

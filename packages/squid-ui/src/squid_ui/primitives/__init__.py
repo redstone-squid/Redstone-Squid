@@ -6,6 +6,7 @@ behind ``squid_ui.primitives``.
 """
 
 from squid_ui.emoji import Emoji, EmojiLike, normalize_emoji
+from squid_ui.ownership import FIRST_PAGE, LAST_PAGE
 from squid_ui.primitives.constraints import (
     Alt,
     Alts,
@@ -66,6 +67,8 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import ActionStyle, Color
 
 __all__ = [
+    "FIRST_PAGE",
+    "LAST_PAGE",
     "ActionStyle",
     "Alt",
     "Alts",

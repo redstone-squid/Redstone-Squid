@@ -65,9 +65,6 @@ from squid_ui.planning.adapter import (
 from squid_ui.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
 from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
-    NavigationContext,
-    NavigationState,
-    NavNode,
     default_nav,
 )
 from squid_ui.planning.planner import plan as plan_document
@@ -93,7 +90,6 @@ from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import Status
-from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
 from squid_ui.text import Localization, TextLike, localization_scope, resolve_text
 from squid_ui_discord import delivery as deliver
@@ -438,24 +434,6 @@ class MessageRoot[
         self.palette = config.palette
         self.chrome = localize_chrome(chrome, localization)
         self.nav = nav if nav is not None else default_nav
-
-        def planned_nav(state: NavigationState) -> Sequence[NavNode]:
-            # Step from the page these buttons were drawn on, not from the stored cursor, so a
-            # press always means "the page next to the one on screen".
-            page = state.position.offset
-
-            async def previous(_event: PressEvent) -> None:
-                self._seek_cursor(state.key, page - 1)
-
-            async def next_(_event: PressEvent) -> None:
-                self._seek_cursor(state.key, page + 1)
-
-            async def seek(page: int) -> None:
-                self._seek_cursor(state.key, page)
-
-            return self.nav(NavigationContext(state, previous, next_, seek))
-
-        self._planned_nav = planned_nav
         self.runtime = ComponentRuntime(
             component,
             on_invalidate=self._mark_dirty,
@@ -870,7 +848,7 @@ class MessageRoot[
                 localization=self.localization,
                 palette=self.palette,
                 strict=self.strict,
-                nav=self._planned_nav,
+                nav=self.nav,
                 session=self.presentation,
                 cache=self.runtime.plan_cache,
                 memo=self.runtime.plan_memo,
@@ -1207,14 +1185,6 @@ class MessageRoot[
         if palette == self.palette:
             return
         self.palette = palette
-        self.invalidate()
-
-    def _seek_cursor(self, key: str, page: int) -> None:
-        """Jump one cursor to a zero-based page, clamped to what it actually holds."""
-        cursor = self.presentation.cursor(key)
-        if cursor.position.offset == page:
-            return
-        self.presentation.move_cursor(key, Position(offset=page))
         self.invalidate()
 
     def reset_cursor(self, key: str | None = None) -> None:

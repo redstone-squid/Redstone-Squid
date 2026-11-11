@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, replace
 
 from squid_ui.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.ownership import Controlled, resolve_page
 from squid_ui.planning.adapter import EMPTY_COST, ResourceCost
 from squid_ui.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_ui.planning.layout_measurement.allocation import (
@@ -43,10 +44,7 @@ from squid_ui.planning.layout_measurement.model import (
 from squid_ui.planning.layout_measurement.realization import Builder
 from squid_ui.planning.layout_measurement.text import TextUnit
 from squid_ui.planning.limits import LIMITS, Axis, MessageLimits
-from squid_ui.planning.navigation import (
-    PlannedNav,
-    materialized_navigation_state,
-)
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
@@ -72,7 +70,7 @@ class MeasuredLayout:
     Local clamps alone do not set this flag. Root pagination uses it to avoid
     packing another node onto a page that already required overflow handling.
     """
-    nav: PlannedNav | None = None
+    nav: PagerNav | None = None
     chrome: Chrome = DEFAULT_CHROME
     limits: MessageLimits = LIMITS
     degradation: DegradationProfile = field(default_factory=DegradationProfile)
@@ -107,9 +105,7 @@ class MeasuredLayout:
             window = slice(pager.nav_at, pager.nav_at + pager.nav_count)
             previous = pager.nav_host[window]
             realized = Builder(limits=self.limits).realize_children(
-                validated_nav(
-                    self.nav(materialized_navigation_state(pager.key, Position(offset=shown), pager.pages, self.chrome))
-                )
+                validated_nav(self.nav(pager.key, shown, pager.pages, self.chrome, pager.owner))
             )
             if len(realized) != pager.nav_count or component_count(realized) != component_count(previous):
                 message = (
@@ -163,7 +159,7 @@ def measure(
     strict: bool = False,
     reserved: ResourceCost = EMPTY_COST,
     position: PositionState = None,
-    nav: PlannedNav | None = None,
+    nav: PagerNav | None = None,
 ) -> MeasuredLayout:
     """Fit a normalized primitive tree and return its realized nodes, costs, and diagnostics.
 
@@ -265,7 +261,7 @@ def _measure_once(
     chrome: Chrome,
     reserved: ResourceCost,
     position: PositionState,
-    nav: PlannedNav | None,
+    nav: PagerNav | None,
     notes: list[SolveNote],
 ) -> MeasuredLayout:
     """One measuring pass, including a fixed point for all measured pager footers."""
@@ -328,7 +324,6 @@ def _measure_once(
         assert isinstance(policy, Paginate)
         key = final.keys[unit.index]
         footer_slot = MeasuredText()
-        initial = len(unit.fragments) - 1 if policy.initial == "end" else 0
         pager = Pager(
             key=key,
             slot=unit.slot,
@@ -337,19 +332,18 @@ def _measure_once(
             fragments=unit.fragments,
             footer_slot=footer_slot,
             footer=final.footers[unit.index],
-            initial=initial,
+            owner=policy.page,
             axis=unit.axis,
         )
-        requested = _requested_position(position, key, first=not pagers)
-        shown = pager.select(initial if requested is None else requested.offset)
+        # A controlled page comes from the application, so a stored position must not override it.
+        owner = policy.page
+        requested = None if isinstance(owner, Controlled) else _requested_position(position, key, first=not pagers)
+        opening = owner.value if isinstance(owner, Controlled) else owner.initial
+        shown = pager.select(resolve_page(opening, pager.pages) if requested is None else requested.offset)
         text_used[unit.axis] = text_used.get(unit.axis, 0) + len(footer_slot.content)
         additions: list[Realized] = [footer_slot]
         if nav is not None:
-            additions.extend(
-                builder.realize_children(
-                    validated_nav(nav(materialized_navigation_state(key, Position(offset=shown), pager.pages, chrome)))
-                )
-            )
+            additions.extend(builder.realize_children(validated_nav(nav(key, shown, pager.pages, chrome, owner))))
         placement = _insert_after(children, unit.slot, additions)
         if placement is None:
             placement = (children, len(children))

@@ -26,6 +26,7 @@ from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome, localize_chrome
 from squid_ui.document import Document, DocumentLike, as_document
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.ownership import FIRST_PAGE, PageOwnership
 from squid_ui.palette import Palette
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
@@ -54,7 +55,7 @@ from squid_ui.planning.layout_measurement.solver import (
     measure,
 )
 from squid_ui.planning.limits import Axis, MessageLimits
-from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.result import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
@@ -150,7 +151,7 @@ def _program_dynamic_values(
     palette: Palette,
     presentation: PresentationState,
     positions: Mapping[str, Position] | None,
-    nav: PlannedNav | None,
+    nav: PagerNav | None,
     capabilities: frozenset[str],
     planned: scene.Scene[Any],
 ) -> tuple[object, ...]:
@@ -173,7 +174,7 @@ def _program_dynamic_values(
     dynamic = tuple(value for value in external if value is not None) + _dynamic_values(document)
     if nav is not None:
         for pager in planned.pagers:
-            nodes = nav(materialized_navigation_state(pager.key, Position(offset=pager.page), pager.pages, chrome))
+            nodes = nav(pager.key, pager.page, pager.pages, chrome)
             dynamic += _dynamic_values(nodes)
     return dynamic
 
@@ -436,8 +437,9 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
         return self.request.positions
 
     @property
-    def nav(self) -> PlannedNav | None:
-        return self.request.nav
+    def nav(self) -> PagerNav | None:
+        factory = self.request.nav
+        return None if factory is None else PagerNav(factory, self.presentation)
 
     def coordinator(self) -> CursorCoordinator:
         return CursorCoordinator(self.presentation, self.chrome, self.nav, self.positions)
@@ -1020,7 +1022,7 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
             key=pager.key,
             extent=pager.pages,
             fingerprint=content_fingerprint(pager.fragments),
-            initial="end" if pager.initial else "start",
+            owner=pager.owner,
         )
         grant = broker.grant(request)
         broker.record(request, grant.position)
@@ -1074,19 +1076,47 @@ def _collect_bindings(nodes: Sequence[Node]) -> SceneBindings:
 def _collect_cached_bindings(
     nodes: Sequence[Node],
     document: scene.Scene,
-    nav: PlannedNav | None,
+    nav: PagerNav | None,
     chrome: Chrome,
 ) -> SceneBindings:
     collected = _collect_bindings(nodes)
     if nav is None:
         return collected
+    # The cached scene records each pager's page but not its owner, so take the owner
+    # from this render's tree: a controlled pager must reach this render's on_change.
+    owners = _page_owners(nodes)
     for pager in document.pagers:
         generated = _collect_bindings(
-            nav(materialized_navigation_state(pager.key, Position(offset=pager.page), pager.pages, chrome))
+            nav(pager.key, pager.page, pager.pages, chrome, owners.get(pager.key, FIRST_PAGE))
         )
         for key, binding in generated.bindings.items():
             collected.bindings.setdefault(key, binding)
     return collected
+
+
+def _page_owners(nodes: Sequence[Node]) -> dict[str, PageOwnership]:
+    """Map each keyed `Paginate` policy in ``nodes`` to its page owner."""
+    owners: dict[str, PageOwnership] = {}
+
+    def walk(value: object) -> None:
+        if isinstance(value, Paginate):
+            if value.key is not None:
+                owners[value.key] = value.page
+            return
+        if callable(value) or isinstance(value, str | bytes):
+            return
+        if is_dataclass(value) and not isinstance(value, type):
+            for item in fields(value):
+                walk(getattr(value, item.name))
+        elif isinstance(value, Mapping):
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, Sequence):
+            for item in value:
+                walk(item)
+
+    walk(nodes)
+    return owners
 
 
 class DiscordPlanner:

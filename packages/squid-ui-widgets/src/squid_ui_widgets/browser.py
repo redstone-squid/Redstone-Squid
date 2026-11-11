@@ -131,7 +131,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         """Request the next source window."""
         self._request = WindowRequest("next")
 
-    async def _seek(self, page: int) -> None:
+    async def _seek(self, _event: ActionEvent, page: int) -> None:
         """Request a zero-based page from a jumpable source."""
         self._request = WindowRequest("seek", Position(offset=page * self.page_size))
 

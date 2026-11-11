@@ -18,9 +18,10 @@ from squid_ui.planning.layout_measurement.costing import component_count
 from squid_ui.planning.layout_measurement.model import MeasuredText
 from squid_ui.planning.layout_measurement.text import split_pages
 from squid_ui.planning.limits import Axis
-from squid_ui.planning.navigation import NavigationContext, default_nav, page_select_nav
+from squid_ui.planning.navigation import PagerNav, default_nav, page_select_nav
 from squid_ui.planning.semantic_adaptation.lowering import lower_semantics
 from squid_ui.primitives import (
+    LAST_PAGE,
     Button,
     Code,
     Heading,
@@ -202,6 +203,75 @@ class Catalog(Component[sl.ComponentsV2Target]):
                 tuple(Item(key, sl.semantic.ItemLabel(f"Item {key}"), (Paragraph("detail"),)) for key in keys),
             )
         ]
+
+
+class ControlledLog(Component[sl.ComponentsV2Target]):
+    """Keeps its own page, as a filtered list does so a new filter can return to page one."""
+
+    page: int = sl.state(0)
+
+    def __init__(self, page: int = 0, *, accept: bool = True) -> None:
+        self.page = page
+        self.accept = accept
+        self.turns: list[int] = []
+
+    async def _turn(self, event: sl.PageEvent) -> None:
+        self.turns.append(event.page)
+        if self.accept:
+            self.page = event.page
+
+    @override
+    def render(self):
+        entries = tuple(f"entry {index}" for index in range(30))
+        return [Lines(entries, overflow=Paginate(key="log", per=10, page=sl.controlled(self.page, self._turn)))]
+
+
+class TestControlledPagination:
+    def _footers(self, view) -> list[str]:
+        return [child.content for child in view.walk_children() if isinstance(child, discord.ui.TextDisplay)]
+
+    def test_the_application_page_is_shown_and_no_cursor_is_stored(self):
+        message_root = MessageRoot(ControlledLog(page=2), access=Everyone(), timeout=None)
+        view = commit_render(message_root)
+        assert any("Page 3 of 3" in text for text in self._footers(view))
+        assert "log" not in message_root.presentation.cursors
+
+    def test_an_out_of_range_page_is_clamped(self):
+        view = commit_render(MessageRoot(ControlledLog(page=99), access=Everyone(), timeout=None))
+        assert any("Page 3 of 3" in text for text in self._footers(view))
+
+    async def test_a_turn_reaches_the_application(self):
+        log = ControlledLog(page=2)
+        message_root = MessageRoot(log, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        interaction = interaction_harness()
+
+        await message_root.dispatch("__cursor_previous.log", interaction)
+
+        assert log.turns == [1]
+        edited = interaction.response.edit_message.await_args.kwargs["view"]
+        assert any("Page 2 of 3" in text for text in self._footers(edited))
+
+    async def test_a_turn_the_application_ignores_leaves_the_page(self):
+        log = ControlledLog(page=2, accept=False)
+        message_root = MessageRoot(log, access=Everyone(), timeout=None)
+        commit_render(message_root)
+
+        await message_root.dispatch("__cursor_previous.log", interaction_harness())
+
+        assert log.turns == [1]
+        assert any("Page 3 of 3" in text for text in self._footers(commit_render(message_root)))
+
+    def test_last_page_opens_an_uncontrolled_pager_at_the_end(self):
+        entries = tuple(f"entry {index}" for index in range(30))
+        solved = measure([Lines(entries, overflow=Paginate(key="log", per=10, page=LAST_PAGE))])
+        assert solved.page == 2
+
+    def test_a_controlled_pager_needs_a_key(self):
+        async def ignore(event: sl.PageEvent) -> None: ...
+
+        with pytest.raises(ValueError, match="needs a key"):
+            Paginate(page=sl.controlled(0, ignore))
 
 
 class TestMountPagination:
@@ -413,10 +483,7 @@ class TestSolverNav:
     def _paginated(self) -> list:
         return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate())]
 
-    def _nav(self, state):
-        async def move(interaction) -> None: ...
-
-        return default_nav(NavigationContext(state, move, move))
+    _nav = PagerNav(default_nav, PresentationState())
 
     def test_nav_nodes_are_realized_into_the_document(self):
         solved = measure(self._paginated(), nav=self._nav)
@@ -434,7 +501,8 @@ class TestSolverNav:
         # `NavNode` rejects this statically; the runtime guard is for callers without a
         # type checker, so the suppression here is the test doing its job.
         with pytest.raises(ValueError, match="component-bearing"):
-            measure(self._paginated(), nav=lambda state: [Text(f"position {state.position.offset}")])  # type: ignore
+            text_nav = PagerNav(lambda context: [Text(f"position {context.position.offset}")], PresentationState())  # type: ignore
+            measure(self._paginated(), nav=text_nav)
 
 
 class TestRepage:
@@ -447,10 +515,7 @@ class TestRepage:
     def _paginated(self) -> list:
         return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate(key="lines"))]
 
-    def _nav(self, state):
-        async def move(interaction) -> None: ...
-
-        return default_nav(NavigationContext(state, move, move))
+    _nav = PagerNav(default_nav, PresentationState())
 
     def test_repage_moves_the_page_without_moving_the_fit(self):
         solved = measure(self._paginated(), nav=self._nav)
@@ -487,11 +552,10 @@ class TestRepage:
         assert solved.page == 0
 
     def test_a_nav_factory_that_hides_controls_between_pages_is_rejected(self):
-        def hiding(state):
-            controls = self._nav(state)
-            return controls if state.position.offset else []
+        def hiding(context):
+            return default_nav(context) if context.position.offset else []
 
-        solved = measure(self._paginated(), nav=hiding)
+        solved = measure(self._paginated(), nav=PagerNav(hiding, PresentationState()))
         with pytest.raises(LayoutInvariantError, match="changed shape between pages"):
             solved.reposition({"lines": Position(offset=1)})
 
@@ -557,11 +621,6 @@ def test_count_pages_hold_every_entry_exactly_once(count, per):
 
 def test_the_solver_counts_the_nav_it_realized():
     # Count the realized navigation controls so planning and drawing charge the same components.
-    async def move(interaction) -> None: ...
-
-    def nav(state):
-        return default_nav(NavigationContext(state, move, move))
-
     view = commit_render(MessageRoot(Browser(), access=Everyone(), timeout=None))
-    solved = measure(Browser().render(), nav=nav)
+    solved = measure(Browser().render(), nav=PagerNav(default_nav, PresentationState()))
     assert component_count(solved.children) == len(list(view.walk_children()))

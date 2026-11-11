@@ -111,7 +111,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
         """Request the next source window."""
         self._request = WindowRequest("next")
 
-    async def _seek(self, page: int) -> None:
+    async def _seek(self, _event: ActionEvent, page: int) -> None:
         """Jump to a zero-based page. Only bound when the source declared it can."""
         self._request = WindowRequest("seek", Position(offset=page * self.page_size))
 

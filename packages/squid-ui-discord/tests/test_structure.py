@@ -15,7 +15,7 @@ from squid_ui.planning import (
     plan,
 )
 from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredText
-from squid_ui.planning.navigation import NavigationContext, default_nav
+from squid_ui.planning.navigation import default_nav
 from squid_ui.planning.result import PlanResult
 from squid_ui.primitives import (
     Alt,
@@ -221,13 +221,10 @@ class TestVariants:
         assert len(_step_events(result)) == 2
 
     def test_pagination_controls_participate_in_the_ladder_budget(self):
-        async def move(interaction) -> None: ...
-
-        def nav(state):
-            return default_nav(NavigationContext(state, move, move))
-
         entries = tuple(f"entry {index}" for index in range(20))
-        result = _planned([*_ladder_document(9), Lines(entries, overflow=Paginate(key="entries", per=10))], nav=nav)
+        result = _planned(
+            [*_ladder_document(9), Lines(entries, overflow=Paginate(key="entries", per=10))], nav=default_nav
+        )
         assert [pager.pages for pager in result.scene.pagers] == [2]
         assert _components(result) <= LIMITS.total_components
         assert _step_events(result)

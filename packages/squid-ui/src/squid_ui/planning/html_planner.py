@@ -26,6 +26,7 @@ from squid_ui.factories import is_builtin_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
+from squid_ui.ownership import FIRST_PAGE, LAST_PAGE
 from squid_ui.palette import Palette
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
@@ -1288,7 +1289,8 @@ class _Compiler:
         # policy; staging stays on the compiler's forked lists because a speculative branch
         # that is discarded must leave no cursor behind, which a stateful coordinator shared
         # across forks cannot promise.
-        request = MaterializedCursorRequest(node.key, extent, fingerprint, initial=node.initial)
+        owner = LAST_PAGE if node.initial == "end" else FIRST_PAGE
+        request = MaterializedCursorRequest(node.key, extent, fingerprint, owner=owner)
         position = CursorCoordinator(self.presentation, self.chrome, overrides=self.positions).grant(request).position
         if extent > 1:
             resolved = Position(offset=position.offset, direction=Direction.AROUND)

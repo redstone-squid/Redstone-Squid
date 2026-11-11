@@ -18,7 +18,7 @@ from squid_ui.planning.cursors import CursorCoordinator
 from squid_ui.planning.layout_measurement.model import Realized
 from squid_ui.planning.layout_measurement.solver import MeasuredLayout
 from squid_ui.planning.limits import Axis, MessageLimits
-from squid_ui.planning.navigation import PlannedNav
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.primitives.nodes import (
@@ -156,7 +156,7 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](P
         capacities: Mapping[Axis, int],
         limits: LimitsT,
         chrome: Chrome,
-        nav: PlannedNav,
+        nav: PagerNav,
         broker: CursorCoordinator,
     ) -> tuple[MeasuredLayout, int]:
         """Pack an over-budget document into pages and return the selected page and total count."""

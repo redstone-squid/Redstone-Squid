@@ -23,6 +23,7 @@ from squid_ui.forms import FormSpec, SubmitHandler
 from squid_ui.grids import GridCell, validate_grid
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
+from squid_ui.ownership import Controlled, Ownership, Uncontrolled
 from squid_ui.palette import INHERIT, Accent, Palette, Tone
 from squid_ui.primitives.nodes import Node
 from squid_ui.rosters import RosterPlacement
@@ -100,33 +101,6 @@ class TimeStyle(StrEnum):
 
 
 # --- Who owns a node's value -----------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class Controlled[ValueT, EventT]:
-    """Read the value from application state and send requested changes to on_change.
-
-    The handler must update that state if it accepts a change; the supplied value
-    remains authoritative on every render.
-    """
-
-    value: ValueT
-    on_change: Callable[[EventT], Awaitable[None]]
-
-
-@dataclass(frozen=True, slots=True)
-class Uncontrolled[ValueT]:
-    """Let PresentationState store the value under the node's key.
-
-    The initial value applies whenever that key has no stored value, including after a reset.
-    Use Controlled when the author-supplied value must win on every render.
-    """
-
-    initial: ValueT
-
-
-type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[ValueT]
-"""Explicitly choose author-owned values or state stored in the presentation session."""
 
 
 type ChoiceOwnership[ContextT = object] = Ownership[tuple[str, ...], ChoiceEvent[ContextT]]

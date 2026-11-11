@@ -31,7 +31,7 @@ from squid_ui.planning.layout_measurement.solver import (
     measure,
 )
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
-from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resolved import emoji as resolved_emoji
 from squid_ui.planning.resolved import optional_text as resolved_optional_text
 from squid_ui.planning.resolved import text as resolved_text
@@ -66,7 +66,6 @@ from squid_ui.primitives.nodes import (
     Variants,
     card_text,
 )
-from squid_ui.sources import Position
 from squid_ui.target_types import ClassicTarget
 from squid_ui.temporal import ZonedDateTime
 
@@ -168,7 +167,7 @@ def _paginate(
     capacities: Mapping[Axis, int],
     limits: ClassicLimits,
     chrome: Chrome,
-    nav: PlannedNav,
+    nav: PagerNav,
     broker: CursorCoordinator,
 ) -> tuple[MeasuredLayout, int]:
     """Greedily pack cards and controls into pages in source order.
@@ -185,7 +184,7 @@ def _paginate(
     def measure_page(children: Sequence[Node], index: int, pages: int) -> MeasuredLayout:
         chrome_nodes: tuple[Node, ...] = (
             Card(children=(Footer(chrome.page_footer(index + 1, pages), overflow=Never()),)),
-            *nav(materialized_navigation_state(key, Position(offset=index), pages, chrome)),
+            *nav(key, index, pages, chrome),
         )
         return measure((*pinned, *children, *chrome_nodes), limits=limits, chrome=chrome, strict=False, nav=nav)
 
@@ -420,7 +419,7 @@ class ClassicDialect:
         capacities: Mapping[Axis, int],
         limits: ClassicLimits,
         chrome: Chrome,
-        nav: PlannedNav,
+        nav: PagerNav,
         broker: CursorCoordinator,
     ) -> tuple[MeasuredLayout, int]:
         return _paginate(nodes, key=key, capacities=capacities, limits=limits, chrome=chrome, nav=nav, broker=broker)

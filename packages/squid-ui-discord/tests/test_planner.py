@@ -38,12 +38,12 @@ from squid_ui_discord.target import NativeItem
 async def _click(event) -> None: ...
 
 
-def _nav(state):
+def _nav(context):
     return (
         Row(
             (
-                Button("Previous", _click, f"prev.{state.key}", disabled=not state.has_previous),
-                Button("Next", _click, f"next.{state.key}", disabled=not state.has_next),
+                Button("Previous", _click, f"prev.{context.key}", disabled=not context.has_previous),
+                Button("Next", _click, f"next.{context.key}", disabled=not context.has_next),
             )
         ),
     )

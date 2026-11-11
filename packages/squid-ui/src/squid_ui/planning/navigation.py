@@ -4,17 +4,24 @@ Both kinds of pager expose `NavigationState`, which describes the visible positi
 and available movements. `NavigationContext` adds handlers so a factory can build
 buttons or a jump menu without knowing how the content is loaded. Page numbers
 are separate from cursor offsets: a source cursor may address items, not pages.
+
+A materialized pager is one whose content the planner already holds, such as a
+`Paginate` text pager or an option window. `PagerNav` builds its controls during
+planning, and `PageCommit` sends each page turn to whoever owns the page: the
+presentation session, or the application through `Controlled.on_change`.
 """
 
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Self, override
 
 from squid_ui.chrome import Chrome
 from squid_ui.context import ContextKey
-from squid_ui.handlers import _HandlerBinder
-from squid_ui.interactions import SelectionEvent
+from squid_ui.handlers import _HandlerBinder, _HandlerComposition
+from squid_ui.interactions import ActionEvent, PressEvent, SelectionEvent
+from squid_ui.ownership import FIRST_PAGE, Controlled, PageEvent, PageOwnership, Uncontrolled, bind_ownership
 from squid_ui.planning.generated import GeneratedHandler
+from squid_ui.presentation import PresentationState
 from squid_ui.primitives.nodes import (
     Button,
     Gallery,
@@ -38,18 +45,76 @@ SEEK_OPTION_LIMIT = 25
 
 
 @dataclass(frozen=True, slots=True)
-class _SeekSelection(GeneratedHandler[SelectionEvent]):
-    seek: Callable[[int], Awaitable[None]]
+class PageCommit(_HandlerComposition):
+    """Send a page turn on one materialized pager to whoever owns its page.
+
+    An uncontrolled page moves the pager's cursor in the presentation session and
+    redraws. A controlled page goes to the application's `on_change`, which decides
+    whether to accept it.
+    """
+
+    owner: PageOwnership
+    key: str
+    extent: int
+    session: PresentationState
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
-        # seek receives an integer, not an action event or frontend registration.
+        owner = bind_ownership(self.owner, binder)
+        return replace(self, owner=owner) if owner is not self.owner else self
+
+    async def __call__(self, event: ActionEvent, page: int) -> None:
+        page = max(0, min(page, self.extent - 1))
+        match self.owner:
+            case Controlled(on_change=on_change):
+                await on_change(
+                    PageEvent(event.actor, event.responder, event.locale, event.metadata, page, context=event.context)
+                )
+            case Uncontrolled():
+                # No explicit acknowledgement: the frontend answers the press by editing the
+                # message in place, so a page turn costs one response instead of two.
+                self.session.move_cursor(self.key, Position(offset=page))
+                event.invalidate()
+
+
+@dataclass(frozen=True, slots=True)
+class TurnPage(GeneratedHandler[PressEvent]):
+    """Move to a page fixed when the button was drawn.
+
+    Previous and Next step from the page on screen, not from the stored cursor, so a
+    press always means "the page next to the one the reader sees".
+    """
+
+    commit: PageCommit
+    page: int
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        commit = binder.composition(self.commit)
+        return replace(self, commit=commit) if commit is not self.commit else self
+
+    @override
+    async def __call__(self, event: PressEvent) -> None:
+        await self.commit(event, self.page)
+
+
+@dataclass(frozen=True, slots=True)
+class _SeekSelection(GeneratedHandler[SelectionEvent]):
+    seek: Callable[[ActionEvent, int], Awaitable[None]]
+
+    @override
+    def _bind_handlers(self, binder: _HandlerBinder) -> Self:
+        # A component's own seek method needs no binding; a pager's commit may hold a
+        # frontend-specific on_change.
+        if isinstance(self.seek, PageCommit):
+            seek = binder.composition(self.seek)
+            return replace(self, seek=seek) if seek is not self.seek else self
         return self
 
     @override
     async def __call__(self, event: SelectionEvent) -> None:
         if event.values:
-            await self.seek(int(event.values[0]))
+            await self.seek(event, int(event.values[0]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +155,7 @@ class NavigationContext:
     state: NavigationState
     on_previous: Callable[..., Awaitable[None]]
     on_next: Callable[..., Awaitable[None]]
-    on_seek: Callable[[int], Awaitable[None]] | None = None
+    on_seek: Callable[[ActionEvent, int], Awaitable[None]] | None = None
     """Jump to a zero-based page, or `None` when the source cannot address one.
 
     A source declares this reachable with `SourceCapabilities.jumpable`; a materialized
@@ -129,7 +194,8 @@ type MountNavNode = Row | SelectMenu | RoutedSelect | RawItem
 `NavNode` also permits V2 structures for planner factories that already know the mode.
 """
 type NavFactory = Callable[[NavigationContext], Sequence[MountNavNode]]
-type PlannedNav = Callable[[NavigationState], Sequence[NavNode]]
+type PlannedNav = Callable[[NavigationContext], Sequence[NavNode]]
+"""A navigation factory used during planning, which may also return V2 structures."""
 
 NAV_FACTORY_CONTEXT = ContextKey[NavFactory]("nav_factory")
 
@@ -232,6 +298,22 @@ def materialized_navigation_state(key: str, position: Position, extent: int, chr
     )
 
 
+@dataclass(frozen=True, slots=True)
+class PagerNav:
+    """Build the navigation controls for materialized pagers in one plan."""
+
+    factory: PlannedNav
+    session: PresentationState
+
+    def __call__(
+        self, key: str, page: int, extent: int, chrome: Chrome, owner: PageOwnership = FIRST_PAGE
+    ) -> Sequence[NavNode]:
+        """Return controls for ``page`` of ``extent`` that send page turns to ``owner``."""
+        state = materialized_navigation_state(key, Position(offset=page), extent, chrome)
+        commit = PageCommit(owner, key, extent, self.session)
+        return self.factory(NavigationContext(state, TurnPage(commit, page - 1), TurnPage(commit, page + 1), commit))
+
+
 __all__ = [
     "MATERIALIZED_NEXT_KEY",
     "MATERIALIZED_PREVIOUS_KEY",
@@ -243,7 +325,10 @@ __all__ = [
     "NavNode",
     "NavigationContext",
     "NavigationState",
+    "PageCommit",
+    "PagerNav",
     "PlannedNav",
+    "TurnPage",
     "default_nav",
     "materialized_navigation_state",
     "navigation_controls",
