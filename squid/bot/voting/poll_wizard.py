@@ -343,7 +343,7 @@ class PollScreen(sd.Screen[str]):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.published_url is not None:
-            published_url = self.published_url
+            published_url = sl.raw_md(self.published_url)
             return (
                 sl.status(
                     tr(t"bot-voting-poll-wizard-poll-published = Poll published: {published_url}"), tone=sl.Tone.SUCCESS

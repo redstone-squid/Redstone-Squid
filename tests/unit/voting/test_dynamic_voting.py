@@ -132,9 +132,24 @@ def test_generic_poll_presentation_uses_host_owned_tallies() -> None:
     text = "\n".join(
         child.content for child in presentation.view.walk_children() if isinstance(child, discord.ui.TextDisplay)
     )
-    assert "2 weighted" in text
+    assert "One — 2 weighted" in text
+    assert "??" not in text
     assert "— 1" in text
     assert "<@420>" in text
+
+
+def test_closed_poll_presentation_has_readable_outcome() -> None:
+    snapshot = poll_snapshot(
+        status=VoteStatus.CLOSED,
+        selections=(VoteSelection(42, 10, "one", "1️⃣", 2),),
+    )
+
+    presentation = render_generic_poll(snapshot)
+    text = "\n".join(
+        child.content for child in presentation.layout.walk_children() if isinstance(child, discord.ui.TextDisplay)
+    )
+    assert "Poll closed — Winner: One" in text
+    assert "??" not in text
 
 
 def test_hidden_poll_presentation_omits_every_tally_value() -> None:

@@ -162,7 +162,7 @@ def _generic_poll_nodes(
             tally_options.append(
                 sp.TallyOption(
                     option_id,
-                    sl.md(t"{label} ??{weighted_count:g} weighted{voter_suffix}"),
+                    sl.md(t"{label} — {weighted_count:g} weighted{voter_suffix}"),
                     raw.get(option_id, 0),
                     emoji=option.emoji,
                 )
@@ -194,7 +194,7 @@ def _generic_poll_nodes(
             if len(winners) > 1
             else f"Winner: {winners[0]}"
         )
-        nodes.append(sl.status(sl.md(t"Poll closed ??{outcome}"), emphasis=sl.semantic.Emphasis.STRONG))
+        nodes.append(sl.status(sl.md(t"Poll closed — {outcome}"), emphasis=sl.semantic.Emphasis.STRONG))
     else:
         nodes.append(
             sl.note(sl.md(t"Closes {sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}."))

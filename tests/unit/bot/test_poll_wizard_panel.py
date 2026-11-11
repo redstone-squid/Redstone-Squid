@@ -8,6 +8,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.ui import render_payload
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
@@ -28,7 +29,7 @@ class Guild:
 
 def make_screen(*, failure: Exception | None = None) -> PollScreen:
     resolve = AsyncCallRecorder(error=failure, result=GENERIC_OPTIONS)
-    publish = AsyncCallRecorder(result="https://discord.invalid/channels/1/2/3")
+    publish = AsyncCallRecorder(result="https://discord.com/channels/1/2/3")
     return PollScreen(resolve, publish, allow_network=True)
 
 
@@ -85,8 +86,13 @@ async def test_wizard_finishes_publication_once() -> None:
     async with sd.testing.stage(screen, owner=object()) as ui:
         key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("poll.finish"))
         await ui.press(key)
-        assert await screen.wait() == sd.Completed("https://discord.invalid/channels/1/2/3")
+        assert await screen.wait() == sd.Completed("https://discord.com/channels/1/2/3")
         assert ui.root.finished
+        payload = render_payload(screen.render())
+        text = "\n".join(
+            child.content for child in payload.layout.walk_children() if isinstance(child, discord.ui.TextDisplay)
+        )
+        assert "Poll published: https://discord.com/channels/1/2/3" in text
         await ui.root.dispatch(key, interaction_harness(user_id=1))
 
     cast(AsyncCallRecorder, screen._resolve_options).assert_awaited_once_with(("One", "Two"))
@@ -119,7 +125,7 @@ async def test_invalid_options_return_the_wizard_to_review() -> None:
 
         cast(AsyncCallRecorder, screen._resolve_options).error = None
         await ui.press(key)
-        assert await screen.wait() == sd.Completed("https://discord.invalid/channels/1/2/3")
+        assert await screen.wait() == sd.Completed("https://discord.com/channels/1/2/3")
 
 
 def test_settings_step_uses_typed_portable_fields() -> None:
