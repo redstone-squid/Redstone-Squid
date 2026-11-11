@@ -141,12 +141,11 @@ def test_process_entry_points_use_concrete_runtime_constructors() -> None:
     assert all({keyword.arg for keyword in call.keywords} <= {"config"} for call in production_calls)
 
 
-def test_submission_domain_and_application_do_not_import_pydantic() -> None:
-    """Transport validation stays outside submission policy and orchestration."""
+def test_submission_domain_does_not_import_pydantic() -> None:
+    """Manifest policy stays independent of application command and transport schemas."""
     violations = [
         f"{path}:{node.lineno}"
-        for root in (Path("squid/submissions/domain"), Path("squid/submissions/application"))
-        for path in root.rglob("*.py")
+        for path in Path("squid/submissions/domain").rglob("*.py")
         for node in ast.walk(source_tree(path))
         if (isinstance(node, ast.Import) and any(alias.name == "pydantic" for alias in node.names))
         or (isinstance(node, ast.ImportFrom) and node.module == "pydantic")

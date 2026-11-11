@@ -124,13 +124,13 @@ from squid.submissions.application import (
 from squid.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
+from squid.submissions.application.build_target import SubmissionBuildPreparation
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.application.schematics import DraftSchematicService
-from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog

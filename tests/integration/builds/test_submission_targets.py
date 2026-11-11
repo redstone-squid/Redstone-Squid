@@ -45,6 +45,7 @@ from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.schematics.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
+from squid.submissions.application.build_target import SubmissionBuildPreparation
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.domain import (
     BuildSubmissionRejected,
@@ -57,7 +58,6 @@ from squid.submissions.domain import (
     SubmissionAttentionReason,
     SubmissionOrigin,
 )
-from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )

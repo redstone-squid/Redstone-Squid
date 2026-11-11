@@ -12428,27 +12428,6 @@
               "default": 20,
               "title": "Limit"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -12592,29 +12571,6 @@
             "MinecraftPlayer": []
           }
         ],
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -12705,21 +12661,6 @@
               }
             },
             "description": "Service Unavailable",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -12989,32 +12930,6 @@
         "summary": "Current Form",
         "description": "Return the localized form and protocol bounds authored by this server.",
         "operationId": "submission_form_current",
-        "security": [
-          {}
-        ],
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -13032,6 +12947,7 @@
             }
           },
           "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13044,7 +12960,6 @@
                 }
               }
             },
-            "description": "Too Many Requests",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -13052,6 +12967,7 @@
             }
           },
           "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13061,22 +12977,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Service Unavailable",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
@@ -13087,6 +12987,9 @@
             }
           }
         },
+        "security": [
+          {}
+        ],
         "x-squid-cli": {
           "classification": "transport-only"
         }
@@ -13123,27 +13026,6 @@
               "minimum": 1,
               "title": "Revision"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -13279,27 +13161,6 @@
               "pattern": "^[a-z][a-z0-9_]{0,63}$",
               "title": "Category"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -13453,27 +13314,6 @@
               "format": "uuid",
               "title": "Draft Id"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -13829,7 +13669,7 @@
           "submissions"
         ],
         "summary": "Change Draft",
-        "description": "Atomically apply a retry-safe optimistic edit to an owned draft.",
+        "description": "Apply an owned draft change; an optional If-Match must agree with base_revision.",
         "operationId": "submission_draft_change",
         "security": [
           {
@@ -13852,6 +13692,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Draft Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
             }
           },
           {
@@ -14030,6 +13886,26 @@
               }
             },
             "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Precondition Failed",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -14655,27 +14531,6 @@
               "default": 20,
               "title": "Limit"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -14873,27 +14728,6 @@
               "format": "uuid",
               "title": "Draft Id"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {
@@ -15090,27 +14924,6 @@
               "format": "uuid",
               "title": "Attempt Id"
             }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 255,
-                  "pattern": "^[\\x21-\\x7e]+$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-              "title": "Idempotency-Key"
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
         "responses": {

@@ -12,6 +12,7 @@ from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import ValidationError
 from squid.sponsors import PublicSponsor
+from squid.submissions.application.build_target import SubmissionBuildPreparation, preview_build
 from squid.submissions.domain import (
     BuildSubmissionRejected,
     DoorOrientation,
@@ -32,7 +33,6 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation, preview_build
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition

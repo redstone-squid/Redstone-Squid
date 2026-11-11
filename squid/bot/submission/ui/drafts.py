@@ -49,6 +49,7 @@ from squid.core.errors import JSONValue, SquidError
 from squid.core.i18n import tr
 from squid.runtime import BotServices
 from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
+from squid.submissions.application.build_target import PREVIEW_TITLE_FIELDS, preview_build
 from squid.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
 from squid.submissions.application.intake import SuppliedAttachment
 from squid.submissions.domain import (
@@ -65,7 +66,6 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.submissions.domain.intake import IntakeStatus
-from squid.submissions.infrastructure.build_target import PREVIEW_TITLE_FIELDS, preview_build
 from squid_i18n import NUMBER
 from squid_reactivity import TopicHandle
 from squid_ui.interactions import PressHandler
