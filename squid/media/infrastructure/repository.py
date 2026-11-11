@@ -131,6 +131,8 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 draft_id=upload.draft_id, upload_id=upload.id, discarded=intent is not None and intent.discarded
             )
         )
+        if intent is None:
+            await _membership_changed(session, upload.draft_id)
         return MediaEnqueueOutcome(created=True, status=MediaJobStatus.PENDING)
 
     @override
@@ -231,7 +233,10 @@ class PostgresMediaJobRepository(MediaJobRepository):
         if reference is None:
             reference = MediaDraftReference(draft_id=draft_id, upload_id=upload_id)
             session.add(reference)
+        if reference.discarded:
+            return True
         reference.discarded = True
+        await _membership_changed(session, draft_id)
         await session.flush()
         if await session.scalar(
             select(MediaUploadRecord.id).where(MediaUploadRecord.id == upload_id, retained_elsewhere(draft_id))
@@ -297,17 +302,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             session.add(MediaDraftReference(draft_id=target_id, upload_id=upload_id))
         else:
             reference.discarded = False
-        await session.execute(
-            update(SubmissionDraft)
-            .where(SubmissionDraft.id == target_id)
-            .values(
-                revision=SubmissionDraft.revision + 1,
-                status=DraftStatus.EDITING,
-                preparation_issues=[],
-                preparation_retry_at=None,
-                updated_at=func.now(),
-            )
-        )
+        await _membership_changed(session, target_id)
         return True
 
     @override
@@ -622,6 +617,20 @@ class PostgresMediaJobRepository(MediaJobRepository):
         session = self._session()
         outcome = cast(CursorResult[Any], await session.execute(statement))
         return bool(outcome.rowcount)
+
+
+async def _membership_changed(session: AsyncSession, draft_id: UUID) -> None:
+    await session.execute(
+        update(SubmissionDraft)
+        .where(SubmissionDraft.id == draft_id)
+        .values(
+            revision=SubmissionDraft.revision + 1,
+            status=DraftStatus.EDITING,
+            preparation_issues=[],
+            preparation_retry_at=None,
+            updated_at=func.now(),
+        )
+    )
 
 
 async def _lock_mutable_submission_draft(

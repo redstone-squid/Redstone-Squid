@@ -13,6 +13,7 @@ from squid.submissions.application.intake import SuppliedAttachment, classify_su
 from squid.submissions.domain import SubmissionAttentionIssue, SubmissionAttentionReason
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.submissions.infrastructure.finalization_repository import _locked_draft
 from squid.submissions.infrastructure.schematics import _changed, _editable
 from squid.submissions.models.entities import SubmissionDraft
 from squid.submissions.models.intake import SubmissionSuppliedAttachment
@@ -59,7 +60,10 @@ class PostgresAttachmentIntake:
                     status=IntakeStatus.PENDING,
                 )
             )
-        if existing is None or not existing.history_managed:
+        # Inferred source files already belong to the draft. Download and retry
+        # only fill in processing metadata for that existing membership.
+        inferred = any(str(source["id"]) == str(attachment.id) for source in model.source_files)
+        if existing is None and not inferred:
             _changed(model)
 
     async def list(self, draft_id: UUID) -> tuple[SuppliedAttachment, ...]:
@@ -96,6 +100,7 @@ class PostgresAttachmentIntake:
     async def set_status(self, draft_id: UUID, source_id: UUID, status: IntakeStatus) -> None:
         """Update intake status without undoing a discard or replacing ready with failed."""
         session = self._session()
+        draft = await _locked_draft(session, draft_id) if status is IntakeStatus.DISCARDED else None
         model = await session.scalar(
             select(SubmissionSuppliedAttachment)
             .where(
@@ -107,7 +112,10 @@ class PostgresAttachmentIntake:
         if model is None:
             raise NotFoundError
         if status is IntakeStatus.DISCARDED:
-            model.discarded = True
+            if not model.discarded:
+                model.discarded = True
+                assert draft is not None
+                _changed(draft)
             return
         if status is IntakeStatus.FAILED and model.status is IntakeStatus.READY:
             return

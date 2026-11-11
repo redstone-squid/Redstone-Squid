@@ -254,3 +254,30 @@ async def test_failed_staging_preserves_visible_membership_and_releases_its_leas
             )
             is None
         )
+
+
+async def test_media_writers_without_intake_still_advance_the_draft_revision(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    owner = await seed_account_and_version(sessions)
+    draft = await create_draft(sessions, owner)
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    source = uuid4()
+    async with factory() as uow:
+        await uow.media_jobs.enqueue(
+            MediaUploadMetadata(
+                source, draft.snapshot.id, MediaKind.IMAGE, "image/png", 10, "a" * 64, "raw/direct", strip_audio=False
+            ),
+            MediaLimits(),
+        )
+        await uow.commit()
+    assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision + 1
+    async with factory() as uow:
+        assert await uow.media_jobs.discard(draft.snapshot.id, source)
+        await uow.commit()
+    assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision + 2
+    async with factory() as uow:
+        assert await uow.media_jobs.discard(draft.snapshot.id, source)
+        await uow.commit()
+    assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision + 2

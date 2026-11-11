@@ -109,6 +109,7 @@ async def test_source_manifest_blocks_even_if_process_dies_before_reserving_down
     assert pending.status is IntakeStatus.PENDING
     assert pending.source == source
     await transact(intake, lambda uow: uow.attachment_intake.reserve(draft, pending), commit=True)
+    assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision
     await transact(
         intake,
         lambda uow: uow.attachment_intake.set_status(draft.snapshot.id, source.id, IntakeStatus.DISCARDED),

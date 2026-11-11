@@ -343,8 +343,8 @@ async def _link(session: AsyncSession, draft: SubmissionDraft, upload_id: UUID) 
     if existing is not None and not existing.discarded:
         return existing
     intent = await session.get(SubmissionSuppliedAttachment, (draft.id, upload_id))
-    if intent is not None and intent.history_managed:
-        # The command already changed membership and advanced the draft revision.
+    if intent is not None:
+        # Intake already established membership and advanced the draft revision.
         # Processor registration fills in that intent without overwriting a later selection.
         primary = await session.scalar(
             select(DraftSchematicLink.source_id).where(
