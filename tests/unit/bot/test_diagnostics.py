@@ -1,6 +1,6 @@
 """Tests for reading a stored error report from Discord."""
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from typing import override
 from uuid import NAMESPACE_URL, uuid5
@@ -15,7 +15,7 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics_view import ERROR_CHROME, ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.models import ErrorReport
-from squid_ui.runtime import Resource, UIExecutionHost
+from squid_ui.runtime import UIExecutionHost
 from squid_ui.sources import Position
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
 from squid_ui_discord import (
@@ -370,8 +370,8 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
     stopped = anyio.Event()
 
     class ObservedRefresh(ErrorReportRefresh):
-        def __init__(self, changes: Resource[bool]) -> None:
-            super().__init__(changes, interval=0.001)
+        def __init__(self, check: Callable[[], Awaitable[bool]]) -> None:
+            super().__init__(check, interval=0.001)
 
         @override
         async def run(self, *, task_status: TaskStatus[None]) -> None:

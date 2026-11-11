@@ -48,18 +48,6 @@ ERROR_CHROME = dataclasses.replace(
 )
 
 
-class _ReportChanges(sl.Reactive):
-    """Share the latest report comparison between the notice and refresh controls."""
-
-    def __init__(self, check: Callable[[], Awaitable[bool]]) -> None:
-        self._check = check
-        self.changed.replace(value=False)
-
-    @sl.resource
-    async def changed(self) -> bool:
-        return await self._check()
-
-
 class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Check for report changes without replacing the browser the reader is using."""
 
@@ -76,12 +64,11 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._work_lost_only = work_lost_only
         self._notice = _ReportUpdateNotice()
         self._controls = _ReportUpdateControls(refresh)
-        self._changes = _ReportChanges(self._check)
-        self.monitor = self.own(ErrorReportRefresh(self.changed))
+        self.monitor = self.own(ErrorReportRefresh(self._check))
 
     @property
     def changed(self) -> sl.runtime.Resource[bool]:
-        return self._changes.changed
+        return self.monitor.changes
 
     async def _check(self) -> bool:
         reports = await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self._work_lost_only)
