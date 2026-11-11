@@ -397,6 +397,26 @@ class AccountService:
                 raise AccountNotFoundError(account_id)
             return profile
 
+    async def replace_profile(self, account_id: int, expected: ProfileUpdate, replacement: ProfileUpdate) -> bool:
+        """Conditionally replace profile fields after validating content and current consent."""
+        async with self._uow_factory() as uow:
+            changed = await uow.accounts.replace_profile(account_id, expected, replacement.validated())
+            if changed:
+                await uow.commit()
+            return changed
+
+    async def replace_identity_visibility(
+        self, account_id: int, identity_id: int, *, expected: bool, replacement: bool
+    ) -> bool:
+        """Conditionally reverse a caller-owned identity's visibility."""
+        async with self._uow_factory() as uow:
+            changed = await uow.accounts.replace_identity_visibility(
+                account_id, identity_id, expected=expected, replacement=replacement
+            )
+            if changed:
+                await uow.commit()
+            return changed
+
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         """Validate and save a partial profile edit after checking the account's consent."""
         async with self._uow_factory() as uow:

@@ -114,6 +114,87 @@ class PostgresNotificationRepository:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
+    async def replace_preferences(
+        self, account_id: int, expected: tuple[bool, bool], replacement: tuple[bool, bool]
+    ) -> bool:
+        session = self._session()
+        await session.get(Account, account_id, with_for_update=True)
+        await session.get(NotificationProfile, account_id, with_for_update=True)
+        current = await self.get_preferences(account_id)
+        if not current.has_current_consent or (current.web_enabled, current.dm_enabled) != expected:
+            return False
+        return (
+            await self.update_preferences(account_id, web_enabled=replacement[0], dm_enabled=replacement[1]) is not None
+        )
+
+    async def replace_read_states(
+        self,
+        account_id: int,
+        expected: tuple[tuple[int, bool], ...],
+        replacement: tuple[tuple[int, bool], ...],
+        *,
+        visibility: InboxVisibility,
+    ) -> bool:
+        session = self._session()
+        if {key for key, _ in expected} != {key for key, _ in replacement}:
+            message = "history must replace the same notification targets"
+            raise ValueError(message)
+        rows = (
+            await session.scalars(
+                select(InboxNotification)
+                .where(
+                    InboxNotification.id.in_([key for key, _ in expected]), *_inbox_predicates(account_id, visibility)
+                )
+                .order_by(InboxNotification.id)
+                .with_for_update()
+            )
+        ).all()
+        if {row.id: row.read_at is not None for row in rows} != dict(expected):
+            return False
+        for notification_id, read in replacement:
+            await self._set_read_state(account_id, notification_id, visibility=visibility, read=read)
+        return True
+
+    async def replace_subscription_states(
+        self, account_id: int, expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
+    ) -> bool:
+        session = self._session()
+        await session.get(Account, account_id, with_for_update=True)
+        if await self._consent_pending(session, account_id):
+            return False
+        if {key for key, _ in expected} != {key for key, _ in replacement}:
+            message = "history must replace the same subscription targets"
+            raise ValueError(message)
+        rows = (
+            await session.scalars(
+                select(NotificationSubscription)
+                .where(
+                    NotificationSubscription.account_id == account_id,
+                    NotificationSubscription.id.in_([key for key, _ in expected]),
+                )
+                .order_by(NotificationSubscription.id)
+                .with_for_update()
+            )
+        ).all()
+        if {row.id: row.enabled for row in rows} != dict(expected):
+            return False
+        desired = dict(replacement)
+        active = await self.list_subscriptions(account_id)
+        for row in rows:
+            if desired[row.id] and not row.enabled:
+                if any(
+                    other.id != row.id
+                    and (other.kind, other.subject_id, other.record_filter)
+                    == (row.kind, row.subject_id, row.record_filter)
+                    for other in active
+                ):
+                    return False
+                if row.subject_id is not None and not await self.subscription_target_exists(row.kind, row.subject_id):
+                    return False
+        for row in rows:
+            row.enabled = desired[row.id]
+        return True
+
     async def get_preferences(self, account_id: int) -> NotificationPreferences:
         session = self._session()
         profile = await session.get(NotificationProfile, account_id)
@@ -134,6 +215,7 @@ class PostgresNotificationRepository:
         DMs clears a previous suspension; disabling them terminates pending deliveries.
         """
         session = self._session()
+        await session.get(Account, account_id, with_for_update=True)
         if await self._consent_pending(session, account_id):
             return None
         profile = (
@@ -188,6 +270,7 @@ class PostgresNotificationRepository:
         self._session()
         filter_value = record_filter
         session = self._session()
+        await session.get(Account, account_id, with_for_update=True)
         predicates = [
             NotificationSubscription.account_id == account_id,
             NotificationSubscription.kind == kind,

@@ -31,6 +31,7 @@ from squid.voting.domain import (
     VoteVisibility,
     normalize_vote_options,
 )
+from squid.voting.domain.models import VoteConfiguration
 from squid.voting.errors import InvalidVoteConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -409,6 +410,38 @@ class VoteService:
             if result.just_closed and result.session is not None:
                 closed.append(result.session)
         return closed
+
+    async def configuration(self, guild_id: int, kind: VoteKind) -> VoteConfiguration:
+        """Read a consistent snapshot of stored configuration, without applying defaults."""
+        async with self._uow_factory() as uow:
+            await uow.votes.lock_configuration(guild_id)
+            result = VoteConfiguration(
+                await uow.votes.get_emoji_preset(guild_id, kind),
+                tuple(sorted(await uow.votes.get_role_weights(guild_id, kind), key=lambda weight: weight.role_id)),
+            )
+            await uow.commit()
+            return result
+
+    async def replace_configuration(
+        self, guild_id: int, kind: VoteKind, *, expected: VoteConfiguration, replacement: VoteConfiguration
+    ) -> bool:
+        """Restore stored configuration only when no intervening configuration edit would be lost."""
+        async with self._uow_factory() as uow:
+            await uow.votes.lock_configuration(guild_id)
+            current = VoteConfiguration(
+                await uow.votes.get_emoji_preset(guild_id, kind),
+                tuple(sorted(await uow.votes.get_role_weights(guild_id, kind), key=lambda weight: weight.role_id)),
+            )
+            if current != expected:
+                return False
+            await uow.votes.reset_configuration(guild_id, kind)
+            if replacement.preset is not None:
+                await uow.votes.set_emoji_preset(replacement.preset)
+            for weight in replacement.weights:
+                await uow.votes.set_role_weight(weight)
+            await uow.commit()
+        await self._refresh_kind(guild_id, kind)
+        return True
 
     async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
         async with self._uow_factory() as uow:

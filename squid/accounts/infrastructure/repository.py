@@ -5,6 +5,7 @@ import hmac
 import secrets
 import uuid
 from collections.abc import Callable, Sequence
+from dataclasses import fields
 
 from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -33,6 +34,7 @@ from squid.accounts.errors import (
     AccountNotFoundError,
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
+    ConsentRequiredError,
     CreatorAliasNotFoundError,
     LastIdentityError,
     MinecraftAccountNotFoundError,
@@ -51,6 +53,7 @@ from squid.accounts.models import (
 from squid.accounts.models import VerificationAttempt as VerificationAttemptModel
 from squid.accounts.models import VerificationCode as VerificationCodeModel
 from squid.core.i18n import tr
+from squid.core.sentinel import UNSET
 from squid.persistence.account_merge import AccountMergeContext
 from squid.persistence.types import InstantUTC
 
@@ -301,6 +304,40 @@ class AccountRepository:
             exists = await session.scalar(select(Account.id).where(Account.id == account_id))
             return None if exists is None else AccountProfile.empty(account_id)
         return model
+
+    async def replace_profile(self, account_id: int, expected: ProfileUpdate, replacement: ProfileUpdate) -> bool:
+        """Conditionally edit supplied fields under the same locks as ordinary profile writes."""
+        session = self._session()
+        account = await session.get(Account, account_id, with_for_update=True)
+        if account is None:
+            return False
+        if not await self.has_current_consent(account_id):
+            raise ConsentRequiredError(account_id=account_id)
+        profile = await session.get(AccountProfile, account_id, with_for_update=True)
+        if profile is None:
+            profile = AccountProfile.empty(account_id)
+        for field in fields(expected):
+            value = getattr(expected, field.name)
+            if value is not UNSET and getattr(profile, field.name) != value:
+                return False
+        await self.upsert_profile(account_id, replacement)
+        return True
+
+    async def replace_identity_visibility(
+        self, account_id: int, identity_id: int, *, expected: bool, replacement: bool
+    ) -> bool:
+        session = self._session()
+        result = await session.execute(
+            update(AccountIdentity)
+            .where(
+                AccountIdentity.id == identity_id,
+                AccountIdentity.account_id == account_id,
+                AccountIdentity.is_public == expected,
+            )
+            .values(is_public=replacement)
+            .returning(AccountIdentity.id)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
         """Apply a validated partial edit, creating the profile row if it is somehow missing."""

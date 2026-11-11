@@ -151,6 +151,29 @@ class SettingsService:
             settings.locale = locale
             await uow.commit()
 
+    async def replace_channel(
+        self, server_id: int, setting: ScalarChannelSetting, *, expected: int | None, replacement: int | None
+    ) -> bool:
+        """Replace a channel only if its current value still matches the saved edit."""
+        async with self._uow_factory() as uow:
+            row = await uow.settings.get_or_create_for_update(server_id)
+            column = _CHANNEL_FIELDS[setting]
+            if getattr(row, column) != expected:
+                return False
+            setattr(row, column, replacement)
+            await uow.commit()
+            return True
+
+    async def replace_locale(self, server_id: int, *, expected: str | None, replacement: str | None) -> bool:
+        """Replace the locale override atomically, preserving other server settings."""
+        async with self._uow_factory() as uow:
+            row = await uow.settings.get_or_create_for_update(server_id)
+            if row.locale != expected:
+                return False
+            row.locale = replacement
+            await uow.commit()
+            return True
+
     async def _set(self, server_id: int, setting: Setting, value: int | None) -> None:
         async with self._uow_factory() as uow:
             settings = await uow.settings.get_or_create_for_update(server_id)

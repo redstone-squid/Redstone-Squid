@@ -1,7 +1,7 @@
 """Account application service tests."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import replace
+from dataclasses import fields, replace
 from uuid import UUID
 
 import pytest
@@ -47,6 +47,7 @@ from squid.accounts.errors import (
 )
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
 from squid.core.errors import ValidationError
+from squid.core.sentinel import UNSET
 from tests.support.identity_uow import AccountScope
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -191,6 +192,29 @@ class FakeAccountRepository:
         if account_id not in self.accounts:
             return None
         return self.profiles.setdefault(account_id, AccountProfile.empty(account_id))
+
+    async def replace_profile(self, account_id: int, expected: ProfileUpdate, replacement: ProfileUpdate) -> bool:
+        profile = await self.get_profile(account_id)
+        if profile is None:
+            return False
+        if any(
+            getattr(profile, f.name) != getattr(expected, f.name)
+            for f in fields(expected)
+            if getattr(expected, f.name) is not UNSET
+        ):
+            return False
+        await self.upsert_profile(account_id, replacement)
+        return True
+
+    async def replace_identity_visibility(
+        self, account_id: int, identity_id: int, *, expected: bool, replacement: bool
+    ) -> bool:
+        account = self.accounts.get(account_id)
+        identity = next((i for i in account.identities if i.id == identity_id), None) if account else None
+        if identity is None or identity.is_public != expected:
+            return False
+        await self.set_identity_visibility(account_id, identity_id, is_public=replacement)
+        return True
 
     async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
         current = self.profiles.setdefault(account_id, AccountProfile.empty(account_id))

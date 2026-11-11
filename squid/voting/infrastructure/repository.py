@@ -16,6 +16,7 @@ from squid.messages.models import Message
 from squid.persistence.repository import BaseAsyncRepository
 from squid.posts.models import DiscordPost
 from squid.settings.infrastructure.repository import ensure_server_settings
+from squid.settings.models import ServerSetting
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,
@@ -470,6 +471,11 @@ class VoteRepository:
         row.result = result
         return True
 
+    async def lock_configuration(self, guild_id: int) -> None:
+        session = self._session()
+        await ensure_server_settings(session, (guild_id,))
+        await session.scalar(select(ServerSetting).where(ServerSetting.server_id == guild_id).with_for_update())
+
     async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
         session = self._session()
         rows = (
@@ -498,6 +504,7 @@ class VoteRepository:
         )
 
     async def set_emoji_preset(self, preset: EmojiPreset) -> None:
+        await self.lock_configuration(preset.guild_id)
         session = self._session()
         await ensure_server_settings(session, (preset.guild_id,))
         await session.execute(
@@ -531,6 +538,7 @@ class VoteRepository:
         return [RoleWeight(row.guild_id, row.kind, row.role_id, row.multiplier) for row in rows]
 
     async def set_role_weight(self, weight: RoleWeight) -> None:
+        await self.lock_configuration(weight.guild_id)
         session = self._session()
         await ensure_server_settings(session, (weight.guild_id,))
         await session.execute(
@@ -552,6 +560,7 @@ class VoteRepository:
         )
 
     async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
+        await self.lock_configuration(guild_id)
         session = self._session()
         await session.execute(
             delete(GuildVoteRoleWeight).where(
@@ -562,6 +571,7 @@ class VoteRepository:
         )
 
     async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
+        await self.lock_configuration(guild_id)
         session = self._session()
         emoji = delete(GuildVoteEmoji).where(GuildVoteEmoji.guild_id == guild_id)
         weights = delete(GuildVoteRoleWeight).where(GuildVoteRoleWeight.guild_id == guild_id)

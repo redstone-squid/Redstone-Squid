@@ -78,6 +78,9 @@ def shared_snapshot() -> VoteSessionSnapshot:
 
 
 class FakeVoteRepository:
+    async def lock_configuration(self, guild_id: int) -> None:
+        pass
+
     """Record service calls and return configured snapshots and mutations without applying votes."""
 
     def __init__(self, session: VoteSessionSnapshot | None):

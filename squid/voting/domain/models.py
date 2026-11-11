@@ -492,3 +492,11 @@ def normalize_vote_options(options: Sequence[VoteOption], *, kind: VoteKind = Vo
                 msg = "Vote sessions require at least one approve and one deny option."
                 raise InvalidVoteConfigurationError(msg)
     return normalized
+
+
+@dataclass(frozen=True, slots=True)
+class VoteConfiguration:
+    """Stored overrides for one guild and vote kind; None means default emojis."""
+
+    preset: EmojiPreset | None
+    weights: tuple[RoleWeight, ...]

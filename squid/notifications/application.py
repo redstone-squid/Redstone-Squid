@@ -26,6 +26,23 @@ from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 class NotificationRepository(Protocol):
     """Persistence needed by the notification application service."""
 
+    async def replace_preferences(
+        self, account_id: int, expected: tuple[bool, bool], replacement: tuple[bool, bool]
+    ) -> bool: ...
+
+    async def replace_read_states(
+        self,
+        account_id: int,
+        expected: tuple[tuple[int, bool], ...],
+        replacement: tuple[tuple[int, bool], ...],
+        *,
+        visibility: InboxVisibility,
+    ) -> bool: ...
+
+    async def replace_subscription_states(
+        self, account_id: int, expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
+    ) -> bool: ...
+
     async def get_preferences(self, account_id: int) -> NotificationPreferences: ...
 
     async def update_preferences(
@@ -103,6 +120,40 @@ class NotificationService:
         self._uow_factory = uow_factory
         self._retention_days = retention_days
         self._runtime_settings = runtime_settings
+
+    async def replace_preferences(
+        self, account_id: int, expected: tuple[bool, bool], replacement: tuple[bool, bool]
+    ) -> bool:
+        async with self._uow_factory() as uow:
+            changed = await uow.notifications.replace_preferences(account_id, expected, replacement)
+            if changed:
+                await uow.commit()
+            return changed
+
+    async def replace_read_states(
+        self,
+        account_id: int,
+        expected: tuple[tuple[int, bool], ...],
+        replacement: tuple[tuple[int, bool], ...],
+        *,
+        visibility: InboxVisibility,
+    ) -> bool:
+        async with self._uow_factory() as uow:
+            changed = await uow.notifications.replace_read_states(
+                account_id, expected, replacement, visibility=visibility
+            )
+            if changed:
+                await uow.commit()
+            return changed
+
+    async def replace_subscription_states(
+        self, account_id: int, expected: tuple[tuple[int, bool], ...], replacement: tuple[tuple[int, bool], ...]
+    ) -> bool:
+        async with self._uow_factory() as uow:
+            changed = await uow.notifications.replace_subscription_states(account_id, expected, replacement)
+            if changed:
+                await uow.commit()
+            return changed
 
     async def preferences(self, account_id: int) -> NotificationPreferences:
         """Return preferences, including an implicit disabled profile when absent."""

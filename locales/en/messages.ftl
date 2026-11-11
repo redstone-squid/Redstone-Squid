@@ -424,7 +424,7 @@ accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers
 # squid/accounts/errors.py:370
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/accounts/infrastructure/repository.py:593
+# squid/accounts/infrastructure/repository.py:630
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
 # squid/accounts/errors.py:330
@@ -2959,19 +2959,19 @@ core-state-invalid-operation = Application state is invalid for this operation.
 # squid/core/errors.py:182
 core-supplied-value-invalid = The supplied value is invalid.
 
-# squid/bot/diagnostics_view.py:385
+# squid/bot/diagnostics_view.py:372
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
 # squid/bot/diagnostics_view.py:37
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages } · the attachment has the whole report
 
-# squid/bot/diagnostics_view.py:324
+# squid/bot/diagnostics_view.py:311
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
 # squid/bot/diagnostics_view.py:44
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics_view.py:187
+# squid/bot/diagnostics_view.py:174
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
 # squid/diagnostics/domain.py:23
@@ -2980,91 +2980,91 @@ diagnostics-error-report-not-found = Error report not found
 # squid/diagnostics/application.py:63
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
-# squid/bot/diagnostics_view.py:221
+# squid/bot/diagnostics_view.py:208
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
 # squid/diagnostics/domain.py:22
 diagnostics-no-stored-error = No stored error matches that reference.
 
-# squid/bot/diagnostics_view.py:151
+# squid/bot/diagnostics_view.py:138
 diagnostics-path-privacy-warning = An error report names internal paths, so it is never posted in a channel.
 
-# squid/bot/diagnostics_view.py:119
+# squid/bot/diagnostics_view.py:106
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics_view.py:395
+# squid/bot/diagnostics_view.py:382
 diagnostics-shared-reference-note = { $count } reports share this reference; this is the newest.
 
-# squid/bot/diagnostics_view.py:114
+# squid/bot/diagnostics_view.py:101
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics_view.py:394
+# squid/bot/diagnostics_view.py:381
 diagnostics-view-ambiguous = Ambiguous
 
-# squid/bot/diagnostics_view.py:268
+# squid/bot/diagnostics_view.py:255
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics_view.py:185
+# squid/bot/diagnostics_view.py:172
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics_view.py:193
+# squid/bot/diagnostics_view.py:180
 diagnostics-view-delete-reports = Delete reports
 
-# squid/bot/diagnostics_view.py:238
+# squid/bot/diagnostics_view.py:225
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
 # squid/bot/diagnostics_view.py:45
 diagnostics-view-earlier = Earlier
 
-# squid/bot/diagnostics_view.py:286
+# squid/bot/diagnostics_view.py:273
 diagnostics-view-error = Error { $reference }
 
-# squid/bot/diagnostics_view.py:236
+# squid/bot/diagnostics_view.py:223
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics_view.py:378
+# squid/bot/diagnostics_view.py:365
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics_view.py:379
+# squid/bot/diagnostics_view.py:366
 diagnostics-view-full-id = Full ID
 
-# squid/bot/diagnostics_view.py:300
+# squid/bot/diagnostics_view.py:287
 diagnostics-view-full-report = Full report
 
 # squid/bot/diagnostics_view.py:46
 diagnostics-view-later = Later
 
-# squid/bot/diagnostics_view.py:253
+# squid/bot/diagnostics_view.py:240
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics_view.py:293
+# squid/bot/diagnostics_view.py:280
 diagnostics-view-log-tail = Log tail
 
-# squid/bot/diagnostics_view.py:282
+# squid/bot/diagnostics_view.py:269
 diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 
-# squid/bot/diagnostics_view.py:220
+# squid/bot/diagnostics_view.py:207
 diagnostics-view-recent-errors = Recent errors
 
-# squid/bot/diagnostics_view.py:136
+# squid/bot/diagnostics_view.py:123
 diagnostics-view-refresh-reports = Refresh reports
 
-# squid/bot/diagnostics_view.py:261
+# squid/bot/diagnostics_view.py:248
 diagnostics-view-show-all = Show all
 
-# squid/bot/diagnostics_view.py:263
+# squid/bot/diagnostics_view.py:250
 diagnostics-view-show-work-lost-only = Show work lost only
 
 # squid/bot/diagnostics_view.py:36
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics_view.py:374
+# squid/bot/diagnostics_view.py:361
 diagnostics-view-when = When
 
-# squid/bot/diagnostics_view.py:377
+# squid/bot/diagnostics_view.py:364
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics_view.py:384
+# squid/bot/diagnostics_view.py:371
 diagnostics-view-work-lost = Work lost
 
 # squid/bot/submission/ui/drafts.py:1104, squid/bot/submission/ui/drafts.py:431, squid/bot/submission/ui/drafts.py:737
@@ -4040,10 +4040,10 @@ notifications-channel-and-follow-help = Toggle where notifications arrive, and u
 # squid/bot/notifications.py:51
 notifications-channel-preferences = Manage notification channels and subscriptions
 
-# squid/notifications/application.py:146
+# squid/notifications/application.py:197
 notifications-creator-record-subscriptions = creator and record subscriptions require only a subject_id
 
-# squid/notifications/application.py:260
+# squid/notifications/application.py:311
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
 # squid/bot/notifications_view.py:454
@@ -4076,7 +4076,7 @@ notifications-invalid-record-title-uuid = Enter a record title ID in UUID form.
 # squid/notifications/domain.py:282, squid/notifications/domain.py:287
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
-# squid/notifications/application.py:185
+# squid/notifications/application.py:236
 notifications-page-size = page_size must be between 1 and 100
 
 # squid/notifications/domain.py:249
@@ -4097,10 +4097,10 @@ notifications-record-filter-required = Choose at least one record filter.
 # squid/notifications/domain.py:197
 notifications-record-filter-single-predicate = record filters may contain only one predicate per tag
 
-# squid/notifications/application.py:140
+# squid/notifications/application.py:191
 notifications-record-filter-structured-only = record_filter subscriptions require only a structured filter
 
-# squid/notifications/application.py:101
+# squid/notifications/application.py:118
 notifications-retention-days-positive = retention_days must be positive
 
 # squid/notifications/domain.py:152
