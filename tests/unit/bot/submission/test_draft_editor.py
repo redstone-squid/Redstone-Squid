@@ -256,7 +256,7 @@ async def test_public_visibility_reveals_required_license_and_permission() -> No
     rights = next(group for group in editor.groups if group.id == "rights_privacy_0")
     assert {field.id for field in rights.fields} == {"schematic_visibility", "schematic_license", "rights_attestation"}
     await editor.projection.reload()
-    assert "Public schematic license" in texts(editor.render())[1]
+    assert "Schematic license" in texts(editor.render())[1]
 
 
 async def test_live_projection_refreshes_saved_state() -> None:

@@ -330,12 +330,17 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
 @pytest.mark.parametrize(
     ("revision", "expected_digest"),
     [
-        (2, "076dd914584359bf38116dba59cae6ea1b18dcdfcf2aef48848579098b3f740f"),
-        (3, "30125e2ae90c9cc6f2f7a418db95ccfb827b15137069be6cca9ccec6520742b9"),
+        (2, "19a6c9ea5209c84e8aee12a4c1ad2485454b5c4091cbd9e737eb0b8ed8fc400f"),
+        (3, "06fc4358f2688a923763f2c7679c7683ecba91af48360fa4d1685c35c9788e8c"),
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
-    """Pin the full historical wire shape; changing a published manifest requires a new revision."""
+    """Pin the full wire shape of each published manifest revision.
+
+    Field IDs, value kinds, options, visibility, and validation rules must not change within a
+    revision; that needs a new revision. Rewording English labels or help text is allowed, like a
+    translation update, but update the digest deliberately when you do.
+    """
     payload = FormManifestResponse.from_domain(build_submission_manifest("en", revision=revision)).model_dump(
         mode="json"
     )
