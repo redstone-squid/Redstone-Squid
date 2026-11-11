@@ -258,6 +258,7 @@ async def test_build_editor_commits_against_the_revision_it_presented(
         component.projection.replace((replace(display_build, revision=99), sl.status("Latest card")))
         await ui.press("review")
         await ui.press("apply")
+        await ui.press("close")
         assert await component.wait() == sd.Completed(display_build.id)
         assert ui.root.finished
 
