@@ -1,4 +1,4 @@
-"""Immutable commands, version stamps, and receipts shared by every editor."""
+"""Edit commands, revisions, receipts, and the errors an edit can raise."""
 
 import hashlib
 import json

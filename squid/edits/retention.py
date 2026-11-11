@@ -1,4 +1,4 @@
-"""Short leases keep resources reachable from live undo and redo entries."""
+"""Renew or release resource leases, which keep files that undo may restore."""
 
 from typing import Protocol
 from uuid import UUID

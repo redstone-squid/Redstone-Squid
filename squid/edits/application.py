@@ -1,4 +1,8 @@
-"""One transaction for validation, conditional mutation, and an outcome record."""
+"""Run an edit command through its handler in one transaction.
+
+The executor also stores each operation's outcome, so a retried command returns the
+first result instead of applying the change twice.
+"""
 
 import logging
 from collections.abc import Mapping

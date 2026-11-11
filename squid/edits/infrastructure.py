@@ -1,4 +1,4 @@
-"""Transaction-scoped operation fencing and committed outcome metadata."""
+"""PostgreSQL storage for edit outcomes and resource leases."""
 
 from collections.abc import Callable
 from uuid import UUID

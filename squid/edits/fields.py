@@ -1,7 +1,9 @@
-"""Schema-driven field commands over explicitly selected aggregates.
+"""Edit handlers that change fields of one record, declared by a Pydantic model.
 
-Stores own locking and revision persistence. The command carries the loaded root
-through preparation so validation, auditing, and saving use the same instance.
+`Aggregate` says how to lock and load the record, read its revision, and save it.
+`FieldCommand` rejects fields the model does not declare, checks permissions, and
+keeps the loaded record in `PreparedFields`, so validation, auditing, and writing
+all use the same instance.
 """
 
 from collections.abc import Awaitable, Callable

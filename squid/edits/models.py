@@ -1,4 +1,7 @@
-"""Short-lived operation outcomes; inverse values remain in the live session."""
+"""Tables for edit outcomes, kept 24 hours for retries, and resource leases.
+
+The values needed for undo are not stored; they stay in the editor's receipts.
+"""
 
 from uuid import UUID
 
