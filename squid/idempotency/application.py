@@ -34,7 +34,7 @@ class IdempotencyRepository(Protocol):
         now: Instant,
     ) -> Reservation: ...
 
-    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None: ...
+    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> StoredResponse: ...
 
     async def purge_expired(self, *, now: Instant) -> int: ...
 
@@ -50,9 +50,9 @@ class IdempotencyService:
     the handler again.
 
     Reserving a key and storing its response use separate transactions. The caller
-    runs the operation between them. An unfinished reservation blocks retries with
-    the same key until it expires; this service does not undo the operation's side
-    effects if response storage fails.
+    runs the operation between them. Ordinary unfinished reservations block retries
+    until expiry. A handler with an atomic edit outcome may explicitly resume the
+    original mutation identity; its executor must serialize and reconcile writes.
     """
 
     def __init__(
@@ -77,13 +77,15 @@ class IdempotencyService:
         fingerprint: bytes,
         method: UnsafeHttpMethod,
         route: str,
+        recoverable: bool = False,
     ) -> PendingRequest | StoredResponse:
         """Reserve a caller's key or return its completed response.
 
         The retention window starts at reservation time and is not extended by
         retries. Reusing a live key with another fingerprint raises
         IdempotencyConflictError. An equivalent unfinished request raises
-        IdempotencyInProgressError.
+        IdempotencyInProgressError unless the handler opts into atomic outcome
+        recovery. That opt-in returns the original mutation ID, never a new one.
         """
         now = self._now()
         async with self._uow_factory() as uow:
@@ -101,14 +103,17 @@ class IdempotencyService:
             return reservation
         self._validate_existing(reservation, fingerprint)
         if reservation.response is None:
+            if recoverable and reservation.pending is not None:
+                return reservation.pending
             raise IdempotencyInProgressError
         return reservation.response
 
-    async def complete(self, request: PendingRequest, response: StoredResponse) -> None:
-        """Make a buffered response available to later equivalent requests."""
+    async def complete(self, request: PendingRequest, response: StoredResponse) -> StoredResponse:
+        """Return the first completed response, retaining it for later equivalent requests."""
         async with self._uow_factory() as uow:
-            await uow.idempotency.complete(request, response, now=self._now())
+            stored = await uow.idempotency.complete(request, response, now=self._now())
             await uow.commit()
+            return stored
 
     async def purge_expired(self) -> int:
         """Remove expired reservations and responses, returning the number deleted."""

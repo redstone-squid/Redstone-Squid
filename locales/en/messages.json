@@ -11731,7 +11731,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/idempotency/domain.py:61"
+      "squid/idempotency/domain.py:63"
     ]
   },
   "idempotency-idempotency-encryption-keys": {
@@ -11749,7 +11749,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/idempotency/domain.py:58"
+      "squid/idempotency/domain.py:60"
     ]
   },
   "idempotency-idempotency-retention": {
@@ -11767,7 +11767,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/idempotency/domain.py:68"
+      "squid/idempotency/domain.py:70"
     ]
   },
   "idempotency-request-in-progress": {
@@ -11776,7 +11776,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/idempotency/domain.py:71"
+      "squid/idempotency/domain.py:73"
     ]
   },
   "ingestion-consent-accept-action": {
@@ -13282,7 +13282,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/notifications/application.py:163"
+      "squid/notifications/application.py:191"
     ]
   },
   "notifications-delivery-claim-limit": {
@@ -13291,7 +13291,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/notifications/application.py:277"
+      "squid/notifications/application.py:305"
     ]
   },
   "notifications-dm-delivery-suspended": {
@@ -13408,7 +13408,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/notifications/application.py:202"
+      "squid/notifications/application.py:230"
     ]
   },
   "notifications-persisted-record-filter": {
@@ -13471,7 +13471,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/notifications/application.py:157"
+      "squid/notifications/application.py:185"
     ]
   },
   "notifications-retention-days-positive": {
@@ -13480,7 +13480,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/notifications/application.py:110"
+      "squid/notifications/application.py:119"
     ]
   },
   "notifications-tag-id-positive": {

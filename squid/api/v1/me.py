@@ -12,7 +12,7 @@ from squid.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoti
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
 from squid.api.dependencies import Accounts, BuildQueries, Services
 from squid.api.errors import responses
-from squid.api.idempotency import edit_operation_id, reserve_idempotent_request
+from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -112,7 +112,7 @@ async def grant_consent(
     "/profile",
     response_model=ProfileDetail,
     responses=responses(400, 401, 403, 404, 412, 428, 422, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_edit_request)],
     operation_id="account_profile_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -168,7 +168,7 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
     "/identities/{identity_id}/visibility",
     response_model=IdentityDetail,
     responses=responses(401, 403, 404, 412, 428, 422, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="account_identity_visibility_set",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -204,9 +204,9 @@ async def set_identity_visibility(
 
 @router.delete(
     "/identities/{identity_id}",
-    response_model=IdentityDetail,
+    status_code=204,
     responses=responses(401, 403, 404, 409, 412, 428, 422, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="account_identity_unlink",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE],
@@ -215,13 +215,11 @@ async def set_identity_visibility(
 )
 async def unlink_identity(
     identity_id: int,
-    accounts: Accounts,
     caller: ManageCaller,
     services: Services,
-    response: Response,
     operation_id: Annotated[UUID, Depends(edit_operation_id)],
     if_match: Annotated[str | None, Header()] = None,
-) -> IdentityDetail:
+) -> Response:
     """Unlink one identity from the caller's account.
 
     Removing the last identity returns 409 so the account retains a sign-in method.
@@ -230,10 +228,6 @@ async def unlink_identity(
     if caller.account_id is None:
         raise AuthenticationError
     expected = expected_revision(account_target(caller.account_id), if_match)
-    snapshot = await accounts.editor_snapshot(caller.account_id)
-    identity = next((row for row in snapshot.account.identities if row.id == identity_id), None)
-    if identity is None:
-        raise AccountIdentityNotFoundError(identity_id, account_id=caller.account_id)
     result = await services.edits.execute(
         EditCommand(
             UNLINK_EDIT,
@@ -243,8 +237,7 @@ async def unlink_identity(
         ),
         EditActor(caller.permission_subject()),
     )
-    response.headers["ETag"] = revision_etag(result.outcome.revisions[0])
-    return IdentityDetail.from_domain(identity)
+    return Response(status_code=204, headers={"ETag": revision_etag(result.outcome.revisions[0])})
 
 
 @router.post(

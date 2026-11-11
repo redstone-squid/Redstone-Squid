@@ -5079,15 +5079,8 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdentityDetail"
-                }
-              }
-            },
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"

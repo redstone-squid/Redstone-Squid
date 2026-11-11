@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, Response, status
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import Notifications, Permissions, Services
 from squid.api.errors import responses
-from squid.api.idempotency import edit_operation_id, reserve_idempotent_request
+from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -76,7 +76,7 @@ async def get_preferences(
     "/preferences",
     response_model=NotificationPreferencesDetail,
     responses=responses(400, 401, 403, 412, 428, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_preferences_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -128,7 +128,7 @@ async def list_subscriptions(
     response_model=NotificationSubscriptionDetail,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_subscription_create",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -163,23 +163,23 @@ async def create_subscription(
             subject_id=subscription.subject_id,
             filter=None if subscription.record_filter is None else dict(subscription.record_filter),
         )
-    snapshot = await notifications.editor_snapshot(account_id)
-    response.headers["ETag"] = revision_etag(Revision(notification_target(account_id), snapshot.preferences.revision))
-    for row in snapshot.subscriptions:
-        if (row.kind, row.subject_id, row.record_filter) == (
-            request.kind,
-            request.subject_id,
-            None if request.filter is None else request.filter.to_domain(),
-        ):
-            return NotificationSubscriptionDetail.from_domain(row)
-    raise NotificationSubscriptionNotFoundError
+    row, revision = await notifications.subscription_snapshot(
+        account_id,
+        kind=request.kind,
+        subject_id=request.subject_id,
+        record_filter=None if request.filter is None else request.filter.to_domain(),
+    )
+    if row is None:
+        raise NotificationSubscriptionNotFoundError
+    response.headers["ETag"] = revision_etag(Revision(notification_target(account_id), revision))
+    return NotificationSubscriptionDetail.from_domain(row)
 
 
 @router.delete(
     "/subscriptions/{subscription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 428, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_subscription_delete",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -237,7 +237,7 @@ async def list_inbox(
     "/inbox/{notification_id}/read",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 428, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_inbox_mark_read",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -268,7 +268,7 @@ async def mark_read(
     "/inbox/{notification_id}/unread",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 412, 428, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_inbox_mark_unread",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )

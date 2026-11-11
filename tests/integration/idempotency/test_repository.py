@@ -221,3 +221,24 @@ async def test_explicit_purge_removes_expired_rows_without_api_traffic(
     )
     async with async_session_factory() as session:
         assert await session.scalar(select(IdempotencyRequest)) is None
+
+
+async def test_unfinished_reservation_exposes_identity_and_completion_keeps_first_response(
+    idempotency_table: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = encrypted_repository(async_session_factory)
+    now = Instant.now()
+    pending = await reserve(repository, now=now)
+    assert isinstance(pending, PendingRequest)
+    unfinished = await reserve(repository, now=now.add(seconds=1))
+    assert isinstance(unfinished, ExistingRequest)
+    assert unfinished.pending == pending
+    original = StoredResponse(204, (("etag", '"account-1-r2"'),), b"")
+    first = await transact(repository, lambda uow: uow.idempotency.complete(pending, original, now=now), commit=True)
+    second = await transact(
+        repository,
+        lambda uow: uow.idempotency.complete(pending, StoredResponse(200, (), b"later"), now=now),
+        commit=True,
+    )
+    assert first == second == original

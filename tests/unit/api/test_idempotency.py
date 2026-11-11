@@ -3,14 +3,16 @@
 import asyncio
 import json
 from collections.abc import Iterator
-from typing import cast, override
+from dataclasses import replace
+from functools import partial
+from typing import Annotated, cast, override
 from uuid import UUID, uuid4
 
 import pytest
 from anyio import create_task_group
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-from starlette.responses import StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from whenever import Instant
 
@@ -19,13 +21,16 @@ from squid.api.idempotency import (
     CompleteIdempotentResponseMiddleware,
     IdempotencyReservationState,
     assert_idempotency_completion_installed,
+    edit_operation_id,
+    reserve_edit_request,
     reserve_idempotent_request,
 )
 from squid.core.errors import ErrorCode
+from squid.edits.application import EditExecutor
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 from squid.idempotency.application import IdempotencyRepository
 from squid.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation, UnsafeHttpMethod
-from tests.support.unit_of_work import PublishingFakeUnitOfWork
+from tests.support.unit_of_work import CommittedState, PublishingFakeUnitOfWork
 from tests.unit.api.fakes import (
     TEST_CONFIG,
     TEST_SYNERGY_SECRET,
@@ -33,6 +38,7 @@ from tests.unit.api.fakes import (
     MockAccountManager,
     build_app,
 )
+from tests.unit.edits.test_executor import ACTOR, Handler, Store, Work, command
 
 
 class MemoryIdempotencyRepository(IdempotencyRepository):
@@ -59,16 +65,19 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
         if existing := self.records.get(identity):
             return existing
         request = PendingRequest(uuid4())
-        self.records[identity] = ExistingRequest(fingerprint, None)
+        self.records[identity] = ExistingRequest(fingerprint, None, request)
         self.pending[request.request_id] = identity
         return request
 
     @override
-    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None:
+    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> StoredResponse:
         del now
-        identity = self.pending.pop(request.request_id)
+        identity = self.pending[request.request_id]
         existing = self.records[identity]
+        if existing.response is not None:
+            return existing.response
         self.records[identity] = ExistingRequest(existing.fingerprint, response)
+        return response
 
     @override
     async def purge_expired(self, *, now: Instant) -> int:
@@ -104,12 +113,13 @@ class CompletionRecorder:
         self.release = asyncio.Event()
         self.release.set()
 
-    async def complete(self, _request: PendingRequest, response: StoredResponse) -> None:
+    async def complete(self, _request: PendingRequest, response: StoredResponse) -> StoredResponse:
         self.started.set()
         await self.release.wait()
         if self.error is not None:
             raise self.error
         self.responses.append(response)
+        return response
 
 
 async def run_completion_middleware(
@@ -430,3 +440,35 @@ def test_streaming_idempotent_route_is_rejected_at_startup() -> None:
 
     with pytest.raises(TypeError, match="cannot declare a streaming response"):
         assert_idempotency_completion_installed(app)
+
+
+def test_lost_edit_response_reuses_the_original_outcome_and_checks_if_match() -> None:
+    repository = MemoryIdempotencyRepository()
+    service = IdempotencyService(uow_factory=lambda: MemoryIdempotencyUnitOfWork(repository))
+    app, _database = build_app(idempotency=service)
+    state = CommittedState(Store())
+    executor = EditExecutor(partial(Work, state), {"example": Handler()})
+    attempts = []
+
+    @app.post("/recoverable-edit", dependencies=[Depends(reserve_edit_request)])
+    async def mutate(operation_id: Annotated[UUID, Depends(edit_operation_id)]) -> Response:
+        attempts.append(operation_id)
+        result = await executor.execute(replace(command(), operation_id=operation_id), ACTOR)
+        if len(attempts) == 1:
+            return JSONResponse({"error": "response rendering failed after commit"}, status_code=503)
+        return JSONResponse({"revision": result.outcome.revisions[0].value})
+
+    headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "edit-one", "If-Match": '"example-1-r1"'}
+    with TestClient(app) as client:
+        failed = client.post("/recoverable-edit", headers=headers)
+        recovered = client.post("/recoverable-edit", headers=headers)
+        replayed = client.post("/recoverable-edit", headers=headers)
+        changed = client.post("/recoverable-edit", headers=headers | {"If-Match": '"example-1-r2"'})
+    assert failed.status_code == 503
+    assert recovered.status_code == replayed.status_code == 200
+    assert recovered.json() == replayed.json() == {"revision": 2}
+    assert changed.status_code == 409
+    assert len(attempts) == 2
+    assert attempts[0] == attempts[1]
+    assert state.value.revision == 2
+    assert len(state.value.outcomes) == 1

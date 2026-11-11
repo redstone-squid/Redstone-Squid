@@ -5498,7 +5498,7 @@ export type AccountIdentityUnlinkResponses = {
     /**
      * Successful Response
      */
-    200: IdentityDetail;
+    204: void;
 };
 
 export type AccountIdentityUnlinkResponse = AccountIdentityUnlinkResponses[keyof AccountIdentityUnlinkResponses];

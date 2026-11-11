@@ -41,15 +41,6 @@ class NotificationEditRepository(NotificationRepository, Protocol):
 
     async def subscription(self, account_id: int, subscription_id: int) -> NotificationSubscription | None: ...
 
-    async def matching_subscription(
-        self,
-        account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None,
-        record_filter: RecordSubscriptionFilter | None,
-    ) -> NotificationSubscription | None: ...
-
     async def reserve_subscription_id(self) -> int: ...
 
     async def save_subscription(self, row: NotificationSubscription) -> None: ...

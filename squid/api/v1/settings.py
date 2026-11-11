@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, Response
 from squid.api.contract import DEVICE, MINECRAFT, PAPER, SERVICE, WEB, WEB_WRITE, cli_command, contract
 from squid.api.dependencies import Services
 from squid.api.errors import responses
-from squid.api.idempotency import edit_operation_id, reserve_idempotent_request
+from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.revisions import expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
@@ -44,7 +44,7 @@ async def get_runtime_settings(services: Services, caller: ViewCaller, response:
     "",
     response_model=RuntimeSettingsDetail,
     responses=responses(401, 403, 412, 422, 428, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="runtime_settings_update",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT, MINECRAFT | PAPER, SERVICE],

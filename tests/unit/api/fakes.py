@@ -545,12 +545,13 @@ class MockIdempotency(IdempotencyService):
         fingerprint: bytes,
         method: UnsafeHttpMethod,
         route: str,
+        recoverable: bool = False,
     ) -> PendingRequest | StoredResponse:
         return PendingRequest(uuid.uuid4())
 
     @override
-    async def complete(self, request: PendingRequest, response: StoredResponse) -> None:
-        return None
+    async def complete(self, request: PendingRequest, response: StoredResponse) -> StoredResponse:
+        return response
 
 
 class MockNotifications(NotificationService):

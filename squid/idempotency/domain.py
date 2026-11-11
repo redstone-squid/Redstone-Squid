@@ -47,6 +47,8 @@ class ExistingRequest:
     fingerprint: bytes
     response: StoredResponse | None
     """None while the reserved request is still in progress."""
+    pending: PendingRequest | None = None
+    """The original mutation identity, for handlers with atomic outcome recovery."""
 
 
 type Reservation = PendingRequest | ExistingRequest

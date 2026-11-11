@@ -3605,22 +3605,22 @@ help-the-command-to-get-help-for = The command to get help for.
 # squid/idempotency/infrastructure/crypto.py:61
 idempotency-active-idempotency-encryption = The active idempotency encryption key is absent from the keyring.
 
-# squid/idempotency/domain.py:61
+# squid/idempotency/domain.py:63
 idempotency-domain-idempotency-key-conflict = Idempotency key conflict
 
 # squid/idempotency/infrastructure/crypto.py:67
 idempotency-idempotency-encryption-keys = Idempotency encryption keys must be exactly 32 bytes.
 
-# squid/idempotency/domain.py:58
+# squid/idempotency/domain.py:60
 idempotency-idempotency-key-used = The idempotency key was already used for a different request.
 
 # squid/idempotency/application.py:66
 idempotency-idempotency-retention = Idempotency retention must be at least one hour.
 
-# squid/idempotency/domain.py:68
+# squid/idempotency/domain.py:70
 idempotency-request-idempotency-key = A request with this idempotency key is still in progress.
 
-# squid/idempotency/domain.py:71
+# squid/idempotency/domain.py:73
 idempotency-request-in-progress = Idempotent request in progress
 
 # squid/bot/submission/consent_banner.py:74
@@ -4110,10 +4110,10 @@ notifications-channel-and-follow-help = Toggle where notifications arrive, and u
 # squid/bot/notifications.py:52
 notifications-channel-preferences = Manage notification channels and subscriptions
 
-# squid/notifications/application.py:163
+# squid/notifications/application.py:191
 notifications-creator-record-subscriptions = creator and record subscriptions require only a subject_id
 
-# squid/notifications/application.py:277
+# squid/notifications/application.py:305
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
 # squid/bot/notifications_view.py:502
@@ -4146,7 +4146,7 @@ notifications-invalid-record-title-uuid = Enter a record title ID in UUID form.
 # squid/notifications/domain.py:283, squid/notifications/domain.py:288
 notifications-list-nonempty-strings = { $name } must be a list of non-empty strings
 
-# squid/notifications/application.py:202
+# squid/notifications/application.py:230
 notifications-page-size = page_size must be between 1 and 100
 
 # squid/notifications/domain.py:250
@@ -4167,10 +4167,10 @@ notifications-record-filter-required = Choose at least one record filter.
 # squid/notifications/domain.py:198
 notifications-record-filter-single-predicate = record filters may contain only one predicate per tag
 
-# squid/notifications/application.py:157
+# squid/notifications/application.py:185
 notifications-record-filter-structured-only = record_filter subscriptions require only a structured filter
 
-# squid/notifications/application.py:110
+# squid/notifications/application.py:119
 notifications-retention-days-positive = retention_days must be positive
 
 # squid/notifications/domain.py:153

@@ -160,10 +160,8 @@ async def _set_identity_visibility(
 async def _unlink_identity(identity_id: int, accounts: AccountRecorder, caller: Caller):
     return await unlink_identity(
         identity_id,
-        accounts,
         caller,
         cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
-        Response(),
         uuid4(),
         '"account-1-r1"',
     )
@@ -235,13 +233,14 @@ class TestIdentities:
         assert accounts.visibility_updates == [(1, 2, False)]
         assert response.is_public is False
 
-    async def test_unlink_returns_the_removed_identity(self) -> None:
+    async def test_unlink_returns_the_resulting_account_revision(self) -> None:
         accounts = _accounts()
 
         response = await _unlink_identity(2, accounts, _caller())
 
         assert accounts.unlinks == [(1, 2)]
-        assert response.provider is IdentityProvider.JAVA
+        assert response.status_code == 204
+        assert response.headers["ETag"] == '"account-1-r2"'
 
     async def test_unlinking_the_last_identity_surfaces_a_conflict(self) -> None:
         accounts = _accounts(unlink_error=LastIdentityError(account_id=1))
@@ -319,7 +318,7 @@ async def test_account_writes_require_the_callers_read_revision(kind: str) -> No
             2, IdentityVisibilityRequest(public=False), accounts, _caller(), services, Response(), uuid4(), None
         )
     else:
-        operation = unlink_identity(2, accounts, _caller(), services, Response(), uuid4(), None)
+        operation = unlink_identity(2, _caller(), services, uuid4(), None)
     with pytest.raises(RevisionRequiredError):
         await operation
     assert recorder.commands == []

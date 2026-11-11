@@ -93,6 +93,7 @@ class EditCommand:
 
     @property
     def fingerprint(self) -> bytes:
+        """Hash edit meaning, excluding the retry's transport-specific issue time."""
         content = json.dumps(
             [
                 self.kind,
@@ -100,7 +101,6 @@ class EditCommand:
                 self.values.encoded,
                 self.purpose,
                 str(self.cause),
-                str(self.issued_at),
             ],
             separators=(",", ":"),
         )

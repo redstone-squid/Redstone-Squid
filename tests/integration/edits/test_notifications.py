@@ -125,6 +125,18 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
     async with migrated_session_factory() as session:
         assert len((await session.scalars(select(NotificationSubscription))).all()) == 1
 
+    await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
+    row, revision = await NotificationService(uow_factory=factory).subscription_snapshot(
+        account.id,
+        kind=SubscriptionKind.RECORD_FILTER,
+        subject_id=None,
+        record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
+    )
+    assert row is not None
+    assert row.id == subscription.id
+    assert not row.enabled
+    assert revision == 4
+
 
 async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
     migrated_session_factory: async_sessionmaker[AsyncSession],

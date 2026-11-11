@@ -54,6 +54,7 @@ class IdempotencyReservationState:
 
     service: IdempotencyService
     request: PendingRequest
+    recoverable: bool = False
 
 
 async def reserve_idempotent_request(
@@ -65,10 +66,21 @@ async def reserve_idempotent_request(
     await reserve_idempotent_request_for(request, caller.subject, idempotency_key)
 
 
+async def reserve_edit_request(
+    request: Request,
+    caller: Annotated[Caller, Depends(current_caller)],
+    idempotency_key: IdempotencyKey = None,
+) -> None:
+    """Resume unfinished requests only for routes whose every write uses EditExecutor."""
+    await reserve_idempotent_request_for(request, caller.subject, idempotency_key, recoverable=True)
+
+
 async def reserve_idempotent_request_for(
     request: Request,
     caller: str,
     idempotency_key: str | None,
+    *,
+    recoverable: bool = False,
 ) -> None:
     """Reserve a mutation key, or raise IdempotencyReplay for a completed matching request.
 
@@ -86,10 +98,11 @@ async def reserve_idempotent_request_for(
         fingerprint=await _request_fingerprint(request, route_path),
         method=UnsafeHttpMethod(request.method),
         route=route_path,
+        recoverable=recoverable,
     )
     if isinstance(reservation, StoredResponse):
         raise IdempotencyReplay(reservation)
-    setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation))
+    setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation, recoverable))
 
 
 def edit_operation_id(request: Request) -> UUID:
@@ -152,8 +165,16 @@ class CompleteIdempotentResponseMiddleware:
         # A disconnect or server shutdown must not interrupt completion after the
         # application mutation has succeeded. No bytes reach the caller until the
         # durable response commit settles.
-        with CancelScope(shield=True):
-            await pending.service.complete(pending.request, response)
+        if not pending.recoverable or response.status_code < 500:
+            with CancelScope(shield=True):
+                stored = await pending.service.complete(pending.request, response)
+            if stored != response:
+                await Response(content=stored.body, status_code=stored.status_code, headers=dict(stored.headers))(
+                    scope, receive, send
+                )
+                return
+        # An uncertain edit or failed refresh stays resumable. The executor's
+        # operation lock prevents a retry from racing an unsettled transaction.
         for message in buffered:
             await send(message)
 
@@ -167,7 +188,7 @@ def assert_idempotency_completion_installed(app: FastAPI) -> None:
         if not isinstance(route, APIRoute):
             continue
         dependencies = {dependency.call for dependency in route.dependant.dependencies}
-        if reserve_idempotent_request not in dependencies:
+        if not dependencies.intersection({reserve_idempotent_request, reserve_edit_request}):
             continue
         response_class = route.response_class
         if isinstance(response_class, type) and issubclass(response_class, StreamingResponse):
@@ -176,20 +197,23 @@ def assert_idempotency_completion_installed(app: FastAPI) -> None:
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:
-    """Hash the method, route, concrete URL path, query, content type, and body.
+    """Hash request meaning, including a supplied revision precondition.
 
     Length prefixes separate the components. Bodies and query strings are hashed
     as received, so semantically equivalent JSON with different spacing differs.
     """
     digest = hashlib.sha256()
-    for value in (
+    components = [
         request.method.encode(),
         route_path.encode(),
         request.url.path.encode(),
         request.scope.get("query_string", b""),
         request.headers.get("content-type", "").encode(),
         await request.body(),
-    ):
+    ]
+    if (if_match := request.headers.get("if-match")) is not None:
+        components.extend((b"If-Match", if_match.encode()))
+    for value in components:
         digest.update(len(value).to_bytes(8, "big"))
         digest.update(value)
     return digest.digest()

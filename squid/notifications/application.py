@@ -35,6 +35,15 @@ class NotificationRepository(Protocol):
 
     async def lock_settings(self, account_id: int) -> int: ...
 
+    async def matching_subscription(
+        self,
+        account_id: int,
+        *,
+        kind: SubscriptionKind,
+        subject_id: UUID | None,
+        record_filter: RecordSubscriptionFilter | None,
+    ) -> NotificationSubscription | None: ...
+
     async def get_preferences(self, account_id: int) -> NotificationPreferences: ...
 
     async def update_preferences(
@@ -120,6 +129,25 @@ class NotificationService:
                 await uow.notifications.get_preferences(account_id),
                 tuple(await uow.notifications.list_subscriptions(account_id)),
             )
+
+    async def subscription_snapshot(
+        self,
+        account_id: int,
+        *,
+        kind: SubscriptionKind,
+        subject_id: UUID | None,
+        record_filter: RecordSubscriptionFilter | None,
+    ) -> tuple[NotificationSubscription | None, int]:
+        """Find a stable follow identity, including one disabled since a lost creation response."""
+        async with self._uow_factory() as uow:
+            revision = await uow.notifications.lock_settings(account_id)
+            row = await uow.notifications.matching_subscription(
+                account_id,
+                kind=kind,
+                subject_id=subject_id,
+                record_filter=record_filter,
+            )
+            return row, revision
 
     async def preferences(self, account_id: int) -> NotificationPreferences:
         """Return preferences, including an implicit disabled profile when absent."""

@@ -27,7 +27,14 @@ class IdempotencyRecorder(IdempotencyService):
 
     @override
     async def reserve(
-        self, *, caller: str, key: str, fingerprint: bytes, method: UnsafeHttpMethod, route: str
+        self,
+        *,
+        caller: str,
+        key: str,
+        fingerprint: bytes,
+        method: UnsafeHttpMethod,
+        route: str,
+        recoverable: bool = False,
     ) -> PendingRequest | StoredResponse:
         self.reservations.append(
             {"caller": caller, "key": key, "fingerprint": fingerprint, "method": method, "route": route}

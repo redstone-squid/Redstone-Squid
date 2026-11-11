@@ -86,23 +86,26 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
         )
         assert existing is not None
         response = self._stored_response(existing) if existing.state is IdempotencyState.COMPLETED else None
-        return ExistingRequest(bytes(existing.request_fingerprint), response)
+        return ExistingRequest(bytes(existing.request_fingerprint), response, PendingRequest(existing.id))
 
     @override
-    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None:
+    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> StoredResponse:
         """Store an encrypted response for a reservation that is still pending.
 
-        Raise RuntimeError if the reservation was removed or already completed.
-        Headers are stored as a mapping, so the last value wins for repeated names.
+        Concurrent completion returns the first stored response without replacing
+        it. Missing reservations raise RuntimeError. Repeated header names keep
+        their last value.
         """
         headers = dict(response.headers)
         session = self._session()
         existing = await session.scalar(
             select(IdempotencyRequest).where(IdempotencyRequest.id == request.request_id).with_for_update()
         )
-        if existing is None or existing.state is not IdempotencyState.IN_PROGRESS:
+        if existing is None:
             msg = f"Idempotency request {request.request_id} was not pending."
             raise RuntimeError(msg)
+        if existing.state is IdempotencyState.COMPLETED:
+            return self._stored_response(existing)
         encrypted = self._cipher_or_raise().encrypt(
             response.body,
             self._metadata(existing, response.status_code, headers),
@@ -114,6 +117,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
         existing.response_body_key_id = encrypted.key_id
         existing.response_body_nonce = encrypted.nonce
         existing.completed_at = now
+        return response
 
     @override
     async def purge_expired(self, *, now: Instant) -> int:
