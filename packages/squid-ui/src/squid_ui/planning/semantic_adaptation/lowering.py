@@ -9,7 +9,7 @@ the Discord planner.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from typing import Literal, assert_never, cast
+from typing import assert_never, cast
 
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
@@ -260,10 +260,7 @@ def _node(node: AnyLayoutNode, path: str, context: LoweringContext) -> list[Node
 def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
-            return [
-                _with_overflow(item, Truncate(cast(Literal["head", "tail"], keep)))
-                for item in _node(child, path, context)
-            ]
+            return [_with_overflow(item, Truncate(keep)) for item in _node(child, path, context)]
         case Spilled(node=child):
             return [_with_overflow(item, Spill()) for item in _node(child, path, context)]
         case OptionalContent(node=child):

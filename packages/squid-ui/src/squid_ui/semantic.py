@@ -671,7 +671,7 @@ class Navigation[ContextT = object](Renderable[RenderTarget, ContextT]):
 @dataclass(frozen=True, slots=True)
 class Truncated[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
     node: LayoutNode[RenderTargetT, ContextT]
-    keep: str = "head"
+    keep: Literal["head", "tail"] = "head"
 
 
 @dataclass(frozen=True, slots=True)
@@ -851,7 +851,7 @@ portable vocabulary or BuiltinLayoutNode for all framework-defined nodes.
 
 
 def truncate[RenderTargetT = RenderTarget, ContextT = object](
-    node: LayoutNode[RenderTargetT, ContextT], *, keep: str = "head"
+    node: LayoutNode[RenderTargetT, ContextT], *, keep: Literal["head", "tail"] = "head"
 ) -> Truncated[RenderTargetT, ContextT]:
     """Allow prose in ``node`` to truncate when no lossless plan fits."""
     return Truncated(node, keep)
