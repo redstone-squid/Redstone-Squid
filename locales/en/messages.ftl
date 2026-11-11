@@ -2966,19 +2966,19 @@ core-state-invalid-operation = Application state is invalid for this operation.
 # squid/core/errors.py:182
 core-supplied-value-invalid = The supplied value is invalid.
 
-# squid/bot/diagnostics_view.py:372
+# squid/bot/diagnostics_view.py:374
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
 # squid/bot/diagnostics_view.py:37
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages } · the attachment has the whole report
 
-# squid/bot/diagnostics_view.py:311
+# squid/bot/diagnostics_view.py:313
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
 # squid/bot/diagnostics_view.py:44
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics_view.py:174
+# squid/bot/diagnostics_view.py:176
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
 # squid/diagnostics/domain.py:23
@@ -2987,7 +2987,7 @@ diagnostics-error-report-not-found = Error report not found
 # squid/diagnostics/application.py:63
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
-# squid/bot/diagnostics_view.py:208
+# squid/bot/diagnostics_view.py:210
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
 # squid/diagnostics/domain.py:22
@@ -2999,79 +2999,79 @@ diagnostics-path-privacy-warning = An error report names internal paths, so it i
 # squid/bot/diagnostics_view.py:106
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics_view.py:382
+# squid/bot/diagnostics_view.py:384
 diagnostics-shared-reference-note = { $count } reports share this reference; this is the newest.
 
 # squid/bot/diagnostics_view.py:101
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics_view.py:381
+# squid/bot/diagnostics_view.py:383
 diagnostics-view-ambiguous = Ambiguous
 
-# squid/bot/diagnostics_view.py:255
+# squid/bot/diagnostics_view.py:257
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics_view.py:172
+# squid/bot/diagnostics_view.py:174
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics_view.py:180
+# squid/bot/diagnostics_view.py:182
 diagnostics-view-delete-reports = Delete reports
 
-# squid/bot/diagnostics_view.py:225
+# squid/bot/diagnostics_view.py:227
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
 # squid/bot/diagnostics_view.py:45
 diagnostics-view-earlier = Earlier
 
-# squid/bot/diagnostics_view.py:273
+# squid/bot/diagnostics_view.py:275
 diagnostics-view-error = Error { $reference }
 
-# squid/bot/diagnostics_view.py:223
+# squid/bot/diagnostics_view.py:225
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics_view.py:365
+# squid/bot/diagnostics_view.py:367
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics_view.py:366
+# squid/bot/diagnostics_view.py:368
 diagnostics-view-full-id = Full ID
 
-# squid/bot/diagnostics_view.py:287
+# squid/bot/diagnostics_view.py:289
 diagnostics-view-full-report = Full report
 
 # squid/bot/diagnostics_view.py:46
 diagnostics-view-later = Later
 
-# squid/bot/diagnostics_view.py:240
+# squid/bot/diagnostics_view.py:242
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics_view.py:280
+# squid/bot/diagnostics_view.py:282
 diagnostics-view-log-tail = Log tail
 
-# squid/bot/diagnostics_view.py:269
+# squid/bot/diagnostics_view.py:271
 diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 
-# squid/bot/diagnostics_view.py:207
+# squid/bot/diagnostics_view.py:209
 diagnostics-view-recent-errors = Recent errors
 
 # squid/bot/diagnostics_view.py:123
 diagnostics-view-refresh-reports = Refresh reports
 
-# squid/bot/diagnostics_view.py:248
+# squid/bot/diagnostics_view.py:250
 diagnostics-view-show-all = Show all
 
-# squid/bot/diagnostics_view.py:250
+# squid/bot/diagnostics_view.py:252
 diagnostics-view-show-work-lost-only = Show work lost only
 
 # squid/bot/diagnostics_view.py:36
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics_view.py:361
+# squid/bot/diagnostics_view.py:363
 diagnostics-view-when = When
 
-# squid/bot/diagnostics_view.py:364
+# squid/bot/diagnostics_view.py:366
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics_view.py:371
+# squid/bot/diagnostics_view.py:373
 diagnostics-view-work-lost = Work lost
 
 # squid/bot/submission/ui/drafts.py:1116, squid/bot/submission/ui/drafts.py:441, squid/bot/submission/ui/drafts.py:744

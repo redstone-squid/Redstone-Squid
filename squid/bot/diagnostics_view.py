@@ -142,6 +142,8 @@ class ErrorReportScreen(sd.Screen[int]):
         ),
         chrome=ERROR_CHROME,
         session=sd.SessionSpec("errors"),
+        # The report monitor checks for new errors in the background; its notice needs a redraw.
+        live_updates=True,
     )
 
     work_lost_only: bool = sl.state(default=False)
