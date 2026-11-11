@@ -37,6 +37,7 @@ from squid.builds.application import (
     BuildService,
 )
 from squid.builds.domain import BuildCategory, BuildDraft, DoorOrientationLiteral
+from squid.builds.domain.models import BuildCategoryLiteral
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
@@ -81,6 +82,8 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     )
     @BuildCommandGroup.build_group.command(name="submit", defer="private")
     @app_commands.describe(
+        category=to_locale_str(tr(t"submit-category-help = The kind of build to submit.")),
+        name=to_locale_str(tr(t"submit-name-help = An optional name for the build.")),
         door_size=to_locale_str(
             tr(t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.")
         ),
@@ -108,6 +111,8 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         self,
         request: sd.Request[Self],
         *,
+        category: BuildCategoryLiteral = "Door",
+        name: str | None = None,
         door_size: str | None = None,
         door_type: DoorOrientationLiteral | None = None,
         build_size: str | None = None,
@@ -127,7 +132,22 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         if uploader_account_id is None:
             return None
 
-        draft = BuildDraft(ai_generated=False, category=BuildCategory.DOOR)
+        if category != "Door" and (door_size is not None or door_type is not None):
+            return error_node(
+                tr(t"submit-inapplicable-options = Options do not apply"),
+                tr(t"submit-door-options-only = Door size and orientation can only be supplied for doors."),
+            )
+        if category not in {"Door", "Extender"} and patterns is not None:
+            return error_node(
+                tr(t"submit-inapplicable-options = Options do not apply"),
+                tr(t"submit-pattern-options-only = Patterns can only be supplied for doors and extenders."),
+            )
+        category_code = category.lower()
+        draft = BuildDraft(
+            ai_generated=False,
+            category=BuildCategory(category),
+            display_name=optional_text(name) if name is not None else None,
+        )
         if door_size is not None:
             try:
                 draft.door_dimensions = parse_hallway_dimensions(door_size)
@@ -168,11 +188,11 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         stored = await services.submission_drafts.create(
             draft_id=draft_id,
             owner_account_id=uploader_account_id,
-            category="door",
+            category=category_code,
             origin=SubmissionOrigin.DISCORD,
             client_capabilities=frozenset(
                 field.required_capability
-                for field in manifest.fields_for("door")
+                for field in manifest.fields_for(category_code)
                 if field.required_capability is not None
             ),
             locale=None,
@@ -207,7 +227,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
             render_card=lambda build: render_build_card(build, self.bot.media_previews),
-            notice=_unused_values_notice(unresolved, manifest),
+            notice=_unused_values_notice(unresolved, manifest, category_code),
         )
 
     @BuildCommandGroup.build_group.command(name="drafts", defer="private")
@@ -399,7 +419,7 @@ def _draft_line(draft: StoredDraft) -> Message:
     return Message.join("\n", (title, Message.join(" · ", (state, tr(t"build-drafts-edited = Edited {updated}")))))
 
 
-def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest) -> sl.TextLike:
+def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest, category: str) -> sl.TextLike:
     """Name the command options whose values the form could not accept, or return empty text.
 
     Prefill drops values the form rejects, such as a "5 wide" door whose height and depth are
@@ -407,7 +427,7 @@ def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest) -> s
     """
     if not field_ids:
         return ""
-    fields = field_names(manifest, "door", field_ids)
+    fields = field_names(manifest, category, field_ids)
     return tr(
         t"draft-editor-unused-options = Some values from the command could not be used: {fields}. Fill them in below."
     )

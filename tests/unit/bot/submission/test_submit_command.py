@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any, cast, override
 from uuid import UUID
 
+import pytest
 from whenever import Instant
 
 from squid.accounts.application import AccountService
@@ -232,3 +233,27 @@ async def test_values_the_form_rejects_are_named_instead_of_dropped() -> None:
     assert source_text(screen.workspace.notice) == (
         "Some values from the command could not be used: Door size. Fill them in below."
     )
+
+
+@pytest.mark.parametrize("category", ["Door", "Extender", "Utility", "Entrance", "Other"])
+async def test_submit_opens_the_selected_category_with_shared_prefills(category: str) -> None:
+    harness = await _submit(_cog(), category=category, name="My build", description="Details", build_size="5x7x4")
+    screen = _screen(harness)
+    assert isinstance(screen, DraftEditorScreen)
+    snapshot = screen.workspace.draft.snapshot
+    assert snapshot.category == category.lower()
+    assert snapshot.answers["display_name"] == "My build"
+    assert snapshot.answers["description"] == "Details"
+    assert snapshot.answers["capture_width"] == 5
+    if category != "Door":
+        assert "opening_width" not in snapshot.answers
+
+
+@pytest.mark.parametrize(
+    "options", [{"category": "Extender", "door_size": "2x2"}, {"category": "Utility", "patterns": "Regular"}]
+)
+async def test_submit_rejects_inapplicable_prefills(options: dict[str, str]) -> None:
+    cog = _cog()
+    harness = await _submit(cog, **options)
+    assert _screen(harness) is None
+    harness.edit_original_response.assert_awaited_once()

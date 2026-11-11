@@ -105,7 +105,7 @@ def test_guided_submit_puts_attachments_last() -> None:
     submit = next(command for command in build_group.walk_commands() if command.qualified_name == "build submit")
     names = [parameter.name for parameter in cast(app_commands.Command[Any, ..., Any], submit).parameters]
 
-    assert names[0] == "door_size"
+    assert names[:3] == ["category", "name", "door_size"]
     assert names[-4:] == ["file", "file_2", "file_3", "file_4"]
 
 

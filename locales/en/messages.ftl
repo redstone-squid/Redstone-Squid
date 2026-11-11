@@ -1527,22 +1527,22 @@ bot-submission-search-view-version = Version
 # squid/bot/submission/search_view.py:108
 bot-submission-search-view-view-build = View build
 
-# squid/bot/submission/submit.py:325
+# squid/bot/submission/submit.py:345
 bot-submission-submit-author-has-not-consented = Author has not consented
 
-# squid/bot/submission/submit.py:144
+# squid/bot/submission/submit.py:164
 bot-submission-submit-check-build-size = Check the build size
 
-# squid/bot/submission/submit.py:136
+# squid/bot/submission/submit.py:156
 bot-submission-submit-check-door-size = Check the door size
 
-# squid/bot/submission/submit.py:87
+# squid/bot/submission/submit.py:90
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 
-# squid/bot/submission/submit.py:310
+# squid/bot/submission/submit.py:330
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
-# squid/bot/submission/submit.py:89
+# squid/bot/submission/submit.py:92
 bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.
 
 # squid/bot/submission/ui/fields.py:108
@@ -1974,34 +1974,34 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:64
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/submission/submit.py:243
+# squid/bot/submission/submit.py:263
 build-drafts-detected = **Builds found in your build-log posts**
 
-# squid/bot/submission/submit.py:399
+# squid/bot/submission/submit.py:419
 build-drafts-edited = Edited { $updated }
 
-# squid/bot/submission/submit.py:254
+# squid/bot/submission/submit.py:274
 build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.
 
-# squid/bot/submission/submit.py:253
+# squid/bot/submission/submit.py:273
 build-drafts-inbox-empty = No drafts are waiting for staff correction.
 
-# squid/bot/submission/submit.py:236
+# squid/bot/submission/submit.py:256
 build-drafts-open = Open
 
-# squid/bot/submission/submit.py:245
+# squid/bot/submission/submit.py:265
 build-drafts-review = Review
 
-# squid/bot/submission/submit.py:391
+# squid/bot/submission/submit.py:411
 build-drafts-state-creating = Creating the build
 
-# squid/bot/submission/submit.py:397
+# squid/bot/submission/submit.py:417
 build-drafts-state-editing = In progress
 
-# squid/bot/submission/submit.py:395
+# squid/bot/submission/submit.py:415
 build-drafts-state-needs-changes = Needs changes
 
-# squid/bot/submission/submit.py:393
+# squid/bot/submission/submit.py:413
 build-drafts-state-waiting = Waiting for files
 
 # squid/bot/submission/ui/views.py:805
@@ -2330,7 +2330,7 @@ command-build-browse-name = browse
 # squid/bot/command_texts.py:29
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
 
-# squid/bot/submission/submit.py:216
+# squid/bot/submission/submit.py:236
 command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.
 
 # squid/bot/command_texts.py:33
@@ -3338,7 +3338,7 @@ draft-editor-title-editing = ## Submit a build · { $category }
 # squid/bot/submission/ui/drafts.py:907
 draft-editor-title-expired = ## Draft expired · { $category }
 
-# squid/bot/submission/submit.py:411
+# squid/bot/submission/submit.py:431
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
 # squid/bot/submission/ui/drafts.py:747
@@ -5290,40 +5290,55 @@ submissions-visible-closing-time = Visible closing time
 # squid/bot/submission/ui/views.py:280, squid/submissions/application/forms.py:457
 submissions-visible-opening-time = Visible opening time
 
-# squid/bot/submission/submit.py:103, squid/bot/submission/submit.py:104, squid/bot/submission/submit.py:105
+# squid/bot/submission/submit.py:106, squid/bot/submission/submit.py:107, squid/bot/submission/submit.py:108
 submit-another-attachment-help = Another schematic, image, or video.
 
-# squid/bot/submission/submit.py:102
+# squid/bot/submission/submit.py:105
 submit-attachment-types-help = Your schematic, an image, or a video.
 
-# squid/bot/submission/submit.py:326
+# squid/bot/submission/submit.py:346
 submit-author-consent-required = The author of this message (<@{ $user_id_text }>) has not consented to data storage. They must grant consent before this build can be ingested.
 
-# squid/bot/submission/submit.py:311
+# squid/bot/submission/submit.py:331
 submit-build-log-channel-required = Builds are only read out of messages posted in a build log channel.
 
-# squid/bot/submission/submit.py:145
+# squid/bot/submission/submit.py:165
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
-# squid/bot/submission/submit.py:99
+# squid/bot/submission/submit.py:85
+submit-category-help = The kind of build to submit.
+
+# squid/bot/submission/submit.py:102
 submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.
 
-# squid/bot/submission/submit.py:91
+# squid/bot/submission/submit.py:94
 submit-creator-ign-prompt = In-game names of the creators, comma separated.
 
-# squid/bot/submission/submit.py:85
+# squid/bot/submission/submit.py:88
 submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
-# squid/bot/submission/submit.py:137
+# squid/bot/submission/submit.py:138
+submit-door-options-only = Door size and orientation can only be supplied for doors.
+
+# squid/bot/submission/submit.py:157
 submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.
 
-# squid/bot/submission/submit.py:96
+# squid/bot/submission/submit.py:137, squid/bot/submission/submit.py:142
+submit-inapplicable-options = Options do not apply
+
+# squid/bot/submission/submit.py:86
+submit-name-help = An optional name for the build.
+
+# squid/bot/submission/submit.py:143
+submit-pattern-options-only = Patterns can only be supplied for doors and extenders.
+
+# squid/bot/submission/submit.py:99
 submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.
 
-# squid/bot/submission/submit.py:101
+# squid/bot/submission/submit.py:104
 submit-staff-notes-prompt = A short description of the build.
 
-# squid/bot/submission/submit.py:93
+# squid/bot/submission/submit.py:96
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
 # squid/suggestions/application/registry.py:82
