@@ -102,7 +102,7 @@ class NotificationScreen(sd.Screen):
         return (
             sl.section(
                 sl.heading(tr(t"bot-notifications-view-notifications = Notifications")),
-                sl.truncate(sl.paragraph(description)),
+                sl.paragraph(description).truncate(),
                 sl.fields(*fields),
                 suspension_note and sl.note(suspension_note),
             ),

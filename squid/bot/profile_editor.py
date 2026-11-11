@@ -189,7 +189,7 @@ class ProfileEditor(sl.Component[sl.ComponentsV2Target, sd.Request]):
         fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft))
         return sl.section(
             sl.heading(draft.display_name or tr(t"account-view-your-account = Your account")),
-            draft.bio and sl.truncate(sl.paragraph(draft.bio)),
+            draft.bio and sl.paragraph(draft.bio).truncate(),
             sl.fields(*fields) if fields else None,
         )
 

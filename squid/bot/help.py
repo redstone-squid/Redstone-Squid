@@ -95,7 +95,7 @@ class HelpScreen(sd.Screen):
         children: tuple[AnyCommand, ...] = tuple(getattr(command, "commands", ()))
         return sl.section(
             sl.heading(heading),
-            sl.truncate(sl.paragraph(description)),
+            sl.paragraph(description).truncate(),
             sl.bullets(
                 *(sl.bullet(f"/{child.qualified_name}") for child in children),
                 key="subcommands",

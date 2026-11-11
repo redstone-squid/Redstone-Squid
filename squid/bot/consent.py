@@ -84,7 +84,7 @@ class ConsentPrompt(sd.Screen[AccountConsent]):
         return (
             sl.section(
                 sl.heading(self._title),
-                sl.truncate(sl.paragraph(self._summary)),
+                sl.paragraph(self._summary).truncate(),
                 bool(card_fields) and sl.fields(*card_fields),
             ),
             sl.action_controls(

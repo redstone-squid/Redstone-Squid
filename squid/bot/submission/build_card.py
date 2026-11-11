@@ -158,7 +158,7 @@ async def render_build_card(
     return sl.section(
         sl.heading(format_build_display_title(build, markdown=True)),
         # Allow the description to shrink when the full card exceeds the layout budget.
-        description and sl.truncate(sl.paragraph(description)),
+        description and sl.paragraph(description).truncate(),
         group("Review warnings", review_names),
         group("Size & performance", performance_names),
         group("Compatibility", {"Versions"}),

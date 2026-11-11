@@ -292,7 +292,7 @@ class BuildPreview(InspectablePanel):
                 sl.field(tr(t"layout-workbench-opening-time = Opening time"), f"{build.ticks} ticks"),
                 sl.field(tr(t"layout-workbench-tag = Tag"), build.tag),
             ),
-            sl.budget(sl.truncate(sl.paragraph(build.description)), min=100, prefer=350),
+            sl.paragraph(build.description).truncate().budget(min=100, prefer=350),
             sl.note(self.draft.publication_text()),
             sl.heading(tr(t"layout-workbench-related-sample-records = Related sample records")),
             sd.v2.lines(

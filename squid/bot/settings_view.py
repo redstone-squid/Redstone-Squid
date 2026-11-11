@@ -226,7 +226,7 @@ class ServerSettings(sl.Component[sl.ComponentsV2Target, sd.Request]):
         children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"bot-settings-view-server-settings = Server settings")),
-                description and sl.truncate(sl.paragraph(description)),
+                description and sl.paragraph(description).truncate(),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._server_fields())),
             )
         ]

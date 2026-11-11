@@ -213,7 +213,7 @@ def card_node(
     return ui.section(
         ui.heading(title),
         # Shorten the description before reducing fields or the footer.
-        description and ui.truncate(ui.paragraph(description)),
+        description and ui.paragraph(description).truncate(),
         # `fields`/`extra_media` are tuples: an empty one is falsy but not `False`, and
         # `_children` only skips `None`/`False`, so the truthiness check must be explicit.
         bool(fields) and ui.fields(*_fields(fields)),
@@ -231,7 +231,7 @@ def text_node(
     """Build a truncating text response for composition inside a component render."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
-    node: ui.LayoutNode[ui.ComponentsV2Target, sd.Request] = ui.truncate(ui.paragraph(content))
+    node: ui.LayoutNode[ui.ComponentsV2Target, sd.Request] = ui.paragraph(content).truncate()
     if accent_colour is not None:
         node = ui.block(node, accent=accent_colour)
     return node
@@ -266,7 +266,7 @@ def link_node(
     """Build a link card for composition inside a component render."""
     return ui.section(
         ui.heading(title),
-        description and ui.truncate(ui.paragraph(description)),
+        description and ui.paragraph(description).truncate(),
         ui.action_controls(ui.link(label, url, key="open-link"), key="link"),
         accent=DISCORD_GREEN,
     )

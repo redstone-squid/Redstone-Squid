@@ -95,7 +95,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         detail = self._build_node or sl.section(
             sl.heading(self.hit.title),
-            sl.truncate(sl.paragraph(_detail_text(self.hit))),
+            sl.paragraph(_detail_text(self.hit)).truncate(),
             accent=DISCORD_GREEN,
         )
         build_id = _build_id(self.hit)

@@ -123,7 +123,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
             sl.section(
                 sl.heading(self._profile.display_name or tr(t"account-view-your-account = Your account")),
                 # Shorten the bio before reducing the identity fields or footer.
-                self._profile.bio and sl.truncate(sl.paragraph(self._profile.bio)),
+                self._profile.bio and sl.paragraph(self._profile.bio).truncate(),
                 sl.fields(*fields),
                 bool(extra_media) and sl.media(*extra_media, key="media"),
                 footer and sl.note(footer),
