@@ -1,7 +1,7 @@
 """Stack navigation by composition.
 
 `StackNavigator` embeds the child component at the top of its stack, followed by the
-Back/Home/Close row. Pushing a child preserves the previous screen for Back; Home discards
+Back/Home row and an optional Close control. Pushing a child preserves the previous screen for Back; Home discards
 all but the root screen. Each visible child enters the component tree through
 `Component.boundary`, so its controls and state use the normal parent-child lifecycle.
 """
@@ -20,9 +20,10 @@ from squid_ui.target_types import ComponentsV2Target
 class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target, ContextT = object](
     Component[RenderTargetT, ContextT]
 ):
-    """A component that shows one child at a time and owns the navigation controls."""
+    """Show one child at a time. Set show_close to offer explicit presentation dismissal."""
 
-    def __init__(self, root: Component[RenderTargetT, ContextT]) -> None:
+    def __init__(self, root: Component[RenderTargetT, ContextT], *, show_close: bool = False) -> None:
+        self.show_close = show_close
         self._stack: list[Component[RenderTargetT, ContextT]] = [root]
 
     @property
@@ -64,9 +65,10 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target, Con
         ]
         if self.depth > 2:
             controls.append(Button(label=chrome.home, on_click=self._home, key="__nav_home"))
-        controls.append(
-            Button(label=chrome.close, on_click=self._close, key="__nav_close", style=ActionStyle.SECONDARY)
-        )
+        if self.show_close:
+            controls.append(
+                Button(label=chrome.close, on_click=self._close, key="__nav_close", style=ActionStyle.SECONDARY)
+            )
         nodes.append(Row(tuple(controls)))
         return nodes
 

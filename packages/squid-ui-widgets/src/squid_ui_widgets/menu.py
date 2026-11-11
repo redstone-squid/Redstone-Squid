@@ -79,7 +79,7 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
 
     MenuState stores the path of selected entry keys. Back removes the last key; Home
     returns to the top level. ``build_component`` creates the local driver and makes Close
-    finish its presentation. RouteDriver can instead carry the path in routed controls.
+    finish its presentation when show_close is enabled. RouteDriver can instead carry the path in routed controls.
     """
 
     def __init__(
@@ -89,8 +89,10 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
         *,
         key: str = "menu",
         initial: Iterable[str] = (),
+        show_close: bool = False,
     ) -> None:
         self.key = require_key(key, name="Menu.key")
+        self.show_close = show_close
         self.title = title
         self.entries = tuple(entries)
         self._validate_entries(self.entries, where="Menu.entries")
@@ -194,7 +196,11 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
             controls.action_control(
                 controls.chrome.home, "home", key=f"{self.key}.home", available=len(state.path) > 1
             ),
-            controls.action_control(controls.chrome.close, "close", key=f"{self.key}.close"),
+            *(
+                [controls.action_control(controls.chrome.close, "close", key=f"{self.key}.close")]
+                if self.show_close
+                else []
+            ),
             key=f"{self.key}.chrome",
             display=ControlDisplay.INDIVIDUAL,
         )

@@ -5199,6 +5199,15 @@
       "squid/bot/submission/ui/views.py:587"
     ]
   },
+  "bot-submission-ui-views-cancel": {
+    "fingerprint": "373b536ca7ad287b933e7b0a739dc570736d06e002ee45d2e9f78b94396c97b8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/submission/ui/views.py:605"
+    ]
+  },
   "bot-submission-ui-views-changes-saved": {
     "fingerprint": "ac4b6becde02101897150f489827d9388ea6c3e6b3ada99ee428794a0571bc7e",
     "attributes": [],
@@ -5206,15 +5215,6 @@
     "arguments": [],
     "locations": [
       "squid/bot/submission/ui/views.py:542"
-    ]
-  },
-  "bot-submission-ui-views-close": {
-    "fingerprint": "57e7e438407b1caf15602ae2e20bafb6a3d75b37d45dc6bf657743b7181bbbdc",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/ui/views.py:605"
     ]
   },
   "bot-submission-ui-views-edit-build": {

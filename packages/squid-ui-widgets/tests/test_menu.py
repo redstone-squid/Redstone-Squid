@@ -18,7 +18,7 @@ class Screen(sl.Component[sl.ComponentsV2Target]):
         return sl.paragraph(f"screen: {self.name}")
 
 
-def _settings() -> sp.Menu[sl.ComponentsV2Target]:
+def _settings(*, show_close: bool = False) -> sp.Menu[sl.ComponentsV2Target]:
     # V2 throughout because one entry embeds `Screen`, which is a V2 component. Naming the
     # element type lets the portable entries solve to the same dialect instead of defaulting.
     entries: list[sp.MenuEntry[sl.ComponentsV2Target]] = [
@@ -29,14 +29,15 @@ def _settings() -> sp.Menu[sl.ComponentsV2Target]:
             entries=[sp.MenuEntry("Audit", sl.paragraph("audit body"), key="audit")],
         ),
     ]
-    return sp.Menu("Settings", entries, key="settings")
+    return sp.Menu("Settings", entries, key="settings", show_close=show_close)
 
 
 async def test_the_root_shows_only_the_heading_and_ends_with_its_own_chrome() -> None:
     harness = wt.mounted(_settings())
 
     assert harness.texts() == ["Settings"], "`## ` is Discord markdown; the machine emits a Heading"
-    assert harness.labels()[-3:] == ["Back", "Home", "Close"]
+    assert harness.labels()[-2:] == ["Back", "Home"]
+    assert "Close" not in harness.labels()
 
 
 async def test_drilling_in_renders_the_entry_and_offers_its_children() -> None:
@@ -64,7 +65,7 @@ async def test_the_path_deepens_on_the_way_in_and_home_empties_it() -> None:
 
 async def test_closing_finishes_the_shell() -> None:
     """Menu.build_component configures the driver to finish when Close is pressed."""
-    harness = wt.driving(_settings().build_component())
+    harness = wt.driving(_settings(show_close=True).build_component())
 
     await harness.press("settings.close")
 

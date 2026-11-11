@@ -25,7 +25,7 @@ async def test_push_pop_and_controls_render_last():
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     view = commit_render(message_root)
     assert "## root" in sd.payload_texts(view)
-    assert sd.payload_labels(view) == ["Back", "Close"]
+    assert sd.payload_labels(view) == ["Back"]
 
     navigator.push(Screen("child"))
     interaction = interaction_harness()
@@ -73,7 +73,7 @@ async def test_child_state_changes_rerender_through_the_shared_root():
 
 
 async def test_close_finishes_the_root():
-    navigator = StackNavigator(Screen("root"))
+    navigator = StackNavigator(Screen("root"), show_close=True)
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     commit_render(message_root)
 

@@ -602,7 +602,7 @@ class BuildEditScreen(sd.Screen[int]):
                     tr(t"bot-submission-ui-views-reload-latest = Reload latest"), self._reload, key="reload"
                 )
             )
-        controls.append(sl.action_control(tr(t"bot-submission-ui-views-close = Close"), self._close, key="close"))
+        controls.append(sl.action_control(tr(t"bot-submission-ui-views-cancel = Cancel"), self._close, key="close"))
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._recovered:
             nodes.append(

@@ -1569,11 +1569,11 @@ bot-submission-ui-views-apply-changes = Apply changes
 # squid/bot/submission/ui/views.py:587
 bot-submission-ui-views-back = Back
 
+# squid/bot/submission/ui/views.py:605
+bot-submission-ui-views-cancel = Cancel
+
 # squid/bot/submission/ui/views.py:542
 bot-submission-ui-views-changes-saved = Changes saved
-
-# squid/bot/submission/ui/views.py:605
-bot-submission-ui-views-close = Close
 
 # squid/bot/submission/ui/views.py:619
 bot-submission-ui-views-edit-build = Edit build
