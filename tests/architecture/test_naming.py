@@ -286,6 +286,9 @@ def _exported_classes() -> dict[str, set[str]]:
             for info in pkgutil.walk_packages(package.__path__, f"{package.__name__}.")
         )
         for module in modules:
+            # The explicit internals bridge exports implementation types for sibling packages.
+            if module.__name__.endswith(".internals"):
+                continue
             for name in getattr(module, "__all__", ()):
                 value = getattr(module, name, None)
                 if inspect.isclass(value):

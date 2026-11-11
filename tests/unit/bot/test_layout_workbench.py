@@ -58,7 +58,8 @@ def test_preview_and_editor_fit(oversized: bool) -> None:
 
 
 def test_form_validates_dimensions_without_losing_values() -> None:
-    draft, editor, _, _, _ = workbench()
+    draft = BuildDraft()
+    editor = Workbench(draft)
     form = BuildForm(draft, editor.history)
     form.dimensions = "0x4x3"
     assert tuple(form.validate())
@@ -112,7 +113,8 @@ async def test_failed_publication_can_retry() -> None:
 
 
 async def test_inspector_captures_committed_report_and_refreshes() -> None:
-    draft, editor, _, _, _ = workbench()
+    draft = BuildDraft()
+    editor = Workbench(draft)
     draft.build = replace(draft.build, oversized=True)
     preview = BuildPreview(draft)
     async with sd.testing.stage(preview, owner=object()) as ui:
@@ -132,7 +134,8 @@ async def test_inspector_captures_committed_report_and_refreshes() -> None:
 
 
 async def test_form_submission_is_one_undoable_edit() -> None:
-    draft, editor, _, _, _ = workbench()
+    draft = BuildDraft()
+    editor = Workbench(draft)
     async with sd.testing.stage(editor, owner=object()) as ui:
         form = await ui.press_for_form("edit")
         form.assert_within_limits()
@@ -148,7 +151,8 @@ async def test_form_submission_is_one_undoable_edit() -> None:
 
 
 async def test_invalid_form_keeps_draft_and_offers_prefilled_retry() -> None:
-    draft, editor, _, _, _ = workbench()
+    draft = BuildDraft()
+    editor = Workbench(draft)
     async with sd.testing.stage(editor, owner=object()) as ui:
         form = await ui.press_for_form("edit")
         attempt = await form.submit(
