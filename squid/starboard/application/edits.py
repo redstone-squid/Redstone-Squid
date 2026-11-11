@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.edits.fields import Aggregate, FieldCommand
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
@@ -19,7 +19,6 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
-from squid.persistence.revisions import require_revision
 from squid.starboard.application.ports import StarboardUnitOfWork
 from squid.starboard.application.snapshots import StarboardSnapshot
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection

@@ -9,10 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.edits.application import EditStore, EditUnitOfWork
-from squid.edits.domain import EditCommand, EditValues, PreparedEdit, Revision
+from squid.edits.domain import EditCommand, EditValues, PreparedEdit, Revision, require_revision
 from squid.edits.retention import EditRetentionStore
 from squid.media.domain import MediaLimits
-from squid.persistence.revisions import require_revision
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 
 DRAFT_ATTACHMENTS = "draft.attachments"

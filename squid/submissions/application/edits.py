@@ -10,8 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from squid.core.actors import Actor
 from squid.core.errors import JSONValue, ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
-from squid.persistence.revisions import require_revision
+from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.submissions.application.drafts import DraftUnitOfWork, StoredDraft, SubmissionDraftService
 from squid.submissions.domain import DraftChange, DraftChangeKey, FieldOperation, FieldOperationKind
 

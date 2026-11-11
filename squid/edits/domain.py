@@ -196,6 +196,13 @@ class RevisionConflictError(ConflictError):
         self.current = current
 
 
+def require_revision(expected: Revision | LatestRevision, current: int) -> Revision:
+    """Return the target's current revision, or raise if a concrete expectation differs from it."""
+    if isinstance(expected, Revision) and expected.value != current:
+        raise RevisionConflictError(expected, current)
+    return Revision(expected.target, current)
+
+
 class OperationReuseError(ConflictError):
     default_message = tr(t"edits-operation-reused = This operation identifier was already used for another edit.")
 

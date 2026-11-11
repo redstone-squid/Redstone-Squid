@@ -7,7 +7,7 @@ share vocabulary. This page defines each term and shows how the pieces fit.
 
 | Term | Meaning | Where |
 |---|---|---|
-| Revision | A counter on a stored record that increases with every change | `revision` columns, `squid/persistence/revisions.py` |
+| Revision | A counter on a stored record that increases with every change | `revision` columns, `squid/persistence/revisions.py`, `squid/edits/domain.py` |
 | Edit | One change requested by a user, checked against revisions and committed in one transaction | `squid/edits` |
 | Session history | The undo and redo stack of one open editor | `squid_ui.runtime.History`, `squid/bot/edit_controller.py` |
 | Build history | A permanent log of every change to a build | `build_edit_history`, `squid/builds/history.py` |

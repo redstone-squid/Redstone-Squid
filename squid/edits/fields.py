@@ -12,8 +12,7 @@ from pydantic import BaseModel
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
-from squid.persistence.revisions import require_revision
+from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 
 
 @dataclass(frozen=True, slots=True)

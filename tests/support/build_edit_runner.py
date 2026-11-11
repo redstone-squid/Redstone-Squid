@@ -11,8 +11,8 @@ from squid.edits.domain import (
     EditReceipt,
     EditResult,
     Revision,
+    require_revision,
 )
-from squid.persistence.revisions import require_revision
 
 
 async def build_edit_actor() -> Actor:

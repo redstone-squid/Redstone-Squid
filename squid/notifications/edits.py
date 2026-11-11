@@ -12,7 +12,7 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.edits.fields import Aggregate, FieldCommand
 from squid.notifications.application import NotificationRepository, NotificationUnitOfWork
 from squid.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
@@ -21,7 +21,6 @@ from squid.notifications.models import InboxNotification, NotificationSubscripti
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_MANAGE, BUILD_SUBMISSION_VIEW_PENDING
-from squid.persistence.revisions import require_revision
 
 PREFERENCES_EDIT = "notifications.preferences"
 SUBSCRIPTIONS_EDIT = "notifications.subscriptions"

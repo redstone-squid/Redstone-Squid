@@ -1,4 +1,4 @@
-"""Shared ORM revision mapping and aggregate checks for application edit handlers."""
+"""ORM revision counters for records that edit handlers change."""
 
 from typing import Any
 
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, MappedAsDataclass, declared_attr, mapped_column
 from sqlalchemy.orm.exc import StaleDataError
 
-from squid.edits.domain import ConcurrentEditError, LatestRevision, Revision, RevisionConflictError
+from squid.edits.domain import ConcurrentEditError, Revision
 
 
 class Revisioned(MappedAsDataclass, eq=False):
@@ -18,12 +18,6 @@ class Revisioned(MappedAsDataclass, eq=False):
     @declared_attr.directive
     def __mapper_args__(cls) -> dict[str, Any]:
         return {"version_id_col": cls.revision}
-
-
-def require_revision(expected: Revision | LatestRevision, current: int) -> Revision:
-    if isinstance(expected, Revision) and expected.value != current:
-        raise RevisionConflictError(expected, current)
-    return Revision(expected.target, current)
 
 
 async def flush_revision(session: AsyncSession, row: Revisioned, expected: Revision) -> Revision:

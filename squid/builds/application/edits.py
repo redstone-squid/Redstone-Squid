@@ -30,8 +30,8 @@ from squid.edits.domain import (
     PreparedEdit,
     Revision,
     RevisionConflictError,
+    require_revision,
 )
-from squid.persistence.revisions import require_revision
 
 BUILD_EDIT = "build.fields"
 
