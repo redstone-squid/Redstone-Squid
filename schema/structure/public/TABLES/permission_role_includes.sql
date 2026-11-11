@@ -17,7 +17,7 @@ CREATE INDEX permission_role_includes_included_idx ON public.permission_role_inc
 
 CREATE CONSTRAINT TRIGGER permission_role_includes_acyclic AFTER INSERT OR UPDATE ON public.permission_role_includes NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION public.check_permission_role_include_cycle();
 
-CREATE TRIGGER permission_role_includes_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_includes FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_role_includes_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_role_includes FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 ALTER TABLE ONLY public.permission_role_includes
     ADD CONSTRAINT permission_role_includes_added_by_fkey FOREIGN KEY (added_by_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;

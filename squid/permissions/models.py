@@ -73,6 +73,7 @@ class PermissionRole(SlugMixin, CreatedAtMixin, Base, kw_only=True):
     """Identifies a role whose patterns are defined in code rather than here."""
     rank: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     """Management rank used to decide who may edit the role. It does not affect permission resolution."""
+    withdrawn: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     protected: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     """Refuses structural edits from anyone but the bot owner."""
     created_by_account_id: Mapped[int | None] = mapped_column(

@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import replace
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, exists, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -63,7 +63,7 @@ class PermissionRepository:
         return SubjectRecords(epoch=epoch, roles=roles, grants=grants, assignments=assignments)
 
     async def _load_roles(self, session: AsyncSession) -> tuple[PermissionRole, ...]:
-        rows = (await session.scalars(select(PermissionRole))).all()
+        rows = (await session.scalars(select(PermissionRole).where(PermissionRole.withdrawn.is_(False)))).all()
         patterns = (await session.scalars(select(PermissionRolePattern))).all()
         includes = (await session.scalars(select(PermissionRoleInclude))).all()
 
@@ -136,6 +136,13 @@ class PermissionAdminRepository:
             reason=entry.reason,
             details=entry.details,
         )
+
+    async def lock_graph(self) -> int:
+        version = await self._session().scalar(
+            select(PermissionEpoch.version).where(PermissionEpoch.id == 1).with_for_update()
+        )
+        assert version is not None
+        return version
 
     async def upsert_grant(
         self,
@@ -265,7 +272,7 @@ class PermissionAdminRepository:
         return tuple(assignment for assignment, _ in rows)
 
     async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
-        statement = select(PermissionRole)
+        statement = select(PermissionRole).where(PermissionRole.withdrawn.is_(False))
         if guild_id is not None:
             statement = statement.where(or_(PermissionRole.guild_id.is_(None), PermissionRole.guild_id == guild_id))
         session = self._session()
@@ -280,6 +287,48 @@ class PermissionAdminRepository:
         candidates = [role for role in await self.list_roles(guild_id=guild_id) if role.slug == slug]
         candidates.sort(key=lambda role: role.guild_id is None)
         return candidates[0] if candidates else None
+
+    async def reserve_role_identity(self) -> int:
+        identity = await self._session().scalar(
+            text("SELECT nextval(pg_get_serial_sequence('permission_roles', 'id'))")
+        )
+        assert isinstance(identity, int)
+        return identity
+
+    async def role_identity(self, role_id: int) -> PermissionRole | None:
+        return await self._session().get(PermissionRole, role_id)
+
+    async def unused_role(self, role_id: int) -> bool:
+        used = await self._session().scalar(
+            select(
+                or_(
+                    exists().where(PermissionRolePattern.role_id == role_id),
+                    exists().where(
+                        or_(PermissionRoleInclude.role_id == role_id, PermissionRoleInclude.included_role_id == role_id)
+                    ),
+                    exists().where(PermissionRoleAssignment.role_id == role_id),
+                )
+            )
+        )
+        return not used
+
+    async def role_slug_available(self, slug: str, guild_id: int | None, role_id: int) -> bool:
+        return (
+            await self._session().scalar(
+                select(PermissionRole.id).where(
+                    PermissionRole.slug == slug,
+                    PermissionRole.guild_id.is_not_distinct_from(guild_id),
+                    PermissionRole.id != role_id,
+                )
+            )
+            is None
+        )
+
+    async def save_role_presence(self, role: PermissionRole, *, audit: AuditEntry) -> None:
+        session = self._session()
+        session.add(role)
+        session.add(self._audit(audit))
+        await session.flush()
 
     async def create_role(
         self,

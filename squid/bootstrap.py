@@ -78,6 +78,22 @@ from squid.permissions.application import (
     PermissionService,
     SubjectRuleCache,
 )
+from squid.permissions.application.edits import (
+    ASSIGNMENT_EDIT,
+    GRANT_EDIT,
+    INCLUDE_EDIT,
+    PATTERN_EDIT,
+    RANK_EDIT,
+    ROLE_CREATE,
+    ROLE_DELETE,
+    PermissionAssignmentEdit,
+    PermissionGrantEdit,
+    PermissionIncludeEdit,
+    PermissionPatternEdit,
+    PermissionRankEdit,
+    PermissionRoleCreation,
+    PermissionRoleDeletion,
+)
 from squid.permissions.infrastructure.repository import (
     EPOCH_CHANNEL,
 )
@@ -358,6 +374,13 @@ class _ServiceGraph:
                 ALIAS_EDIT: TagAliasEdit(self.permissions),
                 PROPOSAL_EDIT: TagProposalEdit(),
                 MODERATION_EDIT: TagModerationEdit(self.permissions),
+                GRANT_EDIT: PermissionGrantEdit(self.permission_admin),
+                ASSIGNMENT_EDIT: PermissionAssignmentEdit(self.permission_admin),
+                RANK_EDIT: PermissionRankEdit(self.permission_admin),
+                PATTERN_EDIT: PermissionPatternEdit(self.permission_admin),
+                INCLUDE_EDIT: PermissionIncludeEdit(self.permission_admin),
+                ROLE_CREATE: PermissionRoleCreation(self.permission_admin),
+                ROLE_DELETE: PermissionRoleDeletion(self.permission_admin),
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),

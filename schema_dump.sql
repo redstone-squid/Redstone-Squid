@@ -3824,6 +3824,7 @@ CREATE TABLE public.permission_roles (
     protected boolean DEFAULT false NOT NULL,
     created_by_account_id integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    withdrawn boolean DEFAULT false NOT NULL,
     CONSTRAINT permission_roles_builtin_is_global CHECK (((builtin_key IS NULL) OR (guild_id IS NULL))),
     CONSTRAINT permission_roles_slug_format CHECK ((slug ~ '^[a-z][a-z0-9-]{1,31}$'::text))
 );
@@ -8948,14 +8949,14 @@ CREATE TRIGGER other_builds_reject_truncate BEFORE TRUNCATE ON public.other_buil
 -- Name: permission_grants permission_grants_bump_epoch; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER permission_grants_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_grants FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_grants_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_grants FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 
 --
 -- Name: permission_role_assignments permission_role_assignments_bump_epoch; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER permission_role_assignments_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_assignments FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_role_assignments_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_role_assignments FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 
 --
@@ -8969,21 +8970,21 @@ CREATE CONSTRAINT TRIGGER permission_role_includes_acyclic AFTER INSERT OR UPDAT
 -- Name: permission_role_includes permission_role_includes_bump_epoch; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER permission_role_includes_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_includes FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_role_includes_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_role_includes FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 
 --
 -- Name: permission_role_patterns permission_role_patterns_bump_epoch; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER permission_role_patterns_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_patterns FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_role_patterns_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_role_patterns FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 
 --
 -- Name: permission_roles permission_roles_bump_epoch; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER permission_roles_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_roles FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_roles_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_roles FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 
 --

@@ -21,7 +21,7 @@ ALTER TABLE ONLY public.permission_role_patterns
 
 CREATE INDEX permission_role_patterns_added_by_idx ON public.permission_role_patterns USING btree (added_by_account_id);
 
-CREATE TRIGGER permission_role_patterns_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_role_patterns FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_role_patterns_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_role_patterns FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 ALTER TABLE ONLY public.permission_role_patterns
     ADD CONSTRAINT permission_role_patterns_added_by_fkey FOREIGN KEY (added_by_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;

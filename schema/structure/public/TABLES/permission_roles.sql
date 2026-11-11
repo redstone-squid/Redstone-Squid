@@ -9,6 +9,7 @@ CREATE TABLE public.permission_roles (
     protected boolean DEFAULT false NOT NULL,
     created_by_account_id integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    withdrawn boolean DEFAULT false NOT NULL,
     CONSTRAINT permission_roles_builtin_is_global CHECK (((builtin_key IS NULL) OR (guild_id IS NULL))),
     CONSTRAINT permission_roles_slug_format CHECK ((slug ~ '^[a-z][a-z0-9-]{1,31}$'::text))
 );
@@ -41,7 +42,7 @@ ALTER TABLE ONLY public.permission_roles
 
 CREATE INDEX permission_roles_created_by_idx ON public.permission_roles USING btree (created_by_account_id);
 
-CREATE TRIGGER permission_roles_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_roles FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_roles_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_roles FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 ALTER TABLE ONLY public.permission_roles
     ADD CONSTRAINT permission_roles_created_by_fkey FOREIGN KEY (created_by_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;

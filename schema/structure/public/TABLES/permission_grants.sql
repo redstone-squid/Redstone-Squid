@@ -39,7 +39,7 @@ CREATE INDEX permission_grants_granted_by_idx ON public.permission_grants USING 
 
 CREATE UNIQUE INDEX permission_grants_role_unique ON public.permission_grants USING btree (subject_role_id, pattern, scope_guild_id) NULLS NOT DISTINCT WHERE (subject_role_id IS NOT NULL);
 
-CREATE TRIGGER permission_grants_bump_epoch AFTER INSERT OR DELETE OR UPDATE ON public.permission_grants FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
+CREATE TRIGGER permission_grants_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_grants FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
 
 ALTER TABLE ONLY public.permission_grants
     ADD CONSTRAINT permission_grants_granted_by_fkey FOREIGN KEY (granted_by_account_id) REFERENCES public.accounts(id) ON DELETE RESTRICT;

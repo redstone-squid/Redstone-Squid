@@ -14,7 +14,8 @@ Management rank does not affect permission resolution. Reordering roles therefor
 cannot silently change which permission rule wins.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import replace
 
 from whenever import Instant
@@ -72,14 +73,41 @@ class PermissionAdministrationService:
         *,
         uow_factory: UnitOfWorkFactory[PermissionAdminUnitOfWork],
         catalogue: Catalogue = CATALOGUE,
+        transaction: PermissionAdminUnitOfWork | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._permissions = permissions
         self._catalogue = catalogue
+        self._transaction = transaction
+
+    def in_transaction(self, uow: PermissionAdminUnitOfWork) -> PermissionAdministrationService:
+        """Reuse policy inside a caller-owned transaction without committing it."""
+        return PermissionAdministrationService(
+            self._permissions, uow_factory=self._uow_factory, catalogue=self._catalogue, transaction=uow
+        )
+
+    @asynccontextmanager
+    async def _read(self) -> AsyncIterator[PermissionAdminUnitOfWork]:
+        if self._transaction is not None:
+            yield self._transaction
+        else:
+            async with self._uow_factory() as uow:
+                yield uow
+
+    @asynccontextmanager
+    async def _write(self) -> AsyncIterator[PermissionAdminUnitOfWork]:
+        async with self._read() as uow:
+            yield uow
+            if self._transaction is None:
+                await uow.commit()
+
+    async def revision(self) -> int:
+        async with self._read() as uow:
+            return await uow.permissions.epoch()
 
     async def resolve_actor(self, subject: Actor) -> Actor:
         """Resolve the caller's capabilities and highest role rank in one transaction."""
-        async with self._uow_factory() as uow:
+        async with self._read() as uow:
             held = (
                 frozenset()
                 if subject.is_bot_owner
@@ -195,6 +223,123 @@ class PermissionAdministrationService:
             raise ValidationError(msg, public_context={"pattern": pattern})
         return reached
 
+    def check_grant(
+        self,
+        actor: Actor,
+        *,
+        pattern: str,
+        effect: Effect,
+        account_id: int | None,
+        discord_role_id: int | None,
+        guild_id: int | None,
+        scope_guild_id: int | None,
+        reason: str | None,
+    ) -> None:
+        Pattern.parse(pattern)
+        self._reached(pattern)
+        if effect is Effect.FORBID:
+            # Absolute and short-circuiting, so it is owner-only and must say why.
+            if not actor.is_bot_owner:
+                msg = "Only the bot owner can forbid a permission."
+                raise PermissionAuthorityError(msg)
+            if not reason:
+                msg = "A forbid rule requires a reason."
+                raise ValidationError(msg, public_context={"field": "reason"})
+        self._require_scope(actor, pattern, scope_guild_id)
+        self._require_authority(actor, (pattern,))
+        if (account_id is None) == (discord_role_id is None):
+            msg = "A rule applies to exactly one subject: an account or a Discord role."
+            raise ValidationError(msg)
+        if discord_role_id is not None and guild_id is None:
+            # Report the missing guild before the database constraint rejects it.
+            msg = "Granting to a Discord role has to be done inside that role's server."
+            raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
+
+    async def check_revoke(
+        self,
+        uow: PermissionAdminUnitOfWork,
+        actor: Actor,
+        *,
+        pattern: str,
+        account_id: int | None,
+        scope_guild_id: int | None,
+    ) -> None:
+        self._require_scope(actor, pattern, scope_guild_id)
+        self._require_authority(actor, (pattern,))
+        if PERM_GRANT_GLOBAL.name in self._reached(pattern):
+            await self._refuse_last_global_granter(uow, account_id, pattern)
+
+    def check_rank(self, actor: Actor, role: PermissionRole, rank: int) -> None:
+        if not 0 <= rank <= MAX_ROLE_RANK:
+            msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
+            raise ValidationError(msg, public_context={"field": "rank"})
+        self._require_role_management(actor, role)
+        if not actor.is_bot_owner and rank >= actor.require_permission_rank():
+            msg = f"You cannot set a rank at or above your own highest ({actor.require_permission_rank()})."
+            raise PermissionRankError(msg, public_context={"rank": rank})
+
+    def check_pattern(self, actor: Actor, role: PermissionRole, pattern: str, mode: int) -> None:
+        Pattern.parse(pattern)
+        self._reached(pattern)
+        self._require_role_management(actor, role)
+        if mode == INCLUDE_MODE:
+            self._require_authority(actor, (pattern,))
+            if role.guild_id is not None and not self._permissions.is_delegable_by_guild_admin(pattern):
+                msg = f"{pattern} reaches permissions outside this server's scope."
+                raise PermissionAuthorityError(msg, public_context={"pattern": pattern})
+
+    async def check_include(
+        self, uow: PermissionAdminUnitOfWork, actor: Actor, role: PermissionRole, included: PermissionRole
+    ) -> None:
+        self._require_role_management(actor, role)
+        if role.id == included.id:
+            msg = "A role cannot include itself."
+            raise ValidationError(msg)
+        # A guild role inside a global role would let one guild's admins change what the
+        # global role grants in every guild.
+        if included.guild_id is not None and included.guild_id != role.guild_id:
+            msg = f"{role.slug} can only include global roles or roles from its own guild."
+            raise ValidationError(msg, public_context={"role": role.slug, "included": included.slug})
+        roles = await uow.permission_admin.list_roles()
+        if self._would_cycle(role.id, included.id, roles):
+            msg = f"Including {included.slug} in {role.slug} would create a cycle."
+            raise ConflictError(msg, public_context={"role": role.slug, "included": included.slug})
+        # Check inherited capabilities just as we check direct include patterns.
+        self._require_authority(actor, self.resolved_leaves(included, roles))
+
+    async def check_assignment(
+        self,
+        uow: PermissionAdminUnitOfWork,
+        actor: Actor,
+        role: PermissionRole,
+        *,
+        account_id: int | None,
+        discord_role_id: int | None,
+        guild_id: int | None,
+        scope_guild_id: int | None,
+    ) -> None:
+        if (account_id is None) == (discord_role_id is None):
+            msg = "A role is assigned to exactly one subject: an account or a Discord role."
+            raise ValidationError(msg)
+        if discord_role_id is not None and guild_id is None:
+            msg = "Assigning to a Discord role has to be done inside that role's server."
+            raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
+        self._require_rank(actor, role)
+        roles = await uow.permission_admin.list_roles()
+        leaves = self.resolved_leaves(role, roles)
+        self._require_assignment_scope(actor, leaves, scope_guild_id)
+        self._require_authority(actor, leaves)
+
+    async def check_unassignment(
+        self, uow: PermissionAdminUnitOfWork, actor: Actor, role: PermissionRole, scope_guild_id: int | None
+    ) -> None:
+        self._require_rank(actor, role)
+        if role.builtin_key == BuiltinRoleKeys.OWNER:
+            msg = "The owner role cannot be unassigned."
+            raise ConflictError(msg, public_context={"role": role.slug})
+        roles = await uow.permission_admin.list_roles()
+        self._require_assignment_scope(actor, self.resolved_leaves(role, roles), scope_guild_id)
+
     # ---- Direct grants -------------------------------------------------
 
     async def grant(
@@ -211,27 +356,17 @@ class PermissionAdministrationService:
         reason: str | None = None,
     ) -> None:
         """Write one allow, deny or forbid rule."""
-        async with self._uow_factory() as uow:
-            Pattern.parse(pattern)
-            self._reached(pattern)
-            if effect is Effect.FORBID:
-                # Absolute and short-circuiting, so it is owner-only and must say why.
-                if not actor.is_bot_owner:
-                    msg = "Only the bot owner can forbid a permission."
-                    raise PermissionAuthorityError(msg)
-                if not reason:
-                    msg = "A forbid rule requires a reason."
-                    raise ValidationError(msg, public_context={"field": "reason"})
-            self._require_scope(actor, pattern, scope_guild_id)
-            self._require_authority(actor, (pattern,))
-            if (account_id is None) == (discord_role_id is None):
-                msg = "A rule applies to exactly one subject: an account or a Discord role."
-                raise ValidationError(msg)
-            if discord_role_id is not None and guild_id is None:
-                # Report the missing guild before the database constraint rejects it.
-                msg = "Granting to a Discord role has to be done inside that role's server."
-                raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
-
+        async with self._write() as uow:
+            self.check_grant(
+                actor,
+                pattern=pattern,
+                effect=effect,
+                account_id=account_id,
+                discord_role_id=discord_role_id,
+                guild_id=guild_id,
+                scope_guild_id=scope_guild_id,
+                reason=reason,
+            )
             await uow.permission_admin.upsert_grant(
                 pattern=pattern,
                 effect=int(effect),
@@ -255,7 +390,6 @@ class PermissionAdministrationService:
                     reason=reason,
                 ),
             )
-            await uow.commit()
 
     async def revoke(
         self,
@@ -271,12 +405,9 @@ class PermissionAdministrationService:
         Remaining rules determine the result; the catalogue default applies only if
         none match.
         """
-        async with self._uow_factory() as uow:
-            self._require_scope(actor, pattern, scope_guild_id)
-            self._require_authority(actor, (pattern,))
-            if PERM_GRANT_GLOBAL.name in self._reached(pattern):
-                await self._refuse_last_global_granter(uow, account_id, pattern)
-            result = await uow.permission_admin.delete_grant(
+        async with self._write() as uow:
+            await self.check_revoke(uow, actor, pattern=pattern, account_id=account_id, scope_guild_id=scope_guild_id)
+            return await uow.permission_admin.delete_grant(
                 pattern=pattern,
                 subject_account_id=account_id,
                 subject_role_id=discord_role_id,
@@ -290,8 +421,6 @@ class PermissionAdministrationService:
                     scope_guild_id=scope_guild_id,
                 ),
             )
-            await uow.commit()
-            return result
 
     async def _refuse_last_global_granter(
         self, uow: PermissionAdminUnitOfWork, account_id: int | None, pattern: str
@@ -327,7 +456,7 @@ class PermissionAdministrationService:
         guild_id: int | None = None,
     ) -> tuple[PermissionGrant, ...]:
         """List stored direct grants matching the supplied subject and guild filters."""
-        async with self._uow_factory() as uow:
+        async with self._read() as uow:
             return await uow.permission_admin.list_rules(
                 subject_account_id=account_id,
                 subject_role_id=discord_role_id,
@@ -342,7 +471,7 @@ class PermissionAdministrationService:
         guild_id: int | None = None,
     ) -> tuple[PermissionRoleAssignment, ...]:
         """List permission-role assignments matching the supplied subject and guild filters."""
-        async with self._uow_factory() as uow:
+        async with self._read() as uow:
             return await uow.permission_admin.list_assignments(
                 subject_account_id=account_id,
                 subject_role_id=discord_role_id,
@@ -351,19 +480,19 @@ class PermissionAdministrationService:
 
     async def audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]:
         """The most recent permission mutations."""
-        async with self._uow_factory() as uow:
+        async with self._read() as uow:
             return await uow.permission_admin.list_audit(guild_id=guild_id, limit=limit)
 
     # ---- Permission roles ----------------------------------------------
 
     async def roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
         """Every role visible from one guild, highest rank first."""
-        async with self._uow_factory() as uow:
+        async with self._read() as uow:
             roles = await uow.permission_admin.list_roles(guild_id=guild_id)
             return tuple(sorted(roles, key=lambda role: (-role.rank, role.slug)))
 
     async def role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole:
-        async with self._uow_factory() as uow:
+        async with self._read() as uow:
             found = await uow.permission_admin.get_role(slug, guild_id=guild_id)
             if found is None:
                 msg = f"No permission role named {slug!r}."
@@ -373,6 +502,22 @@ class PermissionAdministrationService:
     def resolved_leaves(self, role: PermissionRole, roles: Sequence[PermissionRole]) -> tuple[str, ...]:
         """The node names a role actually confers, composition and subtraction applied."""
         return self._permissions.role_leaves(role, roles)
+
+    async def reserve_role_identity(self) -> int:
+        async with self._read() as uow:
+            return await uow.permission_admin.reserve_role_identity()
+
+    def check_role_creation(self, actor: Actor, *, rank: int, guild_id: int | None) -> None:
+        if not 0 <= rank <= MAX_ROLE_RANK:
+            msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
+            raise ValidationError(msg, public_context={"field": "rank"})
+        node = ROLE_DEFINITION_MANAGE if guild_id is None else ROLE_DEFINITION_MANAGE_GUILD
+        if not actor.is_bot_owner and node.name not in actor.capabilities:
+            msg = f"You need {node.name} to create this role."
+            raise PermissionAuthorityError(msg, public_context={"node": node.name})
+        if not actor.is_bot_owner and rank >= actor.require_permission_rank():
+            msg = f"You cannot create a role at rank {rank}; your own highest is {actor.require_permission_rank()}."
+            raise PermissionRankError(msg, public_context={"rank": rank})
 
     async def create_role(
         self,
@@ -385,21 +530,12 @@ class PermissionAdministrationService:
         rank: int = 0,
     ) -> PermissionRole:
         """Create an empty role. Patterns are added separately, each gated."""
-        async with self._uow_factory() as uow:
-            if not 0 <= rank <= MAX_ROLE_RANK:
-                msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
-                raise ValidationError(msg, public_context={"field": "rank"})
-            node = ROLE_DEFINITION_MANAGE if guild_id is None else ROLE_DEFINITION_MANAGE_GUILD
-            if not actor.is_bot_owner and node.name not in actor.capabilities:
-                msg = f"You need {node.name} to create this role."
-                raise PermissionAuthorityError(msg, public_context={"node": node.name})
-            if not actor.is_bot_owner and rank >= actor.require_permission_rank():
-                msg = f"You cannot create a role at rank {rank}; your own highest is {actor.require_permission_rank()}."
-                raise PermissionRankError(msg, public_context={"rank": rank})
+        async with self._write() as uow:
+            self.check_role_creation(actor, rank=rank, guild_id=guild_id)
             if await uow.permission_admin.get_role(slug, guild_id=guild_id) is not None:
                 msg = f"A role named {slug!r} already exists here."
                 raise ConflictError(msg, public_context={"role": slug})
-            result = await uow.permission_admin.create_role(
+            return await uow.permission_admin.create_role(
                 slug=slug,
                 name=name,
                 description=description,
@@ -414,13 +550,11 @@ class PermissionAdministrationService:
                     details={"slug": slug, "rank": rank},
                 ),
             )
-            await uow.commit()
-            return result
 
     async def delete_role(self, actor: Actor, role: PermissionRole) -> bool:
-        async with self._uow_factory() as uow:
+        async with self._write() as uow:
             self._require_role_management(actor, role)
-            result = await uow.permission_admin.delete_role(
+            return await uow.permission_admin.delete_role(
                 role.id,
                 audit=AuditEntry(
                     action="role_delete",
@@ -430,18 +564,10 @@ class PermissionAdministrationService:
                     details={"slug": role.slug},
                 ),
             )
-            await uow.commit()
-            return result
 
     async def set_rank(self, actor: Actor, role: PermissionRole, rank: int) -> None:
-        async with self._uow_factory() as uow:
-            if not 0 <= rank <= MAX_ROLE_RANK:
-                msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
-                raise ValidationError(msg, public_context={"field": "rank"})
-            self._require_role_management(actor, role)
-            if not actor.is_bot_owner and rank >= actor.require_permission_rank():
-                msg = f"You cannot set a rank at or above your own highest ({actor.require_permission_rank()})."
-                raise PermissionRankError(msg, public_context={"rank": rank})
+        async with self._write() as uow:
+            self.check_rank(actor, role, rank)
             await uow.permission_admin.set_role_rank(
                 role.id,
                 rank,
@@ -452,7 +578,6 @@ class PermissionAdministrationService:
                     details={"slug": role.slug, "rank": rank},
                 ),
             )
-            await uow.commit()
 
     async def add_pattern(self, actor: Actor, role: PermissionRole, pattern: str, *, mode: int = INCLUDE_MODE) -> None:
         """Include or exclude a pattern from a role.
@@ -460,15 +585,8 @@ class PermissionAdministrationService:
         Includes require the actor to hold every selected node. Exclusions only narrow
         the role, so they require management authority but not the excluded permissions.
         """
-        async with self._uow_factory() as uow:
-            Pattern.parse(pattern)
-            self._reached(pattern)
-            self._require_role_management(actor, role)
-            if mode == INCLUDE_MODE:
-                self._require_authority(actor, (pattern,))
-                if role.guild_id is not None and not self._permissions.is_delegable_by_guild_admin(pattern):
-                    msg = f"{pattern} reaches permissions outside this server's scope."
-                    raise PermissionAuthorityError(msg, public_context={"pattern": pattern})
+        async with self._write() as uow:
+            self.check_pattern(actor, role, pattern, mode)
             await uow.permission_admin.set_role_pattern(
                 role.id,
                 pattern,
@@ -482,12 +600,11 @@ class PermissionAdministrationService:
                     details={"slug": role.slug},
                 ),
             )
-            await uow.commit()
 
     async def remove_pattern(self, actor: Actor, role: PermissionRole, pattern: str) -> bool:
-        async with self._uow_factory() as uow:
+        async with self._write() as uow:
             self._require_role_management(actor, role)
-            result = await uow.permission_admin.remove_role_pattern(
+            return await uow.permission_admin.remove_role_pattern(
                 role.id,
                 pattern,
                 audit=AuditEntry(
@@ -498,30 +615,14 @@ class PermissionAdministrationService:
                     details={"slug": role.slug},
                 ),
             )
-            await uow.commit()
-            return result
 
     async def add_include(self, actor: Actor, role: PermissionRole, included: PermissionRole) -> None:
         """Compose one role into another.
 
         Refuse cycles, and refuse a guild role unless `role` belongs to the same guild.
         """
-        async with self._uow_factory() as uow:
-            self._require_role_management(actor, role)
-            if role.id == included.id:
-                msg = "A role cannot include itself."
-                raise ValidationError(msg)
-            # A guild role inside a global role would let one guild's admins change what the
-            # global role grants in every guild.
-            if included.guild_id is not None and included.guild_id != role.guild_id:
-                msg = f"{role.slug} can only include global roles or roles from its own guild."
-                raise ValidationError(msg, public_context={"role": role.slug, "included": included.slug})
-            roles = await uow.permission_admin.list_roles()
-            if self._would_cycle(role.id, included.id, roles):
-                msg = f"Including {included.slug} in {role.slug} would create a cycle."
-                raise ConflictError(msg, public_context={"role": role.slug, "included": included.slug})
-            # Check inherited capabilities just as we check direct include patterns.
-            self._require_authority(actor, self.resolved_leaves(included, roles))
+        async with self._write() as uow:
+            await self.check_include(uow, actor, role, included)
             await uow.permission_admin.add_role_include(
                 role.id,
                 included.id,
@@ -533,7 +634,6 @@ class PermissionAdministrationService:
                     details={"slug": role.slug, "included": included.slug},
                 ),
             )
-            await uow.commit()
 
     @staticmethod
     def _would_cycle(role_id: int, included_id: int, roles: Sequence[PermissionRole]) -> bool:
@@ -551,9 +651,9 @@ class PermissionAdministrationService:
         return False
 
     async def remove_include(self, actor: Actor, role: PermissionRole, included: PermissionRole) -> bool:
-        async with self._uow_factory() as uow:
+        async with self._write() as uow:
             self._require_role_management(actor, role)
-            result = await uow.permission_admin.remove_role_include(
+            return await uow.permission_admin.remove_role_include(
                 role.id,
                 included.id,
                 audit=AuditEntry(
@@ -563,8 +663,6 @@ class PermissionAdministrationService:
                     details={"slug": role.slug, "included": included.slug},
                 ),
             )
-            await uow.commit()
-            return result
 
     async def assign(
         self,
@@ -579,18 +677,16 @@ class PermissionAdministrationService:
         reason: str | None = None,
     ) -> None:
         """Give a role to an account or to everyone holding a Discord role."""
-        async with self._uow_factory() as uow:
-            if (account_id is None) == (discord_role_id is None):
-                msg = "A role is assigned to exactly one subject: an account or a Discord role."
-                raise ValidationError(msg)
-            if discord_role_id is not None and guild_id is None:
-                msg = "Assigning to a Discord role has to be done inside that role's server."
-                raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
-            self._require_rank(actor, role)
-            roles = await uow.permission_admin.list_roles()
-            leaves = self.resolved_leaves(role, roles)
-            self._require_assignment_scope(actor, leaves, scope_guild_id)
-            self._require_authority(actor, leaves)
+        async with self._write() as uow:
+            await self.check_assignment(
+                uow,
+                actor,
+                role,
+                account_id=account_id,
+                discord_role_id=discord_role_id,
+                guild_id=guild_id,
+                scope_guild_id=scope_guild_id,
+            )
             await uow.permission_admin.assign_role(
                 role.id,
                 subject_account_id=account_id,
@@ -613,7 +709,6 @@ class PermissionAdministrationService:
                     details={"slug": role.slug},
                 ),
             )
-            await uow.commit()
 
     async def unassign(
         self,
@@ -624,14 +719,9 @@ class PermissionAdministrationService:
         discord_role_id: int | None = None,
         scope_guild_id: int | None = None,
     ) -> bool:
-        async with self._uow_factory() as uow:
-            self._require_rank(actor, role)
-            if role.builtin_key == BuiltinRoleKeys.OWNER:
-                msg = "The owner role cannot be unassigned."
-                raise ConflictError(msg, public_context={"role": role.slug})
-            roles = await uow.permission_admin.list_roles()
-            self._require_assignment_scope(actor, self.resolved_leaves(role, roles), scope_guild_id)
-            result = await uow.permission_admin.unassign_role(
+        async with self._write() as uow:
+            await self.check_unassignment(uow, actor, role, scope_guild_id)
+            return await uow.permission_admin.unassign_role(
                 role.id,
                 subject_account_id=account_id,
                 subject_role_id=discord_role_id,
@@ -646,8 +736,6 @@ class PermissionAdministrationService:
                     details={"slug": role.slug},
                 ),
             )
-            await uow.commit()
-            return result
 
     def unmanageable_patterns(
         self, actor: Actor, role: PermissionRole, roles: Sequence[PermissionRole]

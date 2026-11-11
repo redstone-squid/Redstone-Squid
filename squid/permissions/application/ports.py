@@ -127,6 +127,8 @@ class PermissionAdminStore(Protocol):
 
     async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None: ...
 
+    async def reserve_role_identity(self) -> int: ...
+
     async def create_role(
         self,
         *,

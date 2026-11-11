@@ -126,6 +126,9 @@ class FakeStore:
     async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None:
         return next((role for role in self.roles.values() if role.slug == slug), None)
 
+    async def reserve_role_identity(self) -> int:
+        return max(self.roles, default=0) + 1
+
     async def create_role(
         self, *, slug, name, description, guild_id, rank, created_by_account_id, audit
     ) -> PermissionRole:
