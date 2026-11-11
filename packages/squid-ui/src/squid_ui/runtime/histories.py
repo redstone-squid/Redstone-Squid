@@ -457,6 +457,7 @@ class HistoryEntry:
     compensation_execution: CompensationExecution | None = None
     retentions: tuple[object, ...] = ()
     operation: ReversibleOperation | None = None
+    targets: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -608,6 +609,40 @@ class History:
         self._reserve(
             lambda commit: self._push(HistoryEntry(label, commit.context.action_id, UndoPlan(()), operation=operation))
         )
+
+    def accept_committed(
+        self,
+        label: TextLike,
+        operation: ReversibleOperation,
+        *,
+        operation_id: ActionId,
+        targets: frozenset[str] = frozenset(),
+    ) -> HistoryEntry:
+        """Retain a confirmed external commit independently of the UI transaction.
+
+        Use only after the application has established that the external write
+        committed. A subsequent rendering error or UI rollback must not forget it.
+        Repeated delivery returns the existing entry while it remains retained.
+        """
+        for entry in (*self._undone, *self._redoable):
+            if entry.original_action_id == operation_id:
+                return entry
+        entry = HistoryEntry(label, operation_id, UndoPlan(()), operation=operation, targets=targets)
+        self._push(entry)
+        return entry
+
+    def discard_targets(self, targets: frozenset[str]) -> None:
+        """Forget receipts touching these targets, preserving unrelated edits."""
+        selected = [entry for entry in (*self._undone, *self._redoable) if entry.targets & targets]
+        if any(entry.state in {HistoryEntryState.REVERSING, HistoryEntryState.REAPPLYING} for entry in selected):
+            message = "cannot discard an operation while it is running"
+            raise HistoryError(message)
+        for entry in selected:
+            self._remove_identity(self._undone, entry)
+            self._remove_identity(self._redoable, entry)
+            self._release_entry(entry)
+        if selected:
+            self._signal.notify()
 
     async def _reverse_operation(self, entry: HistoryEntry, *, redo: bool) -> HistoryResult:
         assert entry.operation is not None
@@ -989,6 +1024,13 @@ class History:
 
     def _push(self, entry: HistoryEntry) -> None:
         entry.retentions = self._retain_plan(entry.undo_plan)
+        try:
+            retain = getattr(entry.operation, "retain", None)
+            if retain is not None:
+                entry.retentions += (retain(),)
+        except BaseException:
+            self._release_entry(entry)
+            raise
         self._undone.append(entry)
         evicted = self._undone[: max(0, len(self._undone) - self.limit)]
         for candidate in evicted:

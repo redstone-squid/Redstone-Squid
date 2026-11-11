@@ -734,3 +734,55 @@ async def test_uncertain_saved_operation_is_not_retried() -> None:
     assert result.status is HistoryResultStatus.NEEDS_RECONCILIATION
     assert await stack.undo() is result
     assert calls == ["committed"]
+
+
+async def test_committed_receipt_survives_ui_rollback_and_duplicate_delivery() -> None:
+    class Operation:
+        async def reverse(self) -> Operation:
+            return self
+
+    stack = History()
+    operation_id = uuid.uuid4()
+    operation = Operation()
+    with pytest.raises(ValueError, match="render failed"), transaction():
+        stack.accept_committed("Saved", operation, operation_id=operation_id)
+        raise ValueError("render failed")
+    entry = stack.entries[0]
+    assert stack.accept_committed("Saved", operation, operation_id=operation_id) is entry
+    assert (await stack.undo()).applied
+    assert stack.accept_committed("Saved", operation, operation_id=operation_id) is entry
+    assert not stack.entries
+    assert stack.redoable == (entry,)
+
+
+async def test_external_receipt_retention_and_target_invalidation() -> None:
+    class Lease:
+        def __init__(self) -> None:
+            self.releases = 0
+
+        def release(self) -> None:
+            self.releases += 1
+
+    class Operation:
+        def __init__(self) -> None:
+            self.lease = Lease()
+
+        def retain(self) -> Lease:
+            return self.lease
+
+        async def reverse(self) -> Operation:
+            return self
+
+    stack = History(limit=2)
+    operations = [Operation() for _ in range(4)]
+    for index, operation in enumerate(operations[:3]):
+        stack.accept_committed(str(index), operation, operation_id=uuid.uuid4(), targets=frozenset({str(index)}))
+    assert [operation.lease.releases for operation in operations] == [1, 0, 0, 0]
+    assert (await stack.undo()).applied
+    stack.discard_targets(frozenset({"1"}))
+    assert [operation.lease.releases for operation in operations] == [1, 1, 0, 0]
+    assert len(stack.redoable) == 1
+    stack.accept_committed("New branch", operations[3], operation_id=uuid.uuid4())
+    assert operations[2].lease.releases == 1
+    stack.clear()
+    assert [operation.lease.releases for operation in operations] == [1, 1, 1, 1]
