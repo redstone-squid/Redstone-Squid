@@ -205,6 +205,19 @@ def _external_signature(callback: Callable[..., object], source_type: type) -> i
     """The signature discord.py sees: the request slot re-typed as the native source."""
     parameters, source_index = _source_parameter(callback)
     parameters[source_index] = parameters[source_index].replace(annotation=source_type)
+    # An explicit __signature__ bypasses discord.py's usual Parameter construction.
+    # Prefix parsing and help need its converter and display metadata properties.
+    parameters = [
+        parameter
+        if isinstance(parameter, commands.Parameter)
+        else commands.Parameter(
+            name=parameter.name,
+            kind=parameter.kind,
+            default=parameter.default,
+            annotation=parameter.annotation,
+        )
+        for parameter in parameters
+    ]
     return inspect.Signature(parameters, return_annotation=inspect.Signature.empty)
 
 

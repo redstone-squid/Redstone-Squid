@@ -84,6 +84,32 @@ async def test_command_signature_shows_discord_the_native_source() -> None:
     assert parameters["build_id"].type is discord.AppCommandOptionType.integer
 
 
+@pytest.mark.parametrize("decorate", [sd.prefix_command(), sd.hybrid_command(), sd.hybrid_group()])
+def test_text_command_parameters_support_help_and_conversion(decorate: Any) -> None:
+    async def lookup(request: sd.Request[Any], build_id: int, limit: int = 10) -> None:
+        pass
+
+    command = decorate(lookup)
+
+    assert command.signature == "<build_id> [limit=10]"
+    assert list(command.params) == ["build_id", "limit"]
+    assert command.params["build_id"].converter is int
+    assert command.params["build_id"].required
+    assert not command.params["limit"].required
+
+
+def test_prefix_command_preserves_parameter_display_metadata() -> None:
+    @sd.prefix_command()
+    async def lookup(
+        request: sd.Request[Any],
+        build_id: int = commands.parameter(default=42, displayed_name="build", description="Build ID"),
+    ) -> None:
+        pass
+
+    assert lookup.signature == "[build=42]"
+    assert lookup.params["build_id"].description == "Build ID"
+
+
 async def test_the_request_is_memoized_on_the_interaction() -> None:
     bot = installed_bot()
     cog = Builds(bot)
