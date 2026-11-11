@@ -467,7 +467,9 @@ async def test_cross_draft_lookup_and_missing_discard_are_not_visible() -> None:
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         get_response = await client.get(f"/submissions/drafts/{DRAFT_ID}/media/{UPLOAD_ID}")
-        delete_response = await client.delete(f"/submissions/drafts/{DRAFT_ID}/media/{OTHER_UPLOAD_ID}")
+        delete_response = await client.delete(
+            f"/submissions/drafts/{DRAFT_ID}/media/{OTHER_UPLOAD_ID}", headers={"If-Match": f'"draft-{DRAFT_ID}-r0"'}
+        )
 
     assert get_response.status_code == 404
     assert delete_response.status_code == 404

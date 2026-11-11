@@ -60,7 +60,9 @@ async def test_list_get_and_discard_keep_stable_states_without_private_artifacts
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         list_response = await client.get(f"/submissions/drafts/{DRAFT_ID}/media")
         get_response = await client.get(f"/submissions/drafts/{DRAFT_ID}/media/{UPLOAD_ID}")
-        delete_response = await client.delete(f"/submissions/drafts/{DRAFT_ID}/media/{OTHER_UPLOAD_ID}")
+        delete_response = await client.delete(
+            f"/submissions/drafts/{DRAFT_ID}/media/{OTHER_UPLOAD_ID}", headers={"If-Match": f'"draft-{DRAFT_ID}-r0"'}
+        )
 
     assert list_response.status_code == 200
     assert list_response.headers["Cache-Control"] == "no-store"

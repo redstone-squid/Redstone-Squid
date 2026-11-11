@@ -12,7 +12,10 @@ from squid.api.dependencies import get_draft_attachments
 from squid.api.errors import register_exception_handlers
 from squid.api.security import Caller, current_caller
 from squid.api.v1.submission_media import router
-from squid.api.v1.submissions import authenticated_account
+from squid.api.v1.submissions import authenticated_account, get_submission_edits
+from squid.core.actors import Actor
+from squid.edits.application import EditRunner
+from squid.edits.domain import EditAttempt, EditCommand, EditOutcome, EditResult, Revision
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
@@ -22,7 +25,9 @@ from squid.media.application.jobs import (
 )
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.domain.jobs import MediaJobStatus
+from squid.media.errors import DraftMediaNotFoundError
 from squid.submissions.application import DraftAttachmentService, StoredDraft
+from squid.submissions.application.attachment_edits import AttachmentValues
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.errors import DraftAccessDeniedError
 
@@ -173,6 +178,36 @@ class FakeMedia:
         return True
 
 
+class MediaEditRecorder(EditRunner):
+    def __init__(self, drafts: FakeDrafts, media: FakeMedia) -> None:
+        self.drafts = drafts
+        self.media = media
+
+    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+        version = command.expected[0]
+        draft_id = UUID(version.target.key)
+        await self.drafts.get_accessible(draft_id, actor.require_account_id())
+        values = AttachmentValues.model_validate_json(command.values.encoded)
+        for item in values.files:
+            assert not item.present
+            if not await self.media.discard(draft_id, item.source_id):
+                raise DraftMediaNotFoundError(item.source_id)
+        return EditResult(
+            EditOutcome(
+                command.operation_id,
+                actor.key,
+                command.fingerprint,
+                (Revision(version.target, version.value + 1),),
+                changed=True,
+                final=False,
+            ),
+            None,
+        )
+
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
+        raise NotImplementedError
+
+
 @dataclass(frozen=True, slots=True)
 class DisabledMediaServices:
     media_jobs: None
@@ -202,4 +237,5 @@ def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
     app.dependency_overrides[get_draft_attachments] = attachment_dependency
     app.dependency_overrides[authenticated_account] = account_dependency
     app.dependency_overrides[current_caller] = caller_dependency
+    app.dependency_overrides[get_submission_edits] = lambda: MediaEditRecorder(drafts, media)
     return app
