@@ -6,8 +6,10 @@ from decimal import Decimal
 from functools import partial
 
 import pytest
+from whenever import Instant
 
 from squid.tags.application import TagService
+from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagDefinition
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
@@ -16,6 +18,7 @@ from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 class FakeRepository:
     def __init__(self) -> None:
         self.definition: TagDefinition | None = None
+        self.snapshot: AssignmentSnapshot | None = None
 
     async def create_showcase(
         self,
@@ -58,6 +61,20 @@ class FakeRepository:
         self.definition = replace(self.definition, moderation_status=status)
         return self.definition
 
+    async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None:
+        return self.snapshot
+
+    async def replace_assignment(
+        self,
+        build_id: int,
+        tag_id: int,
+        expected: AssignmentSnapshot | None,
+        replacement: AssignmentSnapshot | None,
+        *,
+        actor_account_id: int,
+    ) -> bool:
+        raise NotImplementedError("Assignment history is not exercised by these governance tests.")
+
     async def assign_showcase(
         self,
         *,
@@ -67,7 +84,12 @@ class FakeRepository:
         actor_account_id: int,
     ) -> bool:
         assert (build_id, tag_id, value) == (10, 1, Decimal("0.4"))
-        return actor_account_id == 42
+        if actor_account_id != 42:
+            return False
+        self.snapshot = AssignmentSnapshot(
+            TagValueType.NUMERIC, value, None, None, None, "user", actor_account_id, Instant.now()
+        )
+        return True
 
 
 class FakeTagUnitOfWork(FakeUnitOfWork[FakeRepository]):
@@ -78,6 +100,7 @@ class FakeTagUnitOfWork(FakeUnitOfWork[FakeRepository]):
 
 def _copy_repository(repository: FakeRepository) -> FakeRepository:
     copied = FakeRepository()
+    copied.snapshot = repository.snapshot
     copied.definition = None if repository.definition is None else replace(repository.definition)
     return copied
 
