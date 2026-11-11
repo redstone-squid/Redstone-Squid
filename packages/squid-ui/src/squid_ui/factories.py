@@ -220,19 +220,10 @@ def _reject(value: object, origin: str, index: int) -> NoReturn:
         detail = f"a mapping is not content; unpack what you meant, e.g. {origin[:-1]}*mapping.values())"
     elif isinstance(value, Iterable):
         detail = f"a {type(value).__name__} is not content; unpack it, e.g. {origin[:-1]}*entries)"
-    elif _is_component(value):
-        detail = "components are placed with self.boundary(child, key=...)"
     else:
         detail = f"{type(value).__name__} is not content"
     message = f"{origin} argument {index}: {detail}"
     raise TypeError(message)
-
-
-def _is_component(value: object) -> bool:
-    # Imported on the error path only, so the sugar layer keeps depending on semantic + text.
-    from squid_ui.runtime.definition import Component
-
-    return isinstance(value, Component)
 
 
 def _children[RenderTargetT = RenderTarget, ContextT = object](

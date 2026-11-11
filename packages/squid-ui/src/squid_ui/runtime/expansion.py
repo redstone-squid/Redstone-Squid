@@ -271,6 +271,8 @@ class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
         def expand_item(
             item: LayoutNode[RenderTargetT, ContextT], item_path: str, route: _LayoutRoute
         ) -> list[LayoutNode[RenderTargetT, ContextT]]:
+            if isinstance(item, Component):
+                item = item.keyed(item._composition_key)
             if isinstance(item, Boundary):
                 if item.key in embed_keys:
                     message = f"{item_path}: duplicate Boundary key {item.key!r}"

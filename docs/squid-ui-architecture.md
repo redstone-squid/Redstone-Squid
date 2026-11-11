@@ -1370,7 +1370,7 @@ class BuildEditor(Component[ComponentsV2Target]):
 
     def render(self) -> DocumentLike[ComponentsV2Target]:
         self.provide(UPDATES, self.updates)
-        return self.boundary(self.notice, key="notice")
+        return self.notice
 ```
 
 A toolbar can inject the same `UPDATES`. Removing a consumer leaves the subscription active;

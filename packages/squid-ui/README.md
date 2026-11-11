@@ -79,7 +79,16 @@ without a listener or delivery runtime.
 ## Component lifetime
 
 Create and retain child components during setup or actions. Rendering places those instances
-with `self.boundary(child, key=...)`; it cannot construct components or write reactive state.
+directly: `return self.child` or `sl.stack(self.first, self.second)`. It cannot construct
+components or write reactive state. Each instance gets an automatic control namespace that
+survives reordering under the same parent. For a namespace stable across new instances or
+process restarts, use `child.keyed("editor")` (integer keys are also accepted).
+
+`keyed()` returns an immutable placement reference; it neither modifies the child nor copies
+its state. Keys are unique within a parent's render, and one instance can appear only once
+in the expanded tree. Replacing a child at the same key mounts the new instance with its own
+state. `parent.boundary(child, key="editor")` remains available for compatibility.
+
 Keep dynamic children by an application key and update the collection in an action. The runtime
 mounts and unmounts children when the delivered tree changes. Reusing a cached render therefore
 preserves the same component identities and lifetimes as running it again.

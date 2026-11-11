@@ -6,6 +6,7 @@ Tree expansion and caching live in the runtime's execution modules.
 
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
+from itertools import count
 from typing import Any, ClassVar, Generic, Protocol, Self, TypeVar, cast, overload, override
 
 from squid_reactivity.core import (
@@ -16,7 +17,7 @@ from squid_ui.document import DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.nodes import Boundary
 from squid_ui.runtime.services import ManagedService, ServiceOwner
-from squid_ui.target_types import RenderTarget
+from squid_ui.target_types import Renderable, RenderTarget
 
 type AnyComponent = Component[Any, Any]
 """A mounted component for any render target.
@@ -57,16 +58,20 @@ so this is the only way to preserve portable-component substitution.
 """
 
 
-class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
+_COMPONENT_KEYS = count()
+
+
+class Component(Reactive, Renderable[RenderTargetT, ContextT], ABC, Generic[RenderTargetT, ContextT]):
     """A reusable part of an interface, combining state with a render method.
 
     render describes the current layout without changing state. State changes
     request another render, but planning and delivery belong to the frontend.
-    Create and retain child components during setup or actions, then place them with
-    boundary during rendering. Component construction during rendering is forbidden.
-    Keep boundary keys stable across renders.
-    Each boundary prefixes its child's control and presentation keys, so two child
-    components can both use a local key such as "save" without colliding.
+    Create and retain children during setup or actions, then return them directly or
+    include them in layout containers. Component construction during rendering is forbidden.
+    Each child instance has an automatic namespace, stable across reordering under the
+    same parent. Use child.keyed("name") for a namespace stable across new instances or
+    process restarts. Keys identify placements; they never recover another instance's state.
+    Both forms prefix control and presentation keys so children can share local names.
 
     A mounted frontend calls on_load before the first render. Once delivery
     succeeds, ComponentRuntime mounts added components and unmounts removed ones;
@@ -81,8 +86,11 @@ class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
                 "Create and retain child components during setup or an action; render only places them."
             )
             raise LayoutInvariantError(message)
-        return super().__new__(cls, *args, **kwargs)
+        instance = super().__new__(cls, *args, **kwargs)
+        vars(instance)["_composition_key"] = f"child-{next(_COMPONENT_KEYS)}"
+        return instance
 
+    _composition_key: str
     _runtime: RuntimeOwner | None = None
     _parent: AnyComponent | None = None
     _owned_services: ServiceOwner | None = None
@@ -101,14 +109,20 @@ class Component(Reactive, ABC, Generic[RenderTargetT, ContextT]):
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Return the current layout synchronously, without changing state."""
 
-    def boundary(self, child: Component[RenderTargetT, ContextT], *, key: str) -> Boundary[RenderTargetT, ContextT]:
-        """Place a child under a stable key used to namespace its controls and presentation state.
+    def keyed(self, key: str | int) -> Boundary[RenderTargetT, ContextT]:
+        """Place this instance under an explicit control and presentation namespace.
 
-        Keys must be unique within this component's render, and one child instance cannot
-        appear twice in the expanded tree. Child target and context requirements must be
-        compatible with the parent.
+        Return an immutable reference without modifying or cloning the component.
+        Keys must be nonempty, contain no dots, and be unique within the parent's
+        render. One instance may appear only once in the expanded tree, even with
+        different keys. Replacing an instance at a key mounts the replacement;
+        its state is not copied from the previous component.
         """
-        return Boundary(child, key)
+        return Boundary(self, str(key))
+
+    def boundary(self, child: Component[RenderTargetT, ContextT], *, key: str) -> Boundary[RenderTargetT, ContextT]:
+        """Compatibility spelling for child.keyed(key)."""
+        return child.keyed(key)
 
     async def on_load(self) -> None:
         """Fetch what this component cannot render without, before its first render.

@@ -55,3 +55,10 @@ async def incompatible_response(
 ) -> None:
     # The public response boundary must not erase an incompatible context.
     await request.respond(component)  # pyrefly: ignore[no-matching-overload]
+
+
+# Direct and keyed placement preserve the child's required event context.
+direct_child: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = DiscordPanel()
+keyed_child: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = DiscordPanel().keyed("discord")
+wrong_direct: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = DiscordPanel()  # type: ignore  # Deliberately incompatible target or context.
+wrong_keyed: sl.LayoutNode[sl.ComponentsV2Target, OtherContext] = DiscordPanel().keyed("discord")  # type: ignore  # Deliberately incompatible target or context.

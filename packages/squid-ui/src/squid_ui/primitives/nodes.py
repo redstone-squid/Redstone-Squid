@@ -274,7 +274,7 @@ class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[Rende
     """Place a child component in the layout under its own control and presentation keys.
 
     The runtime replaces this node with the child's rendered layout before planning.
-    Component.boundary constructs it while preserving the child's target requirements.
+    Component.keyed constructs it while preserving the child's target and context requirements.
     """
 
     component: Component[RenderTargetT, ContextT]

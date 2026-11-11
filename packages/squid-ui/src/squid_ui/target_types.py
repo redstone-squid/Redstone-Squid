@@ -1,5 +1,7 @@
 """Dependency-leaf static vocabulary for render targets and adapter families."""
 
+from typing import Generic, TypeVar
+
 
 class RenderTarget:
     """Marker for portable values renderable by every semantic target."""
@@ -65,7 +67,12 @@ class SlackSdk343Adapter(SlackSdkAdapter):
     """Marker for Squid's verified Slack Python SDK 3.43 adapter."""
 
 
-class Renderable[RenderTargetT = RenderTarget, ContextT = object]:
+# Explicit variance also preserves these constraints when Component inherits Renderable.
+RenderTargetT = TypeVar("RenderTargetT", contravariant=True, default=RenderTarget)
+ContextT = TypeVar("ContextT", contravariant=True, default=object)
+
+
+class Renderable(Generic[RenderTargetT, ContextT]):
     """A value whose accepted protocol target is tracked by the type checker."""
 
     __slots__ = ()

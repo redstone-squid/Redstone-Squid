@@ -64,3 +64,13 @@ def boundaries(
     plan(nested, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
     classic_parent.boundary(v2_child, key="wrong")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
     portable_child.boundary(v2_child, key="wrong")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+
+
+def direct_children(v2_child: sl.Component[ComponentsV2Target], portable_child: sl.Component) -> None:
+    assert_type(v2_child.keyed("child"), Boundary[ComponentsV2Target])
+    assert_type(v2_child.keyed(42), Boundary[ComponentsV2Target])
+    assert_type(sl.stack(v2_child), Stack[ComponentsV2Target])
+    assert_type(sl.stack(v2_child.keyed("child")), Stack[ComponentsV2Target])
+    portable_node: sl.LayoutNode[ComponentsV2Target] = portable_child
+    classic_node: sl.LayoutNode[ClassicTarget] = v2_child  # type: ignore  # Deliberately incompatible target or context.
+    classic_keyed: sl.LayoutNode[ClassicTarget] = v2_child.keyed("child")  # type: ignore  # Deliberately incompatible target or context.
