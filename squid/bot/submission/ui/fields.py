@@ -7,6 +7,7 @@ from enum import StrEnum
 from squid.bot.submission.input import split_values
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.builds.application.editing import BuildEditPatch
+from squid.builds.application.input import parse_build_ticks
 from squid.builds.domain import BuildCategory
 from squid.builds.models import Build
 from squid.core.i18n import tr
@@ -28,6 +29,10 @@ DIMENSIONS_FORMAT = FieldFormat[tuple[int | None, int | None, int | None]](
 OPTIONAL_INT_FORMAT = FieldFormat[int | None](
     lambda text: int(text) if text else None,
     lambda value: "" if value is None else str(value),
+)
+TIMING_FORMAT = FieldFormat[int | None](
+    lambda text: parse_build_ticks(text) if text.strip() else None,
+    lambda value: "" if value is None else f"{value}gt",
 )
 OPTIONAL_TEXT_FORMAT = FieldFormat[str | None](lambda text: text or None, lambda value: value or "")
 STRING_LIST_FORMAT = FieldFormat[list[str]](split_values, ", ".join)
@@ -148,6 +153,7 @@ __all__ = [
     "OPTIONAL_INT_FORMAT",
     "OPTIONAL_TEXT_FORMAT",
     "STRING_LIST_FORMAT",
+    "TIMING_FORMAT",
     "BoundBuildField",
     "BuildFieldSpec",
     "FieldDisplay",

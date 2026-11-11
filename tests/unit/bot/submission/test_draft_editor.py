@@ -24,10 +24,10 @@ from squid.bot.submission.ui.drafts import (
     SectionEditorScreen,
     _DimensionsField,
     _modal_chunks,
-    _parse_ticks,
     draft_editor,
     present_chunk_form,
 )
+from squid.builds.application.input import parse_build_ticks
 from squid.builds.models import Build
 from squid.runtime import BotServices
 from squid.submissions.application import (
@@ -377,13 +377,13 @@ def test_size_input_rejects_text_that_is_not_a_size() -> None:
 
 @pytest.mark.parametrize(("text", "ticks"), [("30gt", 30), ("15rt", 30), ("1.5s", 30), ("3 redstone ticks", 6)])
 def test_timings_accept_explicit_units(text: str, ticks: int) -> None:
-    assert _parse_ticks(text) == ticks
+    assert parse_build_ticks(text) == ticks
 
 
 @pytest.mark.parametrize("text", ["30", "1.5", "soon", "-2s"])
 def test_timings_reject_missing_units_and_nonsense(text: str) -> None:
     with pytest.raises(ValueError, match=r"unit|such as"):
-        _parse_ticks(text)
+        parse_build_ticks(text)
 
 
 async def test_saved_ticks_show_as_seconds_and_prefill_the_modal_losslessly() -> None:
@@ -396,7 +396,7 @@ async def test_saved_ticks_show_as_seconds_and_prefill_the_modal_losslessly() ->
     await editor._edit_section("door_timing", event)
     entry = next(item for item in event.present_form.call_args.args[0].items if item.key == "opening_time")
     assert entry.format(entry.default) == "0.35s"
-    assert _parse_ticks("0.35s") == 7
+    assert parse_build_ticks("0.35s") == 7
 
 
 async def test_public_visibility_reveals_required_license_and_permission() -> None:

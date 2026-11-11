@@ -44,6 +44,8 @@ class DoorPatch(BaseModel):
     patterns: list[str] | None = Field(default=None, max_length=50)
     opening_time: int | None = Field(default=None, ge=0)
     closing_time: int | None = Field(default=None, ge=0)
+    visible_opening_time: int | None = Field(default=None, ge=0)
+    visible_closing_time: int | None = Field(default=None, ge=0)
 
     # Wire name -> BuildEditPatch field name.
     _EDIT_FIELDS: ClassVar[Mapping[str, str]] = {
@@ -52,6 +54,8 @@ class DoorPatch(BaseModel):
         "patterns": "door_type",
         "opening_time": "normal_opening_time",
         "closing_time": "normal_closing_time",
+        "visible_opening_time": "visible_opening_time",
+        "visible_closing_time": "visible_closing_time",
     }
 
     @model_validator(mode="after")
@@ -77,6 +81,7 @@ class BuildPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    display_name: str | None = Field(default=None, max_length=120)
     version_spec: str | None = Field(default=None, max_length=500)
     dimensions: InputDimensions | None = None
     door: DoorPatch | None = None

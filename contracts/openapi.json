@@ -19409,6 +19409,18 @@
       },
       "BuildPatch": {
         "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "version_spec": {
             "anyOf": [
               {
@@ -20883,6 +20895,30 @@
               }
             ],
             "title": "Closing Time"
+          },
+          "visible_opening_time": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Opening Time"
+          },
+          "visible_closing_time": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible Closing Time"
           }
         },
         "additionalProperties": false,

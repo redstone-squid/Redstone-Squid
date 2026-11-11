@@ -26,7 +26,6 @@ build. That request can queue the build, wait for files to finish processing, or
 issues for the submitter to fix; the panel shows which of these happened.
 """
 
-import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
@@ -43,7 +42,7 @@ from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW
-from squid.builds.domain.models import parse_time_string
+from squid.builds.application.input import parse_build_ticks
 from squid.builds.models import Build
 from squid.core.errors import JSONValue, SquidError
 from squid.core.i18n import tr
@@ -1162,25 +1161,6 @@ class _TicksField(sl.forms.DurationField[Any]):
         return _seconds(value) if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-_BARE_NUMBER = re.compile(r"[~≈]?\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+)")
-
-
-def _parse_ticks(text: str) -> int:
-    """Parse "30gt", "15rt", or "1.5s" into game ticks, insisting on a unit.
-
-    parse_time_string reads a bare number as seconds, but submitters often mean ticks,
-    so the form asks for the unit instead of guessing. The manifest's help text says so too.
-    """
-    if _BARE_NUMBER.fullmatch(text.strip()):
-        message = "Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds."
-        raise ValueError(message)
-    ticks = parse_time_string(text)
-    if ticks is None or ticks < 0:
-        message = "Enter a time such as 30gt, 15rt, or 1.5s."
-        raise ValueError(message)
-    return ticks
-
-
 def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any]:
     """Build the modal input for one manifest field, prefilled with its saved value.
 
@@ -1209,7 +1189,7 @@ def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any]:
             required=field.required,
             default=cast(int | None, value),
             placeholder="30gt, 15rt, or 1.5s",
-            parser=_parse_ticks,
+            parser=parse_build_ticks,
         )
     if field.value_kind is ValueKind.INTEGER:
         return sl.forms.IntField[Any](

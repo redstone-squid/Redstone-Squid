@@ -2,12 +2,19 @@
 
 from copy import deepcopy
 
+import pytest
+
 from squid.builds.application import BuildEditPatch
+from squid.builds.errors import InvalidBuildError
+from squid.builds.models import DoorBuild, UtilityBuild
 from squid.core.sentinel import UNSET
 
 
 def test_combine_preserves_every_typed_patch_field() -> None:
     patch = BuildEditPatch(
+        display_name="My build",
+        visible_opening_time=3,
+        visible_closing_time=4,
         version_spec="1.21",
         dimensions=(1, 2, 3),
         door_dimensions=(4, 5, 6),
@@ -53,3 +60,18 @@ def test_copied_patch_does_not_overwrite_omitted_fields() -> None:
 
     assert incoming.version_spec is UNSET
     assert BuildEditPatch.combine([original, incoming]) == BuildEditPatch(version_spec="1.21", normal_opening_time=None)
+
+
+def test_name_and_visible_timings_preserve_omissions_and_allow_clears() -> None:
+    build = DoorBuild(display_name="Original", visible_opening_time=7, visible_closing_time=9)
+    BuildEditPatch(display_name="Renamed", visible_opening_time=None).apply(build)
+    assert build.display_name == "Renamed"
+    assert build.visible_opening_time is None
+    assert build.visible_closing_time == 9
+    BuildEditPatch(display_name=None).apply(build)
+    assert build.display_name is None
+
+
+def test_visible_timings_reject_non_door_builds() -> None:
+    with pytest.raises(InvalidBuildError, match="Door fields"):
+        BuildEditPatch(visible_closing_time=3).apply(UtilityBuild())

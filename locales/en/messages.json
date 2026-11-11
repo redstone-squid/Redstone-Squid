@@ -2443,8 +2443,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:158",
-      "squid/bot/submission/ui/views.py:163"
+      "squid/bot/submission/ui/views.py:167",
+      "squid/bot/submission/ui/views.py:172"
     ]
   },
   "bot-build-field-command-to-get-to-build": {
@@ -2456,8 +2456,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:373",
-      "squid/bot/submission/ui/views.py:378"
+      "squid/bot/submission/ui/views.py:400",
+      "squid/bot/submission/ui/views.py:405"
     ]
   },
   "bot-build-field-completion-time": {
@@ -2469,8 +2469,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:308",
-      "squid/bot/submission/ui/views.py:313"
+      "squid/bot/submission/ui/views.py:335",
+      "squid/bot/submission/ui/views.py:340"
     ]
   },
   "bot-build-field-component-restrictions": {
@@ -2482,8 +2482,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:174",
-      "squid/bot/submission/ui/views.py:179"
+      "squid/bot/submission/ui/views.py:183",
+      "squid/bot/submission/ui/views.py:188"
     ]
   },
   "bot-build-field-coordinates": {
@@ -2495,12 +2495,12 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:357",
-      "squid/bot/submission/ui/views.py:362"
+      "squid/bot/submission/ui/views.py:384",
+      "squid/bot/submission/ui/views.py:389"
     ]
   },
   "bot-build-field-creators-ign": {
-    "fingerprint": "663e732bde32e101c46d0402ca31ee44476e849bd1549895bf5d138cd8a1c3d9",
+    "fingerprint": "4690b39c9d1a6cc788451d559e42535503a9dc42396143c50de539c75e72e454",
     "attributes": [
       "label",
       "placeholder"
@@ -2508,8 +2508,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:240",
-      "squid/bot/submission/ui/views.py:245"
+      "squid/bot/submission/ui/views.py:267",
+      "squid/bot/submission/ui/views.py:272"
     ]
   },
   "bot-build-field-dimensions": {
@@ -2521,8 +2521,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:58",
-      "squid/bot/submission/ui/views.py:63"
+      "squid/bot/submission/ui/views.py:67",
+      "squid/bot/submission/ui/views.py:72"
     ]
   },
   "bot-build-field-door-dimensions": {
@@ -2534,12 +2534,12 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:75",
-      "squid/bot/submission/ui/views.py:80"
+      "squid/bot/submission/ui/views.py:84",
+      "squid/bot/submission/ui/views.py:89"
     ]
   },
   "bot-build-field-door-orientation-type": {
-    "fingerprint": "da88f861e35dc662a84f87a01e840825080a32145157896266f71bd884de2573",
+    "fingerprint": "9e6f103f11ef525cf612f84246c45c8ab6794af38237273fbf5e74e234870a3c",
     "attributes": [
       "label",
       "placeholder"
@@ -2547,12 +2547,12 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:125",
-      "squid/bot/submission/ui/views.py:130"
+      "squid/bot/submission/ui/views.py:134",
+      "squid/bot/submission/ui/views.py:139"
     ]
   },
   "bot-build-field-door-type": {
-    "fingerprint": "e909f3fce589bcbb16f1cb124bc5fe739c0be95113d4e85356ec7d5e7c38268c",
+    "fingerprint": "9f58f07a00be78b575aa9747a09381243d0f00aaf2b1f4fee5864f78d0b517a7",
     "attributes": [
       "label",
       "placeholder"
@@ -2560,8 +2560,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:109",
-      "squid/bot/submission/ui/views.py:114"
+      "squid/bot/submission/ui/views.py:118",
+      "squid/bot/submission/ui/views.py:123"
     ]
   },
   "bot-build-field-error": {
@@ -2581,11 +2581,11 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/views.py:730"
+      "squid/bot/submission/ui/views.py:761"
     ]
   },
   "bot-build-field-extra-user-info": {
-    "fingerprint": "8052a0a4a3c76880fe272f13eed3f06e3ee7fc49a69a9a2fada35dda5630dceb",
+    "fingerprint": "be6b2e18cebabc3f367383415c2b846dfed7b13f4a39d56cdf32aeb8c01eb16d",
     "attributes": [
       "label",
       "placeholder"
@@ -2593,8 +2593,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:324",
-      "squid/bot/submission/ui/views.py:329"
+      "squid/bot/submission/ui/views.py:351",
+      "squid/bot/submission/ui/views.py:356"
     ]
   },
   "bot-build-field-image-urls": {
@@ -2606,8 +2606,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:257",
-      "squid/bot/submission/ui/views.py:262"
+      "squid/bot/submission/ui/views.py:284",
+      "squid/bot/submission/ui/views.py:289"
     ]
   },
   "bot-build-field-miscellaneous-restrictions": {
@@ -2619,12 +2619,12 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:190",
-      "squid/bot/submission/ui/views.py:195"
+      "squid/bot/submission/ui/views.py:199",
+      "squid/bot/submission/ui/views.py:204"
     ]
   },
   "bot-build-field-normal-closing-time": {
-    "fingerprint": "5643ce2c7b992820ac926c5095730e6f13a5187aad6a26215ff22340f62cee92",
+    "fingerprint": "84f242075e70cb22686af9412e0cdcf08ec3824c578b2f7cdb3caf827d01a51c",
     "attributes": [
       "label",
       "placeholder"
@@ -2632,12 +2632,12 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:206",
-      "squid/bot/submission/ui/views.py:211"
+      "squid/bot/submission/ui/views.py:215",
+      "squid/bot/submission/ui/views.py:220"
     ]
   },
   "bot-build-field-normal-opening-time": {
-    "fingerprint": "cc9a30a07deea8ead4aab261b9fd5bf22443706653cca4b861f20275c4391883",
+    "fingerprint": "9d2a03f2a332e1f7bf4631913fea2bd31f04d069257078124e358114755b0dc0",
     "attributes": [
       "label",
       "placeholder"
@@ -2645,8 +2645,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:223",
-      "squid/bot/submission/ui/views.py:228"
+      "squid/bot/submission/ui/views.py:232",
+      "squid/bot/submission/ui/views.py:237"
     ]
   },
   "bot-build-field-server-ip": {
@@ -2658,8 +2658,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:341",
-      "squid/bot/submission/ui/views.py:346"
+      "squid/bot/submission/ui/views.py:368",
+      "squid/bot/submission/ui/views.py:373"
     ]
   },
   "bot-build-field-summary": {
@@ -2679,11 +2679,11 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/fields.py:93"
+      "squid/bot/submission/ui/fields.py:98"
     ]
   },
   "bot-build-field-version-spec": {
-    "fingerprint": "471f1d0818d6146891448fea9c474d3384afb35d88e373ff12c9b68b5c23cbce",
+    "fingerprint": "404f426f750049a84d4356106515881942fc284c07766b5a4d456e10f68abc60",
     "attributes": [
       "label",
       "placeholder"
@@ -2691,8 +2691,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:93",
-      "squid/bot/submission/ui/views.py:98"
+      "squid/bot/submission/ui/views.py:102",
+      "squid/bot/submission/ui/views.py:107"
     ]
   },
   "bot-build-field-video-urls": {
@@ -2704,8 +2704,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:274",
-      "squid/bot/submission/ui/views.py:279"
+      "squid/bot/submission/ui/views.py:301",
+      "squid/bot/submission/ui/views.py:306"
     ]
   },
   "bot-build-field-wiring-placement-restrictions": {
@@ -2717,8 +2717,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:142",
-      "squid/bot/submission/ui/views.py:147"
+      "squid/bot/submission/ui/views.py:151",
+      "squid/bot/submission/ui/views.py:156"
     ]
   },
   "bot-build-field-world-download-urls": {
@@ -2730,8 +2730,8 @@
     "has_value": false,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:291",
-      "squid/bot/submission/ui/views.py:296"
+      "squid/bot/submission/ui/views.py:318",
+      "squid/bot/submission/ui/views.py:323"
     ]
   },
   "bot-claims-view-value": {
@@ -5116,7 +5116,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/fields.py:103"
+      "squid/bot/submission/ui/fields.py:108"
     ]
   },
   "bot-submission-ui-opening-cannot-edit-this-build": {
@@ -5134,7 +5134,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:620"
+      "squid/bot/submission/ui/views.py:651"
     ]
   },
   "bot-submission-ui-views-back": {
@@ -5143,7 +5143,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:625"
+      "squid/bot/submission/ui/views.py:656"
     ]
   },
   "bot-submission-ui-views-cancel": {
@@ -5152,7 +5152,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:643"
+      "squid/bot/submission/ui/views.py:674"
     ]
   },
   "bot-submission-ui-views-changes-saved": {
@@ -5161,7 +5161,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:584"
+      "squid/bot/submission/ui/views.py:615"
     ]
   },
   "bot-submission-ui-views-edit-build": {
@@ -5170,7 +5170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:681"
+      "squid/bot/submission/ui/views.py:712"
     ]
   },
   "bot-submission-ui-views-edit-build-section": {
@@ -5185,7 +5185,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/views.py:433"
+      "squid/bot/submission/ui/views.py:460"
     ]
   },
   "bot-submission-ui-views-invalid-value": {
@@ -5194,7 +5194,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:427"
+      "squid/bot/submission/ui/views.py:454"
     ]
   },
   "bot-submission-ui-views-loading-build": {
@@ -5203,7 +5203,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:612"
+      "squid/bot/submission/ui/views.py:643"
     ]
   },
   "bot-submission-ui-views-no-changes-to-review-yet": {
@@ -5212,7 +5212,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:753"
+      "squid/bot/submission/ui/views.py:784"
     ]
   },
   "bot-submission-ui-views-reload-latest": {
@@ -5221,7 +5221,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:640"
+      "squid/bot/submission/ui/views.py:671"
     ]
   },
   "bot-submission-ui-views-review-changes": {
@@ -5230,7 +5230,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:631"
+      "squid/bot/submission/ui/views.py:662"
     ]
   },
   "bot-tags-view-add-restriction-alias": {
@@ -6593,7 +6593,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:744"
+      "squid/bot/submission/ui/views.py:775"
     ]
   },
   "build-edit-history-save": {
@@ -6602,7 +6602,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:834"
+      "squid/bot/submission/ui/views.py:865"
     ]
   },
   "build-editor-build-deleted": {
@@ -6621,7 +6621,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:585"
+      "squid/bot/submission/ui/views.py:616"
     ]
   },
   "build-editor-concurrent-change": {
@@ -6630,7 +6630,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:792"
+      "squid/bot/submission/ui/views.py:823"
     ]
   },
   "build-editor-edit-access-required": {
@@ -6648,7 +6648,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:874"
+      "squid/bot/submission/ui/views.py:905"
     ]
   },
   "build-editor-expired": {
@@ -6657,7 +6657,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:594"
+      "squid/bot/submission/ui/views.py:625"
     ]
   },
   "build-editor-fields-unavailable": {
@@ -6681,7 +6681,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:602"
+      "squid/bot/submission/ui/views.py:633"
     ]
   },
   "build-editor-reloaded-discarded-changes": {
@@ -6690,7 +6690,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:648"
+      "squid/bot/submission/ui/views.py:679"
     ]
   },
   "build-editor-review-hint": {
@@ -6699,7 +6699,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:656"
+      "squid/bot/submission/ui/views.py:687"
     ]
   },
   "build-editor-section-dimensions-versions": {
@@ -6708,7 +6708,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:447"
+      "squid/bot/submission/ui/views.py:474"
     ]
   },
   "build-editor-section-door": {
@@ -6717,7 +6717,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:452"
+      "squid/bot/submission/ui/views.py:479"
     ]
   },
   "build-editor-section-files": {
@@ -6726,7 +6726,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:466"
+      "squid/bot/submission/ui/views.py:497"
     ]
   },
   "build-editor-section-identity": {
@@ -6735,7 +6735,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:442"
+      "squid/bot/submission/ui/views.py:469"
     ]
   },
   "build-editor-section-restrictions": {
@@ -6744,7 +6744,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:458"
+      "squid/bot/submission/ui/views.py:489"
     ]
   },
   "build-editor-section-server": {
@@ -6753,7 +6753,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:469"
+      "squid/bot/submission/ui/views.py:500"
     ]
   },
   "build-editor-section-timing": {
@@ -6762,7 +6762,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:455"
+      "squid/bot/submission/ui/views.py:484"
     ]
   },
   "build-editor-staging-hint": {
@@ -6771,7 +6771,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/views.py:658"
+      "squid/bot/submission/ui/views.py:689"
     ]
   },
   "build-editor-submit-validation-errors": {
@@ -6786,7 +6786,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/views.py:736"
+      "squid/bot/submission/ui/views.py:767"
     ]
   },
   "build-id-not-visible": {
@@ -9920,9 +9920,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1141",
-      "squid/bot/submission/ui/drafts.py:466",
-      "squid/bot/submission/ui/drafts.py:769"
+      "squid/bot/submission/ui/drafts.py:1140",
+      "squid/bot/submission/ui/drafts.py:465",
+      "squid/bot/submission/ui/drafts.py:768"
     ]
   },
   "draft-editor-build-size": {
@@ -9931,7 +9931,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:110"
+      "squid/bot/submission/ui/drafts.py:109"
     ]
   },
   "draft-editor-choose": {
@@ -9940,7 +9940,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:653"
+      "squid/bot/submission/ui/drafts.py:652"
     ]
   },
   "draft-editor-choose-file": {
@@ -9949,7 +9949,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:740"
+      "squid/bot/submission/ui/drafts.py:739"
     ]
   },
   "draft-editor-detail-closed": {
@@ -9958,7 +9958,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:882"
+      "squid/bot/submission/ui/drafts.py:881"
     ]
   },
   "draft-editor-detail-locked": {
@@ -9967,7 +9967,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:884"
+      "squid/bot/submission/ui/drafts.py:883"
     ]
   },
   "draft-editor-done": {
@@ -9976,8 +9976,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:891",
-      "squid/bot/submission/ui/views.py:895"
+      "squid/bot/submission/ui/drafts.py:890",
+      "squid/bot/submission/ui/views.py:926"
     ]
   },
   "draft-editor-door-size": {
@@ -9986,7 +9986,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:115"
+      "squid/bot/submission/ui/drafts.py:114"
     ]
   },
   "draft-editor-edit": {
@@ -9995,8 +9995,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:464",
-      "squid/bot/submission/ui/drafts.py:608",
+      "squid/bot/submission/ui/drafts.py:463",
+      "squid/bot/submission/ui/drafts.py:607",
       "squid/bot/submission/ui/editor.py:33"
     ]
   },
@@ -10006,7 +10006,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:530"
+      "squid/bot/submission/ui/drafts.py:529"
     ]
   },
   "draft-editor-expired": {
@@ -10015,7 +10015,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:429"
+      "squid/bot/submission/ui/drafts.py:428"
     ]
   },
   "draft-editor-file-download-failed": {
@@ -10024,7 +10024,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:383"
+      "squid/bot/submission/ui/drafts.py:382"
     ]
   },
   "draft-editor-file-failed": {
@@ -10033,7 +10033,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1063"
+      "squid/bot/submission/ui/drafts.py:1062"
     ]
   },
   "draft-editor-file-failed-final": {
@@ -10042,7 +10042,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1065"
+      "squid/bot/submission/ui/drafts.py:1064"
     ]
   },
   "draft-editor-file-kind-image": {
@@ -10051,7 +10051,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1055"
+      "squid/bot/submission/ui/drafts.py:1054"
     ]
   },
   "draft-editor-file-kind-schematic": {
@@ -10060,7 +10060,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1054"
+      "squid/bot/submission/ui/drafts.py:1053"
     ]
   },
   "draft-editor-file-kind-unknown": {
@@ -10069,7 +10069,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1057"
+      "squid/bot/submission/ui/drafts.py:1056"
     ]
   },
   "draft-editor-file-kind-video": {
@@ -10078,7 +10078,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1056"
+      "squid/bot/submission/ui/drafts.py:1055"
     ]
   },
   "draft-editor-file-not-added": {
@@ -10087,7 +10087,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1067"
+      "squid/bot/submission/ui/drafts.py:1066"
     ]
   },
   "draft-editor-file-not-used": {
@@ -10096,7 +10096,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1069"
+      "squid/bot/submission/ui/drafts.py:1068"
     ]
   },
   "draft-editor-file-uploading": {
@@ -10105,7 +10105,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1071"
+      "squid/bot/submission/ui/drafts.py:1070"
     ]
   },
   "draft-editor-files-empty": {
@@ -10114,7 +10114,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1048"
+      "squid/bot/submission/ui/drafts.py:1047"
     ]
   },
   "draft-editor-files-failed": {
@@ -10129,7 +10129,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:365"
+      "squid/bot/submission/ui/drafts.py:364"
     ]
   },
   "draft-editor-files-heading": {
@@ -10138,7 +10138,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:730"
+      "squid/bot/submission/ui/drafts.py:729"
     ]
   },
   "draft-editor-files-label": {
@@ -10147,7 +10147,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1145"
+      "squid/bot/submission/ui/drafts.py:1144"
     ]
   },
   "draft-editor-files-none": {
@@ -10156,7 +10156,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1050"
+      "squid/bot/submission/ui/drafts.py:1049"
     ]
   },
   "draft-editor-files-title": {
@@ -10165,7 +10165,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1044"
+      "squid/bot/submission/ui/drafts.py:1043"
     ]
   },
   "draft-editor-issue-media-processing": {
@@ -10174,7 +10174,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1386"
+      "squid/bot/submission/ui/drafts.py:1366"
     ]
   },
   "draft-editor-issue-media-rejected": {
@@ -10183,7 +10183,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1388"
+      "squid/bot/submission/ui/drafts.py:1368"
     ]
   },
   "draft-editor-issue-permission": {
@@ -10192,7 +10192,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1402"
+      "squid/bot/submission/ui/drafts.py:1382"
     ]
   },
   "draft-editor-issue-retry-exhausted": {
@@ -10201,7 +10201,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1397"
+      "squid/bot/submission/ui/drafts.py:1377"
     ]
   },
   "draft-editor-issue-schema-unsupported": {
@@ -10210,7 +10210,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1368"
+      "squid/bot/submission/ui/drafts.py:1348"
     ]
   },
   "draft-editor-issue-schematic-primary": {
@@ -10219,7 +10219,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1381"
+      "squid/bot/submission/ui/drafts.py:1361"
     ]
   },
   "draft-editor-issue-schematic-processing": {
@@ -10228,7 +10228,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1375"
+      "squid/bot/submission/ui/drafts.py:1355"
     ]
   },
   "draft-editor-issue-schematic-rejected": {
@@ -10237,7 +10237,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1377"
+      "squid/bot/submission/ui/drafts.py:1357"
     ]
   },
   "draft-editor-issue-schematic-required": {
@@ -10246,7 +10246,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1373"
+      "squid/bot/submission/ui/drafts.py:1353"
     ]
   },
   "draft-editor-issue-sponsor": {
@@ -10255,7 +10255,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1392"
+      "squid/bot/submission/ui/drafts.py:1372"
     ]
   },
   "draft-editor-issue-target-rejected": {
@@ -10264,7 +10264,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1404"
+      "squid/bot/submission/ui/drafts.py:1384"
     ]
   },
   "draft-editor-loading": {
@@ -10273,7 +10273,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:440"
+      "squid/bot/submission/ui/drafts.py:439"
     ]
   },
   "draft-editor-main-schematic": {
@@ -10282,7 +10282,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:758"
+      "squid/bot/submission/ui/drafts.py:757"
     ]
   },
   "draft-editor-next-page": {
@@ -10291,7 +10291,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:668"
+      "squid/bot/submission/ui/drafts.py:667"
     ]
   },
   "draft-editor-no": {
@@ -10300,8 +10300,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1027",
-      "squid/bot/submission/ui/drafts.py:1198"
+      "squid/bot/submission/ui/drafts.py:1026",
+      "squid/bot/submission/ui/drafts.py:1178"
     ]
   },
   "draft-editor-no-options": {
@@ -10310,7 +10310,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:631"
+      "squid/bot/submission/ui/drafts.py:630"
     ]
   },
   "draft-editor-not-set": {
@@ -10319,8 +10319,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1018",
-      "squid/bot/submission/ui/drafts.py:995"
+      "squid/bot/submission/ui/drafts.py:1017",
+      "squid/bot/submission/ui/drafts.py:994"
     ]
   },
   "draft-editor-nothing-chosen": {
@@ -10329,7 +10329,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:628"
+      "squid/bot/submission/ui/drafts.py:627"
     ]
   },
   "draft-editor-one-per-line": {
@@ -10338,7 +10338,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1242"
+      "squid/bot/submission/ui/drafts.py:1222"
     ]
   },
   "draft-editor-picker-pages": {
@@ -10358,7 +10358,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:645"
+      "squid/bot/submission/ui/drafts.py:644"
     ]
   },
   "draft-editor-picker-pages-multiple": {
@@ -10378,7 +10378,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:640"
+      "squid/bot/submission/ui/drafts.py:639"
     ]
   },
   "draft-editor-picker-required": {
@@ -10393,7 +10393,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:622"
+      "squid/bot/submission/ui/drafts.py:621"
     ]
   },
   "draft-editor-preview": {
@@ -10402,8 +10402,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:472",
-      "squid/bot/submission/ui/views.py:614"
+      "squid/bot/submission/ui/drafts.py:471",
+      "squid/bot/submission/ui/views.py:645"
     ]
   },
   "draft-editor-preview-failed": {
@@ -10412,7 +10412,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:868"
+      "squid/bot/submission/ui/drafts.py:867"
     ]
   },
   "draft-editor-preview-intro": {
@@ -10421,7 +10421,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:855"
+      "squid/bot/submission/ui/drafts.py:854"
     ]
   },
   "draft-editor-preview-loading": {
@@ -10430,7 +10430,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:870"
+      "squid/bot/submission/ui/drafts.py:869"
     ]
   },
   "draft-editor-preview-needs": {
@@ -10445,7 +10445,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:866"
+      "squid/bot/submission/ui/drafts.py:865"
     ]
   },
   "draft-editor-previous-page": {
@@ -10454,7 +10454,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:662"
+      "squid/bot/submission/ui/drafts.py:661"
     ]
   },
   "draft-editor-problem-above-maximum": {
@@ -10463,7 +10463,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1323"
+      "squid/bot/submission/ui/drafts.py:1303"
     ]
   },
   "draft-editor-problem-below-minimum": {
@@ -10472,7 +10472,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1321"
+      "squid/bot/submission/ui/drafts.py:1301"
     ]
   },
   "draft-editor-problem-required": {
@@ -10481,7 +10481,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1317"
+      "squid/bot/submission/ui/drafts.py:1297"
     ]
   },
   "draft-editor-problem-required-value": {
@@ -10490,7 +10490,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1319"
+      "squid/bot/submission/ui/drafts.py:1299"
     ]
   },
   "draft-editor-problem-too-few-items": {
@@ -10499,7 +10499,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1329"
+      "squid/bot/submission/ui/drafts.py:1309"
     ]
   },
   "draft-editor-problem-too-long": {
@@ -10508,7 +10508,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1327"
+      "squid/bot/submission/ui/drafts.py:1307"
     ]
   },
   "draft-editor-problem-too-many-items": {
@@ -10517,7 +10517,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1331"
+      "squid/bot/submission/ui/drafts.py:1311"
     ]
   },
   "draft-editor-problem-too-short": {
@@ -10526,7 +10526,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1325"
+      "squid/bot/submission/ui/drafts.py:1305"
     ]
   },
   "draft-editor-problem-unknown-field": {
@@ -10535,7 +10535,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1335"
+      "squid/bot/submission/ui/drafts.py:1315"
     ]
   },
   "draft-editor-problem-unknown-option": {
@@ -10544,7 +10544,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1333"
+      "squid/bot/submission/ui/drafts.py:1313"
     ]
   },
   "draft-editor-problem-wrong-type": {
@@ -10553,7 +10553,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1337"
+      "squid/bot/submission/ui/drafts.py:1317"
     ]
   },
   "draft-editor-ready": {
@@ -10562,7 +10562,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:493"
+      "squid/bot/submission/ui/drafts.py:492"
     ]
   },
   "draft-editor-refresh": {
@@ -10571,8 +10571,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:479",
-      "squid/bot/submission/ui/drafts.py:521"
+      "squid/bot/submission/ui/drafts.py:478",
+      "squid/bot/submission/ui/drafts.py:520"
     ]
   },
   "draft-editor-remove-file": {
@@ -10581,7 +10581,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:751"
+      "squid/bot/submission/ui/drafts.py:750"
     ]
   },
   "draft-editor-reopen": {
@@ -10590,7 +10590,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:432"
+      "squid/bot/submission/ui/drafts.py:431"
     ]
   },
   "draft-editor-replace-file": {
@@ -10599,7 +10599,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:749"
+      "squid/bot/submission/ui/drafts.py:748"
     ]
   },
   "draft-editor-replace-title": {
@@ -10608,7 +10608,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:815"
+      "squid/bot/submission/ui/drafts.py:814"
     ]
   },
   "draft-editor-replacement-failed": {
@@ -10617,7 +10617,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:399"
+      "squid/bot/submission/ui/drafts.py:398"
     ]
   },
   "draft-editor-replacement-label": {
@@ -10626,7 +10626,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:816"
+      "squid/bot/submission/ui/drafts.py:815"
     ]
   },
   "draft-editor-required": {
@@ -10635,8 +10635,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1017",
-      "squid/bot/submission/ui/drafts.py:993"
+      "squid/bot/submission/ui/drafts.py:1016",
+      "squid/bot/submission/ui/drafts.py:992"
     ]
   },
   "draft-editor-required-left": {
@@ -10651,7 +10651,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:486"
+      "squid/bot/submission/ui/drafts.py:485"
     ]
   },
   "draft-editor-section-empty": {
@@ -10660,7 +10660,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:965"
+      "squid/bot/submission/ui/drafts.py:964"
     ]
   },
   "draft-editor-section-gone": {
@@ -10669,7 +10669,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:593"
+      "squid/bot/submission/ui/drafts.py:592"
     ]
   },
   "draft-editor-size-format": {
@@ -10678,7 +10678,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1269"
+      "squid/bot/submission/ui/drafts.py:1249"
     ]
   },
   "draft-editor-size-help": {
@@ -10687,7 +10687,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1291"
+      "squid/bot/submission/ui/drafts.py:1271"
     ]
   },
   "draft-editor-status-creating": {
@@ -10696,7 +10696,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:930"
+      "squid/bot/submission/ui/drafts.py:929"
     ]
   },
   "draft-editor-status-done": {
@@ -10711,7 +10711,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:937"
+      "squid/bot/submission/ui/drafts.py:936"
     ]
   },
   "draft-editor-status-done-unknown": {
@@ -10720,7 +10720,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:942"
+      "squid/bot/submission/ui/drafts.py:941"
     ]
   },
   "draft-editor-status-editing": {
@@ -10735,7 +10735,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:913"
+      "squid/bot/submission/ui/drafts.py:912"
     ]
   },
   "draft-editor-status-expired": {
@@ -10744,7 +10744,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:945"
+      "squid/bot/submission/ui/drafts.py:944"
     ]
   },
   "draft-editor-status-needs-changes": {
@@ -10753,7 +10753,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:925"
+      "squid/bot/submission/ui/drafts.py:924"
     ]
   },
   "draft-editor-status-waiting": {
@@ -10762,7 +10762,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:919"
+      "squid/bot/submission/ui/drafts.py:918"
     ]
   },
   "draft-editor-submit": {
@@ -10771,7 +10771,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:501"
+      "squid/bot/submission/ui/drafts.py:500"
     ]
   },
   "draft-editor-title-creating": {
@@ -10786,7 +10786,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:904"
+      "squid/bot/submission/ui/drafts.py:903"
     ]
   },
   "draft-editor-title-done": {
@@ -10801,7 +10801,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:906"
+      "squid/bot/submission/ui/drafts.py:905"
     ]
   },
   "draft-editor-title-editing": {
@@ -10816,7 +10816,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:910"
+      "squid/bot/submission/ui/drafts.py:909"
     ]
   },
   "draft-editor-title-expired": {
@@ -10831,7 +10831,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:908"
+      "squid/bot/submission/ui/drafts.py:907"
     ]
   },
   "draft-editor-unused-options": {
@@ -10855,7 +10855,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:748"
+      "squid/bot/submission/ui/drafts.py:747"
     ]
   },
   "draft-editor-waiting-hint": {
@@ -10864,7 +10864,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:477"
+      "squid/bot/submission/ui/drafts.py:476"
     ]
   },
   "draft-editor-yes": {
@@ -10873,8 +10873,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:1027",
-      "squid/bot/submission/ui/drafts.py:1197"
+      "squid/bot/submission/ui/drafts.py:1026",
+      "squid/bot/submission/ui/drafts.py:1177"
     ]
   },
   "draft-history-answers": {
@@ -10883,7 +10883,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/drafts.py:331"
+      "squid/bot/submission/ui/drafts.py:330"
     ]
   },
   "edit-history-applied": {
@@ -15840,6 +15840,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
+      "squid/bot/submission/ui/views.py:59",
       "squid/submissions/application/forms.py:160"
     ]
   },
@@ -17282,6 +17283,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
+      "squid/bot/submission/ui/views.py:259",
       "squid/submissions/application/forms.py:465"
     ]
   },
@@ -17291,6 +17293,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
+      "squid/bot/submission/ui/views.py:250",
       "squid/submissions/application/forms.py:457"
     ]
   },

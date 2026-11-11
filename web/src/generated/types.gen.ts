@@ -219,6 +219,10 @@ export type BuildLinks = {
  */
 export type BuildPatch = {
     /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
      * Version Spec
      */
     version_spec?: string | null;
@@ -985,6 +989,14 @@ export type DoorPatch = {
      * Closing Time
      */
     closing_time?: number | null;
+    /**
+     * Visible Opening Time
+     */
+    visible_opening_time?: number | null;
+    /**
+     * Visible Closing Time
+     */
+    visible_closing_time?: number | null;
 };
 
 /**

@@ -21,6 +21,9 @@ from squid_ui_discord.testing import assert_within_limits, commit_render, intera
 def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
     """Each parser result reaches its declared domain mutation without a string lookup."""
     samples = {
+        "display_name": "My build",
+        "visible_opening_time": "3gt",
+        "visible_closing_time": "4gt",
         "dimensions": "1x2x3",
         "door_dimensions": "2x3",
         "version_spec": "1.21",
@@ -30,8 +33,8 @@ def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
         "animated_restrictions": "Symmetrical, Full Sync",
         "component_restrictions": "Observerless",
         "miscellaneous_restrictions": "Directional, Locational",
-        "normal_closing_time": "5",
-        "normal_opening_time": "7",
+        "normal_closing_time": "5gt",
+        "normal_opening_time": "7gt",
         "creators_ign": "Alice, Bob",
         "image_urls": "https://example.com/image.png",
         "video_urls": "https://example.com/video.mp4",
@@ -64,6 +67,8 @@ def test_door_only_fields_are_offered_to_doors_alone() -> None:
         "door_orientation_type",
         "normal_opening_time",
         "normal_closing_time",
+        "visible_opening_time",
+        "visible_closing_time",
     }
 
     door = DoorBuild()
@@ -81,9 +86,10 @@ def test_blank_values_preserve_optional_text_numbers_and_list_semantics() -> Non
     assert fields["version_spec"].parser("") is None
     assert fields["version_spec"].parser(" ") == " "
     assert fields["normal_opening_time"].parser("") is None
-    assert fields["normal_opening_time"].parser("0") == 0
-    with pytest.raises(ValueError, match="invalid literal"):
-        fields["normal_opening_time"].parser(" ")
+    assert fields["normal_opening_time"].parser("0gt") == 0
+    assert fields["normal_opening_time"].parser(" ") is None
+    with pytest.raises(ValueError, match="Add a unit"):
+        fields["normal_opening_time"].parser("7")
     assert fields["creators_ign"].parser(" Alice, , Bob, ") == ["Alice", "Bob"]
     assert fields["creators_ign"].parser(" , ") == []
 
@@ -104,7 +110,7 @@ async def test_empty_optional_modal_fields_clear_staged_text_and_numbers() -> No
     version = fields["version_spec"].bind(build)
     timing = fields["normal_opening_time"].bind(build)
     version.stage("1.21")
-    timing.stage("7")
+    timing.stage("7gt")
     items = (version, timing)
     screen = BuildEditScreen(
         build,

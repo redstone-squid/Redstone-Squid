@@ -47,7 +47,8 @@ async def test_editing_one_section_keeps_other_staged_values_and_requires_review
     screen.stage("version_spec", "1.21")
     screen.confirming = True
 
-    await screen._edited(("creators_ign",), submit_event({"creators_ign": "Alice, Bob"}))
+    with sl.runtime.transaction():
+        await screen._edited(("creators_ign",), submit_event({"creators_ign": "Alice, Bob"}))
 
     values = {item.key: item.value for item in screen.items}
     assert values["version_spec"] == "1.21"

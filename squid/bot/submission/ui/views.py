@@ -18,9 +18,9 @@ from squid.bot.submission.input import parse_web_urls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.fields import (
     DIMENSIONS_FORMAT,
-    OPTIONAL_INT_FORMAT,
     OPTIONAL_TEXT_FORMAT,
     STRING_LIST_FORMAT,
+    TIMING_FORMAT,
     BoundBuildField,
     BuildFieldSpec,
     FieldDisplay,
@@ -52,6 +52,15 @@ def _server_info_value(build: Build, key: str) -> str | None:
 
 
 EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
+    field_spec(
+        "display_name",
+        OPTIONAL_TEXT_FORMAT,
+        "",
+        label=tr(t"submissions-application-forms-display-name = Build name"),
+        reader=lambda build: build.display_name,
+        patch=lambda value: BuildEditPatch(display_name=value),
+        maximum=120,
+    ),
     field_spec(
         "dimensions",
         DIMENSIONS_FORMAT,
@@ -92,12 +101,12 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
         OPTIONAL_TEXT_FORMAT,
         tr(t"""
             bot-build-field-version-spec =
-                .label = Version Spec
+                .label = Works in versions
                 .placeholder = 1.16 - 1.17.3
             """).attribute("placeholder"),
         label=tr(t"""
             bot-build-field-version-spec =
-                .label = Version Spec
+                .label = Works in versions
                 .placeholder = 1.16 - 1.17.3
             """).attribute("label"),
         reader=lambda build: build.version_spec,
@@ -108,12 +117,12 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
         STRING_LIST_FORMAT,
         tr(t"""
             bot-build-field-door-type =
-                .label = Door Type
+                .label = Patterns
                 .placeholder = Full lamp, Funnel
             """).attribute("placeholder"),
         label=tr(t"""
             bot-build-field-door-type =
-                .label = Door Type
+                .label = Patterns
                 .placeholder = Full lamp, Funnel
             """).attribute("label"),
         reader=lambda build: list(build.patterns),
@@ -124,12 +133,12 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
         OPTIONAL_TEXT_FORMAT,
         tr(t"""
             bot-build-field-door-orientation-type =
-                .label = Door Orientation Type
+                .label = Door orientation
                 .placeholder = Door, Trapdoor, Skydoor
             """).attribute("placeholder"),
         label=tr(t"""
             bot-build-field-door-orientation-type =
-                .label = Door Orientation Type
+                .label = Door orientation
                 .placeholder = Door, Trapdoor, Skydoor
             """).attribute("label"),
         reader=lambda build: _door(build).orientation,
@@ -202,16 +211,16 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     ),
     field_spec(
         "normal_closing_time",
-        OPTIONAL_INT_FORMAT,
+        TIMING_FORMAT,
         tr(t"""
             bot-build-field-normal-closing-time =
-                .label = Normal Closing Time
-                .placeholder = in gameticks
+                .label = Closing time
+                .placeholder = 30gt, 15rt, or 1.5s
             """).attribute("placeholder"),
         label=tr(t"""
             bot-build-field-normal-closing-time =
-                .label = Normal Closing Time
-                .placeholder = in gameticks
+                .label = Closing time
+                .placeholder = 30gt, 15rt, or 1.5s
             """).attribute("label"),
         reader=lambda build: _door(build).normal_closing_time,
         patch=lambda value: BuildEditPatch(normal_closing_time=value),
@@ -219,19 +228,37 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
     ),
     field_spec(
         "normal_opening_time",
-        OPTIONAL_INT_FORMAT,
+        TIMING_FORMAT,
         tr(t"""
             bot-build-field-normal-opening-time =
-                .label = Normal Opening Time
-                .placeholder = in gameticks
+                .label = Opening time
+                .placeholder = 30gt, 15rt, or 1.5s
             """).attribute("placeholder"),
         label=tr(t"""
             bot-build-field-normal-opening-time =
-                .label = Normal Opening Time
-                .placeholder = in gameticks
+                .label = Opening time
+                .placeholder = 30gt, 15rt, or 1.5s
             """).attribute("label"),
         reader=lambda build: _door(build).normal_opening_time,
         patch=lambda value: BuildEditPatch(normal_opening_time=value),
+        categories=_DOOR_ONLY,
+    ),
+    field_spec(
+        "visible_opening_time",
+        TIMING_FORMAT,
+        "30gt, 15rt, or 1.5s",
+        label=tr(t"submissions-visible-opening-time = Visible opening time"),
+        reader=lambda build: _door(build).visible_opening_time,
+        patch=lambda value: BuildEditPatch(visible_opening_time=value),
+        categories=_DOOR_ONLY,
+    ),
+    field_spec(
+        "visible_closing_time",
+        TIMING_FORMAT,
+        "30gt, 15rt, or 1.5s",
+        label=tr(t"submissions-visible-closing-time = Visible closing time"),
+        reader=lambda build: _door(build).visible_closing_time,
+        patch=lambda value: BuildEditPatch(visible_closing_time=value),
         categories=_DOOR_ONLY,
     ),
     field_spec(
@@ -239,12 +266,12 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
         STRING_LIST_FORMAT,
         tr(t"""
             bot-build-field-creators-ign =
-                .label = Creators Ign
+                .label = Creators
                 .placeholder = Me, My Dog
             """).attribute("placeholder"),
         label=tr(t"""
             bot-build-field-creators-ign =
-                .label = Creators Ign
+                .label = Creators
                 .placeholder = Me, My Dog
             """).attribute("label"),
         reader=lambda build: list(build.creators_ign),
@@ -323,12 +350,12 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
         OPTIONAL_TEXT_FORMAT,
         tr(t"""
             bot-build-field-extra-user-info =
-                .label = Extra User Info
+                .label = Description
                 .placeholder = Anything a reader should know
             """).attribute("placeholder"),
         label=tr(t"""
             bot-build-field-extra-user-info =
-                .label = Extra User Info
+                .label = Description
                 .placeholder = Anything a reader should know
             """).attribute("label"),
         reader=lambda build: build.description,
@@ -440,7 +467,7 @@ EDIT_SECTIONS: tuple[tuple[str, sl.TextLike, tuple[str, ...]], ...] = (
     (
         "identity",
         tr(t"build-editor-section-identity = Name and creators"),
-        ("creators_ign", "extra_user_info", "completion_time"),
+        ("display_name", "creators_ign", "extra_user_info", "completion_time"),
     ),
     (
         "dimensions_versions",
@@ -452,7 +479,11 @@ EDIT_SECTIONS: tuple[tuple[str, sl.TextLike, tuple[str, ...]], ...] = (
         tr(t"build-editor-section-door = Door size and type"),
         ("door_dimensions", "door_orientation_type", "door_type"),
     ),
-    ("timing", tr(t"build-editor-section-timing = Timing"), ("normal_opening_time", "normal_closing_time")),
+    (
+        "timing",
+        tr(t"build-editor-section-timing = Timing"),
+        ("normal_opening_time", "visible_opening_time", "normal_closing_time", "visible_closing_time"),
+    ),
     (
         "restrictions",
         tr(t"build-editor-section-restrictions = Restrictions"),

@@ -137,3 +137,14 @@ def test_door_patch_rejects_a_cleared_collection() -> None:
 def test_door_patch_rejects_non_positive_dimensions() -> None:
     with pytest.raises(ValidationError):
         DoorPatch(door_dimensions=(0, 2, None))
+
+
+def test_name_and_visible_timings_preserve_explicit_clears() -> None:
+    patch = BuildPatch(display_name=None, door=DoorPatch(visible_opening_time=None, visible_closing_time=7))
+    assert patch.edit_attributes() == {
+        "display_name": None,
+        "visible_opening_time": None,
+        "visible_closing_time": 7,
+    }
+    with pytest.raises(ValidationError):
+        DoorPatch.model_validate({"visible_opening_time": -1})

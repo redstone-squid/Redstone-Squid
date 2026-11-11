@@ -27,6 +27,9 @@ class BuildEditPatch:
     all entries of that kind.
     """
 
+    display_name: PatchValue[str | None] = UNSET
+    visible_opening_time: PatchValue[int | None] = UNSET
+    visible_closing_time: PatchValue[int | None] = UNSET
     version_spec: PatchValue[str | None] = UNSET
     dimensions: PatchValue[Dimensions] = UNSET
     door_dimensions: PatchValue[Dimensions] = UNSET
@@ -60,6 +63,9 @@ class BuildEditPatch:
         combined = cls()
         for patch in patches:
             combined = cls(
+                display_name=_latest(combined.display_name, patch.display_name),
+                visible_opening_time=_latest(combined.visible_opening_time, patch.visible_opening_time),
+                visible_closing_time=_latest(combined.visible_closing_time, patch.visible_closing_time),
                 version_spec=_latest(combined.version_spec, patch.version_spec),
                 dimensions=_latest(combined.dimensions, patch.dimensions),
                 door_dimensions=_latest(combined.door_dimensions, patch.door_dimensions),
@@ -126,6 +132,7 @@ class BuildEditPatch:
             InvalidBuildError: If a door-specific field targets another category.
         """
         direct_fields = (
+            "display_name",
             "version_spec",
             "wiring_placement_restrictions",
             "animated_restrictions",
@@ -159,7 +166,14 @@ class BuildEditPatch:
         if self.dimensions is not UNSET:
             build.dimensions = self.dimensions
 
-        door_fields = ("door_dimensions", "door_orientation_type", "normal_closing_time", "normal_opening_time")
+        door_fields = (
+            "door_dimensions",
+            "door_orientation_type",
+            "normal_closing_time",
+            "normal_opening_time",
+            "visible_opening_time",
+            "visible_closing_time",
+        )
         patched_door_fields = [name for name in door_fields if getattr(self, name) is not UNSET]
         if patched_door_fields:
             if not isinstance(build, DoorBuild):
@@ -184,6 +198,11 @@ class BuildEditPatch:
                 build.normal_closing_time = self.normal_closing_time
             if self.normal_opening_time is not UNSET:
                 build.normal_opening_time = self.normal_opening_time
+
+            if self.visible_opening_time is not UNSET:
+                build.visible_opening_time = self.visible_opening_time
+            if self.visible_closing_time is not UNSET:
+                build.visible_closing_time = self.visible_closing_time
 
         if self.locationality is not UNSET:
             self._replace_reliability(
