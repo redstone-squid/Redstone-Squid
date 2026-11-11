@@ -16,6 +16,7 @@ from squid_ui.runtime.tasks import anyio, task_is_within
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.audience import Private
+from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.events import ActionEvent
 from squid_ui_discord.request import Request
 from squid_ui_discord.response import Abandoned, Presented, Rejected, ResponseOverrides, ResponseSpec, invoker_only
@@ -122,10 +123,18 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         return self._screen_flow.outcome
 
     @property
+    def close_reason(self) -> CloseReason | None:
+        """The owning message's closure cause, available during the final render.
+
+        The screen's outcome separately records its result or cancellation.
+        """
+        root = self._screen_flow.root
+        return None if root is None else root.close_reason
+
+    @property
     def expired(self) -> bool:
         """Whether this screen timed out, including during its final render."""
-        root = self._screen_flow.root
-        return root is not None and root.finished and root._screen_close_reason == "timeout"
+        return self.close_reason is CloseReason.TIMEOUT
 
     async def wait(self) -> Completed[ResultT] | Cancelled:
         """Observe closure without cancelling it when this waiter is cancelled."""
@@ -396,14 +405,14 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
         if state.outcome is None:
             state.outcome = Cancelled(reason)
         if root is not None:
-            await root.finish()
+            await root.finish(reason=CloseReason.CLOSED if reason is ScreenCancelReason.USER else CloseReason(reason))
         else:
             await self._screen_finalize()
 
     async def _screen_root_finished(self, root: MessageRoot) -> None:
         state = self._screen_flow
         if state.outcome is None:
-            reason = getattr(root, "_screen_close_reason", None) or ScreenCancelReason.CLOSED
+            reason = root.close_reason or CloseReason.CLOSED
             state.outcome = Cancelled(ScreenCancelReason(reason))
         await self._screen_finalize()
 

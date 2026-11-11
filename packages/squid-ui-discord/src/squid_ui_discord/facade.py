@@ -18,6 +18,7 @@ from squid_ui.runtime.component import Component
 from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.audience import Audience
+from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
 from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui_discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
@@ -370,11 +371,11 @@ class Scope[OwnerT = Any]:
             raise TypeError(message)
         return cast(AccessPolicy, configured)
 
-    async def close(self) -> None:
+    async def close(self, *, reason: CloseReason = CloseReason.SCOPE_CLOSED) -> None:
         """Finish roots and sessions opened by this scope, then unregister it."""
         if self._closed:
             return
-        await self._runtime._close_scope(self)
+        await self._runtime._close_scope(self, reason=reason)
         self._closed = True
 
 

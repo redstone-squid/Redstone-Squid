@@ -12,7 +12,7 @@ from squid_ui import ActionEvent, Component, ComponentsV2Target, DocumentLike, s
 from squid_ui.interactions import ActionMiddleware, ActionProceed, ActionRequest
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.runtime import transaction
-from squid_ui_discord import Everyone, MessageRoot, Owner
+from squid_ui_discord import CloseReason, Everyone, MessageRoot, Owner
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
@@ -160,11 +160,11 @@ async def test_parent_timeout_during_callback_rolls_back_without_deadlock() -> N
             release.set()
     assert accepted == [False]
     assert panel.value == 0
-    assert root._screen_close_reason == "timeout"
+    assert root.close_reason is CloseReason.TIMEOUT
 
 
-async def test_timeout_preserves_preselected_shutdown_reason() -> None:
+async def test_timeout_preserves_accepted_shutdown_reason() -> None:
     root = MessageRoot(Panel(), access=Everyone())
-    root._screen_close_reason = "parent_closed"
+    await root.finish(reason=CloseReason.PARENT_CLOSED)
     await root.handle_timeout()
-    assert root._screen_close_reason == "parent_closed"
+    assert root.close_reason is CloseReason.PARENT_CLOSED

@@ -25,6 +25,7 @@ from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.config import Config
 from squid_ui_discord.contracts import LocalizationResolver
 from squid_ui_discord.delivery import DeliveryResult, Replyable
@@ -153,11 +154,11 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         try:
             for scope in tuple(self._scopes):
                 try:
-                    await scope.close()
+                    await scope.close(reason=CloseReason.SHUTDOWN)
                 except Exception as error:
                     errors.append(error)
             try:
-                await self.sessions.close_all()
+                await self.sessions.close_all(reason=CloseReason.SHUTDOWN)
             except Exception as error:
                 errors.append(error)
         finally:
@@ -256,15 +257,13 @@ class DiscordUIRuntime[ClientT: discord.Client]:
             if policy.observe is not None:
                 await policy.observe(req, error, delivery)
 
-    async def _close_scope[OwnerT](self, scope: Scope[OwnerT]) -> None:
+    async def _close_scope[OwnerT](self, scope: Scope[OwnerT], *, reason: CloseReason) -> None:
         roots = self._scope_roots.pop(id(scope), set())
         targets = {session.root if (session := self.sessions.session_for(root)) is not None else root for root in roots}
         errors: list[Exception] = []
         for message_root in targets:
-            if message_root._screen_close_reason is None:
-                message_root._screen_close_reason = "scope_closed"
             try:
-                await message_root.finish(wait=False)
+                await message_root.finish(wait=False, reason=reason)
             except Exception as error:
                 errors.append(error)
         for message_root in targets:

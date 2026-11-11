@@ -192,7 +192,9 @@ async def test_closure_hook_cannot_wait_for_itself() -> None:
             assert await screen.wait() == Completed("chosen")
 
 
-@pytest.mark.parametrize("reason", [ScreenCancelReason.TIMEOUT, ScreenCancelReason.SCOPE_CLOSED])
+@pytest.mark.parametrize(
+    "reason", [ScreenCancelReason.TIMEOUT, ScreenCancelReason.SCOPE_CLOSED, ScreenCancelReason.SHUTDOWN]
+)
 async def test_external_cancellation_records_reason(reason: ScreenCancelReason) -> None:
     screen = Choice()
     async with sd.testing.stage(screen, owner=object()) as ui:
@@ -200,9 +202,13 @@ async def test_external_cancellation_records_reason(reason: ScreenCancelReason) 
             await ui.root.handle_timeout()
         else:
             assert screen.opening is not None
-            await screen.opening.scope.close()
+            if reason is ScreenCancelReason.SHUTDOWN:
+                await screen.opening.runtime.close()
+            else:
+                await screen.opening.scope.close()
         assert await screen.wait() == Cancelled(reason)
         assert screen.closed == [Cancelled(reason)]
+        assert screen.close_reason is sd.CloseReason(reason)
 
 
 async def test_stale_and_foreign_action_events_cannot_complete_screen() -> None:

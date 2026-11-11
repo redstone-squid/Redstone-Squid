@@ -104,6 +104,7 @@ from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.attachments import attachment_assets, files_for
 from squid_ui_discord.classic import render_message as render_classic_message
 from squid_ui_discord.classic_renderer import ClassicRenderer
+from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.message_payload import MessageMode, MessagePayload
 from squid_ui_discord.message_root_candidates import (
     _ADMITTED,
@@ -541,7 +542,7 @@ class MessageRoot[
         self._render_lock = asyncio.Lock()
         self._settlement_wake: asyncio.Event | None = None
         self._finished = False
-        self._screen_close_reason: str | None = None
+        self._close_reason: CloseReason | None = None
         self._shutdown = Shutdown()
         self._finishing_hooks: list[Callable[[AnyMessageRoot], None]] = []
         self._finish_children: Callable[[bool], Awaitable[None]] | None = None
@@ -645,6 +646,15 @@ class MessageRoot[
     def finished(self) -> bool:
         """Whether this mount has stopped dispatching, by close, timeout or error."""
         return self._finished
+
+    @property
+    def close_reason(self) -> CloseReason | None:
+        """The first accepted closure reason, or None while open.
+
+        Available before the final render and cleanup callbacks. Later closure
+        requests and cleanup failures do not change it.
+        """
+        return self._close_reason
 
     @property
     def plan(self) -> PlanResult | None:
@@ -2683,9 +2693,11 @@ class MessageRoot[
                 presentation = PresentationStatus.ACKNOWLEDGED
         return presentation
 
-    async def finish_via(self, interaction: discord.Interaction, *, wait: bool = True) -> None:
+    async def finish_via(
+        self, interaction: discord.Interaction, *, wait: bool = True, reason: CloseReason = CloseReason.CLOSED
+    ) -> None:
         """Finish through this interaction, optionally waiting for cleanup and callbacks."""
-        await self._accept_finish(interaction=interaction)
+        await self._accept_finish(interaction=interaction, reason=reason)
         if wait:
             await self.wait()
 
@@ -2815,7 +2827,14 @@ class MessageRoot[
         """
         self._hooks.finish.append(callback)
 
-    async def finish(self, *, disable: bool = True, retain_routed: bool = False, wait: bool = True) -> None:
+    async def finish(
+        self,
+        *,
+        disable: bool = True,
+        retain_routed: bool = False,
+        wait: bool = True,
+        reason: CloseReason = CloseReason.CLOSED,
+    ) -> None:
         """Stop accepting interactions and finish this panel's owned work.
 
         By default, wait for service cleanup and finish callbacks and raise any collected
@@ -2830,7 +2849,7 @@ class MessageRoot[
         panel or ``event.on_success(other_panel.finish)`` for another. Immediate closure
         is rejected there because a later rollback could not reopen the panel.
         """
-        await self._accept_finish(disable=disable, retain_routed=retain_routed)
+        await self._accept_finish(disable=disable, retain_routed=retain_routed, reason=reason)
         if wait:
             await self.wait()
 
@@ -2850,9 +2869,9 @@ class MessageRoot[
         for child in self._shutdown_dependencies:
             child._check_shutdown_wait()
 
-    async def dismiss(self, *, wait: bool = True) -> None:
+    async def dismiss(self, *, wait: bool = True, reason: CloseReason = CloseReason.CLOSED) -> None:
         """Delete the message and finish its owned work, optionally awaiting completion."""
-        await self._accept_finish(delete=True)
+        await self._accept_finish(delete=True, reason=reason)
         if wait:
             await self.wait()
 
@@ -2863,6 +2882,7 @@ class MessageRoot[
         retain_routed: bool = False,
         interaction: discord.Interaction | None = None,
         delete: bool = False,
+        reason: CloseReason = CloseReason.CLOSED,
     ) -> None:
         current = CURRENT_TRANSACTION.get()
         if current is not None and not current.closed:
@@ -2873,7 +2893,7 @@ class MessageRoot[
             raise RuntimeError(message)
         async with self._render_lock:
             self._accept_finish_locked(
-                disable=disable, retain_routed=retain_routed, interaction=interaction, delete=delete
+                disable=disable, retain_routed=retain_routed, interaction=interaction, delete=delete, reason=reason
             )
 
     def _accept_finish_locked(
@@ -2883,6 +2903,7 @@ class MessageRoot[
         retain_routed: bool = False,
         interaction: discord.Interaction | None = None,
         delete: bool = False,
+        reason: CloseReason = CloseReason.CLOSED,
     ) -> None:
         if self._finished:
             return
@@ -2894,6 +2915,7 @@ class MessageRoot[
         # Registration, logical closure and the terminal snapshot contain no checkpoint.
         # Even immediate low-level closure captures the caller's current render state.
         self._shutdown.start(self.config.execution_host, work)
+        self._close_reason = reason
         self._finished = True
         if not delete and disable and (self._handle is not None or interaction is not None):
             try:
@@ -3014,11 +3036,10 @@ class MessageRoot[
     async def _service_failed(self, error: Exception) -> None:
         """Finish the message root when one of its services fails."""
         logger.error("owned service failed for mount %s", self.id, exc_info=error)
-        await self.finish(wait=False)
+        await self.finish(wait=False, reason=CloseReason.FAILURE)
 
     async def handle_timeout(self) -> None:
-        self._screen_close_reason = self._screen_close_reason or "timeout"
-        await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout)
+        await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout, reason=CloseReason.TIMEOUT)
 
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
         if self.finished:

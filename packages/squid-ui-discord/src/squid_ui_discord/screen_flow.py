@@ -15,6 +15,8 @@ class ScreenCancelReason(StrEnum):
     REPLACED = "replaced"
     CLOSED = "closed"
     USER = "user"
+    SHUTDOWN = "shutdown"
+    FAILURE = "failure"
 
 
 @dataclass(frozen=True, slots=True)

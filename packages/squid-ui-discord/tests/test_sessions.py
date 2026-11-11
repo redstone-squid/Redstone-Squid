@@ -15,7 +15,7 @@ import squid_ui_discord
 import squid_ui_discord.message_root_contracts
 from squid_i18n import tr
 from squid_ui.primitives import Button, Heading, Row
-from squid_ui_discord import Everyone, MessageRootDefaults, SessionKey, SessionManager
+from squid_ui_discord import CloseReason, Everyone, MessageRootDefaults, SessionKey, SessionManager
 from squid_ui_discord.delivery import Abandoned
 from squid_ui_discord.sessions import (
     AdmissionRequest,
@@ -232,6 +232,7 @@ class TestReplacement:
 
         assert isinstance(first, Opened) and isinstance(second, Opened)
         assert first_root.finished
+        assert first_root.close_reason is CloseReason.REPLACED
         assert manager.get(KEY) == (second.session,)
 
     async def test_incumbent_survives_a_failed_send(self) -> None:

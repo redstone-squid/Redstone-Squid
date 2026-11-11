@@ -13,7 +13,7 @@ import pytest
 from squid_ui import Component, ComponentsV2Target
 from squid_ui.primitives import Text
 from squid_ui.runtime import UIExecutionHost
-from squid_ui_discord import Everyone, MessageRoot, SessionManager
+from squid_ui_discord import CloseReason, Everyone, MessageRoot, SessionManager
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
@@ -30,19 +30,22 @@ async def test_cancel_before_acceptance_leaves_panel_open() -> None:
     await root._render_lock.acquire()
     try:
         with anyio.move_on_after(0):
-            await root.finish(wait=False)
+            await root.finish(wait=False, reason=CloseReason.TIMEOUT)
         assert not root.finished
+        assert root.close_reason is None
     finally:
         root._render_lock.release()
     await root.finish()
+    assert root.close_reason is CloseReason.CLOSED
 
 
 async def test_unavailable_host_rejects_closure_before_changing_panel() -> None:
     for host in (None, UIExecutionHost()):
         root = MessageRoot(Panel(), access=Everyone(), execution_host=host)
         with pytest.raises(RuntimeError, match="running UIExecutionHost"):
-            await root.finish(wait=False)
+            await root.finish(wait=False, reason=CloseReason.TIMEOUT)
         assert not root.finished
+        assert root.close_reason is None
 
 
 async def test_cancelled_waiter_leaves_cleanup_owned_and_repeatable() -> None:
@@ -98,6 +101,7 @@ async def test_callbacks_all_run_and_every_waiter_observes_same_failure() -> Non
         tasks.start_soon(observe)
     await observe()
     assert all(error is failures[0] for error in failures)
+    assert root.close_reason is CloseReason.CLOSED
     assert failures[0].subgroup(ValueError) is not None
     assert events == ["broken", "remaining"]
 
@@ -143,6 +147,7 @@ async def test_terminal_paths_share_one_completion(method: str) -> None:
     await root.wait()
     await root.dismiss()
     assert seen == ["finished"]
+    assert root.close_reason is (CloseReason.TIMEOUT if method == "timeout" else CloseReason.CLOSED)
 
 
 async def test_session_leaves_registry_before_child_cleanup_finishes() -> None:
@@ -297,3 +302,16 @@ async def test_failed_child_cleanup_releases_parent_dependencies() -> None:
     assert child not in root._shutdown_dependencies
     assert child not in opened.session._retiring
     await root.finish()
+
+
+async def test_service_failure_records_reason_before_cleanup() -> None:
+    root = MessageRoot(Panel(), access=Everyone())
+    seen: list[CloseReason | None] = []
+
+    async def closed(message_root: MessageRoot) -> None:
+        seen.append(message_root.close_reason)
+
+    root.on_finish(closed)
+    await root._service_failed(RuntimeError("service failed"))
+    await root.wait()
+    assert seen == [CloseReason.FAILURE]

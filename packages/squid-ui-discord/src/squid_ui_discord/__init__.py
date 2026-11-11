@@ -80,6 +80,7 @@ from squid_ui_discord.adoption import (
 )
 from squid_ui_discord.audience import Audience, Private, Visibility
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.cog import Cog
 from squid_ui_discord.commands import (
     CommandPolicy,
@@ -271,6 +272,7 @@ __all__ = [
     "ChallengeRunner",
     "ChallengeSupervisor",
     "ChoiceEvent",
+    "CloseReason",
     "Cog",
     "CommandPolicy",
     "CommandResult",

@@ -24,6 +24,7 @@ from uuid import uuid4
 import anyio
 
 from squid_ui.text import TextLike
+from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.delivery import Abandoned, Delivered, DeliveryResult, MessageDestination
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
@@ -626,7 +627,9 @@ class Session:
     def _membership(self, user_id: int, status: MembershipStatus) -> MembershipResult:
         return MembershipResult(user_id, status, self._members, self.remaining_capacity)
 
-    async def finish(self, *, disable: bool = True, wait: bool = True) -> None:
+    async def finish(
+        self, *, disable: bool = True, wait: bool = True, reason: CloseReason = CloseReason.CLOSED
+    ) -> None:
         """Close the session and its panels, optionally awaiting cleanup and callbacks.
 
         Closing removes the session from admission bookkeeping. Its root supervises
@@ -634,7 +637,7 @@ class Session:
         """
         if self._message_root_finishing not in self.root._finishing_hooks:
             self.root._finishing_hooks.append(self._message_root_finishing)
-        await self.root.finish(disable=disable, wait=False)
+        await self.root.finish(disable=disable, wait=False, reason=reason)
         if wait:
             await self.wait()
 
@@ -691,7 +694,7 @@ class Session:
             errors: list[Exception] = []
             for child in children:
                 try:
-                    await child.finish(disable=disable, wait=False)
+                    await child.finish(disable=disable, wait=False, reason=CloseReason.PARENT_CLOSED)
                 except Exception as error:
                     errors.append(error)
             for child in children:
@@ -920,16 +923,18 @@ class SessionManager:
         """End every session under ``key``, reporting failures after all attempts."""
         await self._finish_sessions(tuple(self.get(key)), disable=disable)
 
-    async def close_all(self, *, disable: bool = True) -> None:
+    async def close_all(self, *, disable: bool = True, reason: CloseReason = CloseReason.CLOSED) -> None:
         """Request closure of every session, then await their collected results."""
-        await self._finish_sessions(tuple(self._sessions), disable=disable)
+        await self._finish_sessions(tuple(self._sessions), disable=disable, reason=reason)
 
     @staticmethod
-    async def _finish_sessions(sessions: tuple[Session, ...], *, disable: bool) -> None:
+    async def _finish_sessions(
+        sessions: tuple[Session, ...], *, disable: bool, reason: CloseReason = CloseReason.CLOSED
+    ) -> None:
         errors: list[Exception] = []
         for session in sessions:
             try:
-                await session.finish(disable=disable, wait=False)
+                await session.finish(disable=disable, wait=False, reason=reason)
             except Exception as error:
                 errors.append(error)
         for session in sessions:
@@ -1041,11 +1046,8 @@ class SessionManager:
             if key is not None:
                 self._by_key.setdefault(key, []).append(newcomer)
             newcomer._activate()
-        for victim in victims:
-            if victim.root._screen_close_reason is None:
-                victim.root._screen_close_reason = "replaced"
         try:
-            await self._finish_sessions(victims, disable=True)
+            await self._finish_sessions(victims, disable=True, reason=CloseReason.REPLACED)
         except Exception:
             # Admission has committed. Retired-session failures remain observable through
             # their shutdown results, but must not turn a successful open into a retry.
