@@ -52,7 +52,6 @@ class SettingsCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Setting
 
         return SettingsPanel(
             settings=self.settings_service,
-            votes=self.bot.services.votes,
             edits=self.bot.services.edits,
             actor=actor,
             guild=guild,

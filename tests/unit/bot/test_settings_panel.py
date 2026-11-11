@@ -184,7 +184,7 @@ def make_component_panel(
         return EditActor(Subject(account_id=1, guild_id=GUILD_ID))
 
     async def execute(command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None) -> EditResult:
-        if not await panel._authorize(SETTINGS_SERVER_EDIT):
+        if not await panel.settings.authorize(SETTINGS_SERVER_EDIT):
             raise AuthorizationError
         if command.expected[0].value != settings.revision:
             raise RevisionConflictError(command.expected[0], settings.revision)
@@ -217,7 +217,6 @@ def make_component_panel(
 
     panel = SettingsPanel(
         settings=settings,
-        votes=votes,
         edits=cast(Any, SimpleNamespace(execute=execute, reconcile=AsyncMock())),
         actor=actor,
         guild=make_guild(channels=channels if channels is not None else {12: "general"}),
@@ -232,8 +231,8 @@ def make_component_panel(
 async def test_a_saved_channel_is_kept_without_a_hand_written_invalidate() -> None:
     panel, _, _ = make_component_panel()
     with sl.runtime.transaction():
-        await panel.set_channel("Vote", 12)
-    assert panel.channel_id("Vote") == 12
+        await panel.server.set_channel("Vote", 12)
+    assert panel.server.channel_id("Vote") == 12
 
 
 async def test_a_channel_saved_before_a_later_failure_is_not_left_applied() -> None:
@@ -246,36 +245,36 @@ async def test_a_channel_saved_before_a_later_failure_is_not_left_applied() -> N
     await panel.open_server()
 
     async def save_the_channel_then_fail() -> None:
-        await panel.set_channel("Vote", 12)
+        await panel.server.set_channel("Vote", 12)
         message = "the rest of the action failed"
         raise RuntimeError(message)
 
     with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.runtime.transaction():
         await save_the_channel_then_fail()
 
-    assert panel.channel_id("Vote") == 3
+    assert panel.server.channel_id("Vote") == 3
 
 
 async def test_a_half_loaded_voting_page_is_not_left_applied() -> None:
     panel, _, _ = make_component_panel()
     await panel.open_voting(VoteKind.BUILD)
-    loaded_preset = panel._preset
-    votes = cast(FakeVoteService, panel._votes)
+    loaded_preset = panel.voting.configuration.preset
+    votes = cast(FakeSettingsService, panel.settings._settings).votes
     votes.role_weight_error = RuntimeError("database is down")
 
     with pytest.raises(RuntimeError, match="database is down"), sl.runtime.transaction():
         await panel.open_voting(VoteKind.GENERIC)
 
-    assert panel.kind is VoteKind.BUILD
-    assert panel._preset is loaded_preset
+    assert panel.voting.kind is VoteKind.BUILD
+    assert panel.voting.configuration.preset is loaded_preset
 
 
 async def test_a_read_only_action_cannot_change_a_channel() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
     with pytest.raises(sl.runtime.ReactiveWriteError), readonly_transaction():
-        await panel.set_channel("Vote", 12)
-    assert panel.channel_id("Vote") == 3
+        await panel.server.set_channel("Vote", 12)
+    assert panel.server.channel_id("Vote") == 3
     assert settings.stored["Vote"] == 3
 
 
@@ -292,7 +291,7 @@ async def test_changing_language_relocalizes_the_live_root(monkeypatch: pytest.M
     )
 
     with sl.runtime.transaction():
-        await panel.set_locale("zh-CN", message_root=message_root)
+        await panel.server.set_locale("zh-CN", message_root=message_root)
     view = commit_render(message_root)
 
     text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
@@ -312,13 +311,13 @@ async def test_a_channel_change_can_be_undone() -> None:
     await panel.open_server()
 
     with sl.runtime.transaction():
-        await panel.set_channel("Vote", 12)
-    assert panel.channel_id("Vote") == 12
+        await panel.server.set_channel("Vote", 12)
+    assert panel.server.channel_id("Vote") == 12
 
     with sl.runtime.transaction():
         assert await panel.history.undo() is not None
 
-    assert panel.channel_id("Vote") == 3
+    assert panel.server.channel_id("Vote") == 3
     # Undo must compensate through the service as well as restoring the panel's dictionary.
     assert settings.channel_writes[-1] == (GUILD_ID, "Vote", 3)
 
@@ -328,14 +327,14 @@ async def test_a_saved_channel_change_can_be_redone() -> None:
     await panel.open_server()
 
     with sl.runtime.transaction():
-        await panel.set_channel("Vote", None)
+        await panel.server.set_channel("Vote", None)
     with sl.runtime.transaction():
         await panel.history.undo()
     with sl.runtime.transaction():
         result = await panel.history.redo()
 
     assert result.applied
-    assert panel.channel_id("Vote") is None
+    assert panel.server.channel_id("Vote") is None
     assert len(settings.clears) == 2
 
 
@@ -344,7 +343,7 @@ async def test_a_failed_render_retains_the_committed_edit() -> None:
     await panel.open_server()
 
     async def save_the_channel_then_fail() -> None:
-        await panel.set_channel("Vote", 12)
+        await panel.server.set_channel("Vote", 12)
         message = "the rest of the action failed"
         raise RuntimeError(message)
 
@@ -354,7 +353,7 @@ async def test_a_failed_render_retains_the_committed_edit() -> None:
     assert len(panel.history.entries) == 1
     with sl.runtime.transaction():
         assert (await panel.history.undo()).applied
-    assert panel.channel_id("Vote") == 3
+    assert panel.server.channel_id("Vote") == 3
 
 
 async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -> None:
@@ -362,7 +361,7 @@ async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -
 
     assert "Undo" not in _button_labels(commit_render(message_root))
     with sl.runtime.transaction():
-        await panel.set_channel("Vote", 12)
+        await panel.server.set_channel("Vote", 12)
     assert "Undo" in _button_labels(commit_render(message_root))
 
 
@@ -370,13 +369,13 @@ async def test_undo_is_refused_when_the_permission_was_revoked() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
     with sl.runtime.transaction():
-        await panel.set_channel("Vote", 12)
+        await panel.server.set_channel("Vote", 12)
     writes = len(settings.channel_writes)
 
     async def deny(_node: object) -> bool:
         return False
 
-    panel._authorize = deny
+    panel.settings.authorize = deny
     notices: list[Any] = []
 
     class Event:
@@ -391,7 +390,7 @@ async def test_undo_is_refused_when_the_permission_was_revoked() -> None:
         await apply_history(panel.history, event)
 
     assert len(settings.channel_writes) == writes
-    assert panel.channel_id("Vote") == 12
+    assert panel.server.channel_id("Vote") == 12
     assert notices
 
 
@@ -415,10 +414,10 @@ async def test_each_channel_picker_writes_its_own_setting() -> None:
         context: dict[str, object] = {}
 
     with sl.runtime.transaction():
-        await panel._channel_changed(cast(Any, Selection()), "Builds")
+        await panel.server._channel_changed(cast(Any, Selection()), "Builds")
 
-    assert panel.channel_id("Builds") == 12
-    assert panel.channel_id("Vote") == 3
+    assert panel.server.channel_id("Builds") == 12
+    assert panel.server.channel_id("Vote") == 3
     assert settings.channel_writes[-1] == (GUILD_ID, "Builds", 12)
 
 
@@ -429,24 +428,24 @@ def _button_labels(view: Any) -> list[str | None]:
 async def test_clearing_the_weight_form_removes_the_existing_role_weight() -> None:
     panel, _, _ = make_component_panel()
     with sl.runtime.transaction():
-        await panel.set_weight(42, 1.5)
-    assert panel.weight_for(42) == 1.5
+        await panel.voting.set_weight(42, 1.5)
+    assert panel.voting.weight_for(42) == 1.5
     parsed = await settings_view._VoteWeightForm().spec().evaluate({"multiplier": ""})
     assert parsed.errors == ()
     assert parsed.values["multiplier"] is None
 
     with sl.runtime.transaction():
-        await panel._role_weight_submitted(submit_event(parsed.values), 42)
+        await panel.voting._role_weight_submitted(submit_event(parsed.values), 42)
 
-    assert panel.weight_for(42) is None
+    assert panel.voting.weight_for(42) is None
     await panel.open_voting()
-    assert panel.weight_for(42) is None
+    assert panel.voting.weight_for(42) is None
 
 
 async def test_a_reset_press_after_an_undelivered_arm_only_arms_again() -> None:
     """The reader never saw "Confirm reset", so their next press must not reset voting."""
     panel, _, message_root = make_component_panel()
-    votes = cast(FakeVoteService, panel._votes)
+    votes = cast(FakeSettingsService, panel.settings._settings).votes
     weight = RoleWeight(GUILD_ID, VoteKind.BUILD, 101, 2)
     votes.role_weights = (weight,)
     with sl.runtime.transaction():
@@ -462,14 +461,14 @@ async def test_a_reset_press_after_an_undelivered_arm_only_arms_again() -> None:
     await message_root.dispatch(reset, interaction_harness(user_id=1), generation=generation)
 
     assert votes.role_weights == (weight,)
-    assert panel.confirming_reset
+    assert panel.voting.confirming_reset
 
 
 async def test_channel_history_refuses_to_overwrite_another_writer() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
     with sl.runtime.transaction():
-        await panel.set_channel("Vote", 12)
+        await panel.server.set_channel("Vote", 12)
     settings.stored["Vote"] = 42
     settings.revision += 1
     with sl.runtime.transaction():
@@ -482,13 +481,13 @@ async def test_voting_reset_restores_weights_and_can_be_redone() -> None:
     panel, _, _ = make_component_panel()
     await panel.open_voting()
     with sl.runtime.transaction():
-        await panel.set_weight(99, 2)
+        await panel.voting.set_weight(99, 2)
     with sl.runtime.transaction():
-        await panel.reset_voting()
-    assert panel.weight_for(99) is None
+        await panel.voting.reset_voting()
+    assert panel.voting.weight_for(99) is None
     with sl.runtime.transaction():
         assert (await panel.history.undo()).applied
-    assert panel.weight_for(99) == 2
+    assert panel.voting.weight_for(99) == 2
     with sl.runtime.transaction():
         assert (await panel.history.redo()).applied
-    assert panel.weight_for(99) is None
+    assert panel.voting.weight_for(99) is None
