@@ -1,32 +1,33 @@
 """The private Discord panel for filling in and submitting a build draft.
 
 A submission draft stores answers keyed by the field IDs of a pinned FormManifest. The
-manifest groups fields into sections such as "Name and creators" or "Door size and type"; this
-panel draws one row per section, listing every answer in it with an Edit button beside
-the row. Below the sections, a Files row lists the schematic, images, and videos
-attached to the draft.
+manifest groups fields into sections such as "Name and creators" or "Door size and type".
+The draft panel (DraftEditorScreen) is one message: a row per section listing every answer
+in it with an Edit button beside the row, a Files row, and the Submit button.
 
-Editing a section works in one of two ways:
+Editing never replaces that overview:
 
-- If every field in it fits in a Discord modal (at most five typed fields), Edit opens
-  the modal directly.
-- If the section has catalogue fields, such as patterns or source versions, Edit opens a
-  focused view of that section inside the panel. Catalogues can hold more than the 25
-  options a select menu allows, so they are drawn as paged selects, which a modal cannot hold.
+- A section whose fields all fit a Discord modal (at most five typed fields) opens the
+  modal directly.
+- A section with catalogue fields, such as patterns or tags, opens a separate private
+  message (SectionEditorScreen) with paged selects. Catalogues can hold more than the 25
+  options a select menu allows, which a modal cannot hold.
+- Files open in their own message too (FilesEditorScreen), and Preview opens a message
+  showing the build card other people will see (BuildPreviewScreen).
 
-The manifest stores a size as three fields, such as capture_width, capture_height, and
-capture_depth. The panel shows and edits each such triple as one "5 x 7 x 4" value; see
-DimensionGroup.
+All of these messages read one DraftWorkspace, so a change made in any of them redraws the
+others. The manifest stores a size as three fields, such as capture_width, capture_height,
+and capture_depth; the panel shows and edits each triple as one "5 x 7 x 4" value (see
+DimensionGroup).
 
 Every save goes through SubmissionDraftService, which checks access and the draft revision
 the user was looking at. Pressing Submit asks SubmissionFinalizationService to create the
 build. That request can queue the build, wait for files to finish processing, or record
-issues for the submitter to fix; the panel reloads after each change and shows which of
-these happened.
+issues for the submitter to fix; the panel shows which of these happened.
 """
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum, auto
@@ -36,11 +37,12 @@ from uuid import UUID, uuid4
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.submission.draft_intake import add_uploaded_files, receive_retained_file, retry_uploaded_file
+from squid.bot.submission import draft_intake
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW
 from squid.builds.domain.models import parse_time_string
+from squid.builds.models import Build
 from squid.core.errors import JSONValue, SquidError
 from squid.core.i18n import tr
 from squid.runtime import BotServices
@@ -64,13 +66,12 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.submissions.domain.intake import IntakeStatus
+from squid.submissions.infrastructure.build_target import PREVIEW_TITLE_FIELDS, preview_build
 from squid_i18n import NUMBER
 from squid_reactivity import TopicHandle
+from squid_ui.interactions import PressHandler
 from squid_ui.text import Message, TextLike, md
 from squid_ui_discord.modal import FileField
-
-FILES_FOCUS = "files"
-"""The focus value that shows the files view instead of a form section."""
 
 MAX_MODAL_FIELDS = 5
 """Discord modals hold at most five inputs."""
@@ -79,10 +80,13 @@ PICKER_PAGE_SIZE = 25
 """Discord select menus hold at most 25 options."""
 
 MAX_FILES_PER_UPLOAD = 4
-"""Files accepted by one Add files modal, matching the four attachment options of /build submit."""
+"""Files accepted by one Add files modal, matching the four file options of /build submit."""
 
 _VALUE_PREVIEW_LENGTH = 100
 """Longer answers, such as descriptions, are shortened in the summary rows."""
+
+type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
+"""Draws a build card exactly as posted builds are drawn; it needs the bot, which screens do not hold."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,8 +94,8 @@ class DimensionGroup:
     """Three manifest fields edited as one "width x height x depth" input.
 
     The input accepts what parse_dimensions accepts: two or three numbers separated by x or *,
-    with ? for an unknown value. A missing or unknown part is saved as unset, so a required
-    part shows as missing in the summary like any other required field.
+    with ? for an unknown value. A missing or unknown part is saved as unset; if the form
+    requires that part, the summary flags it like any other required field.
     """
 
     key: str
@@ -135,49 +139,54 @@ class Phase(Enum):
     """The draft expired before it was submitted."""
 
 
-_EDITABLE_PHASES = frozenset({Phase.EDITING, Phase.WAITING_FOR_FILES, Phase.NEEDS_CHANGES})
+EDITABLE_PHASES = frozenset({Phase.EDITING, Phase.WAITING_FOR_FILES, Phase.NEEDS_CHANGES})
 _PROCESSING_REASONS = frozenset(
     {SubmissionAttentionReason.SCHEMATIC_PROCESSING, SubmissionAttentionReason.MEDIA_PROCESSING}
 )
 
 
-class DraftEditorScreen(sd.Screen):
-    """Edit and submit one saved draft using its pinned form manifest.
+class DraftWorkspace(sl.Reactive):
+    """One open draft, shared by the panel and the editor and preview messages it opens.
 
-    The panel reloads when the draft's topic publishes a change, for example when a
-    background worker finishes finalization, so it moves from "Creating" to "Done"
-    without the submitter pressing anything. Refresh buttons remain as a fallback.
+    The workspace loads the draft, its files, and its finalization result, and reloads them
+    when the draft's topic publishes a change, for example when a background worker finishes
+    the build. Every message that reads it redraws after a save, whichever message made it.
     """
 
-    policy = sd.ResponseSpec(audience="personal", timeout=600)
-    focus: str | None = sl.state(None)
-    """The section ID or FILES_FOCUS shown on its own, or None for the overview."""
-    picker_pages: Mapping[str, int] = sl.state({})
-    """The page each catalogue field's select menu shows, keyed by field ID."""
     notice: sl.TextLike = sl.state("")
     """An error from the last action, shown until the next action replaces it."""
     option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({}, opaque=True)
     """Catalogue options keyed by option source, used for labels and select menus."""
-    selected_attachment: str | None = sl.state(None)
 
     def __init__(
-        self, services: BotServices, actor_id: int, draft: StoredDraft, manifest: FormManifest, *, changes: TopicHandle
+        self,
+        services: BotServices,
+        actor_id: int,
+        draft: StoredDraft,
+        manifest: FormManifest,
+        *,
+        changes: TopicHandle,
+        render_card: CardRenderer | None = None,
     ) -> None:
         self.services = services
         self.actor_id = actor_id
+        self.manifest = manifest
+        self.render_card = render_card
         self._draft_id = draft.snapshot.id
         self._changes = changes
         self._seed: _Projection | None = (draft, (), None)
-        self.manifest = manifest
-
-    # Draft state
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> _Projection:
-        """Refresh the private editor when durable submission reconciliation publishes a change."""
+        """Reload the draft when durable submission reconciliation publishes a change."""
         self._changes.watch()
         seed, self._seed = self._seed, None
         return seed if seed is not None else await self._read()
+
+    @property
+    def loaded(self) -> bool:
+        state = self.projection.status
+        return self._seed is not None or isinstance(state, sl.resources.Ready) or state.previous is not None
 
     def _current(self) -> _Projection:
         if self._seed is not None:
@@ -195,6 +204,10 @@ class DraftEditorScreen(sd.Screen):
         return self._current()[0]
 
     @property
+    def category(self) -> str:
+        return self.draft.snapshot.category
+
+    @property
     def attachments(self) -> tuple[SuppliedAttachment, ...]:
         """Files supplied to the draft, excluding discarded ones."""
         return tuple(item for item in self._current()[1] if item.status is not IntakeStatus.DISCARDED)
@@ -206,33 +219,29 @@ class DraftEditorScreen(sd.Screen):
     @property
     def answers(self) -> dict[str, JSONValue]:
         """Saved answers with the manifest's defaults filled in."""
-        return self.manifest.apply_defaults(
-            self.draft.snapshot.category, self.draft.snapshot.answers, origin=self.draft.origin
-        )
+        return self.manifest.apply_defaults(self.category, self.draft.snapshot.answers, origin=self.draft.origin)
 
     @property
     def fields(self) -> tuple[FormField, ...]:
         """Fields visible for the current answers and draft origin, in manifest order."""
         answers = self.answers
         return tuple(
-            field
-            for field in self.manifest.fields_for(self.draft.snapshot.category)
-            if field.is_visible(answers, self.draft.origin)
+            field for field in self.manifest.fields_for(self.category) if field.is_visible(answers, self.draft.origin)
         )
 
     @property
     def sections(self) -> tuple[FormSection, ...]:
         """Manifest sections reduced to their visible fields; sections with none are dropped."""
         visible = {field.id for field in self.fields}
-        manifest_sections = (
-            *self.manifest.common_sections,
-            *self.manifest.category(self.draft.snapshot.category).sections,
-        )
+        manifest_sections = (*self.manifest.common_sections, *self.manifest.category(self.category).sections)
         sections = (
             FormSection(section.id, section.title, tuple(field for field in section.fields if field.id in visible))
             for section in manifest_sections
         )
         return tuple(section for section in sections if section.fields)
+
+    def section(self, section_id: str) -> FormSection | None:
+        return next((section for section in self.sections if section.id == section_id), None)
 
     @property
     def phase(self) -> Phase:
@@ -261,23 +270,136 @@ class DraftEditorScreen(sd.Screen):
             issues.extend(result.issues)
         return tuple(dict.fromkeys(issues))
 
-    # Rendering
+    def missing_required(self) -> tuple[str, ...]:
+        """IDs of empty required fields, with a size reported once under its group key.
+
+        The count matches what the summary flags: one "Door size" line rather than its parts.
+        """
+        answers = self.answers
+        missing = [field.id for field in self.fields if field.required and _is_empty(answers.get(field.id))]
+        for group in _dimension_groups(self.fields):
+            if any(field_id in missing for field_id in group.field_ids):
+                missing = [field_id for field_id in missing if field_id not in group.field_ids] + [group.key]
+        return tuple(missing)
+
+    async def reload(self) -> None:
+        current = await self._read()
+        if self._seed is not None:
+            self._seed = current
+        else:
+            self.projection.replace(current)
+
+    async def _read(self) -> _Projection:
+        draft = await self.services.submission_drafts.get_accessible(self._draft_id, self.actor_id)
+        attachments = await self.services.submission_intake.list(self._draft_id, self.actor_id)
+        result = await self.services.submission_finalization.status(self._draft_id, self.actor_id)
+        return draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None
+
+    async def load_options(self, fields: Iterable[FormField]) -> None:
+        """Fetch the current catalogue for each catalogue field, replacing any earlier copy."""
+        sources = {field.option_source for field in fields if field.option_source is not None}
+        loaded = dict(self.option_sets)
+        for source in sources:
+            loaded[source] = (await self.services.submission_forms.options(source, self.category, locale=None)).options
+        self.option_sets = loaded
+
+    async def save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
+        """Save several answers as one change; a failure saves none of them and sets the notice."""
+        change = DraftChange(
+            self.draft.snapshot.revision if base_revision is None else base_revision,
+            "discord-editor",
+            DraftChangeKey(str(uuid4())),
+            tuple(
+                FieldOperation(
+                    uuid4(), field_id, FieldOperationKind.UNSET if value is None else FieldOperationKind.SET, value
+                )
+                for field_id, value in values.items()
+            ),
+        )
+        try:
+            await self.services.submission_drafts.apply_change(self._draft_id, self.actor_id, change, locale=None)
+        except SquidError as error:
+            self.notice = error.public_text()
+        else:
+            self.notice = ""
+        await self.reload()
+
+    async def submit(self) -> None:
+        try:
+            await self.services.submission_finalization.submit(self._draft_id, self.actor_id, locale=None)
+        except SquidError as error:
+            self.notice = error.public_text()
+        else:
+            self.notice = ""
+        await self.reload()
+
+    async def add_files(self, files: Sequence[sl.forms.UploadedFile]) -> None:
+        failed = await draft_intake.add_uploaded_files(self.services, self._draft_id, self.actor_id, files)
+        self.notice = (
+            tr(
+                t"draft-editor-files-failed = {failed} of the files could not be added. "
+                t"They are listed under Files so you can replace or remove them."
+            )
+            if failed
+            else ""
+        )
+        await self.reload()
+
+    async def remove_file(self, file_id: UUID) -> None:
+        await self.services.submission_intake.discard(self._draft_id, self.actor_id, file_id)
+        await self.reload()
+
+    async def use_file(self, file_id: UUID) -> None:
+        """Download a file found in the build-log post the draft was inferred from."""
+        try:
+            await draft_intake.receive_retained_file(self.services, self._draft_id, self.actor_id, file_id)
+        except Exception:
+            self.notice = tr(
+                t"draft-editor-file-download-failed = The file could not be downloaded. Replace or remove it."
+            )
+        await self.reload()
+
+    async def make_main_schematic(self, file_id: UUID) -> None:
+        await self.services.submission_schematics.select_primary(self._draft_id, self.actor_id, file_id)
+        await self.reload()
+
+    async def replace_file(self, file_id: UUID, source: sl.forms.UploadedFile) -> UUID | None:
+        """Add a replacement, then remove the original; on failure keep the original and set the notice."""
+        try:
+            new_id = await draft_intake.retry_uploaded_file(
+                self.services, self._draft_id, self.actor_id, file_id, source
+            )
+        except Exception:
+            self.notice = tr(
+                t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it."
+            )
+            new_id = None
+        else:
+            self.notice = ""
+        await self.reload()
+        return new_id
+
+
+class DraftEditorScreen(sd.Screen):
+    """The draft panel: an overview of every section, then Submit.
+
+    Before submission it lists answers with Edit buttons. Afterwards it shows progress and a
+    read-only summary, ending with a link to edit the created build.
+    """
+
+    policy = sd.ResponseSpec(audience="personal", timeout=600)
+
+    def __init__(self, workspace: DraftWorkspace) -> None:
+        self.workspace = workspace
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        state = self.projection.status
-        if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
+        ws = self.workspace
+        if not ws.loaded:
             return (sl.status(tr(t"draft-editor-loading = Loading your draft…")),)
-        phase = self.phase
-        children: list[Any] = [self._header(phase), sd.v2.separator()]
-        if phase in _EDITABLE_PHASES and self.focus == FILES_FOCUS:
-            children.extend(self._files_view())
-        elif phase in _EDITABLE_PHASES and (section := self._focused_section()) is not None:
-            children.extend(self._section_view(section))
-        elif phase in _EDITABLE_PHASES:
-            children.extend(self._overview(phase))
-        else:
-            children.extend(self._summary(phase))
+        phase = ws.phase
+        children: list[Any] = [_header(ws, phase), sd.v2.separator()]
+        children.extend(self._overview(phase) if phase in EDITABLE_PHASES else self._summary(phase))
         accent = {
             Phase.EDITING: DISCORD_BLUE,
             Phase.WAITING_FOR_FILES: DISCORD_BLUE,
@@ -288,102 +410,43 @@ class DraftEditorScreen(sd.Screen):
         }[phase]
         return (sd.v2.panel(*children, accent=accent),)
 
-    def _header(self, phase: Phase) -> Any:
-        """Title, a sentence about the current phase, and any problems to fix."""
-        category = self.manifest.category(self.draft.snapshot.category).label
-        expires = self.draft.expires_at.to_stdlib()
-        match phase:
-            case Phase.CREATING:
-                title = tr(t"draft-editor-title-creating = ## Submitting your build · {category}")
-            case Phase.DONE:
-                title = tr(t"draft-editor-title-done = ## Build submitted · {category}")
-            case Phase.EXPIRED:
-                title = tr(t"draft-editor-title-expired = ## Draft expired · {category}")
-            case _:
-                title = tr(t"draft-editor-title-editing = ## Submit a build · {category}")
-        match phase:
-            case Phase.EDITING:
-                status = tr(t"""
-                    draft-editor-status-editing =
-                        Fill in each section, then press **Submit**. Your answers are saved as you go.
-                        -# Reopen this draft with `/build drafts` until {expires}.
-                    """)
-            case Phase.WAITING_FOR_FILES:
-                status = tr(
-                    t"draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** "
-                    t"The submission continues on its own once they are ready. "
-                    t"If you edit anything now, press **Submit** again afterwards."
-                )
-            case Phase.NEEDS_CHANGES:
-                status = tr(
-                    t"draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** "
-                    t"Fix the problems below, then press **Submit** again."
-                )
-            case Phase.CREATING:
-                status = tr(
-                    t"draft-editor-status-creating = ⏳ Creating your build. This message updates when it is done."
-                )
-            case Phase.DONE:
-                result = self.result.result if self.result is not None else None
-                status = (
-                    tr(
-                        t"draft-editor-status-done = ✅ Your build was saved as **#{(build_id_text := str(result.build_id))}** "  # noqa: F841 - captured text identifier
-                        t"and is now pending review. You can still edit it while it waits."
-                    )
-                    if result is not None
-                    else tr(t"draft-editor-status-done-unknown = ✅ Your build was saved and is now pending review.")
-                )
-            case Phase.EXPIRED:
-                status = tr(
-                    t"draft-editor-status-expired = This draft expired before it was submitted. "
-                    t"Start a new one with `/build submit`; your answers are listed below for reference."
-                )
-        lines: list[TextLike] = [title, status]
-        issues = [
-            issue
-            for issue in self.issues
-            if phase is not Phase.WAITING_FOR_FILES or issue.reason not in _PROCESSING_REASONS
-        ]
-        if phase in {Phase.NEEDS_CHANGES, Phase.WAITING_FOR_FILES} and issues:
-            labels = {field.id: field.label for field in self.manifest.fields_for(self.draft.snapshot.category)}
-            lines.extend(Message.join("", ("- ", _issue_text(issue, labels))) for issue in issues)
-        if self.notice:
-            lines.append(Message.join("", ("⚠️ ", self.notice)))
-        return sd.v2.text(Message.join("\n", lines))
-
     def _overview(self, phase: Phase) -> list[Any]:
         """One row per section and the Files row, then the Submit row."""
+        ws = self.workspace
         children: list[Any] = [
             sd.v2.section(
-                self._section_text(section),
+                _section_text(ws, section),
                 accessory=sd.v2.button(
-                    tr(t"draft-editor-edit = Edit"),
-                    partial(self._edit_section, section.id),
-                    key=f"edit_{section.id}",
+                    tr(t"draft-editor-edit = Edit"), partial(self._edit_section, section.id), key=f"edit_{section.id}"
                 ),
             )
-            for section in self.sections
+            for section in ws.sections
         ]
         children.append(
             sd.v2.section(
-                self._files_text(),
+                _files_text(ws),
                 accessory=(
                     sd.v2.button(tr(t"draft-editor-edit = Edit"), self._open_files, key="edit_files")
-                    if self.attachments
+                    if ws.attachments
                     else sd.v2.button(tr(t"draft-editor-add-files = Add files"), self._add_files, key="add_files")
                 ),
             )
         )
         children.append(sd.v2.separator())
-        missing = len(self._missing_required())
+        preview = ws.render_card is not None and sd.v2.button(
+            tr(t"draft-editor-preview = Preview"), self._preview, key="preview"
+        )
         if phase is Phase.WAITING_FOR_FILES:
-            children.append(
-                sd.v2.section(
-                    tr(t"draft-editor-waiting-hint = This message updates when your files are ready."),
-                    accessory=sd.v2.button(tr(t"draft-editor-refresh = Refresh"), self._refresh, key="refresh"),
+            children.extend(
+                (
+                    sd.v2.text(tr(t"draft-editor-waiting-hint = This message updates when your files are ready.")),
+                    sd.v2.row(
+                        preview, sd.v2.button(tr(t"draft-editor-refresh = Refresh"), self._refresh, key="refresh")
+                    ),
                 )
             )
             return children
+        missing = len(ws.missing_required())
         footer = (
             tr(t"""
                 draft-editor-required-left = {{ {NUMBER(missing)} ->
@@ -392,17 +455,20 @@ class DraftEditorScreen(sd.Screen):
                 }}
                 """)
             if missing
-            else tr(t"draft-editor-ready = All required fields are filled in. Your files are checked when you submit.")
+            else tr(t"draft-editor-ready = Ready to submit.")
         )
-        children.append(
-            sd.v2.section(
-                footer,
-                accessory=sd.v2.button(
-                    tr(t"draft-editor-submit = Submit"),
-                    self._submit,
-                    key="submit",
-                    style=sl.primitives.ActionStyle.SUCCESS,
-                    disabled=missing > 0,
+        children.extend(
+            (
+                sd.v2.text(footer),
+                sd.v2.row(
+                    preview,
+                    sd.v2.button(
+                        tr(t"draft-editor-submit = Submit"),
+                        self._submit,
+                        key="submit",
+                        style=sl.primitives.ActionStyle.SUCCESS,
+                        disabled=missing > 0,
+                    ),
                 ),
             )
         )
@@ -410,8 +476,9 @@ class DraftEditorScreen(sd.Screen):
 
     def _summary(self, phase: Phase) -> list[Any]:
         """Read-only answers for phases where the draft can no longer be edited."""
-        children: list[Any] = [sd.v2.text(self._section_text(section)) for section in self.sections]
-        children.append(sd.v2.text(self._files_text()))
+        ws = self.workspace
+        children: list[Any] = [sd.v2.text(_section_text(ws, section)) for section in ws.sections]
+        children.append(sd.v2.text(_files_text(ws)))
         if phase is Phase.CREATING:
             children.extend(
                 (
@@ -419,54 +486,103 @@ class DraftEditorScreen(sd.Screen):
                     sd.v2.row(sd.v2.button(tr(t"draft-editor-refresh = Refresh"), self._refresh, key="refresh")),
                 )
             )
-        elif phase is Phase.DONE and self.result is not None and self.result.result is not None:
+        elif phase is Phase.DONE and ws.result is not None and ws.result.result is not None:
             children.extend(
                 (
                     sd.v2.separator(),
                     sd.v2.row(
                         sd.v2.routed_button(
                             tr(t"draft-editor-edit-build = Edit build"),
-                            build_controls.edit_build.id(build_id=self.result.result.build_id),
+                            build_controls.edit_build.id(build_id=ws.result.result.build_id),
                         )
                     ),
                 )
             )
         return children
 
-    def _section_view(self, section: FormSection) -> list[Any]:
-        """Typed fields as modal rows and catalogue fields as paged select menus."""
-        answers = self.answers
-        children: list[Any] = [sd.v2.heading(md(t"{section.title}"), level=3)]
-        children.extend(
-            sd.v2.section(
-                Message.join("\n", self._answer_lines(chunk.fields, answers, show_empty=True)),
-                accessory=sd.v2.button(
-                    tr(t"draft-editor-edit = Edit"), partial(self._edit_form, chunk.id), key=f"form_{chunk.id}"
-                ),
-            )
-            for chunk in _modal_chunks(section)
-        )
+    async def _edit_section(self, section_id: str, event: sd.PressEvent) -> None:
+        """Open the section's modal, or its own editor message if a modal cannot hold it."""
+        section = self.workspace.section(section_id)
+        if section is None:
+            return
+        chunks = _modal_chunks(section)
+        if len(chunks) == 1 and len(chunks[0].fields) == len(section.fields):
+            await present_chunk_form(self.workspace, chunks[0], event)
+            return
+        await self.workspace.load_options(section.fields)
+        await self.open_child(event, SectionEditorScreen(self.workspace, section_id), on_result=self._child_closed)
+
+    async def _open_files(self, event: sd.PressEvent) -> None:
+        await self.open_child(event, FilesEditorScreen(self.workspace), on_result=self._child_closed)
+
+    async def _add_files(self, event: sd.PressEvent) -> None:
+        await present_add_files(self.workspace, event)
+
+    async def _preview(self, event: sd.PressEvent) -> None:
+        await self.open_child(event, BuildPreviewScreen(self.workspace), on_result=self._child_closed)
+
+    async def _child_closed(self, event: sd.ScreenResultEvent[None]) -> None:
+        """Nothing to do: children save as they go, and the shared workspace already redrew this panel."""
+
+    async def _refresh(self, event: sd.PressEvent) -> None:
+        await self.workspace.reload()
+
+    async def _submit(self, event: sd.PressEvent) -> None:
+        await event.acknowledge()
+        await self.workspace.submit()
+
+
+_DETAIL_SESSION = sd.SessionSpec("draft-detail")
+"""Section and file editors share one session, so opening another replaces the previous message."""
+
+
+class SectionEditorScreen(sd.Screen[None]):
+    """A private message for one section whose catalogue fields need paged selects.
+
+    Typed fields in the section still use modals, from Edit buttons beside their values.
+    Choices save immediately; Done only closes this message.
+    """
+
+    policy = sd.ResponseSpec(audience="personal", timeout=600, session=_DETAIL_SESSION)
+    picker_pages: Mapping[str, int] = sl.state({})
+    """The page each catalogue field's select menu shows, keyed by field ID."""
+
+    def __init__(self, workspace: DraftWorkspace, section_id: str) -> None:
+        self.workspace = workspace
+        self.section_id = section_id
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        ws = self.workspace
+        section = ws.section(self.section_id)
+        if (closed := _closed_detail(self, ws)) is not None:
+            return closed
+        if section is None:
+            return (sl.status(tr(t"draft-editor-section-gone = This section is no longer part of the form.")),)
+        answers = ws.answers
+        children: list[Any] = [sd.v2.heading(md(t"{section.title}"))]
+        if ws.notice:
+            children.append(sd.v2.text(Message.join("", ("⚠️ ", ws.notice))))
+        # Follow the form's field order: a picker where its field is, and each modal group where it starts.
+        chunks = {chunk.fields[0].id: chunk for chunk in _modal_chunks(section)}
         for field in section.fields:
             if field.option_source is not None:
                 children.extend(self._picker(field, answers.get(field.id)))
-        children.extend(
-            (
-                sd.v2.separator(),
-                sd.v2.row(
-                    sd.v2.button(
-                        tr(t"draft-editor-done = Done"),
-                        self._close_focus,
-                        key="done",
-                        style=sl.primitives.ActionStyle.PRIMARY,
+            elif (chunk := chunks.get(field.id)) is not None:
+                children.append(
+                    sd.v2.section(
+                        Message.join("\n", _answer_lines(ws, chunk.fields, answers, show_empty=True)),
+                        accessory=sd.v2.button(
+                            tr(t"draft-editor-edit = Edit"), partial(self._edit_form, chunk.id), key=f"form_{chunk.id}"
+                        ),
                     )
-                ),
-            )
-        )
-        return children
+                )
+        children.extend((sd.v2.separator(), _done_row(self._done)))
+        return (sd.v2.panel(*children, accent=DISCORD_BLUE),)
 
     def _picker(self, field: FormField, value: JSONValue) -> list[Any]:
         """A catalogue field's current choice and one page of its options."""
-        options = self.option_sets.get(field.option_source or "", ())
+        options = self.workspace.option_sets.get(field.option_source or "", ())
         selected = _as_list(value)
         labels = {option.value: option.label for option in options}
         chosen = ", ".join(labels.get(item, item) for item in selected)
@@ -531,24 +647,64 @@ class DraftEditorScreen(sd.Screen):
         pages = (len(options) - 1) // PICKER_PAGE_SIZE + 1
         if field.id in self.picker_pages:
             return min(self.picker_pages[field.id], pages - 1)
-        selected = _as_list(self.draft.snapshot.answers.get(field.id))
+        selected = _as_list(self.workspace.draft.snapshot.answers.get(field.id))
         first = next((index for index, option in enumerate(options) if option.value in selected), 0)
         return first // PICKER_PAGE_SIZE
 
-    def _files_view(self) -> list[Any]:
-        """Every supplied file, with actions for the one the submitter selects."""
-        files = self.attachments
-        children: list[Any] = [
-            sd.v2.heading(tr(t"draft-editor-files-heading = Files"), level=3),
-            sd.v2.text(self._files_text(heading=False)),
-        ]
-        selected = next((item for item in files if str(item.id) == self.selected_attachment), None)
+    async def _edit_form(self, chunk_id: str, event: sd.PressEvent) -> None:
+        section = self.workspace.section(self.section_id)
+        chunk = next((chunk for chunk in _modal_chunks(section) if chunk.id == chunk_id), None) if section else None
+        if chunk is not None:
+            await present_chunk_form(self.workspace, chunk, event)
+
+    async def _select_value(self, field_id: str, event: sd.SelectionEvent) -> None:
+        ws = self.workspace
+        field = next(field for field in ws.fields if field.id == field_id)
+        value: JSONValue
+        if field.value_kind is ValueKind.STRING_LIST:
+            options = ws.option_sets.get(field.option_source or "", ())
+            page = self._picker_page(field, options)
+            visible = {option.value for option in options[page * PICKER_PAGE_SIZE : (page + 1) * PICKER_PAGE_SIZE]}
+            # A select menu reports only its own page; keep the choices made on other pages.
+            retained = [item for item in _as_list(ws.draft.snapshot.answers.get(field.id)) if item not in visible]
+            value = [*retained, *event.values]
+        else:
+            value = event.values[0] if event.values else None
+        await ws.save_values({field.id: value})
+
+    async def _turn_page(self, field_id: str, current: int, step: int, event: sd.PressEvent) -> None:
+        self.picker_pages = {**self.picker_pages, field_id: max(0, current + step)}
+
+    async def _done(self, event: sd.PressEvent) -> None:
+        self.complete(event, None)
+
+
+class FilesEditorScreen(sd.Screen[None]):
+    """A private message for adding, replacing, and removing the draft's files."""
+
+    policy = sd.ResponseSpec(audience="personal", timeout=600, session=_DETAIL_SESSION)
+    selected_file: str | None = sl.state(None)
+
+    def __init__(self, workspace: DraftWorkspace) -> None:
+        self.workspace = workspace
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        ws = self.workspace
+        if (closed := _closed_detail(self, ws)) is not None:
+            return closed
+        files = ws.attachments
+        selected = next((item for item in files if str(item.id) == self.selected_file), None)
+        children: list[Any] = [sd.v2.heading(tr(t"draft-editor-files-heading = Files"))]
+        if ws.notice:
+            children.append(sd.v2.text(Message.join("", ("⚠️ ", ws.notice))))
+        children.append(sd.v2.text(_files_text(ws, heading=False)))
         if files:
             children.append(
                 sd.v2.select(
                     *(sd.v2.option(item.filename[:100], str(item.id), default=item is selected) for item in files),
-                    on_select=self._select_attachment,
-                    key="attachment",
+                    on_select=self._select_file,
+                    key="file",
                     placeholder=tr(t"draft-editor-choose-file = Choose a file to replace or remove…"),
                 )
             )
@@ -557,406 +713,407 @@ class DraftEditorScreen(sd.Screen):
                 sd.v2.row(
                     selected.source is not None
                     and selected.status is IntakeStatus.PENDING
-                    and sd.v2.button(
-                        tr(t"draft-editor-use-file = Use this file"), self._use_attachment, key="use_attachment"
-                    ),
-                    sd.v2.button(
-                        tr(t"draft-editor-replace-file = Replace"), self._retry_attachment, key="retry_attachment"
-                    ),
+                    and sd.v2.button(tr(t"draft-editor-use-file = Use this file"), self._use_file, key="use_file"),
+                    sd.v2.button(tr(t"draft-editor-replace-file = Replace"), self._replace_file, key="replace_file"),
                     sd.v2.button(
                         tr(t"draft-editor-remove-file = Remove"),
-                        self._discard_attachment,
-                        key="discard_attachment",
+                        self._remove_file,
+                        key="remove_file",
                         style=sl.primitives.ActionStyle.DANGER,
                     ),
                     selected.kind == "schematic"
                     and sd.v2.button(
                         tr(t"draft-editor-main-schematic = Use as main schematic"),
-                        self._primary_attachment,
-                        key="primary_attachment",
+                        self._make_main_schematic,
+                        key="main_schematic",
                     ),
                 )
             )
         children.extend(
             (
                 sd.v2.separator(),
-                sd.v2.row(
+                _done_row(
+                    self._done,
                     sd.v2.button(tr(t"draft-editor-add-files = Add files"), self._add_files, key="add_files"),
-                    sd.v2.button(
-                        tr(t"draft-editor-done = Done"),
-                        self._close_focus,
-                        key="done",
-                        style=sl.primitives.ActionStyle.PRIMARY,
-                    ),
                 ),
             )
         )
-        return children
+        return (sd.v2.panel(*children, accent=DISCORD_BLUE),)
 
-    def _section_text(self, section: FormSection) -> Message:
-        """The section title followed by one line per answer or missing required field."""
-        lines = self._answer_lines(section.fields, self.answers, show_empty=False)
-        if not lines:
-            lines = [tr(t"draft-editor-section-empty = *Optional. Nothing added yet.*")]
-        return Message.join("\n", (md(t"**{section.title}**"), *lines))
+    def _selected_id(self) -> UUID | None:
+        """The selected file, if it is still on the draft."""
+        if any(str(item.id) == self.selected_file for item in self.workspace.attachments):
+            return UUID(cast(str, self.selected_file))
+        return None
 
-    def _answer_lines(
-        self, fields: Sequence[FormField], answers: Mapping[str, JSONValue], *, show_empty: bool
-    ) -> list[TextLike]:
-        """Format "Label: value" lines, flagging missing required fields and invalid values.
+    async def _select_file(self, event: sd.SelectionEvent) -> None:
+        self.selected_file = event.values[0] if event.values else None
 
-        Empty optional fields are skipped unless show_empty is set, as in a section's own view
-        where the submitter needs to see every field they can fill in.
-        """
-        errors = self.manifest.validate_answers(self.draft.snapshot.category, answers, origin=self.draft.origin)
-        groups = _dimension_groups(fields)
-        grouped = {field_id for group in groups for field_id in group.field_ids}
-        lines: list[TextLike] = []
-        for field in fields:
-            group = next((group for group in groups if group.field_ids[0] == field.id), None)
-            if group is not None:
-                lines.append(self._dimensions_line(group, answers, errors, show_empty=show_empty))
-                continue
-            if field.id in grouped:
-                continue
-            value = answers.get(field.id)
-            label = md(t"{field.label}: ")
-            if _is_empty(value):
-                if field.required:
-                    lines.append(label + tr(t"draft-editor-required = ⚠️ *Required*"))
-                elif show_empty:
-                    lines.append(label + tr(t"draft-editor-not-set = *Not set*"))
-                continue
-            line = label + self._value_text(field, value)
-            if (reason := errors.get(field.id)) is not None:
-                line = Message.join("", (line, " — ⚠️ ", _problem_text(reason)))
-            lines.append(line)
-        return lines
+    async def _add_files(self, event: sd.PressEvent) -> None:
+        await present_add_files(self.workspace, event)
 
-    def _dimensions_line(
-        self, group: DimensionGroup, answers: Mapping[str, JSONValue], errors: Mapping[str, str], *, show_empty: bool
-    ) -> TextLike:
-        """Show a size as "Build size: 5 x 7 x ?", flagging missing or invalid parts."""
-        values = tuple(answers.get(field_id) for field_id in group.field_ids)
-        label = Message.join("", (group.label, ": "))
-        reason = next((errors[field_id] for field_id in group.field_ids if field_id in errors), None)
-        if all(value is None for value in values):
-            if reason is not None:
-                return label + tr(t"draft-editor-required = ⚠️ *Required*")
-            return label + tr(t"draft-editor-not-set = *Not set*") if show_empty else label
-        size = format_dimensions(tuple(value if isinstance(value, int) else None for value in values))
-        line = label + md(t"{size}")
-        return line if reason is None else Message.join("", (line, " — ⚠️ ", _problem_text(reason)))
+    async def _remove_file(self, event: sd.PressEvent) -> None:
+        if (file_id := self._selected_id()) is not None:
+            await self.workspace.remove_file(file_id)
+            self.selected_file = None
 
-    def _value_text(self, field: FormField, value: JSONValue) -> TextLike:
-        """Show an answer the way the submitter chose it: option labels, Yes or No, and seconds."""
-        if isinstance(value, bool):
-            return tr(t"draft-editor-yes = Yes") if value else tr(t"draft-editor-no = No")
-        labels = {option.value: option.label for option in field.options}
-        if field.option_source is not None:
-            labels = {option.value: option.label for option in self.option_sets.get(field.option_source, ())}
-        if isinstance(value, list):
-            joined = ", ".join(labels.get(str(item), str(item)) for item in value)
-            return md(t"{joined}")
-        if field.value_kind is ValueKind.GAME_TICKS and isinstance(value, int):
-            return md(t"{_seconds(value)}")
-        text = labels.get(str(value), str(value)).replace("\n", " ")
-        if len(text) > _VALUE_PREVIEW_LENGTH:
-            text = text[: _VALUE_PREVIEW_LENGTH - 1].rstrip() + "…"
-        return md(t"{text}")
+    async def _use_file(self, event: sd.PressEvent) -> None:
+        if (file_id := self._selected_id()) is not None:
+            await event.acknowledge()
+            await self.workspace.use_file(file_id)
 
-    def _files_text(self, *, heading: bool = True) -> Message:
-        """List each file with its kind and intake status."""
-        lines: list[TextLike] = [tr(t"draft-editor-files-title = **Files**")] if heading else []
-        editable = self.phase in _EDITABLE_PHASES
-        if not self.attachments:
-            lines.append(
-                tr(t"draft-editor-files-empty = *No files yet. Add your schematic and any images or videos.*")
-                if editable
-                else tr(t"draft-editor-files-none = *No files.*")
-            )
-        for item in self.attachments:
-            kind = {
-                "schematic": tr(t"draft-editor-file-kind-schematic = Schematic"),
-                "image": tr(t"draft-editor-file-kind-image = Image"),
-                "video": tr(t"draft-editor-file-kind-video = Video"),
-            }.get(item.kind, tr(t"draft-editor-file-kind-unknown = Unsupported file type"))
-            match item.status:
-                case IntakeStatus.READY:
-                    status = tr(t"draft-editor-file-received = Received")
-                case IntakeStatus.FAILED if editable:
-                    status = tr(t"draft-editor-file-failed = ⚠️ Upload failed. Replace or remove it.")
-                case IntakeStatus.FAILED:
-                    status = tr(t"draft-editor-file-failed-final = ⚠️ Upload failed")
-                case _ if item.source is not None and editable:
-                    status = tr(t"draft-editor-file-not-added = Not added yet. Choose it under Edit to use it.")
-                case _ if item.source is not None:
-                    status = tr(t"draft-editor-file-not-used = Not used")
-                case _:
-                    status = tr(t"draft-editor-file-uploading = Uploading…")
-            # Escaped text, not a code span: Discord shows escape backslashes inside code spans literally.
-            lines.append(Message.join(" · ", (md(t"**{item.filename}**"), kind, status)))
-        return Message.join("\n", lines)
+    async def _make_main_schematic(self, event: sd.PressEvent) -> None:
+        if (file_id := self._selected_id()) is not None:
+            await self.workspace.make_main_schematic(file_id)
 
-    def _focused_section(self) -> FormSection | None:
-        return next((section for section in self.sections if section.id == self.focus), None)
-
-    def _missing_required(self) -> tuple[str, ...]:
-        """IDs of empty required fields, with a size reported once under its group key.
-
-        The count matches what the summary flags: one "Build size" line rather than three fields.
-        """
-        answers = self.answers
-        missing = [field.id for field in self.fields if field.required and _is_empty(answers.get(field.id))]
-        for group in _dimension_groups(self.fields):
-            if any(field_id in missing for field_id in group.field_ids):
-                missing = [field_id for field_id in missing if field_id not in group.field_ids] + [group.key]
-        return tuple(missing)
-
-    # Section editing
-
-    async def _edit_section(self, section_id: str, event: sl.PressEvent) -> None:
-        """Open the section's modal, or its focused view if a modal cannot hold it."""
-        section = next(section for section in self.sections if section.id == section_id)
-        chunks = _modal_chunks(section)
-        if len(chunks) == 1 and len(chunks[0].fields) == len(section.fields):
-            await self._present_form(chunks[0], event)
+    async def _replace_file(self, event: sd.PressEvent) -> None:
+        file_id = self._selected_id()
+        if file_id is None:
             return
-        self.notice = ""
-        self.focus = section_id
-        await self._load_options(section.fields)
-
-    async def _edit_form(self, chunk_id: str, event: sl.PressEvent) -> None:
-        chunk = next(chunk for section in self.sections for chunk in _modal_chunks(section) if chunk.id == chunk_id)
-        await self._present_form(chunk, event)
-
-    async def _present_form(self, chunk: FormSection, event: sl.PressEvent) -> None:
-        """Show a modal for up to five typed fields and save them together."""
-        # Save against the revision the modal showed, so a stale modal cannot overwrite a newer edit.
-        base_revision = self.draft.snapshot.revision
-        answers = self.answers
-
-        groups = _dimension_groups(chunk.fields)
-        grouped = {field_id for group in groups for field_id in group.field_ids}
-
-        async def submitted(event: sl.SubmitEvent) -> None:
-            values: dict[str, JSONValue] = {}
-            for group in groups:
-                raw = event.values.get(group.key)
-                parts = parse_dimensions(str(raw)) if raw else (None, None, None)
-                values.update(zip(group.field_ids, parts, strict=True))
-            for field in chunk.fields:
-                if field.id in grouped:
-                    continue
-                raw = event.values.get(field.id)
-                if field.value_kind is ValueKind.STRING_LIST:
-                    values[field.id] = [line.strip() for line in str(raw or "").splitlines() if line.strip()]
-                else:
-                    values[field.id] = cast(JSONValue, raw)
-            await self._save_values(values, base_revision=base_revision)
-
-        entries: list[sl.forms.FormField[Any]] = []
-        for field in chunk.fields:
-            group = next((group for group in groups if group.field_ids[0] == field.id), None)
-            if group is not None:
-                entries.append(_dimensions_entry(group, chunk.fields, answers))
-            elif field.id not in grouped:
-                entries.append(_form_entry(field, answers.get(field.id)))
-        await event.present_form(
-            sl.forms.FormSpec(chunk.title[:45], tuple(entries)),
-            key=f"draft-{chunk.id}",
-            on_submit=submitted,
-        )
-
-    async def _select_value(self, field_id: str, event: sl.SelectionEvent) -> None:
-        field = next(field for field in self.fields if field.id == field_id)
-        value: JSONValue
-        if field.value_kind is ValueKind.STRING_LIST:
-            options = self.option_sets.get(field.option_source or "", ())
-            page = self._picker_page(field, options)
-            visible = {option.value for option in options[page * PICKER_PAGE_SIZE : (page + 1) * PICKER_PAGE_SIZE]}
-            # A select menu reports only its own page; keep the choices made on other pages.
-            retained = [item for item in _as_list(self.draft.snapshot.answers.get(field.id)) if item not in visible]
-            value = [*retained, *event.values]
-        else:
-            value = event.values[0] if event.values else None
-        await self._save_values({field.id: value})
-
-    async def _turn_page(self, field_id: str, current: int, step: int, event: sl.PressEvent) -> None:
-        self.picker_pages = {**self.picker_pages, field_id: max(0, current + step)}
-
-    async def _close_focus(self, event: sl.PressEvent) -> None:
-        self.focus = None
-        self.notice = ""
-
-    async def _load_options(self, fields: Iterable[FormField]) -> None:
-        """Fetch the current catalogue for each catalogue field, replacing any earlier copy."""
-        sources = {field.option_source for field in fields if field.option_source is not None}
-        loaded = dict(self.option_sets)
-        for source in sources:
-            loaded[source] = (
-                await self.services.submission_forms.options(source, self.draft.snapshot.category, locale=None)
-            ).options
-        self.option_sets = loaded
-
-    async def _save_values(self, values: Mapping[str, JSONValue], *, base_revision: int | None = None) -> None:
-        """Save several answers as one change; a failure saves none of them."""
-        change = DraftChange(
-            self.draft.snapshot.revision if base_revision is None else base_revision,
-            "discord-editor",
-            DraftChangeKey(str(uuid4())),
-            tuple(
-                FieldOperation(
-                    uuid4(), field_id, FieldOperationKind.UNSET if value is None else FieldOperationKind.SET, value
-                )
-                for field_id, value in values.items()
-            ),
-        )
-        try:
-            await self.services.submission_drafts.apply_change(
-                self.draft.snapshot.id, self.actor_id, change, locale=None
-            )
-        except SquidError as error:
-            self.notice = error.public_text()
-        else:
-            self.notice = ""
-        await self._reload()
-
-    # Files
-
-    async def _open_files(self, event: sl.PressEvent) -> None:
-        self.notice = ""
-        self.focus = FILES_FOCUS
-
-    async def _select_attachment(self, event: sl.SelectionEvent) -> None:
-        self.selected_attachment = event.values[0] if event.values else None
-
-    async def _add_files(self, event: sl.PressEvent) -> None:
-        async def supplied(event: sl.SubmitEvent) -> None:
-            uploaded = event.values.get("files")
-            files = uploaded if isinstance(uploaded, tuple) else (uploaded,) if uploaded is not None else ()
-            failed = await add_uploaded_files(
-                self.services,
-                self.draft.snapshot.id,
-                self.actor_id,
-                tuple(item for item in files if isinstance(item, sl.forms.UploadedFile)),
-            )
-            self.notice = (
-                tr(
-                    t"draft-editor-files-failed = {failed} of the files could not be added. "
-                    t"They are listed under Files so you can replace or remove them."
-                )
-                if failed
-                else ""
-            )
-            await self._reload()
-
-        await event.present_form(
-            sl.forms.FormSpec(
-                tr(t"draft-editor-add-files = Add files"),
-                (
-                    FileField(
-                        key="files",
-                        label=tr(t"draft-editor-files-label = Schematic, images, or videos"),
-                        minimum=1,
-                        maximum=MAX_FILES_PER_UPLOAD,
-                    ),
-                ),
-            ),
-            key="add-files",
-            on_submit=supplied,
-        )
-
-    async def _discard_attachment(self, event: sl.PressEvent) -> None:
-        if self.selected_attachment is not None:
-            await self.services.submission_intake.discard(
-                self.draft.snapshot.id, self.actor_id, UUID(self.selected_attachment)
-            )
-            self.selected_attachment = None
-            await self._reload()
-
-    async def _use_attachment(self, event: sl.PressEvent) -> None:
-        if self.selected_attachment is None:
-            return
-        await event.acknowledge()
-        try:
-            await receive_retained_file(
-                self.services, self.draft.snapshot.id, self.actor_id, UUID(self.selected_attachment)
-            )
-        except Exception:
-            self.notice = tr(
-                t"draft-editor-file-download-failed = The file could not be downloaded. Replace or remove it."
-            )
-        await self._reload()
-
-    async def _primary_attachment(self, event: sl.PressEvent) -> None:
-        if self.selected_attachment is not None:
-            await self.services.submission_schematics.select_primary(
-                self.draft.snapshot.id, self.actor_id, UUID(self.selected_attachment)
-            )
-            await self._reload()
-
-    async def _retry_attachment(self, event: sl.PressEvent) -> None:
-        if self.selected_attachment is None:
-            return
-        original_id = UUID(self.selected_attachment)
 
         async def supplied(event: sl.SubmitEvent) -> None:
             source = event.values.get("file")
-            if not isinstance(source, sl.forms.UploadedFile):
-                return
-            try:
-                new_id = await retry_uploaded_file(
-                    self.services, self.draft.snapshot.id, self.actor_id, original_id, source
-                )
-            except Exception:
-                self.notice = tr(
-                    t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it."
-                )
-            else:
-                self.selected_attachment = str(new_id)
-                self.notice = ""
-            await self._reload()
+            if isinstance(source, sl.forms.UploadedFile):
+                new_id = await self.workspace.replace_file(file_id, source)
+                if new_id is not None:
+                    self.selected_file = str(new_id)
 
         await event.present_form(
             sl.forms.FormSpec(
                 tr(t"draft-editor-replace-title = Replace file"),
                 (FileField(key="file", label=tr(t"draft-editor-replacement-label = New file"), minimum=1, maximum=1),),
             ),
-            key="retry-file",
+            key="replace-file",
             on_submit=supplied,
         )
 
-    # Lifecycle
+    async def _done(self, event: sd.PressEvent) -> None:
+        self.complete(event, None)
 
-    async def _read(self) -> _Projection:
-        draft = await self.services.submission_drafts.get_accessible(self._draft_id, self.actor_id)
-        attachments = await self.services.submission_intake.list(self._draft_id, self.actor_id)
-        result = await self.services.submission_finalization.status(self._draft_id, self.actor_id)
-        return draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None
 
-    async def _reload(self) -> None:
-        current = await self._read()
-        if self._seed is not None:
-            self._seed = current
-        else:
-            self.projection.replace(current)
-        if not any(str(item.id) == self.selected_attachment for item in self.attachments):
-            self.selected_attachment = None
+class BuildPreviewScreen(sd.Screen[None]):
+    """A private message showing the card other people will see once the draft is submitted.
 
-    async def _refresh(self, event: sl.PressEvent) -> None:
-        await self._reload()
+    The card is drawn by the same renderer as posted builds, from preview_build, and redraws
+    whenever the draft changes. Images and schematics are not shown: they attach to the build
+    only when it is created.
+    """
 
-    async def _submit(self, event: sl.PressEvent) -> None:
-        await event.acknowledge()
-        try:
-            await self.services.submission_finalization.submit(self.draft.snapshot.id, self.actor_id, locale=None)
-        except SquidError as error:
-            self.notice = error.public_text()
-        else:
-            self.notice = ""
-            self.focus = None
-        await self._reload()
+    policy = sd.ResponseSpec(audience="personal", timeout=600, session=sd.SessionSpec("draft-preview"))
+
+    def __init__(self, workspace: DraftWorkspace) -> None:
+        self.workspace = workspace
+
+    @sl.resource
+    async def card(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None:
+        """The rendered card, or None while the answers its title needs are missing."""
+        ws = self.workspace
+        answers = ws.manifest.visible_answers(ws.category, ws.draft.snapshot.answers, origin=ws.draft.origin)
+        definitions = {definition.stable_key: definition for definition in await ws.services.tags.public_definitions()}
+        build = preview_build(ws.category, answers, definitions)
+        if build is None or ws.render_card is None:
+            return None
+        return await ws.render_card(build)
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        intro = sl.paragraph(
+            tr(
+                t"draft-editor-preview-intro = **Preview** · This is the card others will see once you submit. "
+                t"It updates as you edit; images and schematics appear after submission."
+            )
+        )
+        match self.card.status:
+            case sl.resources.Ready(value=card) if card is not None:
+                return (intro, card)
+            case sl.resources.Ready():
+                ws = self.workspace
+                needed = field_names(ws.manifest, ws.category, PREVIEW_TITLE_FIELDS.get(ws.category, ()))
+                return (intro, sl.paragraph(tr(t"draft-editor-preview-needs = Fill in {needed} to see the preview.")))
+            case sl.resources.Failed(previous=None):
+                return (intro, sl.paragraph(tr(t"draft-editor-preview-failed = The preview could not be drawn.")))
+            case sl.resources.Pending(previous=None):
+                return (intro, sl.status(tr(t"draft-editor-preview-loading = Drawing the preview…")))
+            case sl.resources.Pending(previous=previous) | sl.resources.Failed(previous=previous):
+                assert previous is not None
+                # Keep the last card on screen while the next one is drawn, or if drawing it failed.
+                return (intro,) if previous.value is None else (intro, previous.value)
+
+
+def _closed_detail(
+    screen: sd.Screen[None], ws: DraftWorkspace
+) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...] | None:
+    """The final view of an editor message once it is closed, or once the draft can no longer change."""
+    if screen.outcome is not None:
+        return (sl.status(tr(t"draft-editor-detail-closed = Changes saved. You can dismiss this message.")),)
+    if not ws.loaded or ws.phase not in EDITABLE_PHASES:
+        return (sl.status(tr(t"draft-editor-detail-locked = This draft can no longer be edited here.")),)
+    return None
+
+
+def _done_row(on_done: PressHandler[sd.Request], *before: Any) -> Any:
+    return sd.v2.row(
+        *before,
+        sd.v2.button(tr(t"draft-editor-done = Done"), on_done, key="done", style=sl.primitives.ActionStyle.PRIMARY),
+    )
+
+
+# Text shared by the panel and its editor messages
+
+
+def _header(ws: DraftWorkspace, phase: Phase) -> Any:
+    """Title, a sentence about the current phase, and any problems to fix."""
+    category = ws.manifest.category(ws.category).label
+    expires = ws.draft.expires_at.to_stdlib()
+    match phase:
+        case Phase.CREATING:
+            title = tr(t"draft-editor-title-creating = ## Submitting your build · {category}")
+        case Phase.DONE:
+            title = tr(t"draft-editor-title-done = ## Build submitted · {category}")
+        case Phase.EXPIRED:
+            title = tr(t"draft-editor-title-expired = ## Draft expired · {category}")
+        case _:
+            title = tr(t"draft-editor-title-editing = ## Submit a build · {category}")
+    match phase:
+        case Phase.EDITING:
+            status = tr(t"""
+                draft-editor-status-editing =
+                    Fill in each section, then press **Submit**. Your answers are saved as you go.
+                    -# Reopen this draft with `/build drafts` until {expires}.
+                """)
+        case Phase.WAITING_FOR_FILES:
+            status = tr(
+                t"draft-editor-status-waiting = ⏳ **Submitted. Waiting for your files to finish processing.** "
+                t"The submission continues on its own once they are ready. "
+                t"If you edit anything now, press **Submit** again afterwards."
+            )
+        case Phase.NEEDS_CHANGES:
+            status = tr(
+                t"draft-editor-status-needs-changes = ⚠️ **Your submission needs changes.** "
+                t"Fix the problems below, then press **Submit** again."
+            )
+        case Phase.CREATING:
+            status = tr(t"draft-editor-status-creating = ⏳ Creating your build. This message updates when it is done.")
+        case Phase.DONE:
+            result = ws.result.result if ws.result is not None else None
+            status = (
+                tr(
+                    t"draft-editor-status-done = ✅ Your build was saved as **#{(build_id_text := str(result.build_id))}** "  # noqa: F841 - captured text identifier
+                    t"and is now pending review. You can still edit it while it waits."
+                )
+                if result is not None
+                else tr(t"draft-editor-status-done-unknown = ✅ Your build was saved and is now pending review.")
+            )
+        case Phase.EXPIRED:
+            status = tr(
+                t"draft-editor-status-expired = This draft expired before it was submitted. "
+                t"Start a new one with `/build submit`; your answers are listed below for reference."
+            )
+    lines: list[TextLike] = [title, status]
+    issues = [
+        issue for issue in ws.issues if phase is not Phase.WAITING_FOR_FILES or issue.reason not in _PROCESSING_REASONS
+    ]
+    if phase in {Phase.NEEDS_CHANGES, Phase.WAITING_FOR_FILES} and issues:
+        labels = {field.id: field.label for field in ws.manifest.fields_for(ws.category)}
+        lines.extend(Message.join("", ("- ", _issue_text(issue, labels))) for issue in issues)
+    if ws.notice:
+        lines.append(Message.join("", ("⚠️ ", ws.notice)))
+    return sd.v2.text(Message.join("\n", lines))
+
+
+def _section_text(ws: DraftWorkspace, section: FormSection) -> Message:
+    """The section title followed by one line per answer or missing required field."""
+    lines = _answer_lines(ws, section.fields, ws.answers, show_empty=False)
+    if not lines:
+        lines = [tr(t"draft-editor-section-empty = *Optional. Nothing added yet.*")]
+    return Message.join("\n", (md(t"**{section.title}**"), *lines))
+
+
+def _answer_lines(
+    ws: DraftWorkspace, fields: Sequence[FormField], answers: Mapping[str, JSONValue], *, show_empty: bool
+) -> list[TextLike]:
+    """Format "Label: value" lines, flagging missing required fields and invalid values.
+
+    Empty optional fields are skipped unless show_empty is set, as in a section's own editor
+    where the submitter needs to see every field they can fill in.
+    """
+    errors = ws.manifest.validate_answers(ws.category, answers, origin=ws.draft.origin)
+    groups = _dimension_groups(fields)
+    grouped = {field_id for group in groups for field_id in group.field_ids}
+    lines: list[TextLike] = []
+    for field in fields:
+        group = next((group for group in groups if group.field_ids[0] == field.id), None)
+        if group is not None:
+            if (line := _dimensions_line(group, answers, errors, show_empty=show_empty)) is not None:
+                lines.append(line)
+            continue
+        if field.id in grouped:
+            continue
+        value = answers.get(field.id)
+        label = md(t"{field.label}: ")
+        if _is_empty(value):
+            if field.required:
+                lines.append(label + tr(t"draft-editor-required = ⚠️ *Required*"))
+            elif show_empty:
+                lines.append(label + tr(t"draft-editor-not-set = *Not set*"))
+            continue
+        line = label + _value_text(ws, field, value)
+        if (reason := errors.get(field.id)) is not None:
+            line = Message.join("", (line, " — ⚠️ ", _problem_text(reason)))
+        lines.append(line)
+    return lines
+
+
+def _dimensions_line(
+    group: DimensionGroup, answers: Mapping[str, JSONValue], errors: Mapping[str, str], *, show_empty: bool
+) -> TextLike | None:
+    """Show a size as "Build size: 5 x 7 x ?", flagging missing or invalid parts.
+
+    Returns None for an empty optional size outside a section's own editor, like other empty
+    optional fields.
+    """
+    values = tuple(answers.get(field_id) for field_id in group.field_ids)
+    label = Message.join("", (group.label, ": "))
+    reason = next((errors[field_id] for field_id in group.field_ids if field_id in errors), None)
+    if all(value is None for value in values):
+        if reason is not None:
+            return label + tr(t"draft-editor-required = ⚠️ *Required*")
+        return label + tr(t"draft-editor-not-set = *Not set*") if show_empty else None
+    size = format_dimensions(tuple(value if isinstance(value, int) else None for value in values))
+    line = label + md(t"{size}")
+    return line if reason is None else Message.join("", (line, " — ⚠️ ", _problem_text(reason)))
+
+
+def _value_text(ws: DraftWorkspace, field: FormField, value: JSONValue) -> TextLike:
+    """Show an answer the way the submitter chose it: option labels, Yes or No, and seconds."""
+    if isinstance(value, bool):
+        return tr(t"draft-editor-yes = Yes") if value else tr(t"draft-editor-no = No")
+    labels = {option.value: option.label for option in field.options}
+    if field.option_source is not None:
+        labels = {option.value: option.label for option in ws.option_sets.get(field.option_source, ())}
+    if isinstance(value, list):
+        joined = ", ".join(labels.get(str(item), str(item)) for item in value)
+        return md(t"{joined}")
+    if field.value_kind is ValueKind.GAME_TICKS and isinstance(value, int):
+        return md(t"{_seconds(value)}")
+    text = labels.get(str(value), str(value)).replace("\n", " ")
+    if len(text) > _VALUE_PREVIEW_LENGTH:
+        text = text[: _VALUE_PREVIEW_LENGTH - 1].rstrip() + "…"
+    return md(t"{text}")
+
+
+def _files_text(ws: DraftWorkspace, *, heading: bool = True) -> Message:
+    """List each file with its kind, adding a status only when the file needs attention."""
+    lines: list[TextLike] = [tr(t"draft-editor-files-title = **Files**")] if heading else []
+    editable = ws.phase in EDITABLE_PHASES
+    if not ws.attachments:
+        lines.append(
+            tr(t"draft-editor-files-empty = *No files yet. Add your schematic and any images or videos.*")
+            if editable
+            else tr(t"draft-editor-files-none = *No files.*")
+        )
+    for item in ws.attachments:
+        kind = {
+            "schematic": tr(t"draft-editor-file-kind-schematic = Schematic"),
+            "image": tr(t"draft-editor-file-kind-image = Image"),
+            "video": tr(t"draft-editor-file-kind-video = Video"),
+        }.get(item.kind, tr(t"draft-editor-file-kind-unknown = Unsupported file type"))
+        status: TextLike | None
+        match item.status:
+            case IntakeStatus.READY:
+                status = None
+            case IntakeStatus.FAILED if editable:
+                status = tr(t"draft-editor-file-failed = ⚠️ Upload failed. Replace or remove it.")
+            case IntakeStatus.FAILED:
+                status = tr(t"draft-editor-file-failed-final = ⚠️ Upload failed")
+            case _ if item.source is not None and editable:
+                status = tr(t"draft-editor-file-not-added = Not added yet. Choose it under Edit to use it.")
+            case _ if item.source is not None:
+                status = tr(t"draft-editor-file-not-used = Not used")
+            case _:
+                status = tr(t"draft-editor-file-uploading = Uploading…")
+        # Escaped text, not a code span: Discord shows escape backslashes inside code spans literally.
+        parts: list[TextLike] = [md(t"**{item.filename}**"), kind]
+        if status is not None:
+            parts.append(status)
+        lines.append(Message.join(" · ", parts))
+    return Message.join("\n", lines)
+
+
+def field_names(manifest: FormManifest, category: str, field_ids: Iterable[str]) -> Message:
+    """Join field labels for a sentence, naming a size once (as "Door size") instead of its parts."""
+    labels = {field.id: field.label for field in manifest.fields_for(category)}
+    names: list[TextLike] = []
+    for field_id in field_ids:
+        group = next((group for group in DIMENSION_GROUPS if field_id in group.field_ids), None)
+        name = group.label if group is not None else md(t"{(labels.get(field_id, field_id))}")
+        if name not in names:
+            names.append(name)
+    return Message.join(", ", names)
+
+
+# Modals
+
+
+async def present_chunk_form(ws: DraftWorkspace, chunk: FormSection, event: sd.PressEvent) -> None:
+    """Show a modal for up to five typed fields and save them together."""
+    # Save against the revision the modal showed, so a stale modal cannot overwrite a newer edit.
+    base_revision = ws.draft.snapshot.revision
+    answers = ws.answers
+    groups = _dimension_groups(chunk.fields)
+    grouped = {field_id for group in groups for field_id in group.field_ids}
+
+    async def submitted(event: sl.SubmitEvent) -> None:
+        values: dict[str, JSONValue] = {}
+        for group in groups:
+            raw = event.values.get(group.key)
+            parts = parse_dimensions(str(raw)) if raw else (None, None, None)
+            values.update(zip(group.field_ids, parts, strict=True))
+        for field in chunk.fields:
+            if field.id in grouped:
+                continue
+            raw = event.values.get(field.id)
+            if field.value_kind is ValueKind.STRING_LIST:
+                values[field.id] = [line.strip() for line in str(raw or "").splitlines() if line.strip()]
+            else:
+                values[field.id] = cast(JSONValue, raw)
+        await ws.save_values(values, base_revision=base_revision)
+
+    entries: list[sl.forms.FormField[Any]] = []
+    for field in chunk.fields:
+        group = next((group for group in groups if group.field_ids[0] == field.id), None)
+        if group is not None:
+            entries.append(_dimensions_entry(group, chunk.fields, answers))
+        elif field.id not in grouped:
+            entries.append(_form_entry(field, answers.get(field.id)))
+    await event.present_form(
+        sl.forms.FormSpec(chunk.title[:45], tuple(entries)), key=f"draft-{chunk.id}", on_submit=submitted
+    )
+
+
+async def present_add_files(ws: DraftWorkspace, event: sd.PressEvent) -> None:
+    """Show a modal accepting up to MAX_FILES_PER_UPLOAD files and attach them to the draft."""
+
+    async def supplied(event: sl.SubmitEvent) -> None:
+        uploaded = event.values.get("files")
+        files = uploaded if isinstance(uploaded, tuple) else (uploaded,) if uploaded is not None else ()
+        await ws.add_files(tuple(item for item in files if isinstance(item, sl.forms.UploadedFile)))
+
+    await event.present_form(
+        sl.forms.FormSpec(
+            tr(t"draft-editor-add-files = Add files"),
+            (
+                FileField(
+                    key="files",
+                    label=tr(t"draft-editor-files-label = Schematic, images, or videos"),
+                    minimum=1,
+                    maximum=MAX_FILES_PER_UPLOAD,
+                ),
+            ),
+        ),
+        key="add-files",
+        on_submit=supplied,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1229,13 +1386,20 @@ def _is_empty(value: JSONValue) -> bool:
 
 
 async def draft_editor(
-    services: BotServices, actor_id: int, draft_id: UUID, *, changes: TopicHandle, notice: sl.TextLike = ""
+    services: BotServices,
+    actor_id: int,
+    draft_id: UUID,
+    *,
+    changes: TopicHandle,
+    render_card: CardRenderer | None = None,
+    notice: sl.TextLike = "",
 ) -> DraftEditorScreen:
     """Open a saved draft with the form revision it was created under.
 
     Catalogue options are loaded up front so the summary can show their labels.
 
     Args:
+        render_card: Draws the build card for Preview; without it the panel has no Preview button.
         notice: Text shown at the top of the panel until the submitter's next action, such as
             command options that could not be used.
 
@@ -1249,8 +1413,8 @@ async def draft_editor(
     if manifest is None:
         message = "This draft's form revision is unavailable."
         raise ValueError(message)
-    screen = DraftEditorScreen(services, actor_id, draft, manifest, changes=changes)
-    await screen._reload()
-    await screen._load_options(screen.fields)
-    screen.notice = notice
-    return screen
+    workspace = DraftWorkspace(services, actor_id, draft, manifest, changes=changes, render_card=render_card)
+    await workspace.reload()
+    await workspace.load_options(workspace.fields)
+    workspace.notice = notice
+    return DraftEditorScreen(workspace)

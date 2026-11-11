@@ -227,8 +227,8 @@ async def test_values_the_form_rejects_are_named_instead_of_dropped() -> None:
 
     screen = _screen(harness)
     assert isinstance(screen, DraftEditorScreen)
-    assert screen.draft.snapshot.answers["opening_width"] == 5
-    assert "opening_height" not in screen.draft.snapshot.answers
-    assert source_text(screen.notice) == (
+    assert screen.workspace.draft.snapshot.answers["opening_width"] == 5
+    assert "opening_height" not in screen.workspace.draft.snapshot.answers
+    assert source_text(screen.workspace.notice) == (
         "Some values from the command could not be used: Door size. Fill them in below."
     )

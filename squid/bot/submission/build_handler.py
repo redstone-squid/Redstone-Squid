@@ -228,7 +228,8 @@ class BuildHandler[BotT: squid.bot.app.RedstoneSquid]:
             )
             return sl.section(sl.heading(title), sl.fields(*entries)) if entries else None
 
-        footer = f"Submission ID: {build.id}"
+        # A draft preview renders an unsaved build, which has no ID yet.
+        footer = f"Submission ID: {build.id}" if build.id is not None else "Preview · not submitted yet"
         if build.edited_time is not None:
             footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
         rows = ()

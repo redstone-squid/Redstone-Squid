@@ -26,7 +26,7 @@ from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui import controls as build_controls
-from squid.bot.submission.ui.drafts import DIMENSION_GROUPS, draft_editor
+from squid.bot.submission.ui.drafts import draft_editor, field_names
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce, subject_for_interaction
@@ -205,6 +205,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             uploader_account_id,
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
+            render_card=lambda build: self.bot.for_build(build).render_node(),
             notice=_unused_values_notice(unresolved, manifest),
         )
 
@@ -405,14 +406,7 @@ def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest) -> s
     """
     if not field_ids:
         return ""
-    labels = {field.id: field.label for field in manifest.fields_for("door")}
-    names: list[sl.TextLike] = []
-    for field_id in field_ids:
-        group = next((group for group in DIMENSION_GROUPS if field_id in group.field_ids), None)
-        name = group.label if group is not None else md(t"{(labels.get(field_id, field_id))}")
-        if name not in names:
-            names.append(name)
-    fields = Message.join(", ", names)
+    fields = field_names(manifest, "door", field_ids)
     return tr(
         t"draft-editor-unused-options = Some values from the command could not be used: {fields}. Fill them in below."
     )
