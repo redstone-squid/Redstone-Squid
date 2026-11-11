@@ -41,6 +41,7 @@ from squid.builds.application import (
     BuildService,
     RestrictionService,
 )
+from squid.builds.application.edits import BUILD_EDIT, BuildFieldsEdit
 from squid.builds.application.locks import BuildLockService
 from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel
@@ -341,6 +342,7 @@ class _ServiceGraph:
         return EditExecutor(
             self.uow_factory,
             {
+                BUILD_EDIT: BuildFieldsEdit(self.builds),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),
                 PROFILE_EDIT: AccountProfileEdit(self.permissions),

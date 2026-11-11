@@ -1,7 +1,7 @@
 """Structural tests for the bot's semantic Components V2 workflows."""
 
 from dataclasses import replace
-from typing import Any, cast, override
+from typing import cast, override
 from uuid import UUID
 
 import discord
@@ -12,16 +12,15 @@ import squid_ui_discord as sd
 from squid.bot.submission import build_card as build_card_module
 from squid.bot.submission.build_card import build_description, build_metadata_fields, render_build_card
 from squid.bot.submission.search_view import SearchScreen
-from squid.bot.submission.ui import views as build_views
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
 from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour, render_payload
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.application import BuildEditor, BuildService
+from squid.builds.application import BuildService
+from squid.builds.application.edits import build_target
 from squid.builds.domain import Status
-from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, BuildLink, DoorBuild
+from squid.edits.domain import Revision, RevisionConflictError
 from squid.messages.domain import MessageRef
-from squid.permissions.domain import Subject
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
@@ -35,6 +34,7 @@ from squid_ui_discord.testing import (
     interaction_harness,
     message_harness,
 )
+from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor
 from tests.support.discord import make_layout_bot
 
 
@@ -55,20 +55,15 @@ class BuildRecorder(BuildService):
 
 class EditRecorder(BuildService):
     def __init__(self, build: Build, *, conflict: bool = False) -> None:
-        self.build = build
-        self.conflict = conflict
-        self.expected_revision: int | None = None
+        self.runner = BuildEditRecorder(
+            build,
+            error=RevisionConflictError(Revision(build_target(build.id or 7), build.revision), 2) if conflict else None,
+        )
 
     @override
-    async def apply_edit(
-        self, actor: BuildEditor, build_id: int, patch: Any, *, expected_revision: int | None = None
-    ) -> Build:
-        del actor, patch
-        assert build_id == self.build.id
-        self.expected_revision = expected_revision
-        if self.conflict:
-            raise BuildRevisionMismatchError(build_id, expected_revision=expected_revision, current_revision=2)
-        return replace(self.build, revision=self.build.revision + 1)
+    async def get(self, build_id: int) -> Build:
+        assert build_id == self.runner.build.id
+        return self.runner.build
 
 
 @pytest.fixture
@@ -152,6 +147,8 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
         display_build,
         BuildRecorder(),
         [field],
+        edits=BuildEditRecorder(),
+        actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
         render_build=AsyncCallRecorder(),
         refresh_posts=AsyncCallRecorder(),
@@ -182,6 +179,8 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
     component = BuildEditScreen(
         display_build,
         BuildRecorder(),
+        edits=BuildEditRecorder(),
+        actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
         render_build=AsyncCallRecorder(result=sl.status("card")),
         refresh_posts=AsyncCallRecorder(),
@@ -215,7 +214,6 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
 async def test_build_editor_commits_against_the_revision_it_presented(
     display_build: Build, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncCallRecorder(result=Subject(account_id=1)))
     builds = EditRecorder(display_build)
     field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
@@ -223,6 +221,8 @@ async def test_build_editor_commits_against_the_revision_it_presented(
         display_build,
         builds,
         [field],
+        edits=builds.runner,
+        actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
         render_build=AsyncCallRecorder(result=sl.status("updated")),
         refresh_posts=AsyncCallRecorder(),
@@ -237,7 +237,7 @@ async def test_build_editor_commits_against_the_revision_it_presented(
         assert await component.wait() == sd.Completed(display_build.id)
         assert ui.root.finished
 
-    assert builds.expected_revision == display_build.revision
+    assert builds.runner.commands[0].expected[0].value == 1
     assert component.saved is True
 
 
@@ -246,6 +246,8 @@ async def test_closing_build_editor_cancels_without_saving(display_build: Build)
     component = BuildEditScreen(
         display_build,
         builds,
+        edits=builds.runner,
+        actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
         render_build=AsyncCallRecorder(result=sl.status("card")),
         refresh_posts=AsyncCallRecorder(),
@@ -256,14 +258,13 @@ async def test_closing_build_editor_cancels_without_saving(display_build: Build)
         assert await component.wait() == sd.Cancelled(sd.ScreenCancelReason.USER)
         assert ui.root.finished
 
-    assert builds.expected_revision is None
+    assert builds.runner.commands == []
     assert not component.saved
 
 
 async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
     display_build: Build, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(build_views, "subject_for_interaction", AsyncCallRecorder(result=Subject(account_id=1)))
     builds = EditRecorder(display_build, conflict=True)
     field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
@@ -271,6 +272,8 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
         display_build,
         builds,
         [field],
+        edits=builds.runner,
+        actor=build_edit_actor,
         authorize=AsyncCallRecorder(result=True),
         render_build=AsyncCallRecorder(),
         refresh_posts=AsyncCallRecorder(),
@@ -426,3 +429,40 @@ async def test_search_timeout_disables_bound_controls() -> None:
     controls = [child for child in disabled.walk_children() if isinstance(child, discord.ui.Button | discord.ui.Select)]
     assert controls
     assert all(control.disabled for control in controls)
+
+
+async def test_build_history_survives_a_failed_card_refresh(display_build: Build) -> None:
+    builds = EditRecorder(display_build)
+    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
+    before = display_build.version_spec
+    field.stage("1.21+")
+
+    async def unavailable_card(build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        raise RuntimeError("card service unavailable")
+
+    component = BuildEditScreen(
+        display_build,
+        builds,
+        [field],
+        edits=builds.runner,
+        actor=build_edit_actor,
+        authorize=AsyncCallRecorder(result=True),
+        render_build=unavailable_card,
+        refresh_posts=AsyncCallRecorder(),
+    )
+    async with sd.testing.stage(component, owner=object()) as ui:
+        await ui.press("review")
+        await ui.press("apply")
+        assert component.saved
+        assert component.controller.refresh_failed
+        assert component.history.can_undo
+        assert builds.runner.build.version_spec == "1.21+"
+        assert (await component.history.undo()).applied
+        assert builds.runner.build.version_spec == before
+        assert component.history.can_redo
+        # A change outside this session invalidates redo even if its field is unchanged.
+        builds.runner.build.description = "someone else's change"
+        builds.runner.build.revision += 1
+        assert not (await component.history.redo()).applied
+        assert builds.runner.build.description == "someone else's change"
+        assert builds.runner.build.version_spec == before

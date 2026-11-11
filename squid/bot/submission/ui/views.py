@@ -13,7 +13,8 @@ from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.edit_history import history_controls, record_edit
+from squid.bot.edit_controller import EditController
+from squid.bot.edit_history import history_controls
 from squid.bot.submission.input import parse_web_urls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.fields import (
@@ -28,14 +29,15 @@ from squid.bot.submission.ui.fields import (
     field_spec,
 )
 from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, tr
-from squid.bot.utils.permissions import subject_for_interaction
-from squid.builds.application import BuildEditor, BuildEditPatch, BuildService
+from squid.builds.application import BuildEditPatch, BuildService
+from squid.builds.application.edits import BUILD_EDIT, build_target, patch_values
 from squid.builds.application.input import normalize_extender_orientation, validate_extension_length
 from squid.builds.domain import BuildCategory, UnresolvedTaxonomy
-from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import DEFAULT
+from squid.edits.application import EditRunner
+from squid.edits.domain import EditActor, EditCommand, Revision, RevisionConflictError
 from squid_reactivity import TopicHandle
 from squid_ui.text import Message, md
 
@@ -598,6 +600,8 @@ class BuildEditScreen(BuildEditorScreen[int]):
         *,
         node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None,
         authorize: Callable[[], Awaitable[bool]],
+        edits: EditRunner,
+        actor: Callable[[], Awaitable[EditActor]],
         render_build: Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]],
         refresh_posts: Callable[[int], Awaitable[None]],
         changes: TopicHandle | None = None,
@@ -609,6 +613,8 @@ class BuildEditScreen(BuildEditorScreen[int]):
         self._base_revision = build.revision
         self.builds = builds
         self._authorize = authorize
+        self._actor = actor
+        self.controller = EditController(edits, actor, self._refresh_saved, history=self.history)
         self._render_build = render_build
         self._refresh_posts = refresh_posts
         self._recovered = recovered
@@ -784,8 +790,12 @@ class BuildEditScreen(BuildEditorScreen[int]):
         ]
         nodes.append(sd.v2.panel(*children, accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE))
         nodes.extend(history_controls(self.staged_history))
-        if not any(item.modified for item in self.items) and not self.staged_history.can_redo:
-            nodes.extend(history_controls(self.history))
+        if (
+            self.controller.pending
+            or self.controller.refresh_failed
+            or (not any(item.modified for item in self.items) and not self.staged_history.can_redo)
+        ):
+            nodes.extend(self.controller.controls())
         return tuple(nodes)
 
     def sections(self) -> tuple[tuple[str, sl.TextLike, tuple[BoundBuildField[Any], ...]], ...]:
@@ -862,29 +872,19 @@ class BuildEditScreen(BuildEditorScreen[int]):
             return
         await event.acknowledge()
         patch = BuildEditPatch.combine(item.to_patch() for item in changed)
-        edited_build_id: int | None = None
         build = self.build
-        specs = tuple(item.spec for item in changed)
-        before = tuple(spec.reader(build) for spec in specs)
-        if build.id is None:
-            patch.apply(build)
-            actor = await subject_for_interaction(cast(sd.Request[Any], event.context))
-            if actor.account_id is None:
-                raise AuthorizationError
-            await self.builds.save(
-                build,
-                actor=actor.account_id,
-                operation="create",
-                source="discord_editor",
-            )
-            self._build_id = build.id
-        else:
+        if build.id is not None:
             try:
-                actor = BuildEditor(
-                    await subject_for_interaction(cast(sd.Request[Any], event.context)), source="discord_editor"
+                await self.controller.execute(
+                    EditCommand(
+                        BUILD_EDIT,
+                        (Revision(build_target(build.id), self._base_revision),),
+                        patch_values(patch),
+                    ),
+                    tr(t"build-edit-history-save = Save build changes"),
                 )
-                build = await self.builds.apply_edit(actor, build.id, patch, expected_revision=self._base_revision)
-            except BuildRevisionMismatchError:
+                self.saved = True
+            except RevisionConflictError:
                 self.confirming = False
                 self.validation_error = tr(
                     t"build-editor-concurrent-change = This build "
@@ -892,60 +892,29 @@ class BuildEditScreen(BuildEditorScreen[int]):
                     t"be discarded."
                 )
                 self.invalidate()
-                return
-            edited_build_id = build.id
-        if edited_build_id is not None:
-            build_id = edited_build_id
-            after = tuple(spec.reader(build) for spec in specs)
-
-            async def reverse_values(expected: tuple[Any, ...], replacement: tuple[Any, ...]) -> bool:
-                current = await self.builds.get(build_id)
-                if current is None or tuple(spec.reader(current) for spec in specs) != expected:
-                    return False
-                inverse = BuildEditPatch.combine(
-                    spec.patch(value) for spec, value in zip(specs, replacement, strict=True)
-                )
-                try:
-                    await self.builds.apply_edit(
-                        BuildEditor(
-                            await subject_for_interaction(cast(sd.Request[Any], event.context)), source="discord_editor"
-                        ),
-                        build_id,
-                        inverse,
-                        expected_revision=current.revision,
-                    )
-                except BuildRevisionMismatchError:
-                    return False
-                return True
-
-            async def refresh() -> None:
-                current = await self.builds.get(build_id)
-                if current is None:
-                    raise LookupError(build_id)
-                self.items = tuple(item.spec.bind(current) for item in self.items)
-                self._replace(current, await self._render_build(current))
-                await self._refresh_posts(build_id)
-
-            record_edit(
-                self.history,
-                tr(t"build-edit-history-save = Save build changes"),
-                before,
-                after,
-                target=f"build:{build_id}",
-                authorize=self._authorize,
-                replace=reverse_values,
-                refresh=refresh,
-            )
+            return
+        patch.apply(build)
+        actor = (await self._actor()).subject
+        if actor.account_id is None:
+            raise AuthorizationError
+        await self.builds.save(build, actor=actor.account_id, operation="create", source="discord_editor")
+        self._build_id = build.id
         self.staged_history.clear()
-        self.items = tuple(item.spec.bind(build) for item in self.items)
         self.saved = True
-        self.confirming = False
-        self._replace(build, await self._render_build(build))
-        if edited_build_id is not None:
-            await self._refresh_posts(edited_build_id)
         assert build.id is not None
-        if edited_build_id is None:
-            self.complete(event, build.id)
+        self.complete(event, build.id)
+
+    async def _refresh_saved(self) -> None:
+        assert self._build_id is not None
+        current = await self.builds.get(self._build_id)
+        if current is None:
+            raise LookupError(self._build_id)
+        self.staged_history.clear()
+        self.items = tuple(item.spec.bind(current) for item in self.items)
+        self.confirming = False
+        self.validation_error = None
+        self._replace(current, await self._render_build(current))
+        await self._refresh_posts(self._build_id)
 
     async def _close(self, event: sd.PressEvent) -> None:
         if self.saved and self._build_id is not None:
@@ -954,16 +923,11 @@ class BuildEditScreen(BuildEditorScreen[int]):
             self.cancel(event)
 
     async def _reload(self, event: sl.PressEvent) -> None:
-        await self.projection.reload()
         if not await self._may_event(event):
             return
         await event.acknowledge()
-        build, node = self._current()
-        self.staged_history.clear()
-        self.items = tuple(field.bind(build) for field in EDIT_FIELDS if field.applies_to(build))
-        self.validation_error = None
-        self.confirming = False
-        self._replace(build, node)
+        if self._build_id is not None:
+            await self.controller.discard(frozenset({build_target(self._build_id).identity}))
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
         if not await self.may_edit():

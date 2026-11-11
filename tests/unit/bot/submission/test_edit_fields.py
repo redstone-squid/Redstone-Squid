@@ -16,6 +16,7 @@ from squid_ui.testing import submit_event
 from squid_ui.text import source_text
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
+from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor
 
 
 def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
@@ -118,6 +119,8 @@ async def test_empty_optional_modal_fields_clear_staged_text_and_numbers() -> No
         build,
         Builds(),
         items,
+        edits=BuildEditRecorder(),
+        actor=build_edit_actor,
         authorize=authorize,
         render_build=unexpected_write,
         refresh_posts=unexpected_write,
@@ -182,6 +185,8 @@ async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -
         build,
         Builds(),
         items,
+        edits=BuildEditRecorder(),
+        actor=build_edit_actor,
         authorize=authorize,
         render_build=unexpected_write,
         refresh_posts=unexpected_write,

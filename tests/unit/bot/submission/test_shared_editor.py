@@ -14,12 +14,15 @@ from squid.builds.application import BuildService
 from squid.builds.models import DoorBuild, ExtenderBuild, OtherBuild
 from squid_ui.testing import press_event, submit_event
 from squid_ui_discord.testing import assert_within_limits, commit_render
+from tests.support.build_edit_runner import BuildEditRecorder, build_edit_actor
 
 
 def editor(build: DoorBuild | ExtenderBuild | OtherBuild) -> BuildEditScreen:
     return BuildEditScreen(
         build,
         cast(BuildService, AsyncMock()),
+        edits=BuildEditRecorder(),
+        actor=build_edit_actor,
         authorize=AsyncMock(return_value=True),
         render_build=AsyncMock(return_value=sl.paragraph("Preview")),
         refresh_posts=AsyncMock(),

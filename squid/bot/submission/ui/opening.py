@@ -6,10 +6,11 @@ import squid_ui_discord as sd
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui.views import BuildEditScreen
 from squid.bot.ui import error_node, tr
-from squid.bot.utils.permissions import allows
+from squid.bot.utils.permissions import current_edit_actor
 from squid.builds.application import BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build
+from squid.edits.domain import EditActor
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
 if TYPE_CHECKING:
@@ -30,19 +31,22 @@ async def prepare_build_editor(
     with build-edit permission to proceed.
     """
     client = cast("RedstoneSquid", request.client)
-    actor_id = request.user.id
     prepared: BuildEditScreen | None = None
+
+    async def actor() -> EditActor:
+        return await current_edit_actor(request)
 
     async def authorize() -> bool:
         current = build if prepared is None else prepared.build
-        actor_account_id = await client.account_ids.resolve(client.services.accounts, actor_id)
+        current_actor = await actor()
+        actor_account_id = current_actor.subject.account_id
         if (
             current.submission_status is Status.PENDING
             and actor_account_id is not None
             and current.submitter_account_id == actor_account_id
         ):
             return True
-        return await allows(request, BUILD_SUBMISSION_EDIT)
+        return await client.services.permissions.allows(current_actor.subject, BUILD_SUBMISSION_EDIT)
 
     async def render_build(current: Build) -> Any:
         return await render_build_card(current, client.media_previews)
@@ -55,6 +59,8 @@ async def prepare_build_editor(
         client.services.builds if builds is None else builds,
         node=await render_build(build),
         authorize=authorize,
+        edits=client.services.edits,
+        actor=actor,
         render_build=render_build,
         refresh_posts=refresh_posts,
         changes=None if build.id is None else client.topic_bus.topic("build", str(build.id)),

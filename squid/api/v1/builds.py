@@ -2,13 +2,14 @@
 
 import re
 from typing import Annotated, cast
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
-from squid.api.dependencies import BuildCommands, BuildQueries, CurrentCaller, Permissions, Search
+from squid.api.dependencies import BuildQueries, CurrentCaller, Permissions, Search, Services
 from squid.api.errors import responses
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -24,17 +25,19 @@ from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilt
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.builds.application import (
     BUILD_SORT_FIELDS,
-    BuildEditor,
     BuildEditPatch,
     BuildListSort,
     BuildSortField,
 )
+from squid.builds.application.edits import BUILD_EDIT, build_target, patch_values
 from squid.builds.errors import (
+    BuildNotFoundError,
     BuildRevisionMismatchError,
     BuildRevisionRequiredError,
 )
 from squid.builds.models import Build
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
+from squid.edits.domain import EditActor, EditCommand, Revision
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
@@ -48,7 +51,7 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
     "/{build_id}",
     response_model=BuildDetail,
     responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="builds_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -56,18 +59,25 @@ async def edit_build(
     build_id: int,
     changes: BuildPatch,
     response: Response,
-    builds: BuildCommands,
+    services: Services,
     caller: UserWriter,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
     """Edit an owned pending build, or any build with `build.submission.edit`."""
     caller.require_consented_account()
-    build = await builds.apply_edit(
-        BuildEditor(subject=caller.permission_subject(), source="api"),
-        build_id,
-        BuildEditPatch.from_attributes(changes.edit_attributes()),
-        expected_revision=_expected_revision(build_id, if_match),
+    await services.edits.execute(
+        EditCommand(
+            BUILD_EDIT,
+            (Revision(build_target(build_id), _expected_revision(build_id, if_match)),),
+            patch_values(BuildEditPatch.from_attributes(changes.edit_attributes())),
+            operation_id,
+        ),
+        EditActor(caller.permission_subject()),
     )
+    build = await services.builds.get(build_id)
+    if build is None:
+        raise BuildNotFoundError(build_id)
     response.headers["ETag"] = build_etag(build)
     return BuildDetail.from_domain(build)
 

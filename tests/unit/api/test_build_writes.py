@@ -1,6 +1,8 @@
 """Build mutation route tests."""
 
-from typing import override
+from types import SimpleNamespace
+from typing import cast, override
+from uuid import uuid4
 
 import pytest
 from fastapi import Response
@@ -9,12 +11,13 @@ from pydantic import ValidationError
 from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
-from squid.builds.application import BuildEditor, BuildService
-from squid.builds.application.editing import BuildEditPatch
+from squid.builds.application import BuildService
 from squid.builds.domain import Status
 from squid.builds.errors import BuildRevisionRequiredError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
+from squid.runtime import ApiServices
+from tests.support.build_edit_runner import BuildEditRecorder
 from tests.unit.api.fakes import credential_nodes
 
 ACCOUNT = Caller(
@@ -48,23 +51,15 @@ CLI = Caller(
 
 class BuildRecorder(BuildService):
     def __init__(self, *, result: Build | None = None, edit_error: Exception | None = None) -> None:
-        self.result = result or persisted_build()
-        self.edit_error = edit_error
-        self.edits: list[tuple[BuildEditor, int, BuildEditPatch, int | None]] = []
+        self.runner = BuildEditRecorder(result or persisted_build(), error=edit_error)
 
     @override
-    async def apply_edit(
-        self,
-        actor: BuildEditor,
-        build_id: int,
-        patch: BuildEditPatch,
-        *,
-        expected_revision: int | None = None,
-    ) -> Build:
-        self.edits.append((actor, build_id, patch, expected_revision))
-        if self.edit_error is not None:
-            raise self.edit_error
-        return self.result
+    async def get(self, build_id: int) -> Build:
+        assert build_id == self.runner.build.id
+        return self.runner.build
+
+    def services(self) -> ApiServices:
+        return cast(ApiServices, SimpleNamespace(builds=self, edits=self.runner))
 
 
 @pytest.mark.asyncio
@@ -77,18 +72,19 @@ async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
         42,
         BuildPatch(extra_user_info="changed"),
         http_response,
-        builds,
+        builds.services(),
         ACCOUNT,
+        uuid4(),
         '"build-42-r1"',
     )
 
     assert response.id == 42
-    assert http_response.headers["etag"] == '"build-42-r1"'
-    actor, build_id, patch, expected_revision = builds.edits[0]
-    assert actor == BuildEditor(subject=ACCOUNT.permission_subject(), source="api")
-    assert build_id == 42
-    assert patch.extra_user_info == "changed"
-    assert expected_revision == 1
+    assert http_response.headers["etag"] == '"build-42-r2"'
+    command = builds.runner.commands[0]
+    assert builds.runner.actors[0].subject == ACCOUNT.permission_subject()
+    assert command.expected[0].target.key == "42"
+    assert command.values.unpack() == {"extra_user_info": "changed"}
+    assert command.expected[0].value == 1
 
 
 @pytest.mark.asyncio
@@ -96,7 +92,7 @@ async def test_edit_surfaces_the_service_authorization_refusal() -> None:
     builds = BuildRecorder(edit_error=AuthorizationError())
 
     with pytest.raises(AuthorizationError):
-        await edit_build(42, BuildPatch(), Response(), builds, ACCOUNT, '"build-42-r1"')
+        await edit_build(42, BuildPatch(), Response(), builds.services(), ACCOUNT, uuid4(), '"build-42-r1"')
 
 
 @pytest.mark.asyncio
@@ -105,9 +101,9 @@ async def test_edit_requires_an_if_match_revision() -> None:
     builds = BuildRecorder()
 
     with pytest.raises(BuildRevisionRequiredError):
-        await edit_build(42, BuildPatch(), Response(), builds, ACCOUNT)
+        await edit_build(42, BuildPatch(), Response(), builds.services(), ACCOUNT, uuid4())
 
-    assert builds.edits == []
+    assert builds.runner.commands == []
 
 
 def test_door_patch_flattens_onto_the_application_patch_names() -> None:

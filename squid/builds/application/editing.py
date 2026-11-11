@@ -128,6 +128,10 @@ class BuildEditPatch:
             object.__setattr__(patch, name, value)
         return patch
 
+    def attributes(self) -> dict[str, object]:
+        """Return only supplied values, preserving explicit clears."""
+        return {name: value for name in self.__dataclass_fields__ if (value := getattr(self, name)) is not UNSET}
+
     def apply(self, build: Build) -> None:
         """Mutate a loaded build or detached preview without saving it.
 
