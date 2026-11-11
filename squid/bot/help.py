@@ -156,7 +156,13 @@ class HelpCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self.bot.help_command = Help()
 
     # /help [command]
-    @sd.command()
+    @sd.command(
+        description=to_locale_str(
+            tr(t"command-help-help = Show a grouped command directory or focused command details.")
+        ),
+        name=to_locale_str(tr(t"command-help-name = help")),
+    )
+    @app_commands.rename(command=to_locale_str(tr(t"command-help-command-name = command")))
     @app_commands.describe(
         command=to_locale_str(tr(t"help-the-command-to-get-help-for = The command to get help for."))
     )

@@ -116,7 +116,40 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
         await self.consent_sticky.close()
 
     @autocompletes(sort="search_sorts", query="search_query")
-    @sd.command(name="search", description="Search builds, records, and taxonomy metadata", defer="public")
+    @sd.command(
+        name=to_locale_str(tr(t"command-search-name = search")),
+        description=to_locale_str(tr(t"command-search-help = Search builds, records, and taxonomy metadata")),
+        defer="public",
+    )
+    @app_commands.rename(
+        mode=to_locale_str(tr(t"command-search-mode-name = mode")),
+        query=to_locale_str(tr(t"command-search-query-name = query")),
+        scope=to_locale_str(tr(t"command-search-scope-name = scope")),
+        sort=to_locale_str(tr(t"command-search-sort-name = sort")),
+    )
+    @app_commands.choices(
+        mode=[
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-search-choice-mode-keyword = keyword")), value="keyword"
+            ),
+            app_commands.Choice(name=to_locale_str(tr(t"command-search-choice-mode-smart = smart")), value="smart"),
+        ],
+        scope=[
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-search-choice-scope-records = records")), value="records"
+            ),
+            app_commands.Choice(name=to_locale_str(tr(t"command-search-choice-scope-builds = builds")), value="builds"),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-search-choice-scope-patterns = patterns")), value="patterns"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-search-choice-scope-restrictions = restrictions")), value="restrictions"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-search-choice-scope-everything = everything")), value="everything"
+            ),
+        ],
+    )
     @app_commands.describe(
         query=to_locale_str(tr(t"build-search-query-help = Search text and filters, e.g. `width:5`.")),
         scope=to_locale_str(
@@ -167,8 +200,13 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
         )
 
     @autocompletes(build_id="builds")
-    @BuildCommandGroup.build_group.command(name="browse")
-    @app_commands.rename(build_id="id")
+    @BuildCommandGroup.build_group.command(
+        name=to_locale_str(tr(t"command-build-browse-name = browse")),
+        description=to_locale_str(
+            tr(t"command-build-browse-help = Browse searchable build details, review actions, and schematic tools.")
+        ),
+    )
+    @app_commands.rename(build_id=to_locale_str(tr(t"command-build-browse-build-id-name = id")))
     @app_commands.describe(
         build_id=to_locale_str(tr(t"bot-submission-search-open-this-build-directly = Open this build directly."))
     )

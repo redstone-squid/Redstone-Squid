@@ -39,7 +39,11 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         super().__init__(bot)
         self.account_service = bot.services.accounts
 
-    @sd.command(name="account", description="Manage your account or view a creator page")
+    @sd.command(
+        name=to_locale_str(tr(t"command-account-name = account")),
+        description=to_locale_str(tr(t"command-account-help = Manage your account or view a creator page")),
+    )
+    @app_commands.rename(user=to_locale_str(tr(t"command-account-user-name = user")))
     @app_commands.describe(
         user=to_locale_str(
             tr(t"verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.")

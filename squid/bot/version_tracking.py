@@ -17,6 +17,7 @@ from squid.versions.domain import Edition, MinecraftVersion
 from squid.versions.errors import InvalidVersionError
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -120,7 +121,10 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
         super().__init__(bot)
         self.version_service = bot.services.versions
 
-    @sd.command(name="versions", description="Browse recognized Minecraft versions")
+    @sd.command(
+        name=to_locale_str(tr(t"command-versions-name = versions")),
+        description=to_locale_str(tr(t"command-versions-help = Browse recognized Minecraft versions")),
+    )
     async def versions(self, request: sd.Request[Self]) -> VersionScreen:
         """Open the paged version catalogue."""
 

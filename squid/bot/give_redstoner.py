@@ -20,6 +20,7 @@ from squid.community.domain import RedstonerDecisionKind, RedstonerPolicy
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -157,7 +158,10 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def give_redstoner(self, message: discord.Message):
         await self.give_redstoner_from_message(message)
 
-    @sd.command(name="redstoner", description="Inspect and deploy Redstoner automation")
+    @sd.command(
+        name=to_locale_str(tr(t"command-redstoner-name = redstoner")),
+        description=to_locale_str(tr(t"command-redstoner-help = Inspect and deploy Redstoner automation")),
+    )
     @app_commands.guild_only()
     @hide_unless(manage_roles=True)
     async def redstoner(self, request: sd.Request[Self]) -> sd.CommandResult:

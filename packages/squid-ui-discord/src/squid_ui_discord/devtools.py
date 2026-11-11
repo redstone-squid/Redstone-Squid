@@ -13,10 +13,12 @@ from datetime import datetime, timedelta
 from typing import override
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context
 
 import squid_ui as sl
+from squid_i18n import tr
 from squid_reactivity.diagnostics import (
     ActionResultSnapshot,
     CausalEventSnapshot,
@@ -50,6 +52,7 @@ from squid_ui_discord.devtools_view import (
     plan_text,
     scene_attachment,
 )
+from squid_ui_discord.i18n import to_locale_str
 from squid_ui_discord.live import find
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootSnapshot
@@ -149,8 +152,9 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         return await self._check(ctx)
 
     @commands.hybrid_group(
-        name="dev",
+        to_locale_str(tr(t"command-dev-name = dev")),
         hidden=True,
+        description=to_locale_str(tr(t"command-dev-help = Development-only operational diagnostics.")),
     )
     @discord.app_commands.default_permissions(administrator=True)
     async def dev_group(self, ctx: Context[BotT]) -> None:
@@ -158,33 +162,55 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         await ctx.send_help("dev")
 
     @dev_group.group(
-        name="ui",
+        to_locale_str(tr(t"command-dev-ui-name = ui")),
+        description=to_locale_str(tr(t"command-dev-ui-help = Open the unified operational dashboard.")),
     )
     async def ui_group(self, ctx: Context[BotT]) -> None:
         """Open the unified operational dashboard."""
         await self._open(ctx)
 
-    @ui_group.command(name="roots")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-roots-name = roots")),
+        description=to_locale_str(tr(t"command-dev-ui-roots-help = Open the dashboard focused on message roots.")),
+    )
     async def list_roots(self, ctx: Context[BotT]) -> None:
         """Open the dashboard focused on message roots."""
         await self._open(ctx, focus="roots")
 
-    @ui_group.command(name="root")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-root-name = root")),
+        description=to_locale_str(tr(t"command-dev-ui-root-help = Open the dashboard focused on one message root.")),
+    )
+    @app_commands.rename(message_root_id=to_locale_str(tr(t"command-dev-ui-root-root-name = message_root_id")))
+    @app_commands.describe(message_root_id=to_locale_str(tr(t"command-dev-ui-root-root-help = …")))
     async def inspect_root(self, ctx: Context[BotT], message_root_id: str) -> None:
         """Open the dashboard focused on one message root."""
         await self._open(ctx, focus="roots", message_root_id=message_root_id)
 
-    @ui_group.command(name="sessions")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-sessions-name = sessions")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-sessions-help = Open the dashboard focused on logical sessions.")
+        ),
+    )
     async def list_sessions(self, ctx: Context[BotT]) -> None:
         """Open the dashboard focused on logical sessions."""
         await self._open(ctx, focus="sessions")
 
-    @ui_group.command(name="session")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-session-name = session")),
+        description=to_locale_str(tr(t"command-dev-ui-session-help = Open the dashboard focused on one session.")),
+    )
+    @app_commands.rename(session_id=to_locale_str(tr(t"command-dev-ui-session-session-id-name = session_id")))
+    @app_commands.describe(session_id=to_locale_str(tr(t"command-dev-ui-session-session-id-help = …")))
     async def inspect_session(self, ctx: Context[BotT], session_id: str) -> None:
         """Open the dashboard focused on one session."""
         await self._open(ctx, focus="sessions", session_id=session_id)
 
-    @ui_group.command(name="routes")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-routes-name = routes")),
+        description=to_locale_str(tr(t"command-dev-ui-routes-help = Show routed controls and effective middleware.")),
+    )
     async def list_routes(self, ctx: Context[BotT]) -> None:
         """Show routed controls and effective middleware."""
         lines: list[str] = []
@@ -203,7 +229,12 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         body = "No routers are installed on this client." if not lines else "\n".join(lines)
         await self._send(ctx, [section(sl.heading("Routed controls"), code(body))])
 
-    @ui_group.command(name="queues")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-queues-name = queues")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-queues-help = Show queue pressure and subscriber registrations.")
+        ),
+    )
     async def inspect_queues(self, ctx: Context[BotT]) -> None:
         """Show queue pressure and subscriber registrations."""
         snapshot = self._runtime.snapshot()
@@ -219,7 +250,16 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
             )
         await self._send(ctx, [section(sl.heading("Queues and subscribers"), code("\n".join(lines)))])
 
-    @ui_group.command(name="history")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-history-name = history")),
+        description=to_locale_str(
+            tr(
+                t"command-dev-ui-history-help = Show action-history stacks for a message root without invoking inverses."
+            )
+        ),
+    )
+    @app_commands.rename(message_root_id=to_locale_str(tr(t"command-dev-ui-history-root-name = message_root_id")))
+    @app_commands.describe(message_root_id=to_locale_str(tr(t"command-dev-ui-history-root-help = …")))
     async def inspect_history(self, ctx: Context[BotT], message_root_id: str) -> None:
         """Show action-history stacks for a message root without invoking inverses."""
         try:
@@ -232,7 +272,14 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         )
         await self._send(ctx, [section(sl.heading(f"History for message root {message_root_id}"), code(body))])
 
-    @ui_group.command(name="profile")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-profile-name = profile")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-profile-help = Show profiler health, or retained traces for one message root.")
+        ),
+    )
+    @app_commands.rename(message_root_id=to_locale_str(tr(t"command-dev-ui-profile-root-name = message_root_id")))
+    @app_commands.describe(message_root_id=to_locale_str(tr(t"command-dev-ui-profile-root-help = …")))
     async def inspect_profile(self, ctx: Context[BotT], message_root_id: str | None = None) -> None:
         """Show profiler health, or retained traces for one message root."""
         if message_root_id is None:
@@ -262,7 +309,22 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
             return
         await self._profile_root(ctx, message_root_id)
 
-    @ui_group.command(name="timeline")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-timeline-name = timeline")),
+        description=to_locale_str(
+            tr(
+                t"command-dev-ui-timeline-help = Show retained dispatches across every message root in the order they happened."
+            )
+        ),
+    )
+    @app_commands.rename(
+        limit=to_locale_str(tr(t"command-dev-ui-timeline-limit-name = limit")),
+        target=to_locale_str(tr(t"command-dev-ui-timeline-target-name = target")),
+    )
+    @app_commands.describe(
+        limit=to_locale_str(tr(t"command-dev-ui-timeline-limit-help = …")),
+        target=to_locale_str(tr(t"command-dev-ui-timeline-target-help = …")),
+    )
     async def inspect_timeline(self, ctx: Context[BotT], limit: int = 20, target: str | None = None) -> None:
         """Show retained dispatches across every message root in the order they happened.
 
@@ -291,14 +353,26 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         )
         await self._send(ctx, [section(sl.heading("Dispatch timeline"), code(body))])
 
-    @ui_group.command(name="actions")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-actions-name = actions")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-actions-help = Show causal action results independently of profiler retention.")
+        ),
+    )
+    @app_commands.rename(limit=to_locale_str(tr(t"command-dev-ui-actions-limit-name = limit")))
+    @app_commands.describe(limit=to_locale_str(tr(t"command-dev-ui-actions-limit-help = …")))
     async def inspect_actions(self, ctx: Context[BotT], limit: int = 20) -> None:
         """Show causal action results independently of profiler retention."""
         events = self._action_ledger.events[-max(1, limit) :]
         body = "No retained causal events." if not events else "\n".join(_causal_event_text(item) for item in events)
         await self._send(ctx, [section(sl.heading("Action results"), code(body))])
 
-    @ui_group.command(name="persistence")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-persistence-name = persistence")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-persistence-help = Show durable-runtime health and persisted record metadata.")
+        ),
+    )
     async def inspect_persistence(self, ctx: Context[BotT]) -> None:
         """Show durable-runtime health and persisted record metadata."""
         snapshot = self._runtime.snapshot()
@@ -324,7 +398,12 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         )
         await self._send(ctx, [section(sl.heading("Persistence"), code("\n".join(lines)))])
 
-    @ui_group.command(name="export")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-export-name = export")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-export-help = Attach the complete bounded operational snapshot as JSON.")
+        ),
+    )
     async def export_ui(self, ctx: Context[BotT]) -> None:
         """Attach the complete bounded operational snapshot as JSON."""
         snapshot = self._runtime.snapshot()
@@ -335,32 +414,72 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
             files=[discord.File(io.BytesIO(encoded), filename="squid-operational-snapshot.json")],
         )
 
-    @ui_group.command(name="refresh")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-refresh-name = refresh")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-refresh-help = Force an immediate refresh for one message root.")
+        ),
+    )
+    @app_commands.rename(message_root_id=to_locale_str(tr(t"command-dev-ui-refresh-root-name = message_root_id")))
+    @app_commands.describe(message_root_id=to_locale_str(tr(t"command-dev-ui-refresh-root-help = …")))
     async def refresh_root(self, ctx: Context[BotT], message_root_id: str) -> None:
         """Force an immediate refresh for one message root."""
         await self._run_operation(ctx, self._runtime.refresh_root(message_root_id))
 
-    @ui_group.command(name="close")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-close-name = close")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-close-help = Close a session after repeating its id as confirmation.")
+        ),
+    )
+    @app_commands.rename(
+        confirmation=to_locale_str(tr(t"command-dev-ui-close-confirmation-name = confirmation")),
+        session_id=to_locale_str(tr(t"command-dev-ui-close-session-id-name = session_id")),
+    )
+    @app_commands.describe(
+        confirmation=to_locale_str(tr(t"command-dev-ui-close-confirmation-help = …")),
+        session_id=to_locale_str(tr(t"command-dev-ui-close-session-id-help = …")),
+    )
     async def close_session(self, ctx: Context[BotT], session_id: str, confirmation: str | None = None) -> None:
         """Close a session after repeating its id as confirmation."""
         await self._run_operation(ctx, self._runtime.close_session(session_id, confirmed=confirmation == session_id))
 
-    @ui_group.command(name="idle")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-idle-name = idle")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-idle-help = Wait for the configured refresh and topic queues to settle.")
+        ),
+    )
     async def wait_idle(self, ctx: Context[BotT]) -> None:
         """Wait for the configured refresh and topic queues to settle."""
         await self._run_operation(ctx, self._runtime.wait_idle())
 
-    @ui_group.command(name="flush")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-flush-name = flush")),
+        description=to_locale_str(tr(t"command-dev-ui-flush-help = Flush pending durable checkpoints.")),
+    )
     async def flush_persistence(self, ctx: Context[BotT]) -> None:
         """Flush pending durable checkpoints."""
         await self._run_operation(ctx, self._runtime.flush_persistence())
 
-    @ui_group.command(name="recover")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-recover-name = recover")),
+        description=to_locale_str(
+            tr(
+                t"command-dev-ui-recover-help = Run durable recovery after the caller supplies ``recover`` as confirmation."
+            )
+        ),
+    )
+    @app_commands.rename(confirmation=to_locale_str(tr(t"command-dev-ui-recover-confirmation-name = confirmation")))
+    @app_commands.describe(confirmation=to_locale_str(tr(t"command-dev-ui-recover-confirmation-help = …")))
     async def recover_persistence(self, ctx: Context[BotT], confirmation: str | None = None) -> None:
         """Run durable recovery after the caller supplies ``recover`` as confirmation."""
         await self._run_operation(ctx, self._runtime.recover_persistence(confirmed=confirmation == "recover"))
 
-    @ui_group.command(name="clear-profile")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-clear-profile-name = clear-profile")),
+        description=to_locale_str(tr(t"command-dev-ui-clear-profile-help = Clear bounded profiler diagnostics.")),
+    )
     async def clear_profile(self, ctx: Context[BotT]) -> None:
         """Clear bounded profiler diagnostics."""
         try:
@@ -370,7 +489,22 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
             return
         await self._send(ctx, [section(sl.heading("Devtools operation"), paragraph(result.detail))])
 
-    @ui_group.command(name="purge")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-purge-name = purge")),
+        description=to_locale_str(
+            tr(
+                t"command-dev-ui-purge-help = Purge comma-separated durable keys after supplying ``purge`` as confirmation."
+            )
+        ),
+    )
+    @app_commands.rename(
+        confirmation=to_locale_str(tr(t"command-dev-ui-purge-confirmation-name = confirmation")),
+        record_keys=to_locale_str(tr(t"command-dev-ui-purge-record-keys-name = record_keys")),
+    )
+    @app_commands.describe(
+        confirmation=to_locale_str(tr(t"command-dev-ui-purge-confirmation-help = …")),
+        record_keys=to_locale_str(tr(t"command-dev-ui-purge-record-keys-help = …")),
+    )
     async def purge_persistence(self, ctx: Context[BotT], record_keys: str, confirmation: str | None = None) -> None:
         """Purge comma-separated durable keys after supplying ``purge`` as confirmation."""
         keys = tuple(key.strip() for key in record_keys.split(",") if key.strip())
@@ -382,7 +516,14 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
         body = "\n".join(f"{result.record_key}: {'deleted' if result.deleted else result.reason}" for result in results)
         await self._send(ctx, [section(sl.heading("Persistence purge"), code(body or "No record keys supplied."))])
 
-    @ui_group.command(name="scene")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-scene-name = scene")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-scene-help = Attach the committed scene document for a message root.")
+        ),
+    )
+    @app_commands.rename(message_root_id=to_locale_str(tr(t"command-dev-ui-scene-root-name = message_root_id")))
+    @app_commands.describe(message_root_id=to_locale_str(tr(t"command-dev-ui-scene-root-help = …")))
     async def dump_scene(self, ctx: Context[BotT], message_root_id: str) -> None:
         """Attach the committed scene document for a message root."""
         snapshot = await self._snapshot_or_refuse(ctx, message_root_id)
@@ -401,7 +542,12 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
             files=[discord.File(io.BytesIO(asset.source.data), filename=asset.name)],
         )
 
-    @ui_group.command(name="plan")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-plan-name = plan")),
+        description=to_locale_str(tr(t"command-dev-ui-plan-help = Show the retained plan report for a message root.")),
+    )
+    @app_commands.rename(message_root_id=to_locale_str(tr(t"command-dev-ui-plan-root-name = message_root_id")))
+    @app_commands.describe(message_root_id=to_locale_str(tr(t"command-dev-ui-plan-root-help = …")))
     async def dump_plan(self, ctx: Context[BotT], message_root_id: str) -> None:
         """Show the retained plan report for a message root."""
         snapshot = await self._snapshot_or_refuse(ctx, message_root_id)
@@ -410,7 +556,14 @@ class DevTools[BotT: commands.Bot](Cog[BotT]):
                 ctx, [section(sl.heading(f"Plan for message root {message_root_id}"), code(plan_text(snapshot)))]
             )
 
-    @ui_group.command(name="metrics")
+    @ui_group.command(
+        to_locale_str(tr(t"command-dev-ui-metrics-name = metrics")),
+        description=to_locale_str(
+            tr(t"command-dev-ui-metrics-help = Show planner search and cache metrics for a message root.")
+        ),
+    )
+    @app_commands.rename(message_root_id=to_locale_str(tr(t"command-dev-ui-metrics-root-name = message_root_id")))
+    @app_commands.describe(message_root_id=to_locale_str(tr(t"command-dev-ui-metrics-root-help = …")))
     async def dump_metrics(self, ctx: Context[BotT], message_root_id: str) -> None:
         """Show planner search and cache metrics for a message root."""
         snapshot = await self._snapshot_or_refuse(ctx, message_root_id)

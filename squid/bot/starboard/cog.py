@@ -29,6 +29,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.posts.domain import starboard_entry_key
 from squid.starboard.models import OriginMessage
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -201,7 +202,10 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         starboard_id, origin_message_id = key
         await self.bot.refresh_posts("starboard_entry", starboard_entry_key(starboard_id, origin_message_id))
 
-    @sd.command(name="starboard", description="Configure this server's starboards")
+    @sd.command(
+        name=to_locale_str(tr(t"command-starboard-name = starboard")),
+        description=to_locale_str(tr(t"command-starboard-help = Configure this server's starboards")),
+    )
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
     async def starboard(self, request: sd.Request[Self]) -> StarboardScreen:

@@ -1,0 +1,722 @@
+{
+  "command-dev-help": {
+    "fingerprint": "6edf09d1b16cf659abdb530e7a187d8aefc54662a4438b0e75a8c1f8d82a731b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:157"
+    ]
+  },
+  "command-dev-name": {
+    "fingerprint": "fdfe9794cdb847e4f711bcee92837e4c49795b81770182adf7402644c25f2945",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:155"
+    ]
+  },
+  "command-dev-ui-actions-help": {
+    "fingerprint": "7e3cabafdbf298423cd6130e3e8dc74aa0283e9709e7eb337bd7d6576c2be14c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:359"
+    ]
+  },
+  "command-dev-ui-actions-limit-help": {
+    "fingerprint": "d53da32c042670e9ac97c6ee6028bc4e1ece7c2411a433db2b707de391f86cad",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:363"
+    ]
+  },
+  "command-dev-ui-actions-limit-name": {
+    "fingerprint": "f4c51821d64305959ac2d898f8587ba003fbb2868e139c95e386cf4d24104065",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:362"
+    ]
+  },
+  "command-dev-ui-actions-name": {
+    "fingerprint": "210133c0155a782a7b980cc6700757ee3cae346ac89b3c299ff13e431a0ef6f7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:357"
+    ]
+  },
+  "command-dev-ui-clear-profile-help": {
+    "fingerprint": "66c66ef08c67dcb2547f0ad51b7c84b69431d6e5483c755d7151bb4e56467379",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:481"
+    ]
+  },
+  "command-dev-ui-clear-profile-name": {
+    "fingerprint": "8d63d025da3e633defab8ee6a8bd720d570681be95512ab90844a18eefa8747d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:480"
+    ]
+  },
+  "command-dev-ui-close-confirmation-help": {
+    "fingerprint": "071d2c6a7f6cdab3c1c2cb355f9c5a24888e561ed40ecd74a777f7b9981b3d94",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:440"
+    ]
+  },
+  "command-dev-ui-close-confirmation-name": {
+    "fingerprint": "8a230744788ce8da8c3014ea81dbda7684c47653554c6ba97e83a0794dbd85c4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:436"
+    ]
+  },
+  "command-dev-ui-close-help": {
+    "fingerprint": "a1af15cde1f5530c6fc10834e9e68a9ad610dfb2aa972f199de3d1d197a0dd9d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:432"
+    ]
+  },
+  "command-dev-ui-close-name": {
+    "fingerprint": "9d0dc250dfc9d6668ad2e619bb25292ddb2261052f3215a2a8a5bf3c0b49cc6a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:430"
+    ]
+  },
+  "command-dev-ui-close-session-id-help": {
+    "fingerprint": "ddb0b2735fbbf7b323d2456f7be7f693e86bc5169079034b5b6567bd1562cff8",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:441"
+    ]
+  },
+  "command-dev-ui-close-session-id-name": {
+    "fingerprint": "2c60c009f1bb90887014a78f40d02ce236c1167deb1298104f73968c70e64ffb",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:437"
+    ]
+  },
+  "command-dev-ui-export-help": {
+    "fingerprint": "ad518c9c72986ba29b4818c8894cc9a0ef058ff5ab0b384ab8522f7fc49d53ed",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:404"
+    ]
+  },
+  "command-dev-ui-export-name": {
+    "fingerprint": "e8555ede0f87a3b372ccdfb70e2668d78eff29908a995045e4fee528135727a6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:402"
+    ]
+  },
+  "command-dev-ui-flush-help": {
+    "fingerprint": "d3c70d0e1ac1ef29bd166b4842e7db6a40ace08986ea39371a39eb9df750fe3f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:459"
+    ]
+  },
+  "command-dev-ui-flush-name": {
+    "fingerprint": "8a6e95452d85e90709b1da4e1b7bd7b03ede3dbe384a249bd275949bd43f01b2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:458"
+    ]
+  },
+  "command-dev-ui-help": {
+    "fingerprint": "26e88500a693845c98c914dc9f6198d9b2afa014dd2d353f57aabfa249b737a3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:166"
+    ]
+  },
+  "command-dev-ui-history-help": {
+    "fingerprint": "0a72af06fe133f6f29f20bc8219bef4198e0e92b5f1ae58def37e8c7f9a2002b",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:256"
+    ]
+  },
+  "command-dev-ui-history-name": {
+    "fingerprint": "c836a9bd40f2ce13cfefb0e0ae4de51108697a3f945e4f28d3ce337cc017be2c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:254"
+    ]
+  },
+  "command-dev-ui-history-root-help": {
+    "fingerprint": "6e853230dd58b1f3d385ebde4b410bf3e52cc081621016b3b5a6ab555cce7f74",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:262"
+    ]
+  },
+  "command-dev-ui-history-root-name": {
+    "fingerprint": "f190adffbceae0ceddfddf8230aeb140314d6a7e6475479cc9e944a68177cd15",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:261"
+    ]
+  },
+  "command-dev-ui-idle-help": {
+    "fingerprint": "329927628b8de022e79a838ec188830ca46f7ae1e503d475d0328deabbf60d9c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:450"
+    ]
+  },
+  "command-dev-ui-idle-name": {
+    "fingerprint": "f5eb88f5f811d3a1024857bfc8dffd4a6b350b50de1c15798fe7bdf95e9a69d7",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:448"
+    ]
+  },
+  "command-dev-ui-metrics-help": {
+    "fingerprint": "d10e779de3766f218954c8ca86317cf08620a56008b3b55ffbe366128a27f96d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:562"
+    ]
+  },
+  "command-dev-ui-metrics-name": {
+    "fingerprint": "5cba582d06fce403dacb8544ca9cda530fff975d293d40bb572acae6cec8fc74",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:560"
+    ]
+  },
+  "command-dev-ui-metrics-root-help": {
+    "fingerprint": "ba81dfa74a9ccbb1fcf7bc7a8b171d55b232020ff522cfb2f40e91be88e65dd6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:566"
+    ]
+  },
+  "command-dev-ui-metrics-root-name": {
+    "fingerprint": "274d275ca82a172a2a8d7b6310f18d50dddd87774e279a65137e1f4b2fcff694",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:565"
+    ]
+  },
+  "command-dev-ui-name": {
+    "fingerprint": "f01b279fc83d22a2b5d691dbf12b0388ebbff0a5297b3a14fb03159f3146ba95",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:165"
+    ]
+  },
+  "command-dev-ui-persistence-help": {
+    "fingerprint": "2d673ce1f6e405bd752de3700248fb6bdc715cea90f146f93ab47eb8eb380977",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:373"
+    ]
+  },
+  "command-dev-ui-persistence-name": {
+    "fingerprint": "2c7d2200224372051725d4aee60444e2c93229a27f36d018d922880cb8cbaf84",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:371"
+    ]
+  },
+  "command-dev-ui-plan-help": {
+    "fingerprint": "8173188ba9846e28e5352dc954914cef8c94a8ff8dba003f29d9f606d5b56900",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:547"
+    ]
+  },
+  "command-dev-ui-plan-name": {
+    "fingerprint": "7b3c701c3b86c3634c4a624655436336a7ea99fcf2a537faaa9af35e3ec4646e",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:546"
+    ]
+  },
+  "command-dev-ui-plan-root-help": {
+    "fingerprint": "58fcb926a96cf6b27c5c76680ee679143701d08667b1fe8d6bbc916f7c6c2bb1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:550"
+    ]
+  },
+  "command-dev-ui-plan-root-name": {
+    "fingerprint": "137bd71fe8c5605d436b00635899ac8818aea6e6b52ee9d18fd789a15090a823",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:549"
+    ]
+  },
+  "command-dev-ui-profile-help": {
+    "fingerprint": "82743becb4435ce74497ca762d966cdeebbe803b7f92473cac8d4999188b50db",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:278"
+    ]
+  },
+  "command-dev-ui-profile-name": {
+    "fingerprint": "f411e11d5df14a4ce323508ebed71706b66b6604839caa51746d9a7e092c6c63",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:276"
+    ]
+  },
+  "command-dev-ui-profile-root-help": {
+    "fingerprint": "9fd5c774e423b0951e2666a897788c5b9afc3c8e3ad1d446a75fedb36c247cba",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:282"
+    ]
+  },
+  "command-dev-ui-profile-root-name": {
+    "fingerprint": "254f22f08a794f614ff50a56c4077b080df82713ba3718641222d87080523fc0",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:281"
+    ]
+  },
+  "command-dev-ui-purge-confirmation-help": {
+    "fingerprint": "a29906cee2a911628d366b11b29422ed9e42eb3815e4e30d944d4fb4e4b88f8c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:505"
+    ]
+  },
+  "command-dev-ui-purge-confirmation-name": {
+    "fingerprint": "30d22b0203bca2b906b4427e07612218284f75879701e5c71f20593a979c4fdf",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:501"
+    ]
+  },
+  "command-dev-ui-purge-help": {
+    "fingerprint": "f4cbe11f849af9917f9c4bb8a4b4f01347f02b5b467301b0c9b929c4fd78b76c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:495"
+    ]
+  },
+  "command-dev-ui-purge-name": {
+    "fingerprint": "bcaa4af294a59dd99decf33940c1cd0427e696f05114fe50af165ae1cf4b14fe",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:493"
+    ]
+  },
+  "command-dev-ui-purge-record-keys-help": {
+    "fingerprint": "6304c48487618bd23184f918dd63299b4cb74b8d8fb3e1d9a921c724e7c8c52a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:506"
+    ]
+  },
+  "command-dev-ui-purge-record-keys-name": {
+    "fingerprint": "4b47f2664ddbbdee238e4c4cfca5536065191223adbb1d605fe7e6bbe9aacef9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:502"
+    ]
+  },
+  "command-dev-ui-queues-help": {
+    "fingerprint": "12709fbe1a0ae56d00053d6a53e61409f5ba19d95b4bd263982c06e50769ee3a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:235"
+    ]
+  },
+  "command-dev-ui-queues-name": {
+    "fingerprint": "f22e90ca873bc00d9f39eff3618ee2e2808019188e230a6d48a2975aa71c1715",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:233"
+    ]
+  },
+  "command-dev-ui-recover-confirmation-help": {
+    "fingerprint": "8c840d0eaff1727fff24694a9e9ffc8eaf21b4c9ece529ec4f443a1056a34337",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:474"
+    ]
+  },
+  "command-dev-ui-recover-confirmation-name": {
+    "fingerprint": "114fd93397b4905e64ba41a63c54ff2184c7f09a6544c9489e1bfaca8db3faa9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:473"
+    ]
+  },
+  "command-dev-ui-recover-help": {
+    "fingerprint": "0419d79c66973b917acf761b682f4169d2b26d3e04c7c5a6510dfc8394244272",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:468"
+    ]
+  },
+  "command-dev-ui-recover-name": {
+    "fingerprint": "8d23a75cd984ff9e52ede226d0a41fe8f822902a053c29992b2ab207cbf82adc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:466"
+    ]
+  },
+  "command-dev-ui-refresh-help": {
+    "fingerprint": "5a1d8a9d98dfab2fb3a2ea4a2180d7f1040fcf10672ae882f33d1c91b9a44e02",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:420"
+    ]
+  },
+  "command-dev-ui-refresh-name": {
+    "fingerprint": "e79eabcad5ba8aef80c4e56126ef9e3c88e849abc3844234222204b928f5a0d5",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:418"
+    ]
+  },
+  "command-dev-ui-refresh-root-help": {
+    "fingerprint": "9fcae6ae8a5106464ea0350514b4bf76f9783f2a948f9f9446037bdeff4cba47",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:424"
+    ]
+  },
+  "command-dev-ui-refresh-root-name": {
+    "fingerprint": "67edc2c2982fe1bed1021eee6a1ec9c4598ac4b5ad5f9daeffbd5d371b3ae9a2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:423"
+    ]
+  },
+  "command-dev-ui-root-help": {
+    "fingerprint": "6da2fb620ab0da0c9afb0e8cf6644ce0f1edf32164e0fc5349d550236062d851",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:182"
+    ]
+  },
+  "command-dev-ui-root-name": {
+    "fingerprint": "5307afd276b886fbba2058d1af048faff6185ed0c916a95d59d8102581823521",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:181"
+    ]
+  },
+  "command-dev-ui-root-root-help": {
+    "fingerprint": "c190d05243fa3378d16af82d43b80e8559665e20a0cec686ca89b40a92186c8d",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:185"
+    ]
+  },
+  "command-dev-ui-root-root-name": {
+    "fingerprint": "0f30cb17bda46ab85724e27969316d5d15bb1b4764c5359a7a768c16dea28df4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:184"
+    ]
+  },
+  "command-dev-ui-roots-help": {
+    "fingerprint": "9e86a1a5da47c01cad1f22ffe36cea21ef30f5a5840e1f782cf93dbe1d28aac2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:174"
+    ]
+  },
+  "command-dev-ui-roots-name": {
+    "fingerprint": "482563686daab0781270e235a694491169b8b42a69167d0169197e056c45d5f5",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:173"
+    ]
+  },
+  "command-dev-ui-routes-help": {
+    "fingerprint": "88c5a2edfc84e7799de07101d1e0f419da30899e5c4773e2c1af937b2a9d8b44",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:212"
+    ]
+  },
+  "command-dev-ui-routes-name": {
+    "fingerprint": "cd30da4e448c5add64877d74616e415a8f044d6bc708634ee0898bac20fbb753",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:211"
+    ]
+  },
+  "command-dev-ui-scene-help": {
+    "fingerprint": "09fc7f921fd880d2c0305b46016c3e0390f42123bcc1b58e7d1e2a6147bafb96",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:522"
+    ]
+  },
+  "command-dev-ui-scene-name": {
+    "fingerprint": "4ab07fc72ff8adc86295bffb3cf2083369e90e7e14480ee3a11ac8cc653260ac",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:520"
+    ]
+  },
+  "command-dev-ui-scene-root-help": {
+    "fingerprint": "43ee8aaa74ea4ecd92bb31c3fa9e326604bf4b292e21f47f14c3c196c4d3c46f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:526"
+    ]
+  },
+  "command-dev-ui-scene-root-name": {
+    "fingerprint": "1068361ac533213c27015bd55b992b8bfa73ea2db7157d1354fb1dd6ca67729f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:525"
+    ]
+  },
+  "command-dev-ui-session-help": {
+    "fingerprint": "7e7e6938392c9aa5bf4c3c21799a794703f645fcf56807dc218dfb7feac8de5f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:202"
+    ]
+  },
+  "command-dev-ui-session-name": {
+    "fingerprint": "83cbc217311892f088229166f0db165cab6bdbc39bacefdf75bb23b15ca6bb19",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:201"
+    ]
+  },
+  "command-dev-ui-session-session-id-help": {
+    "fingerprint": "9b5fbdbb3a2b9f3ce5629888815c1192619c63dae3ff9e5e811e2b2af2586894",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:205"
+    ]
+  },
+  "command-dev-ui-session-session-id-name": {
+    "fingerprint": "86acc8050be4fe449e0c0a7e41d3a2ed85d6517bc3a93488aac400f6fe63a820",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:204"
+    ]
+  },
+  "command-dev-ui-sessions-help": {
+    "fingerprint": "899fa7ffb6fafe2f2ecfce7087fcc742f5af14c6926fe59c3b0a602c14c99d95",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:193"
+    ]
+  },
+  "command-dev-ui-sessions-name": {
+    "fingerprint": "b4ef4f3b719e0e723c3edd2e92bfcfc6ec35d6e73446fa3cd40ac63b0ee17091",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:191"
+    ]
+  },
+  "command-dev-ui-timeline-help": {
+    "fingerprint": "650df263a5eab62922a8866213a671a71b8f9e5a2b01e8afbfa09f0b826367e2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:315"
+    ]
+  },
+  "command-dev-ui-timeline-limit-help": {
+    "fingerprint": "68bcf23b9843f25a52b61f8e22bef6d7cdebe6b8299fdace6541ce35f16e1faf",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:325"
+    ]
+  },
+  "command-dev-ui-timeline-limit-name": {
+    "fingerprint": "9a094b021499ddc9b651db442b8d170354928be1614e63b296a2fba36aaebbb5",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:321"
+    ]
+  },
+  "command-dev-ui-timeline-name": {
+    "fingerprint": "91930a2fef1ca29bfa77f84589a6fe5f96677b6e8fef9129711b6609930be844",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:313"
+    ]
+  },
+  "command-dev-ui-timeline-target-help": {
+    "fingerprint": "7eae848cdd8b036025292413b527fa9af012a965408ce59235c124bb4166086a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:326"
+    ]
+  },
+  "command-dev-ui-timeline-target-name": {
+    "fingerprint": "dbf148632aa9f5d735ff34dfdc90af85d32acaf6156567a6669c27ad97098438",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "packages/squid-ui-discord/src/squid_ui_discord/devtools.py:322"
+    ]
+  }
+}

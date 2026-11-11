@@ -21,6 +21,7 @@ from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTR
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
 from squid_ui_discord import Cog
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -267,7 +268,10 @@ class RecordCog[BotT: squid.bot.app.RedstoneSquid](Cog[BotT]):
         self.records = bot.services.records
         self.computation = bot.services.record_computation
 
-    @sd.command(name="records", description="Inspect and maintain computed records")
+    @sd.command(
+        name=to_locale_str(tr(t"command-records-name = records")),
+        description=to_locale_str(tr(t"command-records-help = Inspect and maintain computed records")),
+    )
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
     async def records_workspace(self, request: sd.Request[Self]) -> RecordsScreen:

@@ -20,6 +20,7 @@ from squid.core.actors import Actor
 from squid.core.i18n import tr
 from squid.voting.domain import PollScope, VoteKind, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -43,7 +44,12 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def ui_unload(self) -> None:
         await self.reactions.close()
 
-    @sd.command(name="poll")
+    @sd.command(
+        name=to_locale_str(tr(t"command-poll-name = poll")),
+        description=to_locale_str(
+            tr(t"command-poll-help = Create a multi-option poll through an ephemeral preview wizard.")
+        ),
+    )
     @app_commands.guild_only()
     async def poll(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Create a multi-option poll through an ephemeral preview wizard."""
@@ -94,7 +100,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
         return PollScreen(resolve_options, publish, allow_network=allow_network)
 
-    @sd.context_menu(name="Vote to Delete", defer="private")
+    @sd.context_menu(name=to_locale_str(tr(t"command-vote-to-delete-name = Vote to Delete")), defer="private")
     async def delete_vote_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Open a vote on deleting the message that was right-clicked."""
         if request.guild is None or message.guild != request.guild:

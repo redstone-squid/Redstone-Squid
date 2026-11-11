@@ -6,7 +6,7 @@ Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
 import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import cast
+from typing import Any, cast
 
 import discord
 import pytest_asyncio
@@ -23,13 +23,13 @@ from squid.bot.app import (
 )
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
-from squid.bot.i18n import bind_command_messages
 from squid.bot.reactions import ReactionRouter
 from squid.bot.utils.permissions import AccountIdCache
 from squid.config import BuildConfig, CommunityConfig
 from squid.runtime import BackgroundTaskSupervisor
 from squid.voting.application import VoteService
 from squid.voting.application.ports import VoteActorResolver
+from squid_i18n import Markup, Message, source_text
 from squid_reactivity import EventLedger, LocalTopicBus
 from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services, unconfigured
@@ -176,6 +176,28 @@ async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands
     assert "poll" not in prefix_names, "the directory would find `poll` anyway if it were not app-only"
 
 
-async def test_generated_command_metadata_has_fluent_declarations(loaded_bot: commands.Bot) -> None:
+def _assert_localized(
+    command: discord.app_commands.Command[Any, ..., Any]
+    | discord.app_commands.Group
+    | discord.app_commands.ContextMenu,
+) -> None:
+    metadata: list[str | discord.app_commands.locale_str | None] = [command._locale_name]
+    if isinstance(command, discord.app_commands.Command | discord.app_commands.Group):
+        metadata.append(command._locale_description)
+    if isinstance(command, discord.app_commands.Command):
+        for parameter in command._params.values():
+            metadata.extend([parameter._rename, parameter.description])
+            metadata.extend(choice._locale_name for choice in parameter.choices or [])
+    for value in metadata:
+        assert isinstance(value, discord.app_commands.locale_str), command.qualified_name
+        message = value.extras.get("fluent_message")
+        assert isinstance(message, Message), (command.qualified_name, value.message)
+        assert source_text(message, markup=Markup.PLAIN) == value.message
+    if isinstance(command, discord.app_commands.Group):
+        for child in command.commands:
+            _assert_localized(child)
+
+
+async def test_command_decorators_supply_localized_metadata(loaded_bot: commands.Bot) -> None:
     for command in loaded_bot.tree.get_commands():
-        bind_command_messages(command)
+        _assert_localized(command)

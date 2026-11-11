@@ -10,6 +10,8 @@ from squid.bot.utils.permissions import actor_for_interaction, allows, current_e
 from squid.core.actors import Actor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
+from squid_i18n import tr
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -22,7 +24,10 @@ class SettingsCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Setting
         super().__init__(bot)
         self.settings_service = bot.services.settings
 
-    @sd.command(name="settings", description="Configure this server")
+    @sd.command(
+        name=to_locale_str(tr(t"command-settings-name = settings")),
+        description=to_locale_str(tr(t"command-settings-help = Configure this server")),
+    )
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
     async def settings(self, request: sd.Request[Self]) -> SettingsPanel:

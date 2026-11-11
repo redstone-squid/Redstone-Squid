@@ -31,6 +31,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_REJECT,
 )
 from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -46,8 +47,12 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
 
     @autocompletes(build_id="builds")
-    @sd.command(name="tags", description="Browse, apply, propose, and moderate build tags")
-    @app_commands.rename(build_id="build")
+    @sd.command(
+        name=to_locale_str(tr(t"command-tags-name = tags")),
+        description=to_locale_str(tr(t"command-tags-help = Browse, apply, propose, and moderate build tags")),
+    )
+    @app_commands.describe(build_id=to_locale_str(tr(t"command-tags-build-id-help = …")))
+    @app_commands.rename(build_id=to_locale_str(tr(t"command-tags-build-id-name = build")))
     async def tags_workspace(self, request: sd.Request[Self], build_id: int | None = None) -> TagsScreen:
         """Open the capability-aware build tag workspace."""
         nodes = (
@@ -83,7 +88,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         )
 
     @sd.context_menu(
-        name="Archive Message",
+        name=to_locale_str(tr(t"command-archive-message-name = Archive Message")),
         defer="private",
         default_permissions=discord.Permissions(manage_messages=True),
     )
@@ -137,7 +142,21 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return
         await message.delete()
 
-    @sd.command(name="runtime-settings", description="View or change global runtime settings", defer="private")
+    @sd.command(
+        name=to_locale_str(tr(t"command-runtime-settings-name = runtime-settings")),
+        description=to_locale_str(tr(t"command-runtime-settings-help = View or change global runtime settings")),
+        defer="private",
+    )
+    @app_commands.rename(
+        revision=to_locale_str(tr(t"command-runtime-settings-revision-name = revision")),
+        setting=to_locale_str(tr(t"command-runtime-settings-setting-name = setting")),
+        value=to_locale_str(tr(t"command-runtime-settings-value-name = value")),
+    )
+    @app_commands.describe(
+        revision=to_locale_str(tr(t"command-runtime-settings-revision-help = …")),
+        setting=to_locale_str(tr(t"command-runtime-settings-setting-help = …")),
+        value=to_locale_str(tr(t"command-runtime-settings-value-help = …")),
+    )
     async def runtime_settings_slash(
         self,
         request: sd.Request[Self],

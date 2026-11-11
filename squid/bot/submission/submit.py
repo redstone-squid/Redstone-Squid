@@ -80,7 +80,61 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         restrictions=suggests("approved_restrictions", multi=True),
         creators=suggests("creators", multi=True),
     )
-    @BuildCommandGroup.build_group.command(name="submit", defer="private")
+    @BuildCommandGroup.build_group.command(
+        name=to_locale_str(tr(t"command-build-submit-name = submit")),
+        defer="private",
+        description=to_locale_str(
+            tr(
+                t"command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens."
+            )
+        ),
+    )
+    @app_commands.rename(
+        build_size=to_locale_str(tr(t"command-build-submit-build-size-name = build_size")),
+        category=to_locale_str(tr(t"command-build-submit-category-name = category")),
+        creators=to_locale_str(tr(t"command-build-submit-creators-name = creators")),
+        description=to_locale_str(tr(t"command-build-submit-description-name = description")),
+        door_size=to_locale_str(tr(t"command-build-submit-door-size-name = door_size")),
+        door_type=to_locale_str(tr(t"command-build-submit-door-type-name = door_type")),
+        file=to_locale_str(tr(t"command-build-submit-file-name = file")),
+        file_2=to_locale_str(tr(t"command-build-submit-file-2-name = file_2")),
+        file_3=to_locale_str(tr(t"command-build-submit-file-3-name = file_3")),
+        file_4=to_locale_str(tr(t"command-build-submit-file-4-name = file_4")),
+        name=to_locale_str(tr(t"command-build-submit-name-name = name")),
+        patterns=to_locale_str(tr(t"command-build-submit-patterns-name = patterns")),
+        restrictions=to_locale_str(tr(t"command-build-submit-restrictions-name = restrictions")),
+        versions=to_locale_str(tr(t"command-build-submit-versions-name = versions")),
+    )
+    @app_commands.choices(
+        category=[
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-category-door = Door")), value="Door"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-category-extender = Extender")), value="Extender"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-category-utility = Utility")), value="Utility"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-category-entrance = Entrance")), value="Entrance"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-category-other = Other")), value="Other"
+            ),
+        ],
+        door_type=[
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-door-type-door = Door")), value="Door"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-door-type-skydoor = Skydoor")), value="Skydoor"
+            ),
+            app_commands.Choice(
+                name=to_locale_str(tr(t"command-build-submit-choice-door-type-trapdoor = Trapdoor")), value="Trapdoor"
+            ),
+        ],
+    )
     @app_commands.describe(
         category=to_locale_str(tr(t"submit-category-help = The kind of build to submit.")),
         name=to_locale_str(tr(t"submit-name-help = An optional name for the build.")),
@@ -230,7 +284,14 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             notice=_unused_values_notice(unresolved, manifest, category_code),
         )
 
-    @BuildCommandGroup.build_group.command(name="drafts", defer="private")
+    @BuildCommandGroup.build_group.command(
+        name=to_locale_str(tr(t"command-build-drafts-name = drafts")),
+        defer="private",
+        description=to_locale_str(
+            tr(t"command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.")
+        ),
+    )
+    @app_commands.rename(inbox=to_locale_str(tr(t"command-build-drafts-inbox-name = inbox")))
     @app_commands.describe(
         inbox=to_locale_str(
             tr(t"command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.")
@@ -321,7 +382,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             return
         await self.bot.refresh_posts("inference_run", str(run_id))
 
-    @sd.context_menu(name="Scan Build Message", defer="private")
+    @sd.context_menu(name=to_locale_str(tr(t"command-recalculate-build-name = Scan Build Message")), defer="private")
     async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Review proposed build corrections inferred from this message."""
         await enforce(request, BUILD_SUBMISSION_RECALC)

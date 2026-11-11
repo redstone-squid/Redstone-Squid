@@ -20,7 +20,7 @@ from squid.bootstrap import create_bot_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import UI_ERRORS, SquidCommandTree
-from squid.bot.i18n import SquidAppCommandTranslator, bind_command_messages, localization_resolver
+from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
@@ -332,9 +332,6 @@ class RedstoneSquid(Bot):
                 with contextlib.suppress(commands.ExtensionError):
                     await self.unload_extension(extension)
             raise
-
-        for command in self.tree.get_commands():
-            bind_command_messages(command)
 
         # After every extension, because loading is what imports the handler modules that
         # register routes, and installing the router freezes the table.

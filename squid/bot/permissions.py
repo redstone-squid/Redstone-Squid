@@ -21,6 +21,8 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
+from squid_i18n import tr
+from squid_ui_discord.i18n import to_locale_str
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -44,7 +46,17 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         super().__init__(bot)
         self.admin: PermissionAdministrationService = bot.services.permission_admin
 
-    @sd.command(name="access", description="Inspect and manage this server's access controls")
+    @sd.command(
+        name=to_locale_str(tr(t"command-access-name = access")),
+        description=to_locale_str(tr(t"command-access-help = Inspect and manage this server's access controls")),
+    )
+    @app_commands.rename(
+        role=to_locale_str(tr(t"command-access-role-name = role")),
+        user=to_locale_str(tr(t"command-access-user-name = user")),
+    )
+    @app_commands.describe(
+        role=to_locale_str(tr(t"command-access-role-help = …")), user=to_locale_str(tr(t"command-access-user-help = …"))
+    )
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
     async def access(

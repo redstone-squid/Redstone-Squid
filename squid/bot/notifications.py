@@ -47,7 +47,7 @@ class NotificationCog(sd.Cog[Any]):
             await self.bot.background_tasks.cancel(self._delivery_task)
 
     @sd.command(
-        name="notifications",
+        name=to_locale_str(tr(t"command-notifications-name = notifications")),
         description=to_locale_str(
             tr(t"notifications-channel-preferences = Manage notification channels and subscriptions")
         ),
