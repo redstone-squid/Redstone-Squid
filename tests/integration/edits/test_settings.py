@@ -62,7 +62,7 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
     receipt = results[0].receipt
     assert receipt is not None
     assert receipt.revisions[0].value == revision + 1
-    reverted = await executor.execute(receipt.inverse(receipt.revisions), actor)
+    reverted = await executor.execute(receipt.undo(receipt.revisions), actor)
     assert reverted.receipt is not None
     current, current_revision = await settings.runtime_snapshot()
     assert current == original
@@ -74,7 +74,7 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
     assert actor.account_id is not None
     await settings.update_runtime({"welcome_enabled": False}, actor_account_id=actor.account_id)
     with pytest.raises(RevisionConflictError):
-        await executor.execute(reverted.receipt.inverse(reverted.receipt.revisions, redo=True), actor)
+        await executor.execute(receipt.redo(reverted.receipt.revisions), actor)
 
 
 @pytest.mark.parametrize("explicit_flush", [False, True])

@@ -13,7 +13,6 @@ from squid.builds.application.restrictions import RestrictionService
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import (
-    EditAttempt,
     EditCommand,
     EditOutcome,
     EditReceipt,
@@ -90,7 +89,7 @@ class TagEditRecorder(EditRunner):
         self.tags = tags
         self.restrictions = restrictions
 
-    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         if command.kind == ALIAS_EDIT:
             values = AliasValues.model_validate_json(command.values.encoded)
             item = ("locational", values.alias)
@@ -118,6 +117,9 @@ class TagEditRecorder(EditRunner):
             revision = bound_revisions(command)[0].value + 1
             self.tags.proposal.revision = revision
         else:
+            expected = bound_revisions(command)[0]
+            if expected.value != self.tags.revision:
+                raise RevisionConflictError(expected, self.tags.revision)
             values = ShowcaseValues.model_validate_json(command.values.encoded)
             self.tags.assignments.append(
                 (int(bound_revisions(command)[0].target.key), values.tag_id, values.value, actor.require_account_id())
@@ -127,8 +129,6 @@ class TagEditRecorder(EditRunner):
             before = ShowcaseValues(tag_id=values.tag_id, assigned=False).edit_values()
         revisions = (Revision(bound_revisions(command)[0].target, revision),)
         receipt = EditReceipt(command, before, command.values, revisions, final=command.kind == MODERATION_EDIT)
-        if attempt is not None:
-            attempt.receipt = receipt
         return EditResult(
             EditOutcome(
                 command.operation_id,
@@ -140,9 +140,6 @@ class TagEditRecorder(EditRunner):
             ),
             receipt,
         )
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        raise NotImplementedError
 
 
 class FakeRestrictionService(RestrictionService):
@@ -295,9 +292,9 @@ async def test_alias_history_rechecks_authority_and_reverses_membership() -> Non
     with transaction():
         await screen._add_alias(cast(sl.SubmitEvent, NoticeEvent(restriction="locational", alias="location")))
     assert restrictions.aliases == [("locational", "location")]
-    assert (await screen.history.undo()).applied
+    assert await screen.edits.undo() is not None
     assert restrictions.aliases == []
-    assert (await screen.history.redo()).applied
+    assert await screen.edits.redo() is not None
     assert restrictions.aliases == [("locational", "location")]
 
 
@@ -309,9 +306,9 @@ async def test_moderation_discards_only_history_for_its_tag() -> None:
         await screen._propose(
             cast(sl.SubmitEvent, NoticeEvent(name="Reliable", value_type=TagValueType.NONE, query_name=None))
         )
-    assert len(screen.history.entries) == 2
+    assert len(screen.edits.undoable) == 2
     await screen._request_moderation(cast(sl.PressEvent, object()), tags.proposal, "approve")
     with transaction():
         await screen._decide(cast(Any, TransitionEvent(NoticeEvent())), "confirm")
-    assert len(screen.history.entries) == 1
-    assert screen.history.entries[0].targets == frozenset({tag_target(1).identity})
+    assert len(screen.edits.undoable) == 1
+    assert screen.edits.undoable[0].receipt.targets == frozenset({tag_target(1).identity})

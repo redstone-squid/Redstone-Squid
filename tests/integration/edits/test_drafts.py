@@ -79,7 +79,7 @@ async def test_answers_undo_replay_and_external_change_conflict(
         await executor.execute(
             change_command(draft.snapshot.id, replace(client_change, client_instance_id="different-client")), actor
         )
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.receipt is not None
     current = await service.get_accessible(draft.snapshot.id, actor)
     assert "display_name" not in current.snapshot.answers
@@ -96,7 +96,7 @@ async def test_answers_undo_replay_and_external_change_conflict(
         locale=None,
     )
     with pytest.raises(RevisionConflictError):
-        await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+        await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
     async with sessions() as session:
         assert await session.scalar(select(func.count()).select_from(SubmissionDraftChange)) == 3
         first = await session.scalar(select(SubmissionDraftChange).where(SubmissionDraftChange.resulting_revision == 1))

@@ -1,27 +1,17 @@
-"""Session history orchestration; application handlers remain independent of the UI."""
+"""Save edits from an open editor and let the user undo and redo them. See docs/edits.md."""
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
-from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.edit_history import history_controls
 from squid.core.actors import Actor
-from squid.core.errors import (
-    AuthenticationError,
-    AuthorizationError,
-    ConflictError,
-    InvalidStateError,
-    NotFoundError,
-    ValidationError,
-)
+from squid.core.errors import DomainError
 from squid.core.i18n import tr
 from squid.edits.application import EditRunner
 from squid.edits.domain import (
-    EditAttempt,
     EditCommand,
     EditCommitUncertainError,
     EditReceipt,
@@ -29,43 +19,19 @@ from squid.edits.domain import (
     EditTarget,
     EditValues,
     Revision,
-    RevisionConflictError,
 )
-from squid_reactivity.actions import ConflictDetail
-from squid_reactivity.errors import ReactiveConflictError
 from squid_reactivity.internals import CURRENT_TRANSACTION, Signal
-from squid_ui.runtime import History, ReversibleOperation
 from squid_ui.text import TextLike
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
-class PendingEdit:
-    command: EditCommand
-    attempt: EditAttempt
-    label: TextLike
-    original_entry_id: UUID | None = None
+@dataclass(frozen=True, slots=True, eq=False)
+class SavedEdit:
+    """A committed edit in session history, with the label shown in undo and redo notices."""
 
-
-@dataclass(frozen=True, slots=True)
-class _ReceiptOperation:
-    controller: EditController
     receipt: EditReceipt
     label: TextLike
-    original_entry_id: UUID
-
-    async def reverse(self) -> ReversibleOperation:
-        expected = tuple(
-            Revision(version.target, self.controller._heads[version.target]) for version in self.receipt.revisions
-        )
-        command = self.receipt.inverse(expected, redo=self.receipt.command.purpose == "undo")
-        try:
-            result = await self.controller._run(command, self.label, original_entry_id=self.original_entry_id)
-        except (AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError) as error:
-            raise ReactiveConflictError(ConflictDetail(self.receipt.command.kind, 0, 1), str(error)) from error
-        assert result.receipt is not None
-        return _ReceiptOperation(self.controller, result.receipt, self.label, self.original_entry_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,11 +55,21 @@ class BoundEdit:
 
 
 class EditController:
-    """Own committed receipts and revision continuity for one mounted workspace.
+    """Save one open editor's edits and keep its undo and redo history.
 
-    Bind the current actor provider and refresh callback once, rather than making
-    every screen mutation assemble inverse callbacks. Pending outcomes block all
-    further writes to the targets involved, including undo and redo.
+    Session history is a stack of saved edits. Undo writes an entry's values from
+    before the edit, and redo writes its new values again. Both expect the revision
+    this controller last saw for each target, so they fail with a conflict instead
+    of overwriting a change made elsewhere.
+
+    History only covers an unbroken run of this controller's own changes. Entries
+    for a target are dropped when:
+
+    - a save expected a revision other than the last one this controller saw, so
+      the record changed elsewhere and undoing older entries would overwrite that;
+    - an undo or redo fails, since retrying it would fail the same way;
+    - a save cannot be undone (`final`), or its commit result is unknown;
+    - the owning screen calls `forget`, for example after submitting a draft.
     """
 
     def __init__(
@@ -102,14 +78,16 @@ class EditController:
         actor: Callable[[], Awaitable[Actor]],
         refresh: Callable[[], Awaitable[None]],
         *,
-        history: History | None = None,
+        limit: int = 20,
     ) -> None:
-        self.history = History(limit=20) if history is None else history
         self._runner = runner
         self._actor = actor
         self._refresh = refresh
+        self._limit = limit
+        # Mutated in place: forget() can run while an undo or redo awaits the database.
+        self._done: list[SavedEdit] = []
+        self._undone: list[SavedEdit] = []
         self._heads: dict[EditTarget, int] = {}
-        self._pending: dict[UUID, PendingEdit] = {}
         self._lock = asyncio.Lock()
         self._refresh_failed = False
         self._signal = Signal()
@@ -122,106 +100,103 @@ class EditController:
         return BoundEdit(self, kind, expected)
 
     @property
+    def undoable(self) -> tuple[SavedEdit, ...]:
+        """Saved edits that undo can reverse, oldest first."""
+        self._signal.track()
+        return tuple(self._done)
+
+    @property
+    def redoable(self) -> tuple[SavedEdit, ...]:
+        """Undone edits that redo can apply again, the next one last."""
+        self._signal.track()
+        return tuple(self._undone)
+
+    @property
     def refresh_failed(self) -> bool:
         self._signal.track()
         return self._refresh_failed
 
-    @property
-    def pending(self) -> tuple[PendingEdit, ...]:
-        self._signal.track()
-        return tuple(self._pending.values())
-
-    def require_ready(self, targets: frozenset[str]) -> None:
-        """Fence other session actions while a write's result still needs reconciliation."""
-        if any(targets.intersection(v.target.identity for v in item.command.expected) for item in self.pending):
-            raise InvalidStateError(tr(t"edits-pending = Check the previous saved result before editing this item."))
-
     async def execute(self, command: EditCommand, label: TextLike) -> EditResult:
-        return await self._run(command, label)
-
-    async def _run(self, command: EditCommand, label: TextLike, *, original_entry_id: UUID | None = None) -> EditResult:
-        current = CURRENT_TRANSACTION.get()
-        if current is not None and current.readonly:
-            message = "An edit requires a writable UI action"
-            raise sl.runtime.ReactiveWriteError(message)
+        """Save an edit and add it to history if it changed anything and can be undone."""
+        _require_writable_action()
         async with self._lock:
-            targets = {v.target for v in command.expected}
-            self.require_ready(frozenset(target.identity for target in targets))
-            retained = frozenset(
-                target for entry in (*self.history.entries, *self.history.redoable) for target in entry.targets
-            )
-            for version in command.expected:
-                known = self._heads.get(version.target)
-                if (
-                    isinstance(version, Revision)
-                    and known is not None
-                    and known != version.value
-                    and version.target.identity in retained
-                ):
-                    raise RevisionConflictError(Revision(version.target, known), version.value)
-            pending = PendingEdit(command, EditAttempt(), label, original_entry_id)
-            try:
-                result = await self._runner.execute(command, await self._actor(), attempt=pending.attempt)
-            except BaseException:
-                if pending.attempt.receipt is not None:
-                    self._pending[command.operation_id] = pending
-                    self._signal.notify()
-                raise
-            try:
-                self._accept(result, pending)
-            except BaseException:
-                self._pending[command.operation_id] = pending
-                self._signal.notify()
-                raise
+            changed_elsewhere = [
+                version.target.identity
+                for version in command.expected
+                if (known := self._heads.get(version.target)) is not None
+                and not (isinstance(version, Revision) and version.value == known)
+            ]
+            result = await self._run(command)
+            self.forget(changed_elsewhere)
+            receipt = result.receipt
+            if receipt is not None and result.outcome.changed:
+                if receipt.final:
+                    self.forget(receipt.targets)
+                else:
+                    self._done.append(SavedEdit(receipt, label))
+                    del self._done[: -self._limit]
+                    self._undone.clear()
+            self._accept(result)
             await self.refresh()
             return result
 
-    def _accept(self, result: EditResult, pending: PendingEdit) -> None:
+    async def undo(self) -> SavedEdit | None:
+        """Write the latest saved edit's previous values. Return the entry, or None if history is empty."""
+        return await self._step(self._done, self._undone, EditReceipt.undo)
+
+    async def redo(self) -> SavedEdit | None:
+        """Write the latest undone edit's values again. Return the entry, or None if there is none."""
+        return await self._step(self._undone, self._done, EditReceipt.redo)
+
+    async def _step(
+        self,
+        source: list[SavedEdit],
+        destination: list[SavedEdit],
+        command: Callable[[EditReceipt, tuple[Revision, ...]], EditCommand],
+    ) -> SavedEdit | None:
+        _require_writable_action()
+        async with self._lock:
+            if not source:
+                return None
+            entry = source[-1]
+            expected = tuple(
+                Revision(version.target, self._heads[version.target]) for version in entry.receipt.revisions
+            )
+            try:
+                result = await self._run(command(entry.receipt, expected))
+            except DomainError:
+                self.forget(entry.receipt.targets)
+                await self.refresh()
+                raise
+            if entry in source:
+                source.remove(entry)
+                destination.append(entry)
+            self._accept(result)
+            await self.refresh()
+            return entry
+
+    async def _run(self, command: EditCommand) -> EditResult:
+        try:
+            return await self._runner.execute(command, await self._actor())
+        except EditCommitUncertainError:
+            self.forget(version.target.identity for version in command.expected)
+            await self.refresh()
+            raise
+
+    def _accept(self, result: EditResult) -> None:
         for version in result.outcome.revisions:
             self._heads[version.target] = version.value
-        receipt = result.receipt
-        if receipt is not None and result.outcome.changed:
-            if receipt.final:
-                self.history.discard_targets(receipt.targets)
-            elif pending.original_entry_id is None:
-                self.history.accept_committed(
-                    pending.label,
-                    _ReceiptOperation(self, receipt, pending.label, receipt.command.operation_id),
-                    operation_id=receipt.command.operation_id,
-                    targets=receipt.targets,
-                )
-        self._pending.pop(pending.command.operation_id, None)
         self._signal.notify()
 
-    async def reconcile(self, operation_id: UUID) -> EditResult:
-        current = CURRENT_TRANSACTION.get()
-        if current is not None and current.readonly:
-            message = "Reconciliation requires a writable UI action"
-            raise sl.runtime.ReactiveWriteError(message)
-        async with self._lock:
-            pending = self._pending[operation_id]
-            actor = await self._actor()
-            result = await self._runner.reconcile(pending.command, actor, pending.attempt)
-            if result is None:
-                try:
-                    result = await self._runner.execute(pending.command, actor, attempt=pending.attempt)
-                except EditCommitUncertainError:
-                    raise
-                except AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError:
-                    if pending.original_entry_id is not None:
-                        self.history.settle_reversal(pending.original_entry_id, inverse=None)
-                    self._pending.pop(operation_id, None)
-                    self._signal.notify()
-                    raise
-            if pending.original_entry_id is not None:
-                assert result.receipt is not None
-                self.history.settle_reversal(
-                    pending.original_entry_id,
-                    inverse=_ReceiptOperation(self, result.receipt, pending.label, pending.original_entry_id),
-                )
-            self._accept(result, pending)
-        await self.refresh()
-        return result
+    def forget(self, targets: Iterable[str]) -> None:
+        """Drop history entries for these target identities, such as `"draft:<uuid>"`."""
+        identities = frozenset(targets)
+        if not identities:
+            return
+        self._done[:] = [entry for entry in self._done if not entry.receipt.targets & identities]
+        self._undone[:] = [entry for entry in self._undone if not entry.receipt.targets & identities]
+        self._heads = {target: value for target, value in self._heads.items() if target.identity not in identities}
+        self._signal.notify()
 
     async def refresh(self) -> None:
         try:
@@ -233,36 +208,23 @@ class EditController:
             self._refresh_failed = False
         self._signal.notify()
 
-    async def discard(self, targets: frozenset[str]) -> None:
-        async with self._lock:
-            if any(
-                targets.intersection(v.target.identity for v in pending.command.expected) for pending in self.pending
-            ):
-                raise InvalidStateError(
-                    tr(t"edits-pending-discard = Check the saved result before discarding its history.")
-                )
-            self.history.discard_targets(targets)
-            self._heads = {target: version for target, version in self._heads.items() if target.identity not in targets}
-        await self.refresh()
-
     def controls(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        """Offer recovery and explicit history discard alongside ordinary undo and redo."""
+        """Render Undo and Redo, and a refresh button if reloading saved values failed."""
         nodes = []
-        pending = self.pending
-        if not pending:
-            nodes.extend(history_controls(self.history))
-        for item in pending:
+        can_undo, can_redo = bool(self.undoable), bool(self.redoable)
+        if can_undo or can_redo:
 
-            async def check(event: sl.PressEvent, operation_id: UUID = item.command.operation_id) -> None:
-                await self.reconcile(operation_id)
-                await event.notice(tr(t"edits-result-checked = The saved result has been checked."))
+            async def undo(event: sl.PressEvent) -> None:
+                await event.notice(await self._notice(self.undo))
+
+            async def redo(event: sl.PressEvent) -> None:
+                await event.notice(await self._notice(self.redo))
 
             nodes.append(
                 sl.action_controls(
-                    sl.action_control(
-                        tr(t"edits-check-result = Check saved result"), check, key=f"check-{item.command.operation_id}"
-                    ),
-                    key=f"edit-result-{item.command.operation_id}",
+                    sl.action_control(tr(t"edit-history-undo = Undo"), undo, key="edit-undo", available=can_undo),
+                    sl.action_control(tr(t"edit-history-redo = Redo"), redo, key="edit-redo", available=can_redo),
+                    key="edit-history",
                 )
             )
         if self.refresh_failed:
@@ -276,20 +238,22 @@ class EditController:
                     key="edit-refresh",
                 )
             )
-        if not pending and (self.history.entries or self.history.redoable):
-
-            async def discard(event: sl.PressEvent) -> None:
-                targets = frozenset(
-                    target for entry in (*self.history.entries, *self.history.redoable) for target in entry.targets
-                )
-                await self.discard(targets)
-
-            nodes.append(
-                sl.action_controls(
-                    sl.action_control(
-                        tr(t"edits-discard-reload = Discard history and reload"), discard, key="discard-history"
-                    ),
-                    key="edit-reload",
-                )
-            )
         return tuple(nodes)
+
+    @staticmethod
+    async def _notice(step: Callable[[], Awaitable[SavedEdit | None]]) -> TextLike:
+        try:
+            entry = await step()
+        except EditCommitUncertainError as error:
+            return error.public_text()
+        except DomainError:
+            return tr(t"edit-history-conflict = This edit changed elsewhere or is no longer permitted.")
+        label = "" if entry is None else entry.label
+        return tr(t"edit-history-applied = Applied: {label}")
+
+
+def _require_writable_action() -> None:
+    current = CURRENT_TRANSACTION.get()
+    if current is not None and current.readonly:
+        message = "An edit requires a writable UI action"
+        raise sl.runtime.ReactiveWriteError(message)

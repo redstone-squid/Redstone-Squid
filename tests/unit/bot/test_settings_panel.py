@@ -4,7 +4,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast, override
-from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -12,12 +11,10 @@ import pytest
 import squid.bot.settings_view as settings_view
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.edit_history import apply_history
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.domain import (
-    EditAttempt,
     EditCommand,
     EditOutcome,
     EditReceipt,
@@ -183,7 +180,7 @@ def make_component_panel(
     async def actor() -> Actor:
         return Actor(account_id=1, guild_id=GUILD_ID)
 
-    async def execute(command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(command: EditCommand, actor: Actor) -> EditResult:
         if not await panel.settings.authorize(SETTINGS_SERVER_EDIT):
             raise AuthorizationError
         if bound_revisions(command)[0].value != settings.revision:
@@ -206,8 +203,6 @@ def make_component_panel(
         settings.revision += int(before != after)
         versions = (Revision(bound_revisions(command)[0].target, settings.revision),)
         receipt = EditReceipt(command, before, after, versions)
-        if attempt is not None:
-            attempt.receipt = receipt
         return EditResult(
             EditOutcome(
                 command.operation_id, actor.key, command.fingerprint, versions, changed=before != after, final=False
@@ -217,7 +212,7 @@ def make_component_panel(
 
     panel = SettingsPanel(
         settings=settings,
-        edits=cast(Any, SimpleNamespace(execute=execute, reconcile=AsyncMock())),
+        edits=cast(Any, SimpleNamespace(execute=execute)),
         actor=actor,
         guild=make_guild(channels=channels if channels is not None else {12: "general"}),
         capabilities=EVERYTHING,
@@ -300,9 +295,8 @@ async def test_changing_language_relocalizes_the_live_root(monkeypatch: pytest.M
     assert "Votes" in labels
 
     with sl.runtime.transaction():
-        result = await panel.history.undo()
+        assert await panel.edits.undo() is not None
 
-    assert result.applied
     assert message_root.localization.locale == original_localization.locale
 
 
@@ -315,7 +309,7 @@ async def test_a_channel_change_can_be_undone() -> None:
     assert panel.server.channel_id("Vote") == 12
 
     with sl.runtime.transaction():
-        assert await panel.history.undo() is not None
+        assert await panel.edits.undo() is not None
 
     assert panel.server.channel_id("Vote") == 3
     # Undo must compensate through the service as well as restoring the panel's dictionary.
@@ -329,11 +323,10 @@ async def test_a_saved_channel_change_can_be_redone() -> None:
     with sl.runtime.transaction():
         await panel.server.set_channel("Vote", None)
     with sl.runtime.transaction():
-        await panel.history.undo()
+        await panel.edits.undo()
     with sl.runtime.transaction():
-        result = await panel.history.redo()
+        assert await panel.edits.redo() is not None
 
-    assert result.applied
     assert panel.server.channel_id("Vote") is None
     assert len(settings.clears) == 2
 
@@ -350,9 +343,9 @@ async def test_a_failed_render_retains_the_committed_edit() -> None:
     with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.runtime.transaction():
         await save_the_channel_then_fail()
 
-    assert len(panel.history.entries) == 1
+    assert len(panel.edits.undoable) == 1
     with sl.runtime.transaction():
-        assert (await panel.history.undo()).applied
+        assert await panel.edits.undo() is not None
     assert panel.server.channel_id("Vote") == 3
 
 
@@ -376,22 +369,11 @@ async def test_undo_is_refused_when_the_permission_was_revoked() -> None:
         return False
 
     panel.settings.authorize = deny
-    notices: list[Any] = []
-
-    class Event:
-        responder = object()
-        context = {"frontend": "discord"}
-
-        async def notice(self, text: object, **_kwargs: object) -> None:
-            notices.append(text)
-
-    event = cast(Any, Event())
-    with sl.runtime.transaction():
-        await apply_history(panel.history, event)
+    with pytest.raises(AuthorizationError), sl.runtime.transaction():
+        await panel.edits.undo()
 
     assert len(settings.channel_writes) == writes
     assert panel.server.channel_id("Vote") == 12
-    assert notices
 
 
 async def test_a_large_guild_still_fits_one_message() -> None:
@@ -471,9 +453,8 @@ async def test_channel_history_refuses_to_overwrite_another_writer() -> None:
         await panel.server.set_channel("Vote", 12)
     settings.stored["Vote"] = 42
     settings.revision += 1
-    with sl.runtime.transaction():
-        result = await panel.history.undo()
-    assert result.status is sl.runtime.HistoryResultStatus.CONFLICT
+    with pytest.raises(RevisionConflictError), sl.runtime.transaction():
+        await panel.edits.undo()
     assert settings.stored["Vote"] == 42
 
 
@@ -486,8 +467,8 @@ async def test_voting_reset_restores_weights_and_can_be_redone() -> None:
         await panel.voting.reset_voting()
     assert panel.voting.weight_for(99) is None
     with sl.runtime.transaction():
-        assert (await panel.history.undo()).applied
+        assert await panel.edits.undo() is not None
     assert panel.voting.weight_for(99) == 2
     with sl.runtime.transaction():
-        assert (await panel.history.redo()).applied
+        assert await panel.edits.redo() is not None
     assert panel.voting.weight_for(99) is None

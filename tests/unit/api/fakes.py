@@ -37,7 +37,7 @@ from squid.core.errors import NotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.diagnostics.application import ErrorReportService
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditAttempt, EditCommand, EditResult
+from squid.edits.domain import EditCommand, EditResult
 from squid.idempotency import IdempotencyService, PendingRequest
 from squid.idempotency.domain import StoredResponse, UnsafeHttpMethod
 from squid.media.application.jobs import (
@@ -240,12 +240,8 @@ class MockEditRunner(EditRunner):
     """No persisted targets exist in the default transport-only application."""
 
     @override
-    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         raise NotFoundError
-
-    @override
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        return None
 
 
 class MockBuilds(BuildService):

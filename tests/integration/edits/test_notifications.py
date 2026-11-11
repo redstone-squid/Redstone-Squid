@@ -74,7 +74,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
     saved = next(result for result in results if isinstance(result, EditResult))
     assert saved.receipt is not None
     assert (await service.preferences(account.id)).revision == 1
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.receipt is not None
     assert undone.outcome.revisions[0].value == 2
     await service.subscribe(
@@ -83,7 +83,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
         record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"utility"})),
     )
     with pytest.raises(RevisionConflictError):
-        await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+        await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
 
 
 async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revision(
@@ -107,13 +107,13 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
     )
     assert created.receipt is not None
     subscription = SubscriptionsValues.model_validate(created.receipt.after.unpack()).subscriptions[0]
-    undone = await executor.execute(created.receipt.inverse(created.outcome.revisions), actor)
+    undone = await executor.execute(created.receipt.undo(created.outcome.revisions), actor)
     assert undone.receipt is not None
     async with migrated_session_factory() as session:
         row = await session.get(NotificationSubscription, subscription.id)
         assert row is not None
         assert row.enabled is False
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    redone = await executor.execute(created.receipt.redo(undone.outcome.revisions), actor)
     assert redone.receipt is not None
     assert redone.receipt.after == created.receipt.after
     assert redone.outcome.revisions[0].value == 3
@@ -125,7 +125,7 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
     async with migrated_session_factory() as session:
         assert len((await session.scalars(select(NotificationSubscription))).all()) == 1
 
-    await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
+    await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
     row, revision = await NotificationService(uow_factory=factory).subscription_snapshot(
         account.id,
         kind=SubscriptionKind.RECORD_FILTER,
@@ -190,7 +190,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
     )
     assert saved.receipt is not None
     await arrive()
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.outcome.revisions == (Revision(inbox_target(first.id), 3),)
 
     staff = await arrive(NotificationKind.STAFF_BUILD_SUBMITTED)
@@ -202,4 +202,4 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
     )
     assert staff_saved.receipt is not None
     with pytest.raises(NotificationNotFoundError):
-        await executor.execute(staff_saved.receipt.inverse(staff_saved.outcome.revisions), actor)
+        await executor.execute(staff_saved.receipt.undo(staff_saved.outcome.revisions), actor)

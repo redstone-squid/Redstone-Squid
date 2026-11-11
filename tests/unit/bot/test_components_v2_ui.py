@@ -455,14 +455,15 @@ async def test_build_history_survives_a_failed_card_refresh(display_build: Build
         await ui.press("apply")
         assert component.saved
         assert component.controller.refresh_failed
-        assert component.history.can_undo
+        assert component.controller.undoable
         assert builds.runner.build.version_spec == "1.21+"
-        assert (await component.history.undo()).applied
+        assert await component.controller.undo() is not None
         assert builds.runner.build.version_spec == before
-        assert component.history.can_redo
+        assert component.controller.redoable
         # A change outside this session invalidates redo even if its field is unchanged.
         builds.runner.build.description = "someone else's change"
         builds.runner.build.revision += 1
-        assert not (await component.history.redo()).applied
+        with pytest.raises(RevisionConflictError):
+            await component.controller.redo()
         assert builds.runner.build.description == "someone else's change"
         assert builds.runner.build.version_spec == before

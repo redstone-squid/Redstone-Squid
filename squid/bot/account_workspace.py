@@ -81,7 +81,7 @@ class AccountWorkspace(sd.Screen):
         self._account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(self._actor_id))
         account_id = None if self._account is None else self._account.id
         if self._overview is not None and changed_account_id is not None:
-            await self._overview.edits.discard(frozenset({account_target(changed_account_id).identity}))
+            self._overview.edits.forget({account_target(changed_account_id).identity})
         if account_id is None:
             self._overview = None
         elif self._overview is None or self._overview._account_id != account_id:
@@ -216,7 +216,6 @@ class AccountWorkspace(sd.Screen):
                     consent=consent,
                 )
             else:
-                self._require_edit_ready(account.id)
                 await self._accounts.grant_current_consent(account.id)
             await self._rebuild(changed_account_id=None if account is None else account.id)
 
@@ -266,7 +265,6 @@ class AccountWorkspace(sd.Screen):
                     consent=consent,
                 )
             elif linked_account.consent is None or linked_account.needs_consent_refresh:
-                self._require_edit_ready(linked_account.id)
                 linked_account = await self._accounts.grant_current_consent(linked_account.id)
             account_id = linked_account.id
             if account_id is None:
@@ -280,7 +278,6 @@ class AccountWorkspace(sd.Screen):
                 return
             try:
                 linked_account_id = await consented_account_id(consent)
-                self._require_edit_ready(linked_account_id)
                 refresh = await self._accounts.link_minecraft_account(
                     linked_account_id,
                     code,
@@ -318,7 +315,6 @@ class AccountWorkspace(sd.Screen):
             )
             return
         account_id = self._account_id()
-        self._require_edit_ready(account_id)
         refresh = await self._accounts.refresh_java_identity(account_id)
         await self._rebuild(changed_account_id=account_id)
         await event.notice(refresh_message(refresh))
@@ -338,7 +334,6 @@ class AccountWorkspace(sd.Screen):
         account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(member.id))
         if account is None or account.id is None:
             raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(member.id))
-        self._require_edit_ready(account.id)
         refresh = await self._accounts.refresh_java_identity(account.id)
         await self._rebuild(changed_account_id=account.id)
         await event.notice(refresh_message(refresh))
@@ -391,7 +386,6 @@ class AccountWorkspace(sd.Screen):
             self._merge_code = None
             self._merge_decision = None
             return
-        self._require_edit_ready(self._account_id())
         result = await self._accounts.complete_merge(self._account_id(), code)
         redirected = result.redirected_public_creator_id
         self._merge_code = None
@@ -400,10 +394,6 @@ class AccountWorkspace(sd.Screen):
         await event.source.notice(
             tr(t"account-merge-complete = Merged. `{redirected}` now redirects to your creator page.")
         )
-
-    def _require_edit_ready(self, account_id: int) -> None:
-        if self._overview is not None:
-            self._overview.edits.require_ready(frozenset({account_target(account_id).identity}))
 
     def _account_id(self) -> int:
         account = self._account

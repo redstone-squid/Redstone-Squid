@@ -15,7 +15,7 @@ from squid.api.v1.submission_media import router
 from squid.api.v1.submissions import authenticated_account, get_submission_edits
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditAttempt, EditCommand, EditOutcome, EditResult, Revision
+from squid.edits.domain import EditCommand, EditOutcome, EditResult, Revision
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
@@ -184,7 +184,7 @@ class MediaEditRecorder(EditRunner):
         self.drafts = drafts
         self.media = media
 
-    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         version = bound_revisions(command)[0]
         draft_id = UUID(version.target.key)
         await self.drafts.get_accessible(draft_id, actor.require_account_id())
@@ -204,9 +204,6 @@ class MediaEditRecorder(EditRunner):
             ),
             None,
         )
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        raise NotImplementedError
 
 
 @dataclass(frozen=True, slots=True)

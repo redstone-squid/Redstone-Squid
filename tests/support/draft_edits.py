@@ -6,7 +6,6 @@ from uuid import UUID
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
 from squid.edits.domain import (
-    EditAttempt,
     EditCommand,
     EditOutcome,
     EditReceipt,
@@ -32,7 +31,7 @@ class DraftEditRecorder(EditRunner):
     def __init__(self, drafts: RecordedDrafts) -> None:
         self.drafts = drafts
 
-    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         expected = bound_revisions(command)[0]
         draft_id = UUID(expected.target.key)
         current = await self.drafts.get_accessible(draft_id, actor)
@@ -45,14 +44,9 @@ class DraftEditRecorder(EditRunner):
         revisions = (Revision(expected.target, result.draft.snapshot.revision),)
         after = captured_answers(result.draft.snapshot.answers, fields)
         receipt = EditReceipt(command, before, after, revisions)
-        if attempt is not None:
-            attempt.receipt = receipt
         return EditResult(
             EditOutcome(
                 command.operation_id, actor.key, command.fingerprint, revisions, changed=before != after, final=False
             ),
             receipt,
         )
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        raise NotImplementedError

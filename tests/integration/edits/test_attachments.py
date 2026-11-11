@@ -93,7 +93,7 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
         await session.execute(update(DraftSchematicSource).values(updated_at=Instant.now().subtract(hours=1)))
     async with factory() as uow:
         assert await uow.draft_schematics.cleanup_candidates(limit=10) == ()
-    undone = await executor.execute(removed.receipt.inverse(removed.outcome.revisions), actor)
+    undone = await executor.execute(removed.receipt.undo(removed.outcome.revisions), actor)
     assert undone.receipt is not None
     async with factory() as uow:
         restored = next(item for item in await uow.draft_schematics.list(draft.snapshot.id) if item.id == first.id)
@@ -101,8 +101,8 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
         assert restored.primary
         assert not restored.discarded
     with pytest.raises(RevisionConflictError):
-        await executor.execute(removed.receipt.inverse(removed.outcome.revisions), actor)
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+        await executor.execute(removed.receipt.undo(removed.outcome.revisions), actor)
+    redone = await executor.execute(removed.receipt.redo(undone.outcome.revisions), actor)
     assert redone.receipt is not None
     async with sessions.begin() as session:
         await session.execute(update(SubmissionDraft).values(status=DraftStatus.SUBMITTED))
@@ -110,7 +110,7 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
         assert await uow.draft_schematics.cleanup_candidates(limit=10) == (first.id,)
         await uow.commit()
     with pytest.raises(ConflictError):
-        await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
 
 
 async def test_media_removal_preserves_job_and_hidden_intake_completion(
@@ -151,12 +151,12 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
         await uow.attachment_intake.set_status(draft.snapshot.id, source, IntakeStatus.READY)
         assert await uow.media_jobs.terminal_sources(limit=10) == ()
         await uow.commit()
-    undone = await executor.execute(removed.receipt.inverse(removed.outcome.revisions), actor)
+    undone = await executor.execute(removed.receipt.undo(removed.outcome.revisions), actor)
     assert undone.receipt is not None
     async with factory() as uow:
         assert (await uow.attachment_intake.list(draft.snapshot.id))[0].status is IntakeStatus.READY
         assert (await uow.media_jobs.list_for_draft(draft.snapshot.id))[0].status is MediaJobStatus.PENDING
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    redone = await executor.execute(removed.receipt.redo(undone.outcome.revisions), actor)
     assert redone.receipt is not None
     async with sessions.begin() as session:
         await session.execute(update(SubmissionDraft).values(status=DraftStatus.SUBMITTED))
@@ -171,7 +171,7 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
             is MediaJobStatus.DISCARDED
         )
     with pytest.raises(ConflictError):
-        await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
 
 
 async def test_staged_replacement_commits_once_and_redo_reuses_sources(
@@ -212,13 +212,13 @@ async def test_staged_replacement_commits_once_and_redo_reuses_sources(
     )
     assert result.receipt is not None
     assert result.outcome.revisions[0].value == draft.snapshot.revision + 1
-    undone = await executor.execute(result.receipt.inverse(result.outcome.revisions), actor)
+    undone = await executor.execute(result.receipt.undo(result.outcome.revisions), actor)
     assert undone.receipt is not None
     async with factory() as uow:
         sources = await uow.draft_schematics.list(draft.snapshot.id)
         assert next(item for item in sources if item.id == original.id).primary
         assert next(item for item in sources if item.id == replacement.source_id).discarded
-    await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    await executor.execute(result.receipt.redo(undone.outcome.revisions), actor)
     async with factory() as uow:
         restored = next(
             item for item in await uow.draft_schematics.list(draft.snapshot.id) if item.id == replacement.source_id

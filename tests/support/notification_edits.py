@@ -1,7 +1,7 @@
 """Record notification transport commands; PostgreSQL tests cover revision enforcement."""
 
 from squid.core.actors import Actor
-from squid.edits.domain import EditAttempt, EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
+from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 from squid.notifications.application import NotificationService
 from squid.notifications.domain import DEFAULT_INBOX_VISIBILITY, InboxVisibility
 from squid.notifications.edits import (
@@ -17,7 +17,7 @@ class NotificationEditRecorder:
         self.visibility = visibility
         self.commands: list[EditCommand] = []
 
-    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         self.commands.append(command)
         account_id = actor.account_id
         assert account_id is not None
@@ -55,12 +55,7 @@ class NotificationEditRecorder:
             for version in command.expected
         )
         receipt = EditReceipt(command, before, after, revisions)
-        if attempt is not None:
-            attempt.receipt = receipt
         return EditResult(
             EditOutcome(command.operation_id, actor.key, command.fingerprint, revisions, changed=True, final=False),
             receipt,
         )
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        raise NotImplementedError

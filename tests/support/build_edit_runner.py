@@ -5,7 +5,6 @@ from squid.builds.application.edits import build_values
 from squid.builds.models import Build, DoorBuild
 from squid.core.actors import Actor
 from squid.edits.domain import (
-    EditAttempt,
     EditCommand,
     EditOutcome,
     EditReceipt,
@@ -26,7 +25,7 @@ class BuildEditRecorder:
         self.commands: list[EditCommand] = []
         self.actors: list[Actor] = []
 
-    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         self.commands.append(command)
         self.actors.append(actor)
         if self.error is not None:
@@ -42,14 +41,9 @@ class BuildEditRecorder:
             self.build.revision += 1
         revisions = (Revision(expected.target, self.build.revision),)
         receipt = EditReceipt(command, before, after, revisions)
-        if attempt is not None:
-            attempt.receipt = receipt
         return EditResult(
             EditOutcome(
                 command.operation_id, actor.key, command.fingerprint, revisions, changed=before != after, final=False
             ),
             receipt,
         )
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        raise NotImplementedError

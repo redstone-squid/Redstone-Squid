@@ -153,8 +153,6 @@ class DraftWorkspace(sl.Reactive):
     the build. Every message that reads it redraws after a save, whichever message made it.
     """
 
-    history: sl.runtime.History = sl.runtime.history(limit=20)
-
     notice: sl.TextLike = sl.state("")
     """An error from the last action, shown until the next action replaces it."""
     option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({}, opaque=True)
@@ -177,7 +175,7 @@ class DraftWorkspace(sl.Reactive):
             return Actor(account_id=actor_id) if resolve_actor is None else await resolve_actor()
 
         self.resolve_actor = actor
-        self.edits = EditController(services.edits, actor, self.reload, history=self.history)
+        self.edits = EditController(services.edits, actor, self.reload)
         self.actor_id = actor_id
         self.manifest = manifest
         self.render_card = render_card
@@ -335,14 +333,13 @@ class DraftWorkspace(sl.Reactive):
         return current.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
 
     async def submit(self) -> None:
-        self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
         try:
             await self.services.submission_finalization.submit(self._draft_id, self.actor_id, locale=None)
         except SquidError as error:
             self.notice = error.public_text()
         else:
             self.notice = ""
-            self.history.discard_targets(frozenset({draft_target(self._draft_id).identity}))
+            self.edits.forget({draft_target(self._draft_id).identity})
         await self.reload()
 
     async def add_files(self, files: Sequence[sl.forms.UploadedFile], *, base_revision: int | None = None) -> None:
@@ -356,7 +353,6 @@ class DraftWorkspace(sl.Reactive):
             )
             for file in files
         )
-        self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
         failed = 0
         await self.services.submission_uploads.stage(self._draft_id, await self.resolve_actor(), revision, memberships)
         for item, file in zip(memberships, files, strict=True):
@@ -412,7 +408,6 @@ class DraftWorkspace(sl.Reactive):
             filename=source.name,
             kind=classify_supplied_file(source.name, source.media_type),
         )
-        self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
         await self.services.submission_uploads.stage(
             self._draft_id, await self.resolve_actor(), revision, (replacement,)
         )

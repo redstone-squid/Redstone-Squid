@@ -71,13 +71,13 @@ async def test_showcase_history_and_external_build_edits_share_one_revision(
     assert saved.receipt is not None
     assert (await executor.execute(command, actor)).replayed
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), Actor(account_id=owner.id + 1))
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), Actor(account_id=owner.id + 1))
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.receipt is not None
     async with factory() as uow:
         assert await uow.tags.assignment(build.id, tag.id) is None
         assert await uow.tags.build_revision(build.id) == undone.outcome.revisions[0].value
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    redone = await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
     assert redone.receipt is not None
     async with factory() as uow:
         account = await uow.accounts.lock_for_edit(owner.id)
@@ -85,7 +85,7 @@ async def test_showcase_history_and_external_build_edits_share_one_revision(
         account.consented_at = None
         await uow.commit()
     with pytest.raises(ConsentRequiredError):
-        await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
     async with factory() as uow, uow.builds.editing(actor=owner.id, source="external"):
         current = await uow.builds.get_for_update(build.id)
         assert current is not None
@@ -93,7 +93,7 @@ async def test_showcase_history_and_external_build_edits_share_one_revision(
         await uow.builds.save(current)
         await uow.commit()
     with pytest.raises(RevisionConflictError):
-        await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
     async with sessions() as session:
         assert await session.scalar(select(func.count()).select_from(BuildHistoryEntry)) == 5
 
@@ -128,16 +128,16 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
     assert saved.receipt is not None
     assert (await executor.execute(command, actor)).replayed
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), Actor(discord_user_id=2))
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), Actor(discord_user_id=2))
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.receipt is not None
     async with factory() as uow:
         assert not await uow.restrictions.has_alias(definition.id, "Alternate")
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    redone = await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
     assert redone.receipt is not None
     await restrictions.add_alias("Restriction", "Other alias")
     with pytest.raises(RevisionConflictError):
-        await executor.execute(redone.receipt.inverse(redone.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
 
 
 async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
@@ -168,12 +168,12 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
             EditCommand(PROPOSAL_EDIT, (Revision(tag_target(await tags.reserve_identity()), 0),), values.edit_values()),
             actor,
         )
-    undone = await executor.execute(created.receipt.inverse(created.outcome.revisions), actor)
+    undone = await executor.execute(created.receipt.undo(created.outcome.revisions), actor)
     assert undone.receipt is not None
     assert await tags.pending() == ()
     assert (await executor.execute(command, actor)).replayed
     assert await tags.pending() == ()
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    redone = await executor.execute(created.receipt.redo(undone.outcome.revisions), actor)
     assert redone.receipt is not None
     (restored,) = await tags.pending()
     assert restored.id == identity
@@ -189,11 +189,11 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
     assert approved.receipt is not None
     assert approved.receipt.final
     with pytest.raises(InvalidStateError):
-        approved.receipt.inverse(approved.outcome.revisions)
+        approved.receipt.undo(approved.outcome.revisions)
     assert [row.id for row in await tags.public_definitions()] == [identity]
     assert await tags.public_definition(identity) is not None
     with pytest.raises(ConflictError):
-        await executor.execute(redone.receipt.inverse(approved.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(approved.outcome.revisions), actor)
 
 
 async def test_proposal_undo_refuses_a_definition_already_in_use(
@@ -221,4 +221,4 @@ async def test_proposal_undo_refuses_a_definition_already_in_use(
         assert definition is not None
         session.add(TagAlias(definition=definition, alias="Referenced", normalized_alias="referenced"))
     with pytest.raises(ConflictError):
-        await executor.execute(result.receipt.inverse(result.outcome.revisions), actor)
+        await executor.execute(result.receipt.undo(result.outcome.revisions), actor)

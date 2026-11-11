@@ -60,8 +60,8 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
     if saved.receipt.command.kind == PROFILE_EDIT:
         assert saved.receipt.after.unpack()["display_name"] == "Builder"
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), Actor(account_id=account.id + 1))
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), Actor(account_id=account.id + 1))
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.receipt is not None
     assert undone.outcome.revisions[0].value > saved.outcome.revisions[0].value
     # A provider update is a competing writer even when it changes no profile text.
@@ -69,7 +69,7 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
         await uow.accounts.set_identity_avatar_key(account.id, account.identities[0].id, "changed-avatar")
         await uow.commit()
     with pytest.raises(RevisionConflictError):
-        await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+        await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
     async with factory() as uow:
         current = await uow.accounts.lock_for_edit(account.id)
         current.consent_version = None

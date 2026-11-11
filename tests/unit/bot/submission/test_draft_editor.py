@@ -247,7 +247,7 @@ async def test_undo_resolves_the_current_actor() -> None:
     with transaction():
         await editor.workspace.save_values({"description": "Correction"})
     with transaction():
-        await editor.workspace.history.undo()
+        await editor.workspace.edits.undo()
     assert resolve_actor.await_count == 2
     assert Actor(account_id=99) in drafts.actors
     assert "description" not in drafts.current.snapshot.answers
@@ -643,8 +643,8 @@ async def test_answer_history_reverses_saved_values_without_reverting_other_fiel
     editor = await open_editor(services, drafts)
     with transaction():
         await editor.workspace.save_values({"display_name": "Saved name"})
-    assert len(editor.workspace.history.entries) == 1
-    assert (await editor.workspace.history.undo()).applied
+    assert len(editor.workspace.edits.undoable) == 1
+    assert await editor.workspace.edits.undo() is not None
     assert drafts.current.snapshot.answers.get("display_name") is None
-    assert (await editor.workspace.history.redo()).applied
+    assert await editor.workspace.edits.redo() is not None
     assert drafts.current.snapshot.answers["display_name"] == "Saved name"

@@ -95,7 +95,6 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
 class TagsScreen(sd.Screen):
     """A tag workspace that ends when replaced or timed out."""
 
-    history: sl.runtime.History = sl.runtime.history(limit=20)
     _build_revision: int | None = sl.state(default=None, persist=False)
     _tag_names: Mapping[int, str] = sl.state(factory=dict, persist=False)
     _catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = sl.state(
@@ -126,7 +125,7 @@ class TagsScreen(sd.Screen):
         capabilities: frozenset[PermissionNode],
         authorize: TagAuthorizer,
     ) -> None:
-        self.edits = EditController(edits, actor, self._refresh, history=self.history)
+        self.edits = EditController(edits, actor, self._refresh)
         self._tags = tags
         self._restrictions = restrictions
         self._build_id = build_id

@@ -51,12 +51,12 @@ async def test_guild_child_writes_advance_root_and_block_stale_undo(
     assert current > saved.outcome.revisions[0].value
     assert snapshot.voting[VoteKind.BUILD].weights == (RoleWeight(GUILD, VoteKind.BUILD, 99, 2),)
     with pytest.raises(RevisionConflictError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     # Returning to the old value does not return to the old version (the ABA case).
     await settings.set_locale(GUILD, None)
     await settings.set_locale(GUILD, "zh-CN")
     with pytest.raises(RevisionConflictError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
 
 
 async def test_guild_voting_round_trip_and_current_authority(
@@ -80,7 +80,7 @@ async def test_guild_voting_round_trip_and_current_authority(
     assert saved.receipt is not None
     revoked = Actor(guild_id=GUILD, discord_user_id=17)
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), revoked)
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), revoked)
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     assert undone.outcome.revisions[0].value > saved.outcome.revisions[0].value
     assert (await settings.guild_snapshot(GUILD))[0].voting[VoteKind.BUILD].weights == ()

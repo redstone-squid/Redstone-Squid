@@ -94,12 +94,12 @@ async def test_build_receipts_restore_children_and_unresolved_taxonomy_in_one_au
     assert current is not None
     assert current.revision == result.outcome.revisions[0].value
     assert UnresolvedTaxonomy.read(current.extra_info).restriction_names() == ("Previously unknown restriction",)
-    undone = await executor.execute(result.receipt.inverse(result.outcome.revisions), actor)
+    undone = await executor.execute(result.receipt.undo(result.outcome.revisions), actor)
     assert undone.receipt is not None
     restored = await service.get(build.id)
     assert restored is not None
     assert build_values(restored) == before
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), actor)
+    redone = await executor.execute(result.receipt.redo(undone.outcome.revisions), actor)
     assert redone.receipt is not None
     assert redone.receipt.after == result.receipt.after
     assert redone.outcome.revisions[0].value > undone.outcome.revisions[0].value > result.outcome.revisions[0].value
@@ -142,7 +142,7 @@ async def test_competing_build_edits_and_unrelated_child_write_fence_undo(
             {"id": build.id},
         )
     with pytest.raises(RevisionConflictError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
     current = await service.get(build.id)
     assert current is not None
     async with sessions.begin() as session:
@@ -151,7 +151,7 @@ async def test_competing_build_edits_and_unrelated_child_write_fence_undo(
         await session.flush()
         outsider = Actor(account_id=other.id)
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.inverse((Revision(build_target(build.id), current.revision),)), outsider)
+        await executor.execute(saved.receipt.undo((Revision(build_target(build.id), current.revision),)), outsider)
 
 
 async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_commit(

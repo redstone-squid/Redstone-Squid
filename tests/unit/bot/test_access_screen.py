@@ -39,7 +39,10 @@ async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_hist
     actor = Actor(account_id=1)
 
     async def execute(command: EditCommand, _actor: Actor, **_kwargs: object) -> EditResult:
-        revisions = (Revision(PERMISSION_GRAPH, bound_revisions(command)[0].value + 1),)
+        expected = bound_revisions(command)[0]
+        if expected.value != admin.revision.return_value:
+            raise RevisionConflictError(expected, admin.revision.return_value)
+        revisions = (Revision(PERMISSION_GRAPH, expected.value + 1),)
         final = command.kind == ROLE_DELETE
         receipt = EditReceipt(command, EditValues.of({"effect": None}), command.values, revisions, final=final)
         admin.revision.return_value = revisions[0].value
@@ -65,13 +68,15 @@ async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_hist
         await screen._change_rule(cast(sl.SubmitEvent, Submission()), base_revision=7)
     assert runner.execute.call_args.args[0].expected == (Revision(PERMISSION_GRAPH, 7),)
     assert screen._revision == 8
-    assert len(screen.history.entries) == 1
+    assert len(screen.edits.undoable) == 1
     with transaction(), pytest.raises(RevisionConflictError):
         await screen._change_rule(cast(sl.SubmitEvent, Submission()), base_revision=7)
-    assert runner.execute.call_count == 1
+    # The modal sends the revision it displayed rather than rebasing onto the newer one.
+    assert runner.execute.call_args.args[0].expected == (Revision(PERMISSION_GRAPH, 7),)
+    assert len(screen.edits.undoable) == 1
     screen._pending_delete = ("role", 10, 8)
     event = AsyncMock()
     with transaction():
         await screen._decide_delete(event, "confirm")
     assert runner.execute.call_args.args[0].kind == ROLE_DELETE
-    assert not screen.history.entries
+    assert not screen.edits.undoable

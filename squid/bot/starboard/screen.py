@@ -53,7 +53,6 @@ class StarboardScreen(sd.Screen):
     permission when an action is submitted, including deletion confirmation.
     """
 
-    history: sl.runtime.History = sl.runtime.history(limit=20)
     _snapshots: Mapping[str, StarboardSnapshot] = sl.state({}, persist=False)
     _browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
@@ -84,7 +83,7 @@ class StarboardScreen(sd.Screen):
         self._capabilities = capabilities
         self._authorize = authorize
         self._validate_channel = validate_channel
-        self.edits = EditController(edits, actor, self._refresh, history=self.history)
+        self.edits = EditController(edits, actor, self._refresh)
 
     @override
     async def on_load(self) -> None:

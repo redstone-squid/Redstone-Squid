@@ -58,12 +58,12 @@ async def test_configuration_children_share_revision_and_undo_checks_current_aut
     saved = next(result for result in results if isinstance(result, EditResult))
     assert saved.receipt is not None
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), Actor(guild_id=10, discord_user_id=42))
-    undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), ACTOR)
+        await executor.execute(saved.receipt.undo(saved.outcome.revisions), Actor(guild_id=10, discord_user_id=42))
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), ACTOR)
     assert undone.receipt is not None
     await service.set_emojis(row, (StarboardEmoji(emoji="✅", direction="up"),))
     with pytest.raises(RevisionConflictError):
-        await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), ACTOR)
+        await executor.execute(saved.receipt.redo(undone.outcome.revisions), ACTOR)
     assert await service.is_relevant_emoji(10, "✅")
     assert not await service.is_relevant_emoji(10, "⭐")
 
@@ -84,21 +84,21 @@ async def test_creation_retains_identity_and_revision_and_refuses_name_reuse(
     )
     assert created.receipt is not None
     assert created.outcome.revisions == (Revision(starboard_target(identity), 1),)
-    undone = await executor.execute(created.receipt.inverse(created.outcome.revisions), ACTOR)
+    undone = await executor.execute(created.receipt.undo(created.outcome.revisions), ACTOR)
     assert undone.receipt is not None
     assert await service.get(10, "main") is None
-    redone = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), ACTOR)
+    redone = await executor.execute(created.receipt.redo(undone.outcome.revisions), ACTOR)
     assert redone.receipt is not None
     assert redone.outcome.revisions == (Revision(starboard_target(identity), 3),)
     restored = await service.get(10, "main")
     assert restored is not None
     assert restored.id == identity
-    undone_again = await executor.execute(redone.receipt.inverse(redone.outcome.revisions), ACTOR)
+    undone_again = await executor.execute(redone.receipt.undo(redone.outcome.revisions), ACTOR)
     assert undone_again.receipt is not None
     other = await service.create_starboard(10, 21)
     assert other.id != identity
     with pytest.raises(ConflictError):
-        await executor.execute(undone_again.receipt.inverse(undone_again.outcome.revisions, redo=True), ACTOR)
+        await executor.execute(redone.receipt.redo(undone_again.outcome.revisions), ACTOR)
     async with factory() as uow:
         tombstone = await uow.starboards.get_by_id(identity, include_archived=True)
         assert tombstone is not None
@@ -133,7 +133,7 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
     )
     await service.record_vote(origin, Actor(discord_user_id=50, guild_id=10), "⭐")
     with pytest.raises(ConflictError, match="already in use"):
-        await executor.execute(created.receipt.inverse(created.outcome.revisions), ACTOR)
+        await executor.execute(created.receipt.undo(created.outcome.revisions), ACTOR)
     deleted = await executor.execute(EditCommand(STARBOARD_DELETE, created.outcome.revisions, EditValues.of({})), ACTOR)
     assert deleted.receipt is not None
     assert deleted.receipt.final
@@ -158,7 +158,7 @@ async def test_first_vote_and_creation_undo_cannot_both_win(
         EditCommand(STARBOARD_CREATE, (Revision(starboard_target(identity), 0),), values.values()), ACTOR
     )
     assert created.receipt is not None
-    inverse = created.receipt.inverse(created.outcome.revisions)
+    inverse = created.receipt.undo(created.outcome.revisions)
     origin = OriginMessage(
         id=100,
         author_is_bot=False,

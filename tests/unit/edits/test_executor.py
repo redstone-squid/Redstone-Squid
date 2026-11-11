@@ -13,7 +13,6 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError, ValidationError
 from squid.edits.application import EditExecutor
 from squid.edits.domain import (
-    EditAttempt,
     EditCommand,
     EditCommitUncertainError,
     EditExpiredError,
@@ -88,24 +87,24 @@ def command(name: str = "Changed", revision: int = 1) -> EditCommand:
     return EditCommand("example", (Revision(TARGET, revision),), EditValues.of({"name": name}))
 
 
-async def test_normalized_edit_replay_and_inverse_use_the_same_handler() -> None:
+async def test_normalized_edit_replay_undo_and_redo_use_the_same_handler() -> None:
     state = CommittedState(Store())
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
     edit = command("  Changed  ")
-    attempt = EditAttempt()
-    result = await executor.execute(edit, ACTOR, attempt=attempt)
+    result = await executor.execute(edit, ACTOR)
     assert result.receipt is not None
     assert result.receipt.after.unpack()["name"] == "Changed"
     assert result.receipt.revisions == (Revision(TARGET, 2),)
-    replay = await executor.execute(edit, ACTOR, attempt=attempt)
+    replay = await executor.execute(edit, ACTOR)
     assert replay.replayed
-    assert replay.receipt == result.receipt
+    assert replay.outcome == result.outcome
+    assert replay.receipt is None
     assert state.value.revision == 2
-    restored = await executor.execute(result.receipt.inverse(result.receipt.revisions), ACTOR)
+    restored = await executor.execute(result.receipt.undo(result.receipt.revisions), ACTOR)
     assert restored.receipt is not None
     assert state.value.values.unpack()["name"] == "Original"
     assert state.value.revision == 3
-    await executor.execute(restored.receipt.inverse(restored.receipt.revisions, redo=True), ACTOR)
+    await executor.execute(result.receipt.redo(restored.receipt.revisions), ACTOR)
     assert state.value.values.unpack()["name"] == "Changed"
     assert state.value.revision == 4
 
@@ -129,7 +128,7 @@ async def test_noops_authorization_unknown_fields_and_stale_versions() -> None:
 
 
 @pytest.mark.parametrize("committed", [False, True])
-async def test_uncertain_commit_is_reconciled_from_the_same_transaction_outcome(committed: bool) -> None:
+async def test_retrying_an_uncertain_commit_applies_the_edit_once(committed: bool) -> None:
     class FailingWork(Work):
         async def commit(self) -> None:
             if committed:
@@ -139,14 +138,11 @@ async def test_uncertain_commit_is_reconciled_from_the_same_transaction_outcome(
     state = CommittedState(Store())
     failing = EditExecutor(partial(FailingWork, state), {"example": Handler()})
     edit = command()
-    attempt = EditAttempt()
     with pytest.raises(EditCommitUncertainError):
-        await failing.execute(edit, ACTOR, attempt=attempt)
+        await failing.execute(edit, ACTOR)
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
-    recovered = await executor.reconcile(edit, ACTOR, attempt)
-    assert (recovered is not None) == committed
-    if not committed:
-        await executor.execute(edit, ACTOR, attempt=attempt)
+    retried = await executor.execute(edit, ACTOR)
+    assert retried.replayed == committed
     assert state.value.revision == 2
     assert len(state.value.outcomes) == 1
 
@@ -163,8 +159,6 @@ async def test_operation_reuse_and_expired_attempts_cannot_write() -> None:
     expired = replace(command(revision=2), issued_at=Instant.now().subtract(hours=25))
     with pytest.raises(EditExpiredError):
         await executor.execute(expired, ACTOR)
-    with pytest.raises(EditExpiredError):
-        await executor.reconcile(expired, ACTOR, EditAttempt())
     assert state.value.revision == 2
 
 
@@ -216,7 +210,7 @@ async def test_unconditional_edits_capture_latest_state_and_replay_without_reapp
     assert noop.outcome.revisions == (Revision(TARGET, 3),)
     await executor.execute(command("Later", revision=3), ACTOR)
     with pytest.raises(RevisionConflictError):
-        await executor.execute(result.receipt.inverse(result.receipt.revisions), ACTOR)
+        await executor.execute(result.receipt.undo(result.receipt.revisions), ACTOR)
 
 
 def test_unconditional_undo_is_rejected() -> None:

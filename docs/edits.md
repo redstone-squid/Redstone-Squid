@@ -71,9 +71,10 @@ rows expire after 24 hours, and the executor rejects commands issued more than 2
 hours ago, so a retry cannot apply an edit twice after its outcome has been deleted.
 
 If the commit fails in a way that may or may not have saved the change, the executor
-raises `EditCommitUncertainError`. The bot keeps such an edit as *pending* and blocks
-further edits to its targets until the user presses "Check saved result", which calls
-`EditExecutor.reconcile` to find out whether the outcome row exists.
+raises `EditCommitUncertainError`. Retrying the same command is safe: it returns the
+stored outcome if the first attempt committed and applies the edit otherwise. HTTP
+clients retry with the same idempotency key. The bot does not retry; it drops session
+history for the targets and reloads, so the user sees what was actually saved.
 
 The handlers are registered by kind in `squid/bootstrap.py` (`_ServiceGraph.edits`).
 Most are `FieldCommand` subclasses (`squid/edits/fields.py`), which edit the fields
@@ -81,22 +82,24 @@ declared by a Pydantic model on one record.
 
 ## Session history
 
-Bot editors keep an undo and redo stack for the lifetime of the open screen. The stack
-is the generic `squid_ui.runtime.History`. `EditController` connects it to the edit
-executor:
+Each bot editor that saves through the executor owns an `EditController`
+(`squid/bot/edit_controller.py`). It keeps a stack of saved edits, each holding its
+receipt, for as long as the screen is open:
 
-- After a committed edit, the controller adds an entry that holds the receipt.
-- Undo builds the inverse command from the receipt: the same handler with the old
-  values, expecting the latest revision this controller saw for each target. If
-  another user changed the record since, the undo fails with a conflict instead of
-  discarding their work.
-- A successful undo stores its own receipt, so redo works the same way.
-- A *final* edit, such as a deletion, cannot be undone. Accepting it removes every
-  history entry for the same targets.
+- Undo runs `receipt.undo(...)`, which writes the values from before the edit. Redo
+  runs `receipt.redo(...)`, which writes the edit's values again. Both use the same
+  handler as the original edit.
+- Both expect the revision this controller last saw for each target. If someone else
+  changed the record since, the step fails with a conflict instead of overwriting
+  their change, and the controller drops its history for that record.
+- A save that expects a revision other than the last one the controller saw means the
+  record changed elsewhere and the editor reloaded. The save goes ahead, and older
+  entries for the record are dropped, because undoing them would overwrite that change.
+- A *final* edit, such as a deletion, cannot be undone. Saving it drops every entry
+  for the same targets.
 
-Forms with unsaved widget values also record them in a `History`, using a different
-operation that restores the widget state (`track_local_edits` in
-`squid/bot/edit_history.py`).
+Forms with unsaved widget values keep a separate history of those values
+(`track_local_edits` in `squid/bot/edit_history.py`), built on `squid_ui.runtime.History`.
 
 ### Removed files
 

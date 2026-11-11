@@ -16,7 +16,6 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.errors import ConflictError, InvalidStateError, ValidationError
 from squid.edits.domain import (
-    EditAttempt,
     EditCommand,
     EditCommitUncertainError,
     EditExpiredError,
@@ -35,15 +34,11 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class EditRunner(Protocol):
-    async def execute(
-        self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None
-    ) -> EditResult: ...
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None: ...
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult: ...
 
 
 class EditStore(Protocol):
-    """Operation locks live until transaction completion, including during reconciliation."""
+    """Operation locks last until the transaction ends, so a retry waits for the original."""
 
     async def lock_operation(self, operation_id: UUID) -> None: ...
 
@@ -88,17 +83,11 @@ class EditExecutor[UowT: EditUnitOfWork]:
         self._factory = factory
         self._handlers = dict(handlers)
 
-    async def execute(
-        self,
-        command: EditCommand,
-        actor: Actor,
-        *,
-        attempt: EditAttempt | None = None,
-    ) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         confirmed: EditResult | None = None
         try:
             async with self._factory() as uow:
-                confirmed = await self._execute_in(uow, command, actor, attempt)
+                confirmed = await self._execute_in(uow, command, actor)
         except Exception:
             if confirmed is None:
                 raise
@@ -107,17 +96,14 @@ class EditExecutor[UowT: EditUnitOfWork]:
             logger.warning("Edit committed but transaction cleanup failed", exc_info=True)
         return confirmed
 
-    async def _execute_in(
-        self, uow: UowT, command: EditCommand, actor: Actor, attempt: EditAttempt | None
-    ) -> EditResult:
+    async def _execute_in(self, uow: UowT, command: EditCommand, actor: Actor) -> EditResult:
         actor_key = actor.key
         handler = self._handlers[command.kind]
         await uow.edits.lock_operation(command.operation_id)
         existing = await uow.edits.outcome(command.operation_id)
         if existing is not None:
             self._check_replay(existing, command, actor_key)
-            receipt = self._receipt(attempt, command, existing)
-            return EditResult(existing, receipt, replayed=True)
+            return EditResult(existing, None, replayed=True)
         self._check_deadline(command)
         try:
             prepared = await handler.prepare(uow, actor, command)
@@ -141,31 +127,16 @@ class EditExecutor[UowT: EditUnitOfWork]:
             command.operation_id, actor_key, command.fingerprint, versions, prepared.changed, prepared.final
         )
         await uow.edits.record(outcome)
-        if attempt is not None:
-            attempt.receipt = receipt
         # Defer caller cancellation while commit settles. Once confirmed, the
         # caller can accept the receipt synchronously before its next await.
         try:
             with CancelScope(shield=True):
                 await uow.commit()
         except ConflictError:
-            if attempt is not None:
-                attempt.receipt = None
             raise
         except Exception as error:
             raise EditCommitUncertainError(command.operation_id) from error
         return EditResult(outcome, receipt)
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        """Return the confirmed result, or None only after proving the original transaction ended without it."""
-        async with self._factory() as uow:
-            await uow.edits.lock_operation(command.operation_id)
-            existing = await uow.edits.outcome(command.operation_id)
-            if existing is None:
-                self._check_deadline(command)
-                return None
-            self._check_replay(existing, command, actor.key)
-            return EditResult(existing, self._receipt(attempt, command, existing), replayed=True)
 
     @staticmethod
     def _current_revisions(command: EditCommand, revisions: tuple[Revision, ...]) -> tuple[Revision, ...]:
@@ -183,17 +154,6 @@ class EditExecutor[UowT: EditUnitOfWork]:
     def _check_deadline(command: EditCommand) -> None:
         if command.issued_at.add(hours=24) <= Instant.now():
             raise EditExpiredError
-
-    @staticmethod
-    def _receipt(attempt: EditAttempt | None, command: EditCommand, outcome: EditOutcome) -> EditReceipt | None:
-        receipt = None if attempt is None else attempt.receipt
-        if receipt is not None and (
-            receipt.command.operation_id != command.operation_id
-            or receipt.command.fingerprint != command.fingerprint
-            or receipt.revisions != outcome.revisions
-        ):
-            raise OperationReuseError
-        return receipt
 
     @staticmethod
     def _check_replay(existing: EditOutcome, command: EditCommand, actor: str) -> None:

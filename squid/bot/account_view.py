@@ -58,8 +58,6 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
     saved immediately; profile fields stay in the editor until Save profile.
     """
 
-    history: sl.runtime.History = sl.runtime.history(limit=20)
-
     selected_id: int | None = sl.state(None)
     _revision: int = sl.state(1, persist=False)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
@@ -85,7 +83,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         self._request_consent = request_consent
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
-        self.edits = EditController(edits, actor, self._reload, history=self.history)
+        self.edits = EditController(edits, actor, self._reload)
 
     @override
     async def on_load(self) -> None:
@@ -270,7 +268,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
             granted = await self._accounts.grant_current_consent(self._account_id)
             # Consent is saved outside session history, so its entries for this account
             # now expect an old revision and could only fail. Drop them.
-            await self.edits.discard(frozenset({account_target(self._account_id).identity}))
+            self.edits.forget({account_target(self._account_id).identity})
             # Saving consent advances the revision by exactly one. A larger step means the
             # account also changed elsewhere since this panel loaded, so `work` may be stale.
             expected = Revision(account_target(self._account_id), self._revision + 1)

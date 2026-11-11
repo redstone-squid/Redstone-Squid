@@ -585,7 +585,6 @@ class BuildEditScreen(BuildEditorScreen[int]):
         timeout=900, live_updates=True, retain_routed_on_timeout=True, session=sd.SessionSpec("build-edit")
     )
 
-    history: sl.runtime.History = sl.runtime.history(limit=20)
     staged_history: sl.runtime.History = sl.runtime.history(limit=20)
     items: tuple[BoundBuildField[Any], ...] = sl.state((), persist=False)
     _base_revision: int = sl.state(0)
@@ -615,7 +614,7 @@ class BuildEditScreen(BuildEditorScreen[int]):
         self.builds = builds
         self._authorize = authorize
         self._actor = actor
-        self.controller = EditController(edits, actor, self._refresh_saved, history=self.history)
+        self.controller = EditController(edits, actor, self._refresh_saved)
         self._render_build = render_build
         self._refresh_posts = refresh_posts
         self._recovered = recovered
@@ -791,10 +790,8 @@ class BuildEditScreen(BuildEditorScreen[int]):
         ]
         nodes.append(sd.v2.panel(*children, accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE))
         nodes.extend(history_controls(self.staged_history))
-        if (
-            self.controller.pending
-            or self.controller.refresh_failed
-            or (not any(item.modified for item in self.items) and not self.staged_history.can_redo)
+        if self.controller.refresh_failed or (
+            not any(item.modified for item in self.items) and not self.staged_history.can_redo
         ):
             nodes.extend(self.controller.controls())
         return tuple(nodes)
@@ -924,7 +921,8 @@ class BuildEditScreen(BuildEditorScreen[int]):
             return
         await event.acknowledge()
         if self._build_id is not None:
-            await self.controller.discard(frozenset({build_target(self._build_id).identity}))
+            self.controller.forget({build_target(self._build_id).identity})
+            await self.controller.refresh()
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
         if not await self.may_edit():

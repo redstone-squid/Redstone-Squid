@@ -55,7 +55,6 @@ class NotificationScreen(sd.Screen):
     """Compose notification workflows with one revision-aware edit history."""
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("notifications"))
-    history: sl.runtime.History = sl.runtime.history(limit=20)
 
     def __init__(
         self,
@@ -69,7 +68,7 @@ class NotificationScreen(sd.Screen):
         visibility_resolver: VisibilityResolver | None = None,
     ) -> None:
         self.settings = NotificationSettings(notifications, account_id)
-        self.edits = EditController(edits, actor, self._refresh, history=self.history)
+        self.edits = EditController(edits, actor, self._refresh)
         self.preferences = NotificationPreferencesControls(self.settings, self.edits)
         self.subscriptions = NotificationSubscriptions(self.settings, self.edits)
         self.inbox = NotificationInbox(notifications, account_id, self.edits, visibility, visibility_resolver)

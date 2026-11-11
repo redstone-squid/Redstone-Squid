@@ -92,10 +92,10 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
     )
     assert created.receipt is not None
     assert (await admin.role("history-role")).id == role_id
-    undone = await executor.execute(created.receipt.inverse(created.outcome.revisions), owner)
+    undone = await executor.execute(created.receipt.undo(created.outcome.revisions), owner)
     assert undone.receipt is not None
     assert role_id not in {role.id for role in await admin.roles()}
-    restored = await executor.execute(undone.receipt.inverse(undone.outcome.revisions, redo=True), owner)
+    restored = await executor.execute(created.receipt.redo(undone.outcome.revisions), owner)
     assert restored.receipt is not None
     assert (await admin.role("history-role")).id == role_id
     included = await admin.create_role(owner, slug="included-role", name="Included role", rank=0)
@@ -112,16 +112,14 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
         saved = await executor.execute(saved_command, owner)
         assert saved.receipt is not None
         assert (await executor.execute(saved_command, owner)).replayed
-        reversed_result = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), owner)
+        reversed_result = await executor.execute(saved.receipt.undo(saved.outcome.revisions), owner)
         assert reversed_result.receipt is not None
-        last = await executor.execute(
-            reversed_result.receipt.inverse(reversed_result.outcome.revisions, redo=True), owner
-        )
+        last = await executor.execute(saved.receipt.redo(reversed_result.outcome.revisions), owner)
         assert last.receipt is not None
         assert last.receipt.after == saved.receipt.after
         assert await admin.revision() == last.outcome.revisions[0].value
     with pytest.raises(ConflictError):
-        await executor.execute(restored.receipt.inverse(last.outcome.revisions), owner)
+        await executor.execute(restored.receipt.undo(last.outcome.revisions), owner)
     assert last.receipt is not None
     async with migrated_session_factory() as session:
         audits = await session.scalar(select(func.count()).select_from(PermissionAuditEntry))
@@ -131,12 +129,12 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
         assert await session.scalar(select(func.count()).select_from(PermissionAuditEntry)) == audits
     await admin.set_rank(owner, await admin.role("history-role"), 11)
     with pytest.raises(RevisionConflictError):
-        await executor.execute(last.receipt.inverse(last.outcome.revisions), owner)
+        await executor.execute(last.receipt.undo(last.outcome.revisions), owner)
     deleted = await executor.execute(await command(admin, ROLE_DELETE, RoleDeletionValues(role_id=role_id)), owner)
     assert deleted.receipt is not None
     assert deleted.receipt.final
     with pytest.raises(InvalidStateError):
-        deleted.receipt.inverse(deleted.outcome.revisions)
+        deleted.receipt.undo(deleted.outcome.revisions)
     assert role_id not in {role.id for role in await admin.roles()}
     assert await admin.assignments_for(account_id=subject) == ()
 
@@ -157,6 +155,6 @@ async def test_permission_commands_resolve_current_rank_and_authority_even_for_n
     await admin.revoke(owner, pattern=ROLE_DEFINITION_MANAGE.name, account_id=subject)
     current = (Revision(PERMISSION_GRAPH, await admin.revision()),)
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.inverse(current), actor)
+        await executor.execute(saved.receipt.undo(current), actor)
     with pytest.raises(AuthorizationError):
         await executor.execute(await command(admin, RANK_EDIT, RankValues(role_id=target.id, rank=10)), actor)

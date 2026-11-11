@@ -148,16 +148,20 @@ class EditReceipt:
     def targets(self) -> frozenset[str]:
         return frozenset(version.target.identity for version in self.revisions)
 
-    def inverse(self, expected: tuple[Revision, ...], *, redo: bool = False) -> EditCommand:
+    def undo(self, expected: tuple[Revision, ...]) -> EditCommand:
+        """Return a command that writes the values from before this edit."""
+        return self._replay(expected, self.before, "undo")
+
+    def redo(self, expected: tuple[Revision, ...]) -> EditCommand:
+        """Return a command that writes this edit's values again after an undo."""
+        return self._replay(expected, self.after, "redo")
+
+    def _replay(
+        self, expected: tuple[Revision, ...], values: EditValues, purpose: Literal["undo", "redo"]
+    ) -> EditCommand:
         if self.final:
             raise InvalidStateError(tr(t"edits-final = This operation cannot be undone."))
-        return EditCommand(
-            self.command.kind,
-            expected,
-            self.before,
-            purpose="redo" if redo else "undo",
-            cause=self.command.operation_id,
-        )
+        return EditCommand(self.command.kind, expected, values, purpose=purpose, cause=self.command.operation_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,15 +174,14 @@ class EditOutcome:
     final: bool
 
 
-@dataclass(slots=True)
-class EditAttempt:
-    """Live-session recovery information; no inverse values are stored in the database."""
-
-    receipt: EditReceipt | None = None
-
-
 @dataclass(frozen=True, slots=True)
 class EditResult:
+    """The outcome of an edit, with its receipt unless the command was a retry.
+
+    A retry of a committed operation returns the stored outcome with `replayed` set.
+    Its receipt is None, because the old values are not stored.
+    """
+
     outcome: EditOutcome
     receipt: EditReceipt | None
     replayed: bool = False
@@ -205,8 +208,14 @@ class OperationReuseError(ConflictError):
 
 
 class EditCommitUncertainError(InvalidStateError):
+    """The commit failed in a way that may or may not have saved the edit.
+
+    Retrying the same command is safe: it returns the stored outcome if the first
+    attempt committed, and applies the edit otherwise.
+    """
+
     default_message = tr(
-        t"edits-commit-uncertain = The saved result needs checking before this item can be edited again."
+        t"edits-commit-uncertain = The change may not have been saved. Check the values and try again."
     )
 
     def __init__(self, operation_id: UUID) -> None:

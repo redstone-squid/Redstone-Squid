@@ -90,7 +90,6 @@ class SettingsPanel(sd.Screen):
     """Compose server and voting editors with one guild revision and edit history."""
 
     policy = sd.ResponseSpec(timeout=SESSION_SECONDS, session=sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD))
-    history: sl.runtime.History = sl.runtime.history(limit=20)
     page: str = sl.state("server")
 
     def __init__(
@@ -105,7 +104,7 @@ class SettingsPanel(sd.Screen):
         owner_guild_id: int | None = None,
     ) -> None:
         self._capabilities = capabilities
-        self.settings = SettingsEditor(settings, guild.id, authorize, edits, actor, self.history)
+        self.settings = SettingsEditor(settings, guild.id, authorize, edits, actor)
         self.edits = self.settings.edits
         self.server = ServerSettings(self.settings, guild, editable=capabilities.edit_server)
         self.voting = VotingSettings(
@@ -174,13 +173,12 @@ class SettingsEditor(sl.Reactive):
         authorize: SettingsAuthorizer,
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
-        history: sl.runtime.History,
     ) -> None:
         self._settings = settings
         self._guild_id = guild_id
         self.authorize = authorize
         self.localization = _SettingsLocalization()
-        self.edits = EditController(edits, actor, self.refresh, history=history)
+        self.edits = EditController(edits, actor, self.refresh)
 
     async def refresh(self) -> None:
         self.snapshot, self.revision = await self._settings.guild_snapshot(self._guild_id)

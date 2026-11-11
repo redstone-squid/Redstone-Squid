@@ -7,7 +7,7 @@ import squid_ui_discord as sd
 from squid.bot.starboard import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
 from squid.core.actors import Actor
-from squid.edits.domain import EditAttempt, EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
+from squid.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -88,7 +88,7 @@ class EditRecorder:
         self.operations = operations
         self.commands: list[EditCommand] = []
 
-    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         self.commands.append(command)
         if command.kind == STARBOARD_DELETE:
             await self.operations.delete_starboard(7, self.operations.config.name)
@@ -105,17 +105,12 @@ class EditRecorder:
         revisions = tuple(Revision(version.target, version.value + 1) for version in bound_revisions(command))
         self.operations.config.revision = revisions[0].value
         receipt = EditReceipt(command, before, after, revisions, final=command.kind == STARBOARD_DELETE)
-        if attempt is not None:
-            attempt.receipt = receipt
         return EditResult(
             EditOutcome(
                 command.operation_id, actor.key, command.fingerprint, revisions, changed=True, final=receipt.final
             ),
             receipt,
         )
-
-    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
-        raise NotImplementedError
 
 
 class NoticeEvent:

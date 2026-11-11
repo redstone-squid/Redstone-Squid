@@ -61,7 +61,6 @@ class AccessScreen(sd.Screen):
     """
 
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("access"))
-    history: sl.runtime.History = sl.runtime.history(limit=20)
     _revision: int = sl.state(default=0, persist=False)
     _tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         default=None, persist=False
@@ -91,7 +90,7 @@ class AccessScreen(sd.Screen):
         self._subject_label = subject_label
         self._capabilities = capabilities
         self._authorize = authorize
-        self.edits = EditController(runner, actor, self._refresh, history=self.history)
+        self.edits = EditController(runner, actor, self._refresh)
 
     @override
     async def on_load(self) -> None:
