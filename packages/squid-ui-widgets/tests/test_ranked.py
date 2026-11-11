@@ -56,15 +56,15 @@ async def test_a_mounted_page_turn_stores_the_page_the_pager_asked_for() -> None
     assert harness.state == sp.RankedListState(1)
 
 
-def test_a_routed_ranking_slices_its_page_and_numbers_rows_globally() -> None:
+def test_a_routed_ranking_plans_its_page_and_numbers_rows_globally() -> None:
     """Edsger is third overall, so he is `3.` on page two -- not `1.`."""
     first = wt.routed(_leaderboard())
     second = wt.routed(_leaderboard(), sp.RankedListState(1))
 
-    assert _listing(first.nodes) == ["1. **Ada** — 30", "2. **Grace** — 20"]
-    assert "Page 1 of 2" in first.texts()
-    assert _listing(second.nodes) == ["3. **Edsger** — 10"]
-    assert "Page 2 of 2" in second.texts()
+    assert "1. **Ada** — 30\n2. **Grace** — 20" in first.texts()
+    assert any("Page 1 of 2" in text for text in first.texts())
+    assert "3. **Edsger** — 10" in second.texts()
+    assert any("Page 2 of 2" in text for text in second.texts())
     assert [route.state for route in first.routes] == [sp.RankedListState(0), sp.RankedListState(1)]
 
 
@@ -115,8 +115,3 @@ def test_top_n_caps_the_listing_and_explicit_entries_keep_their_keys() -> None:
 def test_it_rejects_a_non_positive_limit(kwargs: _LimitKwargs) -> None:
     with pytest.raises(ValueError):
         sp.RankedList([], key="ranked", **kwargs)
-
-
-def test_page_position_rejects_an_item_offset_disguised_as_a_negative_page() -> None:
-    with pytest.raises(ValueError, match=r"PagePosition.index must not be negative"):
-        sp.PagePosition(-1)

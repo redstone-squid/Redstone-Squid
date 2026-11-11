@@ -5,6 +5,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
+from squid_ui.ownership import Controlled
 from squid_ui.semantic import ActionControl, Choices, FormTrigger, RoutedActionControl, RoutedChoices
 from squid_ui_widgets import testing as wt
 
@@ -158,7 +159,7 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
 
     rendered = sp.RouteDriver(route).render(pattern, pattern.initial_state)
     assert any(isinstance(node, RoutedChoices) for node in engine.walk(rendered))
-    selection = next(request for request in routes if request.action == "select:roles")
+    selection = next(request for request in routes if request.action.startswith("select_window:roles:"))
     assert selection.phase == "input"
 
     next_page = next(request for request in routes if request.action == "page:roles:next")
@@ -218,3 +219,136 @@ def test_immediate_modal_submission_commits_in_one_transition() -> None:
     state = pattern.transition(pattern.initial_state, "modal", submitted={"selection": ("role-2",)})
 
     assert state.staged == state.committed == ("role-2",)
+
+
+@pytest.mark.parametrize("commit", [sp.CommitMode.EXPLICIT, sp.CommitMode.IMMEDIATE])
+async def test_exclusive_replacement_is_offered_at_capacity(commit: sp.CommitMode) -> None:
+    pattern = sp.MultiChoice(
+        "Access",
+        (
+            sp.MultiChoiceGroup("roles", "Roles", _options("role", 2), exclusive_with=("everyone",)),
+            sp.MultiChoiceGroup("everyone", "Everyone", _options("all", 1)),
+        ),
+        committed=("role-0", "role-1"),
+        maximum=2,
+        commit=commit,
+    )
+    harness = wt.mounted(pattern)
+    picker = next(
+        node
+        for node in engine.walk(harness.nodes)
+        if isinstance(node, Choices) and node.key == "choices.everyone.select"
+    )
+    assert picker.maximum == 1
+
+    routed = wt.routed(pattern)
+    route = next(route for route in routed.routes if route.action.startswith("select_window:everyone:"))
+    await harness.choose("choices.everyone.select", "all-0")
+    assert pattern.transition(route.state, route.action, values=("all-0",)) == harness.state
+    assert harness.state.staged == ("all-0",)
+    assert harness.state.committed == (("all-0",) if commit is sp.CommitMode.IMMEDIATE else ("role-0", "role-1"))
+
+
+async def test_delayed_mounted_submission_replaces_the_rendered_window() -> None:
+    pattern = sp.MultiChoice(
+        "Roles",
+        (sp.MultiChoiceGroup("roles", "Roles", _options("role", 4)),),
+        committed=("role-0", "role-2"),
+        window_size=2,
+    )
+    harness = wt.mounted(pattern)
+    old_nodes = harness.nodes
+    await harness.press("choices.roles.next")
+
+    # Dispatch the old picker after a page turn, as a delayed interaction would.
+    picker = engine.find(old_nodes, Choices, key="choices.roles.select")
+    assert isinstance(picker.selection, Controlled)
+    await picker.selection.on_change(engine.choice_event(responder=harness.responder))
+    assert harness.state.staged == ("role-2",)
+    assert harness.state.pages == (("roles", 1),)
+    assert harness.state.committed == ("role-0", "role-2")
+
+
+def test_routed_window_survives_reconstruction_and_preserves_other_pages() -> None:
+    def machine() -> sp.MultiChoice:
+        return sp.MultiChoice(
+            "Roles",
+            (sp.MultiChoiceGroup("roles", "Roles", _options("role", 4)),),
+            committed=("role-0", "role-2"),
+            window_size=2,
+        )
+
+    original = machine()
+    page_two = original.transition(original.initial_state, "page:roles:next")
+    rendered = wt.routed(original, page_two)
+    route = next(route for route in rendered.routes if route.action.startswith("select_window:roles:"))
+
+    restored = machine()
+    driver = sp.RouteDriver[sp.MultiChoiceState](lambda _request: "unused")
+    replaced = driver.transition(restored, route.state, route.action, values=("role-3",))
+    cleared = driver.transition(restored, route.state, route.action, values=())
+    assert replaced.staged == ("role-0", "role-3")
+    assert cleared.staged == ("role-0",)
+    assert replaced.committed == cleared.committed == ("role-0", "role-2")
+
+
+@pytest.mark.parametrize("change", ["reorder", "remove", "unavailable", "window_size"])
+def test_changed_window_definition_rejects_old_selection(change: str) -> None:
+    entries = _options("role", 4)
+    original = sp.MultiChoice(
+        "Roles",
+        (sp.MultiChoiceGroup("roles", "Roles", entries),),
+        committed=("role-0", "role-2"),
+        window_size=2,
+    )
+    route = next(route for route in wt.routed(original).routes if route.action.startswith("select_window:roles:"))
+    if change == "reorder":
+        entries = tuple(reversed(entries))
+    elif change == "remove":
+        entries = entries[1:]
+    elif change == "unavailable":
+        entries = (sl.choice("Role 0", key="role-0", available=False), *entries[1:])
+    restored = sp.MultiChoice(
+        "Roles",
+        (sp.MultiChoiceGroup("roles", "Roles", entries),),
+        window_size=3 if change == "window_size" else 2,
+    )
+    assert restored.transition(route.state, route.action, values=("role-1",)) == route.state
+
+
+async def test_available_options_define_windows_and_clamp_the_displayed_page() -> None:
+    pattern = sp.MultiChoice(
+        "Roles",
+        (
+            sp.MultiChoiceGroup(
+                "roles",
+                "Roles",
+                (
+                    sl.choice("Unavailable", key="hidden", available=False),
+                    *_options("role", 3),
+                ),
+            ),
+        ),
+        window_size=2,
+    )
+    harness = wt.mounted(pattern)
+    first = next(node for node in engine.walk(harness.nodes) if isinstance(node, Choices))
+    assert tuple(choice.key for choice in first.choices) == ("role-0", "role-1")
+    await harness.press("choices.roles.next")
+    await harness.choose("choices.roles.select", "role-2")
+    assert harness.state.staged == ("role-2",)
+
+    clamped = wt.mounted(pattern, initial=sp.MultiChoiceState(pages=((sp.MachineKeySegment("roles"), 99),)))
+    assert "Page 2 of 2" in " ".join(clamped.texts())
+    await clamped.press("choices.roles.previous")
+    assert clamped.state.pages == (("roles", 0),)
+
+
+def test_no_available_options_renders_without_a_picker() -> None:
+    pattern = sp.MultiChoice(
+        "Roles",
+        (sp.MultiChoiceGroup("roles", "Roles", (sl.choice("Hidden", key="hidden", available=False),)),),
+    )
+    for nodes in (wt.mounted(pattern).nodes, wt.routed(pattern).nodes):
+        assert not any(isinstance(node, Choices | RoutedChoices) for node in engine.walk(nodes))
+        assert "No available options." in engine.texts(nodes)

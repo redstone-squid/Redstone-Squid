@@ -18,18 +18,16 @@ from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
 from squid_ui.factories import (
     action_control,
-    action_controls,
     choice,
     choices,
     controlled,
     form,
-    note,
     routed_action_control,
     routed_choices,
 )
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
-from squid_ui.ownership import PageEvent
+from squid_ui.ownership import PageEvent, RoutedPage
 from squid_ui.primitives import Lines, Paginate
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import (
@@ -186,8 +184,9 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
         A page turn dispatches ``action_name`` with the target page as its only value, so
         the transition should store ``int(values[0])``. The mounted driver hands paging to
         the planner, which draws the host's navigation and may split a page further when it
-        does not fit the message. The routed driver shows exactly ``per`` lines with routed
-        Previous and Next controls.
+        does not fit the message. The routed driver uses the same planner boundaries,
+        with route IDs instead of callbacks. Route encoders must be safe to call repeatedly
+        while planning candidates that may be discarded.
         """
         ...
 
@@ -465,12 +464,12 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         available: bool = True,
     ) -> RoutedChoices:
         """Encode an input-phase route for a choice control."""
-        del selected
         route_id = self.route(TransitionRoute(action_name, self.current, "input"))
         return routed_choices(
             *entries,
             route_id=route_id,
             key=key,
+            selected=selected,
             placeholder=placeholder,
             minimum=minimum,
             maximum=maximum,
@@ -495,28 +494,13 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
     def paged_lines(
         self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
     ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
-        """Slice one page here and encode each neighbouring page's state into a routed control.
+        """Let the planner resolve page boundaries and encode persistent navigation."""
 
-        A routed message has no planner pager, because its nav buttons would hold Python
-        callbacks that do not survive a restart. The page count is therefore exact.
-        """
-        pages = max(1, -(-len(lines) // per))
-        page = max(0, min(page, pages - 1))
-        visible = Lines(tuple(lines[page * per : (page + 1) * per]))
-        if pages == 1:
-            return (visible,)
-
-        def turn(label: TextLike, target: int, suffix: str, *, available: bool) -> RoutedActionControl:
+        def turn(target: int) -> str:
             next_state = self.machine.transition(self.current, action_name, values=(str(target),))
-            route_id = self.route(TransitionRoute(action_name, next_state, "next"))
-            return routed_action_control(label, route_id, key=f"{key}.{suffix}", available=available)
+            return self.route(TransitionRoute(action_name, next_state, "next"))
 
-        return (
-            visible,
-            note(self.chrome.page_footer(page + 1, pages)),
-            action_controls(
-                turn(self.chrome.previous, max(0, page - 1), "previous", available=page > 0),
-                turn(self.chrome.next, min(pages - 1, page + 1), "next", available=page < pages - 1),
-                key=f"{key}.pager",
-            ),
-        )
+        def seek() -> str:
+            return self.route(TransitionRoute(action_name, self.current, "input"))
+
+        return (Lines(tuple(lines), overflow=Paginate(key=key, per=per, page=RoutedPage(page, turn, seek))),)

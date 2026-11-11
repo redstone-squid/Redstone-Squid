@@ -102,3 +102,26 @@ class NestedAction:
                     return None
             case _:
                 return None
+
+
+@dataclass(frozen=True, slots=True)
+class WindowSelection:
+    """The available-option window a rendered picker replaces."""
+
+    group: MachineKeySegment
+    page: int
+    revision: str
+
+    def encode(self) -> str:
+        return f"select_window:{self.group}:{self.page}:{self.revision}"
+
+    @classmethod
+    def parse(cls, action: str) -> Self | None:
+        match action.split(":"):
+            case ["select_window", group, page, revision] if page.isascii() and page.isdecimal() and revision:
+                try:
+                    return cls(MachineKeySegment(group), int(page), revision)
+                except ValueError:
+                    return None
+            case _:
+                return None

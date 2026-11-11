@@ -13,11 +13,11 @@ from squid_ui_widgets._actions import (
     MachineKeySegment,
     PageAction,
     PageDirection,
-    keyed_action,
+    WindowSelection,
     match_keyed_action,
 )
 from squid_ui_widgets._content import display_text, require_key
-from squid_ui_widgets._paging import PagePosition, window
+from squid_ui_widgets._option_window import OptionWindow
 from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 
@@ -173,19 +173,8 @@ class MultiChoice:
         """Expand serialized per-group pages for transition logic."""
         return dict(state.pages)
 
-    def _window(
-        self, group: MultiChoiceGroup, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]
-    ) -> tuple[tuple[Choice, ...], int, int]:
-        """Resolve one group's visible option window."""
-        visible, position, extent = window(
-            group.choices,
-            key=f"{self.key}.{group.key}",
-            position=PagePosition(self._pages(state).get(group.key, 0)),
-            per_page=self.window_size,
-            chrome=controls.chrome,
-            identity=lambda entry: entry.key,
-        )
-        return visible, position.index, extent
+    def _window(self, group: MultiChoiceGroup, state: MultiChoiceState) -> OptionWindow:
+        return OptionWindow.resolve(group.choices, self._pages(state).get(group.key, 0), self.window_size)
 
     def _rivals(self, group_key: MachineKeySegment) -> frozenset[MachineKeySegment]:
         """Return directly or inversely exclusive groups."""
@@ -238,23 +227,27 @@ class MultiChoice:
             if group is None:
                 return state
             pages = self._pages(state)
-            last_page = (len(group.choices) - 1) // self.window_size
-            pages[page_action.key] = min(
-                last_page,
-                max(0, pages.get(page_action.key, 0) + page_action.direction.delta),
-            )
+            window = self._window(group, state)
+            pages[page_action.key] = min(window.pages - 1, max(0, window.page + page_action.direction.delta))
             return MultiChoiceState(state.staged, state.committed, tuple(pages.items()))
+        # Direct machine callers may still select the current window. Rendered controls
+        # always bind a page and revision so delayed input cannot replace another page.
         group_key = match_keyed_action(action, "select")
+        scope = WindowSelection.parse(action)
+        if scope is not None:
+            group_key = scope.group
         if group_key is None:
             return state
-
         group = next((item for item in self.groups if item.key == group_key), None)
         if group is None:
             return state
-        pages = max(1, (len(group.choices) + self.window_size - 1) // self.window_size)
-        page = min(self._pages(state).get(group.key, 0), pages - 1)
-        start = page * self.window_size
-        visible = {entry.key for entry in group.choices[start : start + self.window_size] if entry.available}
+        if scope is None:
+            window = self._window(group, state)
+        else:
+            window = OptionWindow.resolve(group.choices, scope.page, self.window_size)
+            if not window.matches(scope):
+                return state
+        visible = window.keys
         replacement = set(values) & visible
         staged = set(state.staged) - visible
         staged.update(replacement)
@@ -307,48 +300,39 @@ class MultiChoice:
         group_nodes = []
         staged = set(state.staged)
         for group in self.groups:
-            visible, page, pages = self._window(group, state, controls)
-            visible_keys = {entry.key for entry in visible}
-            elsewhere = len(staged - visible_keys)
-            allowance = min(self.window_size, self.maximum - elsewhere)
+            window = self._window(group, state)
+            visible_keys = window.keys
+            rivals = self._rivals(group.key)
+            # A nonempty replacement clears rival groups, so their selections do not
+            # consume the capacity offered by this picker.
+            retained = {key for key in staged - visible_keys if self._group_for.get(key) not in rivals}
+            allowance = min(len(window.choices), self.maximum - len(retained))
             picker = (
                 controls.choices(
-                    visible,
-                    keyed_action("select", group.key),
+                    window.choices,
+                    window.selection_action(group.key),
                     key=f"{self.key}.{group.key}.select",
                     selected=tuple(key for key in state.staged if key in visible_keys),
                     minimum=0,
                     maximum=max(1, allowance, len(staged & visible_keys)),
                     placeholder=group.label,
                 )
-                if allowance > 0 or bool(staged & visible_keys)
-                else status("Selection limit reached in another group.", tone=Tone.INFO)
-            )
-            pager = (
-                action_controls(
-                    controls.action_control(
-                        controls.chrome.previous,
-                        PageAction(group.key, PageDirection.PREVIOUS).encode(),
-                        key=f"{self.key}.{group.key}.previous",
-                        available=page > 0,
-                    ),
-                    controls.action_control(
-                        controls.chrome.next,
-                        PageAction(group.key, PageDirection.NEXT).encode(),
-                        key=f"{self.key}.{group.key}.next",
-                        available=page < pages - 1,
-                    ),
-                    key=f"{self.key}.{group.key}.pager",
+                if window.choices and (allowance > 0 or bool(staged & visible_keys))
+                else status(
+                    "Selection limit reached in another group." if window.choices else "No available options.",
+                    tone=Tone.INFO,
                 )
-                if pages > 1
-                else None
             )
             group_nodes.append(
                 stack(
                     heading(group.label, level=3),
                     picker,
-                    paragraph(controls.chrome.page_footer(page + 1, pages)) if pages > 1 else None,
-                    pager,
+                    *window.navigation(
+                        controls,
+                        f"{self.key}.{group.key}",
+                        previous=PageAction(group.key, PageDirection.PREVIOUS).encode(),
+                        next=PageAction(group.key, PageDirection.NEXT).encode(),
+                    ),
                 )
             )
 

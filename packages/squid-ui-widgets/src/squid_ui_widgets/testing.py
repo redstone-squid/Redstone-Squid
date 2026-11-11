@@ -6,7 +6,8 @@ behavior, while ``mounted(menu)`` tests the transition rules without that finish
 ``routed`` records the states a stateless render asks the host to encode.
 
 Handlers run directly, without frontend transactions or form validation. These helpers
-also skip target planning; use frontend tests to check fitting and dispatchable IDs.
+skip target planning unless `routed` receives a target or contains routed pagination.
+Use frontend tests to check native dispatch.
 
 Import this public API from squid_ui_widgets.testing; it is not re-exported at the
 package root.
@@ -14,13 +15,17 @@ package root.
 
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
-from typing import overload
+from typing import Any, cast, overload
 
+from squid_ui import scene
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.document import as_document
+from squid_ui.document import DocumentLike, as_document
+from squid_ui.planning import AdapterProfile, PlanResult, Target, dynamic_components_v2_target, plan
+from squid_ui.planning.identity import has_routed_page
+from squid_ui.planning.navigation import PlannedNav, default_nav
 from squid_ui.semantic import ActionControl, AnyLayoutNode, LayoutNode, RoutedActionControl, RoutedChoices
-from squid_ui.target_types import RenderTarget
+from squid_ui.target_types import DiscordAdapter, RenderTarget
 from squid_ui_widgets.drivers import (
     _MISSING_INITIAL_STATE,
     ComponentDriver,
@@ -163,17 +168,24 @@ class RoutedRender[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT 
 
     nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     routes: tuple[TransitionRoute[StateT], ...]
+    planned: PlanResult[Any] | None = None
 
     def texts(self) -> list[str]:
         """Return authored text from this routed tree."""
-        return engine.texts(self.nodes)
+        return engine.texts(self.nodes if self.planned is None else self.planned.scene)
 
     def labels(self) -> list[str]:
         """Return control labels from this routed tree."""
-        return engine.labels(self.nodes)
+        return engine.labels(self.nodes if self.planned is None else self.planned.scene)
 
     def route_ids(self) -> list[str]:
         """Every encoded id in the render, in order, across controls and pickers."""
+        if self.planned is not None:
+            return [
+                node.route_id
+                for node in engine.walk(self.planned.scene)
+                if isinstance(node, scene.RoutedButton | scene.RoutedSelect)
+            ] + [node.route_id for node in engine.walk(self.planned.scene) if isinstance(node, scene.HtmlRouteRef)]
         return [
             node.route_id for node in engine.walk(self.nodes) if isinstance(node, RoutedActionControl | RoutedChoices)
         ]
@@ -194,7 +206,10 @@ class _RouteRecorder[StateT]:
 
     def __call__(self, request: TransitionRoute[StateT]) -> str:
         self.routes.append(request)
-        return f"route:{len(self.routes) - 1}:{request.action}"
+        return self.id_for(len(self.routes) - 1)
+
+    def id_for(self, index: int) -> str:
+        return f"route:{index}"
 
 
 @overload
@@ -202,6 +217,8 @@ def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
     machine: StateMachine[StateT, RenderTargetT, ContextT],
     *,
     chrome: Chrome = DEFAULT_CHROME,
+    target: Target[Any, Any, Any, Any] | None = None,
+    nav: PlannedNav = default_nav,
 ) -> RoutedRender[StateT, RenderTargetT, ContextT]: ...
 
 
@@ -211,6 +228,8 @@ def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
     state: StateT,
     *,
     chrome: Chrome = DEFAULT_CHROME,
+    target: Target[Any, Any, Any, Any] | None = None,
+    nav: PlannedNav = default_nav,
 ) -> RoutedRender[StateT, RenderTargetT, ContextT]: ...
 
 
@@ -219,12 +238,28 @@ def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
     state: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
     *,
     chrome: Chrome = DEFAULT_CHROME,
+    target: Target[Any, Any, Any, Any] | None = None,
+    nav: PlannedNav = default_nav,
 ) -> RoutedRender[StateT, RenderTargetT, ContextT]:
-    """Render a machine with test route IDs and record its requested routes."""
+    """Record routes, planning when a target is supplied or the tree has routed pagination.
+
+    Routed pagination defaults to a protocol-only Discord V2 target. `planned` exposes
+    its scene; `routes` includes only IDs reachable in that final scene, not discarded
+    candidates. Other calls retain the lightweight semantic-render behavior.
+    """
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
     driver: RouteDriver[StateT, RenderTargetT, ContextT] = RouteDriver(recorder, chrome)
     result = driver.render(machine, machine.initial_state if isinstance(state, _MissingInitialState) else state)
-    return RoutedRender(as_document(result).children, tuple(recorder.routes))
+    if target is None and has_routed_page(result):
+        target = dynamic_components_v2_target(AdapterProfile(DiscordAdapter, "widget-tests", "1"))
+    # This helper inspects scenes; it never supplies the callbacks' application context.
+    planned = None if target is None else plan(cast(DocumentLike[Any], result), target=target, chrome=chrome, nav=nav)
+    rendered = RoutedRender(as_document(result).children, tuple(recorder.routes), planned)
+    if planned is None:
+        return rendered
+    ids = set(rendered.route_ids())
+    routes = tuple(route for index, route in enumerate(recorder.routes) if recorder.id_for(index) in ids)
+    return RoutedRender(rendered.nodes, routes, planned)
 
 
 __all__ = [

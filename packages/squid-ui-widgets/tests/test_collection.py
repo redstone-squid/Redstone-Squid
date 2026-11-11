@@ -114,3 +114,35 @@ def test_custom_identity_and_routed_form_parity() -> None:
     assert editor.form_for(state, "edit") is not None
     assert isinstance(engine.find(render.nodes, RoutedActionControl, key="collection.edit"), RoutedActionControl)
     assert render.route_for("edit") == sp.TransitionRoute("edit", state, "input")
+
+
+async def test_old_collection_picker_keeps_its_window_after_a_page_turn() -> None:
+    editor = _editor(window_size=2)
+    state = editor.initial_from({"name": str(index)} for index in range(4))
+    harness = wt.mounted(editor, initial=state)
+    rendered = wt.routed(editor, state)
+    route = next(route for route in rendered.routes if route.action.startswith("select_window:"))
+    await harness.press("collection.next")
+    selected = editor.transition(harness.state, route.action, values=("1",))
+    assert selected.selected == "1"
+    assert selected.page == 1
+
+
+def test_collection_reordering_rejects_an_old_window_submission() -> None:
+    editor = _editor(window_size=2)
+    state = editor.initial_from({"name": str(index)} for index in range(4))
+    state = editor.transition(state, "select", values=("1",))
+    route = next(route for route in wt.routed(editor, state).routes if route.action.startswith("select_window:"))
+    reordered = editor.transition(state, "down")
+    assert editor.transition(reordered, route.action, values=("2",)) == reordered
+
+
+def test_collection_removal_clamps_before_the_next_page_turn() -> None:
+    editor = _editor(window_size=2)
+    state = editor.initial_from({"name": str(index)} for index in range(3))
+    state = editor.transition(state, "page:next")
+    state = editor.transition(state, "select", values=("3",))
+    removed = editor.transition(state, "remove")
+    assert removed.page == 0
+    assert removed.selected is None
+    assert len(removed.entries) == 2

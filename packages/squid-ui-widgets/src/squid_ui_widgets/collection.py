@@ -10,7 +10,8 @@ from squid_ui.factories import action_controls, choice, heading, stack, status
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.semantic import ControlDisplay, FormTrigger, Tone
 from squid_ui.text import TextLike
-from squid_ui_widgets._paging import PagePosition, window
+from squid_ui_widgets._actions import MachineKeySegment, WindowSelection
+from squid_ui_widgets._option_window import OptionWindow
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 
 
@@ -159,6 +160,13 @@ class CollectionEditor:
             ordinal += 1
         return str(ordinal)
 
+    def _window(self, state: CollectionState, page: int | None = None) -> OptionWindow:
+        return OptionWindow.resolve(
+            tuple(choice(self.label(self._mapping(entry)), key=entry.key) for entry in state.entries),
+            state.page if page is None else page,
+            self.window_size,
+        )
+
     def transition(
         self,
         state: CollectionState,
@@ -168,8 +176,12 @@ class CollectionEditor:
         submitted: FormValues | None = None,
     ) -> CollectionState:
         """Apply a collection action without mutating the input state."""
-        if action == _Action.SELECT:
-            selected = values[0] if len(values) == 1 and values[0] in {entry.key for entry in state.entries} else None
+        scope = WindowSelection.parse(action)
+        if action == _Action.SELECT or scope is not None:
+            window = self._window(state, None if scope is None else scope.page)
+            if scope is not None and (scope.group != "entries" or not window.matches(scope)):
+                return state
+            selected = values[0] if len(values) == 1 and values[0] in window.keys else None
             return CollectionState(state.entries, selected, state.page)
         if action == _Action.ADD and submitted is not None:
             if self.maximum is not None and len(state.entries) >= self.maximum:
@@ -188,8 +200,8 @@ class CollectionEditor:
         if action == _Action.REMOVE and selected_index is not None and len(state.entries) > self.minimum:
             entries = list(state.entries)
             del entries[selected_index]
-            pages = max(1, (len(entries) + self.window_size - 1) // self.window_size)
-            return CollectionState(tuple(entries), None, min(state.page, pages - 1))
+            updated = CollectionState(tuple(entries), None, state.page)
+            return CollectionState(updated.entries, None, self._window(updated).page)
         if action in {_Action.UP, _Action.DOWN} and self.reorder and selected_index is not None:
             target = selected_index + (-1 if action == _Action.UP else 1)
             if not 0 <= target < len(state.entries):
@@ -199,8 +211,8 @@ class CollectionEditor:
             return CollectionState(tuple(entries), state.selected, target // self.window_size)
         if action in {_Action.PREVIOUS, _Action.NEXT}:
             delta = -1 if action == _Action.PREVIOUS else 1
-            pages = max(1, (len(state.entries) + self.window_size - 1) // self.window_size)
-            return CollectionState(state.entries, state.selected, max(0, min(state.page + delta, pages - 1)))
+            window = self._window(state)
+            return CollectionState(state.entries, state.selected, max(0, min(window.page + delta, window.pages - 1)))
         return state
 
     def form_for(self, state: CollectionState, action: str) -> FormSpec | None:
@@ -222,26 +234,19 @@ class CollectionEditor:
 
     def render(self, state: CollectionState, controls: MachineControls[CollectionState]) -> DocumentLike:
         """Render the visible window and record actions."""
-        visible, position, pages = window(
-            state.entries,
-            key=self.key,
-            position=PagePosition(state.page),
-            per_page=self.window_size,
-            chrome=controls.chrome,
-            identity=lambda entry: entry.key,
-        )
+        window = self._window(state)
         selected_index = self._selected_index(state)
         picker = (
             controls.choices(
-                tuple(choice(self.label(self._mapping(entry)), key=entry.key) for entry in visible),
-                _Action.SELECT.value,
+                window.choices,
+                window.selection_action(MachineKeySegment("entries")),
                 key=f"{self.key}.select",
                 selected=(state.selected,) if state.selected is not None else (),
                 minimum=0,
                 maximum=1,
                 placeholder=self.title,
             )
-            if visible
+            if window.choices
             else None
         )
         add_form = self.form_for(state, _Action.ADD)
@@ -291,26 +296,6 @@ class CollectionEditor:
             key=f"{self.key}.entry-actions",
             display=ControlDisplay.INDIVIDUAL,
         )
-        paging = (
-            action_controls(
-                controls.action_control(
-                    controls.chrome.previous,
-                    _Action.PREVIOUS.value,
-                    key=f"{self.key}.previous",
-                    available=position.index > 0,
-                ),
-                controls.action_control(
-                    controls.chrome.next,
-                    _Action.NEXT.value,
-                    key=f"{self.key}.next",
-                    available=position.index < pages - 1,
-                ),
-                key=f"{self.key}.paging",
-                display=ControlDisplay.INDIVIDUAL,
-            )
-            if pages > 1
-            else None
-        )
         return stack(
             heading(self.title),
             *(status(message, tone=Tone.DANGER) for message in self.errors(state)),
@@ -318,5 +303,5 @@ class CollectionEditor:
             edit_node,
             entry_actions,
             add_node,
-            paging,
+            *window.navigation(controls, self.key, previous=_Action.PREVIOUS.value, next=_Action.NEXT.value),
         )
