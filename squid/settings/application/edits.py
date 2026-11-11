@@ -6,6 +6,7 @@ from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditUnitOfWork, FieldEditHandler
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.edits.fields import Aggregate, FieldCommand
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
@@ -31,47 +32,29 @@ class SettingsEditUnitOfWork(EditUnitOfWork, PermissionUnitOfWork, GuildSettings
     def settings(self) -> SettingsEditStore: ...
 
 
-class RuntimeSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
-    fields = frozenset(RuntimeSettings.model_fields)
-
+class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, RuntimeSettings]):
     def __init__(self, permissions: PermissionService, defaults: RuntimeSettings) -> None:
-        self._permissions = permissions
-        self._defaults = defaults
+        async def load(uow: SettingsEditUnitOfWork) -> RuntimeSetting:
+            return await uow.settings.runtime(defaults, for_update=True)
 
-    async def load(self, uow: SettingsEditUnitOfWork, command: EditCommand) -> EditValues:
-        if len(command.expected) != 1 or command.expected[0].target != RUNTIME_TARGET:
-            message = "A runtime settings edit must guard the singleton revision"
-            raise ValueError(message)
-        row = await uow.settings.runtime(self._defaults, for_update=True)
-        require_revision(command.expected[0], row.revision)
-        return EditValues.of(RuntimeSettings.model_validate(row).model_dump(mode="json"))
+        async def flush(uow: SettingsEditUnitOfWork, row: RuntimeSetting, expected: Revision) -> Revision:
+            return await uow.settings.flush_runtime_revision(row, expected)
 
-    async def validate(
-        self,
-        uow: SettingsEditUnitOfWork,
-        actor: Actor,
-        command: EditCommand,
-        values: EditValues,
-    ) -> EditValues:
-        if actor.account_id is None or not await self._permissions.allows_in(uow, actor, SETTINGS_RUNTIME_EDIT):
-            raise AuthorizationError
-        return EditValues.of(RuntimeSettings.model_validate(values.unpack()).model_dump(mode="json"))
+        async def authorize(uow: SettingsEditUnitOfWork, actor: Actor, row: RuntimeSetting) -> None:
+            if actor.account_id is None or not await permissions.allows_in(uow, actor, SETTINGS_RUNTIME_EDIT):
+                raise AuthorizationError
 
-    async def apply(
-        self,
-        uow: SettingsEditUnitOfWork,
-        actor: Actor,
-        command: EditCommand,
-        prepared: PreparedEdit,
-    ) -> tuple[Revision, ...]:
-        row = await uow.settings.runtime(self._defaults, for_update=True)
-        before = RuntimeSettings.model_validate(prepared.before.unpack())
-        after = RuntimeSettings.model_validate(prepared.after.unpack())
-        for name, value in after.model_dump().items():
-            setattr(row, name, value)
-        assert actor.account_id is not None
-        await uow.settings.record_runtime_change(actor.account_id, before, after)
-        return (await uow.settings.flush_runtime_revision(row, command.expected[0]),)
+        async def audit(
+            uow: SettingsEditUnitOfWork, actor: Actor, before: RuntimeSettings, after: RuntimeSettings
+        ) -> None:
+            await uow.settings.record_runtime_change(actor.require_account_id(), before, after)
+
+        super().__init__(
+            Aggregate(RUNTIME_TARGET, load, lambda row: row.revision, flush),
+            RuntimeSettings,
+            authorize,
+            audit=audit,
+        )
 
 
 GUILD_EDIT = "settings.guild"
