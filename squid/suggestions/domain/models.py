@@ -8,6 +8,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from squid.core.actors import Actor
+
 MAX_SUGGESTIONS = 25
 """Maximum for nonzero request limits, matching Discord's autocomplete response limit."""
 
@@ -43,19 +45,6 @@ class ValueType(StrEnum):
 
     STRING = "string"
     INTEGER = "integer"
-
-
-@dataclass(frozen=True, slots=True)
-class SuggestionViewer:
-    """The identity a suggestion request is answered for.
-
-    The transport must resolve these IDs from its trusted caller context.
-    Providers use them to filter results; permission-node checks use a separate
-    `SuggestionAuthorizer`.
-    """
-
-    account_id: int | None = None
-    guild_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +89,7 @@ class SuggestionRequest:
     """Source-specific scoping, such as the build category an option set belongs to."""
 
     locale: str | None = None
-    viewer: SuggestionViewer = SuggestionViewer()
+    viewer: Actor = Actor()
     cursor: int | None = None
     """Python character offset in `query`; `None` places the caret at the end."""
 

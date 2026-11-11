@@ -13,10 +13,11 @@ from squid.api.dependencies import CurrentCaller, Suggestions
 from squid.api.errors import responses
 from squid.api.security import Caller
 from squid.api.v1.schemas.suggest import SuggestionPage, SuggestionSourceInfo
+from squid.core.actors import Actor
 from squid.core.i18n import negotiate_locale
 from squid.permissions.domain.catalogue import CATALOGUE
 from squid.suggestions.application import SuggestionService
-from squid.suggestions.domain import MAX_SUGGESTIONS, SourceKind, SuggestionRequest, SuggestionViewer
+from squid.suggestions.domain import MAX_SUGGESTIONS, SourceKind, SuggestionRequest
 
 router = APIRouter(prefix="/suggest", tags=["suggest"])
 
@@ -68,7 +69,7 @@ async def suggest(
             limit=limit,
             context={} if category is None else {"category": category},
             locale=negotiate_locale(request.headers.get("accept-language")),
-            viewer=SuggestionViewer(account_id=caller.account_id),
+            viewer=Actor(account_id=caller.account_id),
             cursor=cursor,
         ),
         authorizer=_CallerAuthorizer(request, caller),

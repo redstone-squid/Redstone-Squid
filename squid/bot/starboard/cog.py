@@ -28,7 +28,6 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_WEIGHT_EDIT,
 )
 from squid.posts.domain import starboard_entry_key
-from squid.reactions.domain import ReactionActor
 from squid.starboard.models import OriginMessage
 
 if TYPE_CHECKING:
@@ -78,7 +77,11 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         origin = self._origin(message, member.guild)
         result = await self.service.record_vote(
             origin,
-            ReactionActor(member.id, member.guild.id, frozenset(role.id for role in member.roles)),
+            Actor(
+                discord_user_id=member.id,
+                guild_id=member.guild.id,
+                discord_role_ids=frozenset(role.id for role in member.roles),
+            ),
             event.emoji,
         )
         if result.remove_reaction:
@@ -132,7 +135,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         guild = message.guild
         if guild is None:
             return ()
-        reactions: list[tuple[ReactionActor, str]] = []
+        reactions: list[tuple[Actor, str]] = []
         for reaction in message.reactions:
             emoji = str(reaction.emoji)
             if not await self.service.is_relevant_emoji(guild.id, emoji):
@@ -142,7 +145,11 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                     continue
                 member = user if isinstance(user, discord.Member) else await self._member(guild, user.id)
                 if member is not None:
-                    actor = ReactionActor(member.id, guild.id, frozenset(role.id for role in member.roles))
+                    actor = Actor(
+                        discord_user_id=member.id,
+                        guild_id=guild.id,
+                        discord_role_ids=frozenset(role.id for role in member.roles),
+                    )
                     reactions.append((actor, emoji))
         keys = await self.service.recount(self._origin(message, guild), tuple(reactions))
         self._schedule(keys, force=True)

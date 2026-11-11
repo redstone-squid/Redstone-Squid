@@ -7,11 +7,11 @@ import pytest
 
 from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote
+from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.voting.application import VoteService
 from squid.voting.domain import (
     CastVoteResult,
-    VoteActor,
     VoteChoice,
     VoteKind,
     VoteMessage,
@@ -48,7 +48,7 @@ def account(subject: str = "account:1") -> Caller:
 @dataclass(frozen=True)
 class CastCall:
     session_id: int
-    actor: VoteActor
+    actor: Actor
     option_id: str
 
 
@@ -67,7 +67,7 @@ class VoteRecorder(VoteService):
     async def cast_vote(
         self,
         vote_session_id: int,
-        actor: VoteActor,
+        actor: Actor,
         option_id: str,
         *,
         emoji: str | None = None,
@@ -80,15 +80,15 @@ class VoteRecorder(VoteService):
 
 
 class MemberRecorder:
-    def __init__(self, actor: VoteActor) -> None:
+    def __init__(self, actor: Actor) -> None:
         self.actor = actor
         self.calls: list[tuple[int, int, VoteKind]] = []
 
-    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         self.calls.append((account_id, guild_id, kind))
         return self.actor
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         return await self.member(account_id, guild_id, kind)
 
     async def aclose(self) -> None:
@@ -99,7 +99,7 @@ class MemberRecorder:
 @pytest.mark.asyncio
 async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: int) -> None:
     session = snapshot()
-    actor = VoteActor(1, 7, guild_id=guild_id, role_ids=frozenset({99}))
+    actor = Actor(account_id=1, discord_user_id=7, guild_id=guild_id, discord_role_ids=frozenset({99}))
     votes = VoteRecorder(session)
     members = MemberRecorder(actor)
 
@@ -120,7 +120,7 @@ async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: in
 async def test_a_cli_caller_with_no_discord_identity_can_vote() -> None:
     """The route resolves guild membership from the account-backed CLI caller."""
     session = snapshot()
-    actor = VoteActor(1, 7, guild_id=10, role_ids=frozenset({99}))
+    actor = Actor(account_id=1, discord_user_id=7, guild_id=10, discord_role_ids=frozenset({99}))
     votes = VoteRecorder(session)
     members = MemberRecorder(actor)
     cli = Caller(
@@ -163,7 +163,7 @@ async def test_every_vote_rejection_maps_to_a_typed_api_error(
 ) -> None:
     session = snapshot()
     votes = VoteRecorder(session, rejection=rejection)
-    members = MemberRecorder(VoteActor(1, 7, guild_id=10))
+    members = MemberRecorder(Actor(account_id=1, discord_user_id=7, guild_id=10))
 
     with pytest.raises(error_type):
         await cast_vote(

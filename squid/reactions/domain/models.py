@@ -1,6 +1,6 @@
 """Shared inputs for weighting voting and starboard reactions.
 
-ReactionActor carries Discord member facts and already-resolved capability names.
+Actor carries Discord member facts and already-resolved capability names.
 WeightScope selects the guild and feature configuration. A policy combines those
 inputs with configured role multipliers to return a positive weight or reject an
 ineligible actor, without depending on Discord library objects.
@@ -11,17 +11,6 @@ from math import isfinite
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-
-
-@dataclass(frozen=True, slots=True)
-class ReactionActor:
-    """The member facts that authorize and weight a reaction, as plain values."""
-
-    user_id: int
-    guild_id: int = 0
-    role_ids: frozenset[int] = frozenset()
-    capabilities: frozenset[str] = frozenset()
-    """Permission node names this actor was resolved to hold; see `VoteActor`."""
 
 
 @dataclass(frozen=True, slots=True)

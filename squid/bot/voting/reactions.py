@@ -25,13 +25,14 @@ from squid.bot.reactions import (
 )
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
+from squid.core.actors import Actor
 from squid.core.i18n import tr
 from squid.core.locks import KeyedLock
 from squid.runtime import JobHandle
 from squid.voting.application.accounts import AccountConsentedVoterLookup
 from squid.voting.application.ports import VoteActorResolver
 from squid.voting.application.recount import BallotRecounter
-from squid.voting.domain import CastVoteResult, VoteActor, VoteRejection, VoteSessionSnapshot
+from squid.voting.domain import CastVoteResult, VoteRejection, VoteSessionSnapshot
 from squid_ui.text import Message, localization_scope, raw_md
 from squid_ui_discord import send_to
 
@@ -135,7 +136,7 @@ class VoteReactionHandler:
                 await self._decline_unconsented_vote(message, member, payload.emoji)
             return
         actor = await resolve_actor(self.bot, member, account_id=account_id)
-        previous = snapshot.selection_for(actor.account_id)
+        previous = snapshot.selection_for(actor.require_account_id())
         if not recovering and not snapshot.is_anonymous and previous is not None and previous.option_id != option.id:
             await self._remove_reaction(message, previous.emoji, member)
         result, changed = await self._set_reaction_selection(snapshot, actor, emoji, selected=True)
@@ -216,17 +217,19 @@ class VoteReactionHandler:
         return changed
 
     async def _set_reaction_selection(
-        self, snapshot: VoteSessionSnapshot, actor: VoteActor, emoji: str, *, selected: bool
+        self, snapshot: VoteSessionSnapshot, actor: Actor, emoji: str, *, selected: bool
     ) -> tuple[CastVoteResult, bool]:
         """Make the stored ballot match whether this reaction is present.
 
         Casting toggles, so it is only called when the stored selection differs. The
         actor is a member of the guild the reaction was made in, which decides the alias.
         """
+        if actor.guild_id is None:
+            return CastVoteResult(snapshot, VoteRejection.WRONG_GUILD), False
         option = snapshot.option_by_emoji(emoji, actor.guild_id)
         if option is None:
             return CastVoteResult(snapshot, VoteRejection.INVALID_OPTION), False
-        current = snapshot.selection_for(actor.account_id)
+        current = snapshot.selection_for(actor.require_account_id())
         already_selected = current is not None and current.option_id == option.id
         if selected is already_selected:
             return CastVoteResult(snapshot), False

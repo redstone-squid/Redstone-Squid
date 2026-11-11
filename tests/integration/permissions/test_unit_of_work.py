@@ -65,7 +65,7 @@ async def test_role_creation_commits_with_audit_and_rolls_back_if_audit_fails(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     permissions = PermissionService(uow_factory=factory)
     admin = PermissionAdministrationService(permissions, uow_factory=factory)
-    actor = await admin.actor(Actor(is_bot_owner=True))
+    actor = await admin.resolve_actor(Actor(is_bot_owner=True))
     role = await admin.create_role(actor, slug="uow-reviewer", name="Reviewer", rank=3)
     assert role.id > 0
     assert (await admin.role("uow-reviewer")).id == role.id

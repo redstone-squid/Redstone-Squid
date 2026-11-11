@@ -26,7 +26,6 @@ from squid.voting.application import VoteService
 from squid.voting.application.ports import VoteActorResolver
 from squid.voting.domain import (
     CastVoteResult,
-    VoteActor,
     VoteKind,
     VoteMessage,
     VoteRejection,
@@ -178,7 +177,7 @@ class Votes(VoteService):
             visibility=VoteVisibility.VISIBLE_LIVE, messages=(VoteMessage(100, 200, 10),)
         )
     )
-    casts: list[tuple[VoteActor, str, str | None]] = field(default_factory=list)
+    casts: list[tuple[Actor, str, str | None]] = field(default_factory=list)
     failure: Exception | None = None
     rejection: VoteRejection | None = None
     resolver: VoteActorResolver | None = None
@@ -203,7 +202,7 @@ class Votes(VoteService):
     async def cast_vote(
         self,
         vote_session_id: int,
-        actor: VoteActor,
+        actor: Actor,
         option_id: str,
         *,
         emoji: str | None = None,
@@ -338,9 +337,9 @@ async def test_routed_public_reactions_add_and_remove_a_ballot(reactions: Reacti
             await reactions.bot.reactions.dispatch_remove(reactions.event("REACTION_REMOVE").payload)
             await reactions.refreshed.get()
 
-    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "one", "1️⃣")] * 2
+    assert reactions.votes.casts == [(Actor(account_id=7, discord_user_id=70, guild_id=10), "one", "1️⃣")] * 2
     assert reactions.refreshes == [("vote_session", "1")] * 2
-    assert reactions.permissions.subjects == [Actor(account_id=7, guild_id=10)] * 2
+    assert reactions.permissions.subjects == [Actor(account_id=7, discord_user_id=70, guild_id=10)] * 2
 
 
 async def test_anonymous_reaction_is_removed_only_after_commit(reactions: ReactionHarness) -> None:
@@ -376,7 +375,7 @@ async def test_recount_changes_public_selection_but_keeps_it_when_discord_is_una
         message.reactions = [Reaction("1️⃣"), Reaction("2️⃣", (Member(reactions.guilds[10]),))]
         await reactions.cog.reactions.recount(1)
 
-    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "two", "2️⃣")]
+    assert reactions.votes.casts == [(Actor(account_id=7, discord_user_id=70, guild_id=10), "two", "2️⃣")]
     assert reactions.refreshes == [("vote_session", "1")]
 
 
@@ -427,7 +426,7 @@ async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_s
             reactions.event("REACTION_REMOVE", message_id=101, recovering=True)
         )
 
-    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=11), "one", "🔴")]
+    assert reactions.votes.casts == [(Actor(account_id=7, discord_user_id=70, guild_id=11), "one", "🔴")]
 
 
 async def test_clear_and_recovery_restore_options_without_toggling_ballots(reactions: ReactionHarness) -> None:
@@ -488,6 +487,6 @@ async def test_only_live_public_replacement_takes_back_the_previous_reaction(
     async with reactions.running():
         await handler.on_reaction_add(reactions.event(emoji="2️⃣", recovering=recovering))
 
-    assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "two", "2️⃣")]
+    assert reactions.votes.casts == [(Actor(account_id=7, discord_user_id=70, guild_id=10), "two", "2️⃣")]
     assert reactions.messages[100].removed == ([] if recovering else [("1️⃣", 70)])
     assert reactions.refreshes == [("vote_session", "1")]

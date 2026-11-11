@@ -3,6 +3,7 @@
 import anyio
 import pytest
 
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.suggestions.application import (
     Candidate,
@@ -19,7 +20,6 @@ from squid.suggestions.domain import (
     Suggestion,
     SuggestionRequest,
     SuggestionResult,
-    SuggestionViewer,
     Visibility,
 )
 from squid.suggestions.infrastructure.providers import StaticProvider
@@ -137,7 +137,7 @@ async def test_viewer_scoped_source_is_refused_for_an_anonymous_caller() -> None
     source = SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES), visibility=Visibility.VIEWER_SCOPED)
     service = service_for(source)
     assert (await service.suggest(SuggestionRequest(source="restrictions"))).items == ()
-    signed_in = SuggestionRequest(source="restrictions", viewer=SuggestionViewer(account_id=7))
+    signed_in = SuggestionRequest(source="restrictions", viewer=Actor(account_id=7))
     assert (await service.suggest(signed_in)).items
 
 

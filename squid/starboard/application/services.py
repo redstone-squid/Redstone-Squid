@@ -4,10 +4,11 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from math import isfinite
 
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.reactions.application import RoleWeightPolicy
-from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
+from squid.reactions.domain import RoleMultiplier, WeightScope
 from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.application.ports import (
     EntryKey,
@@ -59,13 +60,14 @@ class StarboardService:
         async with self._uow_factory() as uow:
             return emoji in await uow.starboards.relevant_emojis(guild_id)
 
-    async def record_vote(self, origin: OriginMessage, actor: ReactionActor, emoji: str) -> StarboardVoteResult:
+    async def record_vote(self, origin: OriginMessage, actor: Actor, emoji: str) -> StarboardVoteResult:
         """Record accepted votes across matching boards in one transaction.
 
         A member has one vote per origin and board, so another emoji replaces it.
         Removal is requested if any rejecting board asks for cleanup, even when
         another board accepts the same reaction.
         """
+        user_id = actor.require_discord_user_id()
         async with self._uow_factory() as uow:
             weight_policy = self._weight_policy(uow.starboards)
             pending: list[PendingVote] = []
@@ -82,7 +84,7 @@ class StarboardService:
                 option = next(item for item in config.emojis if item.emoji == emoji)
                 assert role_weight is not None
                 pending.append(PendingVote(config, emoji, verdict.direction, role_weight * option.multiplier))
-            keys = await uow.starboards.record_votes(origin, actor.user_id, pending) if pending else ()
+            keys = await uow.starboards.record_votes(origin, user_id, pending) if pending else ()
             result = StarboardVoteResult(tuple(keys), remove_reaction)
             await uow.commit()
             return result
@@ -93,9 +95,7 @@ class StarboardService:
             await uow.commit()
             return result
 
-    async def recount(
-        self, origin: OriginMessage, reactions: tuple[tuple[ReactionActor, str], ...]
-    ) -> tuple[EntryKey, ...]:
+    async def recount(self, origin: OriginMessage, reactions: tuple[tuple[Actor, str], ...]) -> tuple[EntryKey, ...]:
         """Replace the origin's stored votes from a complete reaction snapshot.
 
         Later accepted reactions win when a member has several emojis on the same
@@ -107,6 +107,7 @@ class StarboardService:
             configs = await uow.starboards.configs_for_source(origin.guild_id, origin.channel_id)
             accepted: dict[tuple[int, int], tuple[int, PendingVote]] = {}
             for actor, emoji in reactions:
+                user_id = actor.require_discord_user_id()
                 for config in configs:
                     verdict = evaluate_vote(config, origin, actor, emoji)
                     if verdict.action != "accept" or verdict.direction is None:
@@ -115,8 +116,8 @@ class StarboardService:
                     role_weight = await weight_policy.calculate(actor, scope)
                     option = next(item for item in config.emojis if item.emoji == emoji)
                     assert role_weight is not None
-                    accepted[(actor.user_id, config.id)] = (
-                        actor.user_id,
+                    accepted[(user_id, config.id)] = (
+                        user_id,
                         PendingVote(config, emoji, verdict.direction, role_weight * option.multiplier),
                     )
             result = tuple(await uow.starboards.recount_votes(origin, tuple(accepted.values())))

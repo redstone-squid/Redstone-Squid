@@ -17,7 +17,6 @@ from squid.suggestions.domain import (
     Suggestion,
     SuggestionRequest,
     SuggestionResult,
-    SuggestionViewer,
     ValueType,
     Visibility,
 )
@@ -32,7 +31,6 @@ __all__ = [
     "SuggestionResult",
     "SuggestionService",
     "SuggestionSource",
-    "SuggestionViewer",
     "UnknownSuggestionSourceError",
     "ValueType",
     "Visibility",

@@ -5,13 +5,13 @@ from typing import Protocol
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.unit_of_work import UnitOfWork
 from squid.voting.domain import (
     EmojiPreset,
     PollScope,
     RoleWeight,
     StoredVoteMutation,
-    VoteActor,
     VoteChange,
     VoteKind,
     VoteOption,
@@ -26,16 +26,16 @@ class VoteWeightPolicy(Protocol):
     VoteService applies the selected option's multiplier to this weight.
     """
 
-    async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot) -> float | None: ...
+    async def calculate(self, actor: Actor, session: VoteSessionSnapshot) -> float | None: ...
 
 
 class VoteActorResolver(Protocol):
     """Resolve membership in the guild whose roles determine ballot weight."""
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         """Return the account's membership facts in `guild_id`.
 
-        An account that is definitely not a member resolves to a `VoteActor` with
+        An account that is definitely not a member resolves to a `Actor` with
         no roles or capabilities. The policy then determines whether the account is
         still eligible and what weight it receives. `None` means membership could
         not be established; refreshes preserve the ballot's cached weight.
@@ -46,7 +46,7 @@ class VoteActorResolver(Protocol):
 class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
     """Resolve membership for an interactive transport and surface dependency failure."""
 
-    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None: ...
+    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None: ...
 
 
 class VoteRepository(Protocol):

@@ -8,10 +8,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.messages.models import Message
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.reactions.domain import ReactionActor
 from squid.starboard.application import PendingVote, StarboardService
 from squid.starboard.models import OriginMessage
 
@@ -61,8 +61,8 @@ async def test_concurrent_votes_commit_and_abandoned_votes_leave_no_entry(
         await repository.record_votes(origin, 50, ())
 
     async with create_task_group() as tasks:
-        tasks.start_soon(service.record_vote, origin, ReactionActor(50, 10), "⭐")
-        tasks.start_soon(service.record_vote, origin, ReactionActor(51, 10), "⭐")
+        tasks.start_soon(service.record_vote, origin, Actor(discord_user_id=50, guild_id=10), "⭐")
+        tasks.start_soon(service.record_vote, origin, Actor(discord_user_id=51, guild_id=10), "⭐")
     stored = await service.entry_state(config.id, origin.id)
     assert stored is not None
     assert stored.entry.score == 2.0

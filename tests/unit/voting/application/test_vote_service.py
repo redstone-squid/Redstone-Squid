@@ -6,6 +6,8 @@ from math import inf, nan
 import pytest
 from whenever import Instant
 
+from squid.core.actors import Actor
+from squid.core.errors import AuthenticationError
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.voting.application import VoteService
 from squid.voting.domain import (
@@ -16,7 +18,6 @@ from squid.voting.domain import (
     PollScope,
     RoleWeight,
     StoredVoteMutation,
-    VoteActor,
     VoteChange,
     VoteChoice,
     VoteKind,
@@ -233,17 +234,17 @@ class MissingActorResolver:
 class RecordingActorResolver:
     """Resolve members from a fixed roster, recording which guild was asked."""
 
-    def __init__(self, members: dict[tuple[int, int], VoteActor] | None = None):
+    def __init__(self, members: dict[tuple[int, int], Actor] | None = None):
         self.members = members or {}
         self.calls: list[tuple[int, int]] = []
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         del kind
         self.calls.append((account_id, guild_id))
         if (account_id, guild_id) in self.members:
             return self.members[(account_id, guild_id)]
         # Definitely not a member, as opposed to a guild we could not reach.
-        return VoteActor(account_id=account_id, discord_id=account_id * 10, guild_id=guild_id)
+        return Actor(account_id=account_id, discord_user_id=account_id * 10, guild_id=guild_id)
 
 
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
@@ -344,9 +345,9 @@ async def test_cast_vote_applies_choice_and_staff_weight(
 
     result = await service.cast_vote(
         12,
-        VoteActor(
+        Actor(
             account_id=7,
-            discord_id=70,
+            discord_user_id=70,
             guild_id=OWNER_GUILD_ID,
             capabilities=STAFF if has_staff_weight else frozenset(),
         ),
@@ -389,7 +390,7 @@ async def test_cast_vote_resolves_a_stable_option_to_each_guild_alias(guild_id: 
     )
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    result = await service.cast_vote(12, VoteActor(7, 70, guild_id=guild_id), "approve")
+    result = await service.cast_vote(12, Actor(account_id=7, discord_user_id=70, guild_id=guild_id), "approve")
 
     assert result.accepted
     assert repository.cast_calls == [
@@ -408,7 +409,7 @@ async def test_cast_vote_resolves_a_stable_option_to_each_guild_alias(guild_id: 
 async def test_cast_vote_rejects_missing_session() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
 
-    result = await service.cast_vote(404, VoteActor(7, 70, guild_id=10), "approve")
+    result = await service.cast_vote(404, Actor(account_id=7, discord_user_id=70, guild_id=10), "approve")
 
     assert result.rejection is VoteRejection.NOT_FOUND
     assert result.session is None
@@ -418,7 +419,7 @@ async def test_cast_vote_rejects_a_guild_the_session_is_not_published_in() -> No
     repository = FakeVoteRepository(snapshot())
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    result = await service.cast_vote(12, VoteActor(7, 70, guild_id=999), "approve")
+    result = await service.cast_vote(12, Actor(account_id=7, discord_user_id=70, guild_id=999), "approve")
 
     assert result.rejection is VoteRejection.WRONG_GUILD
     assert repository.cast_calls == []
@@ -428,7 +429,7 @@ async def test_cast_vote_rejects_unknown_option_identifier() -> None:
     repository = FakeVoteRepository(snapshot())
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    result = await service.cast_vote(12, VoteActor(7, 70, guild_id=10), "missing")
+    result = await service.cast_vote(12, Actor(account_id=7, discord_user_id=70, guild_id=10), "missing")
 
     assert result.rejection is VoteRejection.INVALID_OPTION
     assert repository.cast_calls == []
@@ -440,7 +441,7 @@ async def test_delete_log_vote_requires_the_delete_log_capability() -> None:
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID),
         "approve",
         emoji="👍",
     )
@@ -462,7 +463,7 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF | DELETE_LOG),
+        Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF | DELETE_LOG),
         "approve",
         emoji="👍",
     )
@@ -487,7 +488,7 @@ async def test_closed_vote_is_rejected_before_mutation() -> None:
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, capabilities=DELETE_LOG, guild_id=OWNER_GUILD_ID),
+        Actor(account_id=7, discord_user_id=70, capabilities=DELETE_LOG, guild_id=OWNER_GUILD_ID),
         "approve",
         emoji="👍",
     )
@@ -510,7 +511,7 @@ async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID),
         "approve",
         emoji="👍",
     )
@@ -537,7 +538,7 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
     repository.get_by_id = get_after_mutation  # type: ignore[method-assign]
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID),
         "deny",
         emoji="👎",
     )
@@ -563,7 +564,7 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
+        Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
         "approve",
         emoji="<:strong_yes:123>",
     )
@@ -588,7 +589,7 @@ async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID),
+        Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID),
         "approve",
         emoji="🤷",
     )
@@ -697,8 +698,8 @@ async def test_closing_a_poll_requires_the_creator_or_the_close_any_capability()
     )
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
-    stranger = await service.close(12, VoteActor(8, 80, guild_id=10))
-    creator = await service.close(12, VoteActor(7, 70, guild_id=10))
+    stranger = await service.close(12, Actor(account_id=8, discord_user_id=80, guild_id=10))
+    creator = await service.close(12, Actor(account_id=7, discord_user_id=70, guild_id=10))
 
     assert stranger.rejection is VoteRejection.NOT_AUTHORIZED
     assert creator.accepted
@@ -715,7 +716,11 @@ async def test_build_vote_weighs_by_the_owner_guild_not_the_voting_guild() -> No
     }
     repository.mutation = StoredVoteMutation(initial, None, 4.0, just_closed=False)
     resolver = RecordingActorResolver(
-        {(7, OWNER_GUILD_ID): VoteActor(7, 70, guild_id=OWNER_GUILD_ID, role_ids=frozenset({55}))}
+        {
+            (7, OWNER_GUILD_ID): Actor(
+                account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID, discord_role_ids=frozenset({55})
+            )
+        }
     )
     service = VoteService(
         actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
@@ -723,7 +728,7 @@ async def test_build_vote_weighs_by_the_owner_guild_not_the_voting_guild() -> No
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=VOTING_GUILD_ID, role_ids=frozenset({77})),
+        Actor(account_id=7, discord_user_id=70, guild_id=VOTING_GUILD_ID, discord_role_ids=frozenset({77})),
         "approve",
         emoji="👍",
     )
@@ -749,11 +754,11 @@ async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> Non
 
     result = await service.cast_vote(
         12,
-        VoteActor(
+        Actor(
             account_id=7,
-            discord_id=70,
+            discord_user_id=70,
             guild_id=VOTING_GUILD_ID,
-            role_ids=frozenset({77}),
+            discord_role_ids=frozenset({77}),
             capabilities=STAFF,
         ),
         "approve",
@@ -776,7 +781,7 @@ async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=VOTING_GUILD_ID, capabilities=STAFF),
+        Actor(account_id=7, discord_user_id=70, guild_id=VOTING_GUILD_ID, capabilities=STAFF),
         "approve",
         emoji="👍",
     )
@@ -793,7 +798,7 @@ async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() ->
 
     result = await service.cast_vote(
         12,
-        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
+        Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
         "approve",
         emoji="👍",
     )
@@ -814,7 +819,11 @@ async def test_refresh_reweighs_every_ballot_against_the_owner_guild() -> None:
         (VOTING_GUILD_ID, VoteKind.BUILD): [RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0)],
     }
     resolver = RecordingActorResolver(
-        {(8, OWNER_GUILD_ID): VoteActor(8, 80, guild_id=OWNER_GUILD_ID, role_ids=frozenset({55}))}
+        {
+            (8, OWNER_GUILD_ID): Actor(
+                account_id=8, discord_user_id=80, guild_id=OWNER_GUILD_ID, discord_role_ids=frozenset({55})
+            )
+        }
     )
     service = VoteService(
         actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
@@ -984,3 +993,31 @@ async def test_a_due_poll_is_recounted_before_it_closes_even_if_the_recount_fail
 
     assert recounted == [poll.id]
     assert resolver.calls == [(7, 77)]
+
+
+async def test_an_unlinked_discord_actor_cannot_cast_or_close_a_vote() -> None:
+    repository = FakeVoteRepository(shared_snapshot())
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    actor = Actor(discord_user_id=70, guild_id=OWNER_GUILD_ID)
+    with pytest.raises(AuthenticationError):
+        await service.cast_vote(12, actor, "approve")
+    with pytest.raises(AuthenticationError):
+        await service.close(12, actor)
+    assert repository.cast_calls == []
+
+
+async def test_owner_guild_fallback_clears_all_membership_authority() -> None:
+    repository = FakeVoteRepository(shared_snapshot())
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    actor = Actor(
+        account_id=7,
+        discord_user_id=70,
+        guild_id=VOTING_GUILD_ID,
+        discord_role_ids=frozenset({77}),
+        capabilities=STAFF,
+        is_bot_owner=True,
+        discord_guild_admin=True,
+        highest_permission_rank=999,
+    )
+    weighted = await service._weight_actor(actor, shared_snapshot(), OWNER_GUILD_ID)
+    assert weighted == Actor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID)

@@ -6,11 +6,11 @@ from typing import override
 
 import pytest
 
+from squid.core.actors import Actor
 from squid.voting.application import VoteService
 from squid.voting.application.recount import BallotRecounter, CardReactions
 from squid.voting.domain import (
     CastVoteResult,
-    VoteActor,
     VoteKind,
     VoteMessage,
     VoteRejection,
@@ -40,13 +40,13 @@ class Votes(VoteService):
     async def cast_vote(
         self,
         vote_session_id: int,
-        actor: VoteActor,
+        actor: Actor,
         option_id: str,
         *,
         emoji: str | None = None,
         toggle: bool = True,
     ) -> CastVoteResult:
-        self.casts.append((actor.account_id, option_id, emoji, toggle))
+        self.casts.append((actor.require_account_id(), option_id, emoji, toggle))
         return CastVoteResult(self.snapshot, self.rejection)
 
 
@@ -77,10 +77,10 @@ class Voters:
 class Actors:
     unreachable: frozenset[int] = frozenset()
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         if account_id in self.unreachable:
             return None
-        return VoteActor(account_id, account_id - 1000, guild_id)
+        return Actor(account_id=account_id, discord_user_id=account_id - 1000, guild_id=guild_id)
 
 
 def _snapshot(*, anonymous: bool = False, selections: tuple[VoteSelection, ...] = ()) -> VoteSessionSnapshot:

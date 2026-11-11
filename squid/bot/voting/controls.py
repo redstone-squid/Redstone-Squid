@@ -14,8 +14,9 @@ import squid_ui_discord as sd
 from squid.bot.routes._root import _feature_group
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
+from squid.core.actors import Actor
 from squid.core.i18n import tr
-from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
+from squid.voting.domain import VoteRejection, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -88,7 +89,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
 
 async def _authorize(
     request: sd.Request[squid.bot.app.RedstoneSquid],
-) -> tuple[VoteSessionSnapshot, VoteActor] | None:
+) -> tuple[VoteSessionSnapshot, Actor] | None:
     """The session and actor behind a click, or `None` once the click has been refused.
 
     Refreshing recomputes the weights a close would act on, so both controls are gated by

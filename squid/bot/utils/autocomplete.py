@@ -16,6 +16,7 @@ from discord import app_commands
 
 import squid_ui_discord as sd
 from squid.bot.utils.permissions import allows
+from squid.core.actors import Actor
 from squid.observability import trace_span
 from squid.suggestions.application import SuggestionSource
 from squid.suggestions.domain import (
@@ -23,7 +24,6 @@ from squid.suggestions.domain import (
     ReplacementSpan,
     Suggestion,
     SuggestionRequest,
-    SuggestionViewer,
     ValueType,
     Visibility,
 )
@@ -168,13 +168,13 @@ def _spliced_choice(
 async def _viewer(
     interaction: discord.Interaction[Any],
     source: SuggestionSource,
-) -> SuggestionViewer:
+) -> Actor:
     """Resolve the caller's identity, paying for the account lookup only when a source needs it."""
     if source.visibility is not Visibility.VIEWER_SCOPED:
-        return SuggestionViewer(guild_id=interaction.guild_id)
+        return Actor(guild_id=interaction.guild_id)
     bot = interaction.client
     account_id = await bot.account_ids.resolve(bot.services.accounts, interaction.user.id)
-    return SuggestionViewer(account_id=account_id, guild_id=interaction.guild_id)
+    return Actor(account_id=account_id, guild_id=interaction.guild_id)
 
 
 def _split(current: str, separator: str | None) -> tuple[str, str]:

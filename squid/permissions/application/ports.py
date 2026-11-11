@@ -6,6 +6,7 @@ from typing import Protocol
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 from squid.unit_of_work import UnitOfWork
 
@@ -51,17 +52,8 @@ class ActorCapabilityResolver(Protocol):
     so evaluating a policy does not itself perform permission queries.
     """
 
-    async def capabilities_for(
-        self,
-        *,
-        account_id: int | None,
-        discord_role_ids: Iterable[int],
-        guild_id: int | None,
-        is_bot_owner: bool = False,
-        discord_guild_admin: bool = False,
-        nodes: Iterable[str] = (),
-    ) -> frozenset[str]:
-        """Return the subset of `nodes` held by the described actor."""
+    async def capabilities(self, subject: Actor, nodes: Iterable[str]) -> frozenset[str]:
+        """Return the subset of requested nodes held by this actor."""
         ...
 
 

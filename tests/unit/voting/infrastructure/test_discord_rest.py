@@ -4,6 +4,7 @@ Script discord.py HTTP responses to check how interactive lookups and background
 weight refreshes distinguish absent members from unavailable membership information.
 """
 
+from collections.abc import Iterable
 from typing import Any, cast
 
 import aiohttp
@@ -12,6 +13,7 @@ from aiohttp import ClientResponse
 from discord.errors import DiscordServerError, Forbidden, HTTPException, NotFound, RateLimited
 from discord.http import HTTPClient, Route
 
+from squid.core.actors import Actor
 from squid.voting.domain import VoteKind
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 from squid.voting.infrastructure.discord_rest import (
@@ -56,8 +58,8 @@ class StubHTTPClient:
 class FakeCapabilities:
     """Grants the delete-log node to holders of role 11, as a role grant would."""
 
-    async def capabilities_for(self, *, discord_role_ids, nodes=(), **_kwargs) -> frozenset[str]:
-        held = "vote.log_delete.cast" if 11 in set(discord_role_ids) else ""
+    async def capabilities(self, actor: Actor, nodes: Iterable[str]) -> frozenset[str]:
+        held = "vote.log_delete.cast" if 11 in actor.discord_role_ids else ""
         return frozenset({node for node in nodes if node == held})
 
 
@@ -85,9 +87,9 @@ async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
 
     assert actor is not None
     assert actor.account_id == 1
-    assert actor.discord_id == 7
+    assert actor.discord_user_id == 7
     assert actor.guild_id == 10
-    assert actor.role_ids == frozenset({11, 22})
+    assert actor.discord_role_ids == frozenset({11, 22})
     assert actor.capabilities == frozenset({"vote.log_delete.cast"})
     assert http.calls == [(10, 7)]
 
@@ -131,10 +133,10 @@ async def test_member_caches_successful_lookup_for_five_minutes() -> None:
     refreshed = await resolver.member(1, 10, VoteKind.BUILD)
 
     assert first is not None
-    assert first.role_ids == frozenset({1})
+    assert first.discord_role_ids == frozenset({1})
     assert cached == first
     assert refreshed is not None
-    assert refreshed.role_ids == frozenset({2})
+    assert refreshed.discord_role_ids == frozenset({2})
     assert len(http.calls) == 2
 
 
@@ -270,7 +272,7 @@ async def test_resolve_reports_a_proven_absence_as_a_weightless_member() -> None
     actor = await resolver.resolve(1, 10, VoteKind.BUILD)
 
     assert actor is not None
-    assert actor.role_ids == frozenset()
+    assert actor.discord_role_ids == frozenset()
     assert actor.capabilities == frozenset()
     assert actor.guild_id == 10
 
@@ -292,4 +294,4 @@ async def test_resolve_reports_an_account_without_discord_as_weightless() -> Non
     actor = await resolver.resolve(1, 10, VoteKind.BUILD)
 
     assert actor is not None
-    assert actor.role_ids == frozenset()
+    assert actor.discord_role_ids == frozenset()

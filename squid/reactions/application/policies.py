@@ -4,12 +4,13 @@ from collections.abc import Callable
 from math import isfinite
 from typing import override
 
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.reactions.application.ports import RoleMultiplierProvider, WeightPolicy
-from squid.reactions.domain import ReactionActor, WeightScope
+from squid.reactions.domain import WeightScope
 
-type Eligibility = Callable[[ReactionActor, WeightScope], bool]
+type Eligibility = Callable[[Actor, WeightScope], bool]
 
 
 class RoleWeightPolicy(WeightPolicy):
@@ -38,11 +39,11 @@ class RoleWeightPolicy(WeightPolicy):
         self._staff_multiplier = staff_multiplier
 
     @override
-    async def calculate(self, actor: ReactionActor, scope: WeightScope) -> float | None:
+    async def calculate(self, actor: Actor, scope: WeightScope) -> float | None:
         if self._eligibility is not None and not self._eligibility(actor, scope):
             return None
         multipliers = await self._provider(scope)
-        configured = [item.multiplier for item in multipliers if item.role_id in actor.role_ids]
+        configured = [item.multiplier for item in multipliers if item.role_id in actor.discord_role_ids]
         if configured:
             return max(configured)
         has_staff_capability = bool(self._staff_capability) and self._staff_capability in actor.capabilities

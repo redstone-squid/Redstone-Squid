@@ -6,6 +6,7 @@ from math import isfinite
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.voting.application.policies import RoleVoteWeightPolicy
 from squid.voting.application.ports import VoteActorResolver, VoteUnitOfWork, VoteWeightPolicy
@@ -19,7 +20,6 @@ from squid.voting.domain import (
     EmojiPreset,
     PollScope,
     RoleWeight,
-    VoteActor,
     VoteChange,
     VoteChoice,
     VoteKind,
@@ -82,8 +82,8 @@ class VoteService:
                 return snapshot.poll.guild_id if snapshot.poll is not None else None
 
     async def _weight_actor(
-        self, actor: VoteActor, snapshot: VoteSessionSnapshot, owner_guild_id: int | None
-    ) -> VoteActor | None:
+        self, actor: Actor, snapshot: VoteSessionSnapshot, owner_guild_id: int | None
+    ) -> Actor | None:
         """Resolve the voter in the guild whose role weights govern the session.
 
         With no owner guild, retain the supplied actor for eligibility checks. With no
@@ -93,8 +93,8 @@ class VoteService:
         if owner_guild_id is None or actor.guild_id == owner_guild_id:
             return actor
         if self._actor_resolver is None:
-            return VoteActor(account_id=actor.account_id, discord_id=actor.discord_id, guild_id=owner_guild_id)
-        return await self._actor_resolver.resolve(actor.account_id, owner_guild_id, snapshot.kind)
+            return Actor(account_id=actor.account_id, discord_user_id=actor.discord_user_id, guild_id=owner_guild_id)
+        return await self._actor_resolver.resolve(actor.require_account_id(), owner_guild_id, snapshot.kind)
 
     async def start_build_vote(
         self,
@@ -245,7 +245,7 @@ class VoteService:
     async def cast_vote(
         self,
         vote_session_id: int,
-        actor: VoteActor,
+        actor: Actor,
         option_id: str,
         *,
         emoji: str | None = None,
@@ -265,12 +265,13 @@ class VoteService:
         owner-guild lookup uses base weight 1 for the new ballot, before the option
         multiplier. Unresolved existing ballots retain their cached weights.
         """
+        account_id = actor.require_account_id()
         snapshot = await self.get_session(vote_session_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
         if not snapshot.is_open:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
-        if actor.guild_id not in {message.guild_id for message in snapshot.messages}:
+        if actor.guild_id is None or actor.guild_id not in {message.guild_id for message in snapshot.messages}:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
         option = snapshot.option_by_id(option_id, actor.guild_id, emoji=emoji)
         if option is None:
@@ -314,7 +315,7 @@ class VoteService:
             )
         async with self._uow_factory() as uow:
             mutation = await uow.votes.cast_vote(
-                vote_session_id, actor.account_id, actor.guild_id, option, weight, refreshed, toggle=toggle
+                vote_session_id, account_id, actor.guild_id, option, weight, refreshed, toggle=toggle
             )
             await uow.commit()
         if mutation is None:
@@ -354,8 +355,9 @@ class VoteService:
             mutation.just_closed if mutation is not None else False,
         )
 
-    async def close(self, vote_session_id: int, actor: VoteActor) -> CastVoteResult:
+    async def close(self, vote_session_id: int, actor: Actor) -> CastVoteResult:
         """Refresh and close a generic poll if its author or an authorized actor requests it."""
+        actor.require_account_id()
         snapshot = await self.get_session(vote_session_id)
         if snapshot is None:
             return CastVoteResult(None, VoteRejection.NOT_FOUND)
@@ -487,7 +489,7 @@ class VoteService:
                 await self._refresh_snapshot(snapshot)
 
     async def _calculate_refresh(
-        self, snapshot: VoteSessionSnapshot, *, replacing: VoteActor | None = None
+        self, snapshot: VoteSessionSnapshot, *, replacing: Actor | None = None
     ) -> tuple[dict[int, float], list[int]]:
         """Calculate replacement weights without changing stored ballots.
 

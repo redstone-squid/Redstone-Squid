@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Literal
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.scores import round_score
-from squid.reactions.domain import ReactionActor
 
 type StarboardDirection = Literal["up", "down"]
 type VoteVerdictAction = Literal["accept", "ignore", "remove_reaction"]
@@ -64,7 +64,7 @@ class VoteVerdict:
 def evaluate_vote(
     config: StarboardConfig,
     origin: OriginMessage,
-    actor: ReactionActor,
+    actor: Actor,
     emoji: str,
     *,
     now: Instant | None = None,
@@ -78,7 +78,9 @@ def evaluate_vote(
     option = next((item for item in config.emojis if item.emoji == emoji), None)
     if option is None or not config.enabled or not origin.present:
         return VoteVerdict.ignore()
-    if (not config.self_vote and actor.user_id == origin.author_id) or (not config.allow_bots and origin.author_is_bot):
+    if (not config.self_vote and actor.discord_user_id == origin.author_id) or (
+        not config.allow_bots and origin.author_is_bot
+    ):
         return VoteVerdict.remove_reaction()
     if config.require_image and not origin.has_image:
         return VoteVerdict.remove_reaction()

@@ -19,6 +19,7 @@ from math import isfinite
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.scores import round_score
 from squid.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY
 from squid.voting.errors import InvalidVoteConfigurationError
@@ -148,18 +149,6 @@ class VoteSelection:
         if not isfinite(self.weight) or self.weight <= 0:
             msg = "Cached vote weight must be finite and greater than zero."
             raise InvalidVoteConfigurationError(msg)
-
-
-@dataclass(frozen=True, slots=True)
-class VoteActor:
-    """An account plus current Discord membership facts used to weight a ballot."""
-
-    account_id: int
-    discord_id: int
-    guild_id: int = 0
-    role_ids: frozenset[int] = frozenset()
-    capabilities: frozenset[str] = frozenset()
-    """Permission node names resolved by the adapter before constructing this actor."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,7 +320,7 @@ class VoteSessionSnapshot:
         """Return whether the transport should remove the reaction to hide the voter's choice."""
         return self.is_anonymous
 
-    def can_close(self, actor: VoteActor) -> VoteRejection | None:
+    def can_close(self, actor: Actor) -> VoteRejection | None:
         """Return why `actor` may not close this session, or None when they may."""
         if self.kind is not VoteKind.GENERIC or self.poll is None:
             return VoteRejection.NOT_AUTHORIZED

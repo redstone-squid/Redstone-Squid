@@ -3,11 +3,12 @@
 from collections.abc import Awaitable, Callable, Sequence
 from typing import override
 
+from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.reactions.application import RoleWeightPolicy
-from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
+from squid.reactions.domain import RoleMultiplier, WeightScope
 from squid.voting.application.ports import VoteWeightPolicy
-from squid.voting.domain import RoleWeight, VoteActor, VoteKind, VoteSessionSnapshot
+from squid.voting.domain import RoleWeight, VoteKind, VoteSessionSnapshot
 
 type RoleWeightProvider = Callable[[int, VoteKind], Awaitable[Sequence[RoleWeight]]]
 
@@ -35,11 +36,7 @@ class RoleVoteWeightPolicy(VoteWeightPolicy):
         )
 
     @override
-    async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot) -> float | None:
-        reaction_actor = ReactionActor(
-            user_id=actor.discord_id,
-            guild_id=actor.guild_id,
-            role_ids=actor.role_ids,
-            capabilities=actor.capabilities,
-        )
-        return await self._policy.calculate(reaction_actor, WeightScope(actor.guild_id, session.kind))
+    async def calculate(self, actor: Actor, session: VoteSessionSnapshot) -> float | None:
+        if actor.guild_id is None:
+            return None
+        return await self._policy.calculate(actor, WeightScope(actor.guild_id, session.kind))

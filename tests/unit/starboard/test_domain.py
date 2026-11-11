@@ -5,8 +5,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.messages.models import Message
-from squid.reactions.domain import ReactionActor
 from squid.starboard.domain import entry_should_be_posted, evaluate_vote
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 
@@ -43,30 +43,30 @@ def origin(*, deleted_at: Instant | None = None, **changes: object) -> OriginMes
 @pytest.mark.parametrize(
     ("changes", "actor", "expected"),
     [
-        ({}, ReactionActor(40), "remove_reaction"),
-        ({"self_vote": True}, ReactionActor(40), "accept"),
-        ({"allow_bots": False}, ReactionActor(41), "accept"),
-        ({"require_image": True}, ReactionActor(41), "remove_reaction"),
-        ({"min_age_seconds": 61}, ReactionActor(41), "remove_reaction"),
-        ({"max_age_seconds": 59}, ReactionActor(41), "remove_reaction"),
+        ({}, Actor(discord_user_id=40), "remove_reaction"),
+        ({"self_vote": True}, Actor(discord_user_id=40), "accept"),
+        ({"allow_bots": False}, Actor(discord_user_id=41), "accept"),
+        ({"require_image": True}, Actor(discord_user_id=41), "remove_reaction"),
+        ({"min_age_seconds": 61}, Actor(discord_user_id=41), "remove_reaction"),
+        ({"max_age_seconds": 59}, Actor(discord_user_id=41), "remove_reaction"),
     ],
 )
-def test_vote_policy(changes: dict[str, object], actor: ReactionActor, expected: str) -> None:
+def test_vote_policy(changes: dict[str, object], actor: Actor, expected: str) -> None:
     assert evaluate_vote(config(**changes), origin(), actor, "⭐", now=NOW).action == expected
 
 
 def test_vote_policy_rejects_bot_authors_and_accepts_age_boundaries() -> None:
     assert (
-        evaluate_vote(config(), origin(author_is_bot=True), ReactionActor(41), "⭐", now=NOW).action
+        evaluate_vote(config(), origin(author_is_bot=True), Actor(discord_user_id=41), "⭐", now=NOW).action
         == "remove_reaction"
     )
     bounded = config(min_age_seconds=60, max_age_seconds=60)
-    assert evaluate_vote(bounded, origin(), ReactionActor(41), "⭐", now=NOW).action == "accept"
+    assert evaluate_vote(bounded, origin(), Actor(discord_user_id=41), "⭐", now=NOW).action == "accept"
 
 
 def test_unconfigured_reactions_and_deleted_origins_are_ignored() -> None:
-    assert evaluate_vote(config(), origin(), ReactionActor(41), "other", now=NOW).action == "ignore"
-    assert evaluate_vote(config(), origin(deleted_at=NOW), ReactionActor(41), "⭐", now=NOW).action == "ignore"
+    assert evaluate_vote(config(), origin(), Actor(discord_user_id=41), "other", now=NOW).action == "ignore"
+    assert evaluate_vote(config(), origin(deleted_at=NOW), Actor(discord_user_id=41), "⭐", now=NOW).action == "ignore"
 
 
 @pytest.mark.parametrize(

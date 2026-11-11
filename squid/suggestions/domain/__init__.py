@@ -8,7 +8,6 @@ from squid.suggestions.domain.models import (
     Suggestion,
     SuggestionRequest,
     SuggestionResult,
-    SuggestionViewer,
     ValueType,
     Visibility,
 )
@@ -21,7 +20,6 @@ __all__ = [
     "Suggestion",
     "SuggestionRequest",
     "SuggestionResult",
-    "SuggestionViewer",
     "ValueType",
     "Visibility",
 ]

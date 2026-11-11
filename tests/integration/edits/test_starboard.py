@@ -14,7 +14,6 @@ from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, Re
 from squid.messages.models import Message
 from squid.permissions.application.services import PermissionService
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.reactions.domain import ReactionActor
 from squid.starboard.application.edits import (
     STARBOARD_CREATE,
     STARBOARD_DELETE,
@@ -132,7 +131,7 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
             id=100, guild_id=10, channel_id=30, author_id=40, created_at=Instant.now().subtract(seconds=60)
         ),
     )
-    await service.record_vote(origin, ReactionActor(50, 10), "⭐")
+    await service.record_vote(origin, Actor(discord_user_id=50, guild_id=10), "⭐")
     with pytest.raises(ConflictError, match="already in use"):
         await executor.execute(created.receipt.inverse(created.outcome.revisions), ACTOR)
     deleted = await executor.execute(EditCommand(STARBOARD_DELETE, created.outcome.revisions, EditValues.of({})), ACTOR)
@@ -140,7 +139,7 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
     assert deleted.receipt.final
     assert await service.list_for_guild(10) == ()
     assert not await service.is_relevant_emoji(10, "⭐")
-    ignored = await service.record_vote(origin, ReactionActor(51, 10), "⭐")
+    ignored = await service.record_vote(origin, Actor(discord_user_id=51, guild_id=10), "⭐")
     assert ignored.keys == ()
 
 
@@ -177,7 +176,7 @@ async def test_first_vote_and_creation_undo_cannot_both_win(
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(undo)
-        tasks.start_soon(service.record_vote, origin, ReactionActor(50, 10), "⭐")
+        tasks.start_soon(service.record_vote, origin, Actor(discord_user_id=50, guild_id=10), "⭐")
     async with factory() as uow:
         stored = await uow.starboards.get_by_id(identity, include_archived=True)
         assert stored is not None

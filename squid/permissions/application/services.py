@@ -227,30 +227,6 @@ class PermissionService:
         """The subset of `nodes` that `subject` holds, from one load."""
         return resolve_many(nodes, subject, await self.rules_for(subject), catalogue=self._catalogue)
 
-    async def capabilities_for(
-        self,
-        *,
-        account_id: int | None,
-        discord_role_ids: Iterable[int],
-        guild_id: int | None,
-        is_bot_owner: bool = False,
-        discord_guild_admin: bool = False,
-        nodes: Iterable[str] = (),
-    ) -> frozenset[str]:
-        """Return allowed capability names for adapters constructing voting or reaction actors.
-
-        Those actors carry the resolved names so their policies can check authority
-        without loading permissions themselves.
-        """
-        subject = Actor(
-            account_id=account_id,
-            discord_role_ids=frozenset(discord_role_ids),
-            guild_id=guild_id,
-            is_bot_owner=is_bot_owner,
-            discord_guild_admin=discord_guild_admin,
-        )
-        return await self.capabilities(subject, nodes)
-
     def role_leaves(self, role: PermissionRole, roles: Iterable[PermissionRole]) -> tuple[str, ...]:
         """Return sorted node names after role composition and exclusions.
 

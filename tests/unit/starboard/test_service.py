@@ -2,10 +2,12 @@ from dataclasses import replace
 from functools import partial
 from typing import Any
 
+import pytest
 from whenever import Instant
 
+from squid.core.actors import Actor
+from squid.core.errors import AuthenticationError
 from squid.messages.models import Message
-from squid.reactions.domain import ReactionActor
 from squid.starboard.application import PendingVote, StarboardService
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
@@ -86,7 +88,9 @@ async def test_service_combines_highest_role_and_emoji_multiplier() -> None:
     committed = CommittedState(repository, clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
-    result = await service.record_vote(make_origin(), ReactionActor(41, 10, frozenset({50})), "⭐")
+    result = await service.record_vote(
+        make_origin(), Actor(discord_user_id=41, guild_id=10, discord_role_ids=frozenset({50})), "⭐"
+    )
 
     assert not result.remove_reaction
     assert len(committed.value.recorded) == 1
@@ -98,7 +102,19 @@ async def test_service_only_requests_invalid_reaction_removal_when_configured() 
     committed = CommittedState(repository, clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
-    result = await service.record_vote(make_origin(), ReactionActor(41, 10), "⭐")
+    result = await service.record_vote(make_origin(), Actor(discord_user_id=41, guild_id=10), "⭐")
 
     assert result.remove_reaction
+    assert committed.value.recorded == []
+
+
+async def test_account_identity_cannot_stand_in_for_a_discord_reaction() -> None:
+    repository = FakeRepository(make_config())
+    committed = CommittedState(repository, clone=_copy_repository)
+    service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
+    actor = Actor(account_id=7, guild_id=10)
+    with pytest.raises(AuthenticationError):
+        await service.record_vote(make_origin(), actor, "⭐")
+    with pytest.raises(AuthenticationError):
+        await service.recount(make_origin(), ((actor, "⭐"),))
     assert committed.value.recorded == []

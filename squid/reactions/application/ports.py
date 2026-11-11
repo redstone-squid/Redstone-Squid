@@ -3,19 +3,20 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
+from squid.core.actors import Actor
+from squid.reactions.domain import RoleMultiplier, WeightScope
 
 
 class WeightPolicy(Protocol):
     """Return a positive reaction weight, or None if the actor is ineligible."""
 
-    async def calculate(self, actor: ReactionActor, scope: WeightScope) -> float | None: ...
+    async def calculate(self, actor: Actor, scope: WeightScope) -> float | None: ...
 
 
 class ActorResolver(Protocol):
     """Resolve current member facts as plain values, not library objects."""
 
-    async def resolve(self, user_id: int, guild_id: int, scope: WeightScope) -> ReactionActor | None: ...
+    async def resolve(self, user_id: int, guild_id: int, scope: WeightScope) -> Actor | None: ...
 
 
 class RoleMultiplierProvider(Protocol):

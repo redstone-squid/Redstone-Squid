@@ -6,12 +6,13 @@ import discord
 
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import build_actor
+from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
     VOTE_POLL_CLOSE_ANY,
     VOTE_WEIGHT_STAFF,
 )
-from squid.voting.domain import VoteActor, VoteRejection
+from squid.voting.domain import VoteRejection
 from squid_ui.text import Message
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ def describe_rejection(rejection: VoteRejection) -> Message:
     return REJECTION_MESSAGES[rejection]
 
 
-async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> VoteActor:
+async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> Actor:
     """Resolve the member's vote capabilities in one permission query.
 
     The caller supplies an account ID after checking consent when needed. This
@@ -53,10 +54,10 @@ async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member
         subject,
         (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),
     )
-    return VoteActor(
-        account_id,
-        member.id,
-        member.guild.id,
-        frozenset(role.id for role in member.roles),
+    return Actor(
+        account_id=account_id,
+        discord_user_id=member.id,
+        guild_id=member.guild.id,
+        discord_role_ids=frozenset(role.id for role in member.roles),
         capabilities=capabilities,
     )

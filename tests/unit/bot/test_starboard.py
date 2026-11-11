@@ -12,7 +12,7 @@ import discord
 
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
-from squid.reactions.domain import ReactionActor
+from squid.core.actors import Actor
 from squid.runtime import BackgroundTaskSupervisor
 from squid.starboard.application import StarboardService
 from squid.starboard.models import OriginMessage
@@ -179,13 +179,13 @@ async def test_recount_reads_relevant_reactions_from_humans_with_their_roles() -
         Reaction("⭐", [SimpleNamespace(id=2, bot=False), SimpleNamespace(id=3, bot=False)]),
         Reaction("👍", [SimpleNamespace(id=1, bot=False)]),
     ]
-    recounts: list[tuple[int, tuple[tuple[ReactionActor, str], ...]]] = []
+    recounts: list[tuple[int, tuple[tuple[Actor, str], ...]]] = []
     scheduled: list[tuple[EntryKey, bool]] = []
 
     async def is_relevant_emoji(guild_id: int, emoji: str) -> bool:
         return emoji == "⭐"
 
-    async def recount(origin: OriginMessage, reactions: tuple[tuple[ReactionActor, str], ...]) -> tuple[EntryKey]:
+    async def recount(origin: OriginMessage, reactions: tuple[tuple[Actor, str], ...]) -> tuple[EntryKey]:
         recounts.append((origin.id, reactions))
         return ((7, origin.id),)
 
@@ -196,7 +196,13 @@ async def test_recount_reads_relevant_reactions_from_humans_with_their_roles() -
     assert await cog.recount(message) == ((7, 100),)
 
     assert recounts == [
-        (100, ((ReactionActor(1, 10, frozenset({50})), "⭐"), (ReactionActor(2, 10, frozenset()), "⭐")))
+        (
+            100,
+            (
+                (Actor(discord_user_id=1, guild_id=10, discord_role_ids=frozenset({50})), "⭐"),
+                (Actor(discord_user_id=2, guild_id=10, discord_role_ids=frozenset()), "⭐"),
+            ),
+        )
     ]
     assert scheduled == [((7, 100), True)]
 

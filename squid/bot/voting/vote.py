@@ -16,8 +16,9 @@ from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
+from squid.core.actors import Actor
 from squid.core.i18n import tr
-from squid.voting.domain import PollScope, VoteActor, VoteKind, VoteOption
+from squid.voting.domain import PollScope, VoteKind, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 
 if TYPE_CHECKING:
@@ -135,7 +136,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             raise
         return text_node(tr(t"bot-voting-vote-deletion-vote-opened = Deletion vote opened."))
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
         """Resolve member roles and capabilities for a persisted voter's weight refresh.
 
         No linked Discord identity or a confirmed missing member produces an
@@ -147,7 +148,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
         if identity is None or identity.discord_id is None:
             # No Discord identity at all, so no roles anywhere.
-            return VoteActor(account_id, discord_id=0, guild_id=guild_id)
+            return Actor(account_id=account_id, discord_user_id=None, guild_id=guild_id)
         discord_id = identity.discord_id
         if guild is None:
             return None
@@ -156,7 +157,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             try:
                 member = await guild.fetch_member(discord_id)
             except discord.NotFound:
-                return VoteActor(account_id, discord_id, guild_id)
+                return Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
             except discord.Forbidden:
                 return None
         return await resolve_actor(self.bot, member, account_id=account_id)
