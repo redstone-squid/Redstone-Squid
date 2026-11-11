@@ -28,7 +28,19 @@ from squid_reactivity.actions import (
     current_causality,
 )
 from squid_reactivity.addresses import CellAddress, publish
-from squid_reactivity.completion import Completion
+from squid_reactivity.async_values import (
+    AsyncBinding as AsyncBinding,
+)
+from squid_reactivity.async_values import (
+    _Execution,
+    _observe,
+)
+from squid_reactivity.async_values import (
+    observe_async_bindings as observe_async_bindings,
+)
+from squid_reactivity.async_values import (
+    unique_async_bindings as unique_async_bindings,
+)
 from squid_reactivity.core import (
     declared_cells,
 )
@@ -54,15 +66,6 @@ from squid_reactivity.transactions import (
     action_participant,
     enlist,
 )
-
-
-class AsyncBinding(Protocol):
-    """An observed asynchronous value whose loader runs in the caller's task."""
-
-    @property
-    def pending(self) -> bool: ...
-
-    async def _load(self) -> object: ...
 
 
 class LoadScope(Protocol):
@@ -178,11 +181,6 @@ class _AtomicResourcePending(ResourceNotReadyError):
         super().__init__(f"atomic resource {resource._label!r} is pending")
 
 
-_CURRENT_BINDINGS: ContextVar[list[AsyncBinding] | None] = ContextVar(
-    "squid_reactivity_observed_async_bindings", default=None
-)
-
-
 class _Missing:
     """Distinguish an absent replacement from a replacement whose value is None."""
 
@@ -238,13 +236,13 @@ class _Load[ValueT]:
     still current installs its dependencies on the resource.
     """
 
-    __slots__ = ("completion", "owner", "scope", "sources", "token")
+    __slots__ = ("execution", "owner", "scope", "sources", "token")
 
     def __init__(
         self,
         owner: Resource[ValueT],
         token: int,
-        completion: Completion[ResourceStatus[ValueT]],
+        execution: _Execution[ResourceStatus[ValueT]],
         scope: LoadScope,
     ) -> None:
         # `owner` is what keeps `Resource.track` able to recognise a self-read. While the load
@@ -253,7 +251,7 @@ class _Load[ValueT]:
         # to itself -- which re-pends it forever rather than settling.
         self.owner = owner
         self.token = token
-        self.completion = completion
+        self.execution = execution
         self.scope = scope
         self.sources: dict[_ReactiveSource, int] = {}
 
@@ -487,14 +485,18 @@ class Resource[ValueT](AsyncBinding):
     async def _loaded(self) -> ResourceStatus[ValueT]:
         token = self._request_token
         if self._loading is not None and self._loading.token == token:
-            await self._loading.completion.wait()
+            await self._loading.execution.completion.wait()
             if isinstance(self._status, Pending):
                 return await self._loaded()
             return self._status
 
-        settled: Completion[ResourceStatus[ValueT]] = Completion()
-        load = _Load(self, token, settled, _load_scope())
+        execution: _Execution[ResourceStatus[ValueT]] = _Execution()
+        load = _Load(self, token, execution, _load_scope())
         self._loading = load
+        return await execution.run(lambda: self._execute_load(load), lambda: self._status)
+
+    async def _execute_load(self, load: _Load[ValueT]) -> ResourceStatus[ValueT]:
+        token = load.token
         generation = (self._generation_id, self._generation_cause, self._generation_root)
         self._emit_generation("started", generation)
         # The active load tracks its own dependencies. Retire the old value's dependencies
@@ -539,8 +541,6 @@ class Resource[ValueT](AsyncBinding):
             _CONSUMER.reset(consumer)
             if self._loading is load:
                 self._loading = None
-            if not settled.done:
-                settled.resolve(self._status)
         return self._status
 
     def _new_generation(self) -> None:
@@ -745,32 +745,3 @@ def resource(
         return descriptor(function, pending_mode=pending)
 
     return decorate if loader is None else decorate(loader)
-
-
-def _observe(binding: AsyncBinding) -> None:
-    observed = _CURRENT_BINDINGS.get()
-    if observed is not None:
-        observed.append(binding)
-
-
-@contextmanager
-def observe_async_bindings() -> Iterator[list[AsyncBinding]]:
-    """Collect asynchronous bindings accessed by one expanded component render."""
-    observed: list[AsyncBinding] = []
-    token = _CURRENT_BINDINGS.set(observed)
-    try:
-        yield observed
-    finally:
-        _CURRENT_BINDINGS.reset(token)
-
-
-def unique_async_bindings(bindings: list[AsyncBinding]) -> tuple[AsyncBinding, ...]:
-    """Preserve render order while removing repeat accesses to the same binding."""
-    seen: set[int] = set()
-    unique: list[AsyncBinding] = []
-    for binding in bindings:
-        identity = id(binding)
-        if identity not in seen:
-            seen.add(identity)
-            unique.append(binding)
-    return tuple(unique)

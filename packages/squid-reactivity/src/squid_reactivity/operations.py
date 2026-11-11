@@ -24,13 +24,12 @@ from squid_reactivity.actions import (
     causal_scope,
     current_action,
 )
-from squid_reactivity.completion import Completion
+from squid_reactivity.async_values import AsyncBinding, _Execution, _observe
 from squid_reactivity.diagnostics import (
     OperationEventSnapshot,
     emit_causal_event,
     has_event_observers,
 )
-from squid_reactivity.resources import AsyncBinding, _observe
 from squid_reactivity.tracking import (
     _Signal,
 )
@@ -117,8 +116,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
         self.context = context
         self._signal = _Signal()
         self._status: OperationStatus[ValueT, ProgressT] = Pending(initial)
-        self._completion: Completion[OperationStatus[ValueT, ProgressT]] = Completion()
-        self._started = False
+        self._execution: _Execution[OperationStatus[ValueT, ProgressT]] = _Execution()
 
     @property
     def status(self) -> OperationStatus[ValueT, ProgressT]:
@@ -162,11 +160,9 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
 
     @override
     async def _load(self) -> OperationStatus[ValueT, ProgressT]:
-        if self._started:
-            if not self._completion.done:
-                await self._completion.wait()
-            return self._status
-        self._started = True
+        return await self._execution.run(self._execute, lambda: self._status)
+
+    async def _execute(self) -> OperationStatus[ValueT, ProgressT]:
         progress = ProgressReporter(self)
         try:
             with causal_scope(self.context.causal_ref(), self.context.root_action_id):
@@ -176,7 +172,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             assert isinstance(current, Pending)
             self._status = Cancelled(current.progress)
             self._signal.notify()
-            self._completion.cancel()
+            self._execution.completion.cancel()
             self._emit("cancelled")
             raise
         except Exception as error:
@@ -184,12 +180,10 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             assert isinstance(current, Pending)
             self._status = Failed(error, current.progress)
             self._signal.notify()
-            self._completion.resolve(self._status)
             self._emit("failed", error)
         else:
             self._status = Succeeded(value)
             self._signal.notify()
-            self._completion.resolve(self._status)
             self._emit("succeeded")
         return self._status
 
