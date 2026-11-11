@@ -90,3 +90,32 @@ async def test_completed_owner_wait_releases_failed_run_locals() -> None:
     gc.collect()
     assert service.current_run is None
     assert references[0]() is None
+
+
+async def test_run_rejects_self_waits_before_completion() -> None:
+    class SelfObserving(ManagedService):
+        @override
+        async def run(self, *, task_status: TaskStatus[None]) -> None:
+            current = self.current_run
+            assert current is not None
+            with pytest.raises(RuntimeError, match="own readiness"):
+                await current.wait_ready()
+            task_status.started()
+            await current.wait_ready()
+            with pytest.raises(RuntimeError, match="own shutdown"):
+                await current
+
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            host = UIExecutionHost()
+            await tasks.start(host.run)
+            owner = ServiceOwner()
+            service = owner.own(SelfObserving())
+            owner.activate(host)
+            current = service.current_run
+            assert current is not None
+            await current
+            assert current.status is ServiceRunStatus.COMPLETED
+            owner.cancel()
+            await owner.wait()
+            await host.close()
