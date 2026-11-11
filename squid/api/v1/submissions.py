@@ -10,12 +10,13 @@ finalization attempt that produces a build.
 from typing import Annotated, Protocol, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response, status
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
+from squid.api.revisions import InvalidRevisionError, expected_revision, revision_etag
 from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
@@ -31,9 +32,11 @@ from squid.api.v1.schemas.submissions import (
     StoredDraftResponse,
     SubmissionAttemptResponse,
 )
+from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
+from squid.edits.application import EditRunner
+from squid.edits.domain import Revision
 from squid.submissions.application import (
-    AppliedDraftChange,
     AppliedDraftUpgrade,
     DraftPreparationSnapshot,
     FinalizationJobSnapshot,
@@ -41,7 +44,8 @@ from squid.submissions.application import (
     StoredDraft,
     SubmissionRequestResult,
 )
-from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
+from squid.submissions.application.edits import change_command, draft_target
+from squid.submissions.domain import FormManifest, SubmissionOrigin
 
 
 class SubmissionFormReader(Protocol):
@@ -86,15 +90,6 @@ class SubmissionDraftCommands(Protocol):
 
     async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
 
-    async def apply_change(
-        self,
-        draft_id: UUID,
-        account_id: int,
-        change: DraftChange,
-        *,
-        locale: str | None,
-    ) -> AppliedDraftChange: ...
-
     async def upgrade_manifest(
         self,
         draft_id: UUID,
@@ -131,6 +126,7 @@ class SubmissionFinalizationCommands(Protocol):
 class SubmissionApiServices(Protocol):
     """Narrow runtime service bundle consumed by this router."""
 
+    edits: EditRunner
     submission_forms: SubmissionFormReader
     submission_drafts: SubmissionDraftCommands
     submission_finalization: SubmissionFinalizationCommands
@@ -148,6 +144,11 @@ def get_submission_forms(request: Request) -> SubmissionFormReader:
     """Resolve form reads without coupling this module to the global runtime type."""
     state = cast(_SubmissionAppState, request.app.state)
     return state.runtime.services.submission_forms
+
+
+def get_submission_edits(request: Request) -> EditRunner:
+    state = cast(_SubmissionAppState, request.app.state)
+    return state.runtime.services.edits
 
 
 def get_submission_drafts(request: Request) -> SubmissionDraftCommands:
@@ -234,7 +235,6 @@ SchemaId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_.-]{0,95}$")]
 router = APIRouter(
     prefix="/submissions",
     tags=["submissions"],
-    dependencies=[Depends(reserve_idempotent_request)],
 )
 
 _DRAFT_CREATE_LINKS = {
@@ -369,6 +369,7 @@ async def form_options(
 
 @router.post(
     "/drafts",
+    dependencies=[Depends(reserve_idempotent_request)],
     response_model=StoredDraftResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 409, 422, 503),
@@ -410,15 +411,18 @@ async def create_draft(
         cli=cli_command("draft.show", features=("submission-drafts",), interaction="direct"),
     ),
 )
-async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> StoredDraftResponse:
+async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId, response: Response) -> StoredDraftResponse:
     """Return one draft after enforcing caller ownership."""
-    return StoredDraftResponse.from_domain(await drafts.get_accessible(draft_id, account_id))
+    draft = await drafts.get_accessible(draft_id, account_id)
+    response.headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
+    return StoredDraftResponse.from_domain(draft)
 
 
 @router.post(
     "/drafts/{draft_id}/changes",
+    dependencies=[Depends(reserve_edit_request)],
     response_model=DraftChangeResponse,
-    responses=responses(400, 401, 403, 404, 409, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
     operation_id="submission_draft_change",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],
@@ -429,22 +433,25 @@ async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> St
 async def change_draft(
     draft_id: UUID,
     payload: DraftChangeRequest,
-    request: Request,
+    response: Response,
     drafts: Drafts,
     account_id: AccountId,
+    edits: Annotated[EditRunner, Depends(get_submission_edits)],
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> DraftChangeResponse:
-    """Atomically apply a retry-safe optimistic edit to an owned draft."""
-    result = await drafts.apply_change(
-        draft_id,
-        account_id,
-        payload.to_domain(),
-        locale=locale_for_request(request),
-    )
-    return DraftChangeResponse(draft=StoredDraftResponse.from_domain(result.draft), replayed=result.replayed)
+    """Apply an owned draft change; an optional If-Match must agree with base_revision."""
+    command = change_command(draft_id, payload.to_domain())
+    if if_match is not None and expected_revision(draft_target(draft_id), if_match) != command.expected[0]:
+        raise InvalidRevisionError
+    result = await edits.execute(command, Actor(account_id=account_id))
+    draft = await drafts.get_accessible(draft_id, account_id)
+    response.headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
+    return DraftChangeResponse(draft=StoredDraftResponse.from_domain(draft), replayed=result.replayed)
 
 
 @router.post(
     "/drafts/{draft_id}/manifest-upgrade",
+    dependencies=[Depends(reserve_idempotent_request)],
     response_model=DraftManifestUpgradeResponse,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_draft_manifest_upgrade",
@@ -473,6 +480,7 @@ async def upgrade_draft_manifest(
 
 @router.post(
     "/drafts/{draft_id}/attempts",
+    dependencies=[Depends(reserve_idempotent_request)],
     response_model=SubmissionAttemptResponse | DraftPreparationResponse,
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
@@ -569,6 +577,7 @@ async def get_draft_attempt(
 
 @router.delete(
     "/drafts/{draft_id}",
+    dependencies=[Depends(reserve_idempotent_request)],
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 422, 503),
     operation_id="submission_draft_delete",

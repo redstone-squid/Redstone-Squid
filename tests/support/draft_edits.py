@@ -1,5 +1,6 @@
 """Record draft commands in transport tests; database tests cover atomic outcomes."""
 
+from typing import Protocol
 from uuid import UUID
 
 from squid.core.actors import Actor
@@ -13,12 +14,21 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.submissions.application.drafts import SubmissionDraftService
-from squid.submissions.application.edits import answer_change, answer_values
+from squid.submissions.application.drafts import AppliedDraftChange, DraftActor, StoredDraft
+from squid.submissions.application.edits import answer_change, captured_answers
+from squid.submissions.domain import DraftChange
+
+
+class RecordedDrafts(Protocol):
+    async def get_accessible(self, draft_id: UUID, actor: DraftActor, /) -> StoredDraft: ...
+
+    async def apply_change(
+        self, draft_id: UUID, actor: DraftActor, change: DraftChange, /, *, locale: str | None
+    ) -> AppliedDraftChange: ...
 
 
 class DraftEditRecorder(EditRunner):
-    def __init__(self, drafts: SubmissionDraftService) -> None:
+    def __init__(self, drafts: RecordedDrafts) -> None:
         self.drafts = drafts
 
     async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
@@ -27,10 +37,12 @@ class DraftEditRecorder(EditRunner):
         expected = command.expected[0]
         if expected.value != current.snapshot.revision:
             raise RevisionConflictError(expected, current.snapshot.revision)
-        before = answer_values({key: current.snapshot.answers.get(key) for key in command.values.unpack()})
-        result = await self.drafts.apply_change(draft_id, actor, answer_change(command), locale=None)
+        change = answer_change(command)
+        fields = tuple(op.field_id for op in change.operations)
+        before = captured_answers(current.snapshot.answers, fields)
+        result = await self.drafts.apply_change(draft_id, actor, change, locale=None)
         revisions = (Revision(expected.target, result.draft.snapshot.revision),)
-        after = answer_values({key: result.draft.snapshot.answers.get(key) for key in command.values.unpack()})
+        after = captured_answers(result.draft.snapshot.answers, fields)
         receipt = EditReceipt(command, before, after, revisions)
         if attempt is not None:
             attempt.receipt = receipt

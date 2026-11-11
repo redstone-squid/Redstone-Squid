@@ -29,6 +29,7 @@ from squid.api.v1.submissions import (
     authenticated_account,
     authenticated_submission_caller,
     get_submission_drafts,
+    get_submission_edits,
     get_submission_finalization,
     get_submission_forms,
     router,
@@ -42,6 +43,7 @@ from squid.submissions.application import (
     StoredDraft,
     build_submission_manifest,
 )
+from squid.submissions.application.drafts import DraftActor, draft_actor_id
 from squid.submissions.domain import (
     ChoiceOption,
     DraftChange,
@@ -53,6 +55,7 @@ from squid.submissions.domain import (
     SubmissionAttentionReason,
     SubmissionOrigin,
 )
+from tests.support.draft_edits import DraftEditRecorder
 
 ACCOUNT_ID = 42
 JAVA_UUID = UUID("00000000-0000-4000-8000-000000000051")
@@ -162,23 +165,22 @@ class FakeDrafts(SubmissionDraftCommands):
         return (self.current,)
 
     @override
-    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, account_id: DraftActor) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
-        assert account_id == ACCOUNT_ID
+        assert draft_actor_id(account_id) == ACCOUNT_ID
         return self.current
 
-    @override
     async def apply_change(
         self,
         draft_id: UUID,
-        account_id: int,
+        account_id: DraftActor,
         change: DraftChange,
         *,
         locale: str | None,
     ) -> AppliedDraftChange:
         assert draft_id == self.current.snapshot.id
-        assert account_id == ACCOUNT_ID
-        assert locale == "en"
+        assert draft_actor_id(account_id) == ACCOUNT_ID
+        assert locale is None
         self.change_seen = change
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         return AppliedDraftChange(self.current)
@@ -372,6 +374,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
+    app.dependency_overrides[get_submission_edits] = lambda: DraftEditRecorder(drafts)
     app.dependency_overrides[get_submission_forms] = form_dependency
     app.dependency_overrides[get_submission_drafts] = draft_dependency
     app.dependency_overrides[get_submission_finalization] = finalization_dependency
@@ -455,6 +458,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert change_response.status_code == 200
     assert change_response.json()["draft"]["revision"] == 1
     assert change_response.json()["replayed"] is False
+    assert change_response.headers["ETag"] == f'"draft-{draft_id}-r1"'
+    assert get_response.headers["ETag"] == f'"draft-{draft_id}-r2"'
     assert drafts.change_seen is not None
     assert drafts.change_seen.operations[0].value == "Compact door"
     assert list_response.status_code == 200
