@@ -20,6 +20,23 @@ def distributions(root: Path) -> list[tuple[Path, Path]]:
     return owners
 
 
+def catalog_matches(english: Path, source: str, metadata: str) -> bool:
+    """Compare generated content while allowing outdated source-location metadata."""
+    source_path = english / "messages.ftl"
+    metadata_path = english / "messages.json"
+    if not source_path.exists() or not metadata_path.exists():
+        return False
+    # Extraction writes source locations as top-level Fluent comments.
+    stored_source = "\n".join(line for line in source_path.read_text().splitlines() if not line.startswith("#"))
+    expected_source = "\n".join(line for line in source.splitlines() if not line.startswith("#"))
+    stored_metadata = json.loads(metadata_path.read_text())
+    expected_metadata = json.loads(metadata)
+    for manifest in (stored_metadata, expected_metadata):
+        for entry in manifest.values():
+            entry.pop("locations", None)
+    return stored_source == expected_source and stored_metadata == expected_metadata
+
+
 def run(command: str, root: Path, locale: str | None = None) -> list[str]:
     reports: list[str] = []
     for source_root, locales in distributions(root):
@@ -33,11 +50,7 @@ def run(command: str, root: Path, locale: str | None = None) -> list[str]:
             english.mkdir(parents=True, exist_ok=True)
             (english / "messages.ftl").write_text(source)
             (english / "messages.json").write_text(metadata)
-        elif (
-            not (english / "messages.ftl").exists()
-            or (english / "messages.ftl").read_text() != source
-            or (english / "messages.json").read_text() != metadata
-        ):
+        elif not catalog_matches(english, source, metadata):
             msg = f"{english}: generated catalog is stale; run squid-i18n extract"
             raise CatalogError(msg)
         revisions = {key: entry["fingerprint"] for key, entry in json.loads(metadata).items()}

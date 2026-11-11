@@ -104,3 +104,69 @@ def test_catalog_updates_preserve_translation_comments_and_require_review(tmp_pa
     source.write_text("")
     assert any("obsolete hello" in report for report in run("update", tmp_path))
     assert translation.read_text() == translated
+
+
+def test_catalog_check_allows_location_drift_without_rewriting_files(tmp_path: Path) -> None:
+    source = tmp_path / "squid" / "messages.py"
+    source.parent.mkdir()
+    source.write_text('tr(t"hello = Hello")')
+    run("extract", tmp_path)
+    english = tmp_path / "locales/en"
+    before = {path.name: path.read_bytes() for path in english.iterdir()}
+
+    source.rename(source.with_name("moved.py"))
+    source.with_name("moved.py").write_text('\n\ntr(t"hello = Hello")\ntr(t"hello = Hello")')
+    assert run("check", tmp_path) == []
+    assert {path.name: path.read_bytes() for path in english.iterdir()} == before
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        'tr(t"hello = Goodbye {name}")',
+        'tr(t"hello = Hello {other}")',
+        'tr(t"other = Hello {name}")',
+        'tr(t"hello = Hello {name}")\ntr(t"added = New")',
+        "",
+        'tr(t"hello = Hello {NUMBER(name, minimum_fraction_digits=2)}")',
+    ],
+)
+def test_catalog_check_rejects_changed_declarations(tmp_path: Path, replacement: str) -> None:
+    source = tmp_path / "squid" / "messages.py"
+    source.parent.mkdir()
+    source.write_text('tr(t"hello = Hello {name}")')
+    run("extract", tmp_path)
+    source.write_text(replacement)
+    with pytest.raises(CatalogError, match="generated catalog is stale"):
+        run("check", tmp_path)
+
+
+@pytest.mark.parametrize("filename", ["messages.ftl", "messages.json"])
+def test_catalog_check_rejects_missing_generated_files(tmp_path: Path, filename: str) -> None:
+    source = tmp_path / "squid" / "messages.py"
+    source.parent.mkdir()
+    source.write_text('tr(t"hello = Hello")')
+    run("extract", tmp_path)
+    (tmp_path / "locales/en" / filename).unlink()
+    with pytest.raises(CatalogError, match="generated catalog is stale"):
+        run("check", tmp_path)
+
+
+def test_catalog_check_rejects_changed_options_with_identical_fluent(tmp_path: Path) -> None:
+    source = tmp_path / "squid" / "messages.py"
+    source.parent.mkdir()
+    source.write_text('tr(t"total = {NUMBER(count, minimum_fraction_digits=2)}")')
+    run("extract", tmp_path)
+    source.write_text('tr(t"total = {NUMBER(count, minimum_fraction_digits=3)}")')
+    with pytest.raises(CatalogError, match="generated catalog is stale"):
+        run("check", tmp_path)
+
+
+def test_catalog_check_rejects_edited_english_resource(tmp_path: Path) -> None:
+    source = tmp_path / "squid" / "messages.py"
+    source.parent.mkdir()
+    source.write_text('tr(t"hello = Hello")')
+    run("extract", tmp_path)
+    (tmp_path / "locales/en/messages.ftl").write_text("hello = Wrong\n")
+    with pytest.raises(CatalogError, match="generated catalog is stale"):
+        run("check", tmp_path)
