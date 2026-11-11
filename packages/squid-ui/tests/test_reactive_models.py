@@ -4,9 +4,13 @@ import gc
 import weakref
 from typing import override
 
+import pytest
+from anyio.abc import TaskStatus
+
 import squid_ui as sl
 from squid_reactivity import CellAddress, Reactive, transaction
 from squid_ui.primitives import Text
+from squid_ui.runtime import ManagedService
 from squid_ui.runtime.owner import ComponentRuntime
 
 
@@ -132,3 +136,23 @@ def test_models_created_in_an_action_need_no_super_initializer() -> None:
     with transaction():
         model = Model(3)
     assert model.value == 3
+
+
+def test_service_state_is_transactional_and_observed_by_multiple_readers() -> None:
+    class Service(ManagedService, Search):
+        async def run(self, *, task_status: TaskStatus[None]) -> None:
+            task_status.started()
+
+    service = Service()
+    runtimes = [ComponentRuntime(Reader(service)), ComponentRuntime(Reader(service))]
+    for runtime in runtimes:
+        runtime.commit(runtime.render())
+    with pytest.raises(ValueError), transaction():
+        service.query = "discard"
+        raise ValueError("discard")
+    assert service.query == ""
+    assert all(not runtime.dirty for runtime in runtimes)
+    with transaction():
+        service.query = "updated"
+    assert all(runtime.dirty for runtime in runtimes)
+    assert service.label == "UPDATED"

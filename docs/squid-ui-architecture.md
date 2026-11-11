@@ -1291,9 +1291,11 @@ Choose the primitive by what it does:
 | `Reactive` | Share reactive data between consumers. |
 | `resource` | Derive an async value from dependencies; safe to cancel and restart. |
 | `operation` | Represent an explicitly started execution and its outcome. |
-| `ManagedService` | Run activity under an explicit owner until it ends. |
+| `ManagedService` | Extend `Reactive` with activity under an explicit owner. |
 
-A service can publish shared state, but it need not have any. Ordinary async queries belong
+A service inherits `Reactive` and can declare state, computed values, and resources directly.
+Keep a separate reactive model when its data is shared across services or has an independent lifetime.
+A service need not declare any state. Ordinary async queries belong
 in resources; explicit submissions belong in operations. Retaining a model in a dictionary
 does not establish ownership of its activity, and removing it does not run cleanup.
 `provide()` and `inject()` share access without establishing ownership of activity.
@@ -1328,19 +1330,16 @@ from squid_ui.primitives import Text
 from squid_ui.runtime import ContextKey, ManagedService, Topic, TopicBus
 
 
-class UpdateState(Reactive):
+class BuildUpdates(ManagedService):
     changed: bool = state(default=False)
 
-
-class BuildUpdates(ManagedService):
     def __init__(self, bus: TopicBus, build_id: int) -> None:
         self.bus = bus
         self.topic = Topic("build", str(build_id))
-        self.state = UpdateState()
 
     async def run(self, *, task_status: TaskStatus[None]) -> None:
         def changed(_: Topic) -> None:
-            self.state.changed = True
+            self.changed = True
 
         unsubscribe = self.bus.subscribe(self.topic, changed)
         try:
@@ -1356,7 +1355,7 @@ UPDATES = ContextKey[BuildUpdates]("build-updates")
 class ChangeNotice(Component[ComponentsV2Target]):
     def render(self) -> Text:
         updates = self.inject(UPDATES)
-        return Text("Build changed; refresh the preview." if updates.state.changed else "Build is up to date.")
+        return Text("Build changed; refresh the preview." if updates.changed else "Build is up to date.")
 
 
 class BuildEditor(Component[ComponentsV2Target]):

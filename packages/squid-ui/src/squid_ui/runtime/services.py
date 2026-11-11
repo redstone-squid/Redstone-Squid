@@ -18,6 +18,7 @@ from contextvars import Context, copy_context
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
+from squid_reactivity import Reactive
 from squid_reactivity.diagnostics import (
     copy_event_observers,
 )
@@ -30,8 +31,13 @@ _logger = logging.getLogger(__name__)
 type ServiceFailure = Callable[[Exception], Awaitable[None]]
 
 
-class ManagedService(ABC):
+class ManagedService(Reactive, ABC):
     """A service that runs until ``run`` returns or its owner cancels it.
+
+    Declare observable fields with state(), computed values, and resources directly
+    on the service. State remains readable between runs. Inside transactions, writes
+    must target declared state; ordinary resource handles belong in run(). Readiness
+    and current_run are execution signals and do not notify reactive readers.
 
     Keep construction cheap and put subscriptions, connections, and background work in
     ``run``. The owner starts that work when it's needed and cancels it when it's done.
@@ -43,6 +49,9 @@ class ManagedService(ABC):
     registers cleanup during acquisition, shields awaited cleanup from cancellation,
     and bounds resource operations that could stall. See ``run`` for an example.
     """
+
+    # Ownership and activation are runtime bookkeeping, outside state transactions.
+    _reactive_internal_attributes = frozenset({"_service_owner", "_service_run"})
 
     _service_owner: object | None = None
     _service_run: ServiceRun | None = None
