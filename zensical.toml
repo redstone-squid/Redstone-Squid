@@ -87,9 +87,22 @@ pygments_lang_class = true
 
 [project.plugins.mkdocstrings.handlers.python]
 inventories = ["https://docs.python.org/3/objects.inv"]
-paths = ["."]
+# Read workspace sources even when an optional adapter is not installed.
+paths = [
+    ".",
+    "packages/squid-i18n/src",
+    "packages/squid-reactivity/src",
+    "packages/squid-replication/src",
+    "packages/squid-storage/src",
+    "packages/squid-ui/src",
+    "packages/squid-ui-discord/src",
+    "packages/squid-ui-slack/src",
+    "packages/squid-ui-widgets/src",
+]
 
 [project.plugins.mkdocstrings.handlers.python.options]
+# Resolve adapter re-exports independently of the order pages are rendered.
+preload_modules = ["squid_ui"]
 docstring_style = "google"
 heading_level = 3
 merge_init_into_class = true

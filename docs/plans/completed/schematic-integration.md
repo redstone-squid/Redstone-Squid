@@ -2,7 +2,7 @@
 
 > **Status (2026-10-31).** Phases 0-4 have landed and the engine pin is now 0.12.0.
 > Uploaded contents are preserved; publication is governed by visibility, rights, and withdrawal.
-> See [release readiness](schematic-release-readiness.md) for remaining rollout work and the fingerprint backfill plan.
+> See [release readiness](../schematic-release-readiness.md) for remaining rollout work and the fingerprint backfill plan.
 > Historical API/version observations below describe their original implementation milestones. The approved plan is
 > amended in place wherever implementation proved it wrong; those amendments are called out where they occur.
 
