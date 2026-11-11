@@ -1053,7 +1053,9 @@ export const runtimeSettingsGet = <ThrowOnError extends boolean = false>(options
 /**
  * Update Runtime Settings
  *
- * Patch settings and audit the internal account. New vote defaults affect new sessions only.
+ * Patch current settings, or require a specific revision with If-Match.
+ *
+ * New vote defaults affect new sessions only.
  */
 export const runtimeSettingsUpdate = <ThrowOnError extends boolean = false>(options: Options<RuntimeSettingsUpdateData, ThrowOnError>): RequestResult<RuntimeSettingsUpdateResponses, RuntimeSettingsUpdateErrors, ThrowOnError> => (options.client ?? client).patch<RuntimeSettingsUpdateResponses, RuntimeSettingsUpdateErrors, ThrowOnError>({
     security: [
@@ -1250,7 +1252,7 @@ export const submissionDraftGet = <ThrowOnError extends boolean = false>(options
 /**
  * Change Draft
  *
- * Atomically apply a retry-safe optimistic edit to an owned draft.
+ * Apply an owned draft change; an optional If-Match must agree with base_revision.
  */
 export const submissionDraftChange = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftChangeData, ThrowOnError>): RequestResult<SubmissionDraftChangeResponses, SubmissionDraftChangeErrors, ThrowOnError> => (options.client ?? client).post<SubmissionDraftChangeResponses, SubmissionDraftChangeErrors, ThrowOnError>({
     security: [

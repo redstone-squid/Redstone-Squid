@@ -4401,10 +4401,6 @@ export type BuildsUpdateErrors = {
      */
     422: ProblemDetail;
     /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -5321,10 +5317,6 @@ export type AccountProfileUpdateErrors = {
      */
     422: ProblemDetail;
     /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -5434,10 +5426,6 @@ export type AccountIdentityVisibilitySetErrors = {
      */
     422: ProblemDetail;
     /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -5507,10 +5495,6 @@ export type AccountIdentityUnlinkErrors = {
      * Unprocessable Content
      */
     422: ProblemDetail;
-    /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6647,10 +6631,6 @@ export type NotificationPreferencesUpdateErrors = {
      */
     422: HttpValidationError;
     /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -6759,10 +6739,6 @@ export type NotificationSubscriptionCreateErrors = {
      */
     422: ProblemDetail;
     /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -6832,10 +6808,6 @@ export type NotificationSubscriptionDeleteErrors = {
      * Validation Error
      */
     422: HttpValidationError;
-    /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6977,10 +6949,6 @@ export type NotificationInboxMarkReadErrors = {
      */
     422: HttpValidationError;
     /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -7050,10 +7018,6 @@ export type NotificationInboxMarkUnreadErrors = {
      * Validation Error
      */
     422: HttpValidationError;
-    /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7607,10 +7571,6 @@ export type RuntimeSettingsUpdateErrors = {
      */
     422: ProblemDetail;
     /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
      * Too Many Requests
      */
     429: ProblemDetail;
@@ -7633,14 +7593,6 @@ export type RuntimeSettingsUpdateResponse = RuntimeSettingsUpdateResponses[keyof
 
 export type SubmissionCorrectionInboxData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path?: never;
     query?: {
         /**
@@ -7691,14 +7643,6 @@ export type SubmissionCorrectionInboxResponse = SubmissionCorrectionInboxRespons
 
 export type SubmissionDraftsListData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/v1/submissions/drafts';
@@ -7713,10 +7657,6 @@ export type SubmissionDraftsListErrors = {
      * Forbidden
      */
     403: ProblemDetail;
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
     /**
      * Too Many Requests
      */
@@ -7797,24 +7737,12 @@ export type SubmissionDraftCreateResponse = SubmissionDraftCreateResponses[keyof
 
 export type SubmissionFormCurrentData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path?: never;
     query?: never;
     url: '/v1/submissions/form/current';
 };
 
 export type SubmissionFormCurrentErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
     /**
      * Too Many Requests
      */
@@ -7838,14 +7766,6 @@ export type SubmissionFormCurrentResponse = SubmissionFormCurrentResponses[keyof
 
 export type SubmissionFormRevisionGetData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path: {
         /**
          * Schema Id
@@ -7892,14 +7812,6 @@ export type SubmissionFormRevisionGetResponse = SubmissionFormRevisionGetRespons
 
 export type SubmissionFormOptionsGetData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path: {
         /**
          * Source
@@ -8009,14 +7921,6 @@ export type SubmissionDraftDeleteResponse = SubmissionDraftDeleteResponses[keyof
 
 export type SubmissionDraftGetData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path: {
         /**
          * Draft Id
@@ -8069,6 +7973,10 @@ export type SubmissionDraftChangeData = {
     body: DraftChangeRequest;
     headers?: {
         /**
+         * If-Match
+         */
+        'If-Match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -8106,6 +8014,10 @@ export type SubmissionDraftChangeErrors = {
      * Conflict
      */
     409: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
     /**
      * Unprocessable Content
      */
@@ -8199,14 +8111,6 @@ export type SubmissionDraftManifestUpgradeResponse = SubmissionDraftManifestUpgr
 
 export type SubmissionAttemptsListData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path: {
         /**
          * Draft Id
@@ -8340,14 +8244,6 @@ export type SubmissionFinalizationStartResponse = SubmissionFinalizationStartRes
 
 export type SubmissionFinalizationGetData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path: {
         /**
          * Draft Id
@@ -8400,14 +8296,6 @@ export type SubmissionFinalizationGetResponse = SubmissionFinalizationGetRespons
 
 export type SubmissionAttemptGetData = {
     body?: never;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
     path: {
         /**
          * Draft Id
@@ -8599,6 +8487,10 @@ export type SubmissionMediaDiscardData = {
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        /**
+         * If-Match
+         */
+        'If-Match'?: string | null;
     };
     path: {
         /**
@@ -8810,6 +8702,10 @@ export type SubmissionSchematicDiscardData = {
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        /**
+         * If-Match
+         */
+        'If-Match'?: string | null;
     };
     path: {
         /**
@@ -8901,6 +8797,10 @@ export type SubmissionSchematicPrimaryData = {
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        /**
+         * If-Match
+         */
+        'If-Match'?: string | null;
     };
     path: {
         /**
@@ -9203,6 +9103,10 @@ export type SubmissionSuppliedFileDiscardData = {
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
          */
         'Idempotency-Key'?: string | null;
+        /**
+         * If-Match
+         */
+        'If-Match'?: string | null;
     };
     path: {
         /**
