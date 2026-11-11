@@ -1209,3 +1209,103 @@ async def _noop(_interaction) -> None: ...
 
 
 async def _press(_event) -> None: ...
+
+
+class TestRouteHandles:
+    @pytest.mark.parametrize("grouped", [False, True])
+    @pytest.mark.parametrize("select", [False, True])
+    async def test_imported_handle_uses_reloaded_handler_and_metadata(self, grouped: bool, select: bool) -> None:
+        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        router = Router(namespace=group, on_gone=_noop) if grouped else Router[discord.Client]()
+        owner = group if grouped else router
+        decorate = owner.select if select else owner.route
+        component = (
+            squid_ui_discord.routing.RouteComponent.SELECT if select else squid_ui_discord.routing.RouteComponent.BUTTON
+        )
+        seen: list[tuple[str, int | None]] = []
+
+        async def original(interaction: discord.Interaction[discord.Client], *values: object, build_id: int) -> None:
+            seen.append(("original", build_id))
+
+        imported = decorate("edit:{build_id:int}")(original)
+        identity = imported.route
+        router.register(_FakeClient())  # type: ignore[arg-type]
+
+        # Reload can switch from named parameters to **kwargs. Both dispatch and
+        # retained imports must reach the replacement.
+        async def replacement(
+            interaction: discord.Interaction[discord.Client], *values: object, **params: object
+        ) -> None:
+            seen.append(("replacement", None))
+
+        reloaded = decorate("edit:{build_id:int}")(replacement)
+        assert reloaded is imported
+        assert imported.route is identity
+        assert imported.__wrapped__ is replacement
+        assert imported.__qualname__ == replacement.__qualname__
+        assert imported.id(build_id=5) == ("r:edit:5" if grouped else "edit:5")
+        await imported(interaction_harness(), build_id=5)
+        await router.dispatch(interaction_harness(), imported.id(build_id=5), component=component, values=("choice",))
+        assert seen == [("replacement", None), ("replacement", None)]
+
+    async def test_rejected_reload_leaves_imported_handle_and_dispatch_unchanged(self) -> None:
+        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        seen: list[int] = []
+
+        @group.route("edit:{build_id:int}", aliases=("old:{build_id:int}",))
+        async def edit(interaction: discord.Interaction[discord.Client], build_id: int) -> None:
+            seen.append(build_id)
+
+        router = Router(namespace=group, on_gone=_noop)
+        router.register(_FakeClient())  # type: ignore[arg-type]
+        identity = edit.route
+
+        async def invalid(interaction: discord.Interaction[discord.Client], typo: int) -> None:
+            pytest.fail("invalid handler was installed")
+
+        with pytest.raises(ValueError, match="asks for"):
+            group.route("edit:{build_id:int}", aliases=("old:{build_id:int}",))(invalid)
+        with pytest.raises(ValueError, match="changed aliases"):
+            group.route("edit:{build_id:int}")
+        with pytest.raises(RuntimeError, match="must be defined before"):
+            group.route("new")
+
+        assert edit.route is identity
+        await edit(interaction_harness(), 4)
+        await router.dispatch(interaction_harness(), "old:5")
+        assert seen == [4, 5]
+
+    async def test_rebinding_keeps_in_flight_calls_on_the_original_handler(self) -> None:
+        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        started = anyio.Event()
+        finish = anyio.Event()
+        seen: list[str] = []
+
+        @group.route("edit")
+        async def edit(interaction: discord.Interaction[discord.Client]) -> None:
+            started.set()
+            await finish.wait()
+            seen.append("original")
+
+        async def replacement(interaction: discord.Interaction[discord.Client]) -> None:
+            seen.append("replacement")
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(edit, interaction_harness())
+            await started.wait()
+            assert group.add(edit.route, replacement) is edit
+            await edit(interaction_harness())
+            finish.set()
+        assert seen == ["replacement", "original"]
+
+    async def test_reregistering_a_handle_does_not_bind_it_to_itself(self) -> None:
+        router = Router[discord.Client]()
+        seen: list[str] = []
+
+        @router.route("edit")
+        async def edit(interaction: discord.Interaction[discord.Client]) -> None:
+            seen.append("edit")
+
+        assert router.add(edit.route, edit) is edit
+        await edit(interaction_harness())
+        assert seen == ["edit"]
