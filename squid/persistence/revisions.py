@@ -10,7 +10,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from squid.edits.domain import ConcurrentEditError, Revision, RevisionConflictError
 
 
-class Revisioned(MappedAsDataclass):
+class Revisioned(MappedAsDataclass, eq=False):
     """Opt-in row version checks. Child and direct-SQL writers must advance the root too."""
 
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1, server_default=text("1"), init=False)
