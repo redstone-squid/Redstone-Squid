@@ -9,9 +9,11 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid_i18n import tr
 from squid_ui import paragraph
 from squid_ui.forms import FormSpec, TextField
 from squid_ui_discord.delivery import DeliveryResult
+from squid_ui_discord.i18n import to_locale_str
 from squid_ui_discord.testing import ContextHarness, InteractionHarness, payload_texts
 
 
@@ -287,7 +289,9 @@ class Menus(sd.Cog[commands.Bot]):
         self.target: object | None = None
 
     @sd.context_menu(
-        name="Inspect build", defer="public", default_permissions=discord.Permissions(manage_messages=True)
+        name=to_locale_str(tr(t"test-inspect-build = Inspect build")),
+        defer="public",
+        default_permissions=discord.Permissions(manage_messages=True),
     )
     async def inspect(self, request: sd.Request[Self], target: discord.Message) -> str:
         assert request.owner is self
@@ -305,6 +309,8 @@ async def test_context_menu_is_registered_invoked_and_removed_with_cog() -> None
     menu = bot.tree.get_command("Inspect build", type=discord.AppCommandType.message)
     assert isinstance(menu, app_commands.ContextMenu)
     assert menu.default_permissions == discord.Permissions(manage_messages=True)
+    assert menu._locale_name is not None
+    assert menu._locale_name.extras["fluent_message"] == tr(t"test-inspect-build = Inspect build")
     await menu._invoke(interaction.source, target)
 
     assert cog.target is target

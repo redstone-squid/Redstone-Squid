@@ -178,7 +178,7 @@ class CommandPolicy:
 class ContextMenuDeclaration:
     """One context-menu declaration, attached to the unbound callback until cog load."""
 
-    name: str
+    name: str | app_commands.locale_str
     type: discord.AppCommandType
     policy: CommandPolicy
     native: NativeContextMenuKwargs
@@ -480,7 +480,7 @@ def hybrid_group(
 
 def context_menu(
     *,
-    name: str,
+    name: str | app_commands.locale_str,
     type: discord.AppCommandType = discord.AppCommandType.message,
     pending: PendingCard | None = None,
     defer: Deferral | None = None,

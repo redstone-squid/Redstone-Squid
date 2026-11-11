@@ -11,6 +11,7 @@ from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.settings.application import SettingsService
 from squid_i18n import Localization, Markup, Message, localization_scope, source_text
 from squid_ui_discord.contracts import LocalizationSource
+from squid_ui_discord.i18n import to_locale_str as to_locale_str
 from squid_ui_discord.runtime import DiscordUIRuntime
 
 
@@ -51,14 +52,6 @@ async def localization_resolver(source: LocalizationSource) -> Localization:
     target = cast(discord.Interaction[Any] | commands.Context[Any] | discord.Message, source)
     locale = await resolve_locale(target, client.services.settings)
     return localization_for(locale)
-
-
-def to_locale_str(message: Message) -> app_commands.locale_str:
-    """Attach a parameter-free Fluent declaration to Discord command metadata."""
-    if message.declaration is None or message.bindings:
-        detail = "Discord command metadata requires a parameter-free Fluent declaration"
-        raise ValueError(detail)
-    return app_commands.locale_str(source_text(message, markup=Markup.PLAIN), fluent_message=message)
 
 
 def bind_command_messages(
