@@ -25,8 +25,8 @@ from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
+from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DIMENSION_GROUPS, draft_editor
-from squid.bot.submission.ui.routes import draft_reopen, inference_reopen, revision_reopen
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce, subject_for_interaction
@@ -231,7 +231,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             sl.primitives.Section(
                 (sl.primitives.Text(_draft_line(draft)),),
                 sl.primitives.RoutedButton(
-                    tr(t"build-drafts-open = Open"), draft_reopen.id(draft_id=str(draft.snapshot.id))
+                    tr(t"build-drafts-open = Open"), build_controls.reopen_draft.id(draft_id=str(draft.snapshot.id))
                 ),
             )
             for draft in drafts
@@ -240,7 +240,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             sl.primitives.Section(
                 (sl.primitives.Text(tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
                 sl.primitives.RoutedButton(
-                    tr(t"build-drafts-review = Review"), inference_reopen.id(run_id=str(run_id))
+                    tr(t"build-drafts-review = Review"), build_controls.reopen_inference.id(run_id=str(run_id))
                 ),
             )
             for run_id in runs
@@ -369,7 +369,9 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         return tuple(
             sl.primitives.Section(
                 (sl.primitives.Text(f"Recalculation candidate {index + 1}: review and choose its target build."),),
-                sl.primitives.RoutedButton("Review changes", revision_reopen.id(proposal_id=str(proposal.id))),
+                sl.primitives.RoutedButton(
+                    "Review changes", build_controls.reopen_revision.id(proposal_id=str(proposal.id))
+                ),
             )
             for index, proposal in enumerate(proposals)
         )

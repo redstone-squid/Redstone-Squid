@@ -17,7 +17,7 @@ from squid.bot.submission.schematics import (
     _describe_timing,
     _parse_position,
 )
-from squid.bot.submission.ui.controls import build_edit
+from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr
 from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.domain import Status
@@ -178,7 +178,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
         ):
             actions.append(
                 sl.routed_action_control(
-                    tr(t"bot-submission-build-browse-edit = Edit"), build_edit.id(build_id=self._build_id), key="edit"
+                    tr(t"bot-submission-build-browse-edit = Edit"),
+                    build_controls.edit_build.id(build_id=self._build_id),
+                    key="edit",
                 )
             )
         if build.submission_status is Status.PENDING and self._capabilities.approve:

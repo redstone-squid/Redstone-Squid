@@ -38,7 +38,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.draft_intake import add_uploaded_files, receive_retained_file, retry_uploaded_file
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
-from squid.bot.submission.ui.routes import build_edit
+from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW
 from squid.builds.domain.models import parse_time_string
 from squid.core.errors import JSONValue, SquidError
@@ -426,7 +426,7 @@ class DraftEditorScreen(sd.Screen):
                     sd.v2.row(
                         sd.v2.routed_button(
                             tr(t"draft-editor-edit-build = Edit build"),
-                            build_edit.id(build_id=self.result.result.build_id),
+                            build_controls.edit_build.id(build_id=self.result.result.build_id),
                         )
                     ),
                 )

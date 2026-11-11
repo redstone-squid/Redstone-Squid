@@ -1,10 +1,11 @@
 """Production route identities and their compatibility aliases."""
 
-from importlib import import_module
+from importlib import import_module, reload
 
 import pytest
 
 from squid.bot.routes import router, routes
+from squid_ui_discord.routing import RouteHandle
 
 
 @pytest.mark.parametrize(
@@ -12,10 +13,10 @@ from squid.bot.routes import router, routes
     [
         ("squid.bot.voting.controls", "poll_close", {}, "r:polls:close", "poll:close"),
         ("squid.bot.voting.controls", "poll_refresh", {}, "r:polls:refresh", "poll:refresh"),
-        ("squid.bot.submission.ui.controls", "build_edit", {"build_id": 5}, "r:builds:5:edit", "edit:build:5"),
+        ("squid.bot.submission.ui.controls", "edit_build", {"build_id": 5}, "r:builds:5:edit", "edit:build:5"),
         (
             "squid.bot.submission.ui.controls",
-            "build_edit_recovery",
+            "recover_build_editor",
             {"build_id": 5},
             "r:builds:5:edit:recover",
             "r:builds:5:edit:recover",
@@ -45,8 +46,9 @@ def test_production_routes_build_canonical_ids_and_keep_legacy_ids(
 ) -> None:
     route = getattr(import_module(module_name), route_name)
     assert route.id(**params) == canonical
-    assert route.match(canonical) == params
-    assert route.match(legacy) == params
+    identity = route.route if isinstance(route, RouteHandle) else route
+    assert identity.match(canonical) == params
+    assert identity.match(legacy) == params
 
 
 def test_route_namespace_is_an_ordinary_root_group() -> None:
@@ -85,3 +87,19 @@ def test_production_route_table_has_one_feature_owned_registration_per_identity(
     assert all(route.middleware[0].endswith(".TraceRoutes") for route in descriptions)
     redstoner = next(route for route in descriptions if route.group_prefix == "r:redstoner-roles")
     assert redstoner.middleware[1].endswith(".OwnerGuildOnly")
+
+
+def test_reloading_build_controls_keeps_imported_handles_current() -> None:
+    controls = import_module("squid.bot.submission.ui.controls")
+    imported = controls.edit_build
+    old_handler = imported.__wrapped__
+    identity = imported.route
+
+    reload(controls)
+
+    assert controls.edit_build is imported
+    assert imported.route is identity
+    assert imported.__wrapped__ is not old_handler
+    resolved = router.resolve(imported.id(build_id=5))
+    assert resolved is not None
+    assert resolved[0].handler is imported.__wrapped__

@@ -6,7 +6,7 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.ingestion import admit_candidates
-from squid.bot.submission.ui.controls import draft_reopen
+from squid.bot.submission.ui import controls as build_controls
 from squid.bot.utils.permissions import subject_for_interaction
 from squid.builds.domain import BuildCategory
 from squid.core.errors import SquidError
@@ -94,7 +94,7 @@ class InferenceCandidatesScreen(sd.Screen):
             nodes.append(
                 sl.primitives.Section(
                     (sl.primitives.Text("Draft saved. Open it to review facts and supplied files."),),
-                    sl.primitives.RoutedButton("Open draft", draft_reopen.id(draft_id=self.opened)),
+                    sl.primitives.RoutedButton("Open draft", build_controls.reopen_draft.id(draft_id=self.opened)),
                 )
             )
         return tuple(nodes)

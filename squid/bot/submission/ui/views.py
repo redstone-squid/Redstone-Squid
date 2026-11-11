@@ -11,7 +11,7 @@ from typing import Any, cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.input import parse_web_urls
-from squid.bot.submission.ui.controls import build_edit_recovery
+from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.fields import (
     DIMENSIONS_FORMAT,
     OPTIONAL_INT_FORMAT,
@@ -643,7 +643,7 @@ class BuildEditScreen(sd.Screen[int]):
                 sl.action_controls(
                     sl.routed_action_control(
                         tr(t"bot-submission-ui-views-reload-fresh-editor = Reload fresh editor"),
-                        build_edit_recovery.id(build_id=self._build_id),
+                        build_controls.recover_build_editor.id(build_id=self._build_id),
                         key="restart",
                     ),
                     key="build-edit-recovery",

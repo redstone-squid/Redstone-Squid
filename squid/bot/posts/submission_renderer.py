@@ -8,7 +8,7 @@ import discord
 
 import squid_ui as sl
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
-from squid.bot.submission.ui.controls import inference_reopen
+from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import render_payload
 from squid.posts.domain import ResourceKind
 
@@ -42,7 +42,9 @@ class SubmissionStatusRenderer(PostRenderer):
             [
                 sl.primitives.Section(
                     (sl.primitives.Text(f"[Submission source]({source})\n{summary}"),),
-                    sl.primitives.RoutedButton("Review privately", inference_reopen.id(run_id=resource_key)),
+                    sl.primitives.RoutedButton(
+                        "Review privately", build_controls.reopen_inference.id(run_id=resource_key)
+                    ),
                 )
             ]
         )
