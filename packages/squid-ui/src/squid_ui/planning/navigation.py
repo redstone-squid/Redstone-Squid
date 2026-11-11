@@ -19,18 +19,10 @@ from squid_ui.chrome import Chrome
 from squid_ui.context import ContextKey
 from squid_ui.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions import ActionEvent, PressEvent, SelectionEvent
-from squid_ui.ownership import (
-    FIRST_PAGE,
-    Controlled,
-    Ownership,
-    PageEvent,
-    PageOwnership,
-    RoutedPage,
-    Uncontrolled,
-    bind_ownership,
-)
+from squid_ui.ownership import Controlled, Ownership, Uncontrolled, bind_ownership
 from squid_ui.planning.generated import GeneratedHandler
 from squid_ui.presentation import PresentationState
+from squid_ui.primitives.constraints import FIRST_PAGE, PageEvent, PageOwnership, RoutedPage
 from squid_ui.primitives.nodes import (
     Button,
     Gallery,

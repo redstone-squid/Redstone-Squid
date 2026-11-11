@@ -31,8 +31,8 @@ from squid_ui.forms import FormLike, SubmitHandler, bind_form
 from squid_ui.grids import GridCell
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionMode, BusySpec, PressHandler, SelectionEvent
-from squid_ui.ownership import FIRST_PAGE, PageOwnership
 from squid_ui.palette import INHERIT, Accent, Palette
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.rosters import RosterPlacement
 from squid_ui.semantic import (
     CLOSED,

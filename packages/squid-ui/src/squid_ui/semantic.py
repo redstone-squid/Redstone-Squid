@@ -23,8 +23,9 @@ from squid_ui.forms import FormSpec, SubmitHandler
 from squid_ui.grids import GridCell, validate_grid
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
-from squid_ui.ownership import FIRST_PAGE, Controlled, Ownership, PageOwnership, Uncontrolled
+from squid_ui.ownership import Controlled, Ownership, Uncontrolled
 from squid_ui.palette import INHERIT, Accent, Palette, Tone
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import Node
 from squid_ui.rosters import RosterPlacement
 from squid_ui.target_types import Renderable, RenderTarget

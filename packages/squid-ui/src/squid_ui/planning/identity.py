@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import fields, is_dataclass
 from enum import Enum
 
-from squid_ui.ownership import RoutedPage
+from squid_ui.primitives.constraints import RoutedPage
 
 
 def stable_fingerprint(values: Sequence[object]) -> str:

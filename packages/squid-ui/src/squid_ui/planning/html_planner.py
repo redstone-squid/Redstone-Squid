@@ -26,7 +26,7 @@ from squid_ui.factories import is_builtin_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
-from squid_ui.ownership import PageOwnership, RoutedPage, Uncontrolled
+from squid_ui.ownership import Uncontrolled
 from squid_ui.palette import Palette
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
@@ -75,6 +75,7 @@ from squid_ui.presentation import (
     PresentationState,
     SessionUpdate,
 )
+from squid_ui.primitives.constraints import PageOwnership, RoutedPage
 from squid_ui.sources import Position
 from squid_ui.target_types import HtmlTarget
 from squid_ui.text import Localization, TextLike, resolve_text

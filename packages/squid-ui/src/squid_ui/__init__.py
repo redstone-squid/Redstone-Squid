@@ -128,8 +128,8 @@ from squid_ui.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
-from squid_ui.ownership import PageEvent, RoutedPage
 from squid_ui.palette import Palette, PaletteRegistry
+from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.definition import Component
 from squid_ui.semantic import (
     ChoiceEvent,

@@ -10,8 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
-from squid_ui.ownership import FIRST_PAGE, PageOwnership
 from squid_ui.planning.limits import Axis
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership
 from squid_ui.primitives.nodes import (
     Button,
     CardMedia,

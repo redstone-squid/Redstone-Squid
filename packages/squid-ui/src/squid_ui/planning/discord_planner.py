@@ -26,7 +26,6 @@ from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome, localize_chrome
 from squid_ui.document import Document, DocumentLike, as_document
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_ui.ownership import FIRST_PAGE, PageOwnership
 from squid_ui.palette import Palette
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
@@ -72,7 +71,7 @@ from squid_ui.planning.semantic_adaptation.lowering import (
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
 from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.presentation import PresentationState
-from squid_ui.primitives.constraints import Paginate
+from squid_ui.primitives.constraints import FIRST_PAGE, PageOwnership, Paginate
 from squid_ui.primitives.nodes import (
     Break,
     Budget,

@@ -6,11 +6,12 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import scene, testing
-from squid_ui.ownership import Controlled, RoutedPage, Uncontrolled
+from squid_ui.ownership import Controlled, Uncontrolled
 from squid_ui.planning import PlanCache, PlanMemo, Target, plan
 from squid_ui.planning.navigation import default_nav, page_select_nav
 from squid_ui.presentation import CursorUpdate, PresentationState
 from squid_ui.primitives import Lines, Paginate
+from squid_ui.primitives.constraints import RoutedPage
 from squid_ui.sources import Position
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
 from squid_ui_widgets import testing as wt

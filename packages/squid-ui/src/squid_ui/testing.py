@@ -23,7 +23,7 @@ from squid_ui.interactions import (
     SubmitEvent,
     Visibility,
 )
-from squid_ui.ownership import PageEvent
+from squid_ui.primitives.constraints import PageEvent
 from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree

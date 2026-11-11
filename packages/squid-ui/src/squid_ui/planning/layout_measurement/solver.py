@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 
 from squid_ui.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.ownership import Controlled, RoutedPage, resolve_page
+from squid_ui.ownership import Controlled
 from squid_ui.planning.adapter import EMPTY_COST, ResourceCost
 from squid_ui.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_ui.planning.layout_measurement.allocation import (
@@ -47,7 +47,7 @@ from squid_ui.planning.layout_measurement.text import TextUnit
 from squid_ui.planning.limits import LIMITS, Axis, MessageLimits
 from squid_ui.planning.navigation import PagerNav
 from squid_ui.planning.resolved import text as resolved_text
-from squid_ui.primitives.constraints import Paginate
+from squid_ui.primitives.constraints import Paginate, RoutedPage, resolve_page
 from squid_ui.primitives.nodes import (
     Lines,
     Node,

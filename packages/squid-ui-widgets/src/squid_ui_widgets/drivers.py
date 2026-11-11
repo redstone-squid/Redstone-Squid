@@ -27,8 +27,8 @@ from squid_ui.factories import (
 )
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
-from squid_ui.ownership import PageEvent, RoutedPage
 from squid_ui.primitives import Lines, Paginate
+from squid_ui.primitives.constraints import PageEvent, RoutedPage
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import (
     ActionControl,

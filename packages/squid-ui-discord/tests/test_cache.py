@@ -10,7 +10,7 @@ from time import perf_counter
 from squid_i18n import tr
 from squid_ui import Palette, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
-from squid_ui.ownership import Controlled, PageEvent
+from squid_ui.ownership import Controlled
 from squid_ui.planning import PlanCache, PlanMemo, plan
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import CachedPlan
@@ -27,6 +27,7 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
+from squid_ui.primitives.constraints import PageEvent
 from squid_ui.runtime import PresentationState
 from squid_ui.semantic import (
     ActionControl,
