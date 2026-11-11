@@ -38,6 +38,7 @@ Home = "index.md"
 Bot = [
     { Internationalization = "i18n.md" },
     { Notifications = "notifications.md" },
+    { "Edits and history" = "edits.md" },
     { "Error reports" = "error-reports.md" },
     { "Action ledger" = "action-ledger.md" },
     { "Credential hashing" = "credential-hashing.md" },

@@ -1,0 +1,134 @@
+# Edits, revisions, and history
+
+Several features change stored records on behalf of a user and need to know whether
+someone else changed the record first. Some of them also let the user undo the change,
+and builds keep a permanent log of every change. These are separate mechanisms that
+share vocabulary. This page defines each term and shows how the pieces fit.
+
+| Term | Meaning | Where |
+|---|---|---|
+| Revision | A counter on a stored record that increases with every change | `revision` columns, `squid/persistence/revisions.py` |
+| Edit | One change requested by a user, checked against revisions and committed in one transaction | `squid/edits` |
+| Session history | The undo and redo stack of one open editor | `squid_ui.runtime.History`, `squid/bot/edit_controller.py` |
+| Build history | A permanent log of every change to a build | `build_edit_history`, `squid/builds/history.py` |
+
+## Revisions
+
+A *revision* is an integer column on a record that changes on every write. Readers
+remember the revision they displayed, and a writer sends it back as the *expected
+revision*. If the stored revision differs, someone else changed the record in the
+meantime, and the write fails with `RevisionConflictError` instead of overwriting
+their change.
+
+An *edit target* (`EditTarget`) names one versioned record, such as
+`EditTarget("build", "42")`. Its `identity` string, `"build:42"`, appears in session
+history and resource leases. A `Revision` pairs a target with a counter value.
+
+Most records get their counter from the `Revisioned` mixin, which uses SQLAlchemy's
+`version_id_col`: the ORM increases the counter on each flush and adds the expected
+value to the `UPDATE`. A concurrent write then matches no row, which the unit of work
+and `flush_revision` report as `ConcurrentEditError`. Writes that
+change only child rows, or that use SQL directly, must increase the parent's counter
+themselves. `flush_revision` does this for ORM edit handlers.
+
+HTTP clients receive revisions as ETags such as `"build-42-r7"` and return them in
+`If-Match` (`squid/api/revisions.py`). A request without `If-Match` applies to the
+current record: the command carries a `LatestRevision`, which the handler replaces
+with the stored revision after locking the record.
+
+## Edits
+
+An edit moves through these steps:
+
+1. A transport (a bot screen or an HTTP route) builds an `EditCommand`. It names the
+   handler (`kind`), the expected revision of each target, and the requested values.
+   Each command has an `operation_id`.
+2. `EditExecutor.execute` opens a transaction and takes an advisory lock on the
+   operation ID. If an `edit_operations` row already exists for that ID, the command
+   is a retry: the executor returns the stored outcome instead of applying it again.
+3. The handler's `prepare` locks the targets, checks the expected revisions, checks
+   permissions, and returns the values before and after the change.
+4. If the values differ, `apply` writes them and returns the new revisions.
+5. The executor stores an `EditOutcome` (operation ID, actor, new revisions) in
+   `edit_operations` and commits.
+
+The caller receives an `EditReceipt` containing the values before and after the change.
+Receipts are kept only in memory; the database does not store the old values. Outcome
+rows expire after 24 hours, and the executor rejects commands issued more than 24
+hours ago, so a retry cannot apply an edit twice after its outcome has been deleted.
+
+If the commit fails in a way that may or may not have saved the change, the executor
+raises `EditCommitUncertainError`. The bot keeps such an edit as *pending* and blocks
+further edits to its targets until the user presses "Check saved result", which calls
+`EditExecutor.reconcile` to find out whether the outcome row exists.
+
+The handlers are registered by kind in `squid/bootstrap.py` (`_ServiceGraph.edits`).
+Most are `FieldCommand` subclasses (`squid/edits/fields.py`), which edit the fields
+declared by a Pydantic model on one record.
+
+## Session history
+
+Bot editors keep an undo and redo stack for the lifetime of the open screen. The stack
+is the generic `squid_ui.runtime.History`. `EditController` connects it to the edit
+executor:
+
+- After a committed edit, the controller adds an entry that holds the receipt.
+- Undo builds the inverse command from the receipt: the same handler with the old
+  values, expecting the latest revision this controller saw for each target. If
+  another user changed the record since, the undo fails with a conflict instead of
+  discarding their work.
+- A successful undo stores its own receipt, so redo works the same way.
+- A *final* edit, such as a deletion, cannot be undone. Accepting it removes every
+  history entry for the same targets.
+
+Forms with unsaved widget values also record them in a `History`, using a different
+operation that restores the widget state (`track_local_edits` in
+`squid/bot/edit_history.py`).
+
+### Resource leases
+
+Removing an attachment from a draft lets cleanup delete its stored file, and an undo
+would then have nothing to restore. To prevent that, the attachment handler records
+an *edit resource lease* (`edit_resource_leases`) for each attachment it removes. While
+a lease is current, media cleanup skips the file (`retained_resource`). The draft
+editor's `EditHistoryRetention` service renews leases for receipts still in its session
+history and releases the rest, including all of its leases when the editor closes.
+A lease lasts 120 seconds without renewal, so a crashed editor holds files only briefly.
+
+## Build history
+
+Every change to a build and its child rows is recorded permanently in
+`build_edit_history`, with snapshots of the build before and after
+(`build_history_states`). PostgreSQL triggers capture the snapshots, so writes made with
+SQL are recorded too.
+
+A transaction that changes a build must first open a *build edit scope*
+(`build_edit_scope`, usually through `uow.builds.editing(...)`) with a
+`BuildEditContext` naming the actor and the kind of operation. The triggers reject build
+changes outside a scope. Build history is independent of session history: undoing an
+edit adds a new history entry rather than removing one.
+
+## Other names that look related
+
+- **Draft revision.** `submission_drafts.revision` is a draft's revision counter, but it
+  starts at 0 and `submission_draft_changes` logs each accepted change for retries.
+  `schema_revision` is the version of the form the draft answers.
+- **Recalculation proposals.** Inferred corrections to an existing build, held for
+  review (`squid/submissions/application/recalculation.py`). Their HTTP routes and
+  table still use the older name "revision proposal".
+- **Minecraft versions.** `squid/versions` handles the game versions a build works in.
+- **Snapshots.** `squid/tags/application/snapshots.py` and
+  `squid/starboard/application/snapshots.py` hold detached copies of records that
+  handlers compare before replacing.
+
+## Known inconsistencies
+
+These are current limitations, not intended design:
+
+- Builds declare their own revision column instead of using `Revisioned`.
+- Draft revisions start at 0; other revisions start at 1.
+- Several repositories increase revision counters by hand instead of through one helper.
+- `EditCommand.expected` can contain unresolved `LatestRevision` values until the handler
+  prepares the edit, so code reading a command must check which form it has.
+- Resource leases are managed by the generic `EditController`, although only draft
+  attachments use them.
