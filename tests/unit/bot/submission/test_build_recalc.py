@@ -1,4 +1,4 @@
-"""The "Recalculate Build" context menu: who may run it, and on what."""
+"""The "Scan Build Message" context menu: who may run it, and on what."""
 
 from collections.abc import Iterable
 from dataclasses import dataclass

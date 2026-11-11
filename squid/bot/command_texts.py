@@ -8,9 +8,7 @@ from squid_i18n import Message, tr
 
 AUTOMATIC_MESSAGES: dict[tuple[str, str], Message] = {
     ("Archive Message", "name"): tr(t"command-archive-message-name = Archive Message"),
-    ("Edit Build", "name"): tr(t"command-edit-build-name = Edit Build"),
-    ("Recalculate Build", "name"): tr(t"command-recalculate-build-name = Recalculate Build"),
-    ("Resync Redstoner", "name"): tr(t"command-resync-redstoner-name = Resync Redstoner"),
+    ("Scan Build Message", "name"): tr(t"command-recalculate-build-name = Scan Build Message"),
     ("Vote to Delete", "name"): tr(t"command-vote-to-delete-name = Vote to Delete"),
     ("access", "description"): tr(t"command-access-help = Inspect and manage this server's access controls"),
     ("access", "name"): tr(t"command-access-name = access"),

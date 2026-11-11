@@ -4,7 +4,6 @@ Retained submission-draft editing is covered in ``test_draft_editor.py``.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any, cast, override
 
 import discord
@@ -21,11 +20,9 @@ from squid.builds.domain import RestrictionTypeLiteral, Status
 from squid.builds.models import DoorBuild, OtherBuild
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
-from squid.posts.application import PostService
-from squid.posts.domain import PostReference
 from squid.settings.application import SettingsService
 from squid_ui.testing import RecordingResponder, press_event
-from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
+from squid_ui_discord.testing import InteractionHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 
@@ -100,9 +97,7 @@ class OwnerCheck:
         return False
 
 
-def _cog(
-    build: Any, *, allowed: bool = True, account_id: int | None = 1, posts: PostService | None = None
-) -> BuildEditCommands[Any]:
+def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     builds = StubBuilds(build)
     cog.builds = builds
@@ -112,8 +107,6 @@ def _cog(
         "permissions": PermissionRecorder(allowed),
         "builds": builds,
     }
-    if posts is not None:
-        doubles["posts"] = posts
     services = bot_services(**doubles)
     cog.bot = cast(
         Any,
@@ -230,55 +223,6 @@ async def test_a_missing_build_is_an_error_card() -> None:
     cog = _cog(None)
 
     assert _component(_sent_view(await _run(cog))) is None
-
-
-class PostRecorder(PostService):
-    def __init__(self, resource_key: str | None) -> None:
-        self._resource_key = resource_key
-
-    @override
-    async def resolve(self, message_id: int) -> PostReference | None:
-        if self._resource_key is None:
-            return None
-        return PostReference(message_id, "build", self._resource_key, "build_card")
-
-
-def _card(*, author_id: int) -> discord.Message:
-    @dataclass(frozen=True)
-    class Author:
-        id: int
-
-    @dataclass(frozen=True)
-    class Message:
-        id: int
-        author: Author
-
-    return cast(discord.Message, Message(id=55, author=Author(author_id)))
-
-
-async def _open_from_menu(cog: BuildEditCommands[Any], message: discord.Message) -> discord.Interaction[Any]:
-    interaction = _interaction(cog.bot)
-    await invoke_context_menu(cog, cog.edit_context_menu, interaction, message)
-    return interaction
-
-
-async def test_the_menu_opens_the_editor_behind_its_own_defer() -> None:
-    """Opening from a resolved build card must produce an editor."""
-    cog = _cog(_door(), posts=PostRecorder("1"))
-    cog.bot.user = cast(Any, discord.Object(id=1))
-
-    interaction = await _open_from_menu(cog, _card(author_id=1))
-
-    assert _component(_sent_view(interaction)) is not None
-
-
-async def test_the_menu_refuses_a_message_that_is_not_a_card() -> None:
-    cog = _cog(_door(), posts=PostRecorder(None))
-    cog.bot.user = cast(Any, discord.Object(id=1))
-
-    interaction = await _open_from_menu(cog, _card(author_id=1))
-
-    assert _component(_sent_view(interaction)) is None
 
 
 async def test_recovery_route_reloads_current_state_before_authorizing() -> None:

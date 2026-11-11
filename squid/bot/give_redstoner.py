@@ -205,22 +205,6 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             publish_panel=publish_panel,
         )
 
-    @sd.context_menu(
-        name="Resync Redstoner",
-        defer="private",
-        default_permissions=discord.Permissions(manage_roles=True),
-    )
-    async def resync_redstoner_context(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Reprocess the selected message for Redstoner role automation."""
-        await enforce(request, REDSTONER_ROLE_RESYNC)
-        guild = request.guild
-        if guild is None or guild.id != self.bot.owner_server_id or message.guild != guild:
-            return text_node(
-                tr(t"give-redstoner-that-message-is-not-in-the-bot = That message is not in the bot's home server.")
-            )
-        await self.give_redstoner_from_message(message)
-        return text_node(tr(t"give-redstoner-redstoner-automation-resynced = Redstoner automation resynced."))
-
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
         """Give the redstoner role to a user based on a Starboard message."""
         if message.guild is None or message.guild.id != self.bot.owner_server_id:

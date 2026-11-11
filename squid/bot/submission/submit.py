@@ -301,7 +301,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             return
         await self.bot.refresh_posts("inference_run", str(run_id))
 
-    @sd.context_menu(name="Recalculate Build", defer="private")
+    @sd.context_menu(name="Scan Build Message", defer="private")
     async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Review proposed build corrections inferred from this message."""
         await enforce(request, BUILD_SUBMISSION_RECALC)

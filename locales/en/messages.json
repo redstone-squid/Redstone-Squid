@@ -4494,7 +4494,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/edit.py:54"
+      "squid/bot/submission/edit.py:53"
     ]
   },
   "bot-submission-edit-no-build-with-that-id": {
@@ -4503,7 +4503,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/edit.py:55"
+      "squid/bot/submission/edit.py:54"
     ]
   },
   "bot-submission-edit-not-a-field-of-this-build": {
@@ -4512,7 +4512,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/edit.py:88"
+      "squid/bot/submission/edit.py:87"
     ]
   },
   "bot-submission-records-build-kind": {
@@ -6662,18 +6662,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/edit.py:89"
-    ]
-  },
-  "build-editor-invalid-build": {
-    "fingerprint": "1b20c5bbd741d07b1fcd246d5c9e6c844086ffc824d1da3ccfcff32b5166f3e6",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/submission/edit.py:104",
-      "squid/bot/submission/edit.py:109",
-      "squid/bot/submission/edit.py:113"
+      "squid/bot/submission/edit.py:88"
     ]
   },
   "build-editor-open-new-editor": {
@@ -7533,7 +7522,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:15"
+      "squid/bot/command_texts.py:13"
     ]
   },
   "command-access-name": {
@@ -7542,7 +7531,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:16"
+      "squid/bot/command_texts.py:14"
     ]
   },
   "command-access-role-help": {
@@ -7551,7 +7540,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:17"
+      "squid/bot/command_texts.py:15"
     ]
   },
   "command-access-role-name": {
@@ -7560,7 +7549,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:18"
+      "squid/bot/command_texts.py:16"
     ]
   },
   "command-access-user-help": {
@@ -7569,7 +7558,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:19"
+      "squid/bot/command_texts.py:17"
     ]
   },
   "command-access-user-name": {
@@ -7578,7 +7567,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:20"
+      "squid/bot/command_texts.py:18"
     ]
   },
   "command-account-help": {
@@ -7587,7 +7576,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:21"
+      "squid/bot/command_texts.py:19"
     ]
   },
   "command-account-name": {
@@ -7596,7 +7585,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:22"
+      "squid/bot/command_texts.py:20"
     ]
   },
   "command-account-user-name": {
@@ -7605,7 +7594,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:23"
+      "squid/bot/command_texts.py:21"
     ]
   },
   "command-archive-message-name": {
@@ -7623,7 +7612,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:30"
+      "squid/bot/command_texts.py:28"
     ]
   },
   "command-build-browse-help": {
@@ -7632,7 +7621,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:26"
+      "squid/bot/command_texts.py:24"
     ]
   },
   "command-build-browse-name": {
@@ -7641,7 +7630,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:29"
+      "squid/bot/command_texts.py:27"
     ]
   },
   "command-build-drafts-help": {
@@ -7650,7 +7639,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:31"
+      "squid/bot/command_texts.py:29"
     ]
   },
   "command-build-drafts-inbox-help": {
@@ -7668,7 +7657,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:35"
+      "squid/bot/command_texts.py:33"
     ]
   },
   "command-build-drafts-name": {
@@ -7677,7 +7666,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:34"
+      "squid/bot/command_texts.py:32"
     ]
   },
   "command-build-help": {
@@ -7686,7 +7675,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:24"
+      "squid/bot/command_texts.py:22"
     ]
   },
   "command-build-name": {
@@ -7695,7 +7684,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:25"
+      "squid/bot/command_texts.py:23"
     ]
   },
   "command-build-submit-build-size-name": {
@@ -7704,7 +7693,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:43"
+      "squid/bot/command_texts.py:41"
     ]
   },
   "command-build-submit-choice-door-type-door": {
@@ -7713,7 +7702,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:36"
+      "squid/bot/command_texts.py:34"
     ]
   },
   "command-build-submit-choice-door-type-skydoor": {
@@ -7722,7 +7711,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:37"
+      "squid/bot/command_texts.py:35"
     ]
   },
   "command-build-submit-choice-door-type-trapdoor": {
@@ -7731,7 +7720,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:38"
+      "squid/bot/command_texts.py:36"
     ]
   },
   "command-build-submit-creators-name": {
@@ -7740,7 +7729,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:44"
+      "squid/bot/command_texts.py:42"
     ]
   },
   "command-build-submit-description-name": {
@@ -7749,7 +7738,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:45"
+      "squid/bot/command_texts.py:43"
     ]
   },
   "command-build-submit-door-size-name": {
@@ -7758,7 +7747,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:46"
+      "squid/bot/command_texts.py:44"
     ]
   },
   "command-build-submit-door-type-name": {
@@ -7767,7 +7756,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:47"
+      "squid/bot/command_texts.py:45"
     ]
   },
   "command-build-submit-file-2-name": {
@@ -7776,7 +7765,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:49"
+      "squid/bot/command_texts.py:47"
     ]
   },
   "command-build-submit-file-3-name": {
@@ -7785,7 +7774,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:50"
+      "squid/bot/command_texts.py:48"
     ]
   },
   "command-build-submit-file-4-name": {
@@ -7794,7 +7783,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:51"
+      "squid/bot/command_texts.py:49"
     ]
   },
   "command-build-submit-file-name": {
@@ -7803,7 +7792,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:48"
+      "squid/bot/command_texts.py:46"
     ]
   },
   "command-build-submit-help": {
@@ -7812,7 +7801,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:39"
+      "squid/bot/command_texts.py:37"
     ]
   },
   "command-build-submit-name": {
@@ -7821,7 +7810,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:42"
+      "squid/bot/command_texts.py:40"
     ]
   },
   "command-build-submit-patterns-name": {
@@ -7830,7 +7819,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:52"
+      "squid/bot/command_texts.py:50"
     ]
   },
   "command-build-submit-restrictions-name": {
@@ -7839,7 +7828,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:53"
+      "squid/bot/command_texts.py:51"
     ]
   },
   "command-build-submit-versions-name": {
@@ -7848,7 +7837,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:54"
+      "squid/bot/command_texts.py:52"
     ]
   },
   "command-dev-help": {
@@ -7857,7 +7846,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:55"
+      "squid/bot/command_texts.py:53"
     ]
   },
   "command-dev-name": {
@@ -7866,7 +7855,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:56"
+      "squid/bot/command_texts.py:54"
     ]
   },
   "command-dev-ui-actions-help": {
@@ -7875,7 +7864,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:59"
+      "squid/bot/command_texts.py:57"
     ]
   },
   "command-dev-ui-actions-limit-help": {
@@ -7884,7 +7873,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:63"
+      "squid/bot/command_texts.py:61"
     ]
   },
   "command-dev-ui-actions-limit-name": {
@@ -7893,7 +7882,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:64"
+      "squid/bot/command_texts.py:62"
     ]
   },
   "command-dev-ui-actions-name": {
@@ -7902,7 +7891,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:62"
+      "squid/bot/command_texts.py:60"
     ]
   },
   "command-dev-ui-clear-profile-help": {
@@ -7911,7 +7900,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:65"
+      "squid/bot/command_texts.py:63"
     ]
   },
   "command-dev-ui-clear-profile-name": {
@@ -7920,7 +7909,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:68"
+      "squid/bot/command_texts.py:66"
     ]
   },
   "command-dev-ui-close-confirmation-help": {
@@ -7929,7 +7918,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:73"
+      "squid/bot/command_texts.py:71"
     ]
   },
   "command-dev-ui-close-confirmation-name": {
@@ -7938,7 +7927,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:74"
+      "squid/bot/command_texts.py:72"
     ]
   },
   "command-dev-ui-close-help": {
@@ -7947,7 +7936,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:69"
+      "squid/bot/command_texts.py:67"
     ]
   },
   "command-dev-ui-close-name": {
@@ -7956,7 +7945,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:72"
+      "squid/bot/command_texts.py:70"
     ]
   },
   "command-dev-ui-close-session-id-help": {
@@ -7965,7 +7954,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:75"
+      "squid/bot/command_texts.py:73"
     ]
   },
   "command-dev-ui-close-session-id-name": {
@@ -7974,7 +7963,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:76"
+      "squid/bot/command_texts.py:74"
     ]
   },
   "command-dev-ui-export-help": {
@@ -7983,7 +7972,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:77"
+      "squid/bot/command_texts.py:75"
     ]
   },
   "command-dev-ui-export-name": {
@@ -7992,7 +7981,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:80"
+      "squid/bot/command_texts.py:78"
     ]
   },
   "command-dev-ui-flush-help": {
@@ -8001,7 +7990,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:81"
+      "squid/bot/command_texts.py:79"
     ]
   },
   "command-dev-ui-flush-name": {
@@ -8010,7 +7999,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:82"
+      "squid/bot/command_texts.py:80"
     ]
   },
   "command-dev-ui-help": {
@@ -8019,7 +8008,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:57"
+      "squid/bot/command_texts.py:55"
     ]
   },
   "command-dev-ui-history-help": {
@@ -8028,7 +8017,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:83"
+      "squid/bot/command_texts.py:81"
     ]
   },
   "command-dev-ui-history-name": {
@@ -8037,7 +8026,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:86"
+      "squid/bot/command_texts.py:84"
     ]
   },
   "command-dev-ui-history-root-help": {
@@ -8046,7 +8035,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:87"
+      "squid/bot/command_texts.py:85"
     ]
   },
   "command-dev-ui-history-root-name": {
@@ -8055,7 +8044,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:88"
+      "squid/bot/command_texts.py:86"
     ]
   },
   "command-dev-ui-idle-help": {
@@ -8064,7 +8053,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:89"
+      "squid/bot/command_texts.py:87"
     ]
   },
   "command-dev-ui-idle-name": {
@@ -8073,7 +8062,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:92"
+      "squid/bot/command_texts.py:90"
     ]
   },
   "command-dev-ui-metrics-help": {
@@ -8082,7 +8071,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:93"
+      "squid/bot/command_texts.py:91"
     ]
   },
   "command-dev-ui-metrics-name": {
@@ -8091,7 +8080,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:96"
+      "squid/bot/command_texts.py:94"
     ]
   },
   "command-dev-ui-metrics-root-help": {
@@ -8100,7 +8089,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:97"
+      "squid/bot/command_texts.py:95"
     ]
   },
   "command-dev-ui-metrics-root-name": {
@@ -8109,7 +8098,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:98"
+      "squid/bot/command_texts.py:96"
     ]
   },
   "command-dev-ui-name": {
@@ -8118,7 +8107,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:58"
+      "squid/bot/command_texts.py:56"
     ]
   },
   "command-dev-ui-persistence-help": {
@@ -8127,7 +8116,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:99"
+      "squid/bot/command_texts.py:97"
     ]
   },
   "command-dev-ui-persistence-name": {
@@ -8136,7 +8125,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:102"
+      "squid/bot/command_texts.py:100"
     ]
   },
   "command-dev-ui-plan-help": {
@@ -8145,7 +8134,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:103"
+      "squid/bot/command_texts.py:101"
     ]
   },
   "command-dev-ui-plan-name": {
@@ -8154,7 +8143,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:104"
+      "squid/bot/command_texts.py:102"
     ]
   },
   "command-dev-ui-plan-root-help": {
@@ -8163,7 +8152,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:105"
+      "squid/bot/command_texts.py:103"
     ]
   },
   "command-dev-ui-plan-root-name": {
@@ -8172,7 +8161,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:106"
+      "squid/bot/command_texts.py:104"
     ]
   },
   "command-dev-ui-profile-help": {
@@ -8181,7 +8170,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:107"
+      "squid/bot/command_texts.py:105"
     ]
   },
   "command-dev-ui-profile-name": {
@@ -8190,7 +8179,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:110"
+      "squid/bot/command_texts.py:108"
     ]
   },
   "command-dev-ui-profile-root-help": {
@@ -8199,7 +8188,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:111"
+      "squid/bot/command_texts.py:109"
     ]
   },
   "command-dev-ui-profile-root-name": {
@@ -8208,7 +8197,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:112"
+      "squid/bot/command_texts.py:110"
     ]
   },
   "command-dev-ui-purge-confirmation-help": {
@@ -8217,7 +8206,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:117"
+      "squid/bot/command_texts.py:115"
     ]
   },
   "command-dev-ui-purge-confirmation-name": {
@@ -8226,7 +8215,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:118"
+      "squid/bot/command_texts.py:116"
     ]
   },
   "command-dev-ui-purge-help": {
@@ -8235,7 +8224,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:113"
+      "squid/bot/command_texts.py:111"
     ]
   },
   "command-dev-ui-purge-name": {
@@ -8244,7 +8233,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:116"
+      "squid/bot/command_texts.py:114"
     ]
   },
   "command-dev-ui-purge-record-keys-help": {
@@ -8253,7 +8242,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:119"
+      "squid/bot/command_texts.py:117"
     ]
   },
   "command-dev-ui-purge-record-keys-name": {
@@ -8262,7 +8251,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:120"
+      "squid/bot/command_texts.py:118"
     ]
   },
   "command-dev-ui-queues-help": {
@@ -8271,7 +8260,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:121"
+      "squid/bot/command_texts.py:119"
     ]
   },
   "command-dev-ui-queues-name": {
@@ -8280,7 +8269,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:124"
+      "squid/bot/command_texts.py:122"
     ]
   },
   "command-dev-ui-recover-confirmation-help": {
@@ -8289,7 +8278,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:129"
+      "squid/bot/command_texts.py:127"
     ]
   },
   "command-dev-ui-recover-confirmation-name": {
@@ -8298,7 +8287,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:130"
+      "squid/bot/command_texts.py:128"
     ]
   },
   "command-dev-ui-recover-help": {
@@ -8307,7 +8296,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:125"
+      "squid/bot/command_texts.py:123"
     ]
   },
   "command-dev-ui-recover-name": {
@@ -8316,7 +8305,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:128"
+      "squid/bot/command_texts.py:126"
     ]
   },
   "command-dev-ui-refresh-help": {
@@ -8325,7 +8314,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:131"
+      "squid/bot/command_texts.py:129"
     ]
   },
   "command-dev-ui-refresh-name": {
@@ -8334,7 +8323,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:134"
+      "squid/bot/command_texts.py:132"
     ]
   },
   "command-dev-ui-refresh-root-help": {
@@ -8343,7 +8332,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:135"
+      "squid/bot/command_texts.py:133"
     ]
   },
   "command-dev-ui-refresh-root-name": {
@@ -8352,7 +8341,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:136"
+      "squid/bot/command_texts.py:134"
     ]
   },
   "command-dev-ui-root-help": {
@@ -8361,7 +8350,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:137"
+      "squid/bot/command_texts.py:135"
     ]
   },
   "command-dev-ui-root-name": {
@@ -8370,7 +8359,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:138"
+      "squid/bot/command_texts.py:136"
     ]
   },
   "command-dev-ui-root-root-help": {
@@ -8379,7 +8368,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:139"
+      "squid/bot/command_texts.py:137"
     ]
   },
   "command-dev-ui-root-root-name": {
@@ -8388,7 +8377,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:140"
+      "squid/bot/command_texts.py:138"
     ]
   },
   "command-dev-ui-roots-help": {
@@ -8397,7 +8386,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:141"
+      "squid/bot/command_texts.py:139"
     ]
   },
   "command-dev-ui-roots-name": {
@@ -8406,7 +8395,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:142"
+      "squid/bot/command_texts.py:140"
     ]
   },
   "command-dev-ui-routes-help": {
@@ -8415,7 +8404,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:143"
+      "squid/bot/command_texts.py:141"
     ]
   },
   "command-dev-ui-routes-name": {
@@ -8424,7 +8413,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:146"
+      "squid/bot/command_texts.py:144"
     ]
   },
   "command-dev-ui-scene-help": {
@@ -8433,7 +8422,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:147"
+      "squid/bot/command_texts.py:145"
     ]
   },
   "command-dev-ui-scene-name": {
@@ -8442,7 +8431,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:150"
+      "squid/bot/command_texts.py:148"
     ]
   },
   "command-dev-ui-scene-root-help": {
@@ -8451,7 +8440,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:151"
+      "squid/bot/command_texts.py:149"
     ]
   },
   "command-dev-ui-scene-root-name": {
@@ -8460,7 +8449,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:152"
+      "squid/bot/command_texts.py:150"
     ]
   },
   "command-dev-ui-session-help": {
@@ -8469,7 +8458,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:153"
+      "squid/bot/command_texts.py:151"
     ]
   },
   "command-dev-ui-session-name": {
@@ -8478,7 +8467,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:154"
+      "squid/bot/command_texts.py:152"
     ]
   },
   "command-dev-ui-session-session-id-help": {
@@ -8487,7 +8476,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:155"
+      "squid/bot/command_texts.py:153"
     ]
   },
   "command-dev-ui-session-session-id-name": {
@@ -8496,7 +8485,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:156"
+      "squid/bot/command_texts.py:154"
     ]
   },
   "command-dev-ui-sessions-help": {
@@ -8505,7 +8494,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:157"
+      "squid/bot/command_texts.py:155"
     ]
   },
   "command-dev-ui-sessions-name": {
@@ -8514,7 +8503,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:160"
+      "squid/bot/command_texts.py:158"
     ]
   },
   "command-dev-ui-timeline-help": {
@@ -8523,7 +8512,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:161"
+      "squid/bot/command_texts.py:159"
     ]
   },
   "command-dev-ui-timeline-limit-help": {
@@ -8532,7 +8521,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:165"
+      "squid/bot/command_texts.py:163"
     ]
   },
   "command-dev-ui-timeline-limit-name": {
@@ -8541,7 +8530,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:166"
+      "squid/bot/command_texts.py:164"
     ]
   },
   "command-dev-ui-timeline-name": {
@@ -8550,7 +8539,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:164"
+      "squid/bot/command_texts.py:162"
     ]
   },
   "command-dev-ui-timeline-target-help": {
@@ -8559,7 +8548,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:167"
+      "squid/bot/command_texts.py:165"
     ]
   },
   "command-dev-ui-timeline-target-name": {
@@ -8568,16 +8557,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:168"
-    ]
-  },
-  "command-edit-build-name": {
-    "fingerprint": "0f385cb6aa1b8235505743b8e515f4ce7245672f51005b3ead814f438582ace7",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/command_texts.py:11"
+      "squid/bot/command_texts.py:166"
     ]
   },
   "command-errors-help": {
@@ -8586,7 +8566,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:169"
+      "squid/bot/command_texts.py:167"
     ]
   },
   "command-errors-name": {
@@ -8595,7 +8575,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:172"
+      "squid/bot/command_texts.py:170"
     ]
   },
   "command-errors-reference-help": {
@@ -8604,7 +8584,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:173"
+      "squid/bot/command_texts.py:171"
     ]
   },
   "command-errors-reference-name": {
@@ -8613,7 +8593,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:176"
+      "squid/bot/command_texts.py:174"
     ]
   },
   "command-help-command-name": {
@@ -8622,7 +8602,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:179"
+      "squid/bot/command_texts.py:177"
     ]
   },
   "command-help-help": {
@@ -8631,7 +8611,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:177"
+      "squid/bot/command_texts.py:175"
     ]
   },
   "command-help-name": {
@@ -8640,7 +8620,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:178"
+      "squid/bot/command_texts.py:176"
     ]
   },
   "command-layout-help": {
@@ -8649,7 +8629,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:180"
+      "squid/bot/command_texts.py:178"
     ]
   },
   "command-layout-name": {
@@ -8658,7 +8638,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:181"
+      "squid/bot/command_texts.py:179"
     ]
   },
   "command-layout-review-choice-mode-live": {
@@ -8667,7 +8647,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:182"
+      "squid/bot/command_texts.py:180"
     ]
   },
   "command-layout-review-choice-mode-simulated": {
@@ -8676,7 +8656,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:183"
+      "squid/bot/command_texts.py:181"
     ]
   },
   "command-layout-review-help": {
@@ -8685,7 +8665,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:184"
+      "squid/bot/command_texts.py:182"
     ]
   },
   "command-layout-review-mode-help": {
@@ -8694,7 +8674,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:188"
+      "squid/bot/command_texts.py:186"
     ]
   },
   "command-layout-review-mode-name": {
@@ -8703,7 +8683,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:189"
+      "squid/bot/command_texts.py:187"
     ]
   },
   "command-layout-review-name": {
@@ -8712,7 +8692,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:187"
+      "squid/bot/command_texts.py:185"
     ]
   },
   "command-layout-workbench-help": {
@@ -8721,7 +8701,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:190"
+      "squid/bot/command_texts.py:188"
     ]
   },
   "command-layout-workbench-name": {
@@ -8730,7 +8710,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:193"
+      "squid/bot/command_texts.py:191"
     ]
   },
   "command-notifications-name": {
@@ -8739,7 +8719,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:194"
+      "squid/bot/command_texts.py:192"
     ]
   },
   "command-poll-help": {
@@ -8748,7 +8728,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:195"
+      "squid/bot/command_texts.py:193"
     ]
   },
   "command-poll-name": {
@@ -8757,16 +8737,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:196"
+      "squid/bot/command_texts.py:194"
     ]
   },
   "command-recalculate-build-name": {
-    "fingerprint": "94e11dcb472159c019f69a0af8c71a62a2f850681e3cc7609a33d468320e9c95",
+    "fingerprint": "75487607aca60d47706b9b06dc6d52ad56ce206a3686aaeb116130fc3189708d",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:12"
+      "squid/bot/command_texts.py:11"
     ]
   },
   "command-records-help": {
@@ -8775,7 +8755,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:197"
+      "squid/bot/command_texts.py:195"
     ]
   },
   "command-records-name": {
@@ -8784,7 +8764,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:198"
+      "squid/bot/command_texts.py:196"
     ]
   },
   "command-recount-help": {
@@ -8793,7 +8773,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:199"
+      "squid/bot/command_texts.py:197"
     ]
   },
   "command-recount-message-help": {
@@ -8802,7 +8782,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:201"
+      "squid/bot/command_texts.py:199"
     ]
   },
   "command-recount-message-name": {
@@ -8811,7 +8791,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:204"
+      "squid/bot/command_texts.py:202"
     ]
   },
   "command-recount-name": {
@@ -8820,7 +8800,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:200"
+      "squid/bot/command_texts.py:198"
     ]
   },
   "command-redstoner-help": {
@@ -8829,7 +8809,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:205"
+      "squid/bot/command_texts.py:203"
     ]
   },
   "command-redstoner-name": {
@@ -8838,16 +8818,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:206"
-    ]
-  },
-  "command-resync-redstoner-name": {
-    "fingerprint": "676ab5c2bc8b56671d1a15d7bf3ae08bc4503feb256a8d46144d5767ad6aa36a",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/command_texts.py:13"
+      "squid/bot/command_texts.py:204"
     ]
   },
   "command-runtime-settings-help": {
@@ -8856,7 +8827,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:207"
+      "squid/bot/command_texts.py:205"
     ]
   },
   "command-runtime-settings-name": {
@@ -8865,7 +8836,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:208"
+      "squid/bot/command_texts.py:206"
     ]
   },
   "command-runtime-settings-setting-help": {
@@ -8874,7 +8845,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:209"
+      "squid/bot/command_texts.py:207"
     ]
   },
   "command-runtime-settings-setting-name": {
@@ -8883,7 +8854,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:210"
+      "squid/bot/command_texts.py:208"
     ]
   },
   "command-runtime-settings-value-help": {
@@ -8892,7 +8863,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:211"
+      "squid/bot/command_texts.py:209"
     ]
   },
   "command-runtime-settings-value-name": {
@@ -8901,7 +8872,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:212"
+      "squid/bot/command_texts.py:210"
     ]
   },
   "command-search-choice-mode-keyword": {
@@ -8910,7 +8881,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:213"
+      "squid/bot/command_texts.py:211"
     ]
   },
   "command-search-choice-mode-smart": {
@@ -8919,7 +8890,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:214"
+      "squid/bot/command_texts.py:212"
     ]
   },
   "command-search-choice-scope-builds": {
@@ -8928,7 +8899,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:215"
+      "squid/bot/command_texts.py:213"
     ]
   },
   "command-search-choice-scope-everything": {
@@ -8937,7 +8908,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:216"
+      "squid/bot/command_texts.py:214"
     ]
   },
   "command-search-choice-scope-patterns": {
@@ -8946,7 +8917,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:217"
+      "squid/bot/command_texts.py:215"
     ]
   },
   "command-search-choice-scope-records": {
@@ -8955,7 +8926,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:218"
+      "squid/bot/command_texts.py:216"
     ]
   },
   "command-search-choice-scope-restrictions": {
@@ -8964,7 +8935,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:219"
+      "squid/bot/command_texts.py:217"
     ]
   },
   "command-search-help": {
@@ -8973,7 +8944,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:220"
+      "squid/bot/command_texts.py:218"
     ]
   },
   "command-search-mode-name": {
@@ -8982,7 +8953,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:222"
+      "squid/bot/command_texts.py:220"
     ]
   },
   "command-search-name": {
@@ -8991,7 +8962,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:221"
+      "squid/bot/command_texts.py:219"
     ]
   },
   "command-search-query-name": {
@@ -9000,7 +8971,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:223"
+      "squid/bot/command_texts.py:221"
     ]
   },
   "command-search-scope-name": {
@@ -9009,7 +8980,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:224"
+      "squid/bot/command_texts.py:222"
     ]
   },
   "command-search-sort-name": {
@@ -9018,7 +8989,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:225"
+      "squid/bot/command_texts.py:223"
     ]
   },
   "command-settings-help": {
@@ -9027,7 +8998,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:226"
+      "squid/bot/command_texts.py:224"
     ]
   },
   "command-settings-name": {
@@ -9036,7 +9007,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:227"
+      "squid/bot/command_texts.py:225"
     ]
   },
   "command-starboard-help": {
@@ -9045,7 +9016,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:228"
+      "squid/bot/command_texts.py:226"
     ]
   },
   "command-starboard-name": {
@@ -9054,7 +9025,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:229"
+      "squid/bot/command_texts.py:227"
     ]
   },
   "command-tags-build-id-help": {
@@ -9063,7 +9034,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:232"
+      "squid/bot/command_texts.py:230"
     ]
   },
   "command-tags-build-id-name": {
@@ -9072,7 +9043,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:233"
+      "squid/bot/command_texts.py:231"
     ]
   },
   "command-tags-help": {
@@ -9081,7 +9052,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:230"
+      "squid/bot/command_texts.py:228"
     ]
   },
   "command-tags-name": {
@@ -9090,7 +9061,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:231"
+      "squid/bot/command_texts.py:229"
     ]
   },
   "command-versions-help": {
@@ -9099,7 +9070,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:234"
+      "squid/bot/command_texts.py:232"
     ]
   },
   "command-versions-name": {
@@ -9108,7 +9079,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:235"
+      "squid/bot/command_texts.py:233"
     ]
   },
   "command-vote-to-delete-name": {
@@ -9117,7 +9088,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/command_texts.py:14"
+      "squid/bot/command_texts.py:12"
     ]
   },
   "consent-agree": {
@@ -10974,6 +10945,60 @@
       "squid/bot/edit_history.py:123"
     ]
   },
+  "edits-commit-uncertain": {
+    "fingerprint": "7192bb0ef907f4e013f3eb74677dbf10455e644d87a7482419d2b5f33c307327",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/edits/domain.py:169"
+    ]
+  },
+  "edits-fields-not-editable": {
+    "fingerprint": "d442bed0980074470a4d89d1cbfa2c3467dd295dd9670f68f9dc90497b8ea60e",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/edits/application.py:72"
+    ]
+  },
+  "edits-final": {
+    "fingerprint": "fc036ed832c294ecd11ad664f9dd238f5765ed7a013988f5bca2d6a3361f25b4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/edits/domain.py:126"
+    ]
+  },
+  "edits-operation-expired": {
+    "fingerprint": "6f18e78393b7efd1d74d2cd0a9f63173e4e6e443bfc4bfa19f70f6a1fe0d1abc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/edits/domain.py:177"
+    ]
+  },
+  "edits-operation-reused": {
+    "fingerprint": "1baa0b85e6b5be6968f0ef8362bcbf5ff0507673f79534649754acfae1fb9a3e",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/edits/domain.py:165"
+    ]
+  },
+  "edits-revision-conflict": {
+    "fingerprint": "4d9f8399e2bda838bfb603ddc3de2cb45e6f8ad51aaa73caad2ae41499e883da",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/edits/domain.py:156"
+    ]
+  },
   "errors-all-permissions-required": {
     "fingerprint": "8a07ea3cdfd45dbb2aa3ee2742c00a059b6d9cb1a0fab50b818130355f7bfbdc",
     "attributes": [],
@@ -11239,7 +11264,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/give_redstoner.py:263"
+      "squid/bot/give_redstoner.py:247"
     ]
   },
   "give-redstoner-deploy-role-controls": {
@@ -11263,7 +11288,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:298"
+      "squid/bot/give_redstoner.py:282"
     ]
   },
   "give-redstoner-in": {
@@ -11283,7 +11308,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:251"
+      "squid/bot/give_redstoner.py:235"
     ]
   },
   "give-redstoner-redstoner-automation": {
@@ -11293,15 +11318,6 @@
     "arguments": [],
     "locations": [
       "squid/bot/give_redstoner.py:129"
-    ]
-  },
-  "give-redstoner-redstoner-automation-resynced": {
-    "fingerprint": "99f0ced707d12285d6017389452b93d10e2a4484b7d3fa510777dd7b6b820055",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/give_redstoner.py:222"
     ]
   },
   "give-redstoner-redstoner-role-controls": {
@@ -11338,15 +11354,6 @@
     "arguments": [],
     "locations": [
       "squid/bot/give_redstoner.py:133"
-    ]
-  },
-  "give-redstoner-that-message-is-not-in-the-bot": {
-    "fingerprint": "658f92698402ec635e70f02eb6bd210a4695c0a722f781de48bddade72e35230",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/give_redstoner.py:219"
     ]
   },
   "give-redstoner-value": {
@@ -11691,7 +11698,7 @@
     ]
   },
   "ingestion-consent-already-granted": {
-    "fingerprint": "50b9167d057a9fb42b40f3b87785f92a80a2249a2600827473e6e10801b578d0",
+    "fingerprint": "239a137bbf63d33daa1c433c4e458846ba0b57de890d84dc37d67fab41e498c8",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -11709,7 +11716,7 @@
     ]
   },
   "ingestion-consent-recorded-confirmation": {
-    "fingerprint": "f228973b144b2ca8bfa4f04ade0337b980a6478545d7b8ae60c1884003405ed8",
+    "fingerprint": "c702254653ae8bedd1af7f916169fdc9910a1a5f5793b5a303fa311003422f83",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -14583,7 +14590,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:305"
+      "squid/bot/give_redstoner.py:289"
     ]
   },
   "redstoner-role-restored": {
@@ -14598,7 +14605,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:293"
+      "squid/bot/give_redstoner.py:277"
     ]
   },
   "redstoner-role-self-removed": {
@@ -14618,7 +14625,7 @@
       }
     ],
     "locations": [
-      "squid/bot/give_redstoner.py:288"
+      "squid/bot/give_redstoner.py:272"
     ]
   },
   "schematic-block-count-disclaimer": {

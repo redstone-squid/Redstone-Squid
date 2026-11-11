@@ -1,14 +1,13 @@
 """Open build editors from Discord messages and optional prefilled values."""
 
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 import discord
 
-import squid_ui_discord as sd
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.input import split_values
-from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
-from squid.bot.ui import error_node, text_node
+from squid.bot.submission.ui.opening import prepare_build_editor, show_build_editor
+from squid.bot.ui import error_node
 from squid.builds.application import BuildService
 from squid.builds.domain import DoorOrientationLiteral
 from squid.core.i18n import tr
@@ -96,20 +95,3 @@ class BuildEditCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[Bot
             return
 
         await show_build_editor(request, screen)
-
-    @sd.context_menu(name="Edit Build", defer="private")
-    async def edit_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """A context menu command to edit a build."""
-        if message.author.id != self.bot.user.id:  # type: ignore
-            return text_node(tr(t"build-editor-invalid-build = This does not look like a build."))
-
-        # The post mapping identifies the build; a message record alone has no resource association.
-        post = await self.bot.services.posts.resolve(message.id)
-        if post is None or post.resource_kind != "build":
-            return text_node(tr(t"build-editor-invalid-build = This does not look like a build."))
-
-        build = await self.builds.get(int(post.resource_key))
-        if build is None:
-            return text_node(tr(t"build-editor-invalid-build = This does not look like a build."))
-        await open_build_editor(request, build)
-        return None

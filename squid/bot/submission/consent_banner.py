@@ -40,7 +40,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                         ### Consent Already Granted
                         Your account has already accepted the current privacy notice. Redstone Squid automatically indexes your submissions in build log channels.
 
-                        {{ "*" }}Tip:* If you posted a build before your consent was recorded, right-click that message and select **Apps > Recalculate Build** to index it now.
+                        {{ "*" }}Tip:* If you posted a build before your consent was recorded, right-click that message and select **Apps > Scan Build Message** to index it now.
                     """)
             ),
             audience="personal",
@@ -87,7 +87,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                         ### Consent Recorded!
                         Thank you! Your consent has been recorded under notice `{version}`. Your future builds posted in build-log channels will now be automatically ingested and submitted for voting.
 
-                        {{ "*" }}Tip:* To ingest a build you posted recently, right-click your message and select **Apps > Recalculate Build**.
+                        {{ "*" }}Tip:* To ingest a build you posted recently, right-click your message and select **Apps > Scan Build Message**.
                     """)
             ),
             audience="personal",

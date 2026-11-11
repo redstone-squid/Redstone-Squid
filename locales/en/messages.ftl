@@ -1364,13 +1364,13 @@ bot-submission-consent-banner-discord-account = Discord account
 # squid/bot/submission/consent_banner.py:65
 bot-submission-consent-banner-value = <@{ $user_id_text }> ({ $user_id_text })
 
-# squid/bot/submission/edit.py:54
+# squid/bot/submission/edit.py:53
 bot-submission-edit-error = Error
 
-# squid/bot/submission/edit.py:55
+# squid/bot/submission/edit.py:54
 bot-submission-edit-no-build-with-that-id = No build with that ID.
 
-# squid/bot/submission/edit.py:88
+# squid/bot/submission/edit.py:87
 bot-submission-edit-not-a-field-of-this-build = Not a field of this build
 
 # squid/bot/submission/records.py:182
@@ -2025,11 +2025,8 @@ build-editor-edit-access-required-views = Only the pending build's submitter or 
 # squid/bot/submission/ui/views.py:593
 build-editor-expired = This editor expired. Unsaved changes were discarded.
 
-# squid/bot/submission/edit.py:89
+# squid/bot/submission/edit.py:88
 build-editor-fields-unavailable = This build has no { $fields }. Open the workspace to see what it does have.
-
-# squid/bot/submission/edit.py:104, squid/bot/submission/edit.py:109, squid/bot/submission/edit.py:113
-build-editor-invalid-build = This does not look like a build.
 
 # squid/bot/submission/ui/views.py:601
 build-editor-open-new-editor = Open new editor
@@ -2288,535 +2285,529 @@ cli-auth-too-many-cli = Too many CLI authorization requests are active.
 # squid/cli_auth/errors.py:73
 cli-cli-device-proof-invalid = The CLI device proof is invalid.
 
-# squid/bot/command_texts.py:15
+# squid/bot/command_texts.py:13
 command-access-help = Inspect and manage this server's access controls
 
-# squid/bot/command_texts.py:16
+# squid/bot/command_texts.py:14
 command-access-name = access
 
-# squid/bot/command_texts.py:17
+# squid/bot/command_texts.py:15
 command-access-role-help = …
 
-# squid/bot/command_texts.py:18
+# squid/bot/command_texts.py:16
 command-access-role-name = role
 
-# squid/bot/command_texts.py:19
+# squid/bot/command_texts.py:17
 command-access-user-help = …
 
-# squid/bot/command_texts.py:20
+# squid/bot/command_texts.py:18
 command-access-user-name = user
 
-# squid/bot/command_texts.py:21
+# squid/bot/command_texts.py:19
 command-account-help = Manage your account or view a creator page
 
-# squid/bot/command_texts.py:22
+# squid/bot/command_texts.py:20
 command-account-name = account
 
-# squid/bot/command_texts.py:23
+# squid/bot/command_texts.py:21
 command-account-user-name = user
 
 # squid/bot/command_texts.py:10
 command-archive-message-name = Archive Message
 
-# squid/bot/command_texts.py:30
+# squid/bot/command_texts.py:28
 command-build-browse-build-id-name = id
 
-# squid/bot/command_texts.py:26
+# squid/bot/command_texts.py:24
 command-build-browse-help = Browse searchable build details, review actions, and schematic tools.
 
-# squid/bot/command_texts.py:29
+# squid/bot/command_texts.py:27
 command-build-browse-name = browse
 
-# squid/bot/command_texts.py:31
+# squid/bot/command_texts.py:29
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
 
 # squid/bot/submission/submit.py:216
 command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.
 
-# squid/bot/command_texts.py:35
+# squid/bot/command_texts.py:33
 command-build-drafts-inbox-name = inbox
 
-# squid/bot/command_texts.py:34
+# squid/bot/command_texts.py:32
 command-build-drafts-name = drafts
 
-# squid/bot/command_texts.py:24
+# squid/bot/command_texts.py:22
 command-build-help = Browse and submit redstone builds
 
-# squid/bot/command_texts.py:25
+# squid/bot/command_texts.py:23
 command-build-name = build
 
-# squid/bot/command_texts.py:43
+# squid/bot/command_texts.py:41
 command-build-submit-build-size-name = build_size
 
-# squid/bot/command_texts.py:36
+# squid/bot/command_texts.py:34
 command-build-submit-choice-door-type-door = Door
 
-# squid/bot/command_texts.py:37
+# squid/bot/command_texts.py:35
 command-build-submit-choice-door-type-skydoor = Skydoor
 
-# squid/bot/command_texts.py:38
+# squid/bot/command_texts.py:36
 command-build-submit-choice-door-type-trapdoor = Trapdoor
 
-# squid/bot/command_texts.py:44
+# squid/bot/command_texts.py:42
 command-build-submit-creators-name = creators
 
-# squid/bot/command_texts.py:45
+# squid/bot/command_texts.py:43
 command-build-submit-description-name = description
 
-# squid/bot/command_texts.py:46
+# squid/bot/command_texts.py:44
 command-build-submit-door-size-name = door_size
 
-# squid/bot/command_texts.py:47
+# squid/bot/command_texts.py:45
 command-build-submit-door-type-name = door_type
 
-# squid/bot/command_texts.py:49
+# squid/bot/command_texts.py:47
 command-build-submit-file-2-name = file_2
 
-# squid/bot/command_texts.py:50
+# squid/bot/command_texts.py:48
 command-build-submit-file-3-name = file_3
 
-# squid/bot/command_texts.py:51
+# squid/bot/command_texts.py:49
 command-build-submit-file-4-name = file_4
 
-# squid/bot/command_texts.py:48
+# squid/bot/command_texts.py:46
 command-build-submit-file-name = file
 
-# squid/bot/command_texts.py:39
+# squid/bot/command_texts.py:37
 command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens.
 
-# squid/bot/command_texts.py:42
+# squid/bot/command_texts.py:40
 command-build-submit-name = submit
 
-# squid/bot/command_texts.py:52
+# squid/bot/command_texts.py:50
 command-build-submit-patterns-name = patterns
 
-# squid/bot/command_texts.py:53
+# squid/bot/command_texts.py:51
 command-build-submit-restrictions-name = restrictions
 
-# squid/bot/command_texts.py:54
+# squid/bot/command_texts.py:52
 command-build-submit-versions-name = versions
 
-# squid/bot/command_texts.py:55
+# squid/bot/command_texts.py:53
 command-dev-help = Development-only operational diagnostics.
 
-# squid/bot/command_texts.py:56
+# squid/bot/command_texts.py:54
 command-dev-name = dev
 
-# squid/bot/command_texts.py:59
+# squid/bot/command_texts.py:57
 command-dev-ui-actions-help = Show causal action results independently of profiler retention.
 
-# squid/bot/command_texts.py:63
+# squid/bot/command_texts.py:61
 command-dev-ui-actions-limit-help = …
 
-# squid/bot/command_texts.py:64
+# squid/bot/command_texts.py:62
 command-dev-ui-actions-limit-name = limit
 
-# squid/bot/command_texts.py:62
+# squid/bot/command_texts.py:60
 command-dev-ui-actions-name = actions
 
-# squid/bot/command_texts.py:65
+# squid/bot/command_texts.py:63
 command-dev-ui-clear-profile-help = Clear bounded profiler diagnostics.
 
-# squid/bot/command_texts.py:68
+# squid/bot/command_texts.py:66
 command-dev-ui-clear-profile-name = clear-profile
 
-# squid/bot/command_texts.py:73
+# squid/bot/command_texts.py:71
 command-dev-ui-close-confirmation-help = …
 
-# squid/bot/command_texts.py:74
+# squid/bot/command_texts.py:72
 command-dev-ui-close-confirmation-name = confirmation
 
-# squid/bot/command_texts.py:69
+# squid/bot/command_texts.py:67
 command-dev-ui-close-help = Close a session after repeating its id as confirmation.
 
-# squid/bot/command_texts.py:72
+# squid/bot/command_texts.py:70
 command-dev-ui-close-name = close
 
-# squid/bot/command_texts.py:75
+# squid/bot/command_texts.py:73
 command-dev-ui-close-session-id-help = …
 
-# squid/bot/command_texts.py:76
+# squid/bot/command_texts.py:74
 command-dev-ui-close-session-id-name = session_id
 
-# squid/bot/command_texts.py:77
+# squid/bot/command_texts.py:75
 command-dev-ui-export-help = Attach the complete bounded operational snapshot as JSON.
 
-# squid/bot/command_texts.py:80
+# squid/bot/command_texts.py:78
 command-dev-ui-export-name = export
 
-# squid/bot/command_texts.py:81
+# squid/bot/command_texts.py:79
 command-dev-ui-flush-help = Flush pending durable checkpoints.
 
-# squid/bot/command_texts.py:82
+# squid/bot/command_texts.py:80
 command-dev-ui-flush-name = flush
 
-# squid/bot/command_texts.py:57
+# squid/bot/command_texts.py:55
 command-dev-ui-help = Open the unified operational dashboard.
 
-# squid/bot/command_texts.py:83
+# squid/bot/command_texts.py:81
 command-dev-ui-history-help = Show action-history stacks for a message root without invoking inverses.
 
-# squid/bot/command_texts.py:86
+# squid/bot/command_texts.py:84
 command-dev-ui-history-name = history
 
-# squid/bot/command_texts.py:87
+# squid/bot/command_texts.py:85
 command-dev-ui-history-root-help = …
 
-# squid/bot/command_texts.py:88
+# squid/bot/command_texts.py:86
 command-dev-ui-history-root-name = message_root_id
 
-# squid/bot/command_texts.py:89
+# squid/bot/command_texts.py:87
 command-dev-ui-idle-help = Wait for the configured refresh and topic queues to settle.
 
-# squid/bot/command_texts.py:92
+# squid/bot/command_texts.py:90
 command-dev-ui-idle-name = idle
 
-# squid/bot/command_texts.py:93
+# squid/bot/command_texts.py:91
 command-dev-ui-metrics-help = Show planner search and cache metrics for a message root.
 
-# squid/bot/command_texts.py:96
+# squid/bot/command_texts.py:94
 command-dev-ui-metrics-name = metrics
 
-# squid/bot/command_texts.py:97
+# squid/bot/command_texts.py:95
 command-dev-ui-metrics-root-help = …
 
-# squid/bot/command_texts.py:98
+# squid/bot/command_texts.py:96
 command-dev-ui-metrics-root-name = message_root_id
 
-# squid/bot/command_texts.py:58
+# squid/bot/command_texts.py:56
 command-dev-ui-name = ui
 
-# squid/bot/command_texts.py:99
+# squid/bot/command_texts.py:97
 command-dev-ui-persistence-help = Show durable-runtime health and persisted record metadata.
 
-# squid/bot/command_texts.py:102
+# squid/bot/command_texts.py:100
 command-dev-ui-persistence-name = persistence
 
-# squid/bot/command_texts.py:103
+# squid/bot/command_texts.py:101
 command-dev-ui-plan-help = Show the retained plan report for a message root.
 
-# squid/bot/command_texts.py:104
+# squid/bot/command_texts.py:102
 command-dev-ui-plan-name = plan
 
-# squid/bot/command_texts.py:105
+# squid/bot/command_texts.py:103
 command-dev-ui-plan-root-help = …
 
-# squid/bot/command_texts.py:106
+# squid/bot/command_texts.py:104
 command-dev-ui-plan-root-name = message_root_id
 
-# squid/bot/command_texts.py:107
+# squid/bot/command_texts.py:105
 command-dev-ui-profile-help = Show profiler health, or retained traces for one message root.
 
-# squid/bot/command_texts.py:110
+# squid/bot/command_texts.py:108
 command-dev-ui-profile-name = profile
 
-# squid/bot/command_texts.py:111
+# squid/bot/command_texts.py:109
 command-dev-ui-profile-root-help = …
 
-# squid/bot/command_texts.py:112
+# squid/bot/command_texts.py:110
 command-dev-ui-profile-root-name = message_root_id
 
-# squid/bot/command_texts.py:117
+# squid/bot/command_texts.py:115
 command-dev-ui-purge-confirmation-help = …
 
-# squid/bot/command_texts.py:118
+# squid/bot/command_texts.py:116
 command-dev-ui-purge-confirmation-name = confirmation
 
-# squid/bot/command_texts.py:113
+# squid/bot/command_texts.py:111
 command-dev-ui-purge-help = Purge comma-separated durable keys after supplying ``purge`` as confirmation.
 
-# squid/bot/command_texts.py:116
+# squid/bot/command_texts.py:114
 command-dev-ui-purge-name = purge
 
-# squid/bot/command_texts.py:119
+# squid/bot/command_texts.py:117
 command-dev-ui-purge-record-keys-help = …
 
-# squid/bot/command_texts.py:120
+# squid/bot/command_texts.py:118
 command-dev-ui-purge-record-keys-name = record_keys
 
-# squid/bot/command_texts.py:121
+# squid/bot/command_texts.py:119
 command-dev-ui-queues-help = Show queue pressure and subscriber registrations.
 
-# squid/bot/command_texts.py:124
+# squid/bot/command_texts.py:122
 command-dev-ui-queues-name = queues
 
-# squid/bot/command_texts.py:129
+# squid/bot/command_texts.py:127
 command-dev-ui-recover-confirmation-help = …
 
-# squid/bot/command_texts.py:130
+# squid/bot/command_texts.py:128
 command-dev-ui-recover-confirmation-name = confirmation
 
-# squid/bot/command_texts.py:125
+# squid/bot/command_texts.py:123
 command-dev-ui-recover-help = Run durable recovery after the caller supplies ``recover`` as confirmation.
 
-# squid/bot/command_texts.py:128
+# squid/bot/command_texts.py:126
 command-dev-ui-recover-name = recover
 
-# squid/bot/command_texts.py:131
+# squid/bot/command_texts.py:129
 command-dev-ui-refresh-help = Force an immediate refresh for one message root.
 
-# squid/bot/command_texts.py:134
+# squid/bot/command_texts.py:132
 command-dev-ui-refresh-name = refresh
 
-# squid/bot/command_texts.py:135
+# squid/bot/command_texts.py:133
 command-dev-ui-refresh-root-help = …
 
-# squid/bot/command_texts.py:136
+# squid/bot/command_texts.py:134
 command-dev-ui-refresh-root-name = message_root_id
 
-# squid/bot/command_texts.py:137
+# squid/bot/command_texts.py:135
 command-dev-ui-root-help = Open the dashboard focused on one message root.
 
-# squid/bot/command_texts.py:138
+# squid/bot/command_texts.py:136
 command-dev-ui-root-name = root
 
-# squid/bot/command_texts.py:139
+# squid/bot/command_texts.py:137
 command-dev-ui-root-root-help = …
 
-# squid/bot/command_texts.py:140
+# squid/bot/command_texts.py:138
 command-dev-ui-root-root-name = message_root_id
 
-# squid/bot/command_texts.py:141
+# squid/bot/command_texts.py:139
 command-dev-ui-roots-help = Open the dashboard focused on message roots.
 
-# squid/bot/command_texts.py:142
+# squid/bot/command_texts.py:140
 command-dev-ui-roots-name = roots
 
-# squid/bot/command_texts.py:143
+# squid/bot/command_texts.py:141
 command-dev-ui-routes-help = Show routed controls and effective middleware.
 
-# squid/bot/command_texts.py:146
+# squid/bot/command_texts.py:144
 command-dev-ui-routes-name = routes
 
-# squid/bot/command_texts.py:147
+# squid/bot/command_texts.py:145
 command-dev-ui-scene-help = Attach the committed scene document for a message root.
 
-# squid/bot/command_texts.py:150
+# squid/bot/command_texts.py:148
 command-dev-ui-scene-name = scene
 
-# squid/bot/command_texts.py:151
+# squid/bot/command_texts.py:149
 command-dev-ui-scene-root-help = …
 
-# squid/bot/command_texts.py:152
+# squid/bot/command_texts.py:150
 command-dev-ui-scene-root-name = message_root_id
 
-# squid/bot/command_texts.py:153
+# squid/bot/command_texts.py:151
 command-dev-ui-session-help = Open the dashboard focused on one session.
 
-# squid/bot/command_texts.py:154
+# squid/bot/command_texts.py:152
 command-dev-ui-session-name = session
 
-# squid/bot/command_texts.py:155
+# squid/bot/command_texts.py:153
 command-dev-ui-session-session-id-help = …
 
-# squid/bot/command_texts.py:156
+# squid/bot/command_texts.py:154
 command-dev-ui-session-session-id-name = session_id
 
-# squid/bot/command_texts.py:157
+# squid/bot/command_texts.py:155
 command-dev-ui-sessions-help = Open the dashboard focused on logical sessions.
 
-# squid/bot/command_texts.py:160
+# squid/bot/command_texts.py:158
 command-dev-ui-sessions-name = sessions
 
-# squid/bot/command_texts.py:161
+# squid/bot/command_texts.py:159
 command-dev-ui-timeline-help = Show retained dispatches across every message root in the order they happened.
 
-# squid/bot/command_texts.py:165
+# squid/bot/command_texts.py:163
 command-dev-ui-timeline-limit-help = …
 
-# squid/bot/command_texts.py:166
+# squid/bot/command_texts.py:164
 command-dev-ui-timeline-limit-name = limit
 
-# squid/bot/command_texts.py:164
+# squid/bot/command_texts.py:162
 command-dev-ui-timeline-name = timeline
 
-# squid/bot/command_texts.py:167
+# squid/bot/command_texts.py:165
 command-dev-ui-timeline-target-help = …
 
-# squid/bot/command_texts.py:168
+# squid/bot/command_texts.py:166
 command-dev-ui-timeline-target-name = target
 
-# squid/bot/command_texts.py:11
-command-edit-build-name = Edit Build
-
-# squid/bot/command_texts.py:169
+# squid/bot/command_texts.py:167
 command-errors-help = Browse private error reports, optionally opening one reference.
 
-# squid/bot/command_texts.py:172
+# squid/bot/command_texts.py:170
 command-errors-name = errors
 
-# squid/bot/command_texts.py:173
+# squid/bot/command_texts.py:171
 command-errors-reference-help = The error reference to open immediately
 
-# squid/bot/command_texts.py:176
+# squid/bot/command_texts.py:174
 command-errors-reference-name = reference
 
-# squid/bot/command_texts.py:179
+# squid/bot/command_texts.py:177
 command-help-command-name = command
 
-# squid/bot/command_texts.py:177
+# squid/bot/command_texts.py:175
 command-help-help = Show a grouped command directory or focused command details.
 
-# squid/bot/command_texts.py:178
+# squid/bot/command_texts.py:176
 command-help-name = help
 
-# squid/bot/command_texts.py:180
+# squid/bot/command_texts.py:178
 command-layout-help = Explore the build workbench or collaborative review room.
 
-# squid/bot/command_texts.py:181
+# squid/bot/command_texts.py:179
 command-layout-name = layout
 
-# squid/bot/command_texts.py:182
+# squid/bot/command_texts.py:180
 command-layout-review-choice-mode-live = live
 
-# squid/bot/command_texts.py:183
+# squid/bot/command_texts.py:181
 command-layout-review-choice-mode-simulated = simulated
 
-# squid/bot/command_texts.py:184
+# squid/bot/command_texts.py:182
 command-layout-review-help = Review together, or operate Alice and Bob yourself in simulated mode.
 
-# squid/bot/command_texts.py:188
+# squid/bot/command_texts.py:186
 command-layout-review-mode-help = …
 
-# squid/bot/command_texts.py:189
+# squid/bot/command_texts.py:187
 command-layout-review-mode-name = mode
 
-# squid/bot/command_texts.py:187
+# squid/bot/command_texts.py:185
 command-layout-review-name = review
 
-# squid/bot/command_texts.py:190
+# squid/bot/command_texts.py:188
 command-layout-workbench-help = Edit a sample build and watch a second message update live.
 
-# squid/bot/command_texts.py:193
+# squid/bot/command_texts.py:191
 command-layout-workbench-name = workbench
 
-# squid/bot/command_texts.py:194
+# squid/bot/command_texts.py:192
 command-notifications-name = notifications
 
-# squid/bot/command_texts.py:195
+# squid/bot/command_texts.py:193
 command-poll-help = Create a multi-option poll through an ephemeral preview wizard.
 
-# squid/bot/command_texts.py:196
+# squid/bot/command_texts.py:194
 command-poll-name = poll
 
-# squid/bot/command_texts.py:12
-command-recalculate-build-name = Recalculate Build
+# squid/bot/command_texts.py:11
+command-recalculate-build-name = Scan Build Message
 
-# squid/bot/command_texts.py:197
+# squid/bot/command_texts.py:195
 command-records-help = Inspect and maintain computed records
 
-# squid/bot/command_texts.py:198
+# squid/bot/command_texts.py:196
 command-records-name = records
 
-# squid/bot/command_texts.py:199
+# squid/bot/command_texts.py:197
 command-recount-help = Count the reactions on a vote or starboard message again.
 
-# squid/bot/command_texts.py:201
+# squid/bot/command_texts.py:199
 command-recount-message-help = Link to a vote card, a starboard post, or the message it shows
 
-# squid/bot/command_texts.py:204
+# squid/bot/command_texts.py:202
 command-recount-message-name = message
 
-# squid/bot/command_texts.py:200
+# squid/bot/command_texts.py:198
 command-recount-name = recount
 
-# squid/bot/command_texts.py:205
+# squid/bot/command_texts.py:203
 command-redstoner-help = Inspect and deploy Redstoner automation
 
-# squid/bot/command_texts.py:206
+# squid/bot/command_texts.py:204
 command-redstoner-name = redstoner
 
-# squid/bot/command_texts.py:13
-command-resync-redstoner-name = Resync Redstoner
-
-# squid/bot/command_texts.py:207
+# squid/bot/command_texts.py:205
 command-runtime-settings-help = View or change global runtime settings
 
-# squid/bot/command_texts.py:208
+# squid/bot/command_texts.py:206
 command-runtime-settings-name = runtime-settings
 
-# squid/bot/command_texts.py:209
+# squid/bot/command_texts.py:207
 command-runtime-settings-setting-help = …
 
-# squid/bot/command_texts.py:210
+# squid/bot/command_texts.py:208
 command-runtime-settings-setting-name = setting
 
-# squid/bot/command_texts.py:211
+# squid/bot/command_texts.py:209
 command-runtime-settings-value-help = …
 
-# squid/bot/command_texts.py:212
+# squid/bot/command_texts.py:210
 command-runtime-settings-value-name = value
 
-# squid/bot/command_texts.py:213
+# squid/bot/command_texts.py:211
 command-search-choice-mode-keyword = keyword
 
-# squid/bot/command_texts.py:214
+# squid/bot/command_texts.py:212
 command-search-choice-mode-smart = smart
 
-# squid/bot/command_texts.py:215
+# squid/bot/command_texts.py:213
 command-search-choice-scope-builds = builds
 
-# squid/bot/command_texts.py:216
+# squid/bot/command_texts.py:214
 command-search-choice-scope-everything = everything
 
-# squid/bot/command_texts.py:217
+# squid/bot/command_texts.py:215
 command-search-choice-scope-patterns = patterns
 
-# squid/bot/command_texts.py:218
+# squid/bot/command_texts.py:216
 command-search-choice-scope-records = records
 
-# squid/bot/command_texts.py:219
+# squid/bot/command_texts.py:217
 command-search-choice-scope-restrictions = restrictions
 
-# squid/bot/command_texts.py:220
+# squid/bot/command_texts.py:218
 command-search-help = Search builds, records, and taxonomy metadata
 
-# squid/bot/command_texts.py:222
+# squid/bot/command_texts.py:220
 command-search-mode-name = mode
 
-# squid/bot/command_texts.py:221
+# squid/bot/command_texts.py:219
 command-search-name = search
 
-# squid/bot/command_texts.py:223
+# squid/bot/command_texts.py:221
 command-search-query-name = query
 
-# squid/bot/command_texts.py:224
+# squid/bot/command_texts.py:222
 command-search-scope-name = scope
 
-# squid/bot/command_texts.py:225
+# squid/bot/command_texts.py:223
 command-search-sort-name = sort
 
-# squid/bot/command_texts.py:226
+# squid/bot/command_texts.py:224
 command-settings-help = Configure this server
 
-# squid/bot/command_texts.py:227
+# squid/bot/command_texts.py:225
 command-settings-name = settings
 
-# squid/bot/command_texts.py:228
+# squid/bot/command_texts.py:226
 command-starboard-help = Configure this server's starboards
 
-# squid/bot/command_texts.py:229
+# squid/bot/command_texts.py:227
 command-starboard-name = starboard
 
-# squid/bot/command_texts.py:232
+# squid/bot/command_texts.py:230
 command-tags-build-id-help = …
 
-# squid/bot/command_texts.py:233
+# squid/bot/command_texts.py:231
 command-tags-build-id-name = build
 
-# squid/bot/command_texts.py:230
+# squid/bot/command_texts.py:228
 command-tags-help = Browse, apply, propose, and moderate build tags
 
-# squid/bot/command_texts.py:231
+# squid/bot/command_texts.py:229
 command-tags-name = tags
 
-# squid/bot/command_texts.py:234
+# squid/bot/command_texts.py:232
 command-versions-help = Browse recognized Minecraft versions
 
-# squid/bot/command_texts.py:235
+# squid/bot/command_texts.py:233
 command-versions-name = versions
 
-# squid/bot/command_texts.py:14
+# squid/bot/command_texts.py:12
 command-vote-to-delete-name = Vote to Delete
 
 # squid/bot/consent.py:161
@@ -3380,6 +3371,24 @@ edit-history-uncertain = The saved result needs checking. Refresh before editing
 # squid/bot/edit_history.py:123
 edit-history-undo = Undo
 
+# squid/edits/domain.py:169
+edits-commit-uncertain = The saved result needs checking before this item can be edited again.
+
+# squid/edits/application.py:72
+edits-fields-not-editable = This edit contains fields that cannot be changed.
+
+# squid/edits/domain.py:126
+edits-final = This operation cannot be undone.
+
+# squid/edits/domain.py:177
+edits-operation-expired = This edit has expired. Reload the item before editing again.
+
+# squid/edits/domain.py:165
+edits-operation-reused = This operation identifier was already used for another edit.
+
+# squid/edits/domain.py:156
+edits-revision-conflict = This item changed elsewhere. Reload it before editing.
+
 # squid/bot/errors.py:175
 errors-all-permissions-required = You need these permissions to use this command:
 
@@ -3458,23 +3467,20 @@ events-consumer-non-empty = consumer must be a non-empty name
 # squid/events/application.py:60
 events-max-attempts-positive = max_attempts must be positive
 
-# squid/bot/give_redstoner.py:263
+# squid/bot/give_redstoner.py:247
 give-redstoner-could-not-find-the-redstoner = Could not find the redstoner role.
 
 # squid/bot/give_redstoner.py:124
 give-redstoner-deploy-role-controls = Deploy role controls
 
-# squid/bot/give_redstoner.py:298
+# squid/bot/give_redstoner.py:282
 give-redstoner-gave-the-redstoner-role = Gave { $member } the redstoner role.
 
-# squid/bot/give_redstoner.py:251
+# squid/bot/give_redstoner.py:235
 give-redstoner-in = { $reason } in { $url }
 
 # squid/bot/give_redstoner.py:129
 give-redstoner-redstoner-automation = Redstoner automation
-
-# squid/bot/give_redstoner.py:222
-give-redstoner-redstoner-automation-resynced = Redstoner automation resynced.
 
 # squid/bot/give_redstoner.py:149
 give-redstoner-redstoner-role-controls = Redstoner role controls deployed.
@@ -3487,9 +3493,6 @@ give-redstoner-server = Server
 
 # squid/bot/give_redstoner.py:133
 give-redstoner-source-channel = Source channel
-
-# squid/bot/give_redstoner.py:219
-give-redstoner-that-message-is-not-in-the-bot = That message is not in the bot's home server.
 
 # squid/bot/give_redstoner.py:131
 give-redstoner-value = { $role_mention }
@@ -3598,7 +3601,7 @@ ingestion-consent-already-granted =
     ### Consent Already Granted
     Your account has already accepted the current privacy notice. Redstone Squid automatically indexes your submissions in build log channels.
 
-    { "*" }Tip:* If you posted a build before your consent was recorded, right-click that message and select **Apps > Recalculate Build** to index it now.
+    { "*" }Tip:* If you posted a build before your consent was recorded, right-click that message and select **Apps > Scan Build Message** to index it now.
 
 # squid/bot/submission/consent_banner.py:55
 ingestion-consent-data-use-notice = Redstone Squid automatically indexes redstone doors and builds posted in this channel. Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves your posts ignored by automated ingestion.
@@ -3608,7 +3611,7 @@ ingestion-consent-recorded-confirmation =
     ### Consent Recorded!
     Thank you! Your consent has been recorded under notice `{ $version }`. Your future builds posted in build-log channels will now be automatically ingested and submitted for voting.
 
-    { "*" }Tip:* To ingest a build you posted recently, right-click your message and select **Apps > Recalculate Build**.
+    { "*" }Tip:* To ingest a build you posted recently, right-click your message and select **Apps > Scan Build Message**.
 
 # squid/bot/submission/consent_banner.py:71
 ingestion-consent-timestamp-notice = Notice { $version }, timed at the moment you agree.
@@ -4503,13 +4506,13 @@ redstoner-control-bot-only = This is only available in the bot's home server.
 # squid/bot/give_redstoner.py:145
 redstoner-deploy-forbidden = You are no longer allowed to deploy Redstoner controls.
 
-# squid/bot/give_redstoner.py:305
+# squid/bot/give_redstoner.py:289
 redstoner-role-earned = Hi { $member }, you received the { $role } role after reaching 15 upvotes in { $url }.
 
-# squid/bot/give_redstoner.py:293
+# squid/bot/give_redstoner.py:277
 redstoner-role-restored = { $member } — just kidding, here is your role back.
 
-# squid/bot/give_redstoner.py:288
+# squid/bot/give_redstoner.py:272
 redstoner-role-self-removed = { $owner }, { $member } has removed their own redstoner role.
 
 # squid/bot/submission/schematics.py:56
