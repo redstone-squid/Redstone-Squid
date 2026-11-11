@@ -24,17 +24,28 @@ An *edit target* (`EditTarget`) names one versioned record, such as
 `EditTarget("build", "42")`. Its `identity` string, `"build:42"`, appears in session
 history and resource leases. A `Revision` pairs a target with a counter value.
 
-Most records get their counter from the `Revisioned` mixin, which uses SQLAlchemy's
-`version_id_col`: the ORM increases the counter on each flush and adds the expected
-value to the `UPDATE`. A concurrent write then matches no row, which the unit of work
-and `flush_revision` report as `ConcurrentEditError`. Writes that
-change only child rows, or that use SQL directly, must increase the parent's counter
-themselves. `flush_revision` does this for ORM edit handlers.
+Revisions advance in one of three ways:
+
+- **Changed columns.** Most records use the `Revisioned` mixin, which sets SQLAlchemy's
+  `version_id_col`. The ORM increases the counter on each flush that changes a column
+  and adds the expected value to the `UPDATE`. A concurrent write then matches no row,
+  which the unit of work and `flush_revision` report as `ConcurrentEditError`.
+- **Child rows or direct SQL.** The mapper sees no change to the parent row, so the
+  writer increases the parent's counter itself: `flush_revision` in edit handlers,
+  `revision += 1` or `revision = revision + 1` in repositories.
+- **Builds.** `Build` sets `version_id_col` in its own mapper arguments, because they
+  also hold `polymorphic_on`. In addition, the build history trigger advances the
+  revision at commit when the build's snapshot changed and nothing else advanced it.
+  Code that must return the new revision before commit, such as edit handlers,
+  still advances it explicitly.
+
+Submission drafts start at revision 0 rather than 1 and do not use `version_id_col`.
+Every draft writer advances the counter itself.
 
 HTTP clients receive revisions as ETags such as `"build-42-r7"` and return them in
 `If-Match` (`squid/api/revisions.py`). A request without `If-Match` applies to the
-current record: the command carries a `LatestRevision`, which the handler replaces
-with the stored revision after locking the record.
+current record: the command carries a `LatestRevision`, and the handler reports
+whatever revision it finds after locking the record.
 
 ## Edits
 
@@ -113,9 +124,9 @@ edit adds a new history entry rather than removing one.
 
 ## Other names that look related
 
-- **Draft revision.** `submission_drafts.revision` is a draft's revision counter, but it
-  starts at 0 and `submission_draft_changes` logs each accepted change for retries.
-  `schema_revision` is the version of the form the draft answers.
+- **Draft changes and schema revisions.** `submission_draft_changes` logs each accepted
+  answer change so a client retry returns the same result. `schema_revision` is the
+  version of the form a draft answers, not a revision counter.
 - **Recalculation proposals.** Inferred corrections to an existing build, held for
   review (`squid/submissions/application/recalculation.py`). Their HTTP routes and
   table still use the older name "revision proposal".
@@ -123,11 +134,3 @@ edit adds a new history entry rather than removing one.
 - **Snapshots.** `squid/tags/application/snapshots.py` and
   `squid/starboard/application/snapshots.py` hold detached copies of records that
   handlers compare before replacing.
-
-## Known inconsistencies
-
-These are current limitations, not intended design:
-
-- Builds declare their own revision column instead of using `Revisioned`.
-- Draft revisions start at 0; other revisions start at 1.
-- Several repositories increase revision counters by hand instead of through one helper.
