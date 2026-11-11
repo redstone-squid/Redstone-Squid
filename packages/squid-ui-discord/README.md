@@ -100,6 +100,17 @@ A failed result callback leaves the child available for retry. `on_cancel` recei
 reason without interaction authority. Commands can await `screen.wait()` for `Completed(value)`
 or `Cancelled`; waiting inside an active UI action transaction is rejected.
 
+`root.close_reason` and `screen.close_reason` expose an `sd.CloseReason` once message
+closure is accepted, including during the final render. They are `None` while the root
+is open. Reasons distinguish explicit closure, timeout, parent or scope closure,
+replacement, runtime shutdown, and service failure. The first accepted reason stays
+fixed even if another caller closes the root or cleanup fails. Cleanup errors remain
+observable through `root.wait()`.
+
+Use `screen.expired` to render a timeout-specific message. The screen's `outcome` is
+separate: saving can produce `Completed(value)` and cancelling can produce
+`Cancelled(USER)`, while both close the message with `CloseReason.CLOSED`.
+
 Migration: replace preset screen bases and class policy fields with `Screen` and a
 `ResponseSpec`. `Screen[Owner]` becomes `Screen[None, Owner]`. Access the live session through
 `screen.session`, and the declaration through `Screen.policy.session`. Inherited policy is an
