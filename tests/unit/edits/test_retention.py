@@ -43,18 +43,18 @@ async def test_retention_follows_undo_redo_branch_discard_and_parent_close() -> 
     await retention.sync()
     assert recorder.calls[-1] == (first, frozenset())
     assert (await controller.history.undo()).applied
-    undo = controller.retained_operations()
+    undo = retention.retained()
     await retention.sync()
     assert recorder.calls[-1] == (undo, first)
     await controller.execute(command("Branch", state.value.revision), "Branch")
-    branch = controller.retained_operations()
+    branch = retention.retained()
     await retention.sync()
     assert recorder.calls[-1] == (branch, undo)
     await controller.discard(frozenset({TARGET.identity}))
     await retention.sync()
     assert recorder.calls[-1] == (frozenset(), branch)
     await controller.execute(command("Final", state.value.revision), "Final")
-    final = controller.retained_operations()
+    final = retention.retained()
     async with anyio.create_task_group() as tasks:
         await tasks.start(retention.run)
         tasks.cancel_scope.cancel()
@@ -72,4 +72,4 @@ async def test_close_releases_an_entry_evicted_before_the_first_renewal() -> Non
         await tasks.start(retention.run)
         tasks.cancel_scope.cancel()
     assert any(result.outcome.operation_id in released for _, released in recorder.calls)
-    assert not controller.owned_resource_operations
+    assert not retention.owned

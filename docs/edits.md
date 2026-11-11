@@ -93,8 +93,9 @@ Removing an attachment from a draft lets cleanup delete its stored file, and an 
 would then have nothing to restore. To prevent that, the attachment handler records
 an *edit resource lease* (`edit_resource_leases`) for each attachment it removes. While
 a lease is current, media cleanup skips the file (`retained_resource`). The draft
-editor's `EditHistoryRetention` service renews leases for receipts still in its session
-history and releases the rest, including all of its leases when the editor closes.
+editor's `EditHistoryRetention` service observes its `EditController`, renews leases for
+receipts still in session history, and releases the rest, including all of its leases
+when the editor closes.
 A lease lasts 120 seconds without renewal, so a crashed editor holds files only briefly.
 
 ## Build history
@@ -130,5 +131,3 @@ These are current limitations, not intended design:
 - Builds declare their own revision column instead of using `Revisioned`.
 - Draft revisions start at 0; other revisions start at 1.
 - Several repositories increase revision counters by hand instead of through one helper.
-- Resource leases are managed by the generic `EditController`, although only draft
-  attachments use them.

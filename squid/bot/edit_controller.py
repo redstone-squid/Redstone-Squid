@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Protocol
 from uuid import UUID
 
 import squid_ui as sl
@@ -40,6 +41,16 @@ from squid_ui.text import TextLike
 logger = logging.getLogger(__name__)
 
 
+class EditObserver(Protocol):
+    """Follows the receipts an EditController holds, for state kept outside the controller."""
+
+    def receipt_created(self, receipt: EditReceipt) -> None:
+        """Called for every receipt, including one whose commit is still uncertain."""
+
+    def receipts_changed(self) -> None:
+        """Called when session history or pending edits may have gained or lost receipts."""
+
+
 @dataclass(slots=True)
 class PendingEdit:
     command: EditCommand
@@ -65,7 +76,7 @@ class _ReceiptOperation:
         except (AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError) as error:
             raise ReactiveConflictError(ConflictDetail(self.receipt.command.kind, 0, 1), str(error)) from error
         finally:
-            self.controller._retention_changed.set()
+            self.controller._notify_changed()
         assert result.receipt is not None
         return _ReceiptOperation(self.controller, result.receipt, self.label, self.original_entry_id)
 
@@ -115,8 +126,7 @@ class EditController:
         self._lock = asyncio.Lock()
         self._refresh_failed = False
         self._signal = Signal()
-        self._resource_operations: set[UUID] = set()
-        self._retention_changed = asyncio.Event()
+        self._observers: list[EditObserver] = []
 
     def bind(self, kind: str, target: EditTarget, revision: int) -> BoundEdit:
         """Capture a displayed revision; later refreshes never rebase this binding."""
@@ -135,29 +145,37 @@ class EditController:
         self._signal.track()
         return tuple(self._pending.values())
 
-    def retained_operations(self) -> frozenset[UUID]:
-        """Operations whose attachment resources remain reachable from this workspace."""
+    @property
+    def receipts(self) -> tuple[EditReceipt, ...]:
+        """Receipts reachable from undo, redo, or edits whose saved result needs checking."""
         receipts = [
             entry.operation.receipt
             for entry in (*self.history.entries, *self.history.redoable)
             if isinstance(entry.operation, _ReceiptOperation)
         ]
         receipts.extend(pending.attempt.receipt for pending in self.pending if pending.attempt.receipt is not None)
-        retained = frozenset(receipt.command.operation_id for receipt in receipts if receipt.resources)
-        # A confirmed reversal moves its history entry after the controller returns.
-        # Keep both leases through that interval, including a slow refresh.
-        return retained | self.owned_resource_operations if self._lock.locked() else retained
+        return tuple(receipts)
 
     @property
-    def owned_resource_operations(self) -> frozenset[UUID]:
-        return frozenset(self._resource_operations)
+    def busy(self) -> bool:
+        """Whether an edit, undo, redo, or reconciliation is running.
 
-    def retention_released(self, operations: frozenset[UUID]) -> None:
-        self._resource_operations.difference_update(operations)
+        After an undo or redo returns, History replaces the entry's receipt with the
+        new one. Until then, `receipts` contains the old receipt but not the new one.
+        """
+        return self._lock.locked()
 
-    async def wait_retention_change(self) -> None:
-        await self._retention_changed.wait()
-        self._retention_changed.clear()
+    def observe(self, observer: EditObserver) -> None:
+        """Report receipts to an observer for the rest of this controller's lifetime."""
+        self._observers.append(observer)
+
+    def _notify_changed(self) -> None:
+        for observer in self._observers:
+            observer.receipts_changed()
+
+    def _notify_created(self, receipt: EditReceipt) -> None:
+        for observer in self._observers:
+            observer.receipt_created(receipt)
 
     def require_ready(self, targets: frozenset[str]) -> None:
         """Fence other session actions while a write's result still needs reconciliation."""
@@ -168,7 +186,7 @@ class EditController:
         try:
             return await self._run(command, label)
         finally:
-            self._retention_changed.set()
+            self._notify_changed()
 
     async def _run(self, command: EditCommand, label: TextLike, *, original_entry_id: UUID | None = None) -> EditResult:
         current = CURRENT_TRANSACTION.get()
@@ -195,8 +213,7 @@ class EditController:
                 result = await self._runner.execute(command, await self._actor(), attempt=pending.attempt)
             except BaseException:
                 if pending.attempt.receipt is not None:
-                    if pending.attempt.receipt.resources:
-                        self._resource_operations.add(command.operation_id)
+                    self._notify_created(pending.attempt.receipt)
                     self._pending[command.operation_id] = pending
                     self._signal.notify()
                 raise
@@ -213,9 +230,9 @@ class EditController:
         for version in result.outcome.revisions:
             self._heads[version.target] = version.value
         receipt = result.receipt
-        if receipt is not None and receipt.resources:
-            self._resource_operations.add(receipt.command.operation_id)
-        self._retention_changed.set()
+        if receipt is not None:
+            self._notify_created(receipt)
+        self._notify_changed()
         if receipt is not None and result.outcome.changed:
             if receipt.final:
                 self.history.discard_targets(receipt.targets)
@@ -278,7 +295,7 @@ class EditController:
                     tr(t"edits-pending-discard = Check the saved result before discarding its history.")
                 )
             self.history.discard_targets(targets)
-            self._retention_changed.set()
+            self._notify_changed()
             self._heads = {target: version for target, version in self._heads.items() if target.identity not in targets}
         await self.refresh()
 
