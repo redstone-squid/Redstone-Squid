@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from squid.core.actors import Actor
 from squid.core.errors import ValidationError
@@ -21,6 +21,8 @@ class FileMembership(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_id: UUID
     present: bool
+    filename: str | None = Field(default=None, min_length=1, max_length=255)
+    kind: str | None = Field(default=None, pattern=r"^(schematic|image|video|unknown)$")
 
 
 class AttachmentValues(BaseModel):
@@ -34,7 +36,9 @@ class AttachmentValues(BaseModel):
 
 
 class AttachmentEditStore(Protocol):
-    async def read(self, draft: StoredDraft, sources: tuple[UUID, ...]) -> AttachmentValues: ...
+    async def stage(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> None: ...
+
+    async def read(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> AttachmentValues: ...
 
     async def validate(self, draft: StoredDraft, values: AttachmentValues, limits: MediaLimits) -> AttachmentValues: ...
 
@@ -74,11 +78,19 @@ class DraftAttachmentsEdit:
         if len(set(sources)) != len(sources):
             raise ValidationError
         # The repository locks the draft before inspecting processor references.
-        before = await uow.attachment_edits.read(draft, sources)
+        before = await uow.attachment_edits.read(draft, values.files)
         if draft.snapshot.revision != expected.value:
             raise RevisionConflictError(expected, draft.snapshot.revision)
+        files = tuple(
+            item.model_copy(update={"present": requested.present})
+            for item, requested in zip(before.files, values.files, strict=True)
+        )
         desired = values.model_copy(
-            update={"primary": values.primary if values.select_primary else before.primary, "select_primary": True}
+            update={
+                "files": files,
+                "primary": values.primary if values.select_primary else before.primary,
+                "select_primary": True,
+            }
         )
         after = await uow.attachment_edits.validate(draft, desired, self._limits)
         resources = tuple(f"attachment:{source}" for source in sources)

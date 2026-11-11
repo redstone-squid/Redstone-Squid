@@ -55,6 +55,7 @@ from squid.submissions.models.finalization import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
+from squid.submissions.models.intake import SubmissionSuppliedAttachment
 from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
@@ -67,6 +68,7 @@ _TABLES = model_tables(
     EditResourceLease,
     Account,
     SubmissionDraft,
+    SubmissionSuppliedAttachment,
     SubmissionDraftAccess,
     SubmissionDraftChange,
     DraftSchematicSource,

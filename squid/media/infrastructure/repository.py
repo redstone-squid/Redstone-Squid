@@ -49,6 +49,7 @@ from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.persistence.types import database_now
 from squid.submissions.domain import DraftStatus
 from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.intake import SubmissionSuppliedAttachment
 
 
 class PostgresMediaJobRepository(MediaJobRepository):
@@ -97,7 +98,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
         if draft_status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             raise MediaDraftStateConflictError(draft_status)
-        totals = await _active_totals(session, upload.draft_id)
+        intent = await session.get(SubmissionSuppliedAttachment, (upload.draft_id, upload.id))
+        totals = (
+            MediaBatchTotals()
+            if intent is not None and intent.discarded
+            else await _active_totals(session, upload.draft_id)
+        )
         candidate = MediaBatchTotals(
             image_count=totals.image_count + int(upload.kind is MediaKind.IMAGE),
             video_count=totals.video_count + int(upload.kind is MediaKind.VIDEO),
@@ -120,7 +126,11 @@ class PostgresMediaJobRepository(MediaJobRepository):
         )
         await session.flush()
         session.add(MediaNormalizationJobRecord(upload_id=upload.id))
-        session.add(MediaDraftReference(draft_id=upload.draft_id, upload_id=upload.id))
+        session.add(
+            MediaDraftReference(
+                draft_id=upload.draft_id, upload_id=upload.id, discarded=intent is not None and intent.discarded
+            )
+        )
         return MediaEnqueueOutcome(created=True, status=MediaJobStatus.PENDING)
 
     @override

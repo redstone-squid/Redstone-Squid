@@ -63,6 +63,7 @@ from squid.submissions.application import (
     SubmissionFinalizationWorker,
     SubmissionFormService,
 )
+from squid.submissions.application.attachment_uploads import DraftAttachmentUploads
 from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
@@ -132,6 +133,7 @@ class BotServices:
     submission_finalization: SubmissionFinalizationService
     submission_schematics: DraftSchematicService
     submission_revisions: RevisionProposalService
+    submission_uploads: DraftAttachmentUploads
     submission_intake: SubmissionAttachmentIntake
     submission_inference: SubmissionInferenceRuns
     restrictions: RestrictionService

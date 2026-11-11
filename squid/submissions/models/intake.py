@@ -31,3 +31,4 @@ class SubmissionSuppliedAttachment(Base, kw_only=True):
     kind: Mapped[str] = mapped_column(Text)
     status: Mapped[IntakeStatus] = mapped_column(StrEnumText(IntakeStatus))
     discarded: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    history_managed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))

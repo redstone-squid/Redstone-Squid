@@ -5203,6 +5203,7 @@ CREATE TABLE public.submission_supplied_attachments (
     kind text NOT NULL,
     status text NOT NULL,
     discarded boolean DEFAULT false NOT NULL,
+    history_managed boolean DEFAULT false NOT NULL,
     CONSTRAINT submission_supplied_attachments_kind_check CHECK ((kind = ANY (ARRAY['schematic'::text, 'image'::text, 'video'::text, 'unknown'::text]))),
     CONSTRAINT submission_supplied_attachments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'discarded'::text])))
 );

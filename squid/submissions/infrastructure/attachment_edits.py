@@ -1,7 +1,6 @@
 """Change attachment references without discarding their shared processing results."""
 
 from collections.abc import Callable
-from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +25,30 @@ class PostgresAttachmentEdits:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
-    async def read(self, draft: StoredDraft, sources: tuple[UUID, ...]) -> AttachmentValues:
+    async def stage(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> None:
+        session = self._session()
+        await _editable(session, draft)
+        if not 0 < len(files) <= 10 or len({item.source_id for item in files}) != len(files):
+            raise ValidationError
+        for item in files:
+            if item.filename is None or item.kind is None:
+                raise ValidationError
+            if await session.get(SubmissionSuppliedAttachment, (draft.snapshot.id, item.source_id)) is not None:
+                raise ConflictError
+            session.add(
+                SubmissionSuppliedAttachment(
+                    draft_id=draft.snapshot.id,
+                    source_id=item.source_id,
+                    filename=item.filename,
+                    kind=item.kind,
+                    status=IntakeStatus.PENDING,
+                    discarded=True,
+                    history_managed=True,
+                )
+            )
+        await session.flush()
+
+    async def read(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> AttachmentValues:
         session = self._session()
         await _editable(session, draft)
         supplied = {item.id: item for item in await PostgresAttachmentIntake(self._session).list(draft.snapshot.id)}
@@ -42,24 +64,37 @@ class PostgresAttachmentEdits:
                 select(MediaUploadRecord.id).where(media_for_draft(draft.snapshot.id, include_discarded=True))
             )
         )
-        files = []
-        for source in sources:
+        captured = []
+        for requested in files:
+            source = requested.source_id
+            filename, kind = requested.filename, requested.kind
             if source in supplied:
-                present = supplied[source].status is not IntakeStatus.DISCARDED
+                existing = supplied[source]
+                if filename is not None and (filename, kind) != (existing.filename, existing.kind):
+                    raise ConflictError
+                filename, kind = existing.filename, existing.kind
+                present = existing.status is not IntakeStatus.DISCARDED
             elif source in schematics:
                 present = not schematics[source].discarded
             elif source in known_media:
                 present = source in media
+            elif filename is not None and kind is not None:
+                if not filename.strip():
+                    raise ValidationError
+                present = False
             else:
                 raise NotFoundError
-            files.append(FileMembership(source_id=source, present=present))
+            captured.append(FileMembership(source_id=source, present=present, filename=filename, kind=kind))
         primary = next((row.source_id for row in schematics.values() if row.is_primary), None)
-        return AttachmentValues(files=tuple(files), primary=primary, select_primary=True)
+        return AttachmentValues(files=tuple(captured), primary=primary, select_primary=True)
 
     async def validate(self, draft: StoredDraft, values: AttachmentValues, limits: MediaLimits) -> AttachmentValues:
         session = self._session()
         supplied = {item.id: item for item in await PostgresAttachmentIntake(self._session).list(draft.snapshot.id)}
         membership = {item.source_id: item.present for item in values.files}
+        for item in values.files:
+            if item.present and item.filename is not None and item.kind is None:
+                raise ValidationError
         active = {item.id for item in supplied.values() if item.status is not IntakeStatus.DISCARDED}
         active.difference_update(source for source, present in membership.items() if not present)
         active.update(source for source, present in membership.items() if present)
@@ -143,6 +178,16 @@ class PostgresAttachmentEdits:
                     filename=source.filename,
                     kind=source.kind,
                     status=source.status,
+                )
+                session.add(intake)
+            if intake is None and item.filename is not None and item.kind is not None:
+                intake = SubmissionSuppliedAttachment(
+                    draft_id=draft.snapshot.id,
+                    source_id=item.source_id,
+                    filename=item.filename,
+                    kind=item.kind,
+                    status=IntakeStatus.PENDING,
+                    history_managed=True,
                 )
                 session.add(intake)
             if intake is not None:

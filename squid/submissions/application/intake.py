@@ -31,6 +31,7 @@ class SuppliedAttachment:
     kind: str
     status: IntakeStatus
     source: SubmissionSourceFile | None = None
+    history_managed: bool = False
 
 
 class AttachmentIntakeRepository(Protocol):
@@ -89,7 +90,7 @@ class SubmissionAttachmentIntake:
             )
         if attachment is None:
             raise NotFoundError
-        if attachment.status is IntakeStatus.DISCARDED:
+        if attachment.status is IntakeStatus.DISCARDED and not attachment.history_managed:
             message = "This supplied file was discarded; supply a new file identifier."
             raise ConflictError(message)
         if content_type in {None, "application/octet-stream"}:

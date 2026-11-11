@@ -142,6 +142,7 @@ from squid.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
 from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, DraftAttachmentsEdit
+from squid.submissions.application.attachment_uploads import DraftAttachmentUploads
 from squid.submissions.application.build_target import SubmissionBuildPreparation
 from squid.submissions.application.commit import BuildSubmissionExecutor
 from squid.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
@@ -533,6 +534,10 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def submission_uploads(self) -> DraftAttachmentUploads:
+        return DraftAttachmentUploads(self.submission_drafts, self.uow_factory)
+
+    @cached_property
     def submission_intake(self) -> SubmissionAttachmentIntake:
         return SubmissionAttachmentIntake(
             self.submission_drafts, self.submission_schematics, self.media_jobs, uow_factory=self.uow_factory
@@ -831,6 +836,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_schematics=graph.submission_schematics,
         submission_revisions=graph.submission_revisions,
         submission_intake=graph.submission_intake,
+        submission_uploads=graph.submission_uploads,
         submission_inference=graph.submission_inference,
         restrictions=graph.restrictions,
         build_queries=graph.build_queries,

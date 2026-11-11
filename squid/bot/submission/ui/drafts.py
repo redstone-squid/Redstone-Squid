@@ -32,7 +32,7 @@ from decimal import Decimal
 from enum import Enum, auto
 from functools import partial
 from typing import Any, cast, override
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -53,7 +53,7 @@ from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
 from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
 from squid.submissions.application.build_target import PREVIEW_TITLE_FIELDS, preview_build
 from squid.submissions.application.edits import DRAFT_ANSWERS, answer_values, draft_target
-from squid.submissions.application.intake import SuppliedAttachment
+from squid.submissions.application.intake import SuppliedAttachment, classify_supplied_file
 from squid.submissions.domain import (
     ChoiceOption,
     DraftStatus,
@@ -177,6 +177,7 @@ class DraftWorkspace(sl.Reactive):
         async def actor() -> Actor:
             return Actor(account_id=actor_id) if resolve_actor is None else await resolve_actor()
 
+        self.resolve_actor = actor
         self.edits = EditController(services.edits, actor, self.reload, history=self.history)
         self.actor_id = actor_id
         self.manifest = manifest
@@ -345,8 +346,33 @@ class DraftWorkspace(sl.Reactive):
             self.history.discard_targets(frozenset({draft_target(self._draft_id).identity}))
         await self.reload()
 
-    async def add_files(self, files: Sequence[sl.forms.UploadedFile]) -> None:
-        failed = await draft_intake.add_uploaded_files(self.services, self._draft_id, self.actor_id, files)
+    async def add_files(self, files: Sequence[sl.forms.UploadedFile], *, base_revision: int | None = None) -> None:
+        revision = self.draft.snapshot.revision if base_revision is None else base_revision
+        memberships = tuple(
+            FileMembership(
+                source_id=uuid4(),
+                present=True,
+                filename=file.name,
+                kind=classify_supplied_file(file.name, file.media_type),
+            )
+            for file in files
+        )
+        self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
+        failed = 0
+        async with self.services.submission_uploads.staging(
+            self._draft_id, await self.resolve_actor(), revision, memberships
+        ):
+            for item, file in zip(memberships, files, strict=True):
+                try:
+                    await draft_intake.register_uploaded_file(
+                        self.services, self._draft_id, self.actor_id, item.source_id, file
+                    )
+                except Exception:
+                    await self.services.submission_intake.fail(self._draft_id, self.actor_id, item.source_id)
+                    failed += 1
+            await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
+                AttachmentValues(files=memberships).edit_values(), tr(t"draft-history-add-files = Add submission files")
+            )
         self.notice = (
             tr(
                 t"draft-editor-files-failed = {failed} of the files could not be added. "
@@ -355,7 +381,6 @@ class DraftWorkspace(sl.Reactive):
             if failed
             else ""
         )
-        await self.reload()
 
     async def remove_file(self, file_id: UUID) -> None:
         await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), self.draft.snapshot.revision).save(
@@ -379,21 +404,36 @@ class DraftWorkspace(sl.Reactive):
             tr(t"draft-history-primary = Choose primary schematic"),
         )
 
-    async def replace_file(self, file_id: UUID, source: sl.forms.UploadedFile) -> UUID | None:
-        """Add a replacement, then remove the original; on failure keep the original and set the notice."""
-        try:
-            new_id = await draft_intake.retry_uploaded_file(
-                self.services, self._draft_id, self.actor_id, file_id, source
+    async def replace_file(
+        self, file_id: UUID, source: sl.forms.UploadedFile, *, base_revision: int | None = None
+    ) -> UUID | None:
+        """Register hidden replacement bytes, then atomically swap the two references."""
+        revision = self.draft.snapshot.revision if base_revision is None else base_revision
+        replacement = FileMembership(
+            source_id=uuid4(),
+            present=True,
+            filename=source.name,
+            kind=classify_supplied_file(source.name, source.media_type),
+        )
+        self.edits.require_ready(frozenset({draft_target(self._draft_id).identity}))
+        async with self.services.submission_uploads.staging(
+            self._draft_id, await self.resolve_actor(), revision, (replacement,)
+        ):
+            try:
+                await draft_intake.register_uploaded_file(
+                    self.services, self._draft_id, self.actor_id, replacement.source_id, source
+                )
+            except Exception:
+                self.notice = tr(
+                    t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it."
+                )
+                return None
+            await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), revision).save(
+                AttachmentValues(files=(FileMembership(source_id=file_id, present=False), replacement)).edit_values(),
+                tr(t"draft-history-replace-file = Replace submission file"),
             )
-        except Exception:
-            self.notice = tr(
-                t"draft-editor-replacement-failed = The replacement could not be added. Try again or remove it."
-            )
-            new_id = None
-        else:
-            self.notice = ""
-        await self.reload()
-        return new_id
+        self.notice = ""
+        return replacement.source_id
 
 
 class DraftEditorScreen(BuildEditorScreen[None]):
@@ -794,10 +834,12 @@ class FilesEditorScreen(sd.Screen[None]):
         if file_id is None:
             return
 
+        revision = self.workspace.draft.snapshot.revision
+
         async def supplied(event: sl.SubmitEvent) -> None:
             source = event.values.get("file")
             if isinstance(source, sl.forms.UploadedFile):
-                new_id = await self.workspace.replace_file(file_id, source)
+                new_id = await self.workspace.replace_file(file_id, source, base_revision=revision)
                 if new_id is not None:
                     self.selected_file = str(new_id)
 
@@ -1122,10 +1164,14 @@ async def present_chunk_form(ws: DraftWorkspace, chunk: FormSection, event: sd.P
 async def present_add_files(ws: DraftWorkspace, event: sd.PressEvent) -> None:
     """Show a modal accepting up to MAX_FILES_PER_UPLOAD files and attach them to the draft."""
 
+    revision = ws.draft.snapshot.revision
+
     async def supplied(event: sl.SubmitEvent) -> None:
         uploaded = event.values.get("files")
         files = uploaded if isinstance(uploaded, tuple) else (uploaded,) if uploaded is not None else ()
-        await ws.add_files(tuple(item for item in files if isinstance(item, sl.forms.UploadedFile)))
+        await ws.add_files(
+            tuple(item for item in files if isinstance(item, sl.forms.UploadedFile)), base_revision=revision
+        )
 
     await event.present_form(
         sl.forms.FormSpec(

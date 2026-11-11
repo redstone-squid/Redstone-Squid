@@ -25,6 +25,7 @@ from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicSt
 from squid.submissions.errors import DraftAccessDeniedError, DraftStateConflictError
 from squid.submissions.infrastructure.finalization_repository import _locked_draft, _require_expected_draft
 from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.intake import SubmissionSuppliedAttachment
 from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 
 MAX_DRAFT_SCHEMATICS = 10
@@ -340,6 +341,30 @@ def _require_editable(model: SubmissionDraft, draft: StoredDraft) -> None:
 async def _link(session: AsyncSession, draft: SubmissionDraft, upload_id: UUID) -> DraftSchematicLink:
     existing = await session.get(DraftSchematicLink, (draft.id, upload_id))
     if existing is not None and not existing.discarded:
+        return existing
+    intent = await session.get(SubmissionSuppliedAttachment, (draft.id, upload_id))
+    if intent is not None and intent.history_managed:
+        # The command already changed membership and advanced the draft revision.
+        # Processor registration fills in that intent without overwriting a later selection.
+        primary = await session.scalar(
+            select(DraftSchematicLink.source_id).where(
+                DraftSchematicLink.draft_id == draft.id, DraftSchematicLink.is_primary.is_(True)
+            )
+        )
+        count = await session.scalar(
+            select(func.count())
+            .select_from(SubmissionSuppliedAttachment)
+            .where(
+                SubmissionSuppliedAttachment.draft_id == draft.id,
+                SubmissionSuppliedAttachment.kind == "schematic",
+                SubmissionSuppliedAttachment.discarded.is_(False),
+            )
+        )
+        if existing is None:
+            existing = DraftSchematicLink(draft_id=draft.id, source_id=upload_id)
+            session.add(existing)
+        existing.discarded = intent.discarded
+        existing.is_primary = not intent.discarded and primary is None and count == 1
         return existing
     count = (
         await session.scalar(

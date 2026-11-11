@@ -59,7 +59,8 @@ class PostgresAttachmentIntake:
                     status=IntakeStatus.PENDING,
                 )
             )
-        _changed(model)
+        if existing is None or not existing.history_managed:
+            _changed(model)
 
     async def list(self, draft_id: UUID) -> tuple[SuppliedAttachment, ...]:
         session = self._session()
@@ -70,7 +71,11 @@ class PostgresAttachmentIntake:
         )
         retained = {
             row.source_id: SuppliedAttachment(
-                row.source_id, row.filename, row.kind, IntakeStatus.DISCARDED if row.discarded else row.status
+                row.source_id,
+                row.filename,
+                row.kind,
+                IntakeStatus.DISCARDED if row.discarded else row.status,
+                history_managed=row.history_managed,
             )
             for row in rows
         }
@@ -84,6 +89,7 @@ class PostgresAttachmentIntake:
                     classify_supplied_file(source.filename, source.content_type),
                     actual.status if actual is not None else IntakeStatus.PENDING,
                     source,
+                    actual.history_managed if actual is not None else False,
                 )
         return tuple(retained.values())
 

@@ -43,6 +43,7 @@ from squid.persistence.base import Base
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.intake import SubmissionSuppliedAttachment
 from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
@@ -57,6 +58,7 @@ _TABLES = model_tables(
     EditResourceLease,
     Account,
     SubmissionDraft,
+    SubmissionSuppliedAttachment,
     MediaUploadRecord,
     MediaNormalizationJobRecord,
     MediaDraftReference,
