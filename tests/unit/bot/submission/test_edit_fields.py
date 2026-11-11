@@ -238,3 +238,30 @@ def test_unexpected_edit_parser_failures_propagate() -> None:
 
     with pytest.raises(RuntimeError, match="parser defect"):
         bound.stage("changed")
+
+
+@pytest.mark.parametrize("section", ["restrictions", "files"])
+async def test_optional_lists_allow_empty_modal_values_and_clear_existing_entries(section: str) -> None:
+    keys = (
+        {
+            "wiring_placement_restrictions",
+            "animated_restrictions",
+            "component_restrictions",
+            "miscellaneous_restrictions",
+        }
+        if section == "restrictions"
+        else {"image_urls", "video_urls", "world_download_urls"}
+    )
+    build = DoorBuild()
+    items = tuple(field.bind(build) for field in EDIT_FIELDS if field.key in keys)
+    for item in items:
+        item.stage("https://example.com/file" if section == "files" else "Example")
+        item.to_patch().apply(build)
+    form = _edit_form(items, 1)
+    assert all(not control.required for control in form.items if isinstance(control, sl.forms.TextField))
+    result = await form.evaluate({key: "" for key in keys})
+    assert result.errors == ()
+    for item in items:
+        item.stage("")
+        item.to_patch().apply(build)
+        assert item.spec.reader(build) == []

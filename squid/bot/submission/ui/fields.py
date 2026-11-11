@@ -30,7 +30,7 @@ OPTIONAL_INT_FORMAT = FieldFormat[int | None](
     lambda value: "" if value is None else str(value),
 )
 OPTIONAL_TEXT_FORMAT = FieldFormat[str | None](lambda text: text or None, lambda value: value or "")
-STRING_LIST_FORMAT = FieldFormat[list[str]](split_values, ", ".join, required=True)
+STRING_LIST_FORMAT = FieldFormat[list[str]](split_values, ", ".join)
 
 
 class FieldDisplay(StrEnum):

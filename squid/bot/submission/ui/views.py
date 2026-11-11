@@ -249,6 +249,7 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
             """).attribute("label"),
         reader=lambda build: list(build.creators_ign),
         patch=lambda value: BuildEditPatch(creators_ign=value),
+        required=True,
     ),
     field_spec(
         "image_urls",
