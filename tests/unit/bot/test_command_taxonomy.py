@@ -14,8 +14,8 @@ from squid.bot.layout_showcase import LayoutShowcaseCog
 from squid.bot.permissions import PermissionCog
 from squid.bot.settings import SettingsCog
 from squid.bot.starboard import StarboardCog
+from squid.bot.submission.commands import BuildCommands
 from squid.bot.submission.records import RecordCog
-from squid.bot.submission.search import SearchCog
 from squid.bot.verify import VerifyCog
 from squid.bot.version_tracking import VersionTracker
 from squid.bot.voting.vote import VoteCog
@@ -33,7 +33,7 @@ UNGATED_COMMANDS = frozenset(
 """Explicit exceptions to the permission-node requirement for commands in PUBLIC_COGS."""
 
 PUBLIC_COGS = (
-    SearchCog,
+    BuildCommands,
     Admin,
     Diagnostics,
     RecordCog,
@@ -87,7 +87,7 @@ def _nodes(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
 
 def test_build_slash_group_includes_the_app_only_workspaces() -> None:
     build_group = next(
-        command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"
+        command for command in cast(Any, BuildCommands).__cog_app_commands__ if command.qualified_name == "build"
     )
 
     assert {command.qualified_name for command in build_group.walk_commands()} == {
@@ -100,7 +100,7 @@ def test_build_slash_group_includes_the_app_only_workspaces() -> None:
 def test_guided_submit_puts_attachments_last() -> None:
     """Typed fields lead the option tab order, followed by attachments."""
     build_group = next(
-        command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"
+        command for command in cast(Any, BuildCommands).__cog_app_commands__ if command.qualified_name == "build"
     )
     submit = next(command for command in build_group.walk_commands() if command.qualified_name == "build submit")
     names = [parameter.name for parameter in cast(app_commands.Command[Any, ..., Any], submit).parameters]
@@ -110,7 +110,7 @@ def test_guided_submit_puts_attachments_last() -> None:
 
 
 def test_search_modes_have_user_friendly_labels() -> None:
-    cog = cast(Any, SearchCog)
+    cog = cast(Any, BuildCommands)
     search = next(command for command in cog.__cog_app_commands__ if command.qualified_name == "search")
     mode = next(
         parameter

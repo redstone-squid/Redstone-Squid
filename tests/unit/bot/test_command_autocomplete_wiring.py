@@ -25,7 +25,7 @@ COMMAND_MODULES = [
     "squid.bot.submission.edit",
     "squid.bot.submission.records",
     "squid.bot.submission.schematics",
-    "squid.bot.submission.search",
+    "squid.bot.submission.commands",
     "squid.bot.submission.submit",
     "squid.bot.verify",
     "squid.bot.version_tracking",

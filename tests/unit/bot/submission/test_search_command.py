@@ -5,7 +5,7 @@ from typing import Any, cast, override
 
 import pytest
 
-from squid.bot.submission.search import SearchCog, SearchTarget
+from squid.bot.submission.commands import BuildCommands, SearchTarget
 from squid.builds.application import BuildQueryService
 from squid.builds.models import Build
 from squid.core.errors import ValidationError
@@ -51,15 +51,15 @@ class CogBot:
     services: BotServices
 
 
-def _cog(search: RecordingSearch) -> SearchCog[Any]:
-    cog = SearchCog.__new__(SearchCog)
+def _cog(search: RecordingSearch) -> BuildCommands[Any]:
+    cog = BuildCommands.__new__(BuildCommands)
     cog.bot = cast(Any, CogBot(services=bot_services(settings=SettingsRecorder())))
     cog.queries = BuildQueryRecorder()
     cog.search = search
     return cog
 
 
-async def _run(cog: SearchCog[Any], **kwargs: Any) -> None:
+async def _run(cog: BuildCommands[Any], **kwargs: Any) -> None:
     await cog._search_screen(**kwargs)
 
 

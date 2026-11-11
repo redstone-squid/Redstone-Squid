@@ -1,9 +1,8 @@
-"""Search and canonical build browsing entry points."""
+"""Discord commands for build search, browsing, editing, and submission."""
 
-import json
 import logging
-from enum import Enum, StrEnum
-from typing import TYPE_CHECKING, Any, Self, override
+from enum import StrEnum
+from typing import TYPE_CHECKING, Self, override
 
 from discord import app_commands
 from discord.ext import commands
@@ -20,7 +19,6 @@ from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import actor_for_interaction, allows
-from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_MEASURE_TIMING,
@@ -75,32 +73,11 @@ def _targeted(target: SearchTarget, query: str) -> tuple[SearchScope, str]:
     return scope, f"{narrowing} ({query})"
 
 
-def _debug_dump(build: Build) -> str:
-    """Serialize a build's internal state as readable JSON without its embedding."""
-    state: dict[str, Any] = {key: value for key, value in build.edit_values().items() if key != "embedding"}
-    state["category"] = build.category
-    state["embedding_dimensions"] = len(build.embedding) if build.embedding is not None else None
-    return json.dumps(_jsonable(state), indent=2, sort_keys=True, default=str)
-
-
-def _jsonable(value: Any) -> Any:
-    """Render enums by name, since an IntEnum otherwise serializes as the integer."""
-    match value:
-        case Enum():
-            return value.name
-        case dict():
-            return {str(key): _jsonable(item) for key, item in value.items()}
-        case list() | tuple():
-            return [_jsonable(item) for item in value]
-        case _:
-            return value
-
-
-class SearchCog[BotT: squid.bot.app.RedstoneSquid](
+class BuildCommands[BotT: squid.bot.app.RedstoneSquid](
     BuildEditCommands[BotT],
     BuildSubmitCommands[BotT],
 ):
-    """Own app-only search, build browsing, and build submission."""
+    """Own build search, browsing, editing, submission, and consent-message lifetime."""
 
     def __init__(self, bot: BotT):
         super().__init__(bot)
@@ -270,4 +247,4 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load search and build commands."""
-    await bot.add_cog(SearchCog(bot))
+    await bot.add_cog(BuildCommands(bot))

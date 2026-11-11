@@ -1250,31 +1250,31 @@ bot-starboard-screen-up = Up
 # squid/bot/starboard/screen.py:395
 bot-starboard-screen-value = Value
 
-# squid/bot/submission/build_browse.py:178
+# squid/bot/submission/build_browse.py:201
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/submission/build_browse.py:351
+# squid/bot/submission/build_browse.py:372
 bot-submission-build-browse-back-to-builds = Back to builds
 
-# squid/bot/submission/build_browse.py:337
+# squid/bot/submission/build_browse.py:358
 bot-submission-build-browse-browse = Browse
 
-# squid/bot/submission/build_browse.py:207
+# squid/bot/submission/build_browse.py:230
 bot-submission-build-browse-build = { $action } build #{ $build_id_text }?
 
-# squid/bot/submission/build_browse.py:327
+# squid/bot/submission/build_browse.py:348
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:416
+# squid/bot/submission/build_browse.py:437
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/submission/build_browse.py:341
+# squid/bot/submission/build_browse.py:362
 bot-submission-build-browse-builds = Builds
 
-# squid/bot/submission/build_browse.py:223
+# squid/bot/submission/build_browse.py:246
 bot-submission-build-browse-cancel = Cancel
 
-# squid/bot/submission/build_browse.py:222
+# squid/bot/submission/build_browse.py:245
 bot-submission-build-browse-confirm = Confirm
 
 # squid/bot/submission/schematic_tools.py:172
@@ -1283,46 +1283,46 @@ bot-submission-build-browse-conversion-report = Conversion report: { $loss_summa
 # squid/bot/submission/schematic_tools.py:215, squid/bot/submission/schematic_tools.py:88
 bot-submission-build-browse-convert-schematic = Convert schematic
 
-# squid/bot/submission/build_browse.py:196
+# squid/bot/submission/build_browse.py:219
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:423
+# squid/bot/submission/build_browse.py:444
 bot-submission-build-browse-description-or-title = Description or title
 
-# squid/bot/submission/build_browse.py:154, squid/bot/submission/schematic_tools.py:56
+# squid/bot/submission/build_browse.py:177, squid/bot/submission/schematic_tools.py:56
 bot-submission-build-browse-download-result = Download result
 
 # squid/bot/submission/schematic_tools.py:73
 bot-submission-build-browse-download-schematic = Download schematic
 
-# squid/bot/submission/build_browse.py:170
+# squid/bot/submission/build_browse.py:193
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/build_browse.py:338, squid/bot/submission/build_browse.py:420
+# squid/bot/submission/build_browse.py:359, squid/bot/submission/build_browse.py:441
 bot-submission-build-browse-find-build = Find build
 
 # squid/bot/submission/schematic_tools.py:239
 bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 
-# squid/bot/submission/build_browse.py:138
+# squid/bot/submission/build_browse.py:161
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:357
+# squid/bot/submission/build_browse.py:378
 bot-submission-build-browse-loading-builds = Loading builds.
 
 # squid/bot/submission/schematic_tools.py:97
 bot-submission-build-browse-measure-timing = Measure timing
 
-# squid/bot/submission/build_browse.py:414
+# squid/bot/submission/build_browse.py:435
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:363
+# squid/bot/submission/build_browse.py:384
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/submission/schematic_tools.py:218
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/submission/build_browse.py:187
+# squid/bot/submission/build_browse.py:210
 bot-submission-build-browse-reject = Reject
 
 # squid/bot/submission/schematic_tools.py:78
@@ -1331,7 +1331,7 @@ bot-submission-build-browse-render-schematic = Render schematic
 # squid/bot/submission/schematic_tools.py:68
 bot-submission-build-browse-schematic-info = Schematic info
 
-# squid/bot/submission/build_browse.py:369
+# squid/bot/submission/build_browse.py:390
 bot-submission-build-browse-search-by-meaning = Search by meaning
 
 # squid/bot/submission/consent_banner.py:70
@@ -1433,7 +1433,7 @@ bot-submission-schematics-signs = **Signs**: { $text }
 # squid/bot/submission/schematics.py:101
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/search.py:211
+# squid/bot/submission/commands.py:188
 bot-submission-search-open-this-build-directly = Open this build directly.
 
 # squid/bot/submission/search_view.py:256
@@ -2045,7 +2045,7 @@ build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
 
-# squid/bot/submission/build_browse.py:401
+# squid/bot/submission/build_browse.py:422
 build-id-not-visible = No visible build has that ID.
 
 # squid/builds/application/input.py:32
@@ -2063,7 +2063,7 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/submission/build_browse.py:328
+# squid/bot/submission/build_browse.py:349
 build-list-empty = No builds are available.
 
 # squid/bot/submission/schematic_tools.py:226
@@ -2072,19 +2072,19 @@ build-minecraft-data-version-label = Minecraft data version
 # squid/bot/submission/schematic_tools.py:229
 build-minecraft-version-label = Minecraft version name
 
-# squid/bot/submission/build_browse.py:263
+# squid/bot/submission/build_browse.py:284
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:277, squid/bot/submission/schematic_tools.py:209
+# squid/bot/submission/build_browse.py:298, squid/bot/submission/schematic_tools.py:209
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/submission/build_browse.py:205
+# squid/bot/submission/build_browse.py:228
 build-review-confirmation-title = Confirm review decision
 
-# squid/bot/submission/build_browse.py:246
+# squid/bot/submission/build_browse.py:269
 build-review-state-updated = Build review state updated.
 
-# squid/bot/submission/build_browse.py:220
+# squid/bot/submission/build_browse.py:243
 build-review-state-warning = This changes the build's review state.
 
 # squid/bot/submission/schematic_tools.py:121
@@ -2105,22 +2105,22 @@ build-search-load-failed = Could not load search results.
 # squid/bot/submission/search_view.py:161
 build-search-loading = Loading search results…
 
-# squid/bot/submission/search.py:163
+# squid/bot/submission/commands.py:140
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/build_browse.py:407
+# squid/bot/submission/build_browse.py:428
 build-search-no-visible-match = No visible build matches that search.
 
-# squid/bot/submission/search.py:154
+# squid/bot/submission/commands.py:131
 build-search-query-help = Search text and filters, e.g. `width:5`.
 
-# squid/bot/submission/search.py:161
+# squid/bot/submission/commands.py:138
 build-search-sort-help = Order results by a field, ascending or descending.
 
-# squid/bot/submission/search.py:156
+# squid/bot/submission/commands.py:133
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
 
 # squid/builds/errors.py:108
@@ -2306,13 +2306,13 @@ command-account-user-name = user
 # squid/bot/admin.py:94
 command-archive-message-name = Archive Message
 
-# squid/bot/submission/search.py:209
+# squid/bot/submission/commands.py:186
 command-build-browse-build-id-name = id
 
-# squid/bot/submission/search.py:206
+# squid/bot/submission/commands.py:183
 command-build-browse-help = Browse searchable build details, review actions, and schematic tools.
 
-# squid/bot/submission/search.py:204
+# squid/bot/submission/commands.py:181
 command-build-browse-name = browse
 
 # squid/bot/submission/submit.py:293
@@ -2516,43 +2516,43 @@ command-runtime-settings-value-help = …
 # squid/bot/admin.py:156
 command-runtime-settings-value-name = value
 
-# squid/bot/submission/search.py:133
+# squid/bot/submission/commands.py:110
 command-search-choice-mode-keyword = keyword
 
-# squid/bot/submission/search.py:135
+# squid/bot/submission/commands.py:112
 command-search-choice-mode-smart = smart
 
-# squid/bot/submission/search.py:141
+# squid/bot/submission/commands.py:118
 command-search-choice-scope-builds = builds
 
-# squid/bot/submission/search.py:149
+# squid/bot/submission/commands.py:126
 command-search-choice-scope-everything = everything
 
-# squid/bot/submission/search.py:143
+# squid/bot/submission/commands.py:120
 command-search-choice-scope-patterns = patterns
 
-# squid/bot/submission/search.py:139
+# squid/bot/submission/commands.py:116
 command-search-choice-scope-records = records
 
-# squid/bot/submission/search.py:146
+# squid/bot/submission/commands.py:123
 command-search-choice-scope-restrictions = restrictions
 
-# squid/bot/submission/search.py:121
+# squid/bot/submission/commands.py:98
 command-search-help = Search builds, records, and taxonomy metadata
 
-# squid/bot/submission/search.py:125
+# squid/bot/submission/commands.py:102
 command-search-mode-name = mode
 
-# squid/bot/submission/search.py:120
+# squid/bot/submission/commands.py:97
 command-search-name = search
 
-# squid/bot/submission/search.py:126
+# squid/bot/submission/commands.py:103
 command-search-query-name = query
 
-# squid/bot/submission/search.py:127
+# squid/bot/submission/commands.py:104
 command-search-scope-name = scope
 
-# squid/bot/submission/search.py:128
+# squid/bot/submission/commands.py:105
 command-search-sort-name = sort
 
 # squid/bot/settings.py:29

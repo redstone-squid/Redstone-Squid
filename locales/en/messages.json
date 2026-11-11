@@ -4124,7 +4124,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:178"
+      "squid/bot/submission/build_browse.py:201"
     ]
   },
   "bot-submission-build-browse-back-to-builds": {
@@ -4133,7 +4133,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:351"
+      "squid/bot/submission/build_browse.py:372"
     ]
   },
   "bot-submission-build-browse-browse": {
@@ -4142,7 +4142,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:337"
+      "squid/bot/submission/build_browse.py:358"
     ]
   },
   "bot-submission-build-browse-build": {
@@ -4162,7 +4162,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/build_browse.py:207"
+      "squid/bot/submission/build_browse.py:230"
     ]
   },
   "bot-submission-build-browse-build-catalogue": {
@@ -4171,7 +4171,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:327"
+      "squid/bot/submission/build_browse.py:348"
     ]
   },
   "bot-submission-build-browse-build-id": {
@@ -4180,7 +4180,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:416"
+      "squid/bot/submission/build_browse.py:437"
     ]
   },
   "bot-submission-build-browse-builds": {
@@ -4189,7 +4189,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:341"
+      "squid/bot/submission/build_browse.py:362"
     ]
   },
   "bot-submission-build-browse-cancel": {
@@ -4198,7 +4198,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:223"
+      "squid/bot/submission/build_browse.py:246"
     ]
   },
   "bot-submission-build-browse-confirm": {
@@ -4207,7 +4207,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:222"
+      "squid/bot/submission/build_browse.py:245"
     ]
   },
   "bot-submission-build-browse-conversion-report": {
@@ -4241,7 +4241,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:196"
+      "squid/bot/submission/build_browse.py:219"
     ]
   },
   "bot-submission-build-browse-description-or-title": {
@@ -4250,7 +4250,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:423"
+      "squid/bot/submission/build_browse.py:444"
     ]
   },
   "bot-submission-build-browse-download-result": {
@@ -4259,7 +4259,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:154",
+      "squid/bot/submission/build_browse.py:177",
       "squid/bot/submission/schematic_tools.py:56"
     ]
   },
@@ -4278,7 +4278,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:170"
+      "squid/bot/submission/build_browse.py:193"
     ]
   },
   "bot-submission-build-browse-find-build": {
@@ -4287,8 +4287,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:338",
-      "squid/bot/submission/build_browse.py:420"
+      "squid/bot/submission/build_browse.py:359",
+      "squid/bot/submission/build_browse.py:441"
     ]
   },
   "bot-submission-build-browse-input-position-x-y-z": {
@@ -4306,7 +4306,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:138"
+      "squid/bot/submission/build_browse.py:161"
     ]
   },
   "bot-submission-build-browse-loading-builds": {
@@ -4315,7 +4315,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:357"
+      "squid/bot/submission/build_browse.py:378"
     ]
   },
   "bot-submission-build-browse-measure-timing": {
@@ -4333,7 +4333,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:414"
+      "squid/bot/submission/build_browse.py:435"
     ]
   },
   "bot-submission-build-browse-open-by-id": {
@@ -4342,7 +4342,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:363"
+      "squid/bot/submission/build_browse.py:384"
     ]
   },
   "bot-submission-build-browse-output-format": {
@@ -4360,7 +4360,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:187"
+      "squid/bot/submission/build_browse.py:210"
     ]
   },
   "bot-submission-build-browse-render-schematic": {
@@ -4387,7 +4387,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:369"
+      "squid/bot/submission/build_browse.py:390"
     ]
   },
   "bot-submission-consent-banner-consent-recorded": {
@@ -4742,7 +4742,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:211"
+      "squid/bot/submission/commands.py:188"
     ]
   },
   "bot-submission-search-view-build": {
@@ -6720,7 +6720,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:401"
+      "squid/bot/submission/build_browse.py:422"
     ]
   },
   "build-input-extender-orientation": {
@@ -6774,7 +6774,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:328"
+      "squid/bot/submission/build_browse.py:349"
     ]
   },
   "build-minecraft-data-version-label": {
@@ -6801,7 +6801,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:263"
+      "squid/bot/submission/build_browse.py:284"
     ]
   },
   "build-operation-permission-denied": {
@@ -6810,7 +6810,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:277",
+      "squid/bot/submission/build_browse.py:298",
       "squid/bot/submission/schematic_tools.py:209"
     ]
   },
@@ -6820,7 +6820,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:205"
+      "squid/bot/submission/build_browse.py:228"
     ]
   },
   "build-review-state-updated": {
@@ -6829,7 +6829,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:246"
+      "squid/bot/submission/build_browse.py:269"
     ]
   },
   "build-review-state-warning": {
@@ -6838,7 +6838,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:220"
+      "squid/bot/submission/build_browse.py:243"
     ]
   },
   "build-schematic-missing": {
@@ -6902,7 +6902,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:163"
+      "squid/bot/submission/commands.py:140"
     ]
   },
   "build-search-no-results": {
@@ -6920,7 +6920,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/build_browse.py:407"
+      "squid/bot/submission/build_browse.py:428"
     ]
   },
   "build-search-query-help": {
@@ -6929,7 +6929,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:154"
+      "squid/bot/submission/commands.py:131"
     ]
   },
   "build-search-sort-help": {
@@ -6938,7 +6938,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:161"
+      "squid/bot/submission/commands.py:138"
     ]
   },
   "build-search-target-types-help": {
@@ -6947,7 +6947,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:156"
+      "squid/bot/submission/commands.py:133"
     ]
   },
   "builds-alias-restriction": {
@@ -7584,7 +7584,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:209"
+      "squid/bot/submission/commands.py:186"
     ]
   },
   "command-build-browse-help": {
@@ -7593,7 +7593,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:206"
+      "squid/bot/submission/commands.py:183"
     ]
   },
   "command-build-browse-name": {
@@ -7602,7 +7602,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:204"
+      "squid/bot/submission/commands.py:181"
     ]
   },
   "command-build-drafts-help": {
@@ -8214,7 +8214,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:133"
+      "squid/bot/submission/commands.py:110"
     ]
   },
   "command-search-choice-mode-smart": {
@@ -8223,7 +8223,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:135"
+      "squid/bot/submission/commands.py:112"
     ]
   },
   "command-search-choice-scope-builds": {
@@ -8232,7 +8232,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:141"
+      "squid/bot/submission/commands.py:118"
     ]
   },
   "command-search-choice-scope-everything": {
@@ -8241,7 +8241,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:149"
+      "squid/bot/submission/commands.py:126"
     ]
   },
   "command-search-choice-scope-patterns": {
@@ -8250,7 +8250,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:143"
+      "squid/bot/submission/commands.py:120"
     ]
   },
   "command-search-choice-scope-records": {
@@ -8259,7 +8259,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:139"
+      "squid/bot/submission/commands.py:116"
     ]
   },
   "command-search-choice-scope-restrictions": {
@@ -8268,7 +8268,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:146"
+      "squid/bot/submission/commands.py:123"
     ]
   },
   "command-search-help": {
@@ -8277,7 +8277,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:121"
+      "squid/bot/submission/commands.py:98"
     ]
   },
   "command-search-mode-name": {
@@ -8286,7 +8286,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:125"
+      "squid/bot/submission/commands.py:102"
     ]
   },
   "command-search-name": {
@@ -8295,7 +8295,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:120"
+      "squid/bot/submission/commands.py:97"
     ]
   },
   "command-search-query-name": {
@@ -8304,7 +8304,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:126"
+      "squid/bot/submission/commands.py:103"
     ]
   },
   "command-search-scope-name": {
@@ -8313,7 +8313,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:127"
+      "squid/bot/submission/commands.py:104"
     ]
   },
   "command-search-sort-name": {
@@ -8322,7 +8322,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/search.py:128"
+      "squid/bot/submission/commands.py:105"
     ]
   },
   "command-settings-help": {

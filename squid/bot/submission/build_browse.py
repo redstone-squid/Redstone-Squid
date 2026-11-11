@@ -1,8 +1,10 @@
 """Canonical build catalogue, review, and schematic workspace."""
 
+import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import cast, override
+from enum import Enum
+from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -28,6 +30,27 @@ from squid_ui.sources import window_fingerprint
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
 type BuildAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
+
+
+def _debug_dump(build: Build) -> str:
+    """Serialize a build's internal state as readable JSON without its embedding."""
+    state: dict[str, Any] = {key: value for key, value in build.edit_values().items() if key != "embedding"}
+    state["category"] = build.category
+    state["embedding_dimensions"] = len(build.embedding) if build.embedding is not None else None
+    return json.dumps(_jsonable(state), indent=2, sort_keys=True, default=str)
+
+
+def _jsonable(value: Any) -> Any:
+    """Render enums by name, since an IntEnum otherwise serializes as the integer."""
+    match value:
+        case Enum():
+            return value.name
+        case dict():
+            return {str(key): _jsonable(item) for key, item in value.items()}
+        case list() | tuple():
+            return [_jsonable(item) for item in value]
+        case _:
+            return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,8 +279,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     async def _debug(self, event: sl.PressEvent) -> None:
         if not await self._may(event, BUILD_SUBMISSION_DEBUG):
             return
-        from squid.bot.submission.search import _debug_dump
-
         build = await self._queries.get(self._build_id)
         if build is None:
             await event.notice(tr(t"build-no-longer-available = That build is no longer available."))
