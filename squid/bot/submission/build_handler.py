@@ -3,14 +3,13 @@
 import logging
 import mimetypes
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Literal, cast, override
+from typing import TYPE_CHECKING, override
 
 import discord
 from discord.utils import escape_markdown
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot._types import GuildMessageable
 from squid.bot.ui import (
     DISCORD_GREEN,
     DISCORD_GREY,
@@ -20,7 +19,6 @@ from squid.bot.ui import (
     render_payload,
     truncate_display_text,
 )
-from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.builds.domain import Status
 from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.builds.domain.titles import format_build_display_title
@@ -115,52 +113,6 @@ class BuildHandler[BotT: squid.bot.app.RedstoneSquid]:
     @override
     def __repr__(self):
         return f"<BuildHandler(bot={self.bot}, build={self.build})>"
-
-    async def get_channels_to_post_to(self) -> list[GuildMessageable]:
-        """Return review channels for pending builds or configured build channels for confirmed ones.
-
-        Denied builds and builds without a valid submission status raise ValueError.
-        Confirmed-build channels absent from the bot cache are omitted.
-        """
-
-        target: Literal["Smallest", "Fastest", "First", "Builds"]
-
-        match self.build.submission_status:
-            case Status.PENDING:
-                return await configured_vote_channels(self.bot)
-            case Status.DENIED:
-                msg = "Denied submissions should not be posted."
-                raise ValueError(msg)
-            case Status.CONFIRMED:
-                target = "Builds"
-            case _:
-                msg = "Invalid submission status"
-                raise ValueError(msg)
-
-        guild_channels = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), target)
-        maybe_channels = [
-            self.bot.get_channel(channel_id) for channel_id in guild_channels.values() if channel_id is not None
-        ]
-        channels = [channel for channel in maybe_channels if channel is not None]
-        # noinspection PyTypeHints: PyCharm thinks this cast is invalid
-        return cast(list[GuildMessageable], channels)
-
-    async def post_for_voting(self, type: Literal["add", "update"] = "add") -> None:
-        """Ensure review posts exist for a pending build.
-
-        Only type="add" is implemented; "update" raises NotImplementedError.
-        Other build states raise ValueError.
-        """
-        build = self.build
-        if type == "update":
-            msg = "Updating builds is not yet implemented."
-            raise NotImplementedError(msg)
-
-        if build.submission_status != Status.PENDING:
-            msg = "The build must be pending to post it."
-            raise ValueError(msg)
-
-        await ensure_build_review(self.bot, build, await self.get_channels_to_post_to())
 
     async def get_original_message(self) -> discord.Message | None:
         """Return a cached source message or fetch the first source with a known channel."""

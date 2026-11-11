@@ -1,10 +1,11 @@
 """Renderers deciding what each kind of resource shows in Discord."""
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, cast, final
 
 import discord
 
+from squid.bot._types import GuildMessageable
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.builds.domain import Status
 from squid.posts.domain import ResourceKind
@@ -38,14 +39,17 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
 
         handler = self.bot.for_build(build)
         payload = await handler.render_payload()
+        configured = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), "Builds")
+        channels = (self.bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
         return [
             DesiredPost(
                 channel_id=channel.id,
-                guild_id=channel.guild.id,
+                guild_id=cast(GuildMessageable, channel).guild.id,
                 surface="build_card",
                 payload=payload,
             )
-            for channel in await handler.get_channels_to_post_to()
+            for channel in channels
+            if channel is not None
         ]
 
     async def after_send(self, resource_key: str, message: discord.Message) -> None:

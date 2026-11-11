@@ -42,61 +42,62 @@ class BuildQueryRecorder(BuildQueryService):
         return self.build
 
 
-@dataclass(slots=True)
-class ReviewPublisherRecorder:
-    posts: int = 0
+@pytest.fixture
+def review_calls(monkeypatch: pytest.MonkeyPatch) -> list[Build]:
+    calls: list[Build] = []
 
-    async def post_for_voting(self) -> None:
-        self.posts += 1
+    async def channels(bot: object) -> tuple[()]:
+        return ()
+
+    async def review(bot: object, build: Build, channels: object) -> None:
+        calls.append(build)
+
+    monkeypatch.setattr("squid.bot.events.handlers.configured_vote_channels", channels)
+    monkeypatch.setattr("squid.bot.events.handlers.ensure_build_review", review)
+    return calls
 
 
 @dataclass(frozen=True, slots=True)
 class _Bot:
     services: BotServices
-    publisher: ReviewPublisherRecorder
-
-    def for_build(self, build: Build) -> ReviewPublisherRecorder:
-        assert build is cast(BuildQueryRecorder, self.services.build_queries).build
-        return self.publisher
 
 
-def _handler(build: Build) -> tuple[PostSubmittedBuildHandler, BuildQueryRecorder, ReviewPublisherRecorder]:
+def _handler(build: Build) -> tuple[PostSubmittedBuildHandler, BuildQueryRecorder]:
     queries = BuildQueryRecorder(build)
-    publisher = ReviewPublisherRecorder()
-    bot = cast(Any, _Bot(bot_services(build_queries=queries), publisher))
-    return PostSubmittedBuildHandler(bot), queries, publisher
+    bot = cast(Any, _Bot(bot_services(build_queries=queries)))
+    return PostSubmittedBuildHandler(bot), queries
 
 
-async def test_submitted_build_is_sent_to_the_review_publisher() -> None:
+async def test_submitted_build_is_sent_to_the_review_publisher(review_calls: list[Build]) -> None:
     build = OtherBuild(id=42, submitter_account_id=7)
     build.submission_status = Status.PENDING
-    handler, queries, publisher = _handler(build)
+    handler, queries = _handler(build)
 
     await handler.handle(_event(event_type="build.submitted", schema_version=2))
 
     assert queries.requested == [42]
-    assert publisher.posts == 1
+    assert review_calls == [build]
 
 
-async def test_submitted_build_redelivery_reuses_the_same_review_publisher_path() -> None:
+async def test_submitted_build_redelivery_reuses_the_same_review_publisher_path(review_calls: list[Build]) -> None:
     build = OtherBuild(id=42, submitter_account_id=7)
     build.submission_status = Status.PENDING
-    handler, queries, publisher = _handler(build)
+    handler, queries = _handler(build)
     event = _event(event_type="build.submitted", schema_version=2)
 
     await handler.handle(event)
     await handler.handle(event)
 
     assert queries.requested == [42, 42]
-    assert publisher.posts == 2
+    assert review_calls == [build, build]
 
 
-async def test_submitted_build_with_unsupported_schema_is_rejected() -> None:
+async def test_submitted_build_with_unsupported_schema_is_rejected(review_calls: list[Build]) -> None:
     build = OtherBuild(id=42, submitter_account_id=7)
-    handler, queries, publisher = _handler(build)
+    handler, queries = _handler(build)
 
     with pytest.raises(UnsupportedEventVersionError, match="schema version 99"):
         await handler.handle(_event(event_type="build.submitted", schema_version=99))
 
     assert queries.requested == []
-    assert publisher.posts == 0
+    assert review_calls == []

@@ -79,7 +79,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         if snapshot.status == "open":
             # Fill guilds that have a vote channel but no card yet, which is what makes
             # a retried or partially delivered submission complete itself.
-            channels.update({channel.id: channel.guild.id for channel in await handler.get_channels_to_post_to()})
+            channels.update({channel.id: channel.guild.id for channel in await configured_vote_channels(self.bot)})
 
         card = await handler.render_node()
         posts: list[DesiredPost] = []
