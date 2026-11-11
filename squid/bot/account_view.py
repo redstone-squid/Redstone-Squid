@@ -268,11 +268,14 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 # Cancelling leaves the account and the displayed panel unchanged.
                 return
             granted = await self._accounts.grant_current_consent(self._account_id)
+            # Consent is saved outside session history, so its entries for this account
+            # now expect an old revision and could only fail. Drop them.
+            await self.edits.discard(frozenset({account_target(self._account_id).identity}))
+            # Saving consent advances the revision by exactly one. A larger step means the
+            # account also changed elsewhere since this panel loaded, so `work` may be stale.
             expected = Revision(account_target(self._account_id), self._revision + 1)
             if granted.revision != expected.value:
-                await self.edits.discard(frozenset({account_target(self._account_id).identity}))
                 raise RevisionConflictError(expected, granted.revision)
-            await self.edits.discard(frozenset({account_target(self._account_id).identity}))
             self._revision = granted.revision
             self._needs_consent = False
             await work()
