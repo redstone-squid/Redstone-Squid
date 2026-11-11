@@ -18,6 +18,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
+from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagValueType
 from squid.tags.models import TagDefinition
 
@@ -46,6 +47,25 @@ class TagOperations(Protocol):
         *,
         actor_account_id: int,
     ) -> TagDefinition: ...
+
+    async def edit_showcase(
+        self,
+        build_id: int,
+        tag_id: int,
+        raw_value: str | None,
+        *,
+        actor_account_id: int,
+    ) -> tuple[TagDefinition, AssignmentSnapshot | None, AssignmentSnapshot]: ...
+
+    async def replace_assignment(
+        self,
+        build_id: int,
+        tag_id: int,
+        expected: AssignmentSnapshot | None,
+        replacement: AssignmentSnapshot | None,
+        *,
+        actor_account_id: int,
+    ) -> bool: ...
 
     async def approve(self, tag_id: int) -> TagDefinition: ...
 
@@ -296,7 +316,29 @@ class TagsScreen(sd.Screen):
         tag_id = form.tag_id
         assert build_id is not None and tag_id is not None
         value = form.value
-        tag = await self._tags.assign_showcase(build_id, tag_id, value, actor_account_id=account_id)
+        tag, before, after = await self._tags.edit_showcase(build_id, tag_id, value, actor_account_id=account_id)
+
+        async def authorize() -> bool:
+            # Ownership and tag publication are rechecked inside the conditional write.
+            return self._actor_account_id == account_id
+
+        async def replace_assignment(
+            expected: AssignmentSnapshot | None, replacement: AssignmentSnapshot | None
+        ) -> bool:
+            return await self._tags.replace_assignment(
+                build_id, tag_id, expected, replacement, actor_account_id=account_id
+            )
+
+        record_edit(
+            self.history,
+            tr(t"tags-history-assignment = Edit showcase tag"),
+            before,
+            after,
+            target=f"build:{build_id}:tag:{tag_id}",
+            authorize=authorize,
+            replace=replace_assignment,
+            refresh=self._refresh,
+        )
         tag_name = tag.display_name
         await event.notice(
             tr(

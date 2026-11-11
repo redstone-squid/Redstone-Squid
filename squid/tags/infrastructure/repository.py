@@ -11,6 +11,7 @@ from whenever import Instant
 
 from squid.builds.models import Build
 from squid.tags.application import TagDefinitionRepository
+from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
 
@@ -116,6 +117,60 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         )
         return row
 
+    async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None:
+        session = self._session()
+        # Serialize with all build edits, including assignments absent at the time of the read.
+        await session.scalar(select(Build.id).where(Build.id == build_id).with_for_update())
+        row = await session.scalar(
+            select(TagAssignment)
+            .where(TagAssignment.build_id == build_id, TagAssignment.tag_id == tag_id)
+            .with_for_update()
+        )
+        return None if row is None else AssignmentSnapshot.capture(row)
+
+    async def replace_assignment(
+        self,
+        build_id: int,
+        tag_id: int,
+        expected: AssignmentSnapshot | None,
+        replacement: AssignmentSnapshot | None,
+        *,
+        actor_account_id: int,
+    ) -> bool:
+        session = self._session()
+        owned = await session.scalar(
+            select(Build.id)
+            .where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
+            .with_for_update()
+        )
+        if owned is None or await self.assignment(build_id, tag_id) != expected:
+            return False
+        row = await session.scalar(
+            select(TagAssignment).where(TagAssignment.build_id == build_id, TagAssignment.tag_id == tag_id)
+        )
+        if replacement is None:
+            if row is not None:
+                await session.delete(row)
+        else:
+            if row is None:
+                definition = await session.get(TagDefinition, tag_id)
+                if definition is None:
+                    return False
+                row = TagAssignment(definition)
+                row.build_id = build_id
+                session.add(row)
+            row.value_type = replacement.value_type
+            row.value = replacement.value
+            row.display_unit = replacement.display_unit
+            row.display_order = replacement.display_order
+            row.evidence = replacement.evidence
+            row.provenance = replacement.provenance
+            row.created_by_account_id = replacement.created_by_account_id
+            row.created_at = replacement.created_at
+            row.updated_at = Instant.now()
+        await session.flush()
+        return True
+
     @override
     async def assign_showcase(
         self,
@@ -132,7 +187,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         """
         session = self._session()
         owned_build_id = await session.scalar(
-            select(Build.id).where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
+            select(Build.id)
+            .where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
+            .with_for_update()
         )
         if owned_build_id is None:
             return False

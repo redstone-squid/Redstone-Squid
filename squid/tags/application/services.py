@@ -9,6 +9,7 @@ from uuid import uuid4
 from squid.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagModerationStatus, TagValue, TagValueType
 from squid.tags.errors import TagNotFoundError
 from squid.tags.models import TagDefinition
@@ -38,6 +39,18 @@ class TagDefinitionRepository(Protocol):
     async def approved(self) -> Sequence[TagDefinition]: ...
 
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
+
+    async def assignment(self, build_id: int, tag_id: int) -> AssignmentSnapshot | None: ...
+
+    async def replace_assignment(
+        self,
+        build_id: int,
+        tag_id: int,
+        expected: AssignmentSnapshot | None,
+        replacement: AssignmentSnapshot | None,
+        *,
+        actor_account_id: int,
+    ) -> bool: ...
 
     async def assign_showcase(
         self,
@@ -144,6 +157,18 @@ class TagService:
         actor_account_id: int,
     ) -> TagDefinition:
         """Attach an approved showcase tag to a build submitted by the caller."""
+        definition, _, _ = await self.edit_showcase(build_id, tag_id, raw_value, actor_account_id=actor_account_id)
+        return definition
+
+    async def edit_showcase(
+        self,
+        build_id: int,
+        tag_id: int,
+        raw_value: str | None,
+        *,
+        actor_account_id: int,
+    ) -> tuple[TagDefinition, AssignmentSnapshot | None, AssignmentSnapshot]:
+        """Attach an approved showcase tag to a build submitted by the caller."""
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(actor=actor_account_id, operation="edit", source="showcase_assignment"),
@@ -158,6 +183,7 @@ class TagService:
                 msg = tr(t"tags-approved-user-showcase = An approved user showcase tag is required.")
                 raise ValidationError(msg)
             value = _coerce_assignment_value(definition, raw_value)
+            before = await uow.tags.assignment(build_id, tag_id)
             assigned = await uow.tags.assign_showcase(
                 build_id=build_id,
                 tag_id=tag_id,
@@ -167,8 +193,44 @@ class TagService:
             if not assigned:
                 msg = tr(t"tags-build-not-exist = The build does not exist or was not submitted by you.")
                 raise ValidationError(msg)
+            after = await uow.tags.assignment(build_id, tag_id)
+            assert after is not None
             await uow.commit()
-            return definition
+            return definition, before, after
+
+    async def replace_assignment(
+        self,
+        build_id: int,
+        tag_id: int,
+        expected: AssignmentSnapshot | None,
+        replacement: AssignmentSnapshot | None,
+        *,
+        actor_account_id: int,
+    ) -> bool:
+        """Reverse one assignment while rechecking ownership and publication status."""
+        async with (
+            self._uow_factory() as uow,
+            uow.builds.editing(actor=actor_account_id, operation="edit", source="showcase_history"),
+        ):
+            definition = await uow.tags.get(tag_id)
+            if (
+                definition is None
+                or definition.authority.value != "user"
+                or definition.semantic_kind.value != "showcase"
+                or definition.moderation_status is not TagModerationStatus.APPROVED
+            ):
+                return False
+            if replacement is not None and replacement.value_type != definition.value_type:
+                return False
+            changed = await uow.tags.replace_assignment(
+                build_id,
+                tag_id,
+                expected,
+                replacement,
+                actor_account_id=actor_account_id,
+            )
+            await uow.commit()
+            return changed
 
     async def _set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition:
         async with self._uow_factory() as uow:
