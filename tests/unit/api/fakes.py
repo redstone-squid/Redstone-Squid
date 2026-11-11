@@ -33,6 +33,7 @@ from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSes
 from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.cli_auth.models import CliDevice, CliDeviceEnrollment
 from squid.config import ApiProcessConfig
+from squid.core.actors import Actor
 from squid.core.errors import NotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.diagnostics.application import ErrorReportService
@@ -67,7 +68,6 @@ from squid.notifications.models import InboxNotification, NotificationSubscripti
 from squid.permissions.application import PermissionService, SubjectRecords
 from squid.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.permissions.domain import Pattern
-from squid.permissions.domain.resolution import Subject
 from squid.records.application import PublicRecordQueryService, RecordService
 from squid.records.application.models import PublicRecordDetail, PublishedTitle
 from squid.runtime import ApiServices, ApplicationRuntime
@@ -730,19 +730,19 @@ class MockSubmissionRevisions(RevisionProposalService):
         """Hold no repository; nothing here reaches one."""
 
     @override
-    async def list_for_source(self, source_message_id: int, actor: Subject) -> tuple[RevisionProposal, ...]:
+    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RevisionProposal, ...]:
         return ()
 
     @override
-    async def get(self, proposal_id: UUID, actor: Subject) -> RevisionProposal:
+    async def get(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
         raise NotFoundError
 
     @override
-    async def match(self, proposal_id: UUID, build_id: int, actor: Subject, *, renew: bool = False) -> RevisionProposal:
+    async def match(self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False) -> RevisionProposal:
         raise NotFoundError
 
     @override
-    async def approve(self, proposal_id: UUID, actor: Subject) -> RevisionProposal:
+    async def approve(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
         raise NotFoundError
 
 

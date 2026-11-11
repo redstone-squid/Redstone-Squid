@@ -11,16 +11,8 @@ from squid.accounts.application.edits import (
 from squid.accounts.domain import ProfileUpdate
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import AccountProfile
-from squid.edits.domain import (
-    EditActor,
-    EditAttempt,
-    EditCommand,
-    EditOutcome,
-    EditReceipt,
-    EditResult,
-    EditValues,
-    Revision,
-)
+from squid.core.actors import Actor
+from squid.edits.domain import EditAttempt, EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 
 
 class SnapshotAccountService(AccountService):
@@ -36,9 +28,7 @@ class AccountEditRecorder:
         self.accounts = accounts
         self.commands: list[EditCommand] = []
 
-    async def execute(
-        self, command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None
-    ) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
         self.commands.append(command)
         account_id = int(command.expected[0].target.key)
         values = command.values.unpack()
@@ -80,5 +70,5 @@ class AccountEditRecorder:
             receipt,
         )
 
-    async def reconcile(self, command: EditCommand, actor: EditActor, attempt: EditAttempt) -> EditResult | None:
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
         raise NotImplementedError

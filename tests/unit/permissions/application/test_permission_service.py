@@ -4,9 +4,10 @@ from collections.abc import Iterable
 
 import pytest
 
+from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
-from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Origin, Reason, Subject
+from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Origin, Reason
 from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 from tests.support.permissions import permission_uow_factory
 
@@ -62,7 +63,7 @@ async def test_a_builtin_role_uses_the_pattern_list_defined_in_code() -> None:
     permissions, _ = service(
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
     )
-    subject = Subject(account_id=7, guild_id=GUILD)
+    subject = Actor(account_id=7, guild_id=GUILD)
 
     assert await permissions.allows(subject, "build.submission.approve")
     assert not await permissions.allows(subject, "record.entry.rebuild")
@@ -90,7 +91,7 @@ async def test_stored_patterns_extend_a_builtin_rather_than_replacing_it() -> No
         roles=widened("guild-admin", "perm.audit.view"),
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["guild-admin"], subject_account_id=7),),
     )
-    subject = Subject(account_id=7, guild_id=GUILD)
+    subject = Actor(account_id=7, guild_id=GUILD)
 
     assert await permissions.allows(subject, "perm.audit.view")
     assert await permissions.allows(subject, "settings.server.edit")
@@ -102,7 +103,7 @@ async def test_a_stored_pattern_cannot_punch_through_a_builtins_exclude() -> Non
         roles=widened("global-admin", "bot.**", "record.entry.rebuild"),
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
     )
-    subject = Subject(account_id=7, guild_id=GUILD)
+    subject = Actor(account_id=7, guild_id=GUILD)
 
     assert not await permissions.allows(subject, "bot.tree.sync")
     assert not await permissions.allows(subject, "record.entry.rebuild")
@@ -112,7 +113,7 @@ async def test_a_role_assignment_to_a_discord_role_reaches_its_holders() -> None
     permissions, _ = service(
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_role_id=99, subject_guild_id=GUILD),),
     )
-    subject = Subject(account_id=7, discord_role_ids=frozenset({99}), guild_id=GUILD)
+    subject = Actor(account_id=7, discord_role_ids=frozenset({99}), guild_id=GUILD)
 
     assert await permissions.allows(subject, "vote.log_delete.cast")
 
@@ -120,14 +121,14 @@ async def test_a_role_assignment_to_a_discord_role_reaches_its_holders() -> None
 class TestGuildAdminBridge:
     async def test_manage_server_confers_the_guild_nodes(self) -> None:
         permissions, _ = service()
-        subject = Subject(account_id=7, guild_id=GUILD, discord_guild_admin=True)
+        subject = Actor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
 
         assert await permissions.allows(subject, "settings.server.edit")
         assert not await permissions.allows(subject, "build.submission.approve")
 
     async def test_it_is_absent_without_manage_server(self) -> None:
         permissions, _ = service()
-        subject = Subject(account_id=7, guild_id=GUILD)
+        subject = Actor(account_id=7, guild_id=GUILD)
 
         assert not await permissions.allows(subject, "settings.server.edit")
 
@@ -136,7 +137,7 @@ class TestGuildAdminBridge:
         permissions, _ = service(
             grants=(PermissionGrant(pattern="settings.server.edit", effect=int(Effect.DENY), subject_account_id=7),),
         )
-        subject = Subject(account_id=7, guild_id=GUILD, discord_guild_admin=True)
+        subject = Actor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
         decision = await permissions.check(subject, "settings.server.edit")
 
         assert not decision.allowed
@@ -146,7 +147,7 @@ class TestGuildAdminBridge:
     async def test_it_cannot_reach_a_global_node_even_if_widened(self) -> None:
         """Storage lets someone add a global pattern; resolution still refuses it."""
         permissions, _ = service(roles=widened("guild-admin", "build.**"))
-        subject = Subject(account_id=7, guild_id=GUILD, discord_guild_admin=True)
+        subject = Actor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
 
         assert not await permissions.allows(subject, "build.submission.approve")
 
@@ -155,7 +156,7 @@ class TestLoadCost:
     async def test_the_owner_short_circuits_without_touching_the_store(self) -> None:
         permissions, store = service()
 
-        assert await permissions.allows(Subject(account_id=1, is_bot_owner=True), "record.entry.rebuild")
+        assert await permissions.allows(Actor(account_id=1, is_bot_owner=True), "record.entry.rebuild")
         assert store.loads == 0
 
     async def test_resolving_many_nodes_costs_one_load(self) -> None:
@@ -164,7 +165,7 @@ class TestLoadCost:
             assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
         )
         held = await permissions.capabilities(
-            Subject(account_id=7, guild_id=GUILD),
+            Actor(account_id=7, guild_id=GUILD),
             ["build.submission.approve", "build.submission.reject", "tag.proposal.approve", "bot.tree.sync"],
         )
 
@@ -209,6 +210,12 @@ async def test_an_expired_assignment_stops_applying() -> None:
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_account_id=7, expires_at=expired),),
     )
 
-    decision = await permissions.check(Subject(account_id=7, guild_id=GUILD), "vote.log_delete.cast")
+    decision = await permissions.check(Actor(account_id=7, guild_id=GUILD), "vote.log_delete.cast")
 
     assert decision.reason is Reason.DEFAULT
+
+
+async def test_current_permission_rules_ignore_actor_capability_snapshots() -> None:
+    permissions, _ = service()
+    actor = Actor(account_id=7, capabilities=frozenset({"record.entry.rebuild"}), highest_permission_rank=999)
+    assert not await permissions.allows(actor, "record.entry.rebuild")

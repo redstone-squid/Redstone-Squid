@@ -5,7 +5,7 @@ from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.utils.permissions import subject_for_interaction
+from squid.bot.utils.permissions import actor_for_interaction
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
 from squid.submissions.application.revision_values import RevisionProposal
@@ -70,7 +70,7 @@ class RevisionProposalScreen(sd.Screen):
         return tuple(nodes)
 
     async def _match(self, event: sd.ChoiceEvent) -> None:
-        actor = await subject_for_interaction(event.context)
+        actor = await actor_for_interaction(event.context)
         try:
             self.proposal = await self.services.submission_revisions.match(
                 self.proposal.id, int(event.selected[0]), actor
@@ -80,14 +80,14 @@ class RevisionProposalScreen(sd.Screen):
 
     async def _approve(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
-        actor = await subject_for_interaction(event.context)
+        actor = await actor_for_interaction(event.context)
         try:
             self.proposal = await self.services.submission_revisions.approve(self.proposal.id, actor)
         except SquidError as error:
             self.notice = error.public_text()
 
     async def _renew(self, event: sd.PressEvent) -> None:
-        actor = await subject_for_interaction(event.context)
+        actor = await actor_for_interaction(event.context)
         if self.proposal.build_id is not None:
             self.proposal = await self.services.submission_revisions.match(
                 self.proposal.id, self.proposal.build_id, actor, renew=True
@@ -97,7 +97,7 @@ class RevisionProposalScreen(sd.Screen):
 
 async def proposal_screen(services: BotServices, proposal_id: UUID, request: sd.Request) -> RevisionProposalScreen:
     """Reload retained review state and current target choices after restart."""
-    actor = await subject_for_interaction(request)
+    actor = await actor_for_interaction(request)
     proposal = await services.submission_revisions.get(proposal_id, actor)
     targets = tuple(await services.builds.list_ids_for_source_message(proposal.source_message_id))
     return RevisionProposalScreen(services, proposal, targets)

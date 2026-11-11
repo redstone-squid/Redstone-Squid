@@ -4,9 +4,10 @@ from collections.abc import Iterable
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache, cache_key
 from squid.permissions.application.ports import SubjectRecords
-from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Pattern, Rule, Subject
+from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Pattern, Rule
 from squid.permissions.models import PermissionRole, PermissionRoleAssignment
 from tests.support.permissions import permission_uow_factory
 
@@ -51,7 +52,7 @@ def rule(pattern: str = "build.**") -> tuple[Rule, ...]:
 class TestSubjectRuleCache:
     def test_a_hit_returns_the_stored_rules(self) -> None:
         cache = SubjectRuleCache()
-        key = cache_key(Subject(account_id=7))
+        key = cache_key(Actor(account_id=7))
         cache.put(key, rule(), epoch=1)
 
         assert cache.get(key) == rule()
@@ -59,7 +60,7 @@ class TestSubjectRuleCache:
     def test_an_entry_read_before_a_write_is_discarded(self) -> None:
         """The stamp is the epoch the rules were *read* at, not the current one."""
         cache = SubjectRuleCache()
-        key = cache_key(Subject(account_id=7))
+        key = cache_key(Actor(account_id=7))
         cache.put(key, rule(), epoch=1)
         cache.observe_epoch(2)
 
@@ -68,7 +69,7 @@ class TestSubjectRuleCache:
     def test_the_wall_clock_backstop_expires_an_entry(self) -> None:
         """Expire cached rules even when no watcher reports an epoch change."""
         cache = SubjectRuleCache(max_age_seconds=30)
-        key = cache_key(Subject(account_id=7))
+        key = cache_key(Actor(account_id=7))
         stored_at = Instant.from_utc(2026, 1, 1)
         cache.put(key, rule(), epoch=1, now=stored_at)
 
@@ -85,8 +86,8 @@ class TestSubjectRuleCache:
     def test_a_newer_epoch_from_a_load_advances_the_cache(self) -> None:
         """A load that saw a write invalidates entries read before it, watcher or no watcher."""
         cache = SubjectRuleCache()
-        stale = cache_key(Subject(account_id=7))
-        fresh = cache_key(Subject(account_id=8))
+        stale = cache_key(Actor(account_id=7))
+        fresh = cache_key(Actor(account_id=8))
         cache.put(stale, rule(), epoch=1)
         cache.put(fresh, rule(), epoch=2)
 
@@ -95,7 +96,7 @@ class TestSubjectRuleCache:
 
     def test_the_least_recently_used_entry_is_evicted(self) -> None:
         cache = SubjectRuleCache(max_entries=2)
-        first, second, third = (cache_key(Subject(account_id=account)) for account in (1, 2, 3))
+        first, second, third = (cache_key(Actor(account_id=account)) for account in (1, 2, 3))
         cache.put(first, rule(), epoch=1)
         cache.put(second, rule(), epoch=1)
         cache.get(first)  # first is now the most recently used
@@ -107,8 +108,8 @@ class TestSubjectRuleCache:
 
     def test_the_manage_server_bridge_is_part_of_the_key(self) -> None:
         """Two subjects differing only in Manage Server do not share a rule set."""
-        assert cache_key(Subject(account_id=7, guild_id=GUILD)) != cache_key(
-            Subject(account_id=7, guild_id=GUILD, discord_guild_admin=True)
+        assert cache_key(Actor(account_id=7, guild_id=GUILD)) != cache_key(
+            Actor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
         )
 
 
@@ -116,7 +117,7 @@ class TestServiceCaching:
     async def test_a_second_check_reuses_the_loaded_rules(self) -> None:
         store = CountingStore()
         permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=SubjectRuleCache())
-        subject = Subject(account_id=7, guild_id=GUILD)
+        subject = Actor(account_id=7, guild_id=GUILD)
 
         assert await permissions.allows(subject, "vote.log_delete.cast")
         assert await permissions.allows(subject, "vote.weight.staff")
@@ -127,7 +128,7 @@ class TestServiceCaching:
         cache = SubjectRuleCache()
         permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=cache)
         watcher = PermissionEpochWatcher(cache, uow_factory=permission_uow_factory(store))
-        subject = Subject(account_id=7, guild_id=GUILD)
+        subject = Actor(account_id=7, guild_id=GUILD)
 
         await permissions.allows(subject, "vote.log_delete.cast")
         store.epoch_version = 2
@@ -142,7 +143,7 @@ class TestServiceCaching:
         cache = SubjectRuleCache()
         permissions = PermissionService(uow_factory=permission_uow_factory(store), cache=cache)
 
-        assert await permissions.allows(Subject(account_id=1, is_bot_owner=True), "bot.tree.sync")
+        assert await permissions.allows(Actor(account_id=1, is_bot_owner=True), "bot.tree.sync")
         assert store.loads == 0
         assert len(cache) == 0
 

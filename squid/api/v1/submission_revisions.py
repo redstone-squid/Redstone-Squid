@@ -69,7 +69,7 @@ async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) 
     caller.require_consented_account()
     return [
         RevisionProposalResponse.from_domain(item)
-        for item in await proposals.list_for_source(message_id, caller.permission_subject())
+        for item in await proposals.list_for_source(message_id, caller.to_actor())
     ]
 
 
@@ -77,7 +77,7 @@ async def history(message_id: int, caller: CurrentCaller, proposals: Proposals) 
 async def get_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: Proposals) -> RevisionProposalResponse:
     """Return a revision proposal after checking the caller's access."""
     caller.require_consented_account()
-    return RevisionProposalResponse.from_domain(await proposals.get(proposal_id, caller.permission_subject()))
+    return RevisionProposalResponse.from_domain(await proposals.get(proposal_id, caller.to_actor()))
 
 
 @router.post("/{proposal_id}/match", operation_id="submission_revision_match", openapi_extra=_WRITE)
@@ -90,7 +90,7 @@ async def match_proposal(
     """
     caller.require_consented_account()
     return RevisionProposalResponse.from_domain(
-        await proposals.match(proposal_id, payload.build_id, caller.permission_subject(), renew=payload.renew)
+        await proposals.match(proposal_id, payload.build_id, caller.to_actor(), renew=payload.renew)
     )
 
 
@@ -101,4 +101,4 @@ async def approve_proposal(proposal_id: UUID, caller: CurrentCaller, proposals: 
     An already applied proposal returns its existing approval result.
     """
     caller.require_consented_account()
-    return RevisionProposalResponse.from_domain(await proposals.approve(proposal_id, caller.permission_subject()))
+    return RevisionProposalResponse.from_domain(await proposals.approve(proposal_id, caller.to_actor()))

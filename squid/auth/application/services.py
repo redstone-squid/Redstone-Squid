@@ -11,10 +11,11 @@ from whenever import Instant
 from squid.auth.application.ports import ApiKeyUnitOfWork
 from squid.auth.domain import IssuedApiKey
 from squid.auth.models.entities import ApiKey
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.i18n import tr
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import CATALOGUE, Pattern, Subject
+from squid.permissions.domain import CATALOGUE, Pattern
 from squid.unit_of_work import UnitOfWorkFactory
 
 API_KEY_PREFIX = "sq"
@@ -113,7 +114,7 @@ class ApiKeyService:
         """
         if self._permissions is None or owner_account_id is None:
             return
-        subject = Subject(account_id=owner_account_id)
+        subject = Actor(account_id=owner_account_id)
         requested_nodes = frozenset(node for pattern in patterns for node in CATALOGUE.expand(pattern))
         held = await self._permissions.capabilities_in(uow, subject, requested_nodes)
         for pattern in patterns:

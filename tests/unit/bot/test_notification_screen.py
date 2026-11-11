@@ -9,8 +9,8 @@ from whenever import Instant
 
 import squid_ui as sl
 from squid.bot.notifications_view import NotificationScreen
+from squid.core.actors import Actor
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
-from squid.edits.domain import EditActor
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
@@ -22,7 +22,6 @@ from squid.notifications import (
 from squid.notifications.application import NotificationEditorSnapshot
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
-from squid.permissions.domain import Subject
 from squid_ui.testing import RecordingResponder, choose, labels, press, render_tree, submit
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import stage
@@ -131,8 +130,8 @@ def make_screen(
 ) -> ScreenHarness:
     notifications = NotificationRecorder()
 
-    async def actor() -> EditActor:
-        return EditActor(Subject(account_id=7), discord_user_id=42)
+    async def actor() -> Actor:
+        return Actor(account_id=7, discord_user_id=42)
 
     return ScreenHarness(
         NotificationScreen(

@@ -8,9 +8,9 @@ import pytest
 
 from squid.accounts.domain import IdentityProvider
 from squid.bot.admin import Admin
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.domain import EditValues, Revision
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
 from squid.settings.application.edits import RUNTIME_TARGET
 
@@ -32,7 +32,7 @@ async def test_runtime_edit_uses_internal_account_or_refuses_unlinked_owner(
             )
         )
     )
-    monkeypatch.setattr("squid.bot.admin.subject_for_interaction", AsyncMock(return_value=Subject(account_id=17)))
+    monkeypatch.setattr("squid.bot.admin.actor_for_interaction", AsyncMock(return_value=Actor(account_id=17)))
     settings = SimpleNamespace()
     owner = SimpleNamespace(
         bot=SimpleNamespace(services=SimpleNamespace(accounts=accounts, settings=settings, edits=edits))
@@ -48,7 +48,7 @@ async def test_runtime_edit_uses_internal_account_or_refuses_unlinked_owner(
         command, actor = edits.execute.call_args.args
         assert command.values.unpack() == {"welcome_forward_chance": 0.25}
         assert command.expected == (Revision(RUNTIME_TARGET, 1),)
-        assert actor.subject.account_id == 17
+        assert actor.account_id == 17
     else:
         edits.execute.assert_not_awaited()
 

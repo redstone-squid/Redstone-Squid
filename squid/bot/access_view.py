@@ -7,10 +7,10 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
+from squid.core.actors import Actor
 from squid.permissions.application.administration import (
     EXCLUDE_MODE,
     INCLUDE_MODE,
-    Actor,
     PermissionAdministrationService,
     effect_label,
     scope_label,

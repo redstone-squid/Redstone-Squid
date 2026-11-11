@@ -6,6 +6,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.submissions.application import (
@@ -685,12 +686,12 @@ async def test_manifest_upgrade_rejects_an_unretained_source_without_touching_th
 
 
 async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> None:
-    from squid.permissions.domain import PermissionNode, Subject
+    from squid.permissions.domain import PermissionNode
 
     class Permissions:
         allowed = True
 
-        async def allows_in(self, uow: PermissionUnitOfWork, subject: Subject, node: PermissionNode) -> bool:
+        async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool:
             return subject.account_id == 8 and self.allowed
 
     permissions = Permissions()
@@ -709,16 +710,16 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
         locale="en",
         draft_id=DRAFT_ID,
     )
-    corrected = await service.apply_change(DRAFT_ID, Subject(account_id=8), _change(), locale="en")
+    corrected = await service.apply_change(DRAFT_ID, Actor(account_id=8), _change(), locale="en")
     assert corrected.draft.snapshot.owner_account_id == 7
     assert repository.actors == [8]
     with pytest.raises(DraftAccessDeniedError):
         await service.get_owned(DRAFT_ID, 8)
     permissions.allowed = False
     with pytest.raises(DraftAccessDeniedError):
-        await service.get_accessible(DRAFT_ID, Subject(account_id=8))
+        await service.get_accessible(DRAFT_ID, Actor(account_id=8))
     with pytest.raises(DraftAccessDeniedError):
-        await service.apply_change(DRAFT_ID, Subject(account_id=8), _change(base_revision=1), locale="en")
+        await service.apply_change(DRAFT_ID, Actor(account_id=8), _change(base_revision=1), locale="en")
     with pytest.raises(DraftAccessDeniedError):
-        await service.attention_inbox(Subject(account_id=8))
+        await service.attention_inbox(Actor(account_id=8))
     assert repository.actors == [8]

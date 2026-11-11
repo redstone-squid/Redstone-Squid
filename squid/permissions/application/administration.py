@@ -15,21 +15,16 @@ cannot silently change which permission rule wins.
 """
 
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.core.i18n import tr
 from squid.permissions.application.ports import AuditEntry, PermissionAdminUnitOfWork
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import (
-    CATALOGUE,
-    BuiltinRoleKeys,
-    Catalogue,
-    Effect,
-    Pattern,
-    Subject,
-)
+from squid.permissions.domain import CATALOGUE, BuiltinRoleKeys, Catalogue, Effect, Pattern
 from squid.permissions.domain.catalogue import (
     PERM_GRANT_GLOBAL,
     PERM_GRANT_GUILD,
@@ -64,22 +59,6 @@ class ProtectedRoleError(AuthorizationError):
     default_title = tr(t"permissions-built-role = Built-in role")
 
 
-class Actor:
-    """Who is performing an administrative action, and what they may do.
-
-    Built once per command so the authorization checks share one permission load.
-    """
-
-    def __init__(self, subject: Subject, *, held: frozenset[str], highest_rank: int) -> None:
-        self.subject = subject
-        self.held = held
-        self.highest_rank = highest_rank
-
-    @property
-    def is_owner(self) -> bool:
-        return self.subject.is_bot_owner
-
-
 class PermissionAdministrationService:
     """Validate administrative changes and commit them with their audit entries.
 
@@ -98,7 +77,7 @@ class PermissionAdministrationService:
         self._permissions = permissions
         self._catalogue = catalogue
 
-    async def actor(self, subject: Subject) -> Actor:
+    async def resolve_actor(self, subject: Actor) -> Actor:
         """Resolve the caller's capabilities and highest role rank in one transaction."""
         async with self._uow_factory() as uow:
             held = (
@@ -106,9 +85,9 @@ class PermissionAdministrationService:
                 if subject.is_bot_owner
                 else await self._permissions.capabilities_in(uow, subject, self._catalogue)
             )
-            return Actor(subject, held=held, highest_rank=await self._highest_rank(uow, subject))
+            return replace(subject, capabilities=held, highest_permission_rank=await self._highest_rank(uow, subject))
 
-    async def _highest_rank(self, uow: PermissionAdminUnitOfWork, subject: Subject) -> int:
+    async def _highest_rank(self, uow: PermissionAdminUnitOfWork, subject: Actor) -> int:
         if subject.is_bot_owner:
             return MAX_ROLE_RANK + 1
         roles = {role.id: role for role in await uow.permission_admin.list_roles()}
@@ -141,22 +120,22 @@ class PermissionAdministrationService:
 
     def _require_authority(self, actor: Actor, patterns: Iterable[str]) -> None:
         """Reject patterns selecting any current node the actor does not hold."""
-        if actor.is_owner:
+        if actor.is_bot_owner:
             return
         for pattern in patterns:
             reached = self._reached(pattern)
-            if missing := sorted(reached - actor.held):
+            if missing := sorted(reached - actor.capabilities):
                 msg = f"{missing[0]} is outside your authority; you cannot grant what you do not hold."
                 raise PermissionAuthorityError(msg, public_context={"node": missing[0], "pattern": pattern})
 
     def _require_rank(self, actor: Actor, role: PermissionRole) -> None:
         """Refuse managing a role at or above the actor's own highest rank."""
-        if actor.is_owner:
+        if actor.is_bot_owner:
             return
-        if role.rank >= actor.highest_rank:
+        if role.rank >= actor.require_permission_rank():
             msg = (
                 f"{role.slug} (rank {role.rank}) is at or above your highest role "
-                f"(rank {actor.highest_rank}); you cannot manage it."
+                f"(rank {actor.require_permission_rank()}); you cannot manage it."
             )
             raise PermissionRankError(msg, public_context={"role": role.slug, "rank": role.rank})
 
@@ -166,7 +145,7 @@ class PermissionAdministrationService:
         Holding a role's capabilities and outranking it does not authorize changing
         that shared built-in definition.
         """
-        if role.protected and not actor.is_owner:
+        if role.protected and not actor.is_bot_owner:
             msg = f"{role.slug} is a built-in role; only the bot owner can restructure it."
             raise ProtectedRoleError(msg, public_context={"role": role.slug})
 
@@ -176,12 +155,12 @@ class PermissionAdministrationService:
         Global granters and the owner bypass this delegation restriction. The resolver
         also prevents guild-scoped grants from satisfying global nodes.
         """
-        if actor.is_owner or PERM_GRANT_GLOBAL.name in actor.held:
+        if actor.is_bot_owner or PERM_GRANT_GLOBAL.name in actor.capabilities:
             return
-        if PERM_GRANT_GUILD.name not in actor.held:
+        if PERM_GRANT_GUILD.name not in actor.capabilities:
             msg = "You cannot grant permissions."
             raise PermissionAuthorityError(msg)
-        if scope_guild_id is None or scope_guild_id != actor.subject.guild_id:
+        if scope_guild_id is None or scope_guild_id != actor.guild_id:
             msg = "You may only grant permissions scoped to this server."
             raise PermissionAuthorityError(msg, public_context={"scope_guild_id": scope_guild_id})
         if not self._permissions.is_delegable_by_guild_admin(pattern):
@@ -200,7 +179,7 @@ class PermissionAdministrationService:
 
     def _require_role_management(self, actor: Actor, role: PermissionRole) -> None:
         node = ROLE_DEFINITION_MANAGE if role.guild_id is None else ROLE_DEFINITION_MANAGE_GUILD
-        if not actor.is_owner and node.name not in actor.held:
+        if not actor.is_bot_owner and node.name not in actor.capabilities:
             msg = f"You need {node.name} to manage this role."
             raise PermissionAuthorityError(msg, public_context={"node": node.name})
         self._require_unprotected(actor, role)
@@ -237,7 +216,7 @@ class PermissionAdministrationService:
             self._reached(pattern)
             if effect is Effect.FORBID:
                 # Absolute and short-circuiting, so it is owner-only and must say why.
-                if not actor.is_owner:
+                if not actor.is_bot_owner:
                     msg = "Only the bot owner can forbid a permission."
                     raise PermissionAuthorityError(msg)
                 if not reason:
@@ -261,11 +240,11 @@ class PermissionAdministrationService:
                 subject_guild_id=guild_id if discord_role_id is not None else None,
                 scope_guild_id=scope_guild_id,
                 expires_at=expires_at,
-                granted_by_account_id=actor.subject.account_id,
+                granted_by_account_id=actor.account_id,
                 reason=reason,
                 audit=AuditEntry(
                     action="grant",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     subject_kind="account" if account_id is not None else "discord_role",
                     subject_id=account_id if account_id is not None else discord_role_id,
                     subject_guild_id=guild_id,
@@ -304,7 +283,7 @@ class PermissionAdministrationService:
                 scope_guild_id=scope_guild_id,
                 audit=AuditEntry(
                     action="revoke",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     subject_kind="account" if account_id is not None else "discord_role",
                     subject_id=account_id if account_id is not None else discord_role_id,
                     pattern=pattern,
@@ -411,11 +390,11 @@ class PermissionAdministrationService:
                 msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
                 raise ValidationError(msg, public_context={"field": "rank"})
             node = ROLE_DEFINITION_MANAGE if guild_id is None else ROLE_DEFINITION_MANAGE_GUILD
-            if not actor.is_owner and node.name not in actor.held:
+            if not actor.is_bot_owner and node.name not in actor.capabilities:
                 msg = f"You need {node.name} to create this role."
                 raise PermissionAuthorityError(msg, public_context={"node": node.name})
-            if not actor.is_owner and rank >= actor.highest_rank:
-                msg = f"You cannot create a role at rank {rank}; your own highest is {actor.highest_rank}."
+            if not actor.is_bot_owner and rank >= actor.require_permission_rank():
+                msg = f"You cannot create a role at rank {rank}; your own highest is {actor.require_permission_rank()}."
                 raise PermissionRankError(msg, public_context={"rank": rank})
             if await uow.permission_admin.get_role(slug, guild_id=guild_id) is not None:
                 msg = f"A role named {slug!r} already exists here."
@@ -426,10 +405,10 @@ class PermissionAdministrationService:
                 description=description,
                 guild_id=guild_id,
                 rank=rank,
-                created_by_account_id=actor.subject.account_id,
+                created_by_account_id=actor.account_id,
                 audit=AuditEntry(
                     action="role_create",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     subject_guild_id=guild_id,
                     reason=description,
                     details={"slug": slug, "rank": rank},
@@ -445,7 +424,7 @@ class PermissionAdministrationService:
                 role.id,
                 audit=AuditEntry(
                     action="role_delete",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     role_id=role.id,
                     subject_guild_id=role.guild_id,
                     details={"slug": role.slug},
@@ -460,15 +439,15 @@ class PermissionAdministrationService:
                 msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
                 raise ValidationError(msg, public_context={"field": "rank"})
             self._require_role_management(actor, role)
-            if not actor.is_owner and rank >= actor.highest_rank:
-                msg = f"You cannot set a rank at or above your own highest ({actor.highest_rank})."
+            if not actor.is_bot_owner and rank >= actor.require_permission_rank():
+                msg = f"You cannot set a rank at or above your own highest ({actor.require_permission_rank()})."
                 raise PermissionRankError(msg, public_context={"rank": rank})
             await uow.permission_admin.set_role_rank(
                 role.id,
                 rank,
                 audit=AuditEntry(
                     action="role_rank",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     role_id=role.id,
                     details={"slug": role.slug, "rank": rank},
                 ),
@@ -494,10 +473,10 @@ class PermissionAdministrationService:
                 role.id,
                 pattern,
                 mode,
-                added_by_account_id=actor.subject.account_id,
+                added_by_account_id=actor.account_id,
                 audit=AuditEntry(
                     action="role_include" if mode == INCLUDE_MODE else "role_exclude",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     role_id=role.id,
                     pattern=pattern,
                     details={"slug": role.slug},
@@ -513,7 +492,7 @@ class PermissionAdministrationService:
                 pattern,
                 audit=AuditEntry(
                     action="role_pattern_remove",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     role_id=role.id,
                     pattern=pattern,
                     details={"slug": role.slug},
@@ -546,10 +525,10 @@ class PermissionAdministrationService:
             await uow.permission_admin.add_role_include(
                 role.id,
                 included.id,
-                added_by_account_id=actor.subject.account_id,
+                added_by_account_id=actor.account_id,
                 audit=AuditEntry(
                     action="role_compose",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     role_id=role.id,
                     details={"slug": role.slug, "included": included.slug},
                 ),
@@ -579,7 +558,7 @@ class PermissionAdministrationService:
                 included.id,
                 audit=AuditEntry(
                     action="role_decompose",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     role_id=role.id,
                     details={"slug": role.slug, "included": included.slug},
                 ),
@@ -619,11 +598,11 @@ class PermissionAdministrationService:
                 subject_guild_id=guild_id if discord_role_id is not None else None,
                 scope_guild_id=scope_guild_id,
                 expires_at=expires_at,
-                granted_by_account_id=actor.subject.account_id,
+                granted_by_account_id=actor.account_id,
                 reason=reason,
                 audit=AuditEntry(
                     action="role_assign",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     subject_kind="account" if account_id is not None else "discord_role",
                     subject_id=account_id if account_id is not None else discord_role_id,
                     subject_guild_id=guild_id,
@@ -659,7 +638,7 @@ class PermissionAdministrationService:
                 scope_guild_id=scope_guild_id,
                 audit=AuditEntry(
                     action="role_unassign",
-                    actor_account_id=actor.subject.account_id,
+                    actor_account_id=actor.account_id,
                     subject_kind="account" if account_id is not None else "discord_role",
                     subject_id=account_id if account_id is not None else discord_role_id,
                     role_id=role.id,
@@ -674,9 +653,9 @@ class PermissionAdministrationService:
         self, actor: Actor, role: PermissionRole, roles: Sequence[PermissionRole]
     ) -> tuple[str, ...]:
         """Return role capabilities the actor cannot grant, for administrative displays."""
-        if actor.is_owner:
+        if actor.is_bot_owner:
             return ()
-        return tuple(sorted(frozenset(self.resolved_leaves(role, roles)) - actor.held))
+        return tuple(sorted(frozenset(self.resolved_leaves(role, roles)) - actor.capabilities))
 
 
 def _is_live(expires_at: Instant | None, now: Instant) -> bool:

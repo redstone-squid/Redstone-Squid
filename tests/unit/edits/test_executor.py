@@ -9,10 +9,10 @@ import pytest
 from pydantic import JsonValue
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ValidationError
 from squid.edits.application import EditExecutor, FieldEditHandler
 from squid.edits.domain import (
-    EditActor,
     EditAttempt,
     EditCommand,
     EditCommitUncertainError,
@@ -25,12 +25,11 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.permissions.domain import Subject
 from squid.persistence.revisions import require_revision
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 TARGET = EditTarget("example", "1")
-ACTOR = EditActor(Subject(account_id=7))
+ACTOR = Actor(account_id=7)
 
 
 @dataclass
@@ -63,7 +62,7 @@ class Handler(FieldEditHandler[Work]):
         require_revision(command.expected[0], uow.state.revision)
         return uow.state.values
 
-    async def validate(self, uow: Work, actor: Subject, command: EditCommand, values: EditValues) -> EditValues:
+    async def validate(self, uow: Work, actor: Actor, command: EditCommand, values: EditValues) -> EditValues:
         if not uow.state.allowed or actor.account_id != 7:
             raise AuthorizationError
         data = values.unpack()
@@ -71,7 +70,7 @@ class Handler(FieldEditHandler[Work]):
         return EditValues.of(data)
 
     async def apply(
-        self, uow: Work, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: Work, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         uow.state.values = prepared.after
         uow.state.revision += 1
@@ -153,7 +152,7 @@ async def test_operation_reuse_and_expired_attempts_cannot_write() -> None:
     with pytest.raises(OperationReuseError):
         await executor.execute(replace(edit, values=EditValues.of({"name": "Other"})), ACTOR)
     with pytest.raises(OperationReuseError):
-        await executor.execute(edit, EditActor(Subject(account_id=8)))
+        await executor.execute(edit, Actor(account_id=8))
     expired = replace(command(revision=2), issued_at=Instant.now().subtract(hours=25))
     with pytest.raises(EditExpiredError):
         await executor.execute(expired, ACTOR)

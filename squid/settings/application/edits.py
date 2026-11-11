@@ -2,12 +2,12 @@
 
 from typing import Protocol
 
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditUnitOfWork, FieldEditHandler
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
 from squid.persistence.revisions import require_revision
 from squid.settings.application.ports import GuildSettingsUnitOfWork, SettingsStore
@@ -49,7 +49,7 @@ class RuntimeSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
     async def validate(
         self,
         uow: SettingsEditUnitOfWork,
-        actor: Subject,
+        actor: Actor,
         command: EditCommand,
         values: EditValues,
     ) -> EditValues:
@@ -60,7 +60,7 @@ class RuntimeSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
     async def apply(
         self,
         uow: SettingsEditUnitOfWork,
-        actor: Subject,
+        actor: Actor,
         command: EditCommand,
         prepared: PreparedEdit,
     ) -> tuple[Revision, ...]:
@@ -114,7 +114,7 @@ class GuildSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
         return EditValues.of(value.model_dump(mode="json"))
 
     async def validate(
-        self, uow: SettingsEditUnitOfWork, actor: Subject, command: EditCommand, values: EditValues
+        self, uow: SettingsEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
     ) -> EditValues:
         guild_id = self.guild_id(command)
         if actor.guild_id != guild_id:
@@ -145,7 +145,7 @@ class GuildSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
         return EditValues.of(after.model_dump(mode="json"))
 
     async def apply(
-        self, uow: SettingsEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: SettingsEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         guild_id = self.guild_id(command)
         row = await uow.settings.get_or_create_for_update(guild_id)

@@ -5,15 +5,16 @@ from functools import partial
 import pytest
 
 from squid.bot.edit_controller import EditController
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditActor, RevisionConflictError
+from squid.edits.domain import RevisionConflictError
 from squid_ui.runtime import HistoryResultStatus
 from tests.support.unit_of_work import CommittedState
 from tests.unit.edits.test_executor import ACTOR, TARGET, Handler, Store, Work, command
 
 
-async def actor() -> EditActor:
+async def actor() -> Actor:
     return ACTOR
 
 

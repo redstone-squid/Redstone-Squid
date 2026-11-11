@@ -17,9 +17,9 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
     AccountIdCache,
     PermissionNodeRequired,
+    actor_for,
     current_edit_actor,
     requires,
-    subject_for,
 )
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords
@@ -100,7 +100,7 @@ class ContextRecord:
 def _member(user_id: int, guild: Guild, **permissions: bool) -> discord.Member:
     """A stand-in that passes `isinstance(..., discord.Member)`.
 
-    Subject building keys off that check to decide whether there are roles and a
+    Actor building keys off that check to decide whether there are roles and a
     guild to consider, so a plain namespace would silently produce an empty
     subject and prove nothing.
     """
@@ -195,8 +195,8 @@ class TestSubject:
         bot, guild = _bot(member_id=8)
         context = _context(bot, guild, _member(8, guild))
 
-        first = await subject_for(context)
-        second = await subject_for(context)
+        first = await actor_for(context)
+        second = await actor_for(context)
 
         assert first is second
         assert cast(FakeAccountService, bot.services.accounts).lookups == 1
@@ -206,7 +206,7 @@ class TestSubject:
         author = _member(9, guild, manage_guild=True)
         context = _context(bot, guild, author)
 
-        subject = await subject_for(context)
+        subject = await actor_for(context)
 
         assert subject.discord_guild_admin is True
         assert subject.guild_id == 100
@@ -248,8 +248,8 @@ async def test_editor_actor_refreshes_discord_roles_and_bypasses_identity_cache(
     await bot.account_ids.resolve(bot.services.accounts, 8)
     first = await current_edit_actor(request)
     second = await current_edit_actor(request)
-    assert first.subject.discord_role_ids == frozenset()
-    assert not first.subject.discord_guild_admin
-    assert second.subject.account_id == 8
+    assert first.discord_role_ids == frozenset()
+    assert not first.discord_guild_admin
+    assert second.account_id == 8
     assert live_guild.fetch_member.await_count == 2
     assert cast(FakeAccountService, bot.services.accounts).lookups == 3

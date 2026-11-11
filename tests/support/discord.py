@@ -13,9 +13,10 @@ from squid.accounts.application import AccountService
 from squid.bot.errors import UI_ERRORS
 from squid.bot.i18n import localization_resolver
 from squid.bot.ui import HOST_DEFAULTS
+from squid.core.actors import Actor
 from squid.diagnostics.application import ErrorReportService
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
+from squid.permissions.domain import Decision, PermissionNode, Reason
 from squid.runtime import BotServices
 from squid.suggestions.application import SuggestionService
 from squid_reactivity import LocalTopicBus
@@ -168,14 +169,14 @@ class _AutocompletePermissions(PermissionService):
         self.allowed_nodes = allowed_nodes
 
     @override
-    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         del subject
         return str(getattr(node, "name", node)) in self.allowed_nodes
 
     @override
     async def decisions(
         self,
-        subject: Subject,
+        subject: Actor,
         nodes: Iterable[PermissionNode | str],
     ) -> tuple[Decision, ...]:
         del subject

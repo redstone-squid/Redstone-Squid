@@ -40,7 +40,7 @@ from squid.api.v1.schemas.me import (
 )
 from squid.builds.domain import Status
 from squid.core.errors import AuthenticationError
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
@@ -139,7 +139,7 @@ async def update_profile(
             ProfileValues.patch(body.to_domain()),
             operation_id=operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     snapshot = await accounts.editor_snapshot(caller.account_id)
     response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
@@ -192,7 +192,7 @@ async def set_identity_visibility(
             EditValues.of({"identity_id": identity_id, "is_public": body.public}),
             operation_id=operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     snapshot = await accounts.editor_snapshot(caller.account_id)
     response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
@@ -235,7 +235,7 @@ async def unlink_identity(
             EditValues.of({"identity_id": identity_id}),
             operation_id=operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     return Response(status_code=204, headers={"ETag": revision_etag(result.outcome.revisions[0])})
 

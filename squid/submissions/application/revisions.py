@@ -12,9 +12,9 @@ from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildDraft
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.models import Build
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal, revision_values
 from squid.unit_of_work import UnitOfWorkFactory
@@ -58,7 +58,7 @@ class RevisionProposalService:
         run_id: UUID,
         index: int,
         owner_account_id: int,
-        actor: Subject,
+        actor: Actor,
         source_message_id: int,
         candidate: BuildDraft,
     ) -> RevisionProposal:
@@ -86,7 +86,7 @@ class RevisionProposalService:
             await uow.commit()
             return result
 
-    async def get(self, proposal_id: UUID, actor: Subject) -> RevisionProposal:
+    async def get(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
         """Read a retained proposal under current owner or staff authority."""
         async with self._uow_factory() as uow:
             proposal = await uow.revision_proposals.get(proposal_id)
@@ -95,7 +95,7 @@ class RevisionProposalService:
             await self._require_read_access(uow, (proposal,), actor)
             return proposal
 
-    async def list_for_source(self, source_message_id: int, actor: Subject) -> tuple[RevisionProposal, ...]:
+    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RevisionProposal, ...]:
         """Return a bounded history with the same visibility policy as individual reads."""
         async with self._uow_factory() as uow:
             rows = await uow.revision_proposals.list_for_source(source_message_id, limit=20)
@@ -103,7 +103,7 @@ class RevisionProposalService:
             return rows
 
     async def _require_read_access(
-        self, uow: RevisionUnitOfWork, proposals: Sequence[RevisionProposal], actor: Subject
+        self, uow: RevisionUnitOfWork, proposals: Sequence[RevisionProposal], actor: Actor
     ) -> None:
         if any(
             actor.account_id not in {proposal.owner_account_id, proposal.requested_by_account_id}
@@ -111,7 +111,7 @@ class RevisionProposalService:
         ) and not await self._permissions.allows_in(uow, actor, BUILD_SUBMISSION_EDIT):
             raise AuthorizationError
 
-    async def match(self, proposal_id: UUID, build_id: int, actor: Subject, *, renew: bool = False) -> RevisionProposal:
+    async def match(self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False) -> RevisionProposal:
         """Capture a fresh diff; renewed review creates a new immutable proposal identity."""
         proposal = await self.get(proposal_id, actor)
         self._require_pending(proposal)
@@ -140,7 +140,7 @@ class RevisionProposalService:
             await uow.commit()
             return result
 
-    async def approve(self, proposal_id: UUID, actor: Subject) -> RevisionProposal:
+    async def approve(self, proposal_id: UUID, actor: Actor) -> RevisionProposal:
         """Apply the reviewed changes after rechecking access and the build revision.
 
         An already applied proposal returns its receipt. A changed build or newly

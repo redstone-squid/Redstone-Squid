@@ -81,7 +81,7 @@ async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
     assert response.id == 42
     assert http_response.headers["etag"] == '"build-42-r2"'
     command = builds.runner.commands[0]
-    assert builds.runner.actors[0].subject == ACCOUNT.permission_subject()
+    assert builds.runner.actors[0] == ACCOUNT.to_actor()
     assert command.expected[0].target.key == "42"
     assert command.values.unpack() == {"extra_user_info": "changed"}
     assert command.expected[0].value == 1

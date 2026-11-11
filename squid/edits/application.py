@@ -9,10 +9,10 @@ from anyio import CancelScope
 from pydantic import ValidationError as SchemaValidationError
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import ConflictError, ValidationError
 from squid.core.i18n import tr
 from squid.edits.domain import (
-    EditActor,
     EditAttempt,
     EditCommand,
     EditCommitUncertainError,
@@ -25,7 +25,6 @@ from squid.edits.domain import (
     PreparedEdit,
     Revision,
 )
-from squid.permissions.domain import Subject
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
@@ -33,10 +32,10 @@ logger = logging.getLogger(__name__)
 
 class EditRunner(Protocol):
     async def execute(
-        self, command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None
+        self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None
     ) -> EditResult: ...
 
-    async def reconcile(self, command: EditCommand, actor: EditActor, attempt: EditAttempt) -> EditResult | None: ...
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None: ...
 
 
 class EditStore(Protocol):
@@ -63,12 +62,12 @@ class EditHandler[UowT: EditUnitOfWork](Protocol):
     normalized values actually written, rather than the user's unvalidated input.
     """
 
-    async def prepare(self, uow: UowT, actor: Subject, command: EditCommand) -> PreparedEdit: ...
+    async def prepare(self, uow: UowT, actor: Actor, command: EditCommand) -> PreparedEdit: ...
 
     async def apply(
         self,
         uow: UowT,
-        actor: Subject,
+        actor: Actor,
         command: EditCommand,
         prepared: PreparedEdit,
     ) -> tuple[Revision, ...]: ...
@@ -90,13 +89,13 @@ class FieldEditHandler[UowT: EditUnitOfWork]:
     async def validate(
         self,
         uow: UowT,
-        actor: Subject,
+        actor: Actor,
         command: EditCommand,
         values: EditValues,
     ) -> EditValues:
         raise NotImplementedError
 
-    async def prepare(self, uow: UowT, actor: Subject, command: EditCommand) -> PreparedEdit:
+    async def prepare(self, uow: UowT, actor: Actor, command: EditCommand) -> PreparedEdit:
         changes = command.values.unpack()
         if not changes.keys() <= self.fields:
             raise ValidationError(tr(t"edits-fields-not-editable = This edit contains fields that cannot be changed."))
@@ -112,7 +111,7 @@ class FieldEditHandler[UowT: EditUnitOfWork]:
     async def apply(
         self,
         uow: UowT,
-        actor: Subject,
+        actor: Actor,
         command: EditCommand,
         prepared: PreparedEdit,
     ) -> tuple[Revision, ...]:
@@ -129,7 +128,7 @@ class EditExecutor[UowT: EditUnitOfWork]:
     async def execute(
         self,
         command: EditCommand,
-        actor: EditActor,
+        actor: Actor,
         *,
         attempt: EditAttempt | None = None,
     ) -> EditResult:
@@ -146,7 +145,7 @@ class EditExecutor[UowT: EditUnitOfWork]:
         return confirmed
 
     async def _execute_in(
-        self, uow: UowT, command: EditCommand, actor: EditActor, attempt: EditAttempt | None
+        self, uow: UowT, command: EditCommand, actor: Actor, attempt: EditAttempt | None
     ) -> EditResult:
         actor_key = actor.key
         handler = self._handlers[command.kind]
@@ -158,12 +157,10 @@ class EditExecutor[UowT: EditUnitOfWork]:
             return EditResult(existing, receipt, replayed=True)
         self._check_deadline(command)
         try:
-            prepared = await handler.prepare(uow, actor.subject, command)
+            prepared = await handler.prepare(uow, actor, command)
         except SchemaValidationError as error:
             raise ValidationError(str(error)) from error
-        versions = (
-            (await handler.apply(uow, actor.subject, command, prepared)) if prepared.changed else command.expected
-        )
+        versions = (await handler.apply(uow, actor, command, prepared)) if prepared.changed else command.expected
         if len(versions) != len(command.expected) or {v.target for v in versions} != {
             v.target for v in command.expected
         }:
@@ -195,7 +192,7 @@ class EditExecutor[UowT: EditUnitOfWork]:
             raise EditCommitUncertainError(command.operation_id) from error
         return EditResult(outcome, receipt)
 
-    async def reconcile(self, command: EditCommand, actor: EditActor, attempt: EditAttempt) -> EditResult | None:
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
         """Return the confirmed result, or None only after proving the original transaction ended without it."""
         async with self._factory() as uow:
             await uow.edits.lock_operation(command.operation_id)

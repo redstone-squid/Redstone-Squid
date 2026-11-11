@@ -7,11 +7,12 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.messages.domain import MessageSnapshot
 from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.submissions.application.forms import FormManifestRegistry
 from squid.submissions.domain import (
@@ -40,7 +41,7 @@ DEFAULT_DRAFT_RETENTION_DAYS = 7
 DEFAULT_ACCOUNT_DRAFT_CAPACITY = 10
 DEFAULT_INFERRED_DRAFT_CAPACITY = 1_000
 
-type DraftActor = int | Subject
+type DraftActor = int | Actor
 
 
 def draft_actor_id(actor: DraftActor) -> int:
@@ -54,7 +55,7 @@ def draft_actor_id(actor: DraftActor) -> int:
 class DraftPermissions(Protocol):
     """Live permission checks used for staff correction of account-owned drafts."""
 
-    async def allows_in(self, uow: PermissionUnitOfWork, subject: Subject, node: PermissionNode) -> bool: ...
+    async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,7 +345,7 @@ class SubmissionDraftService:
         """Page correction work by stable ID after checking current staff permission."""
         async with self._uow_factory() as uow:
             draft_actor_id(actor)
-            subject = Subject(account_id=actor) if isinstance(actor, int) else actor
+            subject = Actor(account_id=actor) if isinstance(actor, int) else actor
             if self._permissions is None or not await self._permissions.allows_in(uow, subject, BUILD_SUBMISSION_EDIT):
                 raise DraftAccessDeniedError
             if not 1 <= limit <= 100:
@@ -370,7 +371,7 @@ class SubmissionDraftService:
             raise DraftNotFoundError(draft_id)
         account_id = draft_actor_id(actor)
         if draft.snapshot.owner_account_id != account_id:
-            subject = Subject(account_id=actor) if isinstance(actor, int) else actor
+            subject = Actor(account_id=actor) if isinstance(actor, int) else actor
             if self._permissions is None or not await self._permissions.allows_in(uow, subject, BUILD_SUBMISSION_EDIT):
                 raise DraftAccessDeniedError
         if draft.snapshot.status is DraftStatus.EXPIRED or (

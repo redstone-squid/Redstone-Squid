@@ -11,7 +11,7 @@ from squid.bot.routes._root import _feature_group
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import drafts, inference, opening, revisions
 from squid.bot.ui import text_node
-from squid.bot.utils.permissions import subject_for_interaction
+from squid.bot.utils.permissions import actor_for_interaction
 from squid.core.i18n import tr
 
 if TYPE_CHECKING:
@@ -82,7 +82,7 @@ async def reopen_inference(interaction: Interaction[RedstoneSquid], run_id: str)
     request = await sd.request(interaction)
     if await ensure_consented_account(request, interaction.client.services.accounts) is None:
         return
-    actor = await subject_for_interaction(request)
+    actor = await actor_for_interaction(request)
     candidates = await interaction.client.services.submission_inference.get(UUID(run_id), actor)
     await request.respond(
         inference.InferenceCandidatesScreen(interaction.client.services, UUID(run_id), candidates), audience="personal"

@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.models import Account
 from squid.auth.application import ApiKeyService
 from squid.auth.models.entities import ApiKey
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService, SubjectRuleCache
 from squid.permissions.application.ports import AuditEntry
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -27,7 +27,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     permissions = PermissionService(uow_factory=factory, cache=SubjectRuleCache())
     api_keys = ApiKeyService("test-pepper", uow_factory=factory, permissions=permissions)
-    subject = Subject(account_id=account_id)
+    subject = Actor(account_id=account_id)
     node = "build.submission.approve"
     async with factory() as uow:
         await uow.permission_admin.upsert_grant(

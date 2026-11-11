@@ -10,8 +10,8 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
 from squid.bot.notifications_view import NotificationScreen
 from squid.bot.utils.permissions import allows, current_edit_actor
+from squid.core.actors import Actor
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
-from squid.edits.domain import EditActor
 from squid.notifications import (
     InboxVisibility,
     PendingNotificationDelivery,
@@ -58,7 +58,7 @@ class NotificationCog(sd.Cog[Any]):
         if account_id is None:
             return None
 
-        async def actor() -> EditActor:
+        async def actor() -> Actor:
             return await current_edit_actor(request)
 
         async def visibility() -> InboxVisibility:

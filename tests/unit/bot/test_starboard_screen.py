@@ -6,17 +6,9 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.starboard import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
-from squid.edits.domain import (
-    EditActor,
-    EditAttempt,
-    EditCommand,
-    EditOutcome,
-    EditReceipt,
-    EditResult,
-    EditValues,
-    Revision,
-)
-from squid.permissions.domain import PermissionNode, Subject
+from squid.core.actors import Actor
+from squid.edits.domain import EditAttempt, EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
@@ -95,9 +87,7 @@ class EditRecorder:
         self.operations = operations
         self.commands: list[EditCommand] = []
 
-    async def execute(
-        self, command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None
-    ) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
         self.commands.append(command)
         if command.kind == STARBOARD_DELETE:
             await self.operations.delete_starboard(7, self.operations.config.name)
@@ -123,7 +113,7 @@ class EditRecorder:
             receipt,
         )
 
-    async def reconcile(self, command: EditCommand, actor: EditActor, attempt: EditAttempt) -> EditResult | None:
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
         raise NotImplementedError
 
 
@@ -153,8 +143,8 @@ def make_screen(
     async def authorize(_node: PermissionNode) -> bool:
         return allowed
 
-    async def actor() -> EditActor:
-        return EditActor(Subject(account_id=1, guild_id=7))
+    async def actor() -> Actor:
+        return Actor(account_id=1, guild_id=7)
 
     return (
         StarboardScreen(

@@ -12,7 +12,7 @@ from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.revisions import expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
 from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET
 from squid.settings.domain.runtime import RuntimeSettings
@@ -65,7 +65,7 @@ async def update_runtime_settings(
     version = expected_revision(RUNTIME_TARGET, if_match)
     result = await services.edits.execute(
         EditCommand(RUNTIME_EDIT, (version,), EditValues.of(body.model_dump(exclude_unset=True)), operation_id),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     if result.receipt is None:
         settings, revision = await services.settings.runtime_snapshot()

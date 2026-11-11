@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue, StrictBool
 from whenever import Instant
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
 from squid.edits.application import EditUnitOfWork, FieldEditHandler
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
@@ -17,7 +18,6 @@ from squid.notifications.errors import NotificationNotFoundError, NotificationSu
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_MANAGE, BUILD_SUBMISSION_VIEW_PENDING
 from squid.persistence.revisions import require_revision
 
@@ -58,7 +58,7 @@ class NotificationEditUnitOfWork(NotificationUnitOfWork, EditUnitOfWork, Permiss
 
 
 async def authorize(
-    uow: NotificationEditUnitOfWork, permissions: PermissionService, actor: Subject, account_id: int
+    uow: NotificationEditUnitOfWork, permissions: PermissionService, actor: Actor, account_id: int
 ) -> None:
     if actor.account_id != account_id or not await permissions.allows_in(uow, actor, ACCOUNT_SELF_MANAGE):
         raise AuthorizationError
@@ -97,13 +97,13 @@ class NotificationPreferencesEdit(NotificationSettingsEdit):
         return EditValues.of({"web_enabled": preferences.web_enabled, "dm_enabled": preferences.dm_enabled})
 
     async def validate(
-        self, uow: NotificationEditUnitOfWork, actor: Subject, command: EditCommand, values: EditValues
+        self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
     ) -> EditValues:
         await authorize(uow, self._permissions, actor, self.account_id(command))
         return EditValues.of(PreferencesValues.model_validate(values.unpack()).model_dump(mode="json"))
 
     async def apply(
-        self, uow: NotificationEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         account_id = self.account_id(command)
         values = PreferencesValues.model_validate(prepared.after.unpack())
@@ -169,7 +169,7 @@ class StatesValues(BaseModel):
 
 
 class NotificationSubscriptionsEdit(NotificationSettingsEdit):
-    async def prepare(self, uow: NotificationEditUnitOfWork, actor: Subject, command: EditCommand) -> PreparedEdit:
+    async def prepare(self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         account_id = await self.lock(uow, command)
         await authorize(uow, self._permissions, actor, account_id)
         values = command.values.unpack()
@@ -239,7 +239,7 @@ class NotificationSubscriptionsEdit(NotificationSettingsEdit):
         )
 
     async def apply(
-        self, uow: NotificationEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         account_id = self.account_id(command)
         for desired in sorted(
@@ -267,7 +267,7 @@ class InboxReadEdit:
         self._permissions = permissions
 
     async def rows(
-        self, uow: NotificationEditUnitOfWork, actor: Subject, command: EditCommand
+        self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand
     ) -> Sequence[InboxNotification]:
         account_id = actor.account_id
         if account_id is None:
@@ -289,14 +289,14 @@ class InboxReadEdit:
             require_revision(versions[inbox_target(row.id)], row.revision)
         return rows
 
-    async def prepare(self, uow: NotificationEditUnitOfWork, actor: Subject, command: EditCommand) -> PreparedEdit:
+    async def prepare(self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         rows = await self.rows(uow, actor, command)
         before = StatesValues(states={row.id: row.read_at is not None for row in rows})
         after = StatesValues.model_validate(command.values.unpack())
         return PreparedEdit(EditValues.of(before.model_dump(mode="json")), EditValues.of(after.model_dump(mode="json")))
 
     async def apply(
-        self, uow: NotificationEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         rows = await self.rows(uow, actor, command)
         states = StatesValues.model_validate(prepared.after.unpack()).states

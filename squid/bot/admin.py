@@ -16,9 +16,9 @@ from squid.bot.reactions import ReactionEvent, ReactionFilter, reaction_handler
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import allows, enforce, requires, subject_for_interaction
+from squid.bot.utils.permissions import actor_for_interaction, allows, enforce, requires
 from squid.core.i18n import tr
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -200,7 +200,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 EditCommand(
                     RUNTIME_EDIT, (Revision(RUNTIME_TARGET, revision),), EditValues.of({setting: json.loads(value)})
                 ),
-                EditActor(await subject_for_interaction(request), discord_user_id=request.user.id),
+                await actor_for_interaction(request),
             )
         except (json.JSONDecodeError, ValidationError) as exc:
             return text_node(f"Invalid setting: {exc}")

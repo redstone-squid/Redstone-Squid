@@ -9,6 +9,7 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_history import history_controls
+from squid.core.actors import Actor
 from squid.core.errors import (
     AuthenticationError,
     AuthorizationError,
@@ -20,7 +21,6 @@ from squid.core.errors import (
 from squid.core.i18n import tr
 from squid.edits.application import EditRunner
 from squid.edits.domain import (
-    EditActor,
     EditAttempt,
     EditCommand,
     EditCommitUncertainError,
@@ -78,7 +78,7 @@ class EditController:
     def __init__(
         self,
         runner: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         refresh: Callable[[], Awaitable[None]],
         *,
         history: History | None = None,

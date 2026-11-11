@@ -21,8 +21,9 @@ from dataclasses import dataclass
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.observability import add_counter
-from squid.permissions.domain import Rule, Subject
+from squid.permissions.domain import Rule
 
 MAX_ENTRIES = 4096
 """Bounded so a raid, or a scripted client, cannot grow the cache without limit."""
@@ -33,7 +34,7 @@ MAX_AGE_SECONDS = 30.0
 type CacheKey = tuple[int | None, frozenset[int], int | None, bool]
 
 
-def cache_key(subject: Subject) -> CacheKey:
+def cache_key(subject: Actor) -> CacheKey:
     """Include every subject fact that changes its assembled rules.
 
     The Manage Server flag contributes bridge rules. The owner flag is omitted

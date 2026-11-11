@@ -34,10 +34,11 @@ from squid.builds.application.edits import BUILD_EDIT, build_target, patch_value
 from squid.builds.application.input import normalize_extender_orientation, validate_extension_length
 from squid.builds.domain import BuildCategory, UnresolvedTaxonomy
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import DEFAULT
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditActor, EditCommand, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, Revision, RevisionConflictError
 from squid_reactivity import TopicHandle
 from squid_ui.text import Message, md
 
@@ -601,7 +602,7 @@ class BuildEditScreen(BuildEditorScreen[int]):
         node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None,
         authorize: Callable[[], Awaitable[bool]],
         edits: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         render_build: Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]],
         refresh_posts: Callable[[int], Awaitable[None]],
         changes: TopicHandle | None = None,
@@ -894,7 +895,7 @@ class BuildEditScreen(BuildEditorScreen[int]):
                 self.invalidate()
             return
         patch.apply(build)
-        actor = (await self._actor()).subject
+        actor = await self._actor()
         if actor.account_id is None:
             raise AuthorizationError
         await self.builds.save(build, actor=actor.account_id, operation="create", source="discord_editor")

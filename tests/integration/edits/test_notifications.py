@@ -8,8 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import AccountConsent
+from squid.core.actors import Actor
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditActor, EditCommand, EditResult, EditValues, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.events.models import DomainEvent
 from squid.notifications.application import NotificationService
 from squid.notifications.domain import (
@@ -33,7 +34,6 @@ from squid.notifications.edits import (
 from squid.notifications.errors import NotificationNotFoundError
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -53,7 +53,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
     async with factory() as uow:
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.commit()
-    actor = EditActor(Subject(account_id=account.id))
+    actor = Actor(account_id=account.id)
     expected = (Revision(notification_target(account.id), 0),)
     results: list[EditResult | RevisionConflictError] = []
 
@@ -96,7 +96,7 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
     async with factory() as uow:
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.commit()
-    actor = EditActor(Subject(account_id=account.id))
+    actor = Actor(account_id=account.id)
     created = await executor.execute(
         EditCommand(
             SUBSCRIPTIONS_EDIT,
@@ -148,7 +148,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.notifications.update_preferences(account.id, web_enabled=True, dm_enabled=False)
         await uow.commit()
-    actor = EditActor(Subject(account_id=account.id))
+    actor = Actor(account_id=account.id)
 
     async def arrive(kind: NotificationKind = NotificationKind.BUILD_CONFIRMED) -> InboxNotification:
         async with migrated_session_factory.begin() as session:
@@ -198,7 +198,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
         EditCommand(
             INBOX_EDIT, (Revision(inbox_target(staff.id), 1),), EditValues.of({"states": {str(staff.id): True}})
         ),
-        EditActor(Subject(account_id=account.id, is_bot_owner=True)),
+        Actor(account_id=account.id, is_bot_owner=True),
     )
     assert staff_saved.receipt is not None
     with pytest.raises(NotificationNotFoundError):

@@ -34,8 +34,8 @@ from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import ConsentPrompt, request_consent
 from squid.bot.profile_editor import ProfileEditor
 from squid.bot.verify import VerifyCog
-from squid.edits.domain import EditActor
-from squid.permissions.domain import PermissionNode, Subject
+from squid.core.actors import Actor
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
 from squid_ui.testing import labels
 from squid_ui.text import NEUTRAL, resolve_text, source_text
@@ -51,8 +51,8 @@ DISCORD = replace(AccountIdentity.discord(AUTHOR_ID), id=1, verified_at=NOW)
 JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2, verified_at=NOW)
 
 
-async def edit_actor() -> EditActor:
-    return EditActor(Subject(account_id=ACCOUNT_ID), discord_user_id=AUTHOR_ID)
+async def edit_actor() -> Actor:
+    return Actor(account_id=ACCOUNT_ID, discord_user_id=AUTHOR_ID)
 
 
 def _workspace(*, accounts: AccountService, **kwargs: Any) -> AccountWorkspace:

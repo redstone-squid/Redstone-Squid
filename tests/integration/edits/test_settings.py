@@ -8,18 +8,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
+from squid.core.actors import Actor
 from squid.edits.application import EditExecutor
-from squid.edits.domain import (
-    ConcurrentEditError,
-    EditActor,
-    EditCommand,
-    EditResult,
-    EditValues,
-    Revision,
-    RevisionConflictError,
-)
+from squid.edits.domain import ConcurrentEditError, EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
 from squid.settings.application.services import SettingsService
@@ -27,12 +19,12 @@ from squid.settings.domain.runtime import RuntimeSettings
 from squid.settings.models import RuntimeSettingChange
 
 
-async def owner(sessions: async_sessionmaker[AsyncSession]) -> EditActor:
+async def owner(sessions: async_sessionmaker[AsyncSession]) -> Actor:
     async with sessions.begin() as session:
         account = Account()
         session.add(account)
         await session.flush()
-        return EditActor(Subject(account_id=account.id, is_bot_owner=True))
+        return Actor(account_id=account.id, is_bot_owner=True)
 
 
 async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt(
@@ -71,8 +63,8 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
         assert await session.scalar(select(func.count()).select_from(RuntimeSettingChange)) == 2
 
     # Ordinary writers advance the same root; a stale receipt cannot undo them.
-    assert actor.subject.account_id is not None
-    await settings.update_runtime({"welcome_enabled": False}, actor_account_id=actor.subject.account_id)
+    assert actor.account_id is not None
+    await settings.update_runtime({"welcome_enabled": False}, actor_account_id=actor.account_id)
     with pytest.raises(RevisionConflictError):
         await executor.execute(reverted.receipt.inverse(reverted.receipt.revisions, redo=True), actor)
 

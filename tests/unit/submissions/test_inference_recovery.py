@@ -12,9 +12,9 @@ import pytest
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.builds.domain import BuildDraft
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.permissions.application.ports import PermissionStore
-from squid.permissions.domain import Subject
 from squid.submissions.application.inference_runs import (
     InferenceCandidate,
     InferenceClaim,
@@ -104,7 +104,7 @@ class Recovery:
         return f"submission-inference/{self.repository.id}/0"
 
     async def resume(self, *, account_id: int = 7) -> tuple[InferenceCandidate, ...] | None:
-        return await self.service.resume(self.repository.id, Subject(account_id=account_id))
+        return await self.service.resume(self.repository.id, Actor(account_id=account_id))
 
 
 @pytest.fixture

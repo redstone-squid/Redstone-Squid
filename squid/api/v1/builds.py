@@ -37,7 +37,7 @@ from squid.builds.errors import (
 )
 from squid.builds.models import Build
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
-from squid.edits.domain import EditActor, EditCommand, Revision
+from squid.edits.domain import EditCommand, Revision
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
@@ -73,7 +73,7 @@ async def edit_build(
             patch_values(BuildEditPatch.from_attributes(changes.edit_attributes())),
             operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     build = await services.builds.get(build_id)
     if build is None:

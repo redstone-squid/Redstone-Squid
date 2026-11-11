@@ -18,8 +18,9 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildService
 from squid.builds.domain import RestrictionTypeLiteral, Status
 from squid.builds.models import DoorBuild, OtherBuild
+from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain import PermissionNode
 from squid.settings.application import SettingsService
 from squid_ui.testing import RecordingResponder, press_event
 from squid_ui_discord.testing import InteractionHarness
@@ -80,7 +81,7 @@ class PermissionRecorder(PermissionService):
         self.allowed = allowed
 
     @override
-    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         return self.allowed
 
 

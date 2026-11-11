@@ -16,11 +16,11 @@ from squid.builds.application.taxonomy_service import BuildTaxonomyService
 from squid.builds.domain import Status, UnresolvedTaxonomy
 from squid.builds.history_models import BuildHistoryEntry
 from squid.builds.models import Build, OtherBuild
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditActor, EditCommand, EditResult, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditResult, Revision, RevisionConflictError
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.application import VersionService
 from tests.support.build_edits import build_edit_session
@@ -37,7 +37,7 @@ class Embeddings:
 
 async def setup(
     sessions: async_sessionmaker[AsyncSession], embeddings: Embeddings | None = None
-) -> tuple[BuildService, EditExecutor[SqlAlchemyUnitOfWork], EditActor, Build]:
+) -> tuple[BuildService, EditExecutor[SqlAlchemyUnitOfWork], Actor, Build]:
     account_id = await seed_account_and_version(sessions)
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     service = BuildService(
@@ -61,7 +61,7 @@ async def setup(
     return (
         service,
         EditExecutor(factory, {BUILD_EDIT: BuildFieldsEdit(service)}),
-        EditActor(Subject(account_id=account_id)),
+        Actor(account_id=account_id),
         build,
     )
 
@@ -147,7 +147,7 @@ async def test_competing_build_edits_and_unrelated_child_write_fence_undo(
         other = Account()
         session.add(other)
         await session.flush()
-        outsider = EditActor(Subject(account_id=other.id))
+        outsider = Actor(account_id=other.id)
     with pytest.raises(AuthorizationError):
         await executor.execute(saved.receipt.inverse((Revision(build_target(build.id), current.revision),)), outsider)
 
@@ -187,7 +187,7 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
             await entered.wait()
             async with (
                 SqlAlchemyUnitOfWork(sessions) as uow,
-                uow.builds.editing(actor=actor.subject.account_id or 0, source="test"),
+                uow.builds.editing(actor=actor.account_id or 0, source="test"),
             ):
                 current = await uow.builds.get_for_update(build.id)
                 assert current is not None

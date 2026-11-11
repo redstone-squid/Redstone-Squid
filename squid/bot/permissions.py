@@ -8,7 +8,7 @@ from discord import app_commands
 import squid_ui_discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.bot.utils.accounts import get_or_create_discord_account_id
-from squid.bot.utils.permissions import allows, enforce, hide_unless, subject_for_interaction
+from squid.bot.utils.permissions import actor_for_interaction, allows, enforce, hide_unless
 from squid.core.errors import ValidationError
 from squid.permissions.application.administration import PermissionAdministrationService, effect_label, scope_label
 from squid.permissions.domain import Effect, PermissionNode, Reason, TraceStep
@@ -66,7 +66,7 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         )
         role_id = role.id if role is not None else None
         label = role.name if role is not None else target.display_name if target is not None else "unknown"
-        subject = await subject_for_interaction(request)
+        subject = await actor_for_interaction(request)
         capability_list: list[PermissionNode] = []
         for node in ACCESS_NODES:
             if await self.bot.services.permissions.allows(subject, node):
@@ -74,7 +74,7 @@ class PermissionCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Permi
         capabilities = frozenset(capability_list)
 
         async def actor():
-            return await self.admin.actor(await subject_for_interaction(request))
+            return await self.admin.resolve_actor(await actor_for_interaction(request))
 
         async def authorize(node: PermissionNode) -> bool:
             return await allows(request, node)

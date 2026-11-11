@@ -13,9 +13,9 @@ from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionFilte
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
 from squid.bot.utils.permissions import allows, current_edit_actor, enforce, hide_unless
+from squid.core.actors import Actor
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-from squid.edits.domain import EditActor
 from squid.messages.models import Message
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -226,7 +226,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                     )
                 )
 
-        async def actor() -> EditActor:
+        async def actor() -> Actor:
             return await current_edit_actor(request)
 
         return StarboardScreen(

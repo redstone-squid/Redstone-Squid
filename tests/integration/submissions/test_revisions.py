@@ -16,9 +16,9 @@ from squid.builds.application.ports import BuildUnitOfWork
 from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.permissions.models import PermissionGrant
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -74,7 +74,7 @@ async def prepared_proposal(
     policy = EditPolicy()
     repository = partial(SqlAlchemyUnitOfWork, sessions)
     await transact(repository, lambda uow: uow.revision_proposals.create(proposal), commit=True)
-    return repository, proposal, build, BuildEditor(Subject(account_id=owner)), policy
+    return repository, proposal, build, BuildEditor(Actor(account_id=owner)), policy
 
 
 async def test_approval_commits_once_and_preserves_build_identity(
@@ -201,8 +201,8 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
     )
     actor = {
         "owner": owner.subject,
-        "requester": Subject(account_id=requester.id),
-        "staff": Subject(account_id=staff.id),
+        "requester": Actor(account_id=requester.id),
+        "staff": Actor(account_id=staff.id),
     }[role]
     service = RevisionProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
 

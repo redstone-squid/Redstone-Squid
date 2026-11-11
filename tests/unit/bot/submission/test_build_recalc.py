@@ -18,8 +18,9 @@ from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
+from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
+from squid.permissions.domain import Decision, PermissionNode, Reason
 from squid.settings.application import SettingsService
 from squid.settings.domain.runtime import RuntimeSettings
 from squid.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
@@ -50,7 +51,7 @@ class StubPermissions(PermissionService):
         self.allowed = allowed
 
     @override
-    async def decisions(self, subject: Subject, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
+    async def decisions(self, subject: Actor, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
         return tuple(
             Decision(
                 node=node.name if isinstance(node, PermissionNode) else node,
@@ -262,7 +263,7 @@ class Proposals(RevisionProposalService):
         run_id: UUID,
         index: int,
         owner_account_id: int,
-        actor: Subject,
+        actor: Actor,
         source_message_id: int,
         candidate: BuildDraft,
     ) -> RevisionProposal:
@@ -291,7 +292,7 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
     cog.bot.inference_reasoning_effort = None
     monkeypatch.setattr("squid.bot.submission.submit.assemble_bundle", AsyncCallRecorder(result="retained-input"))
     monkeypatch.setattr(
-        "squid.bot.submission.submit.subject_for_interaction", AsyncCallRecorder(result=Subject(account_id=7))
+        "squid.bot.submission.submit.actor_for_interaction", AsyncCallRecorder(result=Actor(account_id=7))
     )
     context = ContextHarness().source
     context.interaction = InteractionHarness().source

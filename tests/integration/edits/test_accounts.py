@@ -18,11 +18,11 @@ from squid.accounts.application.edits import (
 from squid.accounts.domain import AccountConsent, ProfileUpdate
 from squid.accounts.errors import ConsentRequiredError, LastIdentityError
 from squid.accounts.models import AccountIdentity
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditActor, EditCommand, EditResult, EditValues, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -39,7 +39,7 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
             consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(999),)
         )
         await uow.commit()
-    actor = EditActor(Subject(account_id=account.id))
+    actor = Actor(account_id=account.id)
     expected = (Revision(account_target(account.id), account.revision),)
     outcomes: list[EditResult | RevisionConflictError] = []
 
@@ -60,9 +60,7 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
     if saved.receipt.command.kind == PROFILE_EDIT:
         assert saved.receipt.after.unpack()["display_name"] == "Builder"
     with pytest.raises(AuthorizationError):
-        await executor.execute(
-            saved.receipt.inverse(saved.outcome.revisions), EditActor(Subject(account_id=account.id + 1))
-        )
+        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), Actor(account_id=account.id + 1))
     undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)
     assert undone.receipt is not None
     assert undone.outcome.revisions[0].value > saved.outcome.revisions[0].value
@@ -100,7 +98,7 @@ async def test_final_unlink_retains_profile_and_last_identity_guard(
         assert identity_id is not None
         await uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="Keep", avatar_identity_id=identity_id))
         await uow.commit()
-    actor = EditActor(Subject(account_id=account.id))
+    actor = Actor(account_id=account.id)
     result = await executor.execute(
         EditCommand(
             UNLINK_EDIT,

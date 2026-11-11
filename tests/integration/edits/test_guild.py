@@ -6,12 +6,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
 from squid.events.models import DomainEvent, DomainEventDeliveryRecord
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.application.edits import GUILD_EDIT, GuildSettingsEdit, guild_target
 from squid.settings.application.services import SettingsService
@@ -27,7 +27,7 @@ async def test_guild_child_writes_advance_root_and_block_stale_undo(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     settings = SettingsService(uow_factory=factory)
     executor = EditExecutor(factory, {GUILD_EDIT: GuildSettingsEdit(PermissionService(uow_factory=factory))})
-    actor = EditActor(Subject(account_id=None, guild_id=GUILD, is_bot_owner=True), discord_user_id=17)
+    actor = Actor(account_id=None, guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
     _, revision = await settings.guild_snapshot(GUILD)
     saved = await executor.execute(
         EditCommand(GUILD_EDIT, (Revision(guild_target(GUILD), revision),), EditValues.of({"locale": "zh-CN"})), actor
@@ -65,7 +65,7 @@ async def test_guild_voting_round_trip_and_current_authority(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     settings = SettingsService(uow_factory=factory)
     executor = EditExecutor(factory, {GUILD_EDIT: GuildSettingsEdit(PermissionService(uow_factory=factory))})
-    actor = EditActor(Subject(guild_id=GUILD, is_bot_owner=True), discord_user_id=17)
+    actor = Actor(guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
     snapshot, revision = await settings.guild_snapshot(GUILD)
     voting = snapshot.voting | {VoteKind.BUILD: VoteConfiguration(None, (RoleWeight(GUILD, VoteKind.BUILD, 99, 2),))}
     replacement = snapshot.model_copy(update={"voting": voting})
@@ -78,7 +78,7 @@ async def test_guild_voting_round_trip_and_current_authority(
         actor,
     )
     assert saved.receipt is not None
-    revoked = EditActor(Subject(guild_id=GUILD), discord_user_id=17)
+    revoked = Actor(guild_id=GUILD, discord_user_id=17)
     with pytest.raises(AuthorizationError):
         await executor.execute(saved.receipt.inverse(saved.outcome.revisions), revoked)
     undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), actor)

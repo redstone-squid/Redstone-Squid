@@ -30,7 +30,7 @@ from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import draft_editor, field_names
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.permissions import enforce, subject_for_interaction
+from squid.bot.utils.permissions import actor_for_interaction, enforce
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
     BuildInferenceService,
@@ -247,7 +247,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             else await self.bot.services.submission_drafts.list_active(actor)
         )
         runs = await self.bot.services.submission_inference.list_active(
-            await subject_for_interaction(request), inbox=inbox
+            await actor_for_interaction(request), inbox=inbox
         )
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.primitives.Section(
@@ -360,7 +360,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         owner_account_id: int,
     ) -> sd.CommandResult:
         """Retain inferred candidates and return review controls without submitting builds."""
-        actor = await subject_for_interaction(request)
+        actor = await actor_for_interaction(request)
         run_id = (
             uuid5(NAMESPACE_URL, f"discord-recalculation:{request.interaction.id}")
             if request.interaction is not None

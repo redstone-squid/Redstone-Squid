@@ -10,8 +10,9 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
+from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
@@ -61,7 +62,7 @@ class NotificationScreen(sd.Screen):
         *,
         notifications: NotificationService,
         edits: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         account_id: int,
         author_id: int,
         visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,

@@ -9,9 +9,10 @@ from starlette.types import Scope
 
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.suggest import list_sources, suggest
+from squid.core.actors import Actor
 from squid.core.errors import NotFoundError
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain import PermissionNode
 from squid.suggestions.application import (
     Candidate,
     SuggestionRegistry,
@@ -63,7 +64,7 @@ class PermissionAnswer(PermissionService):
         self.allowed = allowed
 
     @override
-    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         del subject
         return self.allowed and str(getattr(node, "name", node)) == VIEW_PENDING
 

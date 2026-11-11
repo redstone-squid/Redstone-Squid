@@ -14,9 +14,9 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_history import apply_history
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.domain import (
-    EditActor,
     EditAttempt,
     EditCommand,
     EditOutcome,
@@ -26,7 +26,6 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT
 from squid.settings.application import SettingsService
 from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
@@ -180,10 +179,10 @@ def make_component_panel(
     async def authorize(_node: object) -> bool:
         return True
 
-    async def actor() -> EditActor:
-        return EditActor(Subject(account_id=1, guild_id=GUILD_ID))
+    async def actor() -> Actor:
+        return Actor(account_id=1, guild_id=GUILD_ID)
 
-    async def execute(command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None) -> EditResult:
+    async def execute(command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
         if not await panel.settings.authorize(SETTINGS_SERVER_EDIT):
             raise AuthorizationError
         if command.expected[0].value != settings.revision:

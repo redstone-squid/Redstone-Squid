@@ -7,12 +7,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditActor, EditCommand, EditResult, EditValues, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.messages.models import Message
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.reactions.domain import ReactionActor
 from squid.starboard.application.edits import (
@@ -30,7 +30,7 @@ from squid.starboard.application.history import StarboardSnapshot
 from squid.starboard.application.services import StarboardService
 from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 
-ACTOR = EditActor(Subject(guild_id=10, is_bot_owner=True), discord_user_id=42)
+ACTOR = Actor(guild_id=10, is_bot_owner=True, discord_user_id=42)
 
 
 async def test_configuration_children_share_revision_and_undo_checks_current_authority(
@@ -59,9 +59,7 @@ async def test_configuration_children_share_revision_and_undo_checks_current_aut
     saved = next(result for result in results if isinstance(result, EditResult))
     assert saved.receipt is not None
     with pytest.raises(AuthorizationError):
-        await executor.execute(
-            saved.receipt.inverse(saved.outcome.revisions), EditActor(Subject(guild_id=10), discord_user_id=42)
-        )
+        await executor.execute(saved.receipt.inverse(saved.outcome.revisions), Actor(guild_id=10, discord_user_id=42))
     undone = await executor.execute(saved.receipt.inverse(saved.outcome.revisions), ACTOR)
     assert undone.receipt is not None
     await service.set_emojis(row, (StarboardEmoji(emoji="✅", direction="up"),))

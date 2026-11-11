@@ -17,10 +17,10 @@ from whenever import Instant
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
-from squid.edits.domain import EditActor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import CATALOGUE, Decision, PermissionNode, Reason, Subject
+from squid.permissions.domain import CATALOGUE, Decision, PermissionNode, Reason
 
 if TYPE_CHECKING:
     from discord.ext.commands._types import Check
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 type CheckMode = Literal["all", "any"]
 
-SUBJECT_ATTRIBUTE = "_squid_permission_subject"
+ACTOR_ATTRIBUTE = "_squid_actor"
 """Where a resolved subject is memoized for the rest of one invocation.
 
 Checks run *before* `before_invoke`, and a command in a group runs the group's
@@ -92,18 +92,19 @@ def has_manage_server(member: discord.Member) -> bool:
     return member.id == member.guild.owner_id or permissions.administrator or permissions.manage_guild
 
 
-async def build_subject(
+async def build_actor(
     bot: squid.bot.app.RedstoneSquid,
     user: discord.User | discord.Member | discord.abc.User,
     guild_id: int | None,
-) -> Subject:
+) -> Actor:
     """Build a permission subject from the supplied Discord user and guild context.
 
     Member roles come from the supplied object without a REST refresh. Account
     identity uses the shared lookup cache; the owner check is delegated to the bot.
     """
     member = user if isinstance(user, discord.Member) else None
-    return Subject(
+    return Actor(
+        discord_user_id=user.id,
         account_id=await bot.account_ids.resolve(bot.services.accounts, user.id),
         discord_role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
         guild_id=guild_id,
@@ -112,23 +113,23 @@ async def build_subject(
     )
 
 
-async def subject_for(ctx: Context[squid.bot.app.RedstoneSquid]) -> Subject:
+async def actor_for(ctx: Context[squid.bot.app.RedstoneSquid]) -> Actor:
     """The caller's subject, resolved once per invocation."""
-    memoized = getattr(ctx, SUBJECT_ATTRIBUTE, None)
-    if isinstance(memoized, Subject):
+    memoized = getattr(ctx, ACTOR_ATTRIBUTE, None)
+    if isinstance(memoized, Actor):
         return memoized
-    subject = await build_subject(ctx.bot, ctx.author, ctx.guild.id if ctx.guild is not None else None)
-    setattr(ctx, SUBJECT_ATTRIBUTE, subject)
+    subject = await build_actor(ctx.bot, ctx.author, ctx.guild.id if ctx.guild is not None else None)
+    setattr(ctx, ACTOR_ATTRIBUTE, subject)
     return subject
 
 
-async def subject_for_interaction(caller: sd.Request[Any]) -> Subject:
+async def actor_for_interaction(caller: sd.Request[Any]) -> Actor:
     """Build the permission subject for a command, component, or modal request."""
     guild_id = None if caller.guild is None else caller.guild.id
-    return await build_subject(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
+    return await build_actor(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
 
 
-async def current_edit_actor(caller: sd.Request[Any]) -> EditActor:
+async def current_edit_actor(caller: sd.Request[Any]) -> Actor:
     """Refresh identity and guild membership for a long-lived editor action.
 
     An editor can outlive a role change or account merge. Its opening request is
@@ -145,14 +146,12 @@ async def current_edit_actor(caller: sd.Request[Any]) -> EditActor:
         except discord.NotFound as error:
             raise AuthorizationError from error
     account = await bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
-    return EditActor(
-        Subject(
-            account_id=None if account is None else account.id,
-            discord_role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
-            guild_id=None if guild is None else guild.id,
-            is_bot_owner=await bot.is_owner(user),
-            discord_guild_admin=member is not None and has_manage_server(member),
-        ),
+    return Actor(
+        account_id=None if account is None else account.id,
+        discord_role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
+        guild_id=None if guild is None else guild.id,
+        is_bot_owner=await bot.is_owner(user),
+        discord_guild_admin=member is not None and has_manage_server(member),
         discord_user_id=user.id,
     )
 
@@ -163,7 +162,7 @@ def _permissions_of(caller: sd.Request[Any]) -> PermissionService:
 
 async def allows(caller: sd.Request[Any], node: PermissionNode | str) -> bool:
     """Whether the user behind `caller` holds `node`."""
-    subject = await subject_for_interaction(caller)
+    subject = await actor_for_interaction(caller)
     return await _permissions_of(caller).allows(subject, node)
 
 
@@ -181,7 +180,7 @@ async def enforce(
         PermissionNodeRequired: The caller does not satisfy the requested mode.
     """
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
-    subject = await subject_for_interaction(caller)
+    subject = await actor_for_interaction(caller)
     decisions = await _permissions_of(caller).decisions(subject, resolved)
     if _satisfied(decisions, mode):
         return
@@ -212,7 +211,7 @@ def requires(
     async def predicate(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:
         if guild_only and ctx.guild is None:
             raise NoPrivateMessage()
-        subject = await subject_for(ctx)
+        subject = await actor_for(ctx)
         decisions = await ctx.bot.services.permissions.decisions(subject, resolved)
         if _satisfied(decisions, mode):
             return True

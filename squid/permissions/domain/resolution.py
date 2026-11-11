@@ -42,6 +42,7 @@ from enum import IntEnum, StrEnum
 
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import CATALOGUE, Catalogue
 from squid.permissions.domain.matching import Pattern
 from squid.permissions.domain.models import Default, Effect, NodeScope, PermissionNode
@@ -86,21 +87,6 @@ TIE = "tie"
 would have produced the same verdict had it won."""
 
 type Rank = tuple[tuple[int, int, int, int], int, int, int, int]
-
-
-@dataclass(frozen=True, slots=True)
-class Subject:
-    """The caller and guild context for a permission check.
-
-    A caller without a stored account can still receive Discord role grants.
-    Permission checks do not create account rows.
-    """
-
-    account_id: int | None = None
-    discord_role_ids: frozenset[int] = field(default_factory=frozenset)
-    guild_id: int | None = None
-    is_bot_owner: bool = False
-    discord_guild_admin: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,7 +252,7 @@ def rules_from_role(
 def _applicable(
     rule: Rule,
     node: PermissionNode,
-    subject: Subject,
+    subject: Actor,
     now: Instant,
 ) -> bool:
     if rule.expires_at is not None and rule.expires_at <= now:
@@ -307,7 +293,7 @@ def _lost_on(winner: Rank, loser: Rank) -> str:
 
 def resolve(
     node: PermissionNode | str,
-    subject: Subject,
+    subject: Actor,
     rules: Sequence[Rule] = (),
     *,
     catalogue: Catalogue = CATALOGUE,
@@ -357,7 +343,7 @@ def resolve(
 
 def resolve_many(
     nodes: Iterable[PermissionNode | str],
-    subject: Subject,
+    subject: Actor,
     rules: Sequence[Rule] = (),
     *,
     catalogue: Catalogue = CATALOGUE,

@@ -12,24 +12,6 @@ from whenever import Instant
 
 from squid.core.errors import ConflictError, InvalidStateError
 from squid.core.i18n import tr
-from squid.permissions.domain import Subject
-
-
-@dataclass(frozen=True, slots=True)
-class EditActor:
-    """Server-resolved identity and current permission context, never client-supplied."""
-
-    subject: Subject
-    discord_user_id: int | None = None
-
-    @property
-    def key(self) -> str:
-        if self.subject.account_id is not None:
-            return f"account:{self.subject.account_id}"
-        if self.discord_user_id is not None:
-            return f"discord:{self.discord_user_id}"
-        message = "An edit requires an identified actor"
-        raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True, order=True)

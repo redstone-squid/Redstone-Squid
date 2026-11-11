@@ -10,7 +10,7 @@ from squid.bot.utils.permissions import current_edit_actor
 from squid.builds.application import BuildService
 from squid.builds.domain import Status
 from squid.builds.models import Build
-from squid.edits.domain import EditActor
+from squid.core.actors import Actor
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
 if TYPE_CHECKING:
@@ -33,20 +33,20 @@ async def prepare_build_editor(
     client = cast("RedstoneSquid", request.client)
     prepared: BuildEditScreen | None = None
 
-    async def actor() -> EditActor:
+    async def actor() -> Actor:
         return await current_edit_actor(request)
 
     async def authorize() -> bool:
         current = build if prepared is None else prepared.build
         current_actor = await actor()
-        actor_account_id = current_actor.subject.account_id
+        actor_account_id = current_actor.account_id
         if (
             current.submission_status is Status.PENDING
             and actor_account_id is not None
             and current.submitter_account_id == actor_account_id
         ):
             return True
-        return await client.services.permissions.allows(current_actor.subject, BUILD_SUBMISSION_EDIT)
+        return await client.services.permissions.allows(current_actor, BUILD_SUBMISSION_EDIT)
 
     async def render_build(current: Build) -> Any:
         return await render_build_card(current, client.media_previews)

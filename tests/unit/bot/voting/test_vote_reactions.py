@@ -17,8 +17,9 @@ from squid.accounts.models import Account, AccountIdentity
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.voting.vote import VoteCog
+from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain import PermissionNode
 from squid.runtime import BackgroundTaskSupervisor
 from squid.settings.application import SettingsService
 from squid.voting.application import VoteService
@@ -159,10 +160,10 @@ class Accounts(AccountService):
 
 @dataclass
 class Permissions(PermissionService):
-    subjects: list[Subject] = field(default_factory=list)
+    subjects: list[Actor] = field(default_factory=list)
 
     @override
-    async def capabilities(self, subject: Subject, nodes: Iterable[PermissionNode | str]) -> frozenset[str]:
+    async def capabilities(self, subject: Actor, nodes: Iterable[PermissionNode | str]) -> frozenset[str]:
         self.subjects.append(subject)
         return frozenset()
 
@@ -339,7 +340,7 @@ async def test_routed_public_reactions_add_and_remove_a_ballot(reactions: Reacti
 
     assert reactions.votes.casts == [(VoteActor(7, 70, guild_id=10), "one", "1️⃣")] * 2
     assert reactions.refreshes == [("vote_session", "1")] * 2
-    assert reactions.permissions.subjects == [Subject(account_id=7, guild_id=10)] * 2
+    assert reactions.permissions.subjects == [Actor(account_id=7, guild_id=10)] * 2
 
 
 async def test_anonymous_reaction_is_removed_only_after_commit(reactions: ReactionHarness) -> None:

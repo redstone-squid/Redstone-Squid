@@ -10,10 +10,10 @@ import anyio
 from squid.artifacts.application import ArtifactStore
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.builds.domain import BuildDraft
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue, NotFoundError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import PermissionUnitOfWork
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.unit_of_work import UnitOfWorkFactory
@@ -163,7 +163,7 @@ class SubmissionInferenceRuns:
                 await uow.commit()
             raise
 
-    async def resume(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...] | None:
+    async def resume(self, run_id: UUID, actor: Actor) -> tuple[InferenceCandidate, ...] | None:
         """Retry retained inputs, or return completed candidates without rereading the source message."""
         async with self._uow_factory() as uow:
             retained = await uow.inference_runs.retained(run_id)
@@ -202,7 +202,7 @@ class SubmissionInferenceRuns:
             source_files=self._codec.decode_source_files(inputs.get("source_files", [])),
         )
 
-    async def get(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...]:
+    async def get(self, run_id: UUID, actor: Actor) -> tuple[InferenceCandidate, ...]:
         """Reopen retained candidates under the current owner or staff authority."""
         async with self._uow_factory() as uow:
             result = await uow.inference_runs.get(run_id)
@@ -215,7 +215,7 @@ class SubmissionInferenceRuns:
                 raise AuthorizationError
             return candidates
 
-    async def list_active(self, actor: Subject, *, inbox: bool = False) -> tuple[UUID, ...]:
+    async def list_active(self, actor: Actor, *, inbox: bool = False) -> tuple[UUID, ...]:
         """List retained runs for the actor, or for all accounts after a staff check."""
         async with self._uow_factory() as uow:
             if actor.account_id is None:

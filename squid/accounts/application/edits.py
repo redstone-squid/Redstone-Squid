@@ -9,13 +9,13 @@ from squid.accounts.application.ports import AccountRepository, AccountUnitOfWor
 from squid.accounts.domain import ProfileLink, ProfileUpdate
 from squid.accounts.errors import AccountIdentityNotFoundError, ConsentRequiredError
 from squid.accounts.models import Account, AccountProfile
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import UNSET
 from squid.edits.application import EditUnitOfWork, FieldEditHandler
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_MANAGE
 from squid.persistence.revisions import require_revision
 
@@ -84,7 +84,7 @@ class AccountFieldEdit(FieldEditHandler[AccountEditUnitOfWork]):
         require_revision(command.expected[0], account.revision)
         return account
 
-    async def authorize(self, uow: AccountEditUnitOfWork, actor: Subject, command: EditCommand) -> None:
+    async def authorize(self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand) -> None:
         account_id = self.account_id(command)
         if actor.account_id != account_id or not await self._permissions.allows_in(uow, actor, ACCOUNT_SELF_MANAGE):
             raise AuthorizationError
@@ -102,14 +102,14 @@ class AccountProfileEdit(AccountFieldEdit):
         return EditValues.of(ProfileValues.model_validate(profile).model_dump(mode="json"))
 
     async def validate(
-        self, uow: AccountEditUnitOfWork, actor: Subject, command: EditCommand, values: EditValues
+        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
     ) -> EditValues:
         await self.authorize(uow, actor, command)
         normalized = ProfileValues.model_validate(values.unpack()).update().validated()
         return ProfileValues.patch(normalized)
 
     async def apply(
-        self, uow: AccountEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         account = await self.account(uow, command)
         await uow.accounts.upsert_profile(account.id, ProfileValues.model_validate(prepared.after.unpack()).update())
@@ -134,13 +134,13 @@ class AccountVisibilityEdit(AccountFieldEdit):
         return EditValues.of({"identity_id": identity_id, "is_public": identity.is_public})
 
     async def validate(
-        self, uow: AccountEditUnitOfWork, actor: Subject, command: EditCommand, values: EditValues
+        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
     ) -> EditValues:
         await self.authorize(uow, actor, command)
         return EditValues.of(VisibilityValues.model_validate(values.unpack()).model_dump(mode="json"))
 
     async def apply(
-        self, uow: AccountEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         account = await self.account(uow, command)
         values = VisibilityValues.model_validate(prepared.after.unpack())
@@ -149,7 +149,7 @@ class AccountVisibilityEdit(AccountFieldEdit):
 
 
 class AccountUnlinkEdit(AccountFieldEdit):
-    async def prepare(self, uow: AccountEditUnitOfWork, actor: Subject, command: EditCommand) -> PreparedEdit:
+    async def prepare(self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         account = await self.account(uow, command)
         await self.authorize(uow, actor, command)
         identity_id = command.values.unpack().get("identity_id")
@@ -165,7 +165,7 @@ class AccountUnlinkEdit(AccountFieldEdit):
         )
 
     async def apply(
-        self, uow: AccountEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         account = await self.account(uow, command)
         identity_id = prepared.before.unpack()["identity_id"]

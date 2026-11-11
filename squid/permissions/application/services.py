@@ -12,6 +12,7 @@ scope, and precedence for each requested capability.
 
 from collections.abc import Iterable
 
+from squid.core.actors import Actor
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
 from squid.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
 from squid.permissions.domain import (
@@ -28,7 +29,6 @@ from squid.permissions.domain import (
     PermissionNode,
     RoleSpec,
     Rule,
-    Subject,
     SubjectKind,
     expand_role,
     resolve,
@@ -100,7 +100,7 @@ class PermissionService:
         """The rule-set cache this service reads through, if it has one."""
         return self._cache
 
-    async def rules_for(self, subject: Subject) -> tuple[Rule, ...]:
+    async def rules_for(self, subject: Actor) -> tuple[Rule, ...]:
         """Load and expand the subject's rules; the resolver still checks expiry and scope."""
         if subject.is_bot_owner:
             # The owner short-circuits before any rule is read, so loading them
@@ -122,12 +122,12 @@ class PermissionService:
             self._cache.put(key, rules, epoch=records.epoch)
         return rules
 
-    async def allows_in(self, uow: PermissionUnitOfWork, subject: Subject, node: PermissionNode) -> bool:
+    async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool:
         """Check one permission using the caller's transaction and current stored rules."""
         return node.name in await self.capabilities_in(uow, subject, (node,))
 
     async def capabilities_in(
-        self, uow: PermissionUnitOfWork, subject: Subject, nodes: Iterable[PermissionNode | str]
+        self, uow: PermissionUnitOfWork, subject: Actor, nodes: Iterable[PermissionNode | str]
     ) -> frozenset[str]:
         """Resolve authority from the caller's transaction without using or populating the cache."""
         if subject.is_bot_owner:
@@ -141,7 +141,7 @@ class PermissionService:
             rules = self.assemble(records, subject)
         return resolve_many(nodes, subject, rules, catalogue=self._catalogue)
 
-    def assemble(self, records: SubjectRecords, subject: Subject) -> tuple[Rule, ...]:
+    def assemble(self, records: SubjectRecords, subject: Actor) -> tuple[Rule, ...]:
         """Convert stored grants and role assignments into rules, including the guild-admin bridge."""
         specs = _role_specs(records.roles)
         rules = [_grant_rule(grant) for grant in records.grants]
@@ -176,7 +176,7 @@ class PermissionService:
         self,
         records: SubjectRecords,
         specs: dict[str, RoleSpec],
-        subject: Subject,
+        subject: Actor,
     ) -> list[Rule]:
         """Add guild-admin rules for Discord members with Manage Server.
 
@@ -198,17 +198,17 @@ class PermissionService:
             )
         )
 
-    async def check(self, subject: Subject, node: PermissionNode | str) -> Decision:
+    async def check(self, subject: Actor, node: PermissionNode | str) -> Decision:
         """Decide one node, with the trace that `/perm can` renders."""
         return resolve(node, subject, await self.rules_for(subject), catalogue=self._catalogue)
 
-    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         """Whether `subject` holds `node`."""
         return (await self.check(subject, node)).allowed
 
     async def decisions(
         self,
-        subject: Subject,
+        subject: Actor,
         nodes: Iterable[PermissionNode | str],
     ) -> tuple[Decision, ...]:
         """Decide several nodes from one rule load, retaining each decision's explanation.
@@ -221,7 +221,7 @@ class PermissionService:
 
     async def capabilities(
         self,
-        subject: Subject,
+        subject: Actor,
         nodes: Iterable[PermissionNode | str],
     ) -> frozenset[str]:
         """The subset of `nodes` that `subject` holds, from one load."""
@@ -242,7 +242,7 @@ class PermissionService:
         Those actors carry the resolved names so their policies can check authority
         without loading permissions themselves.
         """
-        subject = Subject(
+        subject = Actor(
             account_id=account_id,
             discord_role_ids=frozenset(discord_role_ids),
             guild_id=guild_id,

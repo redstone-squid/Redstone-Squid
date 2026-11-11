@@ -7,10 +7,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
+from squid.core.actors import Actor
 from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache
 from squid.permissions.application.administration import PermissionAdministrationService
 from squid.permissions.application.ports import AuditEntry
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -27,7 +27,7 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     cache = SubjectRuleCache()
     permissions = PermissionService(uow_factory=factory, cache=cache)
-    subject = Subject(account_id=account_id)
+    subject = Actor(account_id=account_id)
     node = "build.submission.approve"
     assert not await permissions.allows(subject, node)
     async with factory() as uow:
@@ -65,7 +65,7 @@ async def test_role_creation_commits_with_audit_and_rolls_back_if_audit_fails(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     permissions = PermissionService(uow_factory=factory)
     admin = PermissionAdministrationService(permissions, uow_factory=factory)
-    actor = await admin.actor(Subject(is_bot_owner=True))
+    actor = await admin.actor(Actor(is_bot_owner=True))
     role = await admin.create_role(actor, slug="uow-reviewer", name="Reviewer", rank=3)
     assert role.id > 0
     assert (await admin.role("uow-reviewer")).id == role.id

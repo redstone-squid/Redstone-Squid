@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import build_subject
+from squid.bot.utils.permissions import build_actor
 from squid.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
     VOTE_POLL_CLOSE_ANY,
@@ -48,7 +48,7 @@ async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member
     function loads permissions and uses roles from the supplied member object;
     it does not create an account or refresh Discord membership.
     """
-    subject = await build_subject(bot, member, member.guild.id)
+    subject = await build_actor(bot, member, member.guild.id)
     capabilities = await bot.services.permissions.capabilities(
         subject,
         (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),

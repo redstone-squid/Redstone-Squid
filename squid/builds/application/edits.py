@@ -18,10 +18,10 @@ from squid.builds.domain import Info, UnresolvedTaxonomy
 from squid.builds.domain.taxonomy import RESTRICTION_FIELDS
 from squid.builds.errors import BuildNotFoundError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
 from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, RevisionConflictError
-from squid.permissions.domain import Subject
 
 BUILD_EDIT = "build.fields"
 
@@ -94,7 +94,7 @@ class BuildFieldsEdit:
     def __init__(self, builds: BuildService) -> None:
         self._builds = builds
 
-    async def prepare(self, uow: BuildEditUnitOfWork, actor: Subject, command: EditCommand) -> PreparedBuildEdit:
+    async def prepare(self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
         if actor.account_id is None:
             raise AuthorizationError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
@@ -134,7 +134,7 @@ class BuildFieldsEdit:
         return PreparedBuildEdit(before, build_values(build), build=build)
 
     async def apply(
-        self, uow: BuildEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         assert isinstance(prepared, PreparedBuildEdit)
         assert actor.account_id is not None

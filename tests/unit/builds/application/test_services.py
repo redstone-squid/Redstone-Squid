@@ -20,10 +20,10 @@ from squid.builds.application.taxonomy import TaxonomyResolution, apply_build_ta
 from squid.builds.domain import BuildCategory, Status, normalize_tag_name
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import PermissionStore, SubjectRecords
-from squid.permissions.domain import Subject
 from squid.permissions.models import PermissionGrant
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
@@ -463,8 +463,8 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
 class TestAuthorizedEditing:
     """Pending submission owners can edit; other edits require the shared permission."""
 
-    OWNER = BuildEditor(subject=Subject(account_id=1))
-    STRANGER = BuildEditor(subject=Subject(account_id=2))
+    OWNER = BuildEditor(subject=Actor(account_id=1))
+    STRANGER = BuildEditor(subject=Actor(account_id=2))
 
     @staticmethod
     def _permissions(*held: str) -> PermissionStore:
@@ -553,7 +553,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(existing_bu
 
     service._embeddings = RevokeDuringPreparation()
     with pytest.raises(AuthorizationError):
-        await service.apply_edit(BuildEditor(Subject(account_id=2)), 42, BuildEditPatch(extra_user_info="denied"))
+        await service.apply_edit(BuildEditor(Actor(account_id=2)), 42, BuildEditPatch(extra_user_info="denied"))
     assert repository.saved == []
 
 

@@ -3,8 +3,8 @@
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.edits import build_values
 from squid.builds.models import Build, DoorBuild
+from squid.core.actors import Actor
 from squid.edits.domain import (
-    EditActor,
     EditAttempt,
     EditCommand,
     EditOutcome,
@@ -13,11 +13,10 @@ from squid.edits.domain import (
     Revision,
     RevisionConflictError,
 )
-from squid.permissions.domain import Subject
 
 
-async def build_edit_actor() -> EditActor:
-    return EditActor(Subject(account_id=1))
+async def build_edit_actor() -> Actor:
+    return Actor(account_id=1)
 
 
 class BuildEditRecorder:
@@ -25,11 +24,9 @@ class BuildEditRecorder:
         self.build = build or DoorBuild(id=1)
         self.error = error
         self.commands: list[EditCommand] = []
-        self.actors: list[EditActor] = []
+        self.actors: list[Actor] = []
 
-    async def execute(
-        self, command: EditCommand, actor: EditActor, *, attempt: EditAttempt | None = None
-    ) -> EditResult:
+    async def execute(self, command: EditCommand, actor: Actor, *, attempt: EditAttempt | None = None) -> EditResult:
         self.commands.append(command)
         self.actors.append(actor)
         if self.error is not None:
@@ -55,5 +52,5 @@ class BuildEditRecorder:
             receipt,
         )
 
-    async def reconcile(self, command: EditCommand, actor: EditActor, attempt: EditAttempt) -> EditResult | None:
+    async def reconcile(self, command: EditCommand, actor: Actor, attempt: EditAttempt) -> EditResult | None:
         raise NotImplementedError

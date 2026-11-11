@@ -13,10 +13,11 @@ from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
 from squid.builds.domain import Status
 from squid.builds.models import Build, DoorBuild
+from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain import PermissionNode
 from tests.unit.api.fakes import credential_nodes
 
 # This credential can read submissions but does not carry a moderation-view permission.
@@ -68,10 +69,10 @@ class BuildQueryRecorder(BuildQueryService):
 class PermissionRecorder(PermissionService):
     def __init__(self, allowed: bool) -> None:
         self.allowed = allowed
-        self.calls: list[tuple[Subject, PermissionNode | str]] = []
+        self.calls: list[tuple[Actor, PermissionNode | str]] = []
 
     @override
-    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         self.calls.append((subject, node))
         return self.allowed
 

@@ -11,9 +11,10 @@ import squid_ui_discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.i18n import localization_for
 from squid.bot.ui import CardField, tr
+from squid.core.actors import Actor
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
 from squid.settings.application.edits import GUILD_EDIT, guild_target
@@ -97,7 +98,7 @@ class SettingsPanel(sd.Screen):
         *,
         settings: SettingsService,
         edits: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         guild: discord.Guild,
         capabilities: SettingsCapabilities,
         authorize: SettingsAuthorizer,
@@ -172,7 +173,7 @@ class SettingsEditor(sl.Reactive):
         guild_id: int,
         authorize: SettingsAuthorizer,
         edits: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         history: sl.runtime.History,
     ) -> None:
         self._settings = settings

@@ -20,6 +20,7 @@ from squid.api.v1.notifications import (
     update_preferences,
 )
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
+from squid.core.actors import Actor
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
@@ -33,7 +34,7 @@ from squid.notifications import (
 from squid.notifications.domain import NotificationKind
 from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain import PermissionNode
 from squid.runtime import ApiServices
 from tests.support.notification_edits import NotificationEditRecorder
 
@@ -102,7 +103,7 @@ class PermissionAnswer(PermissionService):
         self.allowed = allowed
 
     @override
-    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+    async def allows(self, subject: Actor, node: PermissionNode | str) -> bool:
         return self.allowed
 
 

@@ -12,6 +12,7 @@ from whenever import Instant
 
 from squid.builds.domain import BuildCategory
 from squid.builds.models import Build
+from squid.core.actors import Actor
 from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
@@ -182,7 +183,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     from sqlalchemy import update
 
     from squid.accounts.models import Account
-    from squid.permissions.domain import PermissionNode, Subject
+    from squid.permissions.domain import PermissionNode
     from squid.submissions.application import CheckedInFormManifestRegistry, SubmissionDraftService
     from squid.submissions.domain import BuildSubmissionRejected, SubmissionAttentionReason
     from squid.submissions.models.finalization import SubmissionFinalizationJob
@@ -208,7 +209,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     class Permissions:
         allowed = True
 
-        async def allows_in(self, uow: PermissionUnitOfWork, subject: Subject, node: PermissionNode) -> bool:
+        async def allows_in(self, uow: PermissionUnitOfWork, subject: Actor, node: PermissionNode) -> bool:
             return self.allowed
 
     permissions = Permissions()

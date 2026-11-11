@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
+from squid.core.actors import Actor
 from squid.permissions.application import PermissionService
-from squid.permissions.domain import Subject
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 BACKFILL_DATABASE = "redstone_squid_backfill"
@@ -98,15 +98,15 @@ async def backfilled(
         await async_engine.dispose()
 
 
-def _subject(accounts: dict[str, int], who: str) -> Subject:
+def _subject(accounts: dict[str, int], who: str) -> Actor:
     """The subject each legacy tier used to describe."""
     if who == "trusted_member":
-        return Subject(
+        return Actor(
             account_id=accounts[who],
             discord_role_ids=frozenset({TRUSTED_ROLE}),
             guild_id=GUILD,
         )
-    return Subject(account_id=accounts[who], discord_role_ids=frozenset({OTHER_ROLE}), guild_id=GUILD)
+    return Actor(account_id=accounts[who], discord_role_ids=frozenset({OTHER_ROLE}), guild_id=GUILD)
 
 
 @pytest.mark.parametrize(

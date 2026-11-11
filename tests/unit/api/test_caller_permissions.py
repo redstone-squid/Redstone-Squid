@@ -6,8 +6,8 @@ import pytest
 from pytest_mock import MockerFixture
 
 from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
+from squid.core.actors import Actor
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 
 
@@ -42,7 +42,7 @@ async def test_owned_credentials_consult_current_account_authority_without_a_gui
     caller = Caller(kind=kind, subject="owned", account_id=7, nodes=UNBOUNDED)
 
     assert await caller.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING) is allowed
-    permissions.allows.assert_awaited_once_with(Subject(account_id=7, guild_id=None), BUILD_SUBMISSION_VIEW_PENDING)
+    permissions.allows.assert_awaited_once_with(Actor(account_id=7, guild_id=None), BUILD_SUBMISSION_VIEW_PENDING)
 
 
 @pytest.mark.parametrize("allowed", [False, True])
@@ -51,4 +51,4 @@ async def test_anonymous_authority_is_resolved_by_the_permission_service(mocker:
     permissions.allows.return_value = allowed
 
     assert await ANONYMOUS.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING) is allowed
-    permissions.allows.assert_awaited_once_with(Subject(account_id=None, guild_id=None), BUILD_SUBMISSION_VIEW_PENDING)
+    permissions.allows.assert_awaited_once_with(Actor(account_id=None, guild_id=None), BUILD_SUBMISSION_VIEW_PENDING)

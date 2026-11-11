@@ -41,7 +41,7 @@ async def test_every_account_credential_audits_the_internal_account(kind: str) -
     )
     command, actor = edits.execute.call_args.args
     assert command.values.unpack() == {"welcome_forward_chance": 0.5}
-    assert actor.subject.account_id == 7
+    assert actor.account_id == 7
     assert response.headers["ETag"] == '"runtime-settings-1-r2"'
 
 

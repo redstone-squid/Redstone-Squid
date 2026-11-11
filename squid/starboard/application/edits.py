@@ -4,12 +4,13 @@ from typing import Annotated, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.edits.application import EditUnitOfWork, FieldEditHandler
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
@@ -129,7 +130,7 @@ class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
         return row
 
     async def authorize(
-        self, uow: StarboardEditUnitOfWork, actor: Subject, guild_id: int, nodes: set[PermissionNode]
+        self, uow: StarboardEditUnitOfWork, actor: Actor, guild_id: int, nodes: set[PermissionNode]
     ) -> None:
         if actor.guild_id != guild_id:
             raise AuthorizationError
@@ -150,7 +151,7 @@ class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
         return (await self.capture(uow, row)).values()
 
     async def validate(
-        self, uow: StarboardEditUnitOfWork, actor: Subject, command: EditCommand, values: EditValues
+        self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
     ) -> EditValues:
         row = await self.row(uow, command)
         assert row is not None
@@ -176,7 +177,7 @@ class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
         return after.model_copy(update={"settings": after.settings | {"name": normalized.name}}).values()
 
     async def apply(
-        self, uow: StarboardEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         row = await self.row(uow, command)
         assert row is not None
@@ -193,7 +194,7 @@ class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
 
 
 class StarboardCreation(StarboardEdit):
-    async def prepare(self, uow: StarboardEditUnitOfWork, actor: Subject, command: EditCommand) -> PreparedEdit:
+    async def prepare(self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         row = await self.row(uow, command, missing=True)
         after = BoardPresence.model_validate(command.values.unpack())
         normalized = after.config(self.identity(command))
@@ -221,7 +222,7 @@ class StarboardCreation(StarboardEdit):
         return PreparedEdit(before.values(), after.values())
 
     async def apply(
-        self, uow: StarboardEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         row = await self.row(uow, command, missing=True)
         after = BoardPresence.model_validate(prepared.after.unpack())
@@ -236,7 +237,7 @@ class StarboardCreation(StarboardEdit):
 
 
 class StarboardDeletion(StarboardEdit):
-    async def prepare(self, uow: StarboardEditUnitOfWork, actor: Subject, command: EditCommand) -> PreparedEdit:
+    async def prepare(self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         row = await self.row(uow, command)
         assert row is not None
         await self.authorize(uow, actor, row.guild_id, {STARBOARD_BOARD_DELETE})
@@ -244,7 +245,7 @@ class StarboardDeletion(StarboardEdit):
         return PreparedEdit(before.values(), before.model_copy(update={"present": False}).values(), final=True)
 
     async def apply(
-        self, uow: StarboardEditUnitOfWork, actor: Subject, command: EditCommand, prepared: PreparedEdit
+        self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         row = await self.row(uow, command)
         assert row is not None

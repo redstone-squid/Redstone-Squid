@@ -12,10 +12,11 @@ from fastapi.security import APIKeyHeader
 from squid.accounts.errors import ConsentRequiredError
 from squid.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
 from squid.cli_auth.errors import CliAuthorizationError
+from squid.core.actors import Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, DomainError
 from squid.minecraft_auth.application.crypto import PLAYER_TOKEN_PREFIX
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import CATALOGUE, Pattern, PermissionNode, Subject
+from squid.permissions.domain import CATALOGUE, Pattern, PermissionNode
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,19 +63,19 @@ class Caller:
             return False
         if self.kind == "service" and self.account_id is None:
             return True
-        return await permissions.allows(self.permission_subject(), node)
+        return await permissions.allows(self.to_actor(), node)
 
     def credential_allows(self, node: PermissionNode) -> bool:
         """Whether the credential itself carries `node`, before its owner is consulted."""
         return any(pattern.matches(node) for pattern in self.nodes)
 
-    def permission_subject(self) -> Subject:
+    def to_actor(self) -> Actor:
         """Return the account subject used for HTTP permission checks.
 
         No guild is supplied: a permission granted in one Discord server must not
         authorize an HTTP request outside that server.
         """
-        return Subject(account_id=self.account_id, guild_id=None)
+        return Actor(account_id=self.account_id, guild_id=None)
 
     def require_consented_account(self) -> int:
         """Return the caller's account ID after checking privacy consent.

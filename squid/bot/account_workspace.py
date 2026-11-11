@@ -19,8 +19,8 @@ from squid.bot.account_view import AccountOverview, ConsentRequest
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
 from squid.bot.ui import tr
+from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditActor
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
 from squid_ui_discord.modal import EntityField
@@ -43,7 +43,7 @@ class AccountWorkspace(sd.Screen):
         *,
         accounts: AccountService,
         edits: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         actor_id: int,
         account: Account | None,
         request_consent: ConsentRequest,

@@ -27,7 +27,7 @@ from squid.api.v1.schemas.notifications import (
     NotificationSubscriptionDetail,
 )
 from squid.core.errors import AuthenticationError
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.notifications import InboxVisibility
 from squid.notifications.edits import (
     INBOX_EDIT,
@@ -98,7 +98,7 @@ async def update_preferences(
             EditValues.of(request.model_dump(mode="json")),
             operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     return await get_preferences(notifications, caller, response)
 
@@ -152,7 +152,7 @@ async def create_subscription(
             EditValues.of({"create": values}),
             operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     if result.receipt is not None:
         subscription = SubscriptionsValues.model_validate(result.receipt.after.unpack()).subscriptions[0]
@@ -198,7 +198,7 @@ async def delete_subscription(
             EditValues.of({"states": {str(subscription_id): False}}),
             operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     return Response(
         status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
@@ -257,7 +257,7 @@ async def mark_read(
             EditValues.of({"states": {str(notification_id): True}}),
             operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     return Response(
         status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}
@@ -288,7 +288,7 @@ async def mark_unread(
             EditValues.of({"states": {str(notification_id): False}}),
             operation_id,
         ),
-        EditActor(caller.permission_subject()),
+        caller.to_actor(),
     )
     return Response(
         status_code=status.HTTP_204_NO_CONTENT, headers={"ETag": revision_etag(result.outcome.revisions[0])}

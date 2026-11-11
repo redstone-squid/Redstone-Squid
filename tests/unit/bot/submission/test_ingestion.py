@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.bot.submission import ingestion
 from squid.builds.application.inference import BuildInferenceInput
 from squid.builds.domain import BuildCategory, BuildDraft
-from squid.permissions.domain import Subject
+from squid.core.actors import Actor
 from squid.runtime import BotServices
 from squid.submissions.application.drafts import DraftActor, StoredDraft
 from squid.submissions.application.finalization import FinalizationJobSnapshot, SubmissionFinalizationService
@@ -49,7 +49,7 @@ class InferenceRecorder(SubmissionInferenceRuns):
             purpose=purpose,
         )
 
-    async def resume(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...] | None:
+    async def resume(self, run_id: UUID, actor: Actor) -> tuple[InferenceCandidate, ...] | None:
         return await self.resume_calls(run_id, actor)
 
 
@@ -180,7 +180,7 @@ async def test_replayed_delivery_uses_retained_candidates_without_reading_change
 async def test_staff_retry_is_attributed_to_the_staff_actor(monkeypatch: pytest.MonkeyPatch) -> None:
     item = candidate()
     h = setup(monkeypatch, (item,))
-    actor = Subject(account_id=19)
+    actor = Actor(account_id=19)
 
     await ingestion.admit_candidates(h.services, (item,), actor=actor)
 

@@ -19,7 +19,7 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import allows, subject_for_interaction
+from squid.bot.utils.permissions import actor_for_interaction, allows
 from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
@@ -174,7 +174,7 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
     )
     async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
         """Browse searchable build details, review actions, and schematic tools."""
-        subject = await subject_for_interaction(request)
+        subject = await actor_for_interaction(request)
         permissions = self.bot.services.permissions
 
         async def held(node: PermissionNode) -> bool:

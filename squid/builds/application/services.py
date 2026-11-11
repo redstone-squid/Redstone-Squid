@@ -19,9 +19,9 @@ from squid.builds.domain import BuildDraft, RestrictionTypeLiteral, Status, sort
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.builds.models import Build
+from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.unit_of_work import UnitOfWorkFactory
 
@@ -30,7 +30,7 @@ from squid.unit_of_work import UnitOfWorkFactory
 class BuildEditor:
     """The permission subject requesting a build edit."""
 
-    subject: Subject
+    subject: Actor
     source: str = "build_edit"
 
 

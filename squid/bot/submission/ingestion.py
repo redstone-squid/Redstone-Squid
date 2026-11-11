@@ -16,8 +16,8 @@ import discord
 from squid.bot.submission.draft_intake import receive_retained_file
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.utils.accounts import get_or_create_discord_account_id
+from squid.core.actors import Actor
 from squid.core.errors import SquidError
-from squid.permissions.domain import Subject
 from squid.runtime import BotServices
 from squid.submissions.application.drafts import DraftActor
 from squid.submissions.application.inference_runs import InferenceCandidate
@@ -45,7 +45,7 @@ async def ingest_message_bundle(
     """
     run_id = uuid5(NAMESPACE_URL, "discord-inference:" + ":".join(str(message.id) for message in primary))
     owner = await get_or_create_discord_account_id(services.accounts, primary[0].author)
-    candidates = await services.submission_inference.resume(run_id, Subject(account_id=owner))
+    candidates = await services.submission_inference.resume(run_id, Actor(account_id=owner))
     if candidates is None:
         source_files = tuple(
             SubmissionSourceFile(

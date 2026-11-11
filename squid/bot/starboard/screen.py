@@ -9,8 +9,9 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
+from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -75,7 +76,7 @@ class StarboardScreen(sd.Screen):
         capabilities: frozenset[PermissionNode],
         authorize: StarboardAuthorizer,
         edits: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         validate_channel: ChannelValidator,
     ) -> None:
         self._operations = operations

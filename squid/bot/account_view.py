@@ -27,8 +27,9 @@ from squid.bot.profile_editor import ProfileEditor
 from squid.bot.profile_render import identity_label as _identity_label
 from squid.bot.profile_render import own_profile_avatar, own_profile_fields
 from squid.bot.ui import CardField, tr
+from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditActor, EditCommand, EditValues, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
 
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
@@ -73,7 +74,7 @@ class AccountOverview(sl.Component[sl.ComponentsV2Target, sd.Request]):
         *,
         accounts: AccountService,
         edits: EditRunner,
-        actor: Callable[[], Awaitable[EditActor]],
+        actor: Callable[[], Awaitable[Actor]],
         account_id: int,
         actor_id: int,
         request_consent: ConsentRequest,
