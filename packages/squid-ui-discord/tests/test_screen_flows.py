@@ -343,3 +343,57 @@ async def test_parent_render_failure_after_commit_still_closes_completed_child()
         assert await parent.child.wait() == Completed("chosen")
         assert child.root.finished
         parent.value = ""
+
+
+class ReopeningParent(sd.Screen[str]):
+    """Opens a fresh Choice on every press; Choice's session admits one at a time."""
+
+    policy = sd.ResponseSpec(session=sd.SessionSpec("reopening-parent"))
+
+    def __init__(self) -> None:
+        self.children: list[Choice] = []
+        self.fail_open = False
+
+    @override
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+        return sl.action_controls(sl.action_control("Open", self.open, key="open"), key="actions")
+
+    async def open(self, event: sd.PressEvent) -> None:
+        child = Choice()
+        result = await self.open_child(event, child, on_result=self.accept)
+        assert isinstance(result, sd.Presented)
+        self.children.append(child)
+        if self.fail_open:
+            raise ValueError("opening action rolled back")
+
+    async def accept(self, event: ScreenResultEvent[str]) -> None:
+        pass
+
+
+async def test_opening_from_a_press_replaces_the_colliding_child_after_commit() -> None:
+    # A panel cannot close inside an action's transaction, so the replaced child must close
+    # once the press commits rather than failing the replacement and leaving both open.
+    parent = ReopeningParent()
+    async with sd.testing.stage(parent, owner=object()) as ui:
+        await ui.press("open")
+        first = parent.children[0]
+        await ui.press("open")
+        second = parent.children[1]
+
+        with anyio.fail_after(2):
+            assert await first.wait() == Cancelled(ScreenCancelReason.REPLACED)
+        assert second.outcome is None
+        assert parent._screen_flow.children == {second}
+
+
+async def test_a_rolled_back_open_leaves_the_existing_child_open() -> None:
+    parent = ReopeningParent()
+    async with sd.testing.stage(parent, owner=object()) as ui:
+        await ui.press("open")
+        first = parent.children[0]
+        parent.fail_open = True
+        await ui.press("open")
+        await anyio.sleep(0)
+
+        assert first.outcome is None
+        assert first in parent._screen_flow.children

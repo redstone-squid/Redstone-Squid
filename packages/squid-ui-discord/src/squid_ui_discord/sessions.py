@@ -18,11 +18,14 @@ from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum, StrEnum
+from functools import partial
 from typing import Literal, Protocol
 from uuid import uuid4
 
 import anyio
 
+from squid_reactivity import on_action_commit
+from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_ui.text import TextLike
 from squid_ui_discord.closure import CloseReason
 from squid_ui_discord.delivery import Abandoned, Delivered, DeliveryResult, MessageDestination
@@ -1046,13 +1049,25 @@ class SessionManager:
             if key is not None:
                 self._by_key.setdefault(key, []).append(newcomer)
             newcomer._activate()
+        current = CURRENT_TRANSACTION.get()
+        host = message_root.config.execution_host
+        if victims and current is not None and not current.closed and host is not None:
+            # A panel cannot close inside an action's transaction, so an open from a button
+            # press retires the sessions it replaces once that action commits. If the action
+            # rolls back, the opener discards the newcomer and the replaced sessions stay open.
+            on_action_commit(lambda _commit: host.start_cleanup(partial(self._retire, victims, newcomer)))
+        else:
+            await self._retire(victims, newcomer)
+        return Opened(newcomer)
+
+    async def _retire(self, victims: tuple[Session, ...], newcomer: Session) -> None:
+        """Close sessions replaced by newcomer, logging failures instead of raising them."""
         try:
             await self._finish_sessions(victims, disable=True, reason=CloseReason.REPLACED)
         except Exception:
             # Admission has committed. Retired-session failures remain observable through
             # their shutdown results, but must not turn a successful open into a retry.
             logger.exception("replacement cleanup failed after admitting session %s", newcomer.id)
-        return Opened(newcomer)
 
     def _live_occupants(self, key: Hashable) -> tuple[Session, ...]:
         occupants = self._by_key.get(key, [])
