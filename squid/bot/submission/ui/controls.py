@@ -1,4 +1,4 @@
-"""Durable routed controls for build workspaces."""
+"""Handlers for durable build-workspace controls; route identities live in routes.py."""
 
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -7,22 +7,22 @@ from discord import Interaction
 
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
-from squid.bot.routes._root import _feature_group
 from squid.bot.submission.ui.drafts import draft_editor
 from squid.bot.submission.ui.revisions import proposal_screen
+from squid.bot.submission.ui.routes import (
+    build_edit,
+    build_edit_recovery,
+    builds,
+    draft_reopen,
+    inference_reopen,
+    revision_reopen,
+)
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import subject_for_interaction
 from squid.core.i18n import tr
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
-
-
-builds, _builds_created = _feature_group("builds")
-build_edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
-build_edit_recovery = builds.define("{build_id:int}:edit:recover")
-draft_reopen = builds.define("draft:{draft_id}:reopen")
-revision_reopen = builds.define("revision:{proposal_id}:reopen")
 
 
 @builds.route(build_edit)
@@ -59,9 +59,6 @@ async def recover_build_editor(interaction: Interaction[RedstoneSquid], build_id
     await open_build_editor(request, build, recovered=True)
 
 
-__all__ = ["build_edit", "build_edit_recovery", "builds", "edit_build", "recover_build_editor"]
-
-
 @builds.route(draft_reopen)
 async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -> None:
     """Resolve durable identity and current authority before reopening a private draft."""
@@ -88,9 +85,6 @@ async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: 
     await request.respond(screen, audience="personal")
 
 
-inference_reopen = builds.define("inference:{run_id}:reopen")
-
-
 @builds.route(inference_reopen)
 async def reopen_inference(interaction: Interaction[RedstoneSquid], run_id: str) -> None:
     """Recover candidates under current consent and owner or staff authority."""
@@ -105,3 +99,18 @@ async def reopen_inference(interaction: Interaction[RedstoneSquid], run_id: str)
     await request.respond(
         InferenceCandidatesScreen(interaction.client.services, UUID(run_id), candidates), audience="personal"
     )
+
+
+__all__ = [
+    "build_edit",
+    "build_edit_recovery",
+    "builds",
+    "draft_reopen",
+    "edit_build",
+    "inference_reopen",
+    "recover_build_editor",
+    "reopen_draft",
+    "reopen_inference",
+    "reopen_revision",
+    "revision_reopen",
+]
