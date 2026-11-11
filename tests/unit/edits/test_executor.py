@@ -6,12 +6,12 @@ from types import TracebackType
 from uuid import UUID
 
 import pytest
-from pydantic import JsonValue
+from pydantic import BaseModel, ConfigDict, JsonValue
 from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ValidationError
-from squid.edits.application import EditExecutor, FieldEditHandler
+from squid.edits.application import EditExecutor
 from squid.edits.domain import (
     EditAttempt,
     EditCommand,
@@ -21,11 +21,10 @@ from squid.edits.domain import (
     EditTarget,
     EditValues,
     OperationReuseError,
-    PreparedEdit,
     Revision,
     RevisionConflictError,
 )
-from squid.persistence.revisions import require_revision
+from squid.edits.fields import Aggregate, FieldCommand
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 TARGET = EditTarget("example", "1")
@@ -55,26 +54,32 @@ class Work(FakeUnitOfWork[Store]):
         return self.state
 
 
-class Handler(FieldEditHandler[Work]):
-    fields = frozenset({"name", "enabled"})
+class Values(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    name: str
+    enabled: bool
 
-    async def load(self, uow: Work, command: EditCommand) -> EditValues:
-        require_revision(command.expected[0], uow.state.revision)
-        return uow.state.values
 
-    async def validate(self, uow: Work, actor: Actor, command: EditCommand, values: EditValues) -> EditValues:
-        if not uow.state.allowed or actor.account_id != 7:
-            raise AuthorizationError
-        data = values.unpack()
-        data["name"] = str(data["name"]).strip()
-        return EditValues.of(data)
+class Handler(FieldCommand[Work, Store, Values]):
+    def __init__(self) -> None:
+        async def load(uow: Work, command: EditCommand) -> Store:
+            return uow.state
 
-    async def apply(
-        self, uow: Work, actor: Actor, command: EditCommand, prepared: PreparedEdit
-    ) -> tuple[Revision, ...]:
-        uow.state.values = prepared.after
-        uow.state.revision += 1
-        return (Revision(TARGET, uow.state.revision),)
+        async def flush(uow: Work, root: Store, expected: Revision) -> Revision:
+            root.revision += 1
+            return Revision(TARGET, root.revision)
+
+        async def authorize(uow: Work, actor: Actor, root: Store) -> None:
+            if not root.allowed or actor.account_id != 7:
+                raise AuthorizationError
+
+        super().__init__(Aggregate(TARGET, load, lambda root: root.revision, flush), Values, authorize)
+
+    async def capture(self, uow: Work, root: Store, command: EditCommand) -> Values:
+        return Values.model_validate(root.values.unpack())
+
+    async def write(self, uow: Work, root: Store, before: Values, after: Values) -> None:
+        root.values = EditValues.of(after.model_dump(mode="json"))
 
 
 def command(name: str = "Changed", revision: int = 1) -> EditCommand:

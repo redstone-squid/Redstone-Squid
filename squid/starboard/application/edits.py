@@ -6,8 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
-from squid.edits.application import EditUnitOfWork, FieldEditHandler
+from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.edits.fields import Aggregate, FieldCommand
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import PermissionNode
@@ -106,9 +107,7 @@ class BoardPresence(BoardValues):
     present: bool
 
 
-class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
-    fields = frozenset(BoardValues.model_fields)
-
+class StarboardOperations:
     def __init__(self, permissions: PermissionService) -> None:
         self._permissions = permissions
 
@@ -129,7 +128,7 @@ class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
             raise NotFoundError(msg)
         return row
 
-    async def authorize(
+    async def authorize_board(
         self, uow: StarboardEditUnitOfWork, actor: Actor, guild_id: int, nodes: set[PermissionNode]
     ) -> None:
         if actor.guild_id != guild_id:
@@ -139,25 +138,46 @@ class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
                 raise AuthorizationError
 
     @staticmethod
-    async def capture(uow: StarboardEditUnitOfWork, row: StarboardConfig) -> BoardValues:
+    async def board_values(uow: StarboardEditUnitOfWork, row: StarboardConfig) -> BoardValues:
         return BoardValues.capture(StarboardSnapshot.capture(row, dict(await uow.starboards.role_multipliers(row.id))))
 
-    async def load(self, uow: StarboardEditUnitOfWork, command: EditCommand) -> EditValues:
-        row = await self.row(uow, command)
-        assert row is not None
-        if row.archived:
-            msg = "Starboard not found."
-            raise NotFoundError(msg)
-        return (await self.capture(uow, row)).values()
+
+class StarboardEdit(FieldCommand[StarboardEditUnitOfWork, StarboardConfig, BoardValues], StarboardOperations):
+    def __init__(self, permissions: PermissionService) -> None:
+        StarboardOperations.__init__(self, permissions)
+
+        async def load(uow: StarboardEditUnitOfWork, command: EditCommand) -> StarboardConfig:
+            row = await uow.starboards.get_by_id(
+                int(command.expected[0].target.key), for_update=True, include_archived=True
+            )
+            if row is None or row.archived:
+                raise NotFoundError
+            return row
+
+        async def flush(uow: StarboardEditUnitOfWork, row: StarboardConfig, expected: Revision) -> Revision:
+            return await uow.starboards.flush_revision(row, expected)
+
+        async def authorize_root(uow: StarboardEditUnitOfWork, actor: Actor, row: StarboardConfig) -> None:
+            if actor.guild_id != row.guild_id:
+                raise AuthorizationError
+
+        FieldCommand.__init__(
+            self, Aggregate("starboard", load, lambda row: row.revision, flush), BoardValues, authorize_root
+        )
+
+    async def capture(self, uow: StarboardEditUnitOfWork, root: StarboardConfig, command: EditCommand) -> BoardValues:
+        return await self.board_values(uow, root)
 
     async def validate(
-        self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
-    ) -> EditValues:
-        row = await self.row(uow, command)
-        assert row is not None
-        before = await self.capture(uow, row)
-        after = BoardValues.model_validate(values.unpack())
-        if after.guild_id != row.guild_id:
+        self,
+        uow: StarboardEditUnitOfWork,
+        actor: Actor,
+        root: StarboardConfig,
+        command: EditCommand,
+        before: BoardValues,
+        after: BoardValues,
+    ) -> BoardValues:
+        if after.guild_id != root.guild_id:
             msg = "A starboard edit cannot change its guild."
             raise ValidationError(msg)
         nodes = set()
@@ -167,46 +187,41 @@ class StarboardEdit(FieldEditHandler[StarboardEditUnitOfWork]):
             nodes.add(STARBOARD_EMOJI_EDIT)
         if before.weights != after.weights:
             nodes.add(STARBOARD_WEIGHT_EDIT)
-        await self.authorize(uow, actor, row.guild_id, nodes or {STARBOARD_BOARD_EDIT})
-        normalized = after.config(row.id)
-        await uow.starboards.lock_names(row.guild_id)
-        collision = await uow.starboards.get(row.guild_id, normalized.name)
-        if collision is not None and collision.id != row.id:
+        await StarboardOperations.authorize_board(self, uow, actor, root.guild_id, nodes or {STARBOARD_BOARD_EDIT})
+        normalized = after.config(root.id)
+        await uow.starboards.lock_names(root.guild_id)
+        collision = await uow.starboards.get(root.guild_id, normalized.name)
+        if collision is not None and collision.id != root.id:
             msg = "A starboard with this name already exists."
             raise ConflictError(msg)
-        return after.model_copy(update={"settings": after.settings | {"name": normalized.name}}).values()
+        return after.model_copy(update={"settings": after.settings | {"name": normalized.name}})
 
-    async def apply(
-        self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
-    ) -> tuple[Revision, ...]:
-        row = await self.row(uow, command)
-        assert row is not None
-        before = BoardValues.model_validate(prepared.before.unpack())
-        after = BoardValues.model_validate(prepared.after.unpack())
+    async def write(
+        self, uow: StarboardEditUnitOfWork, root: StarboardConfig, before: BoardValues, after: BoardValues
+    ) -> None:
         for key, value in after.settings.items():
-            setattr(row, key, value)
+            setattr(root, key, value)
         if after.emojis != before.emojis:
-            await uow.starboards.set_emojis(row.id, tuple(emoji.row() for emoji in after.emojis))
+            await uow.starboards.set_emojis(root.id, tuple(emoji.row() for emoji in after.emojis))
         for role_id in before.weights.keys() | after.weights.keys():
             if before.weights.get(role_id) != after.weights.get(role_id):
-                await uow.starboards.set_role_multiplier(row.id, role_id, after.weights.get(role_id))
-        return (await uow.starboards.flush_revision(row, command.expected[0]),)
+                await uow.starboards.set_role_multiplier(root.id, role_id, after.weights.get(role_id))
 
 
-class StarboardCreation(StarboardEdit):
+class StarboardCreation(StarboardOperations):
     async def prepare(self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         row = await self.row(uow, command, missing=True)
         after = BoardPresence.model_validate(command.values.unpack())
         normalized = after.config(self.identity(command))
         after = after.model_copy(update={"settings": after.settings | {"name": normalized.name}})
-        await self.authorize(uow, actor, after.guild_id, {STARBOARD_BOARD_CREATE})
+        await self.authorize_board(uow, actor, after.guild_id, {STARBOARD_BOARD_CREATE})
         if row is None:
             if not after.present:
                 msg = "Starboard not found."
                 raise NotFoundError(msg)
             before = after.model_copy(update={"present": False})
         else:
-            before = BoardPresence(**(await self.capture(uow, row)).model_dump(), present=not row.archived)
+            before = BoardPresence(**(await self.board_values(uow, row)).model_dump(), present=not row.archived)
             if before.model_copy(update={"present": after.present}) != after:
                 msg = "The starboard configuration changed after creation."
                 raise ConflictError(msg)
@@ -236,12 +251,12 @@ class StarboardCreation(StarboardEdit):
         return (await uow.starboards.flush_revision(row, command.expected[0]),)
 
 
-class StarboardDeletion(StarboardEdit):
+class StarboardDeletion(StarboardOperations):
     async def prepare(self, uow: StarboardEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         row = await self.row(uow, command)
         assert row is not None
-        await self.authorize(uow, actor, row.guild_id, {STARBOARD_BOARD_DELETE})
-        before = BoardPresence(**(await self.capture(uow, row)).model_dump(), present=not row.archived)
+        await self.authorize_board(uow, actor, row.guild_id, {STARBOARD_BOARD_DELETE})
+        before = BoardPresence(**(await self.board_values(uow, row)).model_dump(), present=not row.archived)
         return PreparedEdit(before.values(), before.model_copy(update={"present": False}).values(), final=True)
 
     async def apply(

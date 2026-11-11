@@ -17,15 +17,18 @@ from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit
 
 @dataclass(frozen=True, slots=True)
 class Aggregate[UowT: EditUnitOfWork, RootT]:
-    target: EditTarget
-    load: Callable[[UowT], Awaitable[RootT]]
+    target: EditTarget | str
+    load: Callable[[UowT, EditCommand], Awaitable[RootT]]
     revision: Callable[[RootT], int]
     flush: Callable[[UowT, RootT, Revision], Awaitable[Revision]]
 
     async def lock(self, uow: UowT, command: EditCommand) -> RootT:
-        if len(command.expected) != 1 or command.expected[0].target != self.target:
+        if len(command.expected) != 1:
             raise ValidationError
-        root = await self.load(uow)
+        target = command.expected[0].target
+        if (target.kind if isinstance(self.target, str) else target) != self.target:
+            raise ValidationError
+        root = await self.load(uow, command)
         expected = command.expected[0]
         current = self.revision(root)
         if current != expected.value:
@@ -60,12 +63,17 @@ class FieldCommand[UowT: EditUnitOfWork, RootT, ValuesT: BaseModel]:
         self.authorize = authorize
         self.audit = audit
 
-    def capture(self, root: RootT) -> ValuesT:
+    async def capture(self, uow: UowT, root: RootT, command: EditCommand) -> ValuesT:
         return self.values.model_validate(root, from_attributes=True)
 
-    async def write(self, uow: UowT, root: RootT, values: ValuesT) -> None:
+    async def validate(
+        self, uow: UowT, actor: Actor, root: RootT, command: EditCommand, before: ValuesT, after: ValuesT
+    ) -> ValuesT:
+        return after
+
+    async def write(self, uow: UowT, root: RootT, before: ValuesT, after: ValuesT) -> None:
         for name in self.values.model_fields:
-            setattr(root, name, getattr(values, name))
+            setattr(root, name, getattr(after, name))
 
     async def prepare(self, uow: UowT, actor: Actor, command: EditCommand) -> PreparedFields[RootT, ValuesT]:
         changes = command.values.unpack()
@@ -73,8 +81,9 @@ class FieldCommand[UowT: EditUnitOfWork, RootT, ValuesT: BaseModel]:
             raise ValidationError
         root = await self.aggregate.lock(uow, command)
         await self.authorize(uow, actor, root)
-        previous = self.capture(root)
+        previous = await self.capture(uow, root, command)
         desired = self.values.model_validate(previous.model_dump(mode="json") | changes)
+        desired = await self.validate(uow, actor, root, command, previous, desired)
         return PreparedFields(
             EditValues.of(previous.model_dump(mode="json")),
             EditValues.of(desired.model_dump(mode="json")),
@@ -87,7 +96,7 @@ class FieldCommand[UowT: EditUnitOfWork, RootT, ValuesT: BaseModel]:
         self, uow: UowT, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         assert isinstance(prepared, PreparedFields)
-        await self.write(uow, prepared.root, prepared.desired)
+        await self.write(uow, prepared.root, prepared.previous, prepared.desired)
         if self.audit is not None:
             await self.audit(uow, actor, prepared.previous, prepared.desired)
         return (await self.aggregate.flush(uow, prepared.root, command.expected[0]),)

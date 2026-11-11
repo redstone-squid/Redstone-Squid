@@ -12,12 +12,12 @@ from squid.accounts.models import Account, AccountProfile
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import UNSET
-from squid.edits.application import EditUnitOfWork, FieldEditHandler
+from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.edits.fields import Aggregate, FieldCommand
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_MANAGE
-from squid.persistence.revisions import require_revision
 
 PROFILE_EDIT = "accounts.profile"
 VISIBILITY_EDIT = "accounts.visibility"
@@ -68,52 +68,50 @@ class AccountEditUnitOfWork(AccountUnitOfWork, EditUnitOfWork, PermissionUnitOfW
     def accounts(self) -> AccountEditStore: ...
 
 
-class AccountFieldEdit(FieldEditHandler[AccountEditUnitOfWork]):
+class AccountEdits:
     def __init__(self, permissions: PermissionService) -> None:
         self._permissions = permissions
 
-    @staticmethod
-    def account_id(command: EditCommand) -> int:
-        if len(command.expected) != 1 or command.expected[0].target.kind != "account":
-            message = "Account edits must guard the owning account revision"
-            raise ValueError(message)
-        return int(command.expected[0].target.key)
+        async def load(uow: AccountEditUnitOfWork, command: EditCommand) -> Account:
+            return await uow.accounts.lock_for_edit(int(command.expected[0].target.key))
 
-    async def account(self, uow: AccountEditUnitOfWork, command: EditCommand) -> Account:
-        account = await uow.accounts.lock_for_edit(self.account_id(command))
-        require_revision(command.expected[0], account.revision)
-        return account
+        async def flush(uow: AccountEditUnitOfWork, account: Account, expected: Revision) -> Revision:
+            return await uow.accounts.flush_edit_revision(account, expected)
 
-    async def authorize(self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand) -> None:
-        account_id = self.account_id(command)
-        if actor.account_id != account_id or not await self._permissions.allows_in(uow, actor, ACCOUNT_SELF_MANAGE):
+        self.aggregate = Aggregate("account", load, lambda account: account.revision, flush)
+
+    async def authorize(self, uow: AccountEditUnitOfWork, actor: Actor, account: Account) -> None:
+        if actor.account_id != account.id or not await self._permissions.allows_in(uow, actor, ACCOUNT_SELF_MANAGE):
             raise AuthorizationError
-        if not await uow.accounts.has_current_consent(account_id):
-            raise ConsentRequiredError(account_id=account_id)
+        if not await uow.accounts.has_current_consent(account.id):
+            raise ConsentRequiredError(account_id=account.id)
 
 
-class AccountProfileEdit(AccountFieldEdit):
-    fields = frozenset(ProfileValues.model_fields)
+class AccountProfileEdit(FieldCommand[AccountEditUnitOfWork, Account, ProfileValues]):
+    def __init__(self, permissions: PermissionService) -> None:
+        policy = AccountEdits(permissions)
+        super().__init__(policy.aggregate, ProfileValues, policy.authorize)
 
-    async def load(self, uow: AccountEditUnitOfWork, command: EditCommand) -> EditValues:
-        account = await self.account(uow, command)
-        profile = await uow.accounts.get_profile(account.id)
+    async def capture(self, uow: AccountEditUnitOfWork, root: Account, command: EditCommand) -> ProfileValues:
+        profile = await uow.accounts.get_profile(root.id)
         assert profile is not None
-        return EditValues.of(ProfileValues.model_validate(profile).model_dump(mode="json"))
+        return ProfileValues.model_validate(profile)
 
     async def validate(
-        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
-    ) -> EditValues:
-        await self.authorize(uow, actor, command)
-        normalized = ProfileValues.model_validate(values.unpack()).update().validated()
-        return ProfileValues.patch(normalized)
+        self,
+        uow: AccountEditUnitOfWork,
+        actor: Actor,
+        root: Account,
+        command: EditCommand,
+        before: ProfileValues,
+        after: ProfileValues,
+    ) -> ProfileValues:
+        return ProfileValues.model_validate(ProfileValues.patch(after.update().validated()).unpack())
 
-    async def apply(
-        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
-    ) -> tuple[Revision, ...]:
-        account = await self.account(uow, command)
-        await uow.accounts.upsert_profile(account.id, ProfileValues.model_validate(prepared.after.unpack()).update())
-        return (await uow.accounts.flush_edit_revision(account, command.expected[0]),)
+    async def write(
+        self, uow: AccountEditUnitOfWork, root: Account, before: ProfileValues, after: ProfileValues
+    ) -> None:
+        await uow.accounts.upsert_profile(root.id, after.update())
 
 
 class VisibilityValues(BaseModel):
@@ -122,36 +120,28 @@ class VisibilityValues(BaseModel):
     is_public: bool
 
 
-class AccountVisibilityEdit(AccountFieldEdit):
-    fields = frozenset(VisibilityValues.model_fields)
+class AccountVisibilityEdit(FieldCommand[AccountEditUnitOfWork, Account, VisibilityValues]):
+    def __init__(self, permissions: PermissionService) -> None:
+        policy = AccountEdits(permissions)
+        super().__init__(policy.aggregate, VisibilityValues, policy.authorize)
 
-    async def load(self, uow: AccountEditUnitOfWork, command: EditCommand) -> EditValues:
-        account = await self.account(uow, command)
+    async def capture(self, uow: AccountEditUnitOfWork, root: Account, command: EditCommand) -> VisibilityValues:
         identity_id = VisibilityValues.model_validate(command.values.unpack()).identity_id
-        identity = next((row for row in account.identities if row.id == identity_id), None)
+        identity = next((row for row in root.identities if row.id == identity_id), None)
         if identity is None:
-            raise AccountIdentityNotFoundError(identity_id, account_id=account.id)
-        return EditValues.of({"identity_id": identity_id, "is_public": identity.is_public})
+            raise AccountIdentityNotFoundError(identity_id, account_id=root.id)
+        return VisibilityValues(identity_id=identity_id, is_public=identity.is_public)
 
-    async def validate(
-        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
-    ) -> EditValues:
-        await self.authorize(uow, actor, command)
-        return EditValues.of(VisibilityValues.model_validate(values.unpack()).model_dump(mode="json"))
-
-    async def apply(
-        self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
-    ) -> tuple[Revision, ...]:
-        account = await self.account(uow, command)
-        values = VisibilityValues.model_validate(prepared.after.unpack())
-        await uow.accounts.set_identity_visibility(account.id, values.identity_id, is_public=values.is_public)
-        return (await uow.accounts.flush_edit_revision(account, command.expected[0]),)
+    async def write(
+        self, uow: AccountEditUnitOfWork, root: Account, before: VisibilityValues, after: VisibilityValues
+    ) -> None:
+        await uow.accounts.set_identity_visibility(root.id, after.identity_id, is_public=after.is_public)
 
 
-class AccountUnlinkEdit(AccountFieldEdit):
+class AccountUnlinkEdit(AccountEdits):
     async def prepare(self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
-        account = await self.account(uow, command)
-        await self.authorize(uow, actor, command)
+        account = await self.aggregate.lock(uow, command)
+        await self.authorize(uow, actor, account)
         identity_id = command.values.unpack().get("identity_id")
         if not isinstance(identity_id, int) or isinstance(identity_id, bool):
             message = "An unlink requires an identity ID"
@@ -167,7 +157,7 @@ class AccountUnlinkEdit(AccountFieldEdit):
     async def apply(
         self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
-        account = await self.account(uow, command)
+        account = await self.aggregate.lock(uow, command)
         identity_id = prepared.before.unpack()["identity_id"]
         assert isinstance(identity_id, int)
         await uow.accounts.unlink_identity(account.id, identity_id)

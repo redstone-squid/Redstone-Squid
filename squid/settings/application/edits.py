@@ -1,16 +1,16 @@
 """Declarative runtime setting edits with current authority and aggregate revisions."""
 
+from dataclasses import dataclass
 from typing import Protocol
 
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
-from squid.edits.application import EditUnitOfWork, FieldEditHandler
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.edits.application import EditUnitOfWork
+from squid.edits.domain import EditCommand, EditTarget, Revision
 from squid.edits.fields import Aggregate, FieldCommand
 from squid.permissions.application.ports import PermissionUnitOfWork
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
-from squid.persistence.revisions import require_revision
 from squid.settings.application.ports import GuildSettingsUnitOfWork, SettingsStore
 from squid.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.settings.domain.runtime import RuntimeSettings
@@ -34,7 +34,7 @@ class SettingsEditUnitOfWork(EditUnitOfWork, PermissionUnitOfWork, GuildSettings
 
 class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, RuntimeSettings]):
     def __init__(self, permissions: PermissionService, defaults: RuntimeSettings) -> None:
-        async def load(uow: SettingsEditUnitOfWork) -> RuntimeSetting:
+        async def load(uow: SettingsEditUnitOfWork, command: EditCommand) -> RuntimeSetting:
             return await uow.settings.runtime(defaults, for_update=True)
 
         async def flush(uow: SettingsEditUnitOfWork, row: RuntimeSetting, expected: Revision) -> Revision:
@@ -67,6 +67,11 @@ def guild_target(guild_id: int) -> EditTarget:
 async def guild_snapshot(uow: GuildSettingsUnitOfWork, guild_id: int) -> tuple[GuildSettings, int]:
     """Read channels and child vote settings under their shared root lock."""
     row = await uow.settings.get_or_create_for_update(guild_id)
+    return await _guild_values(uow, row), row.revision
+
+
+async def _guild_values(uow: GuildSettingsUnitOfWork, row: ServerSetting) -> GuildSettings:
+    guild_id = row.server_id
     voting = {}
     for kind in VoteKind:
         voting[kind] = VoteConfiguration(
@@ -75,35 +80,47 @@ async def guild_snapshot(uow: GuildSettingsUnitOfWork, guild_id: int) -> tuple[G
         )
     return GuildSettings(
         **{name: getattr(row, name) for name in CHANNEL_FIELDS.values()}, locale=row.locale, voting=voting
-    ), row.revision
+    )
 
 
-class GuildSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
-    fields = frozenset(GuildSettings.model_fields)
+@dataclass(slots=True)
+class GuildEditState:
+    row: ServerSetting
+    values: GuildSettings
 
+
+class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, GuildSettings]):
     def __init__(self, permissions: PermissionService) -> None:
         self._permissions = permissions
 
-    @staticmethod
-    def guild_id(command: EditCommand) -> int:
-        if len(command.expected) != 1 or command.expected[0].target.kind != "guild-settings":
-            message = "A guild settings edit must guard its guild revision"
-            raise ValueError(message)
-        return int(command.expected[0].target.key)
+        async def load(uow: SettingsEditUnitOfWork, command: EditCommand) -> GuildEditState:
+            row = await uow.settings.get_or_create_for_update(int(command.expected[0].target.key))
+            return GuildEditState(row, await _guild_values(uow, row))
 
-    async def load(self, uow: SettingsEditUnitOfWork, command: EditCommand) -> EditValues:
-        value, revision = await guild_snapshot(uow, self.guild_id(command))
-        require_revision(command.expected[0], revision)
-        return EditValues.of(value.model_dump(mode="json"))
+        async def flush(uow: SettingsEditUnitOfWork, state: GuildEditState, expected: Revision) -> Revision:
+            return await uow.settings.flush_guild_revision(state.row, expected)
+
+        async def authorize(uow: SettingsEditUnitOfWork, actor: Actor, state: GuildEditState) -> None:
+            if actor.guild_id != state.row.server_id:
+                raise AuthorizationError
+
+        super().__init__(
+            Aggregate("guild-settings", load, lambda state: state.row.revision, flush), GuildSettings, authorize
+        )
+
+    async def capture(self, uow: SettingsEditUnitOfWork, root: GuildEditState, command: EditCommand) -> GuildSettings:
+        return root.values
 
     async def validate(
-        self, uow: SettingsEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
-    ) -> EditValues:
-        guild_id = self.guild_id(command)
-        if actor.guild_id != guild_id:
-            raise AuthorizationError
-        before, _ = await guild_snapshot(uow, guild_id)
-        after = GuildSettings.model_validate(values.unpack())
+        self,
+        uow: SettingsEditUnitOfWork,
+        actor: Actor,
+        root: GuildEditState,
+        command: EditCommand,
+        before: GuildSettings,
+        after: GuildSettings,
+    ) -> GuildSettings:
+        guild_id = root.row.server_id
         changed = {name for name, value in before.model_dump().items() if value != after.model_dump()[name]}
         checked = changed or command.values.unpack().keys()
         nodes = set()
@@ -125,17 +142,14 @@ class GuildSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
             if any(weight.guild_id != guild_id or weight.kind != kind for weight in configuration.weights):
                 message = "Role weights must belong to this guild and voting kind"
                 raise ValueError(message)
-        return EditValues.of(after.model_dump(mode="json"))
+        return after
 
-    async def apply(
-        self, uow: SettingsEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
-    ) -> tuple[Revision, ...]:
-        guild_id = self.guild_id(command)
-        row = await uow.settings.get_or_create_for_update(guild_id)
-        before = GuildSettings.model_validate(prepared.before.unpack())
-        after = GuildSettings.model_validate(prepared.after.unpack())
+    async def write(
+        self, uow: SettingsEditUnitOfWork, root: GuildEditState, before: GuildSettings, after: GuildSettings
+    ) -> None:
+        guild_id = root.row.server_id
         for name in (*CHANNEL_FIELDS.values(), "locale"):
-            setattr(row, name, getattr(after, name))
+            setattr(root.row, name, getattr(after, name))
         for kind, configuration in after.voting.items():
             if configuration == before.voting[kind]:
                 continue
@@ -144,4 +158,3 @@ class GuildSettingsEdit(FieldEditHandler[SettingsEditUnitOfWork]):
                 await uow.votes.set_emoji_preset(configuration.preset)
             for weight in configuration.weights:
                 await uow.votes.set_role_weight(weight)
-        return (await uow.settings.flush_guild_revision(row, command.expected[0]),)

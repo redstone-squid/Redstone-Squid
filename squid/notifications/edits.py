@@ -1,6 +1,7 @@
 """Shared edits for channel preferences, stable follows, and per-item read state."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol, cast
 from uuid import UUID
 
@@ -10,8 +11,9 @@ from whenever import Instant
 from squid.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
-from squid.edits.application import EditUnitOfWork, FieldEditHandler
+from squid.edits.application import EditUnitOfWork
 from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
+from squid.edits.fields import Aggregate, FieldCommand
 from squid.notifications.application import NotificationRepository, NotificationUnitOfWork
 from squid.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.errors import NotificationNotFoundError, NotificationSubscriptionNotFoundError
@@ -66,7 +68,7 @@ async def authorize(
         raise ConsentRequiredError(account_id=account_id)
 
 
-class NotificationSettingsEdit(FieldEditHandler[NotificationEditUnitOfWork]):
+class NotificationSettingsEdit:
     def __init__(self, permissions: PermissionService) -> None:
         self._permissions = permissions
 
@@ -89,29 +91,55 @@ class PreferencesValues(BaseModel):
     dm_enabled: bool
 
 
-class NotificationPreferencesEdit(NotificationSettingsEdit):
-    fields = frozenset(PreferencesValues.model_fields)
+@dataclass(slots=True)
+class NotificationSettingsState:
+    account_id: int
+    revision: int
 
-    async def load(self, uow: NotificationEditUnitOfWork, command: EditCommand) -> EditValues:
-        preferences = await uow.notifications.get_preferences(await self.lock(uow, command))
-        return EditValues.of({"web_enabled": preferences.web_enabled, "dm_enabled": preferences.dm_enabled})
 
-    async def validate(
-        self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand, values: EditValues
-    ) -> EditValues:
-        await authorize(uow, self._permissions, actor, self.account_id(command))
-        return EditValues.of(PreferencesValues.model_validate(values.unpack()).model_dump(mode="json"))
+class NotificationPreferencesEdit(
+    FieldCommand[NotificationEditUnitOfWork, NotificationSettingsState, PreferencesValues]
+):
+    def __init__(self, permissions: PermissionService) -> None:
+        async def load(uow: NotificationEditUnitOfWork, command: EditCommand) -> NotificationSettingsState:
+            account_id = int(command.expected[0].target.key)
+            return NotificationSettingsState(account_id, await uow.notifications.lock_settings(account_id))
 
-    async def apply(
-        self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
-    ) -> tuple[Revision, ...]:
-        account_id = self.account_id(command)
-        values = PreferencesValues.model_validate(prepared.after.unpack())
+        async def flush(
+            uow: NotificationEditUnitOfWork, root: NotificationSettingsState, expected: Revision
+        ) -> Revision:
+            return Revision(expected.target, root.revision)
+
+        async def authorize_root(
+            uow: NotificationEditUnitOfWork, actor: Actor, root: NotificationSettingsState
+        ) -> None:
+            await authorize(uow, permissions, actor, root.account_id)
+
+        super().__init__(
+            Aggregate("notification-settings", load, lambda root: root.revision, flush),
+            PreferencesValues,
+            authorize_root,
+        )
+
+    async def capture(
+        self, uow: NotificationEditUnitOfWork, root: NotificationSettingsState, command: EditCommand
+    ) -> PreferencesValues:
+        return PreferencesValues.model_validate(
+            await uow.notifications.get_preferences(root.account_id), from_attributes=True
+        )
+
+    async def write(
+        self,
+        uow: NotificationEditUnitOfWork,
+        root: NotificationSettingsState,
+        before: PreferencesValues,
+        after: PreferencesValues,
+    ) -> None:
         result = await uow.notifications.update_preferences(
-            account_id, web_enabled=values.web_enabled, dm_enabled=values.dm_enabled
+            root.account_id, web_enabled=after.web_enabled, dm_enabled=after.dm_enabled
         )
         assert result is not None
-        return (Revision(notification_target(account_id), result.revision),)
+        root.revision = result.revision
 
 
 class SubscriptionValues(BaseModel):

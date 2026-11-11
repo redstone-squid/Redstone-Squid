@@ -11,7 +11,6 @@ from whenever import Instant
 
 from squid.core.actors import Actor
 from squid.core.errors import ConflictError, ValidationError
-from squid.core.i18n import tr
 from squid.edits.domain import (
     EditAttempt,
     EditCommand,
@@ -20,7 +19,6 @@ from squid.edits.domain import (
     EditOutcome,
     EditReceipt,
     EditResult,
-    EditValues,
     OperationReuseError,
     PreparedEdit,
     Revision,
@@ -71,51 +69,6 @@ class EditHandler[UowT: EditUnitOfWork](Protocol):
         command: EditCommand,
         prepared: PreparedEdit,
     ) -> tuple[Revision, ...]: ...
-
-
-class FieldEditHandler[UowT: EditUnitOfWork]:
-    """Generate inverse values for an explicitly declared set of editable fields.
-
-    Domain adapters implement loading, validation, authorization, and persistence
-    once. Screens only supply the command. Load must lock and check the revision;
-    validate may normalize values and must authorize the current actor in this UOW.
-    """
-
-    fields: frozenset[str]
-
-    async def load(self, uow: UowT, command: EditCommand) -> EditValues:
-        raise NotImplementedError
-
-    async def validate(
-        self,
-        uow: UowT,
-        actor: Actor,
-        command: EditCommand,
-        values: EditValues,
-    ) -> EditValues:
-        raise NotImplementedError
-
-    async def prepare(self, uow: UowT, actor: Actor, command: EditCommand) -> PreparedEdit:
-        changes = command.values.unpack()
-        if not changes.keys() <= self.fields:
-            raise ValidationError(tr(t"edits-fields-not-editable = This edit contains fields that cannot be changed."))
-        before = await self.load(uow, command)
-        after = await self.validate(uow, actor, command, before.patch(command.values))
-        if before.unpack().keys() != after.unpack().keys() or not after.unpack().keys() <= self.fields:
-            message = "A field edit must preserve its declared projection"
-            raise ValueError(message)
-        # Retain the complete declared projection. Strict aggregate revisions fence
-        # every reversal, so restoring it cannot overwrite an unrelated later edit.
-        return PreparedEdit(before, after)
-
-    async def apply(
-        self,
-        uow: UowT,
-        actor: Actor,
-        command: EditCommand,
-        prepared: PreparedEdit,
-    ) -> tuple[Revision, ...]:
-        raise NotImplementedError
 
 
 class EditExecutor[UowT: EditUnitOfWork]:
