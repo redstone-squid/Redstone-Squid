@@ -4,13 +4,17 @@ import re
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import override
+from uuid import uuid4
 
 import anyio
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.edit_history import history_controls
 from squid.bot.layout_inspector import InspectablePanel
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, tr
+from squid_reactivity import transaction
+from squid_replication import LoroBackend, Replica
 
 _TAGS = (
     "Flush",
@@ -79,14 +83,28 @@ class BuildSample:
     ticks: int = 16
     description: str = "A flush door with a hidden mechanism and a single input below the threshold."
     oversized: bool = False
-    tag: str = "Flush"
 
 
 class BuildDraft(sl.Reactive):
-    """One invocation's draft and publication, retained only by its live panels."""
+    """Own a disposable build and replicated tags until the workbench calls close."""
 
     build: BuildSample = sl.state(BuildSample())
-    publication: sl.operations.OperationExecution[BuildSample, str] | None = sl.state(None, persist=False, opaque=True)
+    publication: sl.operations.OperationExecution[tuple[BuildSample, frozenset[str]], str] | None = sl.state(
+        None, persist=False, opaque=True
+    )
+
+    def __init__(self) -> None:
+        self.replica = Replica(str(uuid4()), backend=LoroBackend())
+        self.document = self.replica.open("sample-build")
+        self.tags = self.document.set("tags")
+        with transaction():
+            self.tags.add("Flush")
+
+    def close(self) -> None:
+        self.replica.close()
+
+    def snapshot(self) -> tuple[BuildSample, frozenset[str]]:
+        return self.build, self.tags.value
 
     def publication_text(self) -> str:
         execution = self.publication
@@ -96,7 +114,7 @@ class BuildDraft(sl.Reactive):
             case sl.operations.Pending(progress):
                 return f"Publishing · {progress}"
             case sl.operations.Succeeded(value):
-                return "Published · simulated" if value == self.build else "Draft changed · publish again"
+                return "Published · simulated" if value == self.snapshot() else "Draft changed · publish again"
             case sl.operations.Failed():
                 return "Simulated connection failure · retry publishing"
             case sl.operations.Cancelled():
@@ -163,6 +181,11 @@ class Workbench(InspectablePanel):
 
     def __init__(self, draft: BuildDraft) -> None:
         self.draft = draft
+
+    @override
+    async def on_close(self, outcome: sd.Completed[None] | sd.Cancelled) -> None:
+        self.history.clear()
+        self.draft.close()
 
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
@@ -257,10 +280,10 @@ class Workbench(InspectablePanel):
         if self.draft.publishing:
             return
         # Capture before starting: edits during the operation must not change what was sent.
-        build, fail = self.draft.build, self.fail_next
+        build, fail = self.draft.snapshot(), self.fail_next
         self.fail_next = False
 
-        async def publish(progress: sl.operations.ProgressReporter[str]) -> BuildSample:
+        async def publish(progress: sl.operations.ProgressReporter[str]) -> tuple[BuildSample, frozenset[str]]:
             progress.report("checking build")
             await anyio.sleep(0.6)
             progress.report("sending captured revision")
@@ -276,21 +299,28 @@ class Workbench(InspectablePanel):
 
 
 class BuildPreview(InspectablePanel):
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+
     policy = InspectablePanel.policy.overlay(sd.ResponseSpec(session=sd.SessionSpec("layout-preview")))
 
     def __init__(self, draft: BuildDraft) -> None:
         self.draft = draft
 
     @override
+    async def on_close(self, outcome: sd.Completed[None] | sd.Cancelled) -> None:
+        self.history.clear()
+
+    @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         build = self.draft.build
+        tags = self.draft.tags.value
         count = 36 if build.oversized else 3
         heading = sl.heading(build.title)
         children: tuple[sl.ChildLike[sl.ComponentsV2Target, sd.Request], ...] = (
             sl.fields(
                 sl.field(tr(t"layout-workbench-dimensions = Dimensions"), build.dimensions),
                 sl.field(tr(t"layout-workbench-opening-time = Opening time"), f"{build.ticks} ticks"),
-                sl.field(tr(t"layout-workbench-tag = Tag"), build.tag),
+                sl.field(tr(t"layout-workbench-tags = Tags"), ", ".join(sorted(tags)) or "—"),
             ),
             sl.paragraph(build.description).truncate().budget(min=100, prefer=350),
             sl.note(self.draft.publication_text()),
@@ -302,14 +332,20 @@ class BuildPreview(InspectablePanel):
                 ),
                 overflow=sl.primitives.Paginate(key="records", per=4),
             ),
-            sl.heading(tr(t"layout-workbench-choose-a-tag = Choose a tag")),
+            sl.heading(tr(t"layout-workbench-toggle-tags = Add or remove tags")),
             sl.action_controls(
                 *(
-                    sl.action_control(tag, partial(self._tag, tag=tag), key=f"tag-{i}")
+                    sl.action_control(
+                        tag,
+                        partial(self._tag, tag=tag, selected=tag in tags),
+                        key=f"tag-{i}",
+                        tone=sl.Tone.SUCCESS if tag in tags else sl.Tone.NEUTRAL,
+                    )
                     for i, tag in enumerate(_TAGS[:count], 1)
                 ),
                 key="tags",
             ),
+            *history_controls(self.history),
             sl.note(
                 tr(
                     t"layout-workbench-pagination-hint = Try the oversized "
@@ -323,13 +359,19 @@ class BuildPreview(InspectablePanel):
     @override
     def inspection_state(self) -> str:
         return (
-            f"Shared sample: {'oversized' if self.draft.build.oversized else 'small'} · tag={self.draft.build.tag}\n"
+            f"Shared sample: {'oversized' if self.draft.build.oversized else 'small'} · tags={sorted(self.draft.tags.value)}\n"
             f"Operation: {self.draft.publication_text()}\n"
             "Pagination belongs to this message. The draft belongs to both panels."
         )
 
-    async def _tag(self, event: sl.PressEvent[sd.Request], *, tag: str) -> None:
-        self.draft.build = replace(self.draft.build, tag=tag)
+    async def _tag(self, event: sl.PressEvent[sd.Request], *, tag: str, selected: bool) -> None:
+        # Preserve the rendered intent if another editor changes the set before this press arrives.
+        if selected:
+            self.draft.tags.discard(tag)
+            self.history.record(tr(t"layout-workbench-remove-tag = Remove {tag}"))
+        else:
+            self.draft.tags.add(tag)
+            self.history.record(tr(t"layout-workbench-add-tag = Add {tag}"))
 
 
 def history_outcome(verb: str, result: sl.runtime.HistoryResult) -> str:

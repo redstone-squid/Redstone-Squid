@@ -11319,13 +11319,28 @@
       "squid/bot/layout_review.py:104"
     ]
   },
+  "layout-workbench-add-tag": {
+    "fingerprint": "cbadb0a14ee2c9909eeea90e76d83dcd29c95f3d84602df20d6894bfe0635d0a",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "tag",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/layout_workbench.py:372"
+    ]
+  },
   "layout-workbench-build-title": {
     "fingerprint": "5b2cc8283fb17c50519e78876a0bd5a7435a481c8562633b500725cfb636ab93",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:114"
+      "squid/bot/layout_workbench.py:130"
     ]
   },
   "layout-workbench-build-workbench": {
@@ -11334,16 +11349,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:170"
-    ]
-  },
-  "layout-workbench-choose-a-tag": {
-    "fingerprint": "7a41bbb3e27116331df6cde5c42428a55b19f12bd8ba8fc60d8318eeb8133cb5",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/layout_workbench.py:305"
+      "squid/bot/layout_workbench.py:191"
     ]
   },
   "layout-workbench-demo-description": {
@@ -11352,7 +11358,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:173"
+      "squid/bot/layout_workbench.py:194"
     ]
   },
   "layout-workbench-description": {
@@ -11361,7 +11367,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:123"
+      "squid/bot/layout_workbench.py:139"
     ]
   },
   "layout-workbench-dimensions": {
@@ -11370,7 +11376,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:291"
+      "squid/bot/layout_workbench.py:319"
     ]
   },
   "layout-workbench-dimensions-hint": {
@@ -11379,7 +11385,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:116"
+      "squid/bot/layout_workbench.py:132"
     ]
   },
   "layout-workbench-dimensions-validation": {
@@ -11388,7 +11394,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:140"
+      "squid/bot/layout_workbench.py:156"
     ]
   },
   "layout-workbench-draft": {
@@ -11397,7 +11403,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:179"
+      "squid/bot/layout_workbench.py:200"
     ]
   },
   "layout-workbench-edit-build": {
@@ -11406,8 +11412,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:154",
-      "squid/bot/layout_workbench.py:183"
+      "squid/bot/layout_workbench.py:170",
+      "squid/bot/layout_workbench.py:204"
     ]
   },
   "layout-workbench-edit-sample-build": {
@@ -11416,7 +11422,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:113"
+      "squid/bot/layout_workbench.py:129"
     ]
   },
   "layout-workbench-fail-next-publish": {
@@ -11425,7 +11431,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:219"
+      "squid/bot/layout_workbench.py:240"
     ]
   },
   "layout-workbench-failure-armed": {
@@ -11434,7 +11440,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:217"
+      "squid/bot/layout_workbench.py:238"
     ]
   },
   "layout-workbench-opening-time": {
@@ -11443,7 +11449,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:292"
+      "squid/bot/layout_workbench.py:320"
     ]
   },
   "layout-workbench-opening-time-in-ticks": {
@@ -11452,7 +11458,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:120"
+      "squid/bot/layout_workbench.py:136"
     ]
   },
   "layout-workbench-oversized-sample": {
@@ -11461,7 +11467,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:196"
+      "squid/bot/layout_workbench.py:217"
     ]
   },
   "layout-workbench-pagination-hint": {
@@ -11470,7 +11476,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:314"
+      "squid/bot/layout_workbench.py:348"
     ]
   },
   "layout-workbench-publication": {
@@ -11479,7 +11485,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:180"
+      "squid/bot/layout_workbench.py:201"
     ]
   },
   "layout-workbench-publish-sample": {
@@ -11488,7 +11494,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:211"
+      "squid/bot/layout_workbench.py:232"
     ]
   },
   "layout-workbench-redo": {
@@ -11497,7 +11503,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:205"
+      "squid/bot/layout_workbench.py:226"
     ]
   },
   "layout-workbench-related-sample-records": {
@@ -11506,7 +11512,22 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:297"
+      "squid/bot/layout_workbench.py:325"
+    ]
+  },
+  "layout-workbench-remove-tag": {
+    "fingerprint": "99ac6a8d8b32dcda466914aeb27cacabfd4fca63a6ccee57d17dde06613d2397",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "tag",
+        "function": null,
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/bot/layout_workbench.py:369"
     ]
   },
   "layout-workbench-small-sample": {
@@ -11515,16 +11536,25 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:190"
+      "squid/bot/layout_workbench.py:211"
     ]
   },
-  "layout-workbench-tag": {
-    "fingerprint": "65b1d7c4e1c57450dfa2dad47418d3df23c16ff5c81129124c6e0f3ab159fcd1",
+  "layout-workbench-tags": {
+    "fingerprint": "b19e65fb608448788a0596a912d91aaf60b2617f7f56e0b99491645ac53e3283",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:293"
+      "squid/bot/layout_workbench.py:321"
+    ]
+  },
+  "layout-workbench-toggle-tags": {
+    "fingerprint": "08e5fbf5e83823e3af1c7e7f12134b293df827eb04f3e163799cec2dd1bd6cf6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/layout_workbench.py:333"
     ]
   },
   "layout-workbench-undo": {
@@ -11533,7 +11563,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/layout_workbench.py:202"
+      "squid/bot/layout_workbench.py:223"
     ]
   },
   "media-artifact-dimensions-either": {

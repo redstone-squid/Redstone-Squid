@@ -3478,76 +3478,82 @@ layout-review-your-comment = Your comment
 # squid/bot/layout_review.py:104
 layout-review-your-decision = Your decision
 
-# squid/bot/layout_workbench.py:114
+# squid/bot/layout_workbench.py:372
+layout-workbench-add-tag = Add { $tag }
+
+# squid/bot/layout_workbench.py:130
 layout-workbench-build-title = Build title
 
-# squid/bot/layout_workbench.py:170
+# squid/bot/layout_workbench.py:191
 layout-workbench-build-workbench = Build workbench
 
-# squid/bot/layout_workbench.py:305
-layout-workbench-choose-a-tag = Choose a tag
-
-# squid/bot/layout_workbench.py:173
+# squid/bot/layout_workbench.py:194
 layout-workbench-demo-description = A form, an undo stack, and a live preview in another message. All data here is disposable.
 
-# squid/bot/layout_workbench.py:123
+# squid/bot/layout_workbench.py:139
 layout-workbench-description = Description
 
-# squid/bot/layout_workbench.py:291
+# squid/bot/layout_workbench.py:319
 layout-workbench-dimensions = Dimensions
 
-# squid/bot/layout_workbench.py:116
+# squid/bot/layout_workbench.py:132
 layout-workbench-dimensions-hint = Dimensions (width x height x depth)
 
-# squid/bot/layout_workbench.py:140
+# squid/bot/layout_workbench.py:156
 layout-workbench-dimensions-validation = Use three positive sizes, such as 4x4x3.
 
-# squid/bot/layout_workbench.py:179
+# squid/bot/layout_workbench.py:200
 layout-workbench-draft = Draft
 
-# squid/bot/layout_workbench.py:154, squid/bot/layout_workbench.py:183
+# squid/bot/layout_workbench.py:170, squid/bot/layout_workbench.py:204
 layout-workbench-edit-build = Edit build
 
-# squid/bot/layout_workbench.py:113
+# squid/bot/layout_workbench.py:129
 layout-workbench-edit-sample-build = Edit sample build
 
-# squid/bot/layout_workbench.py:219
+# squid/bot/layout_workbench.py:240
 layout-workbench-fail-next-publish = Fail next publish
 
-# squid/bot/layout_workbench.py:217
+# squid/bot/layout_workbench.py:238
 layout-workbench-failure-armed = Failure armed
 
-# squid/bot/layout_workbench.py:292
+# squid/bot/layout_workbench.py:320
 layout-workbench-opening-time = Opening time
 
-# squid/bot/layout_workbench.py:120
+# squid/bot/layout_workbench.py:136
 layout-workbench-opening-time-in-ticks = Opening time in ticks
 
-# squid/bot/layout_workbench.py:196
+# squid/bot/layout_workbench.py:217
 layout-workbench-oversized-sample = Oversized sample
 
-# squid/bot/layout_workbench.py:314
+# squid/bot/layout_workbench.py:348
 layout-workbench-pagination-hint = Try the oversized sample: records paginate, text shortens, and tag buttons become pickers.
 
-# squid/bot/layout_workbench.py:180
+# squid/bot/layout_workbench.py:201
 layout-workbench-publication = Publication
 
-# squid/bot/layout_workbench.py:211
+# squid/bot/layout_workbench.py:232
 layout-workbench-publish-sample = Publish sample
 
-# squid/bot/layout_workbench.py:205
+# squid/bot/layout_workbench.py:226
 layout-workbench-redo = Redo
 
-# squid/bot/layout_workbench.py:297
+# squid/bot/layout_workbench.py:325
 layout-workbench-related-sample-records = Related sample records
 
-# squid/bot/layout_workbench.py:190
+# squid/bot/layout_workbench.py:369
+layout-workbench-remove-tag = Remove { $tag }
+
+# squid/bot/layout_workbench.py:211
 layout-workbench-small-sample = Small sample
 
-# squid/bot/layout_workbench.py:293
-layout-workbench-tag = Tag
+# squid/bot/layout_workbench.py:321
+layout-workbench-tags = Tags
 
-# squid/bot/layout_workbench.py:202
+# squid/bot/layout_workbench.py:333
+layout-workbench-toggle-tags = Add or remove tags
+
+# squid/bot/layout_workbench.py:223
 layout-workbench-undo = Undo
 
 # squid/media/application/jobs.py:191

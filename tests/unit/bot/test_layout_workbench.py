@@ -9,6 +9,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.layout_workbench import BuildDraft, BuildForm, BuildPreview, BuildSample, Workbench
+from squid_reactivity import transaction
 from squid_ui_discord import MessageRoot, MessageRootScheduler, Owner
 from squid_ui_discord.testing import (
     assert_within_limits,
@@ -82,13 +83,13 @@ async def test_publish_captures_revision_and_rejects_duplicate_start() -> None:
         assert draft.publishing
         tasks.start_soon(reader.dispatch, "tag-2", interaction_harness(user_id=7))
         with anyio.fail_after(3):
-            while draft.build.tag == "Flush":
+            while "Seamless" not in draft.tags.value:
                 await anyio.sleep(0.01)
         assert draft.publishing
         await writer.dispatch("publish", interaction_harness(user_id=7), generation=generation)
         assert draft.publication is execution
         await writer.dispatch("large", interaction_harness(user_id=7))
-    assert await execution == BuildSample()
+    assert await execution == (BuildSample(), frozenset({"Flush"}))
     assert draft.publication_text() == "Draft changed · publish again"
 
 
@@ -170,3 +171,24 @@ async def test_invalid_form_keeps_draft_and_offers_prefilled_retry() -> None:
         }
         assert values["dimensions"] == "0x4x3"
         assert values["name"] == "Vault door"
+
+
+async def test_tag_picker_undo_and_redo_preserve_build_fields() -> None:
+    draft = BuildDraft()
+    preview = BuildPreview(draft)
+    async with sd.testing.stage(preview, owner=object()) as ui:
+        await ui.press("tag-2")
+        assert draft.tags.value == {"Flush", "Seamless"}
+        with transaction():
+            draft.build = replace(draft.build, title="New title")
+        await ui.press("edit-undo")
+        assert draft.tags.value == {"Flush"}
+        assert draft.build.title == "New title"
+        await ui.press("edit-redo")
+        assert draft.tags.value == {"Flush", "Seamless"}
+        await ui.press("tag-1")
+        assert draft.tags.value == {"Seamless"}
+        await ui.press("edit-undo")
+        assert draft.tags.value == {"Flush", "Seamless"}
+    assert not preview.history.can_undo
+    draft.close()
