@@ -28,6 +28,7 @@ import anyio
 import discord
 
 from squid_reactivity.actions import ActionCommit, ActionContext, ActorRef, current_action
+from squid_reactivity.addresses import CellAddress
 from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_reactivity.topics import Address, SubscriptionReconciler, Topic
@@ -298,6 +299,9 @@ _ACTION_UNLOCK: ContextVar[tuple[object, Callable[[], None]] | None] = ContextVa
 
 _SCHEDULED_REFRESH: ContextVar[object | None] = ContextVar("squid_ui_discord_scheduled_refresh", default=None)
 
+_SETTLING_ROOT: ContextVar[object | None] = ContextVar("squid_ui_discord_settling_root", default=None)
+"""The root whose own resource settlement is running; it redraws what it loads."""
+
 
 @dataclass(slots=True)
 class _LifecycleHooks:
@@ -520,6 +524,8 @@ class MessageRoot[
                     current.scheduler.schedule_invalidated(current, address)
                 else:
                     current.scheduler.schedule(current)
+            else:
+                current._note_unscheduled_change(address)
 
         self.runtime.subscriptions.bus = topic_bus
         self.runtime.on_reactive_invalidate = refresh
@@ -532,6 +538,8 @@ class MessageRoot[
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
         self._handle: deliver.EditHandle | None = None
+        self._unscheduled_change: str | None = None
+        """What last changed outside this message's interactions and has not been drawn yet."""
         self._delete_handle: deliver.DeleteHandle | None = None
         self._ephemeral: bool | None = None
         self._unwatch_expiry: Callable[[], None] | None = None
@@ -641,6 +649,37 @@ class MessageRoot[
     def generation(self) -> int:
         """The live render generation used to reject stale interactions."""
         return self._candidates.generation
+
+    def _note_unscheduled_change(self, address: Address) -> None:
+        """Remember a change made outside this message's interactions while it has no scheduler.
+
+        Such a change only appears once something redraws this message: its own settlement,
+        an explicit refresh(), or a press. _report_missed_redraw warns if a press or closure
+        finds the change still undrawn, because the user saw stale content until then.
+        """
+        if self._unscheduled_change is not None or self._handle is None or self.finished:
+            return
+        action = current_action()
+        if action is not None and action.metadata.get("message_root_id") == self.id:
+            return
+        if _SETTLING_ROOT.get() is self:
+            return
+        self._unscheduled_change = (
+            f"{type(address.owner).__name__}.{address.name}" if isinstance(address, CellAddress) else str(address)
+        )
+
+    def _report_missed_redraw(self, when: str) -> None:
+        source, self._unscheduled_change = self._unscheduled_change, None
+        if source is None or not self.runtime.dirty:
+            return
+        logger.warning(
+            "%s was %s while still showing state from before a change outside its own interactions (%s); "
+            "enable live_updates, or refresh it after such changes, so the message does not go stale",
+            type(self.component).__qualname__,
+            when,
+            source,
+            extra={"squid_unscheduled_change": True},
+        )
 
     @property
     def finished(self) -> bool:
@@ -1133,6 +1172,8 @@ class MessageRoot[
 
     def _commit(self, candidate: _Candidate[RenderTargetT]) -> None:
         self._candidates.commit(candidate)
+        if not self.runtime.dirty:
+            self._unscheduled_change = None
 
     def _rollback(self, candidate: _Candidate[RenderTargetT]) -> None:
         self._candidates.discard(candidate)
@@ -1375,9 +1416,11 @@ class MessageRoot[
                 current_done: asyncio.Event = done,
                 current_wake: asyncio.Event = wake,
             ) -> None:
+                token = _SETTLING_ROOT.set(self)
                 try:
                     await self._settle_resources(current_bindings)
                 finally:
+                    _SETTLING_ROOT.reset(token)
                     current_done.set()
                     current_wake.set()
 
@@ -1641,6 +1684,7 @@ class MessageRoot[
         against current truth.
         """
         kind = InteractionKind.PRESS if values is None else InteractionKind.SELECTION
+        self._report_missed_redraw("pressed")
         with (
             localization_scope(self.localization),
             self.profiler.operation(
@@ -2907,6 +2951,7 @@ class MessageRoot[
     ) -> None:
         if self._finished:
             return
+        self._report_missed_redraw("closed")
         candidate: _Candidate[RenderTargetT] | _LifecycleCandidate | None = None
 
         async def work() -> None:

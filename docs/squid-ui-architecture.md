@@ -266,6 +266,11 @@ operational settings inherit installation defaults; explicit call keywords overr
 Subclass policy values replace inherited values unless explicitly composed with `Base.policy.overlay`.
 Personal visibility and opener-only access are the screen defaults.
 
+A screen redraws for changes made elsewhere, such as a shared model written by another message, a
+topic published by a worker, or a managed service's resource, only with `live_updates=True`.
+Without it, the message logs a warning when it is pressed or closed while still showing state from
+before such a change; the bot's tests fail on that warning.
+
 An unnamed `SessionSpec` receives the concrete class's module and qualified name when its policy
 is compiled. This leaves the shared declaration unchanged and distinguishes subclasses. Explicit
 names keep shared identity and quota domains stable across renames. Standalone recipes still need

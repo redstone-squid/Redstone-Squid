@@ -74,7 +74,12 @@ class ResponseSpec:
     timeout: Setting[float | None] = UNSET
     expiry: Setting[ExpiryPolicy | None] = UNSET
     live_updates: Setting[bool] = UNSET
-    """Schedule background refreshes for observed reactive fields and external topics."""
+    """Schedule background refreshes for observed reactive fields and external topics.
+
+    Without it, only the message's own interactions, its resource loading, and explicit
+    refresh() calls redraw it. A message pressed or closed while still showing state from
+    before an outside change logs a warning naming the screen.
+    """
     retain_routed_on_timeout: Setting[bool] = UNSET
     session: Setting[SessionSpec | None] = UNSET
     allowed_mentions: Setting[discord.AllowedMentions | None] = UNSET
