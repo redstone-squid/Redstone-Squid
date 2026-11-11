@@ -31,7 +31,9 @@ from squid_reactivity.diagnostics import (
     has_event_observers,
 )
 from squid_reactivity.tracking import (
+    _CONSUMER,
     _Signal,
+    settling,
 )
 from squid_reactivity.transactions import (
     fresh_action_transaction,
@@ -103,6 +105,8 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     same execution. Cancelling the loading task cancels the execution; cancelling
     a joining waiter leaves it running. Awaiting returns the value or raises the
     stored error, while status exposes progress and the final outcome.
+    Resource loaders may await an execution: they track its outcome, without
+    inheriting its input dependencies or repeating its work on reload.
     """
 
     def __init__(
@@ -114,6 +118,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     ) -> None:
         self._loader = loader
         self.context = context
+        self._label = context.name
         self._signal = _Signal()
         self._status: OperationStatus[ValueT, ProgressT] = Pending(initial)
         self._execution: _Execution[OperationStatus[ValueT, ProgressT]] = _Execution()
@@ -146,7 +151,11 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
         return self._awaited().__await__()
 
     async def _awaited(self) -> ValueT:
-        await self._load()
+        try:
+            await self._load()
+        finally:
+            # Track the outcome, not the transient progress seen before awaiting.
+            self._signal.track()
         match self._status:
             case Succeeded(value):
                 return value
@@ -160,10 +169,14 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
 
     @override
     async def _load(self) -> OperationStatus[ValueT, ProgressT]:
-        return await self._execution.run(self._execute, lambda: self._status)
+        with settling(self):
+            return await self._execution.run(self._execute, lambda: self._status)
 
     async def _execute(self) -> OperationStatus[ValueT, ProgressT]:
         progress = ProgressReporter(self)
+        # An execution is a fixed request. Its inputs must not become dependencies
+        # of a resource that happens to be the first caller awaiting it.
+        consumer = _CONSUMER.set(None)
         try:
             with causal_scope(self.context.causal_ref(), self.context.root_action_id):
                 value = await self._loader(progress)
@@ -185,6 +198,8 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             self._status = Succeeded(value)
             self._signal.notify()
             self._emit("succeeded")
+        finally:
+            _CONSUMER.reset(consumer)
         return self._status
 
     @contextmanager
