@@ -3,14 +3,16 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict
 
+from squid.api.attachment_edits import AttachmentEdit
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId
 from squid.core.errors import ValidationError
+from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.domain.schematics import DraftSchematicState
 
@@ -98,13 +100,18 @@ async def upload_schematic(
     "/{upload_id}/primary",
     operation_id="submission_schematic_primary",
     openapi_extra=_WRITE,
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
 )
 async def select_primary(
-    draft_id: UUID, upload_id: UUID, account_id: AccountId, schematics: Schematics
+    draft_id: UUID,
+    upload_id: UUID,
+    account_id: AccountId,
+    schematics: Schematics,
+    edit: AttachmentEdit,
+    response: Response,
 ) -> list[DraftSchematicResponse]:
     """Explicitly select the primary schematic for this draft."""
-    await schematics.select_primary(draft_id, account_id, upload_id)
+    await edit.save(AttachmentValues(primary=upload_id, select_primary=True), response)
     return await list_schematics(draft_id, account_id, schematics)
 
 
@@ -112,13 +119,18 @@ async def select_primary(
     "/{upload_id}",
     operation_id="submission_schematic_discard",
     openapi_extra=_WRITE,
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
 )
 async def discard_schematic(
-    draft_id: UUID, upload_id: UUID, account_id: AccountId, schematics: Schematics
+    draft_id: UUID,
+    upload_id: UUID,
+    account_id: AccountId,
+    schematics: Schematics,
+    edit: AttachmentEdit,
+    response: Response,
 ) -> list[DraftSchematicResponse]:
     """Discard one draft reference; other candidates keep their source."""
-    await schematics.discard(draft_id, account_id, upload_id)
+    await edit.save(AttachmentValues(files=(FileMembership(source_id=upload_id, present=False),)), response)
     return await list_schematics(draft_id, account_id, schematics)
 
 

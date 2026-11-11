@@ -15828,6 +15828,22 @@
               "title": "Idempotency-Key"
             },
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "responses": {
@@ -16397,6 +16413,22 @@
               "title": "Idempotency-Key"
             },
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "responses": {
@@ -16521,6 +16553,22 @@
               "title": "Idempotency-Key"
             },
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "responses": {
@@ -17450,6 +17498,22 @@
               "title": "Idempotency-Key"
             },
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "responses": {

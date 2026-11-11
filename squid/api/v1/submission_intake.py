@@ -12,15 +12,17 @@ from typing import Annotated
 from uuid import UUID
 
 import anyio
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict
 
+from squid.api.attachment_edits import AttachmentEdit
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import reserve_edit_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId
 from squid.core.errors import ValidationError
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.domain.intake import IntakeStatus
 
@@ -112,11 +114,11 @@ async def _receive(request: Request, path: Path) -> None:
     "/{source_id}",
     operation_id="submission_supplied_file_discard",
     openapi_extra=_WRITE,
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
 )
 async def discard_file(
-    draft_id: UUID, source_id: UUID, account_id: AccountId, intake: Intake
+    draft_id: UUID, source_id: UUID, account_id: AccountId, intake: Intake, edit: AttachmentEdit, response: Response
 ) -> list[SuppliedFileResponse]:
     """Explicitly resolve a file that does not belong to this candidate."""
-    await intake.discard(draft_id, account_id, source_id)
+    await edit.save(AttachmentValues(files=(FileMembership(source_id=source_id, present=False),)), response)
     return await list_files(draft_id, account_id, intake)

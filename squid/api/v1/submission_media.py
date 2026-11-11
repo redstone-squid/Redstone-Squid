@@ -20,10 +20,11 @@ from uuid import UUID
 import anyio.to_thread
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
+from squid.api.attachment_edits import AttachmentEdit
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
 from squid.api.dependencies import DraftAttachments
 from squid.api.errors import responses
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.schemas.submission_media import (
     DraftMediaLimitsResponse,
@@ -34,6 +35,7 @@ from squid.api.v1.submissions import authenticated_account
 from squid.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
 from squid.media.errors import DraftMediaRequestError, MediaLimitExceededError
 from squid.submissions.application import StagedUpload
+from squid.submissions.application.attachment_edits import AttachmentValues, FileMembership
 
 _NO_STORE = "no-store"
 _MAX_UPLOAD_HEADER = "Squid-Max-Upload-Bytes"
@@ -191,7 +193,7 @@ async def get_draft_media(
     "/{upload_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(reserve_idempotent_request)],
+    dependencies=[Depends(reserve_edit_request)],
     operation_id="submission_media_discard",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],
@@ -204,16 +206,18 @@ async def discard_draft_media(
     request: Request,
     attachments: DraftAttachments,
     account_id: AccountId,
+    edit: AttachmentEdit,
 ) -> Response:
     """Withdraw one upload while retaining a stable discarded state."""
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     _require_non_nil(upload_id, reason="nil_upload_id")
-    await attachments.discard(draft_id, account_id, upload_id)
-    return Response(
+    response = Response(
         status_code=status.HTTP_204_NO_CONTENT,
         headers={"Cache-Control": _NO_STORE, _MAX_UPLOAD_HEADER: str(attachments.limits.max_source_bytes)},
     )
+    await edit.save(AttachmentValues(files=(FileMembership(source_id=upload_id, present=False),)), response)
+    return response
 
 
 def _source_content_type(request: Request, kind: MediaKind) -> str:
