@@ -156,8 +156,8 @@ class RouteHandle[**P]:
         """Build a canonical custom ID, validating parameters against the route."""
         return self.route.id(**params)
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> Awaitable[None]:
-        return self._registration.handler(*args, **kwargs)
+    async def __call__(self, *args: P.args, **kwargs: P.kwargs) -> None:
+        await self._registration.handler(*args, **kwargs)
 
 
 def _accepted(route: Route, handler: RouteHandler, component: RouteComponent) -> frozenset[str] | None:

@@ -1244,7 +1244,7 @@ class TestRouteHandles:
         assert imported.__wrapped__ is replacement
         assert imported.__qualname__ == replacement.__qualname__
         assert imported.id(build_id=5) == ("r:edit:5" if grouped else "edit:5")
-        await imported(interaction_harness(), build_id=5)
+        await imported(interaction_harness(), (), build_id=5)
         await router.dispatch(interaction_harness(), imported.id(build_id=5), component=component, values=("choice",))
         assert seen == [("replacement", None), ("replacement", None)]
 
@@ -1309,3 +1309,38 @@ class TestRouteHandles:
         assert router.add(edit.route, edit) is edit
         await edit(interaction_harness())
         assert seen == ["edit"]
+
+    async def test_reload_replaces_parameter_filter_with_handler(self) -> None:
+        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        seen: list[int] = []
+
+        @group.route("{build_id:int}:{unused}")
+        async def edit(interaction: discord.Interaction[discord.Client], **params: object) -> None:
+            pytest.fail("original handler was called")
+
+        router = Router(namespace=group, on_gone=_noop)
+
+        async def replacement(interaction: discord.Interaction[discord.Client], build_id: int) -> None:
+            seen.append(build_id)
+
+        group.add(edit.route, replacement)
+        await router.dispatch(interaction_harness(), edit.id(build_id=5, unused="ignored"))
+        assert seen == [5]
+
+    async def test_button_and_select_keep_independent_handles_for_one_identity(self) -> None:
+        group = squid_ui_discord.routing.RouteGroup[discord.Client]("r")
+        seen: list[str] = []
+
+        @group.route("edit")
+        async def button(interaction: discord.Interaction[discord.Client]) -> None:
+            seen.append("button")
+
+        @group.select("edit")
+        async def select(interaction: discord.Interaction[discord.Client], values: tuple[str, ...]) -> None:
+            seen.extend(values)
+
+        assert button is not select
+        assert button.route is select.route
+        await button(interaction_harness())
+        await select(interaction_harness(), ("selected",))
+        assert seen == ["button", "selected"]

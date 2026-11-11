@@ -1150,9 +1150,26 @@ renew, save, or delete after takeover. SQLite assumes coordinated host clocks; P
 
 `RouteGroup` is both the namespace root and the feature-composition unit; there is no special
 namespace subtype. A root such as `RouteGroup("r")` reserves the gone-response prefix when passed
-to `Router`, while its children render_message stable final identities immediately. Group structure,
+to `Router`, while its children define stable final identities immediately. Group structure,
 identities, and middleware freeze when the router registers; an existing identity may replace its
 handler afterward so a discord.py extension reload remains safe.
+
+Group decorators can define a relative route inline. The decorated name is a callable
+`RouteHandle`, so controls can use `edit_build.id(build_id=5)` without a separate route constant:
+
+```python
+@builds.route("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+async def edit_build(interaction: discord.Interaction[Bot], build_id: int) -> None:
+    ...
+```
+
+The group retains one handle per route and component kind. Redeclaring the same identity
+updates its validated handler binding and returns the same handle, including after router
+registration. Existing imports call the replacement; calls already running finish with the
+original handler. Failed handler validation leaves the previous binding intact. The handle's
+`.route` exposes the underlying immutable identity, and `define()` remains available when
+identity must be declared separately. Direct calls bypass dispatch middleware and acknowledgement
+handling. A replacement must preserve the call signature used by direct callers.
 
 Dispatch builds one middleware onion in deterministic order:
 
