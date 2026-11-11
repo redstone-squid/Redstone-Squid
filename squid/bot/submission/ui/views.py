@@ -543,6 +543,25 @@ class BuildEditScreen(sd.Screen[int]):
                     sl.paragraph(tr(t"build-editor-card-refreshed = The build card has been refreshed.")),
                 ),
             )
+        if self.expired:
+            nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+                sl.status(
+                    tr(t"build-editor-expired = This editor expired. Unsaved changes were discarded."),
+                    tone=sl.Tone.WARNING,
+                )
+            ]
+            if self._build_id is not None:
+                nodes.append(
+                    sl.action_controls(
+                        sl.routed_action_control(
+                            tr(t"build-editor-open-new-editor = Open new editor"),
+                            build_controls.recover_build_editor.id(build_id=self._build_id),
+                            key="restart",
+                        ),
+                        key="build-edit-recovery",
+                    )
+                )
+            return tuple(nodes)
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-ui-views-loading-build = Loading build.")),)
@@ -603,7 +622,7 @@ class BuildEditScreen(sd.Screen[int]):
                 )
             )
         controls.append(sl.action_control(tr(t"bot-submission-ui-views-cancel = Cancel"), self._close, key="close"))
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
+        nodes = []
         if self._recovered:
             nodes.append(
                 sl.status(
@@ -624,12 +643,6 @@ class BuildEditScreen(sd.Screen[int]):
                         self.summary_text(),
                     )
                 ),
-                sl.note(
-                    tr(
-                        t"build-editor-reload-discards-staged-context = Reloading a "
-                        t"fresh editor discards every staged context in this one."
-                    )
-                ),
                 accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         )
@@ -638,17 +651,6 @@ class BuildEditScreen(sd.Screen[int]):
         nodes.append(
             sl.action_controls(*controls, key="build-edit-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
         )
-        if self._build_id is not None:
-            nodes.append(
-                sl.action_controls(
-                    sl.routed_action_control(
-                        tr(t"bot-submission-ui-views-reload-fresh-editor = Reload fresh editor"),
-                        build_controls.recover_build_editor.id(build_id=self._build_id),
-                        key="restart",
-                    ),
-                    key="build-edit-recovery",
-                )
-            )
         return tuple(nodes)
 
     def summary_text(self) -> sl.TextLike:

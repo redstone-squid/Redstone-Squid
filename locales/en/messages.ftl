@@ -759,7 +759,7 @@ bot-build-field-door-type =
     .label = Door Type
     .placeholder = Full lamp, Funnel
 
-# squid/bot/submission/ui/views.py:673
+# squid/bot/submission/ui/views.py:675
 bot-build-field-error = **{ $label }:** { $detail }
 
 # squid/bot/submission/ui/views.py:319, squid/bot/submission/ui/views.py:324
@@ -1563,52 +1563,49 @@ bot-submission-ui-fields-invalid-value = Invalid value
 # squid/bot/submission/ui/opening.py:70
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
-# squid/bot/submission/ui/views.py:582
+# squid/bot/submission/ui/views.py:601
 bot-submission-ui-views-apply-changes = Apply changes
 
-# squid/bot/submission/ui/views.py:587
+# squid/bot/submission/ui/views.py:606
 bot-submission-ui-views-back = Back
 
-# squid/bot/submission/ui/views.py:605
+# squid/bot/submission/ui/views.py:624
 bot-submission-ui-views-cancel = Cancel
 
 # squid/bot/submission/ui/views.py:542
 bot-submission-ui-views-changes-saved = Changes saved
 
-# squid/bot/submission/ui/views.py:619
+# squid/bot/submission/ui/views.py:638
 bot-submission-ui-views-edit-build = Edit build
 
 # squid/bot/submission/ui/views.py:428
 bot-submission-ui-views-edit-build-section = Edit build, section { $page }
 
-# squid/bot/submission/ui/views.py:563
+# squid/bot/submission/ui/views.py:582
 bot-submission-ui-views-edit-this-section = Edit this section
 
-# squid/bot/submission/ui/views.py:623
+# squid/bot/submission/ui/views.py:642
 bot-submission-ui-views-fields-in-this-section = Fields in this section
 
 # squid/bot/submission/ui/views.py:422
 bot-submission-ui-views-invalid-value = Invalid value
 
-# squid/bot/submission/ui/views.py:548
+# squid/bot/submission/ui/views.py:567
 bot-submission-ui-views-loading-build = Loading build.
 
-# squid/bot/submission/ui/views.py:572
+# squid/bot/submission/ui/views.py:591
 bot-submission-ui-views-next = Next
 
-# squid/bot/submission/ui/views.py:700
+# squid/bot/submission/ui/views.py:702
 bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.
 
-# squid/bot/submission/ui/views.py:566
+# squid/bot/submission/ui/views.py:585
 bot-submission-ui-views-previous = Previous
 
-# squid/bot/submission/ui/views.py:645
-bot-submission-ui-views-reload-fresh-editor = Reload fresh editor
-
-# squid/bot/submission/ui/views.py:602
+# squid/bot/submission/ui/views.py:621
 bot-submission-ui-views-reload-latest = Reload latest
 
-# squid/bot/submission/ui/views.py:593
+# squid/bot/submission/ui/views.py:612
 bot-submission-ui-views-review-changes = Review changes
 
 # squid/bot/tags_view.py:246, squid/bot/tags_view.py:391
@@ -2037,14 +2034,17 @@ build-editor-build-deleted = That build no longer exists.
 # squid/bot/submission/ui/views.py:543
 build-editor-card-refreshed = The build card has been refreshed.
 
-# squid/bot/submission/ui/views.py:735
+# squid/bot/submission/ui/views.py:737
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
 # squid/bot/submission/ui/opening.py:71
 build-editor-edit-access-required = Only the pending build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/views.py:768
+# squid/bot/submission/ui/views.py:770
 build-editor-edit-access-required-views = Only the pending build's submitter or a trusted staff member can edit it.
+
+# squid/bot/submission/ui/views.py:549
+build-editor-expired = This editor expired. Unsaved changes were discarded.
 
 # squid/bot/submission/edit.py:89
 build-editor-fields-unavailable = This build has no { $fields }. Open the workspace to see what it does have.
@@ -2052,21 +2052,21 @@ build-editor-fields-unavailable = This build has no { $fields }. Open the worksp
 # squid/bot/submission/edit.py:104, squid/bot/submission/edit.py:109, squid/bot/submission/edit.py:113
 build-editor-invalid-build = This does not look like a build.
 
-# squid/bot/submission/ui/views.py:628
-build-editor-reload-discards-staged-context = Reloading a fresh editor discards every staged context in this one.
+# squid/bot/submission/ui/views.py:557
+build-editor-open-new-editor = Open new editor
 
-# squid/bot/submission/ui/views.py:610
+# squid/bot/submission/ui/views.py:629
 build-editor-reloaded-discarded-changes = Fresh editor loaded. Unsaved changes from the previous editor were discarded.
 
-# squid/bot/submission/ui/views.py:553
+# squid/bot/submission/ui/views.py:572
 build-editor-section-unsaved-indicator = Section { $page } of { $pages }. Filled dots have unsaved changes.
 
-# squid/bot/submission/ui/views.py:678
+# squid/bot/submission/ui/views.py:680
 build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
 
-# squid/bot/submission/ui/views.py:555
+# squid/bot/submission/ui/views.py:574
 build-editor-validation-errors =
     Fix these values before review:
     { $validation_error }

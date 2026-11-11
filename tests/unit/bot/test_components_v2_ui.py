@@ -190,8 +190,8 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())
-    assert "Reload fresh editor" in str(component.render())
-    assert "discards every staged context" in str(component.render())
+    assert "Open new editor" not in str(component.render())
+    assert "build-edit-recovery" not in str(component.render())
     assert component._current()[0] is display_build
 
 
@@ -218,13 +218,23 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
     assert isinstance(result, sd.Presented)
     message_root = result.root
     assert message_root.retain_routed_on_timeout is True
+    assert not component.expired
+    active = interaction.response.send_message.await_args.kwargs["view"]
+    assert all(
+        item.label != "Open new editor" for item in active.walk_children() if isinstance(item, discord.ui.Button)
+    )
 
     await message_root.handle_timeout()
 
+    assert component.expired
     expired = interaction.edit_original_response.await_args.kwargs["view"]
     buttons = {item.label: item.disabled for item in expired.walk_children() if isinstance(item, discord.ui.Button)}
-    assert buttons["Reload fresh editor"] is False
-    assert all(disabled for label, disabled in buttons.items() if label != "Reload fresh editor")
+    assert buttons == {"Open new editor": False}
+    assert any(
+        "Unsaved changes were discarded" in item.content
+        for item in expired.walk_children()
+        if isinstance(item, discord.ui.TextDisplay)
+    )
 
 
 async def test_build_editor_commits_against_the_revision_it_presented(
