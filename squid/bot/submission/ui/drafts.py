@@ -40,6 +40,7 @@ import squid_ui_discord as sd
 from squid.bot.submission import draft_intake
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.bot.submission.ui import controls as build_controls
+from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW
 from squid.builds.domain.models import parse_time_string
 from squid.builds.models import Build
@@ -380,7 +381,7 @@ class DraftWorkspace(sl.Reactive):
         return new_id
 
 
-class DraftEditorScreen(sd.Screen):
+class DraftEditorScreen(BuildEditorScreen[None]):
     """The draft panel: an overview of every section, then Submit.
 
     Before submission it lists answers with Edit buttons. Afterwards it shows progress and a
@@ -413,15 +414,9 @@ class DraftEditorScreen(sd.Screen):
     def _overview(self, phase: Phase) -> list[Any]:
         """One row per section and the Files row, then the Submit row."""
         ws = self.workspace
-        children: list[Any] = [
-            sd.v2.section(
-                _section_text(ws, section),
-                accessory=sd.v2.button(
-                    tr(t"draft-editor-edit = Edit"), partial(self._edit_section, section.id), key=f"edit_{section.id}"
-                ),
-            )
-            for section in ws.sections
-        ]
+        children = self.section_overview(
+            [EditorSection(section.id, _section_text(ws, section)) for section in ws.sections]
+        )
         children.append(
             sd.v2.section(
                 _files_text(ws),
@@ -520,9 +515,6 @@ class DraftEditorScreen(sd.Screen):
 
     async def _preview(self, event: sd.PressEvent) -> None:
         await self.open_child(event, BuildPreviewScreen(self.workspace), on_result=self._child_closed)
-
-    async def _child_closed(self, event: sd.ScreenResultEvent[None]) -> None:
-        """Nothing to do: children save as they go, and the shared workspace already redrew this panel."""
 
     async def _refresh(self, event: sd.PressEvent) -> None:
         await self.workspace.reload()
