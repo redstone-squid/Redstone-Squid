@@ -121,6 +121,12 @@ class Screen[ResultT = None, OwnerT = Any](Component[ComponentsV2Target, Request
     def outcome(self) -> Completed[ResultT] | Cancelled | None:
         return self._screen_flow.outcome
 
+    @property
+    def expired(self) -> bool:
+        """Whether this screen timed out, including during its final render."""
+        root = self._screen_flow.root
+        return root is not None and root.finished and root._screen_close_reason == "timeout"
+
     async def wait(self) -> Completed[ResultT] | Cancelled:
         """Observe closure without cancelling it when this waiter is cancelled."""
         current = CURRENT_TRANSACTION.get()

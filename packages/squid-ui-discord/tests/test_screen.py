@@ -80,6 +80,31 @@ def test_screen_has_no_delivery_method() -> None:
     assert not hasattr(BasicScreen(), "show")
 
 
+@pytest.mark.parametrize("timeout", [False, True])
+async def test_expired_is_available_during_final_render(timeout: bool) -> None:
+    rendered: list[bool] = []
+
+    class ExpiryScreen(sd.Screen):
+        @override
+        def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+            rendered.append(self.expired)
+            return sl.heading("Expired" if self.expired else "Active")
+
+    ui, client = _ui()
+    screen = ExpiryScreen()
+    assert not screen.expired
+    request = await ui.request(_context(client))
+    result = await request.respond(screen)
+    assert isinstance(result, sd.Presented)
+    assert rendered == [False]
+    if timeout:
+        await result.root.handle_timeout()
+    else:
+        await result.root.finish()
+    assert rendered[-1] is timeout
+    assert screen.expired is timeout
+
+
 async def test_facade_sets_opening_and_loads_before_first_render() -> None:
     ui, client = _ui()
     context = _context(client)
