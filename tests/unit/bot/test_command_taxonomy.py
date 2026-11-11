@@ -106,7 +106,7 @@ def test_guided_submit_puts_attachments_last() -> None:
     names = [parameter.name for parameter in cast(app_commands.Command[Any, ..., Any], submit).parameters]
 
     assert names[0] == "door_size"
-    assert [name for name in names if name.endswith("_attachment")] == names[-4:]
+    assert names[-4:] == ["file", "file_2", "file_3", "file_4"]
 
 
 def test_search_modes_have_user_friendly_labels() -> None:

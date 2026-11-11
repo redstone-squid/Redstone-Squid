@@ -32,34 +32,25 @@ AUTOMATIC_MESSAGES: dict[tuple[str, str], Message] = {
         t"command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox."
     ),
     ("build drafts", "name"): tr(t"command-build-drafts-name = drafts"),
-    ("build drafts", "parameter-inbox-description"): tr(t"command-build-drafts-inbox-help = …"),
     ("build drafts", "parameter-inbox-name"): tr(t"command-build-drafts-inbox-name = inbox"),
     ("build submit", "choice-door_type-Door"): tr(t"command-build-submit-choice-door-type-door = Door"),
     ("build submit", "choice-door_type-Skydoor"): tr(t"command-build-submit-choice-door-type-skydoor = Skydoor"),
     ("build submit", "choice-door_type-Trapdoor"): tr(t"command-build-submit-choice-door-type-trapdoor = Trapdoor"),
     ("build submit", "description"): tr(
-        t"command-build-submit-help = Submit a build. Every field is optional; a guided form picks up whatever you skip."
+        t"command-build-submit-help = Submit a build. Every option is optional; fill in the rest in the form that opens."
     ),
     ("build submit", "name"): tr(t"command-build-submit-name = submit"),
     ("build submit", "parameter-build_size-name"): tr(t"command-build-submit-build-size-name = build_size"),
     ("build submit", "parameter-creators-name"): tr(t"command-build-submit-creators-name = creators"),
+    ("build submit", "parameter-description-name"): tr(t"command-build-submit-description-name = description"),
     ("build submit", "parameter-door_size-name"): tr(t"command-build-submit-door-size-name = door_size"),
     ("build submit", "parameter-door_type-name"): tr(t"command-build-submit-door-type-name = door_type"),
-    ("build submit", "parameter-first_attachment-name"): tr(
-        t"command-build-submit-first-attachment-name = first_attachment"
-    ),
-    ("build submit", "parameter-fourth_attachment-name"): tr(
-        t"command-build-submit-fourth-attachment-name = fourth_attachment"
-    ),
-    ("build submit", "parameter-notes-name"): tr(t"command-build-submit-notes-name = notes"),
-    ("build submit", "parameter-pattern-name"): tr(t"command-build-submit-pattern-name = pattern"),
+    ("build submit", "parameter-file-name"): tr(t"command-build-submit-file-name = file"),
+    ("build submit", "parameter-file_2-name"): tr(t"command-build-submit-file-2-name = file_2"),
+    ("build submit", "parameter-file_3-name"): tr(t"command-build-submit-file-3-name = file_3"),
+    ("build submit", "parameter-file_4-name"): tr(t"command-build-submit-file-4-name = file_4"),
+    ("build submit", "parameter-patterns-name"): tr(t"command-build-submit-patterns-name = patterns"),
     ("build submit", "parameter-restrictions-name"): tr(t"command-build-submit-restrictions-name = restrictions"),
-    ("build submit", "parameter-second_attachment-name"): tr(
-        t"command-build-submit-second-attachment-name = second_attachment"
-    ),
-    ("build submit", "parameter-third_attachment-name"): tr(
-        t"command-build-submit-third-attachment-name = third_attachment"
-    ),
     ("build submit", "parameter-versions-name"): tr(t"command-build-submit-versions-name = versions"),
     ("dev", "description"): tr(t"command-dev-help = Development-only operational diagnostics."),
     ("dev", "name"): tr(t"command-dev-name = dev"),

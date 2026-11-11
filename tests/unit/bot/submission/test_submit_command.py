@@ -30,6 +30,7 @@ from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRE
 from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.submissions.domain import DraftChange, DraftSnapshot, FormManifest, SubmissionOrigin
 from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid_ui.text import source_text
 from squid_ui_discord.testing import InteractionHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
@@ -218,3 +219,16 @@ async def test_bad_dimensions_are_refused_in_place() -> None:
     harness.followup.send.assert_not_awaited()
     harness.edit_original_response.assert_awaited_once()
     assert _screen(harness) is None
+
+
+async def test_values_the_form_rejects_are_named_instead_of_dropped() -> None:
+    # "5 wide" marks height and depth as not applicable (-1), which the form's minimum of 1 rejects.
+    harness = await _submit(_cog(), door_size="5 wide", build_size="5x7x4")
+
+    screen = _screen(harness)
+    assert isinstance(screen, DraftEditorScreen)
+    assert screen.draft.snapshot.answers["opening_width"] == 5
+    assert "opening_height" not in screen.draft.snapshot.answers
+    assert source_text(screen.notice) == (
+        "Some values from the command could not be used: Door size. Fill them in below."
+    )

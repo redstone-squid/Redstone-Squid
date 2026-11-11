@@ -7,22 +7,29 @@ input and presents progress while those services decide when a build is ready.
 """
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Self
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import discord
-from discord import Message, app_commands
+from discord import app_commands
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import command_text
+from squid.bot.submission.draft_intake import receive_attachments
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.input import optional_text, split_values
+from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
+from squid.bot.submission.ui.drafts import DIMENSION_GROUPS, draft_editor
+from squid.bot.submission.ui.routes import draft_reopen, inference_reopen, revision_reopen
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.permissions import enforce
+from squid.bot.utils.permissions import enforce, subject_for_interaction
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
     BuildInferenceService,
@@ -32,7 +39,19 @@ from squid.builds.domain import BuildCategory, BuildDraft, DoorOrientationLitera
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
+from squid.submissions.application import StoredDraft
+from squid.submissions.application.prefill import prefill_submission
+from squid.submissions.domain import (
+    DraftChange,
+    DraftChangeKey,
+    DraftStatus,
+    FieldOperation,
+    FieldOperationKind,
+    FormManifest,
+    SubmissionOrigin,
+)
 from squid.submissions.errors import DraftCapacityExceededError
+from squid_ui.text import Message, md
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -54,7 +73,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     consent_sticky: StickyMessage
 
     @autocompletes(
-        pattern=suggests("approved_patterns", multi=True),
+        patterns=suggests("approved_patterns", multi=True),
         versions="approved_source_versions",
         restrictions=suggests("approved_restrictions", multi=True),
         creators=suggests("creators", multi=True),
@@ -62,38 +81,27 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
     @BuildCommandGroup.build_group.command(name="submit", defer="private")
     @app_commands.describe(
         door_size=command_text(
-            tr(t"submit-door-dimensions-help = The door opening, e.g. `2x2`. Width x height (x depth).")
+            tr(t"submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.")
         ),
-        door_type=command_text(tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, Skydoor, or Trapdoor.")),
-        pattern=command_text(
-            tr(t"submit-pattern-type-examples-help = Pattern types, comma separated. For example: full lamp, funnel.")
-        ),
+        door_type=command_text(tr(t"bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.")),
         build_size=command_text(
-            tr(
-                t"bot-submission-submit-the-whole-build-e-g-x-x = The whole build, e.g. `5x7x4`. Width x "
-                t"height (x depth)."
-            )
+            tr(t"bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.")
         ),
+        creators=command_text(tr(t"submit-creator-ign-prompt = In-game names of the creators, comma separated.")),
         versions=command_text(
-            tr(t"submit-supported-versions-prompt = Versions the build works in, like `1.17 - 1.18.1, 1.20+`.")
+            tr(t"submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.")
+        ),
+        patterns=command_text(
+            tr(t"submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.")
         ),
         restrictions=command_text(
-            tr(t"submit-comma-separated-examples-help = Comma separated, e.g. `Seamless, Observerless`. See `/help`.")
+            tr(t"submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.")
         ),
-        creators=command_text(tr(t"submit-creator-ign-prompt = In-game names of the creator(s), comma separated.")),
-        notes=command_text(tr(t"submit-staff-notes-prompt = Anything staff should know about the build.")),
-        first_attachment=command_text(
-            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
-        ),
-        second_attachment=command_text(
-            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
-        ),
-        third_attachment=command_text(
-            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
-        ),
-        fourth_attachment=command_text(
-            tr(t"submit-attachment-types-help = An image, video, or schematic; sorted out automatically.")
-        ),
+        description=command_text(tr(t"submit-staff-notes-prompt = A short description of the build.")),
+        file=command_text(tr(t"submit-attachment-types-help = Your schematic, an image, or a video.")),
+        file_2=command_text(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
+        file_3=command_text(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
+        file_4=command_text(tr(t"submit-another-attachment-help = Another schematic, image, or video.")),
     )
     async def submit_form(
         self,
@@ -101,65 +109,62 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         *,
         door_size: str | None = None,
         door_type: DoorOrientationLiteral | None = None,
-        pattern: str | None = None,
         build_size: str | None = None,
-        versions: str | None = None,
-        restrictions: str | None = None,
         creators: str | None = None,
-        notes: str | None = None,
-        first_attachment: discord.Attachment | None = None,
-        second_attachment: discord.Attachment | None = None,
-        third_attachment: discord.Attachment | None = None,
-        fourth_attachment: discord.Attachment | None = None,
+        versions: str | None = None,
+        patterns: str | None = None,
+        restrictions: str | None = None,
+        description: str | None = None,
+        file: discord.Attachment | None = None,
+        file_2: discord.Attachment | None = None,
+        file_3: discord.Attachment | None = None,
+        file_4: discord.Attachment | None = None,
     ) -> sd.CommandResult:
-        """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
+        """Submit a build. Every option is optional; fill in the rest in the form that opens."""
         # Obtain consent before creating a draft or downloading attachments.
         uploader_account_id = await ensure_consented_account(request, self.bot.services.accounts)
         if uploader_account_id is None:
             return None
 
         draft = BuildDraft(ai_generated=False, category=BuildCategory.DOOR)
-        try:
-            if door_size is not None:
+        if door_size is not None:
+            try:
                 draft.door_dimensions = parse_hallway_dimensions(door_size)
-            if build_size is not None:
+            except ValueError:
+                return error_node(
+                    tr(t"bot-submission-submit-check-door-size = Check the door size"),
+                    tr(t"submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`."),
+                )
+        if build_size is not None:
+            try:
                 draft.dimensions = parse_dimensions(build_size)
-        except ValueError as error:
-            return error_node(tr(t"bot-submission-submit-check-the-dimensions = Check the dimensions"), str(error))
-
+            except ValueError:
+                return error_node(
+                    tr(t"bot-submission-submit-check-build-size = Check the build size"),
+                    tr(t"submit-build-size-format = Write it as width x height x depth, such as `5x7x4`."),
+                )
         if door_type is not None:
             draft.door_orientation = door_type
-        if pattern is not None:
-            draft.patterns = split_values(pattern)
+        if patterns is not None:
+            draft.patterns = split_values(patterns)
         if versions is not None:
             draft.version_spec = optional_text(versions)
         if creators is not None:
             draft.creators_ign = split_values(creators)
         if restrictions is not None:
             await self.builds.classify_restrictions(draft, split_values(restrictions))
-        if notes is not None and (parsed_notes := optional_text(notes)) is not None:
-            draft.description = parsed_notes
+        if description is not None and (parsed_description := optional_text(description)) is not None:
+            draft.description = parsed_description
 
-        from uuid import NAMESPACE_URL, uuid4, uuid5
-
-        from squid.bot.submission.draft_intake import receive_attachments
-        from squid.bot.submission.ui.drafts import draft_editor
-        from squid.submissions.application.prefill import prefill_submission
-        from squid.submissions.domain import (
-            DraftChange,
-            DraftChangeKey,
-            FieldOperation,
-            FieldOperationKind,
-            SubmissionOrigin,
-        )
-
-        manifest = await self.bot.services.submission_forms.manifest(locale=None)
+        services = self.bot.services
+        manifest = await services.submission_forms.manifest(locale=None)
+        # Derive the draft ID from the interaction so a retried command reopens the same draft.
         draft_id = (
             uuid5(NAMESPACE_URL, f"discord-submission:{request.interaction.id}")
             if request.interaction is not None
             else uuid4()
         )
-        stored = await self.bot.services.submission_drafts.create(
+        stored = await services.submission_drafts.create(
             draft_id=draft_id,
             owner_account_id=uploader_account_id,
             category="door",
@@ -171,11 +176,11 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             ),
             locale=None,
         )
+        unresolved: tuple[str, ...] = ()
         if stored.snapshot.revision == 0:
-            prefill = await prefill_submission(
-                draft, self.bot.services.submission_forms, origin=SubmissionOrigin.DISCORD
-            )
-            await self.bot.services.submission_drafts.apply_change(
+            prefill = await prefill_submission(draft, services.submission_forms, origin=SubmissionOrigin.DISCORD)
+            unresolved = prefill.unresolved
+            await services.submission_drafts.apply_change(
                 draft_id,
                 uploader_account_id,
                 DraftChange(
@@ -190,28 +195,27 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
                 locale=None,
             )
         await receive_attachments(
-            self.bot.services,
+            services,
             draft_id,
             uploader_account_id,
-            tuple(
-                attachment
-                for attachment in (first_attachment, second_attachment, third_attachment, fourth_attachment)
-                if attachment is not None
-            ),
+            tuple(attachment for attachment in (file, file_2, file_3, file_4) if attachment is not None),
         )
         return await draft_editor(
-            self.bot.services,
+            services,
             uploader_account_id,
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
+            notice=_unused_values_notice(unresolved, manifest),
         )
 
     @BuildCommandGroup.build_group.command(name="drafts", defer="private")
+    @app_commands.describe(
+        inbox=command_text(
+            tr(t"command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.")
+        )
+    )
     async def saved_drafts(self, request: sd.Request[Self], *, inbox: bool = False) -> sd.CommandResult:
         """Reopen saved drafts, or browse the staff correction inbox."""
-        import squid_ui as sl
-        from squid.bot.submission.ui.controls import draft_reopen
-
         actor = await ensure_consented_account(request, self.bot.services.accounts)
         if actor is None:
             return None
@@ -220,29 +224,34 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             if inbox
             else await self.bot.services.submission_drafts.list_active(actor)
         )
-        from squid.bot.submission.ui.controls import inference_reopen
-        from squid.bot.utils.permissions import subject_for_interaction
-
         runs = await self.bot.services.submission_inference.list_active(
             await subject_for_interaction(request), inbox=inbox
         )
-        nodes = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.primitives.Section(
-                (sl.primitives.Text(f"{draft.snapshot.category}: {draft.snapshot.status.value.replace('_', ' ')}"),),
-                sl.primitives.RoutedButton("Open draft", draft_reopen.id(draft_id=str(draft.snapshot.id))),
+                (sl.primitives.Text(_draft_line(draft)),),
+                sl.primitives.RoutedButton(
+                    tr(t"build-drafts-open = Open"), draft_reopen.id(draft_id=str(draft.snapshot.id))
+                ),
             )
             for draft in drafts
         ]
         nodes.extend(
             sl.primitives.Section(
-                (sl.primitives.Text("Retained inference candidates"),),
-                sl.primitives.RoutedButton("Review candidates", inference_reopen.id(run_id=str(run_id))),
+                (sl.primitives.Text(tr(t"build-drafts-detected = **Builds found in your build-log posts**")),),
+                sl.primitives.RoutedButton(
+                    tr(t"build-drafts-review = Review"), inference_reopen.id(run_id=str(run_id))
+                ),
             )
             for run_id in runs
         )
-        return tuple(nodes) if nodes else text_node("No active drafts or inference runs.")
+        if nodes:
+            return tuple(nodes)
+        if inbox:
+            return text_node(tr(t"build-drafts-inbox-empty = No drafts are waiting for staff correction."))
+        return text_node(tr(t"build-drafts-empty = You have no drafts in progress. Start one with `/build submit`."))
 
-    async def _is_build_log_message(self, message: Message) -> bool:
+    async def _is_build_log_message(self, message: discord.Message) -> bool:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
         if message.author.bot or not isinstance(message.channel, discord.TextChannel):
             return False
@@ -250,7 +259,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         return message.channel.id in settings.build_log_channel_ids
 
     @sd.Cog.listener(name="on_message")
-    async def infer_build_from_message(self, message: Message):
+    async def infer_build_from_message(self, message: discord.Message):
         """Ingest an eligible build log message when its author has current consent."""
         if not await self._is_build_log_message(message):
             return
@@ -329,13 +338,6 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
         owner_account_id: int,
     ) -> sd.CommandResult:
         """Retain inferred candidates and return review controls without submitting builds."""
-        from uuid import NAMESPACE_URL, uuid4, uuid5
-
-        import squid_ui as sl
-        from squid.bot.submission.message_context import assemble_bundle
-        from squid.bot.submission.ui.controls import revision_reopen
-        from squid.bot.utils.permissions import subject_for_interaction
-
         actor = await subject_for_interaction(request)
         run_id = (
             uuid5(NAMESPACE_URL, f"discord-recalculation:{request.interaction.id}")
@@ -371,3 +373,44 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             )
             for index, proposal in enumerate(proposals)
         )
+
+
+def _draft_line(draft: StoredDraft) -> Message:
+    """Describe a draft in the /build drafts list by category, a name, its state, and last edit."""
+    answers = draft.snapshot.answers
+    creators = answers.get("creators")
+    name = answers.get("display_name") or (", ".join(map(str, creators)) if isinstance(creators, list) else None)
+    category = draft.snapshot.category.capitalize()
+    title = md(t"**{category}** · {name}") if name else md(t"**{category}**")
+    match draft.snapshot.status:
+        case DraftStatus.PROCESSING:
+            state = tr(t"build-drafts-state-creating = Creating the build")
+        case DraftStatus.NEEDS_ATTENTION if draft.preparation_retry_at is not None:
+            state = tr(t"build-drafts-state-waiting = Waiting for files")
+        case DraftStatus.NEEDS_ATTENTION:
+            state = tr(t"build-drafts-state-needs-changes = Needs changes")
+        case _:
+            state = tr(t"build-drafts-state-editing = In progress")
+    updated = draft.updated_at.to_stdlib()
+    return Message.join("\n", (title, Message.join(" · ", (state, tr(t"build-drafts-edited = Edited {updated}")))))
+
+
+def _unused_values_notice(field_ids: Sequence[str], manifest: FormManifest) -> sl.TextLike:
+    """Name the command options whose values the form could not accept, or return empty text.
+
+    Prefill drops values the form rejects, such as a "5 wide" door whose height and depth are
+    "not applicable", so the submitter can fill those fields in again.
+    """
+    if not field_ids:
+        return ""
+    labels = {field.id: field.label for field in manifest.fields_for("door")}
+    names: list[sl.TextLike] = []
+    for field_id in field_ids:
+        group = next((group for group in DIMENSION_GROUPS if field_id in group.field_ids), None)
+        name = group.label if group is not None else md(t"{(labels.get(field_id, field_id))}")
+        if name not in names:
+            names.append(name)
+    fields = Message.join(", ", names)
+    return tr(
+        t"draft-editor-unused-options = Some values from the command could not be used: {fields}. Fill them in below."
+    )
