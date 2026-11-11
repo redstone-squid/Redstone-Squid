@@ -191,7 +191,6 @@ class BuildHandler[BotT: squid.bot.app.RedstoneSquid]:
     async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         """Return a build card that callers can compose with other layout nodes."""
         build = self.build
-        current_java_version = await self.bot.services.versions.newest("Java")
         metadata = self.get_metadata_fields()
         performance_names = {
             "Dimensions",
@@ -244,7 +243,7 @@ class BuildHandler[BotT: squid.bot.app.RedstoneSquid]:
         media = await self._get_media_urls()
         extra_media = media[1:]
         return sl.section(
-            sl.heading(format_build_display_title(build, markdown=True, current_version=current_java_version)),
+            sl.heading(format_build_display_title(build, markdown=True)),
             # Allow the description to shrink when the full card exceeds the layout budget.
             description and sl.truncate(sl.paragraph(description)),
             group("Review warnings", review_names),

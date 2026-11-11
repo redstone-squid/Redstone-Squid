@@ -373,18 +373,7 @@ class SearchProjectionLoader:
         try:
             domain_build = await self._build_mapper.load(self._session, build)
             formatted = format_build_category(domain_build)
-            current_java = await self._session.scalar(
-                select(Version)
-                .where(Version.edition == "Java")
-                .order_by(
-                    Version.major_version.desc(),
-                    Version.minor_version.desc(),
-                    Version.patch_number.desc(),
-                )
-                .limit(1)
-            )
-            current_version = _version_name(current_java) if current_java is not None else None
-            title = format_build_display_title(domain_build, markdown=False, current_version=current_version)
+            title = format_build_display_title(domain_build, markdown=False)
             canonical_title = formatted.title
             canonical_subtitle = formatted.subtitle
             title_diagnostics = [diagnostic.as_dict() for diagnostic in formatted.diagnostics]

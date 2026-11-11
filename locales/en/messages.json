@@ -14028,8 +14028,8 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:591",
-      "squid/records/application/services.py:620"
+      "squid/records/application/services.py:582",
+      "squid/records/application/services.py:611"
     ]
   },
   "records-category-not-found-title": {
@@ -14072,7 +14072,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:631"
+      "squid/records/application/services.py:622"
     ]
   },
   "records-fixed-volume-positive": {
@@ -14096,7 +14096,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:566"
+      "squid/records/application/services.py:557"
     ]
   },
   "records-maximum-category-size": {
@@ -14159,7 +14159,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/records/application/services.py:554"
+      "squid/records/application/services.py:545"
     ]
   },
   "records-rebuild-summary": {
@@ -14229,7 +14229,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:374"
+      "squid/records/application/services.py:365"
     ]
   },
   "records-record-category-not-found": {
@@ -14277,7 +14277,7 @@
       }
     ],
     "locations": [
-      "squid/records/application/services.py:647"
+      "squid/records/application/services.py:638"
     ]
   },
   "records-restriction-base-key-required": {

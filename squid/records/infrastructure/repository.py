@@ -250,7 +250,7 @@ class PostgresRecordRepository:
                         build_id=build_id,
                         rank=1,
                         metric_snapshot=_metric_snapshot(computed, candidate),
-                        title=_holder_title(computed, build_id),
+                        title=computed.title.title,
                         subtitle=computed.title.subtitle,
                         completion_at=Instant(candidate.completion_at) if candidate.completion_at is not None else None,
                     )
@@ -883,11 +883,6 @@ def _door_size(door: DoorBuild) -> str:
     if door.door_depth is not None and door.door_depth > 1:
         return f"{door.door_width}x{door.door_height}x{door.door_depth}"
     return f"{door.door_width}x{door.door_height}"
-
-
-def _holder_title(computed: ComputedRecord, build_id: int) -> str:
-    suffix = " [BROKEN]" if build_id in computed.broken_holder_ids else ""
-    return f"{computed.title.title}{suffix}"
 
 
 def _metric_snapshot(computed: ComputedRecord, candidate: Candidate) -> dict[str, object]:

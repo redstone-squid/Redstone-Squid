@@ -95,7 +95,6 @@ class CategoryCandidates:
     facets: tuple[CandidateFacet, ...]
     category_text: FormattedTitle
     candidates: tuple[Candidate, ...]
-    candidate_version_ids: tuple[tuple[int, frozenset[int]], ...]
     source: MaterializationSource = MaterializationSource.EAGER
 
 
@@ -109,7 +108,6 @@ class ComputedRecord:
     category: CategoryCandidates
     title: FormattedTitle
     resolution: TitleResolution
-    broken_holder_ids: tuple[int, ...] = ()
     history: tuple[HolderHistoryEntry, ...] = ()
     history_complete: bool = True
 

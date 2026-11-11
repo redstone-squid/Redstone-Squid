@@ -62,7 +62,6 @@ def _batch(rules_revision_id: int, build_ids: list[int]) -> ComputationBatch:
         facets=(),
         category_text=FormattedTitle("2x3 Door"),
         candidates=candidates,
-        candidate_version_ids=tuple((candidate.build_id, frozenset()) for candidate in candidates),
     )
     computed = ComputedRecord(
         base_title=BaseTitle.SMALLEST,

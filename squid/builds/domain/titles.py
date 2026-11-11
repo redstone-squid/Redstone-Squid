@@ -91,11 +91,10 @@ def format_build_category(build: Build) -> FormattedTitle:
             raise NotImplementedError(msg)
 
 
-def format_build_display_title(build: Build, *, markdown: bool, current_version: str | None = None) -> str:
-    """Add moderation status, timing qualifiers, and compatibility to a category title.
+def format_build_display_title(build: Build, *, markdown: bool) -> str:
+    """Add moderation status and timing qualifiers to a category title.
 
-    With markdown enabled, unrecognized terms are italicized. Supplying a
-    current_version absent from the build's version list adds [BROKEN].
+    With markdown enabled, unrecognized terms are italicized.
     """
     category = format_build_category(build)
     terms: list[str] = []
@@ -109,8 +108,6 @@ def format_build_display_title(build: Build, *, markdown: bool, current_version:
     terms.extend(build.component_restrictions)
     terms.extend(_unknown_components(build, markdown=markdown))
     terms.extend(_render_tokens(category.title_tokens, markdown=markdown))
-    if current_version is not None and current_version not in build.versions:
-        terms.append("[BROKEN]")
     return " ".join(terms)
 
 

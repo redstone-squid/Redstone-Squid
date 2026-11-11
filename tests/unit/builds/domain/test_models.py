@@ -173,11 +173,11 @@ class TestBuildTitle:
         }
 
         formatted = format_build_category(sample_build)
-        display = format_build_display_title(sample_build, markdown=False, current_version="Java 1.21.0")
+        display = format_build_display_title(sample_build, markdown=False)
 
         assert formatted.title == "1-wide Odd Wiring 2x3 Door"
         assert formatted.subtitle == "Mysteryless No pistons"
-        assert display == "Pending: No pistons Mysteryless 1-wide Odd Wiring 2x3 Door [BROKEN]"
+        assert display == "Pending: No pistons Mysteryless 1-wide Odd Wiring 2x3 Door"
         assert "*" not in display
 
 

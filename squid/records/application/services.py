@@ -98,7 +98,7 @@ class RecordComputationService:
         """Stage replacement runs in the caller's transaction without committing.
 
         Every kind gets an all-time run. A supplied current version also gets a
-        filtered run and marks incompatible all-time holders as broken.
+        filtered run.
         """
         rules_revision_id = await uow.records.active_rules_revision_id()
         run_ids: list[int] = []
@@ -111,7 +111,6 @@ class RecordComputationService:
                 kind,
                 source,
                 version_id=None,
-                pinned_current_version_id=current_version_id,
                 requested=requested,
             )
             run_ids.append(await uow.records.activate(all_time))
@@ -123,7 +122,6 @@ class RecordComputationService:
                     kind,
                     source,
                     version_id=current_version_id,
-                    pinned_current_version_id=current_version_id,
                     requested=requested,
                 )
                 run_ids.append(await uow.records.activate(current))
@@ -143,7 +141,6 @@ class RecordComputationService:
         source: Sequence[CandidateBuild],
         *,
         version_id: int | None,
-        pinned_current_version_id: int | None,
         requested: Sequence[CategoryIdentity],
     ) -> ComputationBatch:
         scoped = tuple(candidate for candidate in source if version_id is None or version_id in candidate.version_ids)
@@ -166,11 +163,6 @@ class RecordComputationService:
                         category=category,
                         title=self._formatter.format_record(base_title, category.category_text),
                         resolution=resolution,
-                        broken_holder_ids=_broken_holders(
-                            resolution.holder_ids,
-                            category.candidate_version_ids,
-                            pinned_current_version_id,
-                        ),
                         history=_reconstruct_history(base_title, kind, category.candidates),
                         history_complete=all(candidate.completion_at is not None for candidate in category.candidates),
                     )
@@ -284,7 +276,6 @@ class RecordComputationService:
             facets=facets,
             category_text=category_text,
             candidates=tuple(item[0].candidate for item in items),
-            candidate_version_ids=tuple((item[0].candidate.build_id, item[0].version_ids) for item in items),
             source=MaterializationSource.PUBLIC_LOOKUP if source == "public_lookup" else MaterializationSource.EAGER,
         )
 
@@ -661,19 +652,6 @@ def _resolve_record(
     if base_title is BaseTitle.FASTEST_SMALLEST:
         return resolve_fastest_smallest(candidates, _timing_methods(kind))
     return resolve_smallest_fastest(candidates, _timing_methods(kind))
-
-
-def _broken_holders(
-    holder_ids: tuple[int, ...],
-    candidate_version_ids: tuple[tuple[int, frozenset[int]], ...],
-    pinned_current_version_id: int | None,
-) -> tuple[int, ...]:
-    if pinned_current_version_id is None:
-        return ()
-    versions_by_build = dict(candidate_version_ids)
-    return tuple(
-        build_id for build_id in holder_ids if pinned_current_version_id not in versions_by_build.get(build_id, ())
-    )
 
 
 def _reconstruct_history(

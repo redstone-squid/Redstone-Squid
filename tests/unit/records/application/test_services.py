@@ -334,8 +334,10 @@ async def test_current_version_run_filters_incompatible_candidates() -> None:
     } == {(2,)}
     all_time = runs.batches[0]
     assert {
-        record.broken_holder_ids for record in all_time.records if record.resolution.status is ResolutionStatus.RESOLVED
-    } == {(1,), ()}
+        record.resolution.holder_ids
+        for record in all_time.records
+        if record.resolution.status is ResolutionStatus.RESOLVED
+    } == {(1,), (2,)}
 
 
 @pytest.mark.asyncio

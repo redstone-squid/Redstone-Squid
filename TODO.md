@@ -21,8 +21,7 @@
   - Then settle the door and extender timing representations (deferred Phase 5 of
     `docs/plans/completed/schema-audit.md`): keep the `*_timing_variants` tables and write them, or drop them.
 - [x] Implement the fixed-size Door Rules title formatter.
-  - Includes trapdoor rewrites, animated restrictions, named layouts, canonical aliases, conflict diagnostics, and
-    current-version `[BROKEN]` presentation.
+  - Includes trapdoor rewrites, animated restrictions, named layouts, canonical aliases, and conflict diagnostics.
 - [ ] Add algebraic and minimal expandable-size title forms after expandable-volume records are modeled.
 - [x] Add an animated-restriction taxonomy type.
 - [ ] Decide which general eligibility rules remain moderation responsibilities and which need structured evidence.
