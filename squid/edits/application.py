@@ -1,5 +1,6 @@
 """One transaction for validation, conditional mutation, and an outcome record."""
 
+import logging
 from collections.abc import Mapping
 from typing import Protocol
 from uuid import UUID
@@ -26,6 +27,8 @@ from squid.edits.domain import (
 )
 from squid.permissions.domain import Subject
 from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+
+logger = logging.getLogger(__name__)
 
 
 class EditRunner(Protocol):
@@ -130,55 +133,67 @@ class EditExecutor[UowT: EditUnitOfWork]:
         *,
         attempt: EditAttempt | None = None,
     ) -> EditResult:
+        confirmed: EditResult | None = None
+        try:
+            async with self._factory() as uow:
+                confirmed = await self._execute_in(uow, command, actor, attempt)
+        except Exception:
+            if confirmed is None:
+                raise
+            # Session cleanup cannot undo an acknowledged commit. Return its
+            # receipt so transports retain history and do not report a failed save.
+            logger.warning("Edit committed but transaction cleanup failed", exc_info=True)
+        return confirmed
+
+    async def _execute_in(
+        self, uow: UowT, command: EditCommand, actor: EditActor, attempt: EditAttempt | None
+    ) -> EditResult:
         actor_key = actor.key
         handler = self._handlers[command.kind]
-        async with self._factory() as uow:
-            await uow.edits.lock_operation(command.operation_id)
-            existing = await uow.edits.outcome(command.operation_id)
-            if existing is not None:
-                self._check_replay(existing, command, actor_key)
-                receipt = self._receipt(attempt, command, existing)
-                return EditResult(existing, receipt, replayed=True)
-            self._check_deadline(command)
-            try:
-                prepared = await handler.prepare(uow, actor.subject, command)
-            except SchemaValidationError as error:
-                raise ValidationError(str(error)) from error
-            versions = (
-                (await handler.apply(uow, actor.subject, command, prepared)) if prepared.changed else command.expected
-            )
-            if len(versions) != len(command.expected) or {v.target for v in versions} != {
-                v.target for v in command.expected
-            }:
-                message = "An edit must return every guarded target's resulting revision"
-                raise ValueError(message)
-            expected = {v.target: v.value for v in command.expected}
-            if any(v.value < expected[v.target] for v in versions) or (
-                prepared.changed and not any(v.value > expected[v.target] for v in versions)
-            ):
-                message = "Changed edits must advance revisions; revisions must never decrease"
-                raise ValueError(message)
-            receipt = EditReceipt(
-                command, prepared.before, prepared.after, versions, prepared.final, prepared.resources
-            )
-            outcome = EditOutcome(
-                command.operation_id, actor_key, command.fingerprint, versions, prepared.changed, prepared.final
-            )
-            await uow.edits.record(outcome)
+        await uow.edits.lock_operation(command.operation_id)
+        existing = await uow.edits.outcome(command.operation_id)
+        if existing is not None:
+            self._check_replay(existing, command, actor_key)
+            receipt = self._receipt(attempt, command, existing)
+            return EditResult(existing, receipt, replayed=True)
+        self._check_deadline(command)
+        try:
+            prepared = await handler.prepare(uow, actor.subject, command)
+        except SchemaValidationError as error:
+            raise ValidationError(str(error)) from error
+        versions = (
+            (await handler.apply(uow, actor.subject, command, prepared)) if prepared.changed else command.expected
+        )
+        if len(versions) != len(command.expected) or {v.target for v in versions} != {
+            v.target for v in command.expected
+        }:
+            message = "An edit must return every guarded target's resulting revision"
+            raise ValueError(message)
+        expected = {v.target: v.value for v in command.expected}
+        if any(v.value < expected[v.target] for v in versions) or (
+            prepared.changed and not any(v.value > expected[v.target] for v in versions)
+        ):
+            message = "Changed edits must advance revisions; revisions must never decrease"
+            raise ValueError(message)
+        receipt = EditReceipt(command, prepared.before, prepared.after, versions, prepared.final, prepared.resources)
+        outcome = EditOutcome(
+            command.operation_id, actor_key, command.fingerprint, versions, prepared.changed, prepared.final
+        )
+        await uow.edits.record(outcome)
+        if attempt is not None:
+            attempt.receipt = receipt
+        # Defer caller cancellation while commit settles. Once confirmed, the
+        # caller can accept the receipt synchronously before its next await.
+        try:
+            with CancelScope(shield=True):
+                await uow.commit()
+        except ConflictError:
             if attempt is not None:
-                attempt.receipt = receipt
-            # Defer caller cancellation while commit settles. Once confirmed, the
-            # caller can accept the receipt synchronously before its next await.
-            try:
-                with CancelScope(shield=True):
-                    await uow.commit()
-            except ConflictError:
-                if attempt is not None:
-                    attempt.receipt = None
-                raise
-            except Exception as error:
-                raise EditCommitUncertainError(command.operation_id) from error
-            return EditResult(outcome, receipt)
+                attempt.receipt = None
+            raise
+        except Exception as error:
+            raise EditCommitUncertainError(command.operation_id) from error
+        return EditResult(outcome, receipt)
 
     async def reconcile(self, command: EditCommand, actor: EditActor, attempt: EditAttempt) -> EditResult | None:
         """Return the confirmed result, or None only after proving the original transaction ended without it."""

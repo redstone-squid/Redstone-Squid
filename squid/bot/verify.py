@@ -18,7 +18,7 @@ from squid.bot.profile_render import (
     public_profile_fields,
 )
 from squid.bot.ui import card_node, text_node
-from squid.bot.utils.permissions import allows, subject_for_interaction
+from squid.bot.utils.permissions import allows, current_edit_actor
 from squid.core.i18n import tr
 from squid.edits.domain import EditActor
 from squid.permissions.domain.catalogue import (
@@ -87,7 +87,7 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
             return await allows(request, node)
 
         async def edit_actor() -> EditActor:
-            return EditActor(await subject_for_interaction(request), discord_user_id=request.user.id)
+            return await current_edit_actor(request)
 
         return AccountWorkspace(
             accounts=self.account_service,

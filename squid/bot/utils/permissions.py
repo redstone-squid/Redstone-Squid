@@ -17,6 +17,8 @@ from whenever import Instant
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
+from squid.core.errors import AuthorizationError
+from squid.edits.domain import EditActor
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import CATALOGUE, Decision, PermissionNode, Reason, Subject
 
@@ -124,6 +126,35 @@ async def subject_for_interaction(caller: sd.Request[Any]) -> Subject:
     """Build the permission subject for a command, component, or modal request."""
     guild_id = None if caller.guild is None else caller.guild.id
     return await build_subject(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
+
+
+async def current_edit_actor(caller: sd.Request[Any]) -> EditActor:
+    """Refresh identity and guild membership for a long-lived editor action.
+
+    An editor can outlive a role change or account merge. Its opening request is
+    sufficient to identify the user, but not to authorize a later save or undo.
+    Discord failures abort the edit; they must not fall back to stale roles.
+    """
+    bot: squid.bot.app.RedstoneSquid = cast(Any, caller.client)
+    user = caller.user
+    guild = caller.guild
+    member: discord.Member | None = None
+    if guild is not None:
+        try:
+            member = await guild.fetch_member(user.id)
+        except discord.NotFound as error:
+            raise AuthorizationError from error
+    account = await bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
+    return EditActor(
+        Subject(
+            account_id=None if account is None else account.id,
+            discord_role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),
+            guild_id=None if guild is None else guild.id,
+            is_bot_owner=await bot.is_owner(user),
+            discord_guild_admin=member is not None and has_manage_server(member),
+        ),
+        discord_user_id=user.id,
+    )
 
 
 def _permissions_of(caller: sd.Request[Any]) -> PermissionService:

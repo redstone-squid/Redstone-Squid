@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field, replace
 from functools import partial
+from types import TracebackType
 from uuid import UUID
 
 import pytest
@@ -169,3 +170,21 @@ def test_value_projection_has_no_mutable_aliases() -> None:
     decoded = snapshot.unpack()
     decoded["links"] = []
     assert snapshot.unpack() == {"links": ["before"]}
+
+
+async def test_acknowledged_commit_survives_transaction_cleanup_failure() -> None:
+    class CloseFailure(Work):
+        async def __aexit__(
+            self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: TracebackType | None
+        ) -> None:
+            raise ConnectionError("session close failed")
+
+    state = CommittedState(Store())
+    executor = EditExecutor(partial(CloseFailure, state), {"example": Handler()})
+    edit = command()
+    result = await executor.execute(edit, ACTOR)
+    assert result.receipt is not None
+    assert result.outcome.revisions == (Revision(TARGET, 2),)
+    replay = await executor.execute(edit, ACTOR)
+    assert replay.replayed
+    assert state.value.revision == 2

@@ -2876,7 +2876,7 @@
       }
     ],
     "locations": [
-      "squid/bot/notifications.py:123"
+      "squid/bot/notifications.py:126"
     ]
   },
   "bot-notifications-remainder": {
@@ -3239,7 +3239,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications.py:130"
+      "squid/bot/notifications.py:133"
     ]
   },
   "bot-notifications-your-build-was-denied": {
@@ -3248,7 +3248,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications.py:132"
+      "squid/bot/notifications.py:135"
     ]
   },
   "bot-profile-render-build": {
@@ -10960,7 +10960,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:226"
+      "squid/bot/edit_controller.py:230"
     ]
   },
   "edits-commit-uncertain": {
@@ -10987,7 +10987,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:253"
+      "squid/bot/edit_controller.py:257"
     ]
   },
   "edits-fields-not-editable": {
@@ -10996,7 +10996,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/application.py:99"
+      "squid/edits/application.py:102"
     ]
   },
   "edits-final": {
@@ -11050,7 +11050,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:205"
+      "squid/bot/edit_controller.py:209"
     ]
   },
   "edits-refresh": {
@@ -11059,7 +11059,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:238"
+      "squid/bot/edit_controller.py:242"
     ]
   },
   "edits-result-checked": {
@@ -11068,7 +11068,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:221"
+      "squid/bot/edit_controller.py:225"
     ]
   },
   "edits-revision-conflict": {
@@ -13230,7 +13230,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications.py:119"
+      "squid/bot/notifications.py:122"
     ]
   },
   "notifications-build-ready": {
@@ -13239,7 +13239,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications.py:135"
+      "squid/bot/notifications.py:138"
     ]
   },
   "notifications-build-review-link": {
@@ -13254,7 +13254,7 @@
       }
     ],
     "locations": [
-      "squid/bot/notifications.py:114"
+      "squid/bot/notifications.py:117"
     ]
   },
   "notifications-channel-and-follow-help": {
@@ -13355,7 +13355,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications.py:134"
+      "squid/bot/notifications.py:137"
     ]
   },
   "notifications-invalid-creator-uuid": {

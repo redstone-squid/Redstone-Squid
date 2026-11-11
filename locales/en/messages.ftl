@@ -868,7 +868,7 @@ bot-help-usable-subcommands-2 =
 
     { $more_information }
 
-# squid/bot/notifications.py:123
+# squid/bot/notifications.py:126
 bot-notifications-a-credited-build-gained-record =
     { $count ->
         [one] A credited build gained { $count } record.
@@ -988,10 +988,10 @@ bot-notifications-view-version-scope = Version scope
 # squid/bot/notifications_view.py:132, squid/bot/notifications_view.py:191
 bot-notifications-view-web-inbox = Web inbox
 
-# squid/bot/notifications.py:130
+# squid/bot/notifications.py:133
 bot-notifications-your-build-was-confirmed = Your build was confirmed.
 
-# squid/bot/notifications.py:132
+# squid/bot/notifications.py:135
 bot-notifications-your-build-was-denied = Your build was denied.
 
 # squid/bot/profile_render.py:102
@@ -3374,7 +3374,7 @@ edit-history-uncertain = The saved result needs checking. Refresh before editing
 # squid/bot/edit_history.py:123
 edit-history-undo = Undo
 
-# squid/bot/edit_controller.py:226
+# squid/bot/edit_controller.py:230
 edits-check-result = Check saved result
 
 # squid/edits/domain.py:187
@@ -3383,10 +3383,10 @@ edits-commit-uncertain = The saved result needs checking before this item can be
 # squid/edits/domain.py:201
 edits-concurrent-write = Another edit committed first. Reload this item before trying again.
 
-# squid/bot/edit_controller.py:253
+# squid/bot/edit_controller.py:257
 edits-discard-reload = Discard history and reload
 
-# squid/edits/application.py:99
+# squid/edits/application.py:102
 edits-fields-not-editable = This edit contains fields that cannot be changed.
 
 # squid/edits/domain.py:139
@@ -3404,13 +3404,13 @@ edits-operation-reused = This operation identifier was already used for another 
 # squid/bot/edit_controller.py:109
 edits-pending = Check the previous saved result before editing this item.
 
-# squid/bot/edit_controller.py:205
+# squid/bot/edit_controller.py:209
 edits-pending-discard = Check the saved result before discarding its history.
 
-# squid/bot/edit_controller.py:238
+# squid/bot/edit_controller.py:242
 edits-refresh = Refresh saved values
 
-# squid/bot/edit_controller.py:221
+# squid/bot/edit_controller.py:225
 edits-result-checked = The saved result has been checked.
 
 # squid/edits/domain.py:174
@@ -4093,13 +4093,13 @@ notification-history-read = Change read state
 # squid/bot/notifications_view.py:324
 notification-history-unfollow = Unfollow
 
-# squid/bot/notifications.py:119
+# squid/bot/notifications.py:122
 notifications-build-awaiting-review = A new build is awaiting staff review.
 
-# squid/bot/notifications.py:135
+# squid/bot/notifications.py:138
 notifications-build-ready = A build notification is available.
 
-# squid/bot/notifications.py:114
+# squid/bot/notifications.py:117
 notifications-build-review-link =
     A new build is awaiting staff review.
     Open it in Discord with `/build browse id:{ $build_id_text }`.
@@ -4131,7 +4131,7 @@ notifications-exact-predicate-value-required = exact predicates require a value
 # squid/bot/notifications_view.py:396
 notifications-follow-filter-confirmation = Following records matching that filter.
 
-# squid/bot/notifications.py:134
+# squid/bot/notifications.py:137
 notifications-followed-creator-build = A creator you follow has a newly confirmed build.
 
 # squid/bot/notifications_view.py:353

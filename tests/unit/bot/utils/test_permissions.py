@@ -2,13 +2,14 @@
 
 from dataclasses import dataclass
 from typing import cast, override
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import discord
 import pytest
 from discord.ext.commands import Context
 from whenever import Instant
 
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account
@@ -16,6 +17,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
     AccountIdCache,
     PermissionNodeRequired,
+    current_edit_actor,
     requires,
     subject_for,
 )
@@ -229,3 +231,25 @@ class TestAccountIdCache:
         await cache.resolve(accounts, 5)
 
         assert accounts.lookups == 2
+
+
+async def test_editor_actor_refreshes_discord_roles_and_bypasses_identity_cache() -> None:
+    bot, guild = _bot(member_id=8)
+    old_member = _member(8, guild, administrator=True)
+    current_member = _member(8, guild)
+    cast(Mock, current_member).roles = []
+    live_guild = Mock(spec=discord.Guild)
+    live_guild.id = guild.id
+    live_guild.fetch_member = AsyncMock(return_value=current_member)
+    request = Mock(spec=sd.Request)
+    request.client = bot
+    request.guild = live_guild
+    request.user = old_member
+    await bot.account_ids.resolve(bot.services.accounts, 8)
+    first = await current_edit_actor(request)
+    second = await current_edit_actor(request)
+    assert first.subject.discord_role_ids == frozenset()
+    assert not first.subject.discord_guild_admin
+    assert second.subject.account_id == 8
+    assert live_guild.fetch_member.await_count == 2
+    assert cast(FakeAccountService, bot.services.accounts).lookups == 3

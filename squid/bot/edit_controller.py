@@ -161,6 +161,10 @@ class EditController:
         self._signal.notify()
 
     async def reconcile(self, operation_id: UUID) -> EditResult:
+        current = CURRENT_TRANSACTION.get()
+        if current is not None and current.readonly:
+            message = "Reconciliation requires a writable UI action"
+            raise sl.runtime.ReactiveWriteError(message)
         async with self._lock:
             pending = self._pending[operation_id]
             actor = await self._actor()
