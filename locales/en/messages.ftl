@@ -430,7 +430,7 @@ accounts-application-presentation-creator = creator { $creator_id_text }
 # squid/accounts/application/presentation.py:32
 accounts-application-presentation-discord-user = Discord user { $discord_id_text }
 
-# squid/accounts/models.py:213
+# squid/accounts/models.py:208
 accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject_text }.
 
 # squid/accounts/errors.py:370
@@ -457,7 +457,7 @@ accounts-creator-name-not-found = Creator name not found
 # squid/accounts/errors.py:273
 accounts-creator-not-found-title = Creator not found
 
-# squid/accounts/models.py:204
+# squid/accounts/models.py:199
 accounts-discord-identity-subjects = Discord identity subjects must be positive signed 64-bit integers, got { $subject_text }.
 
 # squid/accounts/domain/consent.py:19
@@ -544,7 +544,7 @@ accounts-errors-too-many-attempts = Too many attempts
 # squid/accounts/errors.py:170
 accounts-errors-wait-for-the-cooling-off-period-to = Wait for the cooling-off period to pass, then generate a new code in game.
 
-# squid/accounts/models.py:226
+# squid/accounts/models.py:221
 accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $subject_text }.
 
 # squid/accounts/errors.py:89

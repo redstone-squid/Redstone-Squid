@@ -49,6 +49,7 @@ from squid.accounts.domain.profiles import ProfileLink
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.persistence.base import Base
+from squid.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
 from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC, StrEnumText
 
@@ -80,7 +81,7 @@ class ProfileLinks(TypeDecorator[tuple[ProfileLink, ...]]):
         return None if value is None else tuple(ProfileLink(**link) for link in value)
 
 
-class Account(Revisioned, Base, kw_only=True):
+class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
     """An internal caller independent of every external identity provider."""
 
     __tablename__ = "accounts"
@@ -96,9 +97,6 @@ class Account(Revisioned, Base, kw_only=True):
     """Internal account identifier; assigned when the account is first saved."""
     public_creator_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
-    )
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
     consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
@@ -146,7 +144,7 @@ class Account(Revisioned, Base, kw_only=True):
         )
 
 
-class AccountIdentity(Base, kw_only=True):
+class AccountIdentity(CreatedAtMixin, Base, kw_only=True):
     """A verified provider subject attached to exactly one account."""
 
     __tablename__ = "account_identities"
@@ -170,9 +168,6 @@ class AccountIdentity(Base, kw_only=True):
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
     verified_at: Mapped[Instant | None] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
-    created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
@@ -270,7 +265,7 @@ class AccountIdentity(Base, kw_only=True):
         return uuid.UUID(self.subject) if self.provider is IdentityProvider.JAVA else None
 
 
-class AccountProfile(Base, kw_only=True):
+class AccountProfile(AuditTimestampsMixin, Base, kw_only=True):
     """Public profile content and visibility choices for an account."""
 
     __tablename__ = "account_profiles"
@@ -322,12 +317,6 @@ class AccountProfile(Base, kw_only=True):
         default=None,
     )
     """Linked identity used for the avatar. Unlinking it clears this choice; writes check account ownership."""
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
-    updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
 
     @classmethod
     def empty(cls, account_id: int) -> AccountProfile:
@@ -351,7 +340,7 @@ class PublicCreatorRedirect(Base):
     )
 
 
-class CreatorAlias(Base, kw_only=True):
+class CreatorAlias(CreatedAtMixin, Base, kw_only=True):
     """A creator name credited on a build, optionally claimed by an account."""
 
     __tablename__ = "creator_aliases"
@@ -400,9 +389,6 @@ class CreatorAlias(Base, kw_only=True):
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_method: Mapped[ClaimMethod | None] = mapped_column(StrEnumText(ClaimMethod), default=None)
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
 
     public_creator_id: uuid.UUID | None = None
     """Public identifier of the account claiming this alias."""
@@ -420,7 +406,7 @@ def _refold_on_name_change(_mapper: object, _connection: object, target: Creator
         target.normalized_name = fold_creator_name(target.name)
 
 
-class AliasClaim(Base, kw_only=True):
+class AliasClaim(CreatedAtMixin, Base, kw_only=True):
     """An account's request to be credited under a creator alias."""
 
     __tablename__ = "creator_alias_claims"
@@ -455,9 +441,6 @@ class AliasClaim(Base, kw_only=True):
         nullable=False,
     )
     status: Mapped[ClaimStatus] = mapped_column(StrEnumText(ClaimStatus), nullable=False, default=ClaimStatus.PENDING)
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
     resolved_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     resolved_by_account_id: Mapped[int | None] = mapped_column(
         Integer,
@@ -522,7 +505,7 @@ class VerificationAttempt(Base):
     )
 
 
-class MergeTicket(Base, kw_only=True):
+class MergeTicket(CreatedAtMixin, Base, kw_only=True):
     """A single-use proof that an account consents to being merged into another account."""
 
     __tablename__ = "account_merge_tickets"
@@ -545,10 +528,6 @@ class MergeTicket(Base, kw_only=True):
         default_factory=lambda: Instant.now().add(seconds=MERGE_TICKET_TTL_SECONDS),
     )
     """End of the authentication proof window in which the ticket can be redeemed."""
-
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
 
     def is_live_at(self, now: Instant) -> bool:
         """Whether this ticket may still be redeemed."""

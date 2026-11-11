@@ -27,13 +27,13 @@ from sqlalchemy import (
     SmallInteger,
     Text,
     UniqueConstraint,
-    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
+from squid.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
 from squid.persistence.types import InstantUTC, StrEnumText
 from squid.tags.domain import (
     RecordOperator,
@@ -56,7 +56,7 @@ class UnitDefinition(Base, kw_only=True):
     scale_to_base: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
 
 
-class TagDefinition(Base, kw_only=True):
+class TagDefinition(AuditTimestampsMixin, Base, kw_only=True):
     """A canonical tag that may be assigned to builds."""
 
     __tablename__ = "tag_definitions"
@@ -156,12 +156,6 @@ class TagDefinition(Base, kw_only=True):
         ForeignKey("accounts.id", name="tag_definitions_created_by_account_id_fkey", ondelete="SET NULL"),
         default=None,
     )
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
-    updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
     archived_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
     aliases: Mapped[list[TagAlias]] = relationship(
@@ -179,7 +173,7 @@ class TagDefinition(Base, kw_only=True):
             self.normalized_name = " ".join(self.display_name.casefold().split())
 
 
-class TagAlias(Base, kw_only=True):
+class TagAlias(CreatedAtMixin, Base, kw_only=True):
     """An alternate display name for a tag."""
 
     __tablename__ = "tag_aliases"
@@ -195,9 +189,6 @@ class TagAlias(Base, kw_only=True):
     )
     alias: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
 
     definition: Mapped[TagDefinition] = relationship(back_populates="aliases", lazy="raise_on_sql", default=None)
 
@@ -220,7 +211,7 @@ class TagApplicability(Base, kw_only=True):
     )
 
 
-class TagAssignment(Base, kw_only=True, init=False):
+class TagAssignment(AuditTimestampsMixin, Base, kw_only=True, init=False):
     """A typed tag value attached to one build."""
 
     __tablename__ = "build_tag_assignments"
@@ -295,12 +286,6 @@ class TagAssignment(Base, kw_only=True, init=False):
     created_by_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="build_tag_assignments_created_by_account_id_fkey", ondelete="SET NULL"),
         default=None,
-    )
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
-    updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
     definition: Mapped[TagDefinition] = relationship(

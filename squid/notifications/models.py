@@ -15,7 +15,6 @@ from sqlalchemy import (
     Integer,
     Text,
     UniqueConstraint,
-    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -26,6 +25,7 @@ from whenever import Instant
 
 from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
 from squid.persistence.base import Base
+from squid.persistence.mixins import AuditTimestampsMixin, CreatedAtMixin
 from squid.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC, StrEnumText
@@ -48,7 +48,7 @@ class RecordFilterJSON(TypeDecorator[RecordSubscriptionFilter]):
         return None if value is None else RecordSubscriptionFilter.from_dict(value)
 
 
-class NotificationProfile(Revisioned, Base, kw_only=True):
+class NotificationProfile(AuditTimestampsMixin, Revisioned, Base, kw_only=True):
     """Channel preferences for an account. Consent is recorded on the account itself."""
 
     __tablename__ = "notification_profiles"
@@ -62,15 +62,9 @@ class NotificationProfile(Revisioned, Base, kw_only=True):
     web_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_suspended_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
-    updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
 
 
-class NotificationSubscription(Base, kw_only=True):
+class NotificationSubscription(CreatedAtMixin, Base, kw_only=True):
     """A creator, exact record, or structured record-filter subscription."""
 
     __tablename__ = "notification_subscriptions"
@@ -117,12 +111,9 @@ class NotificationSubscription(Base, kw_only=True):
     subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     record_filter: Mapped[RecordSubscriptionFilter | None] = mapped_column("filter", RecordFilterJSON(), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
 
 
-class InboxNotification(Revisioned, Base, kw_only=True):
+class InboxNotification(CreatedAtMixin, Revisioned, Base, kw_only=True):
     """An event-derived message for one recipient, shared by the web inbox and DM delivery."""
 
     __tablename__ = "notifications"
@@ -160,9 +151,6 @@ class InboxNotification(Revisioned, Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
     web_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
     read_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
 

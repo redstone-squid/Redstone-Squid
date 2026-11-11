@@ -1495,7 +1495,7 @@
       }
     ],
     "locations": [
-      "squid/accounts/models.py:213"
+      "squid/accounts/models.py:208"
     ]
   },
   "accounts-check-uuid-try-again": {
@@ -1593,7 +1593,7 @@
       }
     ],
     "locations": [
-      "squid/accounts/models.py:204"
+      "squid/accounts/models.py:199"
     ]
   },
   "accounts-discord-user-id-stored": {
@@ -1833,7 +1833,7 @@
       }
     ],
     "locations": [
-      "squid/accounts/models.py:226"
+      "squid/accounts/models.py:221"
     ]
   },
   "accounts-last-identity-required": {
