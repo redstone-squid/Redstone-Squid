@@ -37,7 +37,7 @@ from squid.builds.errors import (
 )
 from squid.builds.models import Build
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
-from squid.edits.domain import EditCommand, Revision
+from squid.edits.domain import EditCommand, LatestRevision, Revision
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
@@ -50,7 +50,7 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
 @router.patch(
     "/{build_id}",
     response_model=BuildDetail,
-    responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
+    responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="builds_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -69,7 +69,11 @@ async def edit_build(
     await services.edits.execute(
         EditCommand(
             BUILD_EDIT,
-            (Revision(build_target(build_id), _expected_revision(build_id, if_match)),),
+            (
+                LatestRevision(build_target(build_id))
+                if if_match is None
+                else Revision(build_target(build_id), _expected_revision(build_id, if_match)),
+            ),
             patch_values(BuildEditPatch.from_attributes(changes.edit_attributes())),
             operation_id,
         ),

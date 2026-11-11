@@ -10,19 +10,20 @@ from fastapi import Response
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from squid.api.revisions import InvalidRevisionError, RevisionRequiredError, expected_revision
+from squid.api.revisions import InvalidRevisionError, expected_revision
 from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
 from squid.api.v1.settings import update_runtime_settings
 from squid.core.errors import AuthenticationError
-from squid.edits.domain import EditValues, Revision
+from squid.edits.domain import EditValues, LatestRevision, Revision
 from squid.settings.application.edits import RUNTIME_TARGET
 from squid.settings.domain.runtime import RuntimeSettings
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 
 
+@pytest.mark.parametrize("etag", [None, '"runtime-settings-1-r1"'])
 @pytest.mark.parametrize("kind", ["account", "cli", "minecraft_player", "service"])
-async def test_every_account_credential_audits_the_internal_account(kind: str) -> None:
+async def test_every_account_credential_audits_the_internal_account(kind: str, etag: str | None) -> None:
     edits = SimpleNamespace(
         execute=AsyncMock(
             return_value=SimpleNamespace(
@@ -37,9 +38,10 @@ async def test_every_account_credential_audits_the_internal_account(kind: str) -
     caller = Caller(kind=cast(Any, kind), subject="test", nodes=UNBOUNDED, account_id=7)
     response = Response()
     await update_runtime_settings(
-        RuntimeSettingsPatch(welcome_forward_chance=0.5), services, caller, response, uuid4(), '"runtime-settings-1-r1"'
+        RuntimeSettingsPatch(welcome_forward_chance=0.5), services, caller, response, uuid4(), etag
     )
     command, actor = edits.execute.call_args.args
+    assert command.expected == (LatestRevision(RUNTIME_TARGET) if etag is None else Revision(RUNTIME_TARGET, 1),)
     assert command.values.unpack() == {"welcome_forward_chance": 0.5}
     assert actor.account_id == 7
     assert response.headers["ETag"] == '"runtime-settings-1-r2"'
@@ -102,16 +104,5 @@ def test_revision_preconditions_reject_unread_or_foreign_versions(value: str) ->
         expected_revision(RUNTIME_TARGET, value)
 
 
-async def test_runtime_update_requires_the_version_read_by_the_caller() -> None:
-    edits = SimpleNamespace(execute=AsyncMock())
-    caller = Caller(kind="account", subject="test", nodes=UNBOUNDED, account_id=7)
-    with pytest.raises(RevisionRequiredError):
-        await update_runtime_settings(
-            RuntimeSettingsPatch(welcome_enabled=False),
-            cast(Any, SimpleNamespace(edits=edits)),
-            caller,
-            Response(),
-            uuid4(),
-            None,
-        )
-    edits.execute.assert_not_awaited()
+def test_missing_precondition_selects_latest_revision() -> None:
+    assert expected_revision(RUNTIME_TARGET, None) == LatestRevision(RUNTIME_TARGET)

@@ -9,7 +9,6 @@ from fastapi import Response
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.api.revisions import RevisionRequiredError
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.notifications import (
     create_subscription,
@@ -209,9 +208,8 @@ async def test_read_and_unread_routes_share_the_resolved_visibility() -> None:
     ]
 
 
-async def test_notification_writes_require_the_revision_the_caller_read() -> None:
+async def test_notification_writes_accept_latest_state() -> None:
     recorder = NotificationEditRecorder(NotificationRecorder())
     services = cast(ApiServices, SimpleNamespace(edits=recorder))
-    with pytest.raises(RevisionRequiredError):
-        await mark_read(3, services, ACCOUNT, uuid4())
-    assert recorder.commands == []
+    await mark_read(3, services, ACCOUNT, uuid4())
+    assert recorder.commands[0].expected[0].value is None

@@ -13,7 +13,6 @@ from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
 from squid.builds.application import BuildService
 from squid.builds.domain import Status
-from squid.builds.errors import BuildRevisionRequiredError
 from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
@@ -96,14 +95,10 @@ async def test_edit_surfaces_the_service_authorization_refusal() -> None:
 
 
 @pytest.mark.asyncio
-async def test_edit_requires_an_if_match_revision() -> None:
-    """Reject a missing precondition before invoking the build service."""
+async def test_edit_without_if_match_uses_latest_state() -> None:
     builds = BuildRecorder()
-
-    with pytest.raises(BuildRevisionRequiredError):
-        await edit_build(42, BuildPatch(), Response(), builds.services(), ACCOUNT, uuid4())
-
-    assert builds.runner.commands == []
+    await edit_build(42, BuildPatch(extra_user_info="changed"), Response(), builds.services(), ACCOUNT, uuid4())
+    assert builds.runner.commands[0].expected[0].value is None
 
 
 def test_door_patch_flattens_onto_the_application_patch_names() -> None:

@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.models import Account
 from squid.core.actors import Actor
 from squid.edits.application import EditExecutor
-from squid.edits.domain import ConcurrentEditError, EditCommand, EditResult, EditValues, Revision, RevisionConflictError
+from squid.edits.domain import (
+    ConcurrentEditError,
+    EditCommand,
+    EditResult,
+    EditValues,
+    LatestRevision,
+    Revision,
+    RevisionConflictError,
+)
 from squid.permissions.application.services import PermissionService
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
@@ -89,3 +97,32 @@ async def test_stale_orm_write_is_a_known_conflict_at_flush_or_commit(
         operation = second.settings.flush_runtime_revision(b, expected) if explicit_flush else second.commit()
         with pytest.raises(ConcurrentEditError):
             await operation
+
+
+async def test_unconditional_settings_edits_serialize_and_preserve_other_fields(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    settings = SettingsService(uow_factory=factory)
+    original, revision = await settings.runtime_snapshot()
+    executor = EditExecutor(
+        factory, {RUNTIME_EDIT: RuntimeSettingsEdit(PermissionService(uow_factory=factory), original)}
+    )
+    actor = await owner(migrated_session_factory)
+    results: list[EditResult] = []
+
+    async def edit(field: str) -> None:
+        results.append(
+            await executor.execute(
+                EditCommand(RUNTIME_EDIT, (LatestRevision(RUNTIME_TARGET),), EditValues.of({field: False})), actor
+            )
+        )
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(edit, "welcome_enabled")
+        tasks.start_soon(edit, "redstoner_enabled")
+    current, current_revision = await settings.runtime_snapshot()
+    assert not current.welcome_enabled
+    assert not current.redstoner_enabled
+    assert current_revision == revision + 2
+    assert sorted(result.outcome.revisions[0].value for result in results) == [revision + 1, revision + 2]

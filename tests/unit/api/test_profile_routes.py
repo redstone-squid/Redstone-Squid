@@ -14,7 +14,6 @@ from squid.accounts.application.edits import AccountEditorSnapshot
 from squid.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
 from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
 from squid.accounts.models import Account, AccountIdentity, AccountProfile, MergeTicket
-from squid.api.revisions import RevisionRequiredError
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import (
     clear_profile,
@@ -305,7 +304,7 @@ class TestMerge:
 
 
 @pytest.mark.parametrize("kind", ["profile", "visibility", "unlink"])
-async def test_account_writes_require_the_callers_read_revision(kind: str) -> None:
+async def test_account_writes_accept_latest_state(kind: str) -> None:
     accounts = _accounts()
     recorder = AccountEditRecorder(accounts)
     services = cast(Any, SimpleNamespace(edits=recorder))
@@ -319,6 +318,5 @@ async def test_account_writes_require_the_callers_read_revision(kind: str) -> No
         )
     else:
         operation = unlink_identity(2, _caller(), services, uuid4(), None)
-    with pytest.raises(RevisionRequiredError):
-        await operation
-    assert recorder.commands == []
+    await operation
+    assert recorder.commands[0].expected[0].value is None

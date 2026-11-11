@@ -1,10 +1,10 @@
-"""Strong revision preconditions shared by HTTP editors."""
+"""Optional strong revision preconditions shared by HTTP editors."""
 
 import re
 
 from squid.core.errors import ConflictError, DomainError
 from squid.core.i18n import tr
-from squid.edits.domain import EditTarget, Revision
+from squid.edits.domain import EditTarget, LatestRevision, Revision
 
 
 class RevisionRequiredError(DomainError):
@@ -19,9 +19,10 @@ def revision_etag(version: Revision) -> str:
     return f'"{version.target.kind}-{version.target.key}-r{version.value}"'
 
 
-def expected_revision(target: EditTarget, if_match: str | None) -> Revision:
+def expected_revision(target: EditTarget, if_match: str | None) -> Revision | LatestRevision:
+    """Missing headers apply to current state; supplied tags must match exactly."""
     if if_match is None:
-        raise RevisionRequiredError
+        return LatestRevision(target)
     prefix = re.escape(f'"{target.kind}-{target.key}-r')
     match = re.fullmatch(prefix + r'(\d+)"', if_match.strip())
     if match is None:

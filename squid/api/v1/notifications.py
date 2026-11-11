@@ -75,7 +75,7 @@ async def get_preferences(
 @router.patch(
     "/preferences",
     response_model=NotificationPreferencesDetail,
-    responses=responses(400, 401, 403, 412, 428, 503),
+    responses=responses(400, 401, 403, 412, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_preferences_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -127,7 +127,7 @@ async def list_subscriptions(
     "/subscriptions",
     response_model=NotificationSubscriptionDetail,
     status_code=status.HTTP_201_CREATED,
-    responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
+    responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_subscription_create",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -178,7 +178,7 @@ async def create_subscription(
 @router.delete(
     "/subscriptions/{subscription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 404, 409, 412, 428, 503),
+    responses=responses(401, 403, 404, 409, 412, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_subscription_delete",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -236,7 +236,7 @@ async def list_inbox(
 @router.post(
     "/inbox/{notification_id}/read",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 404, 409, 412, 428, 503),
+    responses=responses(401, 403, 404, 409, 412, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_inbox_mark_read",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -267,7 +267,7 @@ async def mark_read(
 @router.post(
     "/inbox/{notification_id}/unread",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 404, 409, 412, 428, 503),
+    responses=responses(401, 403, 404, 409, 412, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="notification_inbox_mark_unread",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),

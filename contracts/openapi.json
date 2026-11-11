@@ -1382,26 +1382,6 @@
               }
             }
           },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -4554,26 +4534,6 @@
               }
             }
           },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -4947,26 +4907,6 @@
               }
             }
           },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -5201,26 +5141,6 @@
               }
             },
             "description": "Precondition Failed",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -9153,26 +9073,6 @@
               }
             }
           },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -9570,26 +9470,6 @@
               }
             }
           },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -9801,26 +9681,6 @@
               }
             },
             "description": "Precondition Failed",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -10283,26 +10143,6 @@
               }
             }
           },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
           "503": {
             "content": {
               "application/problem+json": {
@@ -10529,26 +10369,6 @@
               }
             },
             "description": "Precondition Failed",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -12141,7 +11961,7 @@
           "settings"
         ],
         "summary": "Update Runtime Settings",
-        "description": "Patch settings and audit the internal account. New vote defaults affect new sessions only.",
+        "description": "Patch current settings, or require a specific revision with If-Match.\n\nNew vote defaults affect new sessions only.",
         "operationId": "runtime_settings_update",
         "security": [
           {
@@ -12322,26 +12142,6 @@
               }
             },
             "description": "Unprocessable Content",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "428": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "description": "Precondition Required",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"

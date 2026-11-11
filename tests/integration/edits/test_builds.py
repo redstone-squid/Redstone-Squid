@@ -19,7 +19,7 @@ from squid.builds.models import Build, OtherBuild
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, EditResult, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, EditResult, LatestRevision, Revision, RevisionConflictError
 from squid.permissions.application.services import PermissionService
 from squid.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.versions.application import VersionService
@@ -66,7 +66,9 @@ async def setup(
     )
 
 
+@pytest.mark.parametrize("latest", [False, True])
 async def test_build_receipts_restore_children_and_unresolved_taxonomy_in_one_audit_entry(
+    latest: bool,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory
@@ -76,7 +78,7 @@ async def test_build_receipts_restore_children_and_unresolved_taxonomy_in_one_au
     result = await executor.execute(
         EditCommand(
             BUILD_EDIT,
-            (Revision(build_target(build.id), build.revision),),
+            (LatestRevision(build_target(build.id)) if latest else Revision(build_target(build.id), build.revision),),
             patch_values(
                 BuildEditPatch(
                     extra_user_info="edited",

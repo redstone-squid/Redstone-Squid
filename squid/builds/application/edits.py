@@ -1,6 +1,7 @@
 """Versioned build edits with the existing build audit scope.
 
-Taxonomy and embeddings are prepared on a detached build before locking its row.
+Conditional edits prepare taxonomy and embeddings before locking the build row.
+Unconditional edits hold the lock throughout preparation to use the latest state.
 The final revision and permission check, audit entry, and recoverable operation
 outcome share one transaction. The row lock provides exclusion with every build
 writer, including callers which also use the longer application lease.
@@ -21,7 +22,15 @@ from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.actors import Actor
 from squid.core.errors import AuthorizationError, DataIntegrityError, ValidationError
 from squid.edits.application import EditUnitOfWork
-from squid.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, RevisionConflictError
+from squid.edits.domain import (
+    EditCommand,
+    EditTarget,
+    EditValues,
+    LatestRevision,
+    PreparedEdit,
+    Revision,
+    RevisionConflictError,
+)
 from squid.persistence.revisions import require_revision
 
 BUILD_EDIT = "build.fields"
@@ -105,10 +114,13 @@ class BuildFieldsEdit:
         values = command.values.unpack()
         unresolved = values.pop("unresolved_taxonomy", None)
         patch = BuildPatch.from_patch(BuildEditPatch.from_attributes(values))
-        current = await uow.builds.get_for_update(build_id)
-        if current is None:
-            raise BuildNotFoundError(build_id)
-        expected = require_revision(expected, current.revision)
+        if isinstance(expected, LatestRevision):
+            # Latest-state edits must serialize preparation too, since their patch
+            # and receipt are based on whichever version holds the lock first.
+            current = await uow.builds.get_for_update(build_id)
+            if current is None:
+                raise BuildNotFoundError(build_id)
+            expected = require_revision(expected, current.revision)
         build = await self._builds.get(build_id)
         if build is None:
             raise BuildNotFoundError(build_id)
@@ -130,6 +142,10 @@ class BuildFieldsEdit:
             attributes["door_type"] = [*cast(list[str], attributes.get("door_type", [])), *retained.patterns]
         editor = BuildEditor(actor, source="versioned_editor")
         await self._builds.prepare_edit(editor, build, BuildEditPatch.from_attributes(attributes))
+        current = await uow.builds.get_for_update(build_id)
+        if current is None:
+            raise BuildNotFoundError(build_id)
+        require_revision(expected, current.revision)
         await self._builds.authorize_edit_in(uow, editor, current)
         return PreparedBuildEdit(before, build_values(build), build=build, revisions=(expected,))
 

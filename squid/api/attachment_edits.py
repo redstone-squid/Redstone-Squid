@@ -11,7 +11,7 @@ from squid.api.revisions import expected_revision, revision_etag
 from squid.api.v1.submissions import AccountId, get_submission_edits
 from squid.core.actors import Actor
 from squid.edits.application import EditRunner
-from squid.edits.domain import EditCommand, Revision
+from squid.edits.domain import EditCommand, LatestRevision, Revision
 from squid.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
 from squid.submissions.application.edits import draft_target
 
@@ -20,7 +20,7 @@ from squid.submissions.application.edits import draft_target
 class AttachmentEditRequest:
     runner: EditRunner
     actor: Actor
-    revision: Revision
+    revision: Revision | LatestRevision
     operation_id: UUID
 
     async def save(self, values: AttachmentValues, response: Response) -> None:

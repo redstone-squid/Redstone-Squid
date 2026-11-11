@@ -37,6 +37,8 @@ class AttachmentValues(BaseModel):
 
 
 class AttachmentEditStore(Protocol):
+    async def lock(self, draft_id: UUID) -> None: ...
+
     async def stage(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> None: ...
 
     async def read(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> AttachmentValues: ...
@@ -73,6 +75,7 @@ class DraftAttachmentsEdit:
         if len(command.expected) != 1 or command.expected[0].target.kind != "draft":
             raise ValidationError
         expected = command.expected[0]
+        await uow.attachment_edits.lock(UUID(expected.target.key))
         draft = await self._drafts.get_accessible_in(uow, UUID(expected.target.key), actor)
         values = AttachmentValues.model_validate_json(command.values.encoded)
         sources = tuple(item.source_id for item in values.files)

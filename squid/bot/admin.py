@@ -19,7 +19,7 @@ from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import actor_for_interaction, allows, current_edit_actor, enforce, requires
 from squid.core.i18n import tr
-from squid.edits.domain import EditCommand, EditValues, Revision
+from squid.edits.domain import EditCommand, EditValues, LatestRevision, Revision
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -215,12 +215,14 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         )
         if account is None or account.id is None or account.needs_consent_refresh:
             return text_node("Open /account and accept the current privacy notice before changing runtime settings.")
-        if revision is None or revision < 1:
-            return text_node("Read runtime-settings first, then supply its revision when saving.")
+        if revision is not None and revision < 1:
+            return text_node("Revision must be positive.")
         try:
             result = await self.bot.services.edits.execute(
                 EditCommand(
-                    RUNTIME_EDIT, (Revision(RUNTIME_TARGET, revision),), EditValues.of({setting: json.loads(value)})
+                    RUNTIME_EDIT,
+                    (LatestRevision(RUNTIME_TARGET) if revision is None else Revision(RUNTIME_TARGET, revision),),
+                    EditValues.of({setting: json.loads(value)}),
                 ),
                 await actor_for_interaction(request),
             )

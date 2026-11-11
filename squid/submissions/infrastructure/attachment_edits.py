@@ -1,6 +1,7 @@
 """Change attachment references without discarding their shared processing results."""
 
 from collections.abc import Callable
+from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +17,7 @@ from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.schematics import DraftSchematicState
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
-from squid.submissions.infrastructure.schematics import _changed, _editable
+from squid.submissions.infrastructure.schematics import _changed, _editable, _locked_draft
 from squid.submissions.models.intake import SubmissionSuppliedAttachment
 from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 
@@ -24,6 +25,9 @@ from squid.submissions.models.schematics import DraftSchematicLink, DraftSchemat
 class PostgresAttachmentEdits:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
+
+    async def lock(self, draft_id: UUID) -> None:
+        await _locked_draft(self._session(), draft_id)
 
     async def stage(self, draft: StoredDraft, files: tuple[FileMembership, ...]) -> None:
         session = self._session()

@@ -111,7 +111,7 @@ async def grant_consent(
 @router.patch(
     "/profile",
     response_model=ProfileDetail,
-    responses=responses(400, 401, 403, 404, 412, 428, 422, 503),
+    responses=responses(400, 401, 403, 404, 412, 422, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_edit_request)],
     operation_id="account_profile_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -167,7 +167,7 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
 @router.put(
     "/identities/{identity_id}/visibility",
     response_model=IdentityDetail,
-    responses=responses(401, 403, 404, 412, 428, 422, 503),
+    responses=responses(401, 403, 404, 412, 422, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="account_identity_visibility_set",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -205,7 +205,7 @@ async def set_identity_visibility(
 @router.delete(
     "/identities/{identity_id}",
     status_code=204,
-    responses=responses(401, 403, 404, 409, 412, 428, 422, 503),
+    responses=responses(401, 403, 404, 409, 412, 422, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="account_identity_unlink",
     openapi_extra=contract(

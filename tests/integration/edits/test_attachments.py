@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.errors import ConflictError
 from squid.edits.application import EditExecutor
-from squid.edits.domain import EditCommand, Revision, RevisionConflictError
+from squid.edits.domain import EditCommand, LatestRevision, Revision, RevisionConflictError
 from squid.edits.models import EditResourceLease
 from squid.media.application.jobs import MediaUploadMetadata
 from squid.media.domain import MediaKind, MediaLimits
@@ -38,7 +38,9 @@ from tests.support.submission_targets import seed_account_and_version
 from tests.unit.schematics.fakes import make_analysis
 
 
+@pytest.mark.parametrize("latest", [False, True])
 async def test_schematic_removal_restores_analysis_and_primary_and_expires_safely(
+    latest: bool,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory
@@ -64,7 +66,11 @@ async def test_schematic_removal_restores_analysis_and_primary_and_expires_safel
     selected = await executor.execute(
         EditCommand(
             DRAFT_ATTACHMENTS,
-            (Revision(draft_target(draft.snapshot.id), draft.snapshot.revision),),
+            (
+                LatestRevision(draft_target(draft.snapshot.id))
+                if latest
+                else Revision(draft_target(draft.snapshot.id), draft.snapshot.revision),
+            ),
             AttachmentValues(primary=first.id, select_primary=True).edit_values(),
         ),
         actor,

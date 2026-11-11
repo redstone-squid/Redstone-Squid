@@ -43,7 +43,7 @@ async def get_runtime_settings(services: Services, caller: ViewCaller, response:
 @router.patch(
     "",
     response_model=RuntimeSettingsDetail,
-    responses=responses(401, 403, 412, 422, 428, 503),
+    responses=responses(401, 403, 412, 422, 503),
     dependencies=[Depends(reserve_edit_request)],
     operation_id="runtime_settings_update",
     openapi_extra=contract(
@@ -60,7 +60,10 @@ async def update_runtime_settings(
     operation_id: Annotated[UUID, Depends(edit_operation_id)],
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> RuntimeSettingsDetail:
-    """Patch settings and audit the internal account. New vote defaults affect new sessions only."""
+    """Patch current settings, or require a specific revision with If-Match.
+
+    New vote defaults affect new sessions only.
+    """
     caller.require_consented_account()
     version = expected_revision(RUNTIME_TARGET, if_match)
     result = await services.edits.execute(

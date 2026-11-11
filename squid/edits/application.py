@@ -57,6 +57,7 @@ class EditHandler[UowT: EditUnitOfWork](Protocol):
     """Domain behavior shared by ordinary edits and their reversals.
 
     Lock targets in stable order and check every expected revision in prepare.
+    Resolve latest-state preconditions into PreparedEdit.revisions under those locks.
     Authorization and normalization belong there too. Apply advances the revisions
     and flushes the writes, but never commits. Final projections must describe the
     normalized values actually written, rather than the user's unvalidated input.
