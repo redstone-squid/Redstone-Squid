@@ -1,16 +1,18 @@
 """Authenticated self-account routes."""
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Response
 
 from squid.accounts.application import AccountService
+from squid.accounts.application.edits import PROFILE_EDIT, UNLINK_EDIT, VISIBILITY_EDIT, ProfileValues, account_target
 from squid.accounts.domain import CURRENT_CONSENT_VERSION
-from squid.accounts.errors import AccountNotFoundError, StaleConsentNoticeError
+from squid.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
-from squid.api.dependencies import Accounts, BuildQueries
+from squid.api.dependencies import Accounts, BuildQueries, Services
 from squid.api.errors import responses
-from squid.api.idempotency import reserve_idempotent_request
+from squid.api.idempotency import edit_operation_id, reserve_idempotent_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -20,6 +22,7 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.rate_limit import enforce_route_rate_limits
+from squid.api.revisions import expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
 from squid.api.v1.schemas.consent import ConsentGrantRequest
@@ -37,6 +40,7 @@ from squid.api.v1.schemas.me import (
 )
 from squid.builds.domain import Status
 from squid.core.errors import AuthenticationError
+from squid.edits.domain import EditActor, EditCommand, EditValues, Revision
 from squid.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
@@ -60,22 +64,22 @@ _ALL_STATUSES = frozenset(Status)
     operation_id="account_get",
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
-async def get_me(accounts: Accounts, caller: UserCaller) -> UserMe:
+async def get_me(accounts: Accounts, caller: UserCaller, response: Response) -> UserMe:
     """Return the caller's account, linked identities, and profile.
 
     An account ID is required; the caller does not need a Discord identity.
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return await _render_me(accounts, caller.account_id, consent_pending=caller.consent_pending)
+    result = await _render_me(accounts, caller.account_id, consent_pending=caller.consent_pending)
+    response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), result.revision))
+    return result
 
 
 async def _render_me(accounts: AccountService, account_id: int, *, consent_pending: bool) -> UserMe:
     """Compose the self view from the account and its profile."""
-    account = await accounts.get_account_by_id(account_id)
-    if account is None:
-        raise AccountNotFoundError(account_id)
-    return UserMe.from_domain(account, await accounts.get_profile(account_id), consent_pending=consent_pending)
+    snapshot = await accounts.editor_snapshot(account_id)
+    return UserMe.from_domain(snapshot.account, snapshot.profile, consent_pending=consent_pending)
 
 
 @router.post(
@@ -107,7 +111,7 @@ async def grant_consent(
 @router.patch(
     "/profile",
     response_model=ProfileDetail,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 412, 428, 422, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_profile_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -116,6 +120,10 @@ async def update_profile(
     body: ProfileUpdateRequest,
     accounts: Accounts,
     caller: ManageCaller,
+    services: Services,
+    response: Response,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> ProfileDetail:
     """Edit the caller's own public profile.
 
@@ -124,8 +132,18 @@ async def update_profile(
     """
     if caller.account_id is None:
         raise AuthenticationError
-    profile = await accounts.update_profile(caller.account_id, body.to_domain())
-    return ProfileDetail.from_domain(profile, await accounts.list_identities(caller.account_id))
+    await services.edits.execute(
+        EditCommand(
+            PROFILE_EDIT,
+            (expected_revision(account_target(caller.account_id), if_match),),
+            ProfileValues.patch(body.to_domain()),
+            operation_id=operation_id,
+        ),
+        EditActor(caller.permission_subject()),
+    )
+    snapshot = await accounts.editor_snapshot(caller.account_id)
+    response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
+    return ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities)
 
 
 @router.get(
@@ -149,7 +167,7 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
 @router.put(
     "/identities/{identity_id}/visibility",
     response_model=IdentityDetail,
-    responses=responses(401, 403, 404, 422, 503),
+    responses=responses(401, 403, 404, 412, 428, 422, 503),
     dependencies=[Depends(reserve_idempotent_request)],
     operation_id="account_identity_visibility_set",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -159,18 +177,35 @@ async def set_identity_visibility(
     body: IdentityVisibilityRequest,
     accounts: Accounts,
     caller: ManageCaller,
+    services: Services,
+    response: Response,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
 ) -> IdentityDetail:
     """Publish or withhold one linked identity on the public creator profile."""
     if caller.account_id is None:
         raise AuthenticationError
-    identity = await accounts.set_identity_visibility(caller.account_id, identity_id, is_public=body.public)
+    await services.edits.execute(
+        EditCommand(
+            VISIBILITY_EDIT,
+            (expected_revision(account_target(caller.account_id), if_match),),
+            EditValues.of({"identity_id": identity_id, "is_public": body.public}),
+            operation_id=operation_id,
+        ),
+        EditActor(caller.permission_subject()),
+    )
+    snapshot = await accounts.editor_snapshot(caller.account_id)
+    response.headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
+    identity = next((identity for identity in snapshot.account.identities if identity.id == identity_id), None)
+    if identity is None:
+        raise AccountIdentityNotFoundError(identity_id, account_id=caller.account_id)
     return IdentityDetail.from_domain(identity)
 
 
 @router.delete(
     "/identities/{identity_id}",
     response_model=IdentityDetail,
-    responses=responses(401, 403, 404, 409, 422, 503),
+    responses=responses(401, 403, 404, 409, 412, 428, 422, 503),
     dependencies=[Depends(reserve_idempotent_request)],
     operation_id="account_identity_unlink",
     openapi_extra=contract(
@@ -178,7 +213,15 @@ async def set_identity_visibility(
         cli=cli_command("account.identity.unlink", interaction="direct"),
     ),
 )
-async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCaller) -> IdentityDetail:
+async def unlink_identity(
+    identity_id: int,
+    accounts: Accounts,
+    caller: ManageCaller,
+    services: Services,
+    response: Response,
+    operation_id: Annotated[UUID, Depends(edit_operation_id)],
+    if_match: Annotated[str | None, Header()] = None,
+) -> IdentityDetail:
     """Unlink one identity from the caller's account.
 
     Removing the last identity returns 409 so the account retains a sign-in method.
@@ -186,7 +229,22 @@ async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCa
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return IdentityDetail.from_domain(await accounts.unlink_identity(caller.account_id, identity_id))
+    expected = expected_revision(account_target(caller.account_id), if_match)
+    snapshot = await accounts.editor_snapshot(caller.account_id)
+    identity = next((row for row in snapshot.account.identities if row.id == identity_id), None)
+    if identity is None:
+        raise AccountIdentityNotFoundError(identity_id, account_id=caller.account_id)
+    result = await services.edits.execute(
+        EditCommand(
+            UNLINK_EDIT,
+            (expected,),
+            EditValues.of({"identity_id": identity_id}),
+            operation_id=operation_id,
+        ),
+        EditActor(caller.permission_subject()),
+    )
+    response.headers["ETag"] = revision_etag(result.outcome.revisions[0])
+    return IdentityDetail.from_domain(identity)
 
 
 @router.post(

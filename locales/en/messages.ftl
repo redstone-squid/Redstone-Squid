@@ -199,7 +199,7 @@ access-view-unassign = Unassign
 # squid/bot/account_presentation.py:55
 account-claim-awaiting-review = **{ $name }** is already credited to another account, so it was not moved. Claim #{ $id_text } is awaiting staff review.
 
-# squid/bot/account_workspace.py:334
+# squid/bot/account_workspace.py:352
 account-claim-pending-review = Claim #{ $claim_id_text } for **{ $alias_name }** is awaiting staff approval.
 
 # squid/bot/account_presentation.py:50
@@ -211,37 +211,40 @@ account-credits-retained = You are still credited under: { $names }.
 # squid/bot/account_presentation.py:27
 account-discord-linked = Your Discord account is now linked to **{ $name }**.
 
-# squid/bot/account_view.py:520
+# squid/bot/account_view.py:511
 account-discord-unlink-warning = This is the Discord account you are using now. The bot will stop recognising you here.
 
-# squid/bot/account_view.py:529
+# squid/bot/account_view.py:520
 account-hidden-page-credit-note = A hidden page still lists the creator names you hold, because that credit is what attributes your builds.
 
-# squid/bot/account_view.py:430
+# squid/bot/account_view.py:421
 account-history-profile = Edit profile
 
-# squid/bot/account_view.py:352
+# squid/bot/account_view.py:354
 account-history-profile-draft = Edit profile draft
 
-# squid/bot/account_view.py:235
+# squid/bot/account_view.py:262
+account-history-unlink = Unlink identity
+
+# squid/bot/account_view.py:237
 account-history-visibility = Change identity visibility
 
-# squid/bot/account_view.py:264
+# squid/bot/account_view.py:266
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
-# squid/bot/account_view.py:515
+# squid/bot/account_view.py:506
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
-# squid/bot/account_workspace.py:187
+# squid/bot/account_workspace.py:200
 account-merge-action = Merge another account into this one
 
-# squid/bot/account_workspace.py:343
+# squid/bot/account_workspace.py:361
 account-merge-code-warning = Merge code: `{ $code }`. It expires { $expiry }. Keep it private: it hands this account over.
 
-# squid/bot/account_workspace.py:382
+# squid/bot/account_workspace.py:401
 account-merge-complete = Merged. `{ $redirected }` now redirects to your creator page.
 
-# squid/bot/account_workspace.py:359
+# squid/bot/account_workspace.py:377
 account-merge-transfer-preview = Move { $aliases } creator names, { $identities } identities, and { $builds } build credits here? This cannot be undone.
 
 # squid/bot/account_presentation.py:41
@@ -250,169 +253,169 @@ account-name-changed = Your Minecraft name changed from **{ $old }** to **{ $new
 # squid/bot/account_presentation.py:37
 account-name-unchanged = Your Minecraft name is still **{ $name }**. Nothing changed.
 
-# squid/bot/account_workspace.py:301
+# squid/bot/account_workspace.py:317
 account-refresh-forbidden = You are no longer allowed to refresh your Minecraft identity.
 
-# squid/bot/account_workspace.py:158
+# squid/bot/account_workspace.py:171
 account-refresh-member-identity = Refresh another member's Minecraft identity
 
-# squid/bot/account_view.py:294
+# squid/bot/account_view.py:296
 account-view-bio = Bio
 
-# squid/bot/account_view.py:134
+# squid/bot/account_view.py:139
 account-view-cancel = Cancel
 
-# squid/bot/account_view.py:186, squid/bot/account_view.py:480
+# squid/bot/account_view.py:191, squid/bot/account_view.py:471
 account-view-creator-page = Creator page
 
-# squid/bot/account_view.py:282
+# squid/bot/account_view.py:284
 account-view-display-name = Display name
 
-# squid/bot/account_view.py:205
+# squid/bot/account_view.py:210
 account-view-edit-page = Edit page
 
-# squid/bot/account_view.py:278
+# squid/bot/account_view.py:280
 account-view-edit-profile = Edit profile
 
-# squid/bot/account_view.py:333
+# squid/bot/account_view.py:335
 account-view-edit-your-creator-page = Edit your creator page
 
-# squid/bot/account_view.py:500
+# squid/bot/account_view.py:491
 account-view-hidden = hidden
 
-# squid/bot/account_view.py:190, squid/bot/account_view.py:481
+# squid/bot/account_view.py:195, squid/bot/account_view.py:472
 account-view-hidden-2 = Hidden
 
-# squid/bot/account_view.py:182
+# squid/bot/account_view.py:187
 account-view-hidden-from-page = Hidden from page
 
-# squid/bot/account_view.py:313
+# squid/bot/account_view.py:315
 account-view-https-url = HTTPS URL
 
-# squid/bot/account_view.py:308
+# squid/bot/account_view.py:310
 account-view-label = Label
 
-# squid/bot/account_view.py:474
+# squid/bot/account_view.py:465
 account-view-linked-accounts = Linked accounts
 
-# squid/bot/account_view.py:61
+# squid/bot/account_view.py:63
 account-view-links = { $count } links
 
-# squid/bot/account_view.py:302, squid/bot/account_view.py:325, squid/bot/account_view.py:493
+# squid/bot/account_view.py:304, squid/bot/account_view.py:327, squid/bot/account_view.py:484
 account-view-links-2 = Links
 
-# squid/bot/account_view.py:475
+# squid/bot/account_view.py:466
 account-view-none-yet = _None yet._
 
-# squid/bot/account_view.py:276
+# squid/bot/account_view.py:278
 account-view-profile = Profile
 
-# squid/bot/account_view.py:304
+# squid/bot/account_view.py:306
 account-view-profile-link = Profile link
 
-# squid/bot/account_view.py:410
+# squid/bot/account_view.py:412
 account-view-profile-saved = Profile saved.
 
-# squid/bot/account_view.py:288, squid/bot/account_view.py:490
+# squid/bot/account_view.py:290, squid/bot/account_view.py:481
 account-view-pronouns = Pronouns
 
-# squid/bot/account_view.py:481
+# squid/bot/account_view.py:472
 account-view-public = Public
 
-# squid/bot/account_view.py:513
+# squid/bot/account_view.py:504
 account-view-remove-this-linked-account = Remove this linked account?
 
-# squid/bot/account_view.py:336
+# squid/bot/account_view.py:338
 account-view-save-profile = Save profile
 
-# squid/bot/account_view.py:178
+# squid/bot/account_view.py:183
 account-view-selected-identity = Selected identity
 
-# squid/bot/account_view.py:189
+# squid/bot/account_view.py:194
 account-view-shown = Shown
 
-# squid/bot/account_view.py:181
+# squid/bot/account_view.py:186
 account-view-shown-on-page = Shown on page
 
-# squid/bot/account_view.py:498
+# squid/bot/account_view.py:489
 account-view-shown-publicly = shown publicly
 
-# squid/bot/account_view.py:505
+# squid/bot/account_view.py:496
 account-view-unknown = unknown
 
-# squid/bot/account_view.py:197
+# squid/bot/account_view.py:202
 account-view-unlink = Unlink
 
-# squid/bot/account_view.py:524
+# squid/bot/account_view.py:515
 account-view-value = { $warning } { $consequence }
 
-# squid/bot/account_view.py:507
+# squid/bot/account_view.py:498
 account-view-verified = { $visibility } · verified { $age }
 
-# squid/bot/account_view.py:147, squid/bot/account_view.py:396
+# squid/bot/account_view.py:152, squid/bot/account_view.py:398
 account-view-your-account = Your account
 
-# squid/bot/account_workspace.py:107
+# squid/bot/account_workspace.py:120
 account-workspace-account = Account
 
-# squid/bot/account_workspace.py:365
+# squid/bot/account_workspace.py:383
 account-workspace-cancel = Cancel
 
-# squid/bot/account_workspace.py:406
+# squid/bot/account_workspace.py:429
 account-workspace-claim-an-older-creator-name = Claim an older creator name
 
-# squid/bot/account_workspace.py:169
+# squid/bot/account_workspace.py:182
 account-workspace-claim-creator-credit = Claim creator credit
 
-# squid/bot/account_workspace.py:180
+# squid/bot/account_workspace.py:193
 account-workspace-create-merge-code = Create merge code
 
-# squid/bot/account_workspace.py:103
+# squid/bot/account_workspace.py:116
 account-workspace-creator-claims = Creator claims
 
-# squid/bot/account_workspace.py:408
+# squid/bot/account_workspace.py:431
 account-workspace-creator-name = Creator name
 
-# squid/bot/account_workspace.py:402
+# squid/bot/account_workspace.py:425
 account-workspace-discord-member = Discord member
 
-# squid/bot/account_workspace.py:396
+# squid/bot/account_workspace.py:419
 account-workspace-in-game-link-code = In-game link code
 
-# squid/bot/account_workspace.py:100
+# squid/bot/account_workspace.py:113
 account-workspace-link-and-refresh = Link and refresh
 
-# squid/bot/account_workspace.py:133, squid/bot/account_workspace.py:394
+# squid/bot/account_workspace.py:146, squid/bot/account_workspace.py:417
 account-workspace-link-minecraft-account = Link Minecraft account
 
-# squid/bot/account_workspace.py:114
+# squid/bot/account_workspace.py:127
 account-workspace-loading-account = Loading account.
 
-# squid/bot/account_workspace.py:104, squid/bot/account_workspace.py:364
+# squid/bot/account_workspace.py:117, squid/bot/account_workspace.py:382
 account-workspace-merge-accounts = Merge accounts
 
-# squid/bot/account_workspace.py:414
+# squid/bot/account_workspace.py:437
 account-workspace-merge-code = Merge code
 
-# squid/bot/account_workspace.py:98
+# squid/bot/account_workspace.py:111
 account-workspace-overview = Overview
 
-# squid/bot/account_workspace.py:412
+# squid/bot/account_workspace.py:435
 account-workspace-preview-account-merge = Preview account merge
 
-# squid/bot/account_workspace.py:312
+# squid/bot/account_workspace.py:329
 account-workspace-refresh-denied-again = You are no longer allowed to refresh another member's identity.
 
-# squid/bot/account_workspace.py:400
+# squid/bot/account_workspace.py:423
 account-workspace-refresh-member-identity = Refresh member identity
 
-# squid/bot/account_workspace.py:148
+# squid/bot/account_workspace.py:161
 account-workspace-refresh-minecraft-identity = Refresh Minecraft identity
 
-# squid/bot/account_workspace.py:106
+# squid/bot/account_workspace.py:119
 account-workspace-review-claims = Review claims
 
-# squid/bot/account_workspace.py:124
+# squid/bot/account_workspace.py:137
 account-workspace-review-privacy-notice = Review privacy notice
 
 # squid/accounts/errors.py:179
@@ -427,13 +430,13 @@ accounts-application-presentation-creator = creator { $creator_id_text }
 # squid/accounts/application/presentation.py:32
 accounts-application-presentation-discord-user = Discord user { $discord_id_text }
 
-# squid/accounts/models.py:211
+# squid/accounts/models.py:213
 accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject_text }.
 
 # squid/accounts/errors.py:370
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/accounts/infrastructure/repository.py:630
+# squid/accounts/infrastructure/repository.py:615
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
 # squid/accounts/errors.py:330
@@ -454,7 +457,7 @@ accounts-creator-name-not-found = Creator name not found
 # squid/accounts/errors.py:273
 accounts-creator-not-found-title = Creator not found
 
-# squid/accounts/models.py:202
+# squid/accounts/models.py:204
 accounts-discord-identity-subjects = Discord identity subjects must be positive signed 64-bit integers, got { $subject_text }.
 
 # squid/accounts/domain/consent.py:19
@@ -541,7 +544,7 @@ accounts-errors-too-many-attempts = Too many attempts
 # squid/accounts/errors.py:170
 accounts-errors-wait-for-the-cooling-off-period-to = Wait for the cooling-off period to pass, then generate a new code in game.
 
-# squid/accounts/models.py:224
+# squid/accounts/models.py:226
 accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $subject_text }.
 
 # squid/accounts/errors.py:89
@@ -1794,13 +1797,13 @@ bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 # squid/bot/ui.py:117
 bot-ui-you-chose = You chose { $label }.
 
-# squid/bot/verify.py:149
+# squid/bot/verify.py:155
 bot-verify-doesn-t-have-a-creator-page = { $user } doesn't have a creator page.
 
-# squid/bot/verify.py:120
+# squid/bot/verify.py:126
 bot-verify-hidden-creator-page = Hidden creator page
 
-# squid/bot/verify.py:116
+# squid/bot/verify.py:122
 bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.
 
 # squid/bot/version_tracking.py:171
@@ -3371,7 +3374,7 @@ edit-history-uncertain = The saved result needs checking. Refresh before editing
 # squid/bot/edit_history.py:123
 edit-history-undo = Undo
 
-# squid/bot/edit_controller.py:217
+# squid/bot/edit_controller.py:226
 edits-check-result = Check saved result
 
 # squid/edits/domain.py:187
@@ -3380,10 +3383,10 @@ edits-commit-uncertain = The saved result needs checking before this item can be
 # squid/edits/domain.py:201
 edits-concurrent-write = Another edit committed first. Reload this item before trying again.
 
-# squid/bot/edit_controller.py:244
+# squid/bot/edit_controller.py:253
 edits-discard-reload = Discard history and reload
 
-# squid/edits/application.py:98
+# squid/edits/application.py:99
 edits-fields-not-editable = This edit contains fields that cannot be changed.
 
 # squid/edits/domain.py:139
@@ -3398,16 +3401,16 @@ edits-operation-expired = This edit has expired. Reload the item before editing 
 # squid/edits/domain.py:183
 edits-operation-reused = This operation identifier was already used for another edit.
 
-# squid/bot/edit_controller.py:111
+# squid/bot/edit_controller.py:109
 edits-pending = Check the previous saved result before editing this item.
 
-# squid/bot/edit_controller.py:196
+# squid/bot/edit_controller.py:205
 edits-pending-discard = Check the saved result before discarding its history.
 
-# squid/bot/edit_controller.py:229
+# squid/bot/edit_controller.py:238
 edits-refresh = Refresh saved values
 
-# squid/bot/edit_controller.py:212
+# squid/bot/edit_controller.py:221
 edits-result-checked = The saved result has been checked.
 
 # squid/edits/domain.py:174
@@ -5410,10 +5413,10 @@ ui-control-expired = This control is no longer available.
 # squid/bot/ui.py:86
 ui-list-controls-not-owned = These list controls belong to someone else.
 
-# squid/bot/verify.py:121
+# squid/bot/verify.py:127
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
 
-# squid/bot/verify.py:44
+# squid/bot/verify.py:45
 verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.
 
 # squid/bot/version_tracking.py:106

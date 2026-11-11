@@ -668,7 +668,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_workspace.py:334"
+      "squid/bot/account_workspace.py:352"
     ]
   },
   "account-credits-attributed": {
@@ -722,7 +722,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:520"
+      "squid/bot/account_view.py:511"
     ]
   },
   "account-hidden-page-credit-note": {
@@ -731,7 +731,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:529"
+      "squid/bot/account_view.py:520"
     ]
   },
   "account-history-profile": {
@@ -740,7 +740,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:430"
+      "squid/bot/account_view.py:421"
     ]
   },
   "account-history-profile-draft": {
@@ -749,7 +749,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:352"
+      "squid/bot/account_view.py:354"
+    ]
+  },
+  "account-history-unlink": {
+    "fingerprint": "5453812562f46c9c99904e6c7ee0693aa0a3b4f70f27c76b6c8a577981c67eab",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/account_view.py:262"
     ]
   },
   "account-history-visibility": {
@@ -758,7 +767,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:235"
+      "squid/bot/account_view.py:237"
     ]
   },
   "account-identity-unlinked": {
@@ -773,7 +782,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_view.py:264"
+      "squid/bot/account_view.py:266"
     ]
   },
   "account-linked-identity-remove-warning": {
@@ -788,7 +797,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_view.py:515"
+      "squid/bot/account_view.py:506"
     ]
   },
   "account-merge-action": {
@@ -797,7 +806,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:187"
+      "squid/bot/account_workspace.py:200"
     ]
   },
   "account-merge-code-warning": {
@@ -817,7 +826,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_workspace.py:343"
+      "squid/bot/account_workspace.py:361"
     ]
   },
   "account-merge-complete": {
@@ -832,7 +841,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_workspace.py:382"
+      "squid/bot/account_workspace.py:401"
     ]
   },
   "account-merge-transfer-preview": {
@@ -857,7 +866,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_workspace.py:359"
+      "squid/bot/account_workspace.py:377"
     ]
   },
   "account-name-changed": {
@@ -901,7 +910,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:301"
+      "squid/bot/account_workspace.py:317"
     ]
   },
   "account-refresh-member-identity": {
@@ -910,7 +919,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:158"
+      "squid/bot/account_workspace.py:171"
     ]
   },
   "account-view-bio": {
@@ -919,7 +928,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:294"
+      "squid/bot/account_view.py:296"
     ]
   },
   "account-view-cancel": {
@@ -928,7 +937,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:134"
+      "squid/bot/account_view.py:139"
     ]
   },
   "account-view-creator-page": {
@@ -937,8 +946,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:186",
-      "squid/bot/account_view.py:480"
+      "squid/bot/account_view.py:191",
+      "squid/bot/account_view.py:471"
     ]
   },
   "account-view-display-name": {
@@ -947,7 +956,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:282"
+      "squid/bot/account_view.py:284"
     ]
   },
   "account-view-edit-page": {
@@ -956,7 +965,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:205"
+      "squid/bot/account_view.py:210"
     ]
   },
   "account-view-edit-profile": {
@@ -965,7 +974,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:278"
+      "squid/bot/account_view.py:280"
     ]
   },
   "account-view-edit-your-creator-page": {
@@ -974,7 +983,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:333"
+      "squid/bot/account_view.py:335"
     ]
   },
   "account-view-hidden": {
@@ -983,7 +992,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:500"
+      "squid/bot/account_view.py:491"
     ]
   },
   "account-view-hidden-2": {
@@ -992,8 +1001,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:190",
-      "squid/bot/account_view.py:481"
+      "squid/bot/account_view.py:195",
+      "squid/bot/account_view.py:472"
     ]
   },
   "account-view-hidden-from-page": {
@@ -1002,7 +1011,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:182"
+      "squid/bot/account_view.py:187"
     ]
   },
   "account-view-https-url": {
@@ -1011,7 +1020,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:313"
+      "squid/bot/account_view.py:315"
     ]
   },
   "account-view-label": {
@@ -1020,7 +1029,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:308"
+      "squid/bot/account_view.py:310"
     ]
   },
   "account-view-linked-accounts": {
@@ -1029,7 +1038,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:474"
+      "squid/bot/account_view.py:465"
     ]
   },
   "account-view-links": {
@@ -1044,7 +1053,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_view.py:61"
+      "squid/bot/account_view.py:63"
     ]
   },
   "account-view-links-2": {
@@ -1053,9 +1062,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:302",
-      "squid/bot/account_view.py:325",
-      "squid/bot/account_view.py:493"
+      "squid/bot/account_view.py:304",
+      "squid/bot/account_view.py:327",
+      "squid/bot/account_view.py:484"
     ]
   },
   "account-view-none-yet": {
@@ -1064,7 +1073,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:475"
+      "squid/bot/account_view.py:466"
     ]
   },
   "account-view-profile": {
@@ -1073,7 +1082,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:276"
+      "squid/bot/account_view.py:278"
     ]
   },
   "account-view-profile-link": {
@@ -1082,7 +1091,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:304"
+      "squid/bot/account_view.py:306"
     ]
   },
   "account-view-profile-saved": {
@@ -1091,7 +1100,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:410"
+      "squid/bot/account_view.py:412"
     ]
   },
   "account-view-pronouns": {
@@ -1100,8 +1109,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:288",
-      "squid/bot/account_view.py:490"
+      "squid/bot/account_view.py:290",
+      "squid/bot/account_view.py:481"
     ]
   },
   "account-view-public": {
@@ -1110,7 +1119,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:481"
+      "squid/bot/account_view.py:472"
     ]
   },
   "account-view-remove-this-linked-account": {
@@ -1119,7 +1128,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:513"
+      "squid/bot/account_view.py:504"
     ]
   },
   "account-view-save-profile": {
@@ -1128,7 +1137,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:336"
+      "squid/bot/account_view.py:338"
     ]
   },
   "account-view-selected-identity": {
@@ -1137,7 +1146,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:178"
+      "squid/bot/account_view.py:183"
     ]
   },
   "account-view-shown": {
@@ -1146,7 +1155,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:189"
+      "squid/bot/account_view.py:194"
     ]
   },
   "account-view-shown-on-page": {
@@ -1155,7 +1164,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:181"
+      "squid/bot/account_view.py:186"
     ]
   },
   "account-view-shown-publicly": {
@@ -1164,7 +1173,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:498"
+      "squid/bot/account_view.py:489"
     ]
   },
   "account-view-unknown": {
@@ -1173,7 +1182,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:505"
+      "squid/bot/account_view.py:496"
     ]
   },
   "account-view-unlink": {
@@ -1182,7 +1191,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:197"
+      "squid/bot/account_view.py:202"
     ]
   },
   "account-view-value": {
@@ -1202,7 +1211,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_view.py:524"
+      "squid/bot/account_view.py:515"
     ]
   },
   "account-view-verified": {
@@ -1222,7 +1231,7 @@
       }
     ],
     "locations": [
-      "squid/bot/account_view.py:507"
+      "squid/bot/account_view.py:498"
     ]
   },
   "account-view-your-account": {
@@ -1231,8 +1240,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_view.py:147",
-      "squid/bot/account_view.py:396"
+      "squid/bot/account_view.py:152",
+      "squid/bot/account_view.py:398"
     ]
   },
   "account-workspace-account": {
@@ -1241,7 +1250,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:107"
+      "squid/bot/account_workspace.py:120"
     ]
   },
   "account-workspace-cancel": {
@@ -1250,7 +1259,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:365"
+      "squid/bot/account_workspace.py:383"
     ]
   },
   "account-workspace-claim-an-older-creator-name": {
@@ -1259,7 +1268,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:406"
+      "squid/bot/account_workspace.py:429"
     ]
   },
   "account-workspace-claim-creator-credit": {
@@ -1268,7 +1277,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:169"
+      "squid/bot/account_workspace.py:182"
     ]
   },
   "account-workspace-create-merge-code": {
@@ -1277,7 +1286,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:180"
+      "squid/bot/account_workspace.py:193"
     ]
   },
   "account-workspace-creator-claims": {
@@ -1286,7 +1295,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:103"
+      "squid/bot/account_workspace.py:116"
     ]
   },
   "account-workspace-creator-name": {
@@ -1295,7 +1304,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:408"
+      "squid/bot/account_workspace.py:431"
     ]
   },
   "account-workspace-discord-member": {
@@ -1304,7 +1313,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:402"
+      "squid/bot/account_workspace.py:425"
     ]
   },
   "account-workspace-in-game-link-code": {
@@ -1313,7 +1322,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:396"
+      "squid/bot/account_workspace.py:419"
     ]
   },
   "account-workspace-link-and-refresh": {
@@ -1322,7 +1331,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:100"
+      "squid/bot/account_workspace.py:113"
     ]
   },
   "account-workspace-link-minecraft-account": {
@@ -1331,8 +1340,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:133",
-      "squid/bot/account_workspace.py:394"
+      "squid/bot/account_workspace.py:146",
+      "squid/bot/account_workspace.py:417"
     ]
   },
   "account-workspace-loading-account": {
@@ -1341,7 +1350,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:114"
+      "squid/bot/account_workspace.py:127"
     ]
   },
   "account-workspace-merge-accounts": {
@@ -1350,8 +1359,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:104",
-      "squid/bot/account_workspace.py:364"
+      "squid/bot/account_workspace.py:117",
+      "squid/bot/account_workspace.py:382"
     ]
   },
   "account-workspace-merge-code": {
@@ -1360,7 +1369,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:414"
+      "squid/bot/account_workspace.py:437"
     ]
   },
   "account-workspace-overview": {
@@ -1369,7 +1378,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:98"
+      "squid/bot/account_workspace.py:111"
     ]
   },
   "account-workspace-preview-account-merge": {
@@ -1378,7 +1387,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:412"
+      "squid/bot/account_workspace.py:435"
     ]
   },
   "account-workspace-refresh-denied-again": {
@@ -1387,7 +1396,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:312"
+      "squid/bot/account_workspace.py:329"
     ]
   },
   "account-workspace-refresh-member-identity": {
@@ -1396,7 +1405,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:400"
+      "squid/bot/account_workspace.py:423"
     ]
   },
   "account-workspace-refresh-minecraft-identity": {
@@ -1405,7 +1414,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:148"
+      "squid/bot/account_workspace.py:161"
     ]
   },
   "account-workspace-review-claims": {
@@ -1414,7 +1423,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:106"
+      "squid/bot/account_workspace.py:119"
     ]
   },
   "account-workspace-review-privacy-notice": {
@@ -1423,7 +1432,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/account_workspace.py:124"
+      "squid/bot/account_workspace.py:137"
     ]
   },
   "accounts-account-already-linked": {
@@ -1486,7 +1495,7 @@
       }
     ],
     "locations": [
-      "squid/accounts/models.py:211"
+      "squid/accounts/models.py:213"
     ]
   },
   "accounts-check-uuid-try-again": {
@@ -1504,7 +1513,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/accounts/infrastructure/repository.py:630"
+      "squid/accounts/infrastructure/repository.py:615"
     ]
   },
   "accounts-creator-already-credited": {
@@ -1584,7 +1593,7 @@
       }
     ],
     "locations": [
-      "squid/accounts/models.py:202"
+      "squid/accounts/models.py:204"
     ]
   },
   "accounts-discord-user-id-stored": {
@@ -1824,7 +1833,7 @@
       }
     ],
     "locations": [
-      "squid/accounts/models.py:224"
+      "squid/accounts/models.py:226"
     ]
   },
   "accounts-last-identity-required": {
@@ -5945,7 +5954,7 @@
       }
     ],
     "locations": [
-      "squid/bot/verify.py:149"
+      "squid/bot/verify.py:155"
     ]
   },
   "bot-verify-hidden-creator-page": {
@@ -5954,7 +5963,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/verify.py:120"
+      "squid/bot/verify.py:126"
     ]
   },
   "bot-verify-that-creator-page-could-not-be-found": {
@@ -5963,7 +5972,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/verify.py:116"
+      "squid/bot/verify.py:122"
     ]
   },
   "bot-version-tracking-add-minecraft-version": {
@@ -10951,7 +10960,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:217"
+      "squid/bot/edit_controller.py:226"
     ]
   },
   "edits-commit-uncertain": {
@@ -10978,7 +10987,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:244"
+      "squid/bot/edit_controller.py:253"
     ]
   },
   "edits-fields-not-editable": {
@@ -10987,7 +10996,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/edits/application.py:98"
+      "squid/edits/application.py:99"
     ]
   },
   "edits-final": {
@@ -11032,7 +11041,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:111"
+      "squid/bot/edit_controller.py:109"
     ]
   },
   "edits-pending-discard": {
@@ -11041,7 +11050,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:196"
+      "squid/bot/edit_controller.py:205"
     ]
   },
   "edits-refresh": {
@@ -11050,7 +11059,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:229"
+      "squid/bot/edit_controller.py:238"
     ]
   },
   "edits-result-checked": {
@@ -11059,7 +11068,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/edit_controller.py:212"
+      "squid/bot/edit_controller.py:221"
     ]
   },
   "edits-revision-conflict": {
@@ -17727,7 +17736,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/verify.py:121"
+      "squid/bot/verify.py:127"
     ]
   },
   "verify-creator-page-target-prompt": {
@@ -17736,7 +17745,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/verify.py:44"
+      "squid/bot/verify.py:45"
     ]
   },
   "versions-add-permission-denied": {

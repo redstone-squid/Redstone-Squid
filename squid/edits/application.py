@@ -5,6 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from anyio import CancelScope
+from pydantic import ValidationError as SchemaValidationError
 from whenever import Instant
 
 from squid.core.errors import ConflictError, ValidationError
@@ -139,7 +140,10 @@ class EditExecutor[UowT: EditUnitOfWork]:
                 receipt = self._receipt(attempt, command, existing)
                 return EditResult(existing, receipt, replayed=True)
             self._check_deadline(command)
-            prepared = await handler.prepare(uow, actor.subject, command)
+            try:
+                prepared = await handler.prepare(uow, actor.subject, command)
+            except SchemaValidationError as error:
+                raise ValidationError(str(error)) from error
             versions = (
                 (await handler.apply(uow, actor.subject, command, prepared)) if prepared.changed else command.expected
             )

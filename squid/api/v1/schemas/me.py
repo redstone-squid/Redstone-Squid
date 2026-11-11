@@ -121,6 +121,7 @@ class UserMe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
+    revision: int
     creator_id: UUID
     """The public identifier this account's creator page is served under."""
 
@@ -143,6 +144,7 @@ class UserMe(BaseModel):
         return cls(
             id=account.id,
             creator_id=account.public_creator_id,
+            revision=account.revision,
             created_at=account.created_at,
             consent_version=account.consent.version if account.consent is not None else None,
             consent_pending=consent_pending,

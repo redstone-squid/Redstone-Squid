@@ -1,16 +1,20 @@
 """Profile, visibility, and identity-management route contracts."""
 
 from dataclasses import replace
-from typing import override
-from uuid import UUID
+from types import SimpleNamespace
+from typing import Any, cast, override
+from uuid import UUID, uuid4
 
 import pytest
+from fastapi import Response
 from whenever import Instant
 
 from squid.accounts.application import AccountService
+from squid.accounts.application.edits import AccountEditorSnapshot
 from squid.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
 from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
-from squid.accounts.models import AccountIdentity, AccountProfile, MergeTicket
+from squid.accounts.models import Account, AccountIdentity, AccountProfile, MergeTicket
+from squid.api.revisions import RevisionRequiredError
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import (
     clear_profile,
@@ -25,6 +29,7 @@ from squid.api.v1.me import (
 from squid.api.v1.schemas.me import IdentityVisibilityRequest, MergeRequest, ProfileUpdateRequest
 from squid.core.errors import AuthenticationError
 from squid.core.sentinel import UNSET
+from tests.support.account_edits import AccountEditRecorder
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 SURVIVING_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -59,6 +64,10 @@ class AccountRecorder(AccountService):
         self.merges: list[tuple[int, str]] = []
 
     @override
+    async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
+        return AccountEditorSnapshot(Account(id=account_id, identities=self.identities), self.profile)
+
+    @override
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         return self.identities
 
@@ -70,6 +79,9 @@ class AccountRecorder(AccountService):
     @override
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         self.visibility_updates.append((account_id, identity_id, is_public))
+        self.identities = tuple(
+            replace(row, is_public=is_public) if row.id == identity_id else row for row in self.identities
+        )
         return replace(JAVA, is_public=is_public)
 
     @override
@@ -118,12 +130,51 @@ def _accounts(
     return AccountRecorder(identities=identities, profile=profile, unlink_error=unlink_error)
 
 
+async def _update_profile(body: ProfileUpdateRequest, accounts: AccountRecorder, caller: Caller):
+    return await update_profile(
+        body,
+        accounts,
+        caller,
+        cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
+        Response(),
+        uuid4(),
+        '"account-1-r1"',
+    )
+
+
+async def _set_identity_visibility(
+    identity_id: int, body: IdentityVisibilityRequest, accounts: AccountRecorder, caller: Caller
+):
+    return await set_identity_visibility(
+        identity_id,
+        body,
+        accounts,
+        caller,
+        cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
+        Response(),
+        uuid4(),
+        '"account-1-r1"',
+    )
+
+
+async def _unlink_identity(identity_id: int, accounts: AccountRecorder, caller: Caller):
+    return await unlink_identity(
+        identity_id,
+        accounts,
+        caller,
+        cast(Any, SimpleNamespace(edits=AccountEditRecorder(accounts))),
+        Response(),
+        uuid4(),
+        '"account-1-r1"',
+    )
+
+
 class TestProfileUpdate:
     async def test_omitted_fields_are_left_alone_and_null_clears(self) -> None:
         accounts = _accounts()
         body = ProfileUpdateRequest.model_validate({"bio": None, "display_name": "Steve"})
 
-        await update_profile(body, accounts, _caller())
+        await _update_profile(body, accounts, _caller())
 
         update = accounts.profile_updates[0][1]
         assert update.display_name == "Steve"
@@ -135,14 +186,14 @@ class TestProfileUpdate:
         accounts = _accounts()
         body = ProfileUpdateRequest.model_validate({"links": [{"label": "Site", "url": "https://example.com"}]})
 
-        await update_profile(body, accounts, _caller())
+        await _update_profile(body, accounts, _caller())
 
         assert accounts.profile_updates[0][1].links == (ProfileLink("Site", "https://example.com"),)
 
     async def test_hidden_null_is_treated_as_false_rather_than_a_clear(self) -> None:
         accounts = _accounts()
 
-        await update_profile(ProfileUpdateRequest.model_validate({"hidden": None}), accounts, _caller())
+        await _update_profile(ProfileUpdateRequest.model_validate({"hidden": None}), accounts, _caller())
 
         assert accounts.profile_updates[0][1].hidden is False
 
@@ -150,7 +201,7 @@ class TestProfileUpdate:
         profile = AccountProfile(account_id=1, display_name="Steve", avatar_identity_id=2)
         accounts = _accounts(profile=profile)
 
-        response = await update_profile(ProfileUpdateRequest(), accounts, _caller())
+        response = await _update_profile(ProfileUpdateRequest(), accounts, _caller())
 
         assert response.display_name == "Steve"
         assert response.avatar is not None
@@ -160,7 +211,7 @@ class TestProfileUpdate:
         anonymous = Caller(kind="anonymous", subject="anonymous")
 
         with pytest.raises(AuthenticationError):
-            await update_profile(ProfileUpdateRequest(), _accounts(), anonymous)
+            await _update_profile(ProfileUpdateRequest(), _accounts(), anonymous)
 
     async def test_unknown_fields_are_refused(self) -> None:
         with pytest.raises(ValueError, match=r"extra_forbidden|Extra inputs"):
@@ -179,7 +230,7 @@ class TestIdentities:
     async def test_visibility_is_set_on_the_callers_own_account(self) -> None:
         accounts = _accounts()
 
-        response = await set_identity_visibility(2, IdentityVisibilityRequest(public=False), accounts, _caller())
+        response = await _set_identity_visibility(2, IdentityVisibilityRequest(public=False), accounts, _caller())
 
         assert accounts.visibility_updates == [(1, 2, False)]
         assert response.is_public is False
@@ -187,7 +238,7 @@ class TestIdentities:
     async def test_unlink_returns_the_removed_identity(self) -> None:
         accounts = _accounts()
 
-        response = await unlink_identity(2, accounts, _caller())
+        response = await _unlink_identity(2, accounts, _caller())
 
         assert accounts.unlinks == [(1, 2)]
         assert response.provider is IdentityProvider.JAVA
@@ -196,7 +247,7 @@ class TestIdentities:
         accounts = _accounts(unlink_error=LastIdentityError(account_id=1))
 
         with pytest.raises(LastIdentityError):
-            await unlink_identity(1, accounts, _caller())
+            await _unlink_identity(1, accounts, _caller())
 
 
 class TestStaffClear:
@@ -252,3 +303,23 @@ class TestMerge:
 
         with pytest.raises(AuthenticationError):
             await create_merge_code(self._merge_accounts(), anonymous)
+
+
+@pytest.mark.parametrize("kind", ["profile", "visibility", "unlink"])
+async def test_account_writes_require_the_callers_read_revision(kind: str) -> None:
+    accounts = _accounts()
+    recorder = AccountEditRecorder(accounts)
+    services = cast(Any, SimpleNamespace(edits=recorder))
+    if kind == "profile":
+        operation = update_profile(
+            ProfileUpdateRequest(bio="new"), accounts, _caller(), services, Response(), uuid4(), None
+        )
+    elif kind == "visibility":
+        operation = set_identity_visibility(
+            2, IdentityVisibilityRequest(public=False), accounts, _caller(), services, Response(), uuid4(), None
+        )
+    else:
+        operation = unlink_identity(2, accounts, _caller(), services, Response(), uuid4(), None)
+    with pytest.raises(RevisionRequiredError):
+        await operation
+    assert recorder.commands == []

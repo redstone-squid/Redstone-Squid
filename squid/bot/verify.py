@@ -18,8 +18,9 @@ from squid.bot.profile_render import (
     public_profile_fields,
 )
 from squid.bot.ui import card_node, text_node
-from squid.bot.utils.permissions import allows
+from squid.bot.utils.permissions import allows, subject_for_interaction
 from squid.core.i18n import tr
+from squid.edits.domain import EditActor
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -85,8 +86,13 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
         async def authorize_claim(node) -> bool:
             return await allows(request, node)
 
+        async def edit_actor() -> EditActor:
+            return EditActor(await subject_for_interaction(request), discord_user_id=request.user.id)
+
         return AccountWorkspace(
             accounts=self.account_service,
+            edits=self.bot.services.edits,
+            actor=edit_actor,
             actor_id=actor.id,
             account=account,
             request_consent=open_consent,

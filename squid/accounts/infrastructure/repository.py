@@ -5,7 +5,6 @@ import hmac
 import secrets
 import uuid
 from collections.abc import Callable, Sequence
-from dataclasses import fields
 
 from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -34,7 +33,6 @@ from squid.accounts.errors import (
     AccountNotFoundError,
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
-    ConsentRequiredError,
     CreatorAliasNotFoundError,
     LastIdentityError,
     MinecraftAccountNotFoundError,
@@ -53,8 +51,9 @@ from squid.accounts.models import (
 from squid.accounts.models import VerificationAttempt as VerificationAttemptModel
 from squid.accounts.models import VerificationCode as VerificationCodeModel
 from squid.core.i18n import tr
-from squid.core.sentinel import UNSET
+from squid.edits.domain import Revision
 from squid.persistence.account_merge import AccountMergeContext
+from squid.persistence.revisions import flush_revision
 from squid.persistence.types import InstantUTC
 
 _BUILD_CREDITS = table("build_creators", column("alias_id"))
@@ -149,6 +148,16 @@ class AccountRepository:
         session.add_all(rows)
         await session.flush()
         return _hydrate_account(account, sorted(rows, key=lambda row: (row.provider, row.id)))
+
+    async def lock_for_edit(self, account_id: int) -> Account:
+        session = self._session()
+        account = await session.get(Account, account_id, with_for_update=True)
+        if account is None:
+            raise AccountNotFoundError(account_id)
+        return await self._load_account(session, account)
+
+    async def flush_edit_revision(self, account: Account, expected: Revision) -> Revision:
+        return await flush_revision(self._session(), account, expected)
 
     async def get_by_id(self, account_id: int) -> Account | None:
         """Return an account by internal identifier."""
@@ -259,12 +268,14 @@ class AccountRepository:
         )
         if not remaining:
             raise LastIdentityError(account_id=account_id)
+        account.revision += 1
         # ON DELETE SET NULL clears a removed avatar; rejecting the unlink rolls that back too.
         return removed
 
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         """Publish or withhold one identity on the account's public profile."""
         session = self._session()
+        account = await self.lock_for_edit(account_id)
         updated = await session.scalar(
             update(AccountIdentity)
             .where(
@@ -276,6 +287,7 @@ class AccountRepository:
         )
         if updated is None:
             raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
+        account.revision += 1
         return updated
 
     async def set_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
@@ -285,14 +297,20 @@ class AccountRepository:
         opportunistically whenever it happens to hold a fresh `discord.User`.
         """
         session = self._session()
-        await session.execute(
+        account = await self.lock_for_edit(account_id)
+        changed = await session.scalar(
             update(AccountIdentity)
             .where(
                 AccountIdentity.id == identity_id,
                 AccountIdentity.account_id == account_id,
+                AccountIdentity.avatar_key.is_distinct_from(avatar_key),
             )
             .values(avatar_key=avatar_key)
+            .returning(AccountIdentity.id)
         )
+
+        if changed is not None:
+            account.revision += 1
 
     async def get_profile(self, account_id: int) -> AccountProfile | None:
         """Return an account's own profile, visibility flags and all."""
@@ -304,40 +322,6 @@ class AccountRepository:
             exists = await session.scalar(select(Account.id).where(Account.id == account_id))
             return None if exists is None else AccountProfile.empty(account_id)
         return model
-
-    async def replace_profile(self, account_id: int, expected: ProfileUpdate, replacement: ProfileUpdate) -> bool:
-        """Conditionally edit supplied fields under the same locks as ordinary profile writes."""
-        session = self._session()
-        account = await session.get(Account, account_id, with_for_update=True)
-        if account is None:
-            return False
-        if not await self.has_current_consent(account_id):
-            raise ConsentRequiredError(account_id=account_id)
-        profile = await session.get(AccountProfile, account_id, with_for_update=True)
-        if profile is None:
-            profile = AccountProfile.empty(account_id)
-        for field in fields(expected):
-            value = getattr(expected, field.name)
-            if value is not UNSET and getattr(profile, field.name) != value:
-                return False
-        await self.upsert_profile(account_id, replacement)
-        return True
-
-    async def replace_identity_visibility(
-        self, account_id: int, identity_id: int, *, expected: bool, replacement: bool
-    ) -> bool:
-        session = self._session()
-        result = await session.execute(
-            update(AccountIdentity)
-            .where(
-                AccountIdentity.id == identity_id,
-                AccountIdentity.account_id == account_id,
-                AccountIdentity.is_public == expected,
-            )
-            .values(is_public=replacement)
-            .returning(AccountIdentity.id)
-        )
-        return result.scalar_one_or_none() is not None
 
     async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
         """Apply a validated partial edit, creating the profile row if it is somehow missing."""
@@ -364,6 +348,7 @@ class AccountRepository:
                 raise AccountIdentityNotFoundError(avatar_identity_id, account_id=account_id)
         update_request.apply(model)
         model.updated_at = Instant.now()
+        account.revision += 1
         await session.flush()
         return model
 
@@ -894,6 +879,7 @@ class AccountRepository:
             previous_name = existing_java.display_name
             existing_java.display_name = verification_code.username
             existing_java.verified_at = Instant.now()
+        account.revision += 1
         account.consent_version = consent.version
         account.consented_at = consent.granted_at
         verification_code.valid = False
@@ -942,6 +928,7 @@ class AccountRepository:
         previous_name = identity.display_name
         identity.display_name = username
         identity.verified_at = Instant.now()
+        account.revision += 1
         return await self._reconcile_java_name(
             session,
             account=account,

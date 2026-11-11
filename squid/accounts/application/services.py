@@ -8,6 +8,7 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.accounts.application.edits import AccountEditorSnapshot
 from squid.accounts.application.ports import AccountUnitOfWork
 from squid.accounts.domain import (
     MERGE_CODE_BYTES,
@@ -389,6 +390,14 @@ class AccountService:
             await uow.accounts.set_identity_avatar_key(account_id, identity_id, avatar_key)
             await uow.commit()
 
+    async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
+        """Read the profile and identities under their shared account revision lock."""
+        async with self._uow_factory() as uow:
+            account = await uow.accounts.lock_for_edit(account_id)
+            profile = await uow.accounts.get_profile(account_id)
+            assert profile is not None
+            return AccountEditorSnapshot(account, profile)
+
     async def get_profile(self, account_id: int) -> AccountProfile:
         """Return an account's own profile, including anything it has chosen to hide."""
         async with self._uow_factory() as uow:
@@ -396,26 +405,6 @@ class AccountService:
             if profile is None:
                 raise AccountNotFoundError(account_id)
             return profile
-
-    async def replace_profile(self, account_id: int, expected: ProfileUpdate, replacement: ProfileUpdate) -> bool:
-        """Conditionally replace profile fields after validating content and current consent."""
-        async with self._uow_factory() as uow:
-            changed = await uow.accounts.replace_profile(account_id, expected, replacement.validated())
-            if changed:
-                await uow.commit()
-            return changed
-
-    async def replace_identity_visibility(
-        self, account_id: int, identity_id: int, *, expected: bool, replacement: bool
-    ) -> bool:
-        """Conditionally reverse a caller-owned identity's visibility."""
-        async with self._uow_factory() as uow:
-            changed = await uow.accounts.replace_identity_visibility(
-                account_id, identity_id, expected=expected, replacement=replacement
-            )
-            if changed:
-                await uow.commit()
-            return changed
 
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         """Validate and save a partial profile edit after checking the account's consent."""

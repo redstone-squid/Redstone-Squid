@@ -33,11 +33,13 @@ from squid.bot.account_view import AccountOverview, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import ConsentPrompt, request_consent
 from squid.bot.verify import VerifyCog
-from squid.permissions.domain import PermissionNode
+from squid.edits.domain import EditActor
+from squid.permissions.domain import PermissionNode, Subject
 from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
 from squid_ui.testing import labels
 from squid_ui.text import NEUTRAL, resolve_text, source_text
 from squid_ui_discord.testing import commit_render, interaction_harness
+from tests.support.account_edits import AccountEditRecorder, SnapshotAccountService
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -46,6 +48,18 @@ JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
 DISCORD = replace(AccountIdentity.discord(AUTHOR_ID), id=1, verified_at=NOW)
 JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2, verified_at=NOW)
+
+
+async def edit_actor() -> EditActor:
+    return EditActor(Subject(account_id=ACCOUNT_ID), discord_user_id=AUTHOR_ID)
+
+
+def _workspace(*, accounts: AccountService, **kwargs: Any) -> AccountWorkspace:
+    return AccountWorkspace(accounts=accounts, edits=AccountEditRecorder(accounts), actor=edit_actor, **kwargs)
+
+
+def _overview(*, accounts: AccountService, **kwargs: Any) -> AccountOverview:
+    return AccountOverview(accounts=accounts, edits=AccountEditRecorder(accounts), actor=edit_actor, **kwargs)
 
 
 async def no_consent_request(
@@ -87,7 +101,7 @@ class ConsentCapture:
         return self.opened
 
 
-async def no_refresh() -> None:
+async def no_refresh(*, changed_account_id: int | None = None) -> None:
     pass
 
 
@@ -127,7 +141,7 @@ class TransitionSource:
         self.source = source
 
 
-class NoAccountService(AccountService):
+class NoAccountService(SnapshotAccountService):
     def __init__(self) -> None:
         pass
 
@@ -137,7 +151,7 @@ class NoAccountService(AccountService):
         return None
 
 
-class PublicProfileService(AccountService):
+class PublicProfileService(SnapshotAccountService):
     def __init__(self, profile: PublicCreatorProfile) -> None:
         self.profile = profile
 
@@ -147,7 +161,7 @@ class PublicProfileService(AccountService):
         return self.profile
 
 
-class LinkAccountService(AccountService):
+class LinkAccountService(SnapshotAccountService):
     def __init__(self) -> None:
         self.linked: list[tuple[int, str]] = []
         self.released: list[str] = []
@@ -209,7 +223,7 @@ class LinkAccountService(AccountService):
         self.released.append(code)
 
 
-class StaffRefreshService(AccountService):
+class StaffRefreshService(SnapshotAccountService):
     def __init__(self, target: Account | None, refresh: IdentityRefresh) -> None:
         self.target = target
         self.refresh = refresh
@@ -228,7 +242,7 @@ class StaffRefreshService(AccountService):
         return self.refresh
 
 
-class MergeAccountService(AccountService):
+class MergeAccountService(SnapshotAccountService):
     def __init__(self) -> None:
         self.completed: list[tuple[int, str]] = []
 
@@ -244,7 +258,7 @@ class MergeAccountService(AccountService):
         return AccountMerge(surviving_account_id, 9, UUID(int=8), UUID(int=9))
 
 
-class AccountMutationService(AccountService):
+class AccountMutationService(SnapshotAccountService):
     def __init__(self, *, unlinked: AccountIdentity = JAVA) -> None:
         self.unlinked = unlinked
         self.profile_updates: list[tuple[int, ProfileUpdate]] = []
@@ -257,18 +271,6 @@ class AccountMutationService(AccountService):
         return Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
 
     @override
-    async def replace_profile(self, account_id: int, expected: ProfileUpdate, replacement: ProfileUpdate) -> bool:
-        await self.update_profile(account_id, replacement)
-        return True
-
-    @override
-    async def replace_identity_visibility(
-        self, account_id: int, identity_id: int, *, expected: bool, replacement: bool
-    ) -> bool:
-        await self.set_identity_visibility(account_id, identity_id, is_public=replacement)
-        return True
-
-    @override
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         self.profile_updates.append((account_id, update))
         return AccountProfile.empty(account_id)
@@ -276,7 +278,9 @@ class AccountMutationService(AccountService):
     @override
     async def grant_current_consent(self, account_id: int) -> Account:
         self.consent_grants.append(account_id)
-        return Account(identities=(), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
+        account = Account(identities=(), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
+        account.revision = 2
+        return account
 
     @override
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
@@ -295,7 +299,7 @@ async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> N
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
@@ -330,7 +334,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
@@ -367,7 +371,7 @@ async def test_link_reservation_is_released_once_when_consent_is_abandoned() -> 
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
@@ -396,7 +400,7 @@ async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
@@ -420,7 +424,7 @@ async def test_accountless_link_cancel_releases_without_creating_personal_rows()
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
@@ -449,7 +453,7 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
@@ -481,7 +485,7 @@ async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
@@ -509,7 +513,7 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
         return True
 
     def workspace(*, allowed: bool) -> AccountWorkspace:
-        return AccountWorkspace(
+        return _workspace(
             accounts=LinkAccountService(),
             actor_id=AUTHOR_ID,
             account=account,
@@ -532,7 +536,7 @@ def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> No
         return True
 
     def workspace(*, allowed: bool) -> AccountWorkspace:
-        return AccountWorkspace(
+        return _workspace(
             accounts=LinkAccountService(),
             actor_id=AUTHOR_ID,
             account=account,
@@ -559,7 +563,7 @@ async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> 
         authorized.append(node)
         return allowed
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
@@ -593,7 +597,7 @@ async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> 
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
@@ -618,7 +622,7 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
     async def authorize(_node: PermissionNode) -> bool:
         return True
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
@@ -677,7 +681,7 @@ async def test_staff_refresh_renders_every_reconciliation_branch(refresh: Identi
     async def authorize(_node: PermissionNode) -> bool:
         return True
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
@@ -704,7 +708,7 @@ async def test_merge_requires_the_workspace_decision() -> None:
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
@@ -734,7 +738,7 @@ def test_account_is_one_app_only_workspace() -> None:
 
 def _account_panel(profile: AccountProfile) -> AccountOverview:
     accounts = AccountMutationService()
-    panel = AccountOverview(
+    panel = _overview(
         accounts=accounts,
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
@@ -824,7 +828,7 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountOverview, dict
         opened["on_answer"] = answer
         return True
 
-    panel = AccountOverview(
+    panel = _overview(
         accounts=AccountMutationService(),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
@@ -911,7 +915,7 @@ class _Recorder:
 
 def _linked_panel() -> tuple[AccountOverview, _Recorder, AccountMutationService, sd.MessageRoot]:
     accounts = AccountMutationService()
-    panel = AccountOverview(
+    panel = _overview(
         accounts=accounts,
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
@@ -985,7 +989,7 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
@@ -1048,7 +1052,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen() -> N
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    workspace = AccountWorkspace(
+    workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,

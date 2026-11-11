@@ -3640,6 +3640,10 @@ export type UserMe = {
      */
     id: number;
     /**
+     * Revision
+     */
+    revision: number;
+    /**
      * Creator Id
      */
     creator_id: string;
@@ -5239,6 +5243,10 @@ export type AccountProfileUpdateData = {
     body: ProfileUpdateRequest;
     headers?: {
         /**
+         * If-Match
+         */
+        'if-match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -5268,9 +5276,17 @@ export type AccountProfileUpdateErrors = {
      */
     404: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ProblemDetail;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5339,6 +5355,10 @@ export type AccountIdentityVisibilitySetData = {
     body: IdentityVisibilityRequest;
     headers?: {
         /**
+         * If-Match
+         */
+        'if-match'?: string | null;
+        /**
          * Idempotency-Key
          *
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -5369,9 +5389,17 @@ export type AccountIdentityVisibilitySetErrors = {
      */
     404: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ProblemDetail;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5396,6 +5424,10 @@ export type AccountIdentityVisibilitySetResponse = AccountIdentityVisibilitySetR
 export type AccountIdentityUnlinkData = {
     body?: never;
     headers?: {
+        /**
+         * If-Match
+         */
+        'if-match'?: string | null;
         /**
          * Idempotency-Key
          *
@@ -5431,9 +5463,17 @@ export type AccountIdentityUnlinkErrors = {
      */
     409: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ProblemDetail;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
     /**
      * Too Many Requests
      */

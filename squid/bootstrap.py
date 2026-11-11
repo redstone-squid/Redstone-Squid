@@ -19,6 +19,14 @@ import httpx
 from whenever import Instant
 
 from squid.accounts.application import AccountService
+from squid.accounts.application.edits import (
+    PROFILE_EDIT,
+    UNLINK_EDIT,
+    VISIBILITY_EDIT,
+    AccountProfileEdit,
+    AccountUnlinkEdit,
+    AccountVisibilityEdit,
+)
 from squid.accounts.application.services import generate_verification_code
 from squid.accounts.infrastructure.mojang import MojangClient
 from squid.artifacts import ArtifactStore
@@ -319,6 +327,9 @@ class _ServiceGraph:
             {
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),
+                PROFILE_EDIT: AccountProfileEdit(self.permissions),
+                VISIBILITY_EDIT: AccountVisibilityEdit(self.permissions),
+                UNLINK_EDIT: AccountUnlinkEdit(self.permissions),
             },
         )
 

@@ -108,6 +108,8 @@ async def merge_accounts(session: AsyncSession, context: AccountMergeContext) ->
     if absorbed is None:
         raise AccountNotFoundError(context.absorbed)
 
+    survivor.revision += 1
+
     # Lock the complete affected aggregate set before different merge phases touch it.
     await session.execute(
         text("""

@@ -8,9 +8,9 @@ from typing import Any, cast, override
 from uuid import UUID
 
 import pytest
+from fastapi import Response
 from whenever import Instant
 
-from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     AccountConsent,
@@ -22,6 +22,7 @@ from squid.accounts.models import Account, AccountIdentity, AccountProfile, Alia
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import get_me, grant_consent, refresh_minecraft_identity, refresh_minecraft_identity_for
 from squid.core.errors import AuthenticationError
+from tests.support.account_edits import SnapshotAccountService
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 CREATOR_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -41,7 +42,7 @@ def _account(*, discord: bool = True) -> Account:
     )
 
 
-class AccountRecorder(AccountService):
+class AccountRecorder(SnapshotAccountService):
     def __init__(
         self,
         *,
@@ -105,7 +106,7 @@ async def test_a_cli_caller_can_read_its_own_account() -> None:
     """A Java-only account remains readable through its CLI credential."""
     accounts = _accounts(account=_account(discord=False))
 
-    response = await get_me(accounts, _caller("cli"))
+    response = await get_me(accounts, _caller("cli"), Response())
 
     assert accounts.account_reads == [1]
     assert response.id == 1
@@ -116,7 +117,7 @@ async def test_a_cli_caller_can_read_its_own_account() -> None:
 
 async def test_the_response_lists_identities_rather_than_flattening_them() -> None:
     """The self view identifies each linked provider separately."""
-    response = await get_me(_accounts(), _caller())
+    response = await get_me(_accounts(), _caller(), Response())
 
     assert [identity.provider for identity in response.identities] == [
         IdentityProvider.DISCORD,
@@ -128,7 +129,7 @@ async def test_the_response_lists_identities_rather_than_flattening_them() -> No
 
 async def test_the_response_carries_the_profile() -> None:
     profile = AccountProfile(account_id=1, display_name="Steve", bio="I build", hidden=True)
-    response = await get_me(_accounts(profile=profile), _caller())
+    response = await get_me(_accounts(profile=profile), _caller(), Response())
 
     assert response.profile.display_name == "Steve"
     assert response.profile.bio == "I build"
@@ -138,7 +139,7 @@ async def test_the_response_carries_the_profile() -> None:
 
 async def test_the_response_renders_a_java_avatar_from_its_source_identity() -> None:
     profile = AccountProfile(account_id=1, avatar_identity_id=2)
-    response = await get_me(_accounts(profile=profile), _caller())
+    response = await get_me(_accounts(profile=profile), _caller(), Response())
 
     assert response.profile.avatar is not None
     assert response.profile.avatar.identity_id == 2
@@ -149,7 +150,7 @@ async def test_a_caller_without_an_account_is_rejected() -> None:
     anonymous = Caller(kind="anonymous", subject="anonymous")
 
     with pytest.raises(AuthenticationError):
-        await get_me(_accounts(), anonymous)
+        await get_me(_accounts(), anonymous, Response())
 
 
 async def test_consent_is_granted_by_account_not_discord_id() -> None:

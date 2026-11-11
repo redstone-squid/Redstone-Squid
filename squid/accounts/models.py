@@ -49,6 +49,7 @@ from squid.accounts.domain.profiles import ProfileLink
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.persistence.base import Base
+from squid.persistence.revisions import Revisioned
 from squid.persistence.types import InstantUTC, StrEnumText
 
 _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
@@ -79,12 +80,13 @@ class ProfileLinks(TypeDecorator[tuple[ProfileLink, ...]]):
         return None if value is None else tuple(ProfileLink(**link) for link in value)
 
 
-class Account(Base, kw_only=True):
+class Account(Revisioned, Base, kw_only=True):
     """An internal caller independent of every external identity provider."""
 
     __tablename__ = "accounts"
     __table_args__ = (
         UniqueConstraint("public_creator_id", name="accounts_public_creator_id_key"),
+        CheckConstraint("revision > 0", name="accounts_revision_positive"),
         CheckConstraint(
             "(consent_version IS NULL) = (consented_at IS NULL)",
             name="accounts_consent_receipt_complete",

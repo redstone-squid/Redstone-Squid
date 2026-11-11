@@ -562,24 +562,3 @@ class TestIdentityVisibilityAndUnlink:
         reloaded = await transact(repository, lambda uow: uow.accounts.get_by_id(account.id))
         assert reloaded is not None
         assert reloaded.identities[0].avatar_key == "deadbeef"
-
-
-async def test_profile_history_checks_only_edited_fields(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
-    account = await _account(repository)
-    await transact(
-        repository, lambda uow: uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="New")), commit=True
-    )
-    changed = await transact(
-        repository,
-        lambda uow: uow.accounts.replace_profile(account.id, ProfileUpdate(bio="New"), ProfileUpdate(bio="Old")),
-        commit=True,
-    )
-    assert changed
-    conflict = await transact(
-        repository,
-        lambda uow: uow.accounts.replace_profile(account.id, ProfileUpdate(bio="New"), ProfileUpdate(bio=None)),
-    )
-    assert not conflict
-    profile = await transact(repository, lambda uow: uow.accounts.get_profile(account.id))
-    assert profile is not None
-    assert profile.bio == "Old"

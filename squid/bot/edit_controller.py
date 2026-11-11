@@ -9,7 +9,14 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.edit_history import history_controls
-from squid.core.errors import AuthorizationError, ConflictError, InvalidStateError, ValidationError
+from squid.core.errors import (
+    AuthenticationError,
+    AuthorizationError,
+    ConflictError,
+    InvalidStateError,
+    NotFoundError,
+    ValidationError,
+)
 from squid.core.i18n import tr
 from squid.edits.application import EditRunner
 from squid.edits.domain import (
@@ -54,7 +61,7 @@ class _ReceiptOperation:
         command = self.receipt.inverse(expected, redo=self.receipt.command.purpose == "undo")
         try:
             result = await self.controller._run(command, self.label, original_entry_id=self.original_entry_id)
-        except (AuthorizationError, ConflictError) as error:
+        except (AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError) as error:
             raise ReactiveConflictError(ConflictDetail(self.receipt.command.kind, 0, 1), str(error)) from error
         assert result.receipt is not None
         return _ReceiptOperation(self.controller, result.receipt, self.label, self.original_entry_id)
@@ -96,6 +103,11 @@ class EditController:
         self._signal.track()
         return tuple(self._pending.values())
 
+    def require_ready(self, targets: frozenset[str]) -> None:
+        """Fence other session actions while a write's result still needs reconciliation."""
+        if any(targets.intersection(v.target.identity for v in item.command.expected) for item in self.pending):
+            raise InvalidStateError(tr(t"edits-pending = Check the previous saved result before editing this item."))
+
     async def execute(self, command: EditCommand, label: TextLike) -> EditResult:
         return await self._run(command, label)
 
@@ -106,10 +118,7 @@ class EditController:
             raise sl.runtime.ReactiveWriteError(message)
         async with self._lock:
             targets = {v.target for v in command.expected}
-            if any(targets.intersection(v.target for v in pending.command.expected) for pending in self.pending):
-                raise InvalidStateError(
-                    tr(t"edits-pending = Check the previous saved result before editing this item.")
-                )
+            self.require_ready(frozenset(target.identity for target in targets))
             retained = frozenset(
                 target for entry in (*self.history.entries, *self.history.redoable) for target in entry.targets
             )
@@ -161,7 +170,7 @@ class EditController:
                     result = await self._runner.execute(pending.command, actor, attempt=pending.attempt)
                 except EditCommitUncertainError:
                     raise
-                except AuthorizationError, ConflictError, ValidationError:
+                except AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError:
                     if pending.original_entry_id is not None:
                         self.history.settle_reversal(pending.original_entry_id, inverse=None)
                     self._pending.pop(operation_id, None)
