@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from decimal import Decimal
 from typing import override
 
-from sqlalchemy import select, text, update
+from sqlalchemy import exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -16,7 +16,7 @@ from squid.persistence.revisions import flush_revision
 from squid.tags.application import TagDefinitionRepository
 from squid.tags.application.history import AssignmentSnapshot
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
-from squid.tags.models import TagAssignment, TagDefinition
+from squid.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
 
 
 class PostgresTagDefinitionRepository(TagDefinitionRepository):
@@ -66,7 +66,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         rows = (
             await session.scalars(
                 select(TagDefinition)
-                .where(TagDefinition.moderation_status == TagModerationStatus.PENDING)
+                .where(
+                    TagDefinition.moderation_status == TagModerationStatus.PENDING, TagDefinition.withdrawn.is_(False)
+                )
                 .order_by(TagDefinition.created_at, TagDefinition.id)
             )
         ).all()
@@ -77,6 +79,41 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         session = self._session()
         row = await session.get(TagDefinition, tag_id)
         return None if row is None else row
+
+    async def reserve_identity(self) -> int:
+        identity = await self._session().scalar(text("SELECT nextval(pg_get_serial_sequence('tag_definitions', 'id'))"))
+        assert isinstance(identity, int)
+        return identity
+
+    async def proposal_for_update(self, tag_id: int) -> TagDefinition | None:
+        await self._session().execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f"tag:{tag_id}", 0))))
+        return await self.get_for_update(tag_id)
+
+    async def create_reserved(self, definition: TagDefinition) -> None:
+        self._session().add(definition)
+        await self._session().flush()
+
+    async def query_name_available(self, name: str, tag_id: int) -> bool:
+        session = self._session()
+        await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f"tag-query:{name}", 0))))
+        return (
+            await session.scalar(
+                select(TagDefinition.id).where(TagDefinition.query_name == name, TagDefinition.id != tag_id)
+            )
+            is None
+        )
+
+    async def is_unused(self, tag_id: int) -> bool:
+        used = await self._session().scalar(
+            select(
+                or_(
+                    exists().where(TagAssignment.tag_id == tag_id),
+                    exists().where(TagAlias.tag_id == tag_id),
+                    exists().where(TagApplicability.tag_id == tag_id),
+                )
+            )
+        )
+        return not used
 
     async def get_for_update(self, tag_id: int) -> TagDefinition | None:
         return await self._session().get(TagDefinition, tag_id, with_for_update=True)
@@ -107,7 +144,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         rows = (
             await session.scalars(
                 select(TagDefinition)
-                .where(TagDefinition.moderation_status == TagModerationStatus.APPROVED)
+                .where(
+                    TagDefinition.moderation_status == TagModerationStatus.APPROVED, TagDefinition.withdrawn.is_(False)
+                )
                 .order_by(TagDefinition.default_display_order, TagDefinition.display_name, TagDefinition.id)
             )
         ).all()

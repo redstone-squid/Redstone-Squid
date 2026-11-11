@@ -28,7 +28,16 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
 )
 from squid.tags.application import TagService
-from squid.tags.application.edits import ALIAS_EDIT, AliasValues, ShowcaseValues, tag_target
+from squid.tags.application.edits import (
+    ALIAS_EDIT,
+    MODERATION_EDIT,
+    PROPOSAL_EDIT,
+    AliasValues,
+    ModerationValues,
+    ProposalValues,
+    ShowcaseValues,
+    tag_target,
+)
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid_ui.runtime import transaction
@@ -71,29 +80,8 @@ class FakeTagService(TagService):
         return (self.proposal,)
 
     @override
-    async def propose_showcase(
-        self,
-        display_name: str,
-        *,
-        value_type: TagValueType,
-        query_name: str | None,
-        created_by_account_id: int,
-    ) -> TagDefinition:
-        self.proposals.append((display_name, value_type, query_name, created_by_account_id))
-        return self.proposal
-
-    @override
-    async def approve(self, tag_id: int) -> TagDefinition:
-        self.approvals.append(tag_id)
-        return self.proposal
-
-    @override
-    async def reject(self, tag_id: int) -> TagDefinition:
-        return self.proposal
-
-    @override
-    async def archive(self, tag_id: int) -> TagDefinition:
-        return self.published
+    async def reserve_identity(self) -> int:
+        return self.proposal.id
 
 
 class TagEditRecorder(EditRunner):
@@ -112,6 +100,22 @@ class TagEditRecorder(EditRunner):
                 self.restrictions.aliases.remove(item)
             self.restrictions.revision += 1
             revision = self.restrictions.revision
+        elif command.kind == PROPOSAL_EDIT:
+            proposal = ProposalValues.model_validate_json(command.values.encoded)
+            self.tags.proposals.append(
+                (proposal.display_name, proposal.value_type, proposal.query_name, actor.require_account_id())
+            )
+            before = proposal.model_copy(update={"present": not proposal.present}).edit_values()
+            self.tags.proposal.withdrawn = not proposal.present
+            revision = command.expected[0].value + 1
+            self.tags.proposal.revision = revision
+        elif command.kind == MODERATION_EDIT:
+            moderation = ModerationValues.model_validate_json(command.values.encoded)
+            before = ModerationValues(status=self.tags.proposal.moderation_status).edit_values()
+            self.tags.proposal.moderation_status = moderation.status
+            self.tags.approvals.append(self.tags.proposal.id)
+            revision = command.expected[0].value + 1
+            self.tags.proposal.revision = revision
         else:
             values = ShowcaseValues.model_validate_json(command.values.encoded)
             self.tags.assignments.append(
@@ -121,11 +125,18 @@ class TagEditRecorder(EditRunner):
             revision = self.tags.revision
             before = ShowcaseValues(tag_id=values.tag_id, assigned=False).edit_values()
         revisions = (Revision(command.expected[0].target, revision),)
-        receipt = EditReceipt(command, before, command.values, revisions)
+        receipt = EditReceipt(command, before, command.values, revisions, final=command.kind == MODERATION_EDIT)
         if attempt is not None:
             attempt.receipt = receipt
         return EditResult(
-            EditOutcome(command.operation_id, actor.key, command.fingerprint, revisions, changed=True, final=False),
+            EditOutcome(
+                command.operation_id,
+                actor.key,
+                command.fingerprint,
+                revisions,
+                changed=True,
+                final=command.kind == MODERATION_EDIT,
+            ),
             receipt,
         )
 
@@ -228,7 +239,8 @@ async def test_proposal_refreshes_the_service_backed_browsers() -> None:
     await screen.on_load()
     event = NoticeEvent(name="Reliable", value_type=TagValueType.NONE, query_name=None)
 
-    await screen._propose(cast(sl.SubmitEvent, event))
+    with transaction():
+        await screen._propose(cast(sl.SubmitEvent, event))
 
     assert tags.proposals == [("Reliable", TagValueType.NONE, None, 7)]
     assert tags.public_reads == 2
@@ -262,7 +274,8 @@ async def test_moderation_requires_a_decision_and_rechecks_permission() -> None:
     assert screen._decision is not None
     source = NoticeEvent()
     transition = TransitionEvent(source)
-    await screen._decide(cast(Any, transition), "confirm")
+    with transaction():
+        await screen._decide(cast(Any, transition), "confirm")
 
     assert tags.approvals == [2]
     assert len(source.notices) == 1
@@ -285,3 +298,19 @@ async def test_alias_history_rechecks_authority_and_reverses_membership() -> Non
     assert restrictions.aliases == []
     assert (await screen.history.redo()).applied
     assert restrictions.aliases == [("locational", "location")]
+
+
+async def test_moderation_discards_only_history_for_its_tag() -> None:
+    screen, tags, _ = make_screen(capabilities=frozenset({TAG_PROPOSAL_APPROVE, RESTRICTION_ALIAS_CREATE}))
+    await screen.on_load()
+    with transaction():
+        await screen._add_alias(cast(sl.SubmitEvent, NoticeEvent(restriction="locational", alias="location")))
+        await screen._propose(
+            cast(sl.SubmitEvent, NoticeEvent(name="Reliable", value_type=TagValueType.NONE, query_name=None))
+        )
+    assert len(screen.history.entries) == 2
+    await screen._request_moderation(cast(sl.PressEvent, object()), tags.proposal, "approve")
+    with transaction():
+        await screen._decide(cast(Any, TransitionEvent(NoticeEvent())), "confirm")
+    assert len(screen.history.entries) == 1
+    assert screen.history.entries[0].targets == frozenset({tag_target(1).identity})

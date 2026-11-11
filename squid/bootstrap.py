@@ -139,7 +139,16 @@ from squid.suggestions.application.queries import SuggestionQueryService
 from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
 from squid.sync import DiscordReconciliationService
 from squid.tags.application import TagService
-from squid.tags.application.edits import ALIAS_EDIT, SHOWCASE_EDIT, ShowcaseAssignmentEdit, TagAliasEdit
+from squid.tags.application.edits import (
+    ALIAS_EDIT,
+    MODERATION_EDIT,
+    PROPOSAL_EDIT,
+    SHOWCASE_EDIT,
+    ShowcaseAssignmentEdit,
+    TagAliasEdit,
+    TagModerationEdit,
+    TagProposalEdit,
+)
 from squid.unit_of_work import UnitOfWorkFactory
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
@@ -347,6 +356,8 @@ class _ServiceGraph:
                 DRAFT_ANSWERS: DraftAnswersEdit(self.submission_drafts),
                 SHOWCASE_EDIT: ShowcaseAssignmentEdit(),
                 ALIAS_EDIT: TagAliasEdit(self.permissions),
+                PROPOSAL_EDIT: TagProposalEdit(),
+                MODERATION_EDIT: TagModerationEdit(self.permissions),
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, defaults),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),

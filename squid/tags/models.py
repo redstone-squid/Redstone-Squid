@@ -159,6 +159,7 @@ class TagDefinition(AuditTimestampsMixin, Revisioned, Base, kw_only=True):
         default=None,
     )
     archived_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    withdrawn: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     aliases: Mapped[list[TagAlias]] = relationship(
         back_populates="definition", default_factory=list, lazy="raise_on_sql"

@@ -23,8 +23,18 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid.tags.application.edits import ALIAS_EDIT, SHOWCASE_EDIT, AliasValues, ShowcaseValues
-from squid.tags.domain import TagValueType
+from squid.tags.application.edits import (
+    ALIAS_EDIT,
+    MODERATION_EDIT,
+    PROPOSAL_EDIT,
+    SHOWCASE_EDIT,
+    AliasValues,
+    ModerationValues,
+    ProposalValues,
+    ShowcaseValues,
+    tag_target,
+)
+from squid.tags.domain import TagModerationStatus, TagValueType
 from squid.tags.models import TagDefinition
 
 
@@ -35,22 +45,9 @@ class TagOperations(Protocol):
 
     async def pending(self) -> Sequence[TagDefinition]: ...
 
-    async def propose_showcase(
-        self,
-        display_name: str,
-        *,
-        value_type: TagValueType,
-        query_name: str | None,
-        created_by_account_id: int,
-    ) -> TagDefinition: ...
+    async def reserve_identity(self) -> int: ...
 
     async def build_revision(self, build_id: int) -> int: ...
-
-    async def approve(self, tag_id: int) -> TagDefinition: ...
-
-    async def reject(self, tag_id: int) -> TagDefinition: ...
-
-    async def archive(self, tag_id: int) -> TagDefinition: ...
 
 
 class RestrictionOperations(Protocol):
@@ -277,14 +274,11 @@ class TagsScreen(sd.Screen):
         name = form.name
         value_type = form.value_type
         query_name = form.query_name
-        tag = await self._tags.propose_showcase(
-            name,
-            value_type=value_type,
-            query_name=query_name,
-            created_by_account_id=account_id,
+        tag_id = await self._tags.reserve_identity()
+        await self.edits.bind(PROPOSAL_EDIT, tag_target(tag_id), 0).save(
+            ProposalValues(display_name=name, value_type=value_type, query_name=query_name).edit_values(),
+            tr(t"tags-history-proposal = Propose showcase tag"),
         )
-        tag_id = tag.id
-        await self._refresh()
         await event.notice(
             tr(
                 t"bot-tags-view-tag-is-awaiting-staff-approval = Tag #{(tag_id_text := str(tag_id))} is awaiting staff approval."  # noqa: F841
@@ -365,14 +359,19 @@ class TagsScreen(sd.Screen):
             self._pending_action = None
             self._decision = None
             return
-        mutation = {"approve": self._tags.approve, "reject": self._tags.reject, "archive": self._tags.archive}[action]
-        changed = await mutation(tag.id)
-        self.history.clear()
-        tag_name = changed.display_name
+        status = {
+            "approve": TagModerationStatus.APPROVED,
+            "reject": TagModerationStatus.REJECTED,
+            "archive": TagModerationStatus.ARCHIVED,
+        }[action]
+        await self.edits.bind(MODERATION_EDIT, tag_target(tag.id), tag.revision).save(
+            ModerationValues(status=status).edit_values(),
+            _action_label(action),
+        )
+        tag_name = tag.display_name
         action_label = _action_label(action)
         self._pending_action = None
         self._decision = None
-        await self._refresh()
         await event.source.notice(tr(t"bot-tags-view-value-2 = {action_label} **{tag_name}**."))
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:

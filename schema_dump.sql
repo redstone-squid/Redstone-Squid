@@ -5284,6 +5284,7 @@ CREATE TABLE public.tag_definitions (
     archived_at timestamp with time zone,
     created_by_account_id integer,
     revision bigint DEFAULT 1 NOT NULL,
+    withdrawn boolean DEFAULT false NOT NULL,
     CONSTRAINT tag_definitions_authority_check CHECK ((authority = ANY (ARRAY['official'::text, 'user'::text]))),
     CONSTRAINT tag_definitions_display_order_check CHECK ((default_display_order >= 0)),
     CONSTRAINT tag_definitions_moderation_status_check CHECK ((moderation_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'archived'::text]))),
