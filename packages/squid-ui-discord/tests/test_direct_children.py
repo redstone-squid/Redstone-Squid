@@ -4,6 +4,7 @@ from typing import override
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid_ui.primitives import Lines, Paginate
 from squid_ui_discord.testing import stage
 
 
@@ -79,3 +80,44 @@ async def test_direct_children_load_dispatch_reorder_and_remount() -> None:
         assert parent.first.loads == parent.second.loads == 1
         assert parent.first.value == 12
         assert parent.second.value == 11
+
+
+async def test_shared_child_loads_once_and_both_placements_dispatch_to_its_state() -> None:
+    child = Counter()
+
+    class Shared(sd.Screen):
+        @override
+        def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+            return child.keyed("left"), child.keyed("right")
+
+    async with stage(Shared(), owner=object()) as ui:
+        assert child.loads == 1
+        assert ui.texts() == ["10", "10"]
+        await ui.press("left.increment")
+        assert ui.texts() == ["11", "11"]
+        await ui.press("right.increment")
+        assert ui.texts() == ["12", "12"]
+        assert child.loads == 1
+
+
+async def test_shared_child_has_independent_page_cursors() -> None:
+    class Pages(sl.Component[sl.ComponentsV2Target, sd.Request]):
+        @override
+        def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+            return Lines(tuple(f"entry {index}" for index in range(6)), overflow=Paginate(key="items", per=2))
+
+    child = Pages()
+
+    class Shared(sd.Screen):
+        @override
+        def render(self) -> sl.DocumentLike[sl.ComponentsV2Target, sd.Request]:
+            return child.keyed("left"), child.keyed("right")
+
+    async with stage(Shared(), owner=object()) as ui:
+        await ui.press("__cursor_next.left.items")
+        assert ui.root.presentation.cursor("left.items").position.offset == 1
+        assert ui.root.presentation.cursor("right.items").position.offset == 0
+        await ui.press("__cursor_next.right.items")
+        await ui.press("__cursor_next.right.items")
+        assert ui.root.presentation.cursor("left.items").position.offset == 1
+        assert ui.root.presentation.cursor("right.items").position.offset == 2

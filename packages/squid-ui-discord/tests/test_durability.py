@@ -338,3 +338,78 @@ def test_failed_transform_cannot_mutate_the_input_snapshot() -> None:
 
     root = next(component for component in snapshot.components if component.path == "$")
     assert root.state == {"nested": {"value": 1}}
+
+
+class SharedDurableRoot(Component[sl.ComponentsV2Target]):
+    def __init__(self, *, shared: bool = True) -> None:
+        self.left = DurableChild()
+        self.right = self.left if shared else DurableChild()
+
+    @override
+    def render(self) -> sl.DocumentLike[sl.ComponentsV2Target]:
+        return self.left.keyed("left"), self.right.keyed("right")
+
+
+def _shared_snapshot(*, shared: bool = True) -> MessageRootState:
+    root = SharedDurableRoot(shared=shared)
+    root.left.entries = ("saved", "two", "three", "four")
+    message_root = MessageRoot(root, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    message_root.presentation.move_cursor("left.items", Position(offset=1))
+    registry = ComponentRegistry()
+    registry.register("shared", version=1, factory=SharedDurableRoot)
+    snapshot = registry.capture(message_root, "shared")
+    message_root.runtime.finish()
+    return MessageRootStateCodec.loads(MessageRootStateCodec.dumps(snapshot))
+
+
+def test_shared_state_and_independent_cursors_round_trip() -> None:
+    snapshot = _shared_snapshot()
+    aliases = [item for item in snapshot.components if item.shared_with is not None]
+    assert len(aliases) == 1
+    assert aliases[0].path == "right"
+    assert aliases[0].shared_with == "left"
+    assert aliases[0].state == {}
+    registry = ComponentRegistry()
+    registry.register("shared", version=1, factory=SharedDurableRoot)
+    restored = registry.restore(snapshot, access=Everyone(), timeout=None)
+    commit_render(restored)
+    assert isinstance(restored.component, SharedDurableRoot)
+    assert restored.component.left is restored.component.right
+    assert restored.component.left.entries[0] == "saved"
+    assert restored.presentation.cursor("left.items").position.offset == 1
+    assert restored.presentation.cursor("right.items").position.offset == 0
+    restored.runtime.finish()
+
+
+@pytest.mark.parametrize("saved_shared", [False, True])
+def test_restore_rejects_changed_instance_sharing(saved_shared: bool) -> None:
+    registry = ComponentRegistry()
+    registry.register("shared", version=1, factory=lambda: SharedDurableRoot(shared=not saved_shared))
+    with pytest.raises(MessageRootStateError, match="shar"):
+        registry.restore(_shared_snapshot(shared=saved_shared), access=Everyone(), timeout=None)
+
+
+@pytest.mark.parametrize("shared_with", ["missing", "right", "$"])
+def test_codec_rejects_invalid_alias_targets(shared_with: str) -> None:
+    snapshot = _shared_snapshot()
+    invalid = replace(
+        snapshot,
+        components=tuple(
+            replace(item, shared_with=shared_with) if item.path == "right" else item for item in snapshot.components
+        ),
+    )
+    with pytest.raises(MessageRootStateError, match="invalid shared component placement"):
+        MessageRootStateCodec.loads(MessageRootStateCodec.dumps(invalid))
+
+
+def test_migrating_an_alias_changes_its_canonical_state_and_type() -> None:
+    original = _shared_snapshot()
+    migrated = migrate_component_state(original, "right", lambda state: {**state, "extra": 2}, type_id="new.Type")
+    by_path = {item.path: item for item in migrated.components}
+    assert by_path["left"].state["extra"] == 2
+    assert by_path["right"].state == {}
+    assert by_path["right"].shared_with == "left"
+    assert by_path["left"].type_id == by_path["right"].type_id == "new.Type"
+    assert original.component_version == 1
+    assert migrated.component_version == 2

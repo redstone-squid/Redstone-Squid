@@ -11,7 +11,7 @@ recovery; DurableBot provides the login-before-recovery-before-gateway ordering.
 """
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -113,6 +113,8 @@ class ComponentState:
     path: str
     type_id: str
     state: Mapping[str, object]
+    shared_with: str | None = None
+    """Canonical placement holding this instance's state; aliases carry empty state."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +241,12 @@ class MessageRootStateCodec:
             "component_key": state.component_key,
             "component_version": state.component_version,
             "components": [
-                {"path": component.path, "type_id": component.type_id, "state": dict(component.state)}
+                {
+                    "path": component.path,
+                    "type_id": component.type_id,
+                    "state": dict(component.state),
+                    **({"shared_with": component.shared_with} if component.shared_with is not None else {}),
+                }
                 for component in state.components
             ],
             "presentation": _presentation_to_dict(state.presentation),
@@ -286,8 +293,10 @@ class MessageRootStateCodec:
                     path=require_string(item, "path", description="snapshot field"),
                     type_id=require_string(item, "type_id", description="snapshot field"),
                     state=state,
+                    shared_with=optional_string(item, "shared_with", description="snapshot field"),
                 )
             )
+        _validate_component_aliases(decoded_components)
         target = require_object(raw.get("target"), "mount target")
         adapter_capabilities = target.get("adapter_capabilities")
         if not isinstance(adapter_capabilities, list) or not all(
@@ -311,6 +320,26 @@ class MessageRootStateCodec:
         )
 
 
+def _validate_component_aliases(components: Sequence[ComponentState]) -> None:
+    by_path = {component.path: component for component in components}
+    if len(by_path) != len(components):
+        message = "duplicate component paths in mount state"
+        raise MessageRootStateError(message)
+    for component in components:
+        if component.shared_with is None:
+            continue
+        canonical = by_path.get(component.shared_with)
+        if (
+            canonical is None
+            or canonical.shared_with is not None
+            or canonical.path == component.path
+            or canonical.type_id != component.type_id
+            or component.state
+        ):
+            message = f"invalid shared component placement {component.path!r}"
+            raise MessageRootStateError(message)
+
+
 def migrate_component_state(
     current: MessageRootState,
     path: str,
@@ -318,7 +347,7 @@ def migrate_component_state(
     *,
     type_id: str | None = None,
 ) -> MessageRootState:
-    """Transform one component snapshot and advance the root's version by one."""
+    """Transform an instance's saved state through any placement and advance the root version."""
     isolated = MessageRootStateCodec.loads(MessageRootStateCodec.dumps(current))
     matches = [index for index, component in enumerate(isolated.components) if component.path == path]
     if len(matches) != 1:
@@ -330,6 +359,8 @@ def migrate_component_state(
         raise MessageRootStateError(message)
 
     index = matches[0]
+    if (canonical_path := current.components[index].shared_with) is not None:
+        index = next(i for i, item in enumerate(current.components) if item.path == canonical_path)
     component = current.components[index]
     transformed = transform(isolated.components[index].state)
     if not isinstance(transformed, Mapping) or not all(isinstance(key, str) for key in transformed):
@@ -341,6 +372,10 @@ def migrate_component_state(
         component.type_id if type_id is None else type_id,
         dict(transformed),
     )
+    if type_id is not None:
+        components = [
+            replace(item, type_id=type_id) if item.shared_with == component.path else item for item in components
+        ]
     migrated = replace(
         current,
         component_version=current.component_version + 1,
@@ -501,15 +536,21 @@ class ComponentRegistry:
         if not message_root.runtime.components:
             message = "a mount must be built before it can be snapshotted"
             raise MessageRootStateError(message)
-        components = tuple(
-            ComponentState(path, _type_id(component), export_state(component))
-            for path, component in sorted(message_root.runtime.components.items())
-        )
+        canonical_paths: dict[AnyComponent, str] = {}
+        components: list[ComponentState] = []
+        for path, component in sorted(message_root.runtime.components.items()):
+            canonical = canonical_paths.get(component)
+            components.append(
+                ComponentState(
+                    path, _type_id(component), export_state(component) if canonical is None else {}, canonical
+                )
+            )
+            canonical_paths.setdefault(component, path)
         snapshot = MessageRootState(
             MessageRootStateCodec.protocol,
             component_key,
             registration.version,
-            components,
+            tuple(components),
             PresentationSnapshot(
                 dict(message_root.presentation.cursors),
                 dict(message_root.presentation.selections),
@@ -534,7 +575,7 @@ class ComponentRegistry:
     ) -> AnyMessageRoot:
         """Resolve the recorded target, migrate state, and reconstruct a mount without sending it.
 
-        The reconstructed tree must have matching component paths and type identities. The
+        The reconstructed tree must match component paths, types, and shared instance relationships. The
         host owns access policy and services through its recipe. Custom restore callbacks and
         explicit target overrides must return a mount configured for the resolved target;
         this method does not recheck the returned mount's target.
@@ -551,6 +592,7 @@ class ComponentRegistry:
             message = f"durable component {state.component_key!r} is not registered"
             raise MessageRootStateError(message)
         state = self._migrate(state, registration)
+        _validate_component_aliases(state.components)
         by_path = {component.path: component for component in state.components}
         if registration.restore is not None:
             if context is None:
@@ -574,9 +616,20 @@ class ComponentRegistry:
         if set(by_path) != set(tree.components):
             message = "restored component tree does not match the state paths"
             raise MessageRootStateError(message)
+        canonical_instances: set[AnyComponent] = set()
         for path, component in tree.components.items():
-            if path != "$":
-                _restore_component(component, by_path[path])
+            snapshot = by_path[path]
+            if snapshot.shared_with is not None:
+                if tree.components[snapshot.shared_with] is not component:
+                    message = f"restored placement {path!r} does not share its saved component instance"
+                    raise MessageRootStateError(message)
+            else:
+                if component in canonical_instances:
+                    message = f"restored placement {path!r} unexpectedly shares a component instance"
+                    raise MessageRootStateError(message)
+                canonical_instances.add(component)
+                if path != "$":
+                    _restore_component(component, snapshot)
         message_root.presentation = PresentationState(
             cursors=dict(state.presentation.cursors),
             selections=dict(state.presentation.selections),
