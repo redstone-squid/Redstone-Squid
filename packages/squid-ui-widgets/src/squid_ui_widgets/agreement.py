@@ -116,7 +116,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](C
                 )
             )
         return stack(
-            *render_content(self, self.prompt, prefix=f"{self.key}.prompt"),
+            *render_content(self.prompt, prefix=f"{self.key}.prompt"),
             bullets(*participant_rows, key=f"{self.key}.participants"),
             status(
                 chrome.approved_count(len(self.approved), self.required),

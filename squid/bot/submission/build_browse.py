@@ -142,12 +142,12 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             assert state.previous is not None
             build, node = state.previous.value
         if self._decision is not None:
-            return (node, self._review_prompt(), self.boundary(self._decision, key="review-decision"))
+            return (node, self._review_prompt(), self._decision.keyed("review-decision"))
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [node]
         actions = self._detail_actions(build)
         if actions is not None:
             nodes.append(actions)
-        nodes.append(self.boundary(self.schematics, key="schematics"))
+        nodes.append(self.schematics.keyed("schematics"))
         if self._asset is not None:
             nodes.append(
                 sl.download(
@@ -345,7 +345,7 @@ class BuildBrowseScreen(sd.Screen):
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._selected is not None:
             return (
-                self.boundary(self._selected, key="selected-build"),
+                self._selected.keyed("selected-build"),
                 sl.action_controls(
                     sl.action_control(
                         tr(t"bot-submission-build-browse-back-to-builds = Back to builds"), self._back, key="back"
@@ -355,7 +355,7 @@ class BuildBrowseScreen(sd.Screen):
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-submission-build-browse-loading-builds = Loading builds.")),)
-        return (self.boundary(self._tabs, key="tabs"),)
+        return (self._tabs.keyed("tabs"),)
 
     def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (

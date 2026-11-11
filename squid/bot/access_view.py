@@ -125,11 +125,11 @@ class AccessScreen(sd.Screen):
                         tr(t"access-view-delete-and-its-assignments = Delete **{slug}** and its assignments?")
                     ),
                 ),
-                self.boundary(self._decision, key="delete-decision"),
+                self._decision.keyed("delete-decision"),
             )
         if self._tabs is None:
             return (sl.status(tr(t"access-view-loading-access-controls = Loading access controls.")),)
-        return (self.boundary(self._tabs, key="tabs"),)
+        return (self._tabs.keyed("tabs"),)
 
     def _subject_browser(
         self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]

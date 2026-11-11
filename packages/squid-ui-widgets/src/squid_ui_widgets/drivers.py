@@ -265,7 +265,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
         self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Embed child components under stable keys."""
-        return render_content(self.owner, content, prefix=prefix)
+        return render_content(content, prefix=prefix)
 
     def action_control(
         self,

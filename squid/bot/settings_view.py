@@ -143,11 +143,11 @@ class SettingsPanel(sd.Screen):
     def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         actions: list[sl.semantic.ActionControl] = []
         if self.page == "voting":
-            content = self.boundary(self.voting, key="voting-settings")
+            content = self.voting
             if self.shows_server:
                 actions.append(sl.action_control(tr(t"bot-settings-view-back = Back"), self._show_server, key="server"))
         else:
-            content = self.boundary(self.server, key="server-settings")
+            content = self.server
             if self.shows_voting:
                 actions.append(
                     sl.action_control(tr(t"bot-settings-view-voting = Voting"), self._show_voting, key="voting")

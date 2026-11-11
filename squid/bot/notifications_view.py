@@ -107,9 +107,9 @@ class NotificationScreen(sd.Screen):
                 sl.fields(*fields),
                 suspension_note and sl.note(suspension_note),
             ),
-            self.boundary(self.preferences, key="preferences"),
-            self.boundary(self.subscriptions, key="subscriptions"),
-            self.boundary(self.inbox, key="inbox"),
+            self.preferences,
+            self.subscriptions,
+            self.inbox,
             *self.edits.controls(),
         )
 

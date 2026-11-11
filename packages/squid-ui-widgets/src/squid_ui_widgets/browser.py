@@ -250,7 +250,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         extra = (
-            render_content(self, normalize_content(self.overview(loaded), name="Browser.overview"), prefix="overview")
+            render_content(normalize_content(self.overview(loaded), name="Browser.overview"), prefix="overview")
             if self.overview is not None
             else ()
         )
@@ -269,7 +269,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
                 maximum=1,
             )
         else:
-            listing = render_content(self, self.empty, prefix="empty")
+            listing = render_content(self.empty, prefix="empty")
             picker = None
         return stack(
             heading(self.title) if self.title is not None else None,
@@ -325,10 +325,9 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = ob
         detail_value = self._detail_value
         assert detail_value is not None
         detail = (
-            (self.boundary(detail_value, key=f"detail-{self.identity(item)}"),)
+            (detail_value.keyed(f"detail-{self.identity(item)}"),)
             if isinstance(detail_value, Component)
             else render_content(
-                self,
                 normalize_content(detail_value, name="Browser.detail"),
                 prefix=f"detail-{self.identity(item)}",
             )

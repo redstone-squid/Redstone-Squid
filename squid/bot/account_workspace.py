@@ -122,10 +122,10 @@ class AccountWorkspace(sd.Screen):
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
-            return (self.boundary(self._merge_decision, key="merge-decision"),)
+            return (self._merge_decision.keyed("merge-decision"),)
         if self._tabs is None:
             return (sl.status(tr(t"account-workspace-loading-account = Loading account.")),)
-        return (self.boundary(self._tabs, key="tabs"),)
+        return (self._tabs.keyed("tabs"),)
 
     def _identity_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         account = self._account

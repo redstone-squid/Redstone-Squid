@@ -217,7 +217,7 @@ class SearchScreen(sd.Screen):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        return (self.boundary(self._browser, key="results"),)
+        return (self._browser.keyed("results"),)
 
 
 def _build_id(hit: SearchHit) -> int | None:

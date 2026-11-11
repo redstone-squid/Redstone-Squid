@@ -124,7 +124,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, Con
     ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Resolve and normalize source-aware header or footer content."""
         value = hook(total) if callable(hook) else hook
-        return render_content(self, normalize_content(value, name=name), prefix=name)
+        return render_content(normalize_content(value, name=name), prefix=name)
 
     @override
     def render(self) -> DocumentLike[RenderTargetT, ContextT]:

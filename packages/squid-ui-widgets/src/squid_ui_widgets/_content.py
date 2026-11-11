@@ -59,12 +59,11 @@ def _normalize_item[RenderTargetT: RenderTarget, ContextT = object](
 
 
 def render_content[RenderTargetT: RenderTarget, ContextT = object](
-    owner: Component[RenderTargetT, ContextT], content: Iterable[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+    content: Iterable[ContentItem[RenderTargetT, ContextT]], *, prefix: str
 ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
     """Embed component children under stable boundary keys and pass layout nodes through."""
     return tuple(
-        owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
-        for index, item in enumerate(content)
+        item.keyed(f"{prefix}-{index}") if isinstance(item, Component) else item for index, item in enumerate(content)
     )
 
 

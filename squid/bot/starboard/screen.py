@@ -137,11 +137,11 @@ class StarboardScreen(sd.Screen):
                         tr(t"starboard-delete-confirmation = Delete **{board_name}** and stop mirroring new entries?")
                     ),
                 ),
-                self.boundary(self._decision, key="delete-decision"),
+                self._decision.keyed("delete-decision"),
             )
         if self._tabs is None:
             return (sl.status(tr(t"bot-starboard-screen-loading-starboards = Loading starboards.")),)
-        return (self.boundary(self._tabs, key="tabs"), *self.edits.controls())
+        return (self._tabs.keyed("tabs"), *self.edits.controls())
 
     def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (

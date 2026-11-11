@@ -149,7 +149,7 @@ def adopt(
 
     Returns:
         A `Component` that composes like any other -- mount it, put it in a `SessionSpec`, or embed
-        it in a larger Squid screen with `self.boundary(child, key=...)`.
+        it directly in a larger Squid screen, or use `child.keyed("name")` for an explicit namespace.
 
     Raises:
         AdoptionError: The view is live, finished, holds an item with no portable translation,

@@ -3,7 +3,7 @@
 `StackNavigator` embeds the child component at the top of its stack, followed by the
 Back/Home row and an optional Close control. Pushing a child preserves the previous screen for Back; Home discards
 all but the root screen. Each visible child enters the component tree through
-`Component.boundary`, so its controls and state use the normal parent-child lifecycle.
+`Component.keyed`, so its controls and state use the normal parent-child lifecycle.
 """
 
 from typing import override
@@ -58,7 +58,7 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target, Con
         """Render the current child followed by its navigation controls."""
         # Keyed by depth: each screen owns its control namespace, so pushing the same child
         # class twice does not make the two copies share handlers.
-        nodes: list[LayoutNode[RenderTargetT, ContextT]] = [self.boundary(self.current, key=f"s{self.depth - 1}")]
+        nodes: list[LayoutNode[RenderTargetT, ContextT]] = [self.current.keyed(f"s{self.depth - 1}")]
         chrome = self.inject(CHROME_CONTEXT)
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),
