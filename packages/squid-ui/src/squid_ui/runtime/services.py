@@ -13,12 +13,13 @@ observe one run even if the service is later stopped and started again.
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Generator, Iterable
 from contextvars import Context, copy_context
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 from squid_reactivity import Reactive
+from squid_reactivity.async_values import _Execution
 from squid_reactivity.diagnostics import (
     copy_event_observers,
 )
@@ -118,7 +119,11 @@ class ServiceRunStatus(Enum):
 
 
 class ServiceRun:
-    """Observe one activation's readiness and outcome, including after a remount."""
+    """Observe one service execution, including its readiness and cleanup.
+
+    Waiting never starts work. The owner starts the execution and controls its
+    cancellation; this handle continues to refer to that run after a remount.
+    """
 
     def __init__(self, activation: _ServiceActivation) -> None:
         self._activation = activation
@@ -127,7 +132,7 @@ class ServiceRun:
     def status(self) -> ServiceRunStatus:
         """Return the current execution state; terminal states include completed cleanup."""
         activation = self._activation
-        if activation._done.is_set():
+        if activation._execution.done:
             if activation._errors:
                 return ServiceRunStatus.FAILED
             return ServiceRunStatus.CANCELLED if activation._cancelled else ServiceRunStatus.COMPLETED
@@ -148,6 +153,10 @@ class ServiceRun:
         """
         await _wait_ready((self._activation,))
 
+    def __await__(self) -> Generator[object]:
+        """Wait for this run and its cleanup, without starting or cancelling it."""
+        return self.wait().__await__()
+
     async def wait(self) -> None:
         """Wait for this run and its cleanup, raising its failure on every failed wait.
 
@@ -166,7 +175,7 @@ class _ServiceActivation:
         self._cancelled = False
         self._started = False
         self._ready = asyncio.Event()
-        self._done = asyncio.Event()
+        self._execution: _Execution[ExceptionGroup | None] = _Execution()
         self._errors: list[Exception] = []
         self._failure: ExceptionGroup | None = None
 
@@ -180,7 +189,7 @@ class _ServiceActivation:
 
     def cancel(self) -> None:
         """Ask the run to stop. Use ``wait`` to wait for cleanup."""
-        if self._done.is_set():
+        if self._execution.done:
             return
         self._cancelled = True
         if self._scope is not None:
@@ -188,12 +197,12 @@ class _ServiceActivation:
 
     async def wait(self) -> None:
         """Wait for cleanup, then raise any errors from the run."""
-        if _owns_current_activity((self,)) and not self._done.is_set():
+        if _owns_current_activity((self,)) and not self._execution.done:
             message = "service activity cannot await its own shutdown"
             raise RuntimeError(message)
-        await self._done.wait()
-        if self._failure is not None:
-            raise self._failure
+        failure = await self._execution.wait()
+        if failure is not None:
+            raise failure
 
     async def wait_ready(self) -> None:
         """Wait for setup to finish, or raise if the run ends before it's ready."""
@@ -204,6 +213,9 @@ class _ServiceActivation:
             raise RuntimeError(message)
 
     async def _run(self, service: ManagedService, previous: _ServiceActivation | None) -> None:
+        await self._execution.run(lambda: self._execute(service, previous), lambda: self._failure)
+
+    async def _execute(self, service: ManagedService, previous: _ServiceActivation | None) -> ExceptionGroup | None:
 
         self._runner_id = anyio.get_current_task().id
         try:
@@ -212,7 +224,7 @@ class _ServiceActivation:
                 if self._cancelled:
                     scope.cancel()
                 if previous is not None:
-                    await previous._done.wait()
+                    await previous._execution.wait()
                     previous = None
                 await anyio.lowlevel.checkpoint()
                 await service.run(task_status=self)
@@ -228,13 +240,14 @@ class _ServiceActivation:
             # Keep it in line so the next run waits for all earlier cleanup to finish.
             with anyio.CancelScope(shield=True):
                 if previous is not None:
-                    await previous._done.wait()
+                    await previous._execution.wait()
             self._scope = None
             self._runner_id = None
             if self._errors:
                 self._failure = ExceptionGroup("service activation failed", self._errors)
-            self._done.set()
             self._ready.set()
+
+        return self._failure
 
 
 class UIExecutionHost:
@@ -453,7 +466,7 @@ class ServiceOwner:
                 raise RuntimeError(msg)
             return
         self.seal()
-        self._retired = [activation for activation in self._retired if not activation._done.is_set()]
+        self._retired = [activation for activation in self._retired if not activation._execution.done]
         self._active = True
         self._host = host
         for service in self._services:
@@ -471,7 +484,7 @@ class ServiceOwner:
 
             async def cleanup() -> None:
                 for dependency in dependencies:
-                    await dependency._done.wait()
+                    await dependency._execution.wait()
                 for activation in activations:
                     activation.cancel()
 
@@ -570,7 +583,7 @@ class _ServiceLifecycle:
             for child, child_path in self._paths.items()
             if child is not owner and path is not None and (path == "$" or child_path.startswith(f"{path}."))
             for activation in (*child._current.values(), *child._retired)
-            if not activation._done.is_set()
+            if not activation._execution.done
         )
         owner._cancel_after(dependencies)
         self._active.discard(owner)

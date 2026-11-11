@@ -9,6 +9,8 @@ import anyio
 import pytest
 from anyio.abc import TaskGroup, TaskStatus
 
+from squid_reactivity.operations import ProgressReporter, operation
+from squid_reactivity.resources import resource
 from squid_ui import Component, ComponentsV2Target, DocumentLike, Reactive, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import (
@@ -17,6 +19,7 @@ from squid_ui.runtime import (
     LocalTopicBus,
     ManagedService,
     ServiceOwner,
+    ServiceRunStatus,
     Topic,
     UIExecutionHost,
 )
@@ -1448,3 +1451,57 @@ def test_failed_host_validation_releases_discovered_component_claims() -> None:
         runtime.render()
     assert child._runtime is None
     runtime.finish()
+
+
+async def test_resources_and_operations_can_observe_a_service_run(owner: ServiceOwner) -> None:
+    release = asyncio.Event()
+
+    class FiniteService(ManagedService):
+        value: int = state(0)
+
+        @override
+        async def run(self, *, task_status: TaskStatus[None]) -> None:
+            task_status.started()
+            await release.wait()
+            self.value = 42
+
+    service = owner.own(FiniteService())
+    async with running_host() as host:
+        owner.activate(host)
+        run = service.current_run
+        assert run is not None
+
+        class Model(Reactive):
+            @resource
+            async def result(self) -> int:
+                await run
+                return service.value
+
+            @operation(initial=None)
+            async def ready(self, progress: ProgressReporter[None]) -> int:
+                await run.wait_ready()
+                return service.value
+
+        model = Model()
+        execution = model.ready.start()
+        assert await execution == 0
+        assert run.status is ServiceRunStatus.READY
+
+        values: list[int] = []
+
+        async def observe() -> None:
+            values.append(await model.result)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(observe)
+            await anyio.wait_all_tasks_blocked()
+            assert not values
+            release.set()
+
+        assert values == [42]
+        assert run.status is ServiceRunStatus.COMPLETED
+        assert await model.result == 42
+        assert await execution == 0
+        await run
+        owner.cancel()
+        await owner.wait()
