@@ -4,22 +4,26 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
-from squid_ui.factories import action_controls, heading, note, stack
+from squid_ui.factories import heading, stack
 from squid_ui.primitives import Lines
 from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
-from squid_ui_widgets._paging import FIRST_PAGE, PagePosition, window
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
 
 
 @dataclass(frozen=True, slots=True)
 class RankedListState:
-    """Serializable page position for :class:`RankedList`."""
+    """Serializable zero-based page for :class:`RankedList`."""
 
-    page: PagePosition = FIRST_PAGE
+    page: int = 0
+
+    def __post_init__(self) -> None:
+        if self.page < 0:
+            message = "RankedListState.page must not be negative"
+            raise ValueError(message)
 
 
 type ContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = (
@@ -31,7 +35,9 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
     """Page a snapshot of entries in their supplied ranking order.
 
     Entries are not sorted. top_n caps the snapshot before paging, and page_size=None
-    shows it all. Header and footer callbacks receive the count after the cap.
+    shows it all. Header and footer callbacks receive the count after the cap. Rows are
+    numbered across the whole ranking, so the first row on page two of a ten-row page
+    is `11.`.
     """
 
     def __init__(
@@ -41,14 +47,13 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
         key: str,
         label: Projector[EntryT] | None = None,
         value: Projector[EntryT] | None = None,
-        identity: Projector[EntryT] | None = None,
         title: TextLike | None = None,
         header: ContentHook[RenderTargetT, ContextT] | None = None,
         footer: ContentHook[RenderTargetT, ContextT] | None = None,
         page_size: int | None = None,
         top_n: int | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
-        initial_page: PagePosition = FIRST_PAGE,
+        initial_page: int = 0,
     ) -> None:
         self.key = require_key(key, name="RankedList.key")
         if page_size is not None and page_size < 1:
@@ -58,7 +63,8 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
             message = "RankedList.top_n must be at least 1"
             raise ValueError(message)
         self.entries = tuple(entries)
-        self.rows = RankedRows(label, value, identity)
+        # The planner pager fingerprints the rendered lines, so rows need no separate identity.
+        self.rows = RankedRows(label, value, None)
         self.title = title
         self.header = header
         self.footer = footer
@@ -88,19 +94,11 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
         values: tuple[str, ...] = (),
         submitted: FormValues | None = None,
     ) -> RankedListState:
-        """Move one page while clamping to the materialized extent."""
-        del values, submitted
-        last_page = self._page_count() - 1
-        if action == "previous":
-            return RankedListState(PagePosition(max(0, state.page.index - 1)))
-        if action == "next":
-            return RankedListState(PagePosition(min(last_page, state.page.index + 1)))
+        """Store the page a pager asked for; the pager clamps it to the pages that exist."""
+        del submitted
+        if action == "page" and values and values[0].isdigit():
+            return RankedListState(int(values[0]))
         return state
-
-    def _page_count(self) -> int:
-        """Return the page count after applying the optional top limit."""
-        total = len(self.entries) if self.top_n is None else min(len(self.entries), self.top_n)
-        return 1 if self.page_size is None else max(1, (total + self.page_size - 1) // self.page_size)
 
     def _hook(
         self,
@@ -117,50 +115,22 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT 
     def render(
         self, state: RankedListState, controls: MachineControls[RankedListState, RenderTargetT, ContextT]
     ) -> DocumentLike[RenderTargetT, ContextT]:
-        """Render the ranked window with stable global row numbers."""
+        """Render the ranking, leaving the page slice to the driver's pager."""
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
         total = len(displayed)
-        if self.page_size is None:
-            visible, position, pages = displayed, FIRST_PAGE, 1
+        lines = self.rows.lines(displayed, 0)
+        if not displayed:
+            body = controls.content(self.empty)
+        elif self.page_size is None:
+            body = (Lines(lines),)
         else:
-            visible, position, pages = window(
-                displayed,
-                key=self.key,
-                position=state.page,
-                per_page=self.page_size,
-                chrome=controls.chrome,
-                identity=self.rows.identity_of,
-            )
-        page = position.index
-        offset = page * (self.page_size or max(1, total))
-        body = (Lines(self.rows.lines(visible, offset)),) if visible else controls.content(self.empty)
-        pager = (
-            action_controls(
-                controls.action_control(
-                    controls.chrome.previous,
-                    "previous",
-                    key=f"{self.key}.previous",
-                    available=page > 0,
-                ),
-                controls.action_control(
-                    controls.chrome.next,
-                    "next",
-                    key=f"{self.key}.next",
-                    available=page < pages - 1,
-                ),
-                key=f"{self.key}.pager",
-            )
-            if pages > 1
-            else None
-        )
+            body = controls.paged_lines(lines, "page", key=self.key, page=state.page, per=self.page_size)
         return stack(
             heading(self.title) if self.title is not None else None,
             *(self._hook(self.header, total, controls, name="header") if self.header is not None else ()),
             *body,
-            note(controls.chrome.page_footer(page + 1, pages)) if pages > 1 else None,
-            pager,
             *(self._hook(self.footer, total, controls, name="footer") if self.footer is not None else ()),
         )
 
 
-__all__ = ["PagePosition", "RankedEntry", "RankedList", "RankedListState"]
+__all__ = ["RankedEntry", "RankedList", "RankedListState"]

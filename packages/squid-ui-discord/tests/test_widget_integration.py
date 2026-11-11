@@ -6,11 +6,19 @@ representative widget renders and dispatches a usable authored key through the m
 
 from collections.abc import Callable
 
+import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
+from squid_ui.planning.navigation import (
+    MATERIALIZED_NEXT_KEY,
+    MATERIALIZED_PREVIOUS_KEY,
+    MATERIALIZED_SEEK_KEY,
+    page_select_nav,
+)
+from squid_ui.primitives import Paginate
 from squid_ui.semantic import ActionControl, Choices, FormTrigger
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
@@ -73,6 +81,22 @@ WIDGETS: tuple[tuple[str, Callable[[], sl.Component[sl.DiscordTarget]]], ...] = 
     ("agreement", _agreement),
 )
 
+
+def _pagers(tree: tuple[sl.semantic.AnyLayoutNode, ...]) -> list[Paginate]:
+    return [node for node in engine.walk(tree) if isinstance(node, Paginate) and node.key is not None]
+
+
+def _authored_keys(tree: tuple[sl.semantic.AnyLayoutNode, ...]) -> set[str]:
+    """Keys of authored controls, plus the navigation the planner draws for each keyed pager."""
+    controls = {node.key for node in engine.walk(tree) if isinstance(node, KEYED_CONTROLS)}
+    pagers = {
+        f"{prefix}.{pager.key}"
+        for pager in _pagers(tree)
+        for prefix in (MATERIALIZED_PREVIOUS_KEY, MATERIALIZED_NEXT_KEY, MATERIALIZED_SEEK_KEY)
+    }
+    return controls | pagers
+
+
 widget = pytest.mark.parametrize("build", [build for _name, build in WIDGETS], ids=[name for name, _ in WIDGETS])
 
 
@@ -104,7 +128,7 @@ def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    authored = {node.key for node in engine.walk(engine.render_tree(component)) if isinstance(node, KEYED_CONTROLS)}
+    authored = _authored_keys(engine.render_tree(component))
     handlers = set(message_root.snapshot().handler_keys)
 
     assert handlers, "a widget with no handlers would make this vacuous"
@@ -128,7 +152,8 @@ async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
 
     key: str | None = None
     values: list[str] | None = None
-    for node in engine.walk(engine.render_tree(component)):
+    tree = engine.render_tree(component)
+    for node in engine.walk(tree):
         if not isinstance(node, KEYED_CONTROLS) or node.key not in handlers:
             continue
         if isinstance(node, ActionControl) and not node.available:
@@ -137,6 +162,9 @@ async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
         if isinstance(node, Choices):
             values = [node.choices[0].key]
         break
+    if key is None:
+        # A widget that pages through the planner draws no keyed control of its own.
+        key = next((f"{MATERIALIZED_NEXT_KEY}.{pager.key}" for pager in _pagers(tree)), None)
 
     assert key is not None, "every advertised widget draws at least one usable control"
 
@@ -149,3 +177,25 @@ async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
         await message_root.dispatch(key, interaction, values)
 
     assert interaction.response.is_done(), f"{key!r} reached no handler"
+
+
+async def test_a_ranked_list_pages_through_the_planner_with_the_host_navigation() -> None:
+    ranking = sp.RankedList(
+        [("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2
+    ).build_component()
+    message_root = MessageRoot(ranking, access=Everyone(), timeout=None, nav=page_select_nav)
+    view = commit_render(message_root)
+
+    texts = [child.content for child in view.walk_children() if isinstance(child, discord.ui.TextDisplay)]
+    assert any("2. **Grace**" in text for text in texts) and not any("Edsger" in text for text in texts)
+    assert any("Page 1 of 2" in text for text in texts)
+    assert any(isinstance(child, discord.ui.Select) for child in view.walk_children()), "the host's jump select"
+
+    interaction = interaction_harness()
+    await message_root.dispatch(f"{MATERIALIZED_SEEK_KEY}.leaderboard", interaction, ["1"])
+
+    assert ranking.machine_state == sp.RankedListState(1)
+    edited = interaction.response.edit_message.await_args.kwargs["view"]
+    texts = [child.content for child in edited.walk_children() if isinstance(child, discord.ui.TextDisplay)]
+    assert any("3. **Edsger** — 10" in text for text in texts)
+    assert any("Page 2 of 2" in text for text in texts)

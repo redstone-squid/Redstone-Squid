@@ -23,6 +23,7 @@ from squid_ui.interactions import (
     SubmitEvent,
     Visibility,
 )
+from squid_ui.ownership import PageEvent
 from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.runtime.definition import AnyComponent, Component
 from squid_ui.runtime.expansion import render_component_tree
@@ -259,6 +260,13 @@ def choice_event(
     )
 
 
+def page_event(
+    page: int, *, actor: str = "1", responder: ActionResponder | None = None, locale: str | None = None
+) -> PageEvent:
+    """A request to show the zero-based `page`, carrying a `RecordingResponder` unless one is supplied."""
+    return PageEvent(Actor(actor), _responder(responder), locale, page=page, context=None)
+
+
 def submit_event(
     values: Mapping[str, object] | None = None,
     *,
@@ -415,6 +423,7 @@ __all__ = [
     "find_all",
     "keys",
     "labels",
+    "page_event",
     "press",
     "press_event",
     "render_tree",

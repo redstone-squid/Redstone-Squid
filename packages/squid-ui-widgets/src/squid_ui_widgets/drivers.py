@@ -16,9 +16,21 @@ from squid_reactivity.core import (
 )
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
-from squid_ui.factories import action_control, choice, choices, controlled, form, routed_action_control, routed_choices
+from squid_ui.factories import (
+    action_control,
+    action_controls,
+    choice,
+    choices,
+    controlled,
+    form,
+    note,
+    routed_action_control,
+    routed_choices,
+)
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.ownership import PageEvent
+from squid_ui.primitives import Lines, Paginate
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import (
     ActionControl,
@@ -32,7 +44,7 @@ from squid_ui.semantic import (
     RoutedChoices,
     Tone,
 )
-from squid_ui.target_types import RenderTarget
+from squid_ui.target_types import DiscordTarget, RenderTarget
 from squid_ui.text import TextLike
 
 type FormValues = Mapping[str, object]
@@ -162,6 +174,22 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, Contex
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> FormTrigger | RoutedActionControl: ...
+
+    def paged_lines(
+        self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
+    ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
+        """Show ``lines`` ``per`` at a time, starting at the zero-based ``page`` from machine state.
+
+        The result is Discord-only because ``Lines`` is a Discord primitive; portable
+        machines should not call it.
+
+        A page turn dispatches ``action_name`` with the target page as its only value, so
+        the transition should store ``int(values[0])``. The mounted driver hands paging to
+        the planner, which draws the host's navigation and may split a page further when it
+        does not fit the message. The routed driver shows exactly ``per`` lines with routed
+        Previous and Next controls.
+        """
+        ...
 
 
 class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
@@ -330,6 +358,16 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
 
         return form(label, resolved, key=key, on_submit=submitted, tone=tone, emphasis=emphasis)
 
+    def paged_lines(
+        self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
+    ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
+        """Page the lines with a planner pager whose page the machine state controls."""
+
+        async def turn(event: PageEvent) -> None:
+            await self.owner._dispatch(event, action_name, values=(str(event.page),))
+
+        return (Lines(tuple(lines), overflow=Paginate(key=key, per=per, page=controlled(page, turn))),)
+
 
 @dataclass(frozen=True, slots=True)
 class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
@@ -453,3 +491,32 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
         del spec
         route_id = self.route(TransitionRoute(action_name, self.current, "input"))
         return routed_action_control(label, route_id, key=key, tone=tone, emphasis=emphasis)
+
+    def paged_lines(
+        self, lines: Sequence[str], action_name: str, *, key: str, page: int, per: int
+    ) -> tuple[LayoutNode[DiscordTarget, ContextT], ...]:
+        """Slice one page here and encode each neighbouring page's state into a routed control.
+
+        A routed message has no planner pager, because its nav buttons would hold Python
+        callbacks that do not survive a restart. The page count is therefore exact.
+        """
+        pages = max(1, -(-len(lines) // per))
+        page = max(0, min(page, pages - 1))
+        visible = Lines(tuple(lines[page * per : (page + 1) * per]))
+        if pages == 1:
+            return (visible,)
+
+        def turn(label: TextLike, target: int, suffix: str, *, available: bool) -> RoutedActionControl:
+            next_state = self.machine.transition(self.current, action_name, values=(str(target),))
+            route_id = self.route(TransitionRoute(action_name, next_state, "next"))
+            return routed_action_control(label, route_id, key=f"{key}.{suffix}", available=available)
+
+        return (
+            visible,
+            note(self.chrome.page_footer(page + 1, pages)),
+            action_controls(
+                turn(self.chrome.previous, max(0, page - 1), "previous", available=page > 0),
+                turn(self.chrome.next, min(pages - 1, page + 1), "next", available=page < pages - 1),
+                key=f"{key}.pager",
+            ),
+        )
