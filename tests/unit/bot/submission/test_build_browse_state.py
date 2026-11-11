@@ -50,7 +50,6 @@ def _screen(*, initial_id: int | None = 7, status: Status = Status.CONFIRMED) ->
             debug=False,
             edit=False,
             measure_timing=False,
-            detect_lattice=False,
         ),
         actor_account_id=1,
         authorize=authorize,

@@ -205,12 +205,6 @@ BUILD_SCHEMATIC_MEASURE_TIMING = _b.node(
     tr(t"permissions-measure-schematic-timing = Measure a schematic's timing."),
     tags=(Tag.DIAGNOSTIC,),
 )
-BUILD_SCHEMATIC_DETECT_LATTICE = _b.node(
-    "build.schematic.detect_lattice",
-    NodeScope.GLOBAL,
-    tr(t"permissions-detect-schematic-lattice = Detect a schematic's lattice structure."),
-    tags=(Tag.DIAGNOSTIC,),
-)
 
 RECORD_ENTRY_INSPECT = _b.node(
     "record.entry.inspect",
@@ -595,7 +589,6 @@ TRUSTED = RoleDefinition(
     rank=200,
     includes=(
         "build.schematic.measure_timing",
-        "build.schematic.detect_lattice",
         "vote.log_delete.cast",
         "vote.weight.staff",
     ),

@@ -112,7 +112,6 @@ class TestBuiltinRoles:
 
     def test_trusted_matches_the_old_tier(self) -> None:
         assert builtin_leaves("trusted") == {
-            "build.schematic.detect_lattice",
             "build.schematic.measure_timing",
             "vote.log_delete.cast",
             "vote.weight.staff",

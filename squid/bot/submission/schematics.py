@@ -2,9 +2,8 @@
 
 from squid.core.i18n import tr
 from squid.schematics.application import RenderSkipReason, StoredSchematic
-from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
+from squid.schematics.domain.models import SchematicFormat, SimulationResult, Vector3
 from squid.schematics.errors import AmbiguousSimulationInputError
-from squid_i18n import NUMBER
 from squid_ui.text import Message, TextLike
 
 WRITABLE_EXTENSIONS = {
@@ -38,9 +37,6 @@ def _describe(stored: StoredSchematic, *, render_skip: RenderSkipReason | None =
     if metrics.declared_author:
         author = metrics.declared_author
         lines.append(tr(t"bot-submission-schematics-declared-author = **Declared author**: {author}"))
-    if stored.analysis.lattice is not None and stored.analysis.lattice.label:
-        label = stored.analysis.lattice.label
-        lines.append(tr(t"bot-submission-schematics-repeating-unit = **Repeating unit**: {label}"))
     if stored.simulation_evidence is not None and stored.simulation_evidence.last_piston_tick is not None:
         ticks = stored.simulation_evidence.last_piston_tick + 1
         lines.append(
@@ -128,17 +124,3 @@ def _describe_timing(result: SimulationResult) -> Message:
         t"only. This does not alter the human-declared or official record timing."
     )
     return Message.join("\n", [summary, *(f"- {note}" for note in result.notes), footer])
-
-
-def _describe_lattice(lattice: AutostackLattice) -> Message:
-    width, height, length = (high - low + 1 for low, high in zip(lattice.cell_min, lattice.cell_max, strict=True))
-    vectors = ", ".join(f"({x}, {y}, {z})" for x, y, z in lattice.vectors)
-    coverage = lattice.coverage
-    return tr(t"""
-        schematic-repeating-lattice-summary =
-            ### Detected repeating lattice
-            {{ "*" }}*Repeating unit**: {width} x {height} x {length}
-            {{ "*" }}*Stack vector(s)**: {vectors}
-            {{ "*" }}*Coverage**: {NUMBER(coverage, minimum_fraction_digits=1, maximum_fraction_digits=1, style="percent")}
-            -# Structured expansion evidence only; it does not establish the valid expandable domain.
-        """)

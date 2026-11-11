@@ -125,7 +125,6 @@ def _subject(accounts: dict[str, int], who: str) -> Subject:
         ("administrator", "perm.grant.global", False),
         # The old `check_is_trusted_or_global_admin` tier.
         ("trusted_member", "build.schematic.measure_timing", True),
-        ("trusted_member", "build.schematic.detect_lattice", True),
         ("trusted_member", "vote.log_delete.cast", True),
         ("trusted_member", "vote.weight.staff", True),
         ("trusted_member", "build.submission.approve", False),

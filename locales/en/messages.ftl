@@ -1271,91 +1271,88 @@ bot-starboard-screen-up = Up
 # squid/bot/starboard/screen.py:383
 bot-starboard-screen-value = Value
 
-# squid/bot/submission/build_browse.py:189
+# squid/bot/submission/build_browse.py:186
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/submission/build_browse.py:525
+# squid/bot/submission/build_browse.py:501
 bot-submission-build-browse-back-to-builds = Back to builds
 
-# squid/bot/submission/build_browse.py:511
+# squid/bot/submission/build_browse.py:487
 bot-submission-build-browse-browse = Browse
 
-# squid/bot/submission/build_browse.py:276
+# squid/bot/submission/build_browse.py:265
 bot-submission-build-browse-build = { $action } build #{ $build_id_text }?
 
-# squid/bot/submission/build_browse.py:501
+# squid/bot/submission/build_browse.py:477
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/submission/build_browse.py:621
+# squid/bot/submission/build_browse.py:597
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/submission/build_browse.py:515
+# squid/bot/submission/build_browse.py:491
 bot-submission-build-browse-builds = Builds
 
-# squid/bot/submission/build_browse.py:292
+# squid/bot/submission/build_browse.py:281
 bot-submission-build-browse-cancel = Cancel
 
-# squid/bot/submission/build_browse.py:291
+# squid/bot/submission/build_browse.py:280
 bot-submission-build-browse-confirm = Confirm
 
-# squid/bot/submission/build_browse.py:401
+# squid/bot/submission/build_browse.py:390
 bot-submission-build-browse-conversion-report = Conversion report: { $loss_summary }
 
-# squid/bot/submission/build_browse.py:245, squid/bot/submission/build_browse.py:588
+# squid/bot/submission/build_browse.py:234, squid/bot/submission/build_browse.py:564
 bot-submission-build-browse-convert-schematic = Convert schematic
 
-# squid/bot/submission/build_browse.py:207
+# squid/bot/submission/build_browse.py:204
 bot-submission-build-browse-debug-download = Debug download
 
-# squid/bot/submission/build_browse.py:628
+# squid/bot/submission/build_browse.py:604
 bot-submission-build-browse-description-or-title = Description or title
 
-# squid/bot/submission/build_browse.py:235
-bot-submission-build-browse-detect-lattice = Detect lattice
-
-# squid/bot/submission/build_browse.py:165
+# squid/bot/submission/build_browse.py:162
 bot-submission-build-browse-download-result = Download result
 
-# squid/bot/submission/build_browse.py:222
+# squid/bot/submission/build_browse.py:219
 bot-submission-build-browse-download-schematic = Download schematic
 
-# squid/bot/submission/build_browse.py:181
+# squid/bot/submission/build_browse.py:178
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/submission/build_browse.py:512, squid/bot/submission/build_browse.py:625
+# squid/bot/submission/build_browse.py:488, squid/bot/submission/build_browse.py:601
 bot-submission-build-browse-find-build = Find build
 
-# squid/bot/submission/build_browse.py:612
+# squid/bot/submission/build_browse.py:588
 bot-submission-build-browse-input-position-x-y-z = Input position (x y z)
 
-# squid/bot/submission/build_browse.py:147
+# squid/bot/submission/build_browse.py:144
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/submission/build_browse.py:531
+# squid/bot/submission/build_browse.py:507
 bot-submission-build-browse-loading-builds = Loading builds.
 
-# squid/bot/submission/build_browse.py:254
+# squid/bot/submission/build_browse.py:243
 bot-submission-build-browse-measure-timing = Measure timing
 
-# squid/bot/submission/build_browse.py:619
+# squid/bot/submission/build_browse.py:595
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/submission/build_browse.py:537
+# squid/bot/submission/build_browse.py:513
 bot-submission-build-browse-open-by-id = Open by ID
 
-# squid/bot/submission/build_browse.py:591
+# squid/bot/submission/build_browse.py:567
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/submission/build_browse.py:198
+# squid/bot/submission/build_browse.py:195
 bot-submission-build-browse-reject = Reject
 
-# squid/bot/submission/build_browse.py:227
+# squid/bot/submission/build_browse.py:224
 bot-submission-build-browse-render-schematic = Render schematic
 
-# squid/bot/submission/build_browse.py:217
+# squid/bot/submission/build_browse.py:214
 bot-submission-build-browse-schematic-info = Schematic info
 
-# squid/bot/submission/build_browse.py:543
+# squid/bot/submission/build_browse.py:519
 bot-submission-build-browse-search-by-meaning = Search by meaning
 
 # squid/bot/submission/consent_banner.py:70
@@ -1427,40 +1424,37 @@ bot-submission-records-records = Records
 # squid/bot/submission/records.py:136
 bot-submission-records-title-issues = Title issues
 
-# squid/bot/submission/schematics.py:95
+# squid/bot/submission/schematics.py:91
 bot-submission-schematics-and-more-not-listed = -# …and { $count } more not listed.
 
-# squid/bot/submission/schematics.py:37
+# squid/bot/submission/schematics.py:36
 bot-submission-schematics-data-version = **Data version**: { $version }
 
-# squid/bot/submission/schematics.py:40
+# squid/bot/submission/schematics.py:39
 bot-submission-schematics-declared-author = **Declared author**: { $author }
 
-# squid/bot/submission/schematics.py:115
+# squid/bot/submission/schematics.py:111
 bot-submission-schematics-inconclusive = inconclusive
 
-# squid/bot/submission/schematics.py:108
+# squid/bot/submission/schematics.py:104
 bot-submission-schematics-no = no
 
-# squid/bot/submission/schematics.py:57
+# squid/bot/submission/schematics.py:53
 bot-submission-schematics-no-preview = **No preview**: { $reason }
 
-# squid/bot/submission/schematics.py:107
+# squid/bot/submission/schematics.py:103
 bot-submission-schematics-none-observed = none observed
 
-# squid/bot/submission/schematics.py:113
+# squid/bot/submission/schematics.py:109
 bot-submission-schematics-passed = passed
 
-# squid/bot/submission/schematics.py:43
-bot-submission-schematics-repeating-unit = **Repeating unit**: { $label }
-
-# squid/bot/submission/schematics.py:54
+# squid/bot/submission/schematics.py:50
 bot-submission-schematics-signs = **Signs**: { $text }
 
-# squid/bot/submission/schematics.py:105
+# squid/bot/submission/schematics.py:101
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/search.py:174
+# squid/bot/submission/search.py:173
 bot-submission-search-open-this-build-directly = Open this build directly.
 
 # squid/bot/submission/search_view.py:256
@@ -2075,46 +2069,43 @@ build-editor-submit-validation-errors =
     Fix these values before review:
     { $error_text }
 
-# squid/bot/submission/build_browse.py:575
+# squid/bot/submission/build_browse.py:551
 build-id-not-visible = No visible build has that ID.
 
-# squid/bot/submission/build_browse.py:416
+# squid/bot/submission/build_browse.py:405
 build-input-position-invalid = Input position must contain three integers, for example `12 5 -3`.
 
-# squid/bot/submission/build_browse.py:502
+# squid/bot/submission/build_browse.py:478
 build-list-empty = No builds are available.
 
-# squid/bot/submission/build_browse.py:599
+# squid/bot/submission/build_browse.py:575
 build-minecraft-data-version-label = Minecraft data version
 
-# squid/bot/submission/build_browse.py:602
+# squid/bot/submission/build_browse.py:578
 build-minecraft-version-label = Minecraft version name
 
-# squid/bot/submission/build_browse.py:332
+# squid/bot/submission/build_browse.py:321
 build-no-longer-available = That build is no longer available.
 
-# squid/bot/submission/build_browse.py:451
+# squid/bot/submission/build_browse.py:427
 build-operation-permission-denied = You are no longer allowed to perform this build operation.
 
-# squid/bot/submission/build_browse.py:274
+# squid/bot/submission/build_browse.py:263
 build-review-confirmation-title = Confirm review decision
 
-# squid/bot/submission/build_browse.py:315
+# squid/bot/submission/build_browse.py:304
 build-review-state-updated = Build review state updated.
 
-# squid/bot/submission/build_browse.py:289
+# squid/bot/submission/build_browse.py:278
 build-review-state-warning = This changes the build's review state.
 
-# squid/bot/submission/build_browse.py:434
-build-schematic-lattice-not-detected = No repeating lattice was detected in this schematic.
-
-# squid/bot/submission/build_browse.py:350
+# squid/bot/submission/build_browse.py:339
 build-schematic-missing = This build has no schematic attached.
 
-# squid/bot/submission/build_browse.py:354
+# squid/bot/submission/build_browse.py:343
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/submission/build_browse.py:609
+# squid/bot/submission/build_browse.py:585
 build-schematic-timing-action = Measure schematic timing
 
 # squid/bot/submission/search_view.py:123, squid/bot/submission/search_view.py:127
@@ -2126,22 +2117,22 @@ build-search-load-failed = Could not load search results.
 # squid/bot/submission/search_view.py:161
 build-search-loading = Loading search results…
 
-# squid/bot/submission/search.py:131
+# squid/bot/submission/search.py:130
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
 # squid/bot/submission/search_view.py:159
 build-search-no-results = No results match this query.
 
-# squid/bot/submission/build_browse.py:581
+# squid/bot/submission/build_browse.py:557
 build-search-no-visible-match = No visible build matches that search.
 
-# squid/bot/submission/search.py:122
+# squid/bot/submission/search.py:121
 build-search-query-help = Search text and filters, e.g. `width:5`.
 
-# squid/bot/submission/search.py:129
+# squid/bot/submission/search.py:128
 build-search-sort-help = Order results by a field, ascending or descending.
 
-# squid/bot/submission/search.py:124
+# squid/bot/submission/search.py:123
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
 
 # squid/builds/errors.py:108
@@ -4161,82 +4152,79 @@ notifications-tag-predicates-objects = tag predicates must be objects
 # squid/notifications/domain.py:217
 notifications-tags-list = tags must be a list
 
-# squid/permissions/domain/catalogue.py:256
+# squid/permissions/domain/catalogue.py:250
 permissions-add-alias-restriction = Add an alias for a restriction.
 
-# squid/permissions/domain/catalogue.py:275
+# squid/permissions/domain/catalogue.py:269
 permissions-approve-creator-alias = Approve a creator alias claim.
 
 # squid/permissions/domain/catalogue.py:159
 permissions-approve-pending-build = Approve pending build submissions.
 
-# squid/permissions/domain/catalogue.py:237
+# squid/permissions/domain/catalogue.py:231
 permissions-approve-tag-proposal = Approve a tag proposal.
 
-# squid/permissions/domain/catalogue.py:440
+# squid/permissions/domain/catalogue.py:434
 permissions-archive-channel-messages = Archive a channel's messages.
 
-# squid/permissions/domain/catalogue.py:249
+# squid/permissions/domain/catalogue.py:243
 permissions-archive-tag = Archive a tag.
 
-# squid/permissions/domain/catalogue.py:489
+# squid/permissions/domain/catalogue.py:483
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
 # squid/permissions/application/administration.py:64
 permissions-built-role = Built-in role
 
-# squid/permissions/domain/catalogue.py:388
+# squid/permissions/domain/catalogue.py:382
 permissions-change-server-bot = Change this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:393
+# squid/permissions/domain/catalogue.py:387
 permissions-change-server-voting = Change this server's voting emojis and role weights.
 
-# squid/permissions/domain/catalogue.py:410
+# squid/permissions/domain/catalogue.py:404
 permissions-change-starboard-configuration = Change a starboard's configuration.
 
-# squid/permissions/domain/catalogue.py:434
+# squid/permissions/domain/catalogue.py:428
 permissions-change-starboard-per = Change a starboard's per-role vote weights.
 
-# squid/permissions/domain/catalogue.py:429
+# squid/permissions/domain/catalogue.py:423
 permissions-change-which-emojis = Change which emojis count towards a starboard.
 
-# squid/permissions/domain/catalogue.py:369
+# squid/permissions/domain/catalogue.py:363
 permissions-change-wide-settings = Change application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:317
+# squid/permissions/domain/catalogue.py:311
 permissions-clear-user-public = Clear another user's public profile.
 
-# squid/permissions/domain/catalogue.py:473
+# squid/permissions/domain/catalogue.py:467
 permissions-close-refresh-poll = Close or refresh a poll you did not create.
 
-# squid/permissions/domain/catalogue.py:329
+# squid/permissions/domain/catalogue.py:323
 permissions-create-edit-global = Create and edit global permission roles.
 
-# squid/permissions/domain/catalogue.py:513
+# squid/permissions/domain/catalogue.py:507
 permissions-create-edit-server = Create and edit this server's permission roles.
 
-# squid/permissions/domain/catalogue.py:463
+# squid/permissions/domain/catalogue.py:457
 permissions-create-poll = Create a poll.
 
-# squid/permissions/domain/catalogue.py:468
+# squid/permissions/domain/catalogue.py:462
 permissions-create-poll-carded = Create a poll carded in every server's vote channel.
 
-# squid/permissions/domain/catalogue.py:405
+# squid/permissions/domain/catalogue.py:399
 permissions-create-starboard = Create a starboard.
 
-# squid/permissions/domain/catalogue.py:341
+# squid/permissions/domain/catalogue.py:335
 permissions-delete-every-stored = Delete every stored error report.
 
-# squid/permissions/domain/catalogue.py:415
+# squid/permissions/domain/catalogue.py:409
 permissions-delete-starboard-recorded = Delete a starboard and its recorded stars.
-
-# squid/permissions/domain/catalogue.py:211
-permissions-detect-schematic-lattice = Detect a schematic's lattice structure.
 
 # squid/permissions/domain/catalogue.py:188
 permissions-download-convert-schematics = Download or convert schematics that are not publicly downloadable, on builds you did not upload them to.
 
-# squid/permissions/domain/catalogue.py:311
+# squid/permissions/domain/catalogue.py:305
 permissions-edit-profile-visibility = Edit your own profile, visibility, linked identities, and merges.
 
 # squid/permissions/domain/catalogue.py:154
@@ -4245,31 +4233,31 @@ permissions-edit-unsubmitted-builds = Edit builds you did not submit.
 # squid/permissions/application/epoch.py:61
 permissions-epoch-watcher-built = This watcher was built without a wake listener.
 
-# squid/permissions/domain/catalogue.py:324
+# squid/permissions/domain/catalogue.py:318
 permissions-grant-revoke-permissions = Grant or revoke permissions anywhere, including global ones.
 
-# squid/permissions/domain/catalogue.py:508
+# squid/permissions/domain/catalogue.py:502
 permissions-grant-revoke-server = Grant or revoke this server's permissions.
 
 # squid/permissions/domain/catalogue.py:182
 permissions-inspect-build-raw = Inspect a build's raw stored representation.
 
-# squid/permissions/domain/catalogue.py:496
+# squid/permissions/domain/catalogue.py:490
 permissions-inspect-explain-user = Inspect and explain another user's permissions.
 
 # squid/permissions/domain/catalogue.py:196
 permissions-inspect-nonpublic-schematics = Inspect and render schematics that are not publicly downloadable, without receiving the file.
 
-# squid/permissions/domain/catalogue.py:218
+# squid/permissions/domain/catalogue.py:212
 permissions-inspect-record-gaps = Inspect record gaps, lookups and title issues.
 
 # squid/permissions/domain/models.py:84
 permissions-invalid-permission-pattern = Invalid permission pattern
 
-# squid/permissions/domain/catalogue.py:269
+# squid/permissions/domain/catalogue.py:263
 permissions-list-pending-creator = List pending creator alias claims.
 
-# squid/permissions/domain/catalogue.py:231
+# squid/permissions/domain/catalogue.py:225
 permissions-list-pending-tag = List pending tag proposals.
 
 # squid/permissions/domain/catalogue.py:205
@@ -4281,85 +4269,85 @@ permissions-not-valid-permission = That is not a valid permission pattern.
 # squid/permissions/application/administration.py:52
 permissions-outside-authority = Outside your authority
 
-# squid/permissions/domain/catalogue.py:446
+# squid/permissions/domain/catalogue.py:440
 permissions-post-manage-redstoner = Post and manage the Redstoner self-assign panel.
 
-# squid/permissions/domain/catalogue.py:299
+# squid/permissions/domain/catalogue.py:293
 permissions-re-read-linked = Re-read your linked Minecraft name after a rename.
 
-# squid/permissions/domain/catalogue.py:305
+# squid/permissions/domain/catalogue.py:299
 permissions-re-read-user = Re-read another user's linked Minecraft name.
 
-# squid/permissions/domain/catalogue.py:292
+# squid/permissions/domain/catalogue.py:286
 permissions-read-account-notifications = Read your own account and notifications.
 
-# squid/permissions/domain/catalogue.py:502
+# squid/permissions/domain/catalogue.py:496
 permissions-read-permission-audit = Read the permission audit log.
 
-# squid/permissions/domain/catalogue.py:335
+# squid/permissions/domain/catalogue.py:329
 permissions-read-stored-error = Read a stored error report by the reference its user was shown.
 
-# squid/permissions/domain/catalogue.py:224
+# squid/permissions/domain/catalogue.py:218
 permissions-rebuild-record-table = Rebuild the record table from scratch.
 
 # squid/permissions/domain/catalogue.py:177
 permissions-recompute-build-derived = Recompute a build's derived attributes.
 
-# squid/permissions/domain/catalogue.py:424
+# squid/permissions/domain/catalogue.py:418
 permissions-recount-starboard-reactions = Recount a starboard's reactions.
 
-# squid/permissions/domain/catalogue.py:263
+# squid/permissions/domain/catalogue.py:257
 permissions-register-minecraft-version = Register a new Minecraft version.
 
-# squid/permissions/domain/catalogue.py:281
+# squid/permissions/domain/catalogue.py:275
 permissions-reject-creator-alias = Reject a creator alias claim.
 
 # squid/permissions/domain/catalogue.py:165
 permissions-reject-pending-build = Reject pending build submissions.
 
-# squid/permissions/domain/catalogue.py:243
+# squid/permissions/domain/catalogue.py:237
 permissions-reject-tag-proposal = Reject a tag proposal.
 
-# squid/permissions/domain/catalogue.py:287
+# squid/permissions/domain/catalogue.py:281
 permissions-relay-account-verification = Relay account verification on another user's behalf.
 
-# squid/permissions/domain/catalogue.py:451
+# squid/permissions/domain/catalogue.py:445
 permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membership.
 
 # squid/permissions/application/administration.py:58
 permissions-role-not-yours = Role is not yours to manage
 
-# squid/permissions/domain/catalogue.py:356
+# squid/permissions/domain/catalogue.py:350
 permissions-run-raw-database = Run raw database and error-handling diagnostics against the live bot.
 
 # squid/permissions/domain/catalogue.py:148
 permissions-submit-build-review = Submit a build for review.
 
-# squid/permissions/domain/catalogue.py:351
+# squid/permissions/domain/catalogue.py:345
 permissions-synchronise-command-tree = Synchronise the application command tree with Discord.
 
 # squid/permissions/domain/catalogue.py:141
 permissions-view-published-builds = View published builds.
 
-# squid/permissions/domain/catalogue.py:382
+# squid/permissions/domain/catalogue.py:376
 permissions-view-server-bot = View this server's bot settings.
 
-# squid/permissions/domain/catalogue.py:399
+# squid/permissions/domain/catalogue.py:393
 permissions-view-server-starboards = View this server's starboards.
 
 # squid/permissions/domain/catalogue.py:171
 permissions-view-unreviewed-builds = View builds that have not been reviewed yet.
 
-# squid/permissions/domain/catalogue.py:363
+# squid/permissions/domain/catalogue.py:357
 permissions-view-wide-settings = View application-wide runtime settings.
 
-# squid/permissions/domain/catalogue.py:478
+# squid/permissions/domain/catalogue.py:472
 permissions-vote-build-log = Vote in build log deletion votes.
 
-# squid/permissions/domain/catalogue.py:457
+# squid/permissions/domain/catalogue.py:451
 permissions-vote-polls = Vote in polls.
 
-# squid/permissions/domain/catalogue.py:483
+# squid/permissions/domain/catalogue.py:477
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
 # squid/bot/voting/poll_wizard.py:337
@@ -4524,34 +4512,26 @@ redstoner-role-restored = { $member } — just kidding, here is your role back.
 # squid/bot/give_redstoner.py:288
 redstoner-role-self-removed = { $owner }, { $member } has removed their own redstoner role.
 
-# squid/bot/submission/schematics.py:60
+# squid/bot/submission/schematics.py:56
 schematic-block-count-disclaimer = -# Read by { $analyzer }. Block count is not the Door Rules cumulative volume.
 
-# squid/bot/submission/schematics.py:27
+# squid/bot/submission/schematics.py:26
 schematic-build-measured-size =
     ### Schematic for build { $id_text }
     { "*" }*Measured size**: { $width } x { $height } x { $length } (bounding volume { $volume })
     { "*" }*Non-air blocks**: { $blocks }
     { "*" }*Distinct block states**: { $states }
 
-# squid/bot/submission/schematics.py:91
+# squid/bot/submission/schematics.py:87
 schematic-inputs-heading = **Inputs found in this schematic**:
 
-# squid/bot/submission/schematics.py:126
+# squid/bot/submission/schematics.py:122
 schematic-moderator-evidence-disclaimer = -# Moderator evidence only. This does not alter the human-declared or official record timing.
 
-# squid/bot/submission/schematics.py:137
-schematic-repeating-lattice-summary =
-    ### Detected repeating lattice
-    { "*" }*Repeating unit**: { $width } x { $height } x { $length }
-    { "*" }*Stack vector(s)**: { $vectors }
-    { "*" }*Coverage**: { NUMBER($coverage, minimumFractionDigits: 1, maximumFractionDigits: 1) }
-    -# Structured expansion evidence only; it does not establish the valid expandable domain.
-
-# squid/bot/submission/schematics.py:47
+# squid/bot/submission/schematics.py:43
 schematic-simulated-piston-evidence = **Simulated piston activity**: { $ticks } gt (moderator evidence only)
 
-# squid/bot/submission/schematics.py:117
+# squid/bot/submission/schematics.py:113
 schematic-simulated-timing-evidence =
     ### Simulated timing evidence
     { "*" }*Input**: ({ $x }, { $y }, { $z }) ({ $source })
@@ -4560,7 +4540,7 @@ schematic-simulated-timing-evidence =
     { "*" }*Evidence**: { $changes } block changes; { $pistons } piston events; { $redstone } redstone events
     { "*" }*Integrity checks**: { $status }
 
-# squid/bot/submission/schematics.py:87
+# squid/bot/submission/schematics.py:83
 schematic-simulation-input-unresolved = ### Simulation input not resolved
 
 # squid/schematics/application/previews.py:52

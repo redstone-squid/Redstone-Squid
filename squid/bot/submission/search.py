@@ -23,7 +23,6 @@ from squid.bot.utils.permissions import allows, subject_for_interaction
 from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
-    BUILD_SCHEMATIC_DETECT_LATTICE,
     BUILD_SCHEMATIC_MEASURE_TIMING,
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_DEBUG,
@@ -188,7 +187,6 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
             debug=await held(BUILD_SUBMISSION_DEBUG),
             edit=await held(BUILD_SUBMISSION_EDIT),
             measure_timing=await held(BUILD_SCHEMATIC_MEASURE_TIMING),
-            detect_lattice=await held(BUILD_SCHEMATIC_DETECT_LATTICE),
         )
 
         async def authorize(node: PermissionNode) -> bool:

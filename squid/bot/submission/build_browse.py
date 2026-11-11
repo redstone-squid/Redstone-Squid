@@ -13,7 +13,6 @@ from squid.bot.submission.schematics import (
     WRITABLE_EXTENSIONS,
     _describe,
     _describe_input_refusal,
-    _describe_lattice,
     _describe_timing,
     _parse_position,
 )
@@ -24,7 +23,6 @@ from squid.builds.domain import Status
 from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
-    BUILD_SCHEMATIC_DETECT_LATTICE,
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
     BUILD_SCHEMATIC_MEASURE_TIMING,
     BUILD_SCHEMATIC_VIEW_PRIVATE,
@@ -53,7 +51,6 @@ class BuildCapabilities:
     debug: bool
     edit: bool
     measure_timing: bool
-    detect_lattice: bool
 
 
 class _BuildSource:
@@ -91,7 +88,7 @@ class _BuildSource:
 class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Show one build and refresh its card when the build topic changes.
 
-    Capabilities control which actions appear. Review, debug, timing, and lattice
+    Capabilities control which actions appear. Review, debug, and timing
     actions recheck permission through authorize; the routed editor checks its own access.
     """
 
@@ -229,14 +226,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
                 key="schematic-render",
             ),
         ]
-        if self._capabilities.detect_lattice:
-            actions.append(
-                sl.action_control(
-                    tr(t"bot-submission-build-browse-detect-lattice = Detect lattice"),
-                    self._detect_lattice,
-                    key="detect-lattice",
-                )
-            )
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.action_controls(*actions, key="schematic-actions")
         ]
@@ -422,19 +411,6 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
             self._schematic_result = _describe_input_refusal(error)
             return
         self._schematic_result = _describe_timing(result)
-
-    async def _detect_lattice(self, event: sl.PressEvent) -> None:
-        if (
-            not await self._may(event, BUILD_SCHEMATIC_DETECT_LATTICE)
-            or await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE) is None
-        ):
-            return
-        lattice = await self._schematics.detect_lattice(self._build_id)
-        self._schematic_result = (
-            tr(t"build-schematic-lattice-not-detected = No repeating lattice was detected in this schematic.")
-            if lattice is None
-            else _describe_lattice(lattice)
-        )
 
     def _schematic_asset(self, data: bytes, extension: str) -> sl.document.Asset:
         return sl.document.Asset(
