@@ -2649,8 +2649,17 @@ class MessageRoot[
     ) -> bool:
         deferred = False
         if not interaction.response.is_done():
-            await interaction.response.defer()
-            deferred = True
+            try:
+                await interaction.response.defer()
+            except discord.InteractionResponded:
+                pass
+            except discord.HTTPException as error:
+                # Discord can accept an in-flight handler response before discord.py
+                # marks it done. Losing that race must not cancel the handler's task group.
+                if error.code != 40060:
+                    raise
+            else:
+                deferred = True
         if profile is not None:
             profile.acknowledge(source if deferred else "action")
         return deferred

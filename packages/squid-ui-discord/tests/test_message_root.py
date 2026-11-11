@@ -959,6 +959,63 @@ class TestRenderAndWire:
             interaction.response._done = True
             release.set()
 
+    @pytest.mark.parametrize("remote", [False, True])
+    async def test_watchdog_losing_to_an_inflight_edit_does_not_cancel_delivery(self, remote: bool) -> None:
+        editing = anyio.Event()
+        collided = anyio.Event()
+        completed = False
+        component = Counter()
+        profiler = MemoryProfiler()
+        message_root = MessageRoot(
+            component, access=Everyone(), timeout=None, acknowledgement_timeout=0.01, profiler=profiler
+        )
+        commit_render(message_root)
+        interaction = interaction_harness()
+
+        async def edit(**fields: Any) -> None:
+            nonlocal completed
+            editing.set()
+            await collided.wait()
+            await anyio.sleep(0)
+            interaction.response._done = True
+            completed = True
+
+        async def defer() -> None:
+            await editing.wait()
+            collided.set()
+            if remote:
+                raise sd.http_error(400, code=40060, message="Interaction has already been acknowledged.")
+            raise discord.InteractionResponded(interaction)
+
+        interaction.response.edit_message.callback = edit
+        interaction.response.defer.callback = defer
+
+        with anyio.fail_after(1):
+            await message_root.dispatch("inc", interaction)
+
+        assert completed
+        assert component.count == 1
+        assert not message_root.pending
+        interaction.response.defer.assert_awaited_once()
+        interaction.followup.edit_message.assert_not_awaited()
+        trace = _profile_trace(profiler)
+        assert trace.result.status is TraceStatus.COMPLETED
+        acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
+        assert dict((attribute.key, attribute.value) for attribute in acknowledgement.attributes) == {
+            "source": "interaction_write"
+        }
+
+    async def test_acknowledgement_preserves_other_http_errors(self) -> None:
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        interaction = interaction_harness()
+        error = sd.http_error(400, code=50035)
+        interaction.response.defer.error = error
+
+        with pytest.raises(discord.HTTPException) as raised:
+            await message_root._acknowledge(interaction)
+
+        assert raised.value is error
+
 
 class TestAccessPolicy:
     def test_access_is_a_required_keyword(self) -> None:
@@ -2892,6 +2949,41 @@ class TestEditHandles:
         assert handle is not None
         assert not handle.permanent
         assert handle.expires_at == deferred.expires_at
+
+    @pytest.mark.parametrize("remote", [False, True])
+    async def test_edit_losing_the_response_race_updates_the_source_via_webhook(self, remote: bool) -> None:
+        component = Counter()
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        interaction = interaction_harness()
+        interaction.response.edit_message.error = (
+            sd.http_error(400, code=40060, message="Interaction has already been acknowledged.")
+            if remote
+            else discord.InteractionResponded(interaction)
+        )
+
+        await message_root.dispatch("inc", interaction)
+
+        interaction.response.edit_message.assert_awaited_once()
+        interaction.followup.edit_message.assert_awaited_once_with(
+            interaction.message.id, **interaction.response.edit_message.await_args.kwargs
+        )
+        assert component.count == 1
+        assert not message_root.pending
+
+    async def test_edit_does_not_retry_other_http_errors(self) -> None:
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        commit_render(message_root)
+        interaction = interaction_harness()
+        error = sd.http_error(400, code=50035)
+        interaction.response.edit_message.error = error
+
+        with pytest.raises(discord.HTTPException) as raised:
+            await message_root.dispatch("inc", interaction)
+
+        assert raised.value is error
+        interaction.followup.edit_message.assert_not_awaited()
+        assert message_root.pending
 
     def test_channel_message_handle_is_permanent_regardless_of_message_flags(self):
         assert delivery.handle_for(message_harness()).permanent

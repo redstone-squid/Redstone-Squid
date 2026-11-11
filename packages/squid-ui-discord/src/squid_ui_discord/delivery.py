@@ -216,7 +216,16 @@ class _WebhookMessageHandle:
             # An unspent response is the cheap path: it edits the source message with no
             # extra round trip. Afterwards the message has to be named explicitly.
             if not interaction.response.is_done():
-                await interaction.response.edit_message(**fields)
+                try:
+                    await interaction.response.edit_message(**fields)
+                except discord.InteractionResponded:
+                    self._message = await interaction.followup.edit_message(self._message_id, **fields)
+                except discord.HTTPException as error:
+                    if error.code != 40060:
+                        raise
+                    # The acknowledgement watchdog may have claimed the response while
+                    # this edit was in flight. The source message still needs updating.
+                    self._message = await interaction.followup.edit_message(self._message_id, **fields)
             else:
                 self._message = await interaction.followup.edit_message(self._message_id, **fields)
         except discord.HTTPException as error:
