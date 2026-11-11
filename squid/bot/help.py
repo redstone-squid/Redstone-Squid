@@ -68,7 +68,7 @@ class HelpScreen(sd.Screen):
         self._needle = command
         self._focused = self._find(command) if command is not None else None
         self._browser = sp.Browser(
-            sl.sources.list_source(self._commands),
+            sl.sources.list_source(item for item in self._commands if item.parent is None),
             key="commands",
             identity=lambda item: item.qualified_name,
             label=lambda item: f"/{item.qualified_name}",
