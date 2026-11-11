@@ -118,10 +118,15 @@ async def test_empty_optional_modal_fields_clear_staged_text_and_numbers() -> No
     assert parsed.errors == ()
     assert parsed.values == {"version_spec": None, "normal_opening_time": None}
 
-    await screen._edited(tuple(parsed.values), submit_event(parsed.values))
+    with sl.runtime.transaction():
+        await screen._edited(tuple(parsed.values), submit_event(parsed.values))
 
     assert all(item.value is None for item in screen.items)
     assert screen.validation_error is None
+    assert (await screen.staged_history.undo()).applied
+    assert tuple(item.value for item in screen.items) == (version.value, timing.value)
+    assert (await screen.staged_history.redo()).applied
+    assert all(item.value is None for item in screen.items)
 
 
 def test_edit_form_pages_preserve_field_metadata_and_fit_discord_limits() -> None:

@@ -13,8 +13,8 @@ from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.edit_history import history_controls, record_edit
 from squid.bot.submission.input import parse_web_urls
-from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
 from squid.bot.submission.ui.fields import (
     DIMENSIONS_FORMAT,
@@ -484,6 +484,9 @@ class BuildEditScreen(BuildEditorScreen[int]):
         timeout=900, live_updates=True, retain_routed_on_timeout=True, session=sd.SessionSpec("build-edit")
     )
 
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    staged_history: sl.runtime.History = sl.runtime.history(limit=20)
+    items: tuple[BoundBuildField[Any], ...] = sl.state((), persist=False)
     _base_revision: int = sl.state(0)
     confirming: bool = sl.state(default=False)
     saved: bool = sl.state(default=False)
@@ -574,7 +577,7 @@ class BuildEditScreen(BuildEditorScreen[int]):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
-        if self.saved:
+        if self.saved and self._build_id is None:
             return (
                 sl.section(
                     sl.heading(tr(t"bot-submission-ui-views-changes-saved = Changes saved")),
@@ -582,6 +585,9 @@ class BuildEditScreen(BuildEditorScreen[int]):
                 ),
             )
         if self.expired:
+            # Route registration imports the editor through opening.py. Resolve it after initialization.
+            from squid.bot.submission.ui import controls as build_controls
+
             nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
                 sl.status(
                     tr(t"build-editor-expired = This editor expired. Unsaved changes were discarded."),
@@ -679,6 +685,9 @@ class BuildEditScreen(BuildEditorScreen[int]):
             sl.action_controls(*controls, key="build-edit-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL),
         ]
         nodes.append(sd.v2.panel(*children, accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE))
+        nodes.extend(history_controls(self.staged_history))
+        if not any(item.modified for item in self.items) and not self.staged_history.can_redo:
+            nodes.extend(history_controls(self.history))
         return tuple(nodes)
 
     def sections(self) -> tuple[tuple[str, sl.TextLike, tuple[BoundBuildField[Any], ...]], ...]:
@@ -708,7 +717,9 @@ class BuildEditScreen(BuildEditorScreen[int]):
 
     async def _edited(self, keys: tuple[str, ...], event: sl.SubmitEvent) -> None:
         errors: list[sl.TextLike] = []
-        for item in self.items:
+        previous = self.items
+        staged = tuple(replace(item) for item in self.items)
+        for item in staged:
             if item.key not in keys:
                 continue
             item.stage(_submitted_text(event.values, item.key))
@@ -727,6 +738,9 @@ class BuildEditScreen(BuildEditorScreen[int]):
                     {error_text}
                 """)
             )
+        if staged != previous:
+            self.items = staged
+            self.staged_history.record(tr(t"build-edit-history-fields = Edit build fields"))
         self.invalidate()
 
     async def _review(self, event: sl.PressEvent) -> None:
@@ -752,6 +766,8 @@ class BuildEditScreen(BuildEditorScreen[int]):
         patch = BuildEditPatch.combine(item.to_patch() for item in changed)
         edited_build_id: int | None = None
         build = self.build
+        specs = tuple(item.spec for item in changed)
+        before = tuple(spec.reader(build) for spec in specs)
         if build.id is None:
             patch.apply(build)
             actor = await subject_for_interaction(cast(sd.Request[Any], event.context))
@@ -780,16 +796,64 @@ class BuildEditScreen(BuildEditorScreen[int]):
                 self.invalidate()
                 return
             edited_build_id = build.id
+        if edited_build_id is not None:
+            build_id = edited_build_id
+            after = tuple(spec.reader(build) for spec in specs)
+
+            async def reverse_values(expected: tuple[Any, ...], replacement: tuple[Any, ...]) -> bool:
+                current = await self.builds.get(build_id)
+                if current is None or tuple(spec.reader(current) for spec in specs) != expected:
+                    return False
+                inverse = BuildEditPatch.combine(
+                    spec.patch(value) for spec, value in zip(specs, replacement, strict=True)
+                )
+                try:
+                    await self.builds.apply_edit(
+                        BuildEditor(
+                            await subject_for_interaction(cast(sd.Request[Any], event.context)), source="discord_editor"
+                        ),
+                        build_id,
+                        inverse,
+                        expected_revision=current.revision,
+                    )
+                except BuildRevisionMismatchError:
+                    return False
+                return True
+
+            async def refresh() -> None:
+                current = await self.builds.get(build_id)
+                if current is None:
+                    raise LookupError(build_id)
+                self.items = tuple(item.spec.bind(current) for item in self.items)
+                self._replace(current, await self._render_build(current))
+                await self._refresh_posts(build_id)
+
+            record_edit(
+                self.history,
+                tr(t"build-edit-history-save = Save build changes"),
+                before,
+                after,
+                target=f"build:{build_id}",
+                authorize=self._authorize,
+                replace=reverse_values,
+                refresh=refresh,
+            )
+        self.staged_history.clear()
+        self.items = tuple(item.spec.bind(build) for item in self.items)
         self.saved = True
         self.confirming = False
         self._replace(build, await self._render_build(build))
         if edited_build_id is not None:
             await self._refresh_posts(edited_build_id)
         assert build.id is not None
-        self.complete(event, build.id)
+        if edited_build_id is None:
+            self.complete(event, build.id)
 
     async def _close(self, event: sd.PressEvent) -> None:
-        self.cancel(event)
+        if self.saved and self._build_id is not None:
+            self.complete(event, self._build_id)
+        else:
+            self.cancel(event)
 
     async def _reload(self, event: sl.PressEvent) -> None:
         await self.projection.reload()
@@ -797,6 +861,7 @@ class BuildEditScreen(BuildEditorScreen[int]):
             return
         await event.acknowledge()
         build, node = self._current()
+        self.staged_history.clear()
         self.items = tuple(field.bind(build) for field in EDIT_FIELDS if field.applies_to(build))
         self.validation_error = None
         self.confirming = False
