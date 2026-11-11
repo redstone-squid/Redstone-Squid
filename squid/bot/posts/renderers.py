@@ -7,6 +7,8 @@ import discord
 
 from squid.bot._types import GuildMessageable
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
+from squid.bot.submission.build_card import render_build_card
+from squid.bot.ui import render_payload
 from squid.builds.domain import Status
 from squid.posts.domain import ResourceKind
 
@@ -37,8 +39,7 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         if build.submission_status != Status.CONFIRMED:
             return ()
 
-        handler = self.bot.for_build(build)
-        payload = await handler.render_payload()
+        payload = render_payload([await render_build_card(build, self.bot.media_previews)])
         configured = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), "Builds")
         channels = (self.bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
         return [

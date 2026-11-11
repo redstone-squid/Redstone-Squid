@@ -25,12 +25,10 @@ from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRen
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter, ReactionSubscription, has_reaction_handlers
 from squid.bot.routes import router as control_router
-from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.ui import HOST_DEFAULTS
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.models import Build
 from squid.config import (
     BotIdentityConfig,
     BotProcessConfig,
@@ -417,10 +415,6 @@ class RedstoneSquid(Bot):
         elif lookup.gone:
             await self.services.messages.mark_deleted(message_id)
         return lookup.message
-
-    def for_build(self, build: Build) -> BuildHandler[Self]:
-        """Bind the bot's services and Discord helpers to a build."""
-        return BuildHandler(self, build)
 
     async def refresh_posts(self, resource_kind: ResourceKind, resource_key: str) -> None:
         """Publish a topic hint and reconcile any pending generation for a resource.

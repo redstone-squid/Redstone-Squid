@@ -114,9 +114,6 @@ class InferenceBot:
     async def refresh_posts(self, resource_kind: str, resource_key: str) -> None:
         assert resource_kind == "inference_run"
 
-    def for_build(self, build: object) -> object:
-        raise AssertionError("the stub ingestion returns no builds")
-
 
 def _make_cog(*, account: Account | None) -> BuildSubmitCommands[Any]:
     cog = BuildSubmitCommands.__new__(BuildSubmitCommands)

@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any, cast
 
 import squid_ui_discord as sd
+from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui.views import BuildEditScreen
 from squid.bot.ui import error_node, tr
 from squid.bot.utils.permissions import allows
@@ -44,7 +45,7 @@ async def prepare_build_editor(
         return await allows(request, BUILD_SUBMISSION_EDIT)
 
     async def render_build(current: Build) -> Any:
-        return await client.for_build(current).render_node()
+        return await render_build_card(current, client.media_previews)
 
     async def refresh_posts(build_id: int) -> None:
         await client.refresh_posts("build", str(build_id))

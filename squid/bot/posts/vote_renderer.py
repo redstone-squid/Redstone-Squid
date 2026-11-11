@@ -8,6 +8,7 @@ import discord
 
 from squid.accounts.domain import IdentityProvider
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
+from squid.bot.submission.build_card import render_build_card
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.bot.voting.sessions import configured_vote_channels
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
@@ -74,14 +75,13 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         if build is None:
             return ()
 
-        handler = self.bot.for_build(build)
         channels = await self._published_channels(snapshot)
         if snapshot.status == "open":
             # Fill guilds that have a vote channel but no card yet, which is what makes
             # a retried or partially delivered submission complete itself.
             channels.update({channel.id: channel.guild.id for channel in await configured_vote_channels(self.bot)})
 
-        card = await handler.render_node()
+        card = await render_build_card(build, self.bot.media_previews)
         posts: list[DesiredPost] = []
         for channel_id, guild_id in channels.items():
             # Rendered per post: the guild decides which emoji the instructions name.

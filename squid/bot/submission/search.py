@@ -12,6 +12,7 @@ from discord.ext.commands import Context, when_mentioned
 import squid_ui_discord as sd
 from squid.bot.i18n import to_locale_str
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
+from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
@@ -163,7 +164,7 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
             request,
             page,
             load_build=self.queries.get,
-            render_build=lambda build: self.bot.for_build(build).render_node(),
+            render_build=lambda build: render_build_card(build, self.bot.media_previews),
         )
 
     @autocompletes(build_id="builds")
@@ -202,7 +203,7 @@ class SearchCog[BotT: squid.bot.app.RedstoneSquid](
             self.bot.services.schematics,
             topics=self.bot.topic_bus,
             initial_id=build_id,
-            render_build=lambda build: self.bot.for_build(build).render_node(),
+            render_build=lambda build: render_build_card(build, self.bot.media_previews),
             capabilities=capabilities,
             actor_account_id=subject.account_id,
             authorize=authorize,

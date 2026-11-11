@@ -19,6 +19,7 @@ import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import to_locale_str
+from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.draft_intake import receive_attachments
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
@@ -205,7 +206,7 @@ class BuildSubmitCommands[BotT: squid.bot.app.RedstoneSquid](BuildCommandGroup[B
             uploader_account_id,
             draft_id,
             changes=self.bot.topic_bus.topic("submission_draft", str(draft_id)),
-            render_card=lambda build: self.bot.for_build(build).render_node(),
+            render_card=lambda build: render_build_card(build, self.bot.media_previews),
             notice=_unused_values_notice(unresolved, manifest),
         )
 

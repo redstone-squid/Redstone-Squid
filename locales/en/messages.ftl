@@ -1463,7 +1463,7 @@ bot-submission-schematics-signs = **Signs**: { $text }
 # squid/bot/submission/schematics.py:105
 bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt after input)
 
-# squid/bot/submission/search.py:173
+# squid/bot/submission/search.py:174
 bot-submission-search-open-this-build-directly = Open this build directly.
 
 # squid/bot/submission/search_view.py:256
@@ -1533,28 +1533,28 @@ bot-submission-search-view-version = Version
 # squid/bot/submission/search_view.py:108
 bot-submission-search-view-view-build = View build
 
-# squid/bot/submission/submit.py:324
+# squid/bot/submission/submit.py:325
 bot-submission-submit-author-has-not-consented = Author has not consented
 
-# squid/bot/submission/submit.py:143
+# squid/bot/submission/submit.py:144
 bot-submission-submit-check-build-size = Check the build size
 
-# squid/bot/submission/submit.py:135
+# squid/bot/submission/submit.py:136
 bot-submission-submit-check-door-size = Check the door size
 
-# squid/bot/submission/submit.py:86
+# squid/bot/submission/submit.py:87
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 
-# squid/bot/submission/submit.py:309
+# squid/bot/submission/submit.py:310
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
-# squid/bot/submission/submit.py:88
+# squid/bot/submission/submit.py:89
 bot-submission-submit-the-whole-build-e-g-x-x = Build size as width x height x depth, e.g. `5x7x4`.
 
 # squid/bot/submission/ui/fields.py:103
 bot-submission-ui-fields-invalid-value = Invalid value
 
-# squid/bot/submission/ui/opening.py:70
+# squid/bot/submission/ui/opening.py:71
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
 # squid/bot/submission/ui/views.py:619
@@ -1980,34 +1980,34 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:64
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/submission/submit.py:242
+# squid/bot/submission/submit.py:243
 build-drafts-detected = **Builds found in your build-log posts**
 
-# squid/bot/submission/submit.py:398
+# squid/bot/submission/submit.py:399
 build-drafts-edited = Edited { $updated }
 
-# squid/bot/submission/submit.py:253
+# squid/bot/submission/submit.py:254
 build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.
 
-# squid/bot/submission/submit.py:252
+# squid/bot/submission/submit.py:253
 build-drafts-inbox-empty = No drafts are waiting for staff correction.
 
-# squid/bot/submission/submit.py:235
+# squid/bot/submission/submit.py:236
 build-drafts-open = Open
 
-# squid/bot/submission/submit.py:244
+# squid/bot/submission/submit.py:245
 build-drafts-review = Review
 
-# squid/bot/submission/submit.py:390
+# squid/bot/submission/submit.py:391
 build-drafts-state-creating = Creating the build
 
-# squid/bot/submission/submit.py:396
+# squid/bot/submission/submit.py:397
 build-drafts-state-editing = In progress
 
-# squid/bot/submission/submit.py:394
+# squid/bot/submission/submit.py:395
 build-drafts-state-needs-changes = Needs changes
 
-# squid/bot/submission/submit.py:392
+# squid/bot/submission/submit.py:393
 build-drafts-state-waiting = Waiting for files
 
 # squid/bot/submission/ui/views.py:743
@@ -2016,7 +2016,7 @@ build-edit-history-fields = Edit build fields
 # squid/bot/submission/ui/views.py:833
 build-edit-history-save = Save build changes
 
-# squid/bot/submission/ui/controls.py:30, squid/bot/submission/ui/controls.py:44
+# squid/bot/submission/ui/controls.py:31, squid/bot/submission/ui/controls.py:45
 build-editor-build-deleted = That build no longer exists.
 
 # squid/bot/submission/ui/views.py:584
@@ -2025,7 +2025,7 @@ build-editor-card-refreshed = The build card has been refreshed.
 # squid/bot/submission/ui/views.py:791
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
-# squid/bot/submission/ui/opening.py:71
+# squid/bot/submission/ui/opening.py:72
 build-editor-edit-access-required = Only the pending build's submitter or a trusted staff member can edit it.
 
 # squid/bot/submission/ui/views.py:873
@@ -2129,7 +2129,7 @@ build-search-load-failed = Could not load search results.
 # squid/bot/submission/search_view.py:161
 build-search-loading = Loading search results…
 
-# squid/bot/submission/search.py:130
+# squid/bot/submission/search.py:131
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
 # squid/bot/submission/search_view.py:159
@@ -2138,13 +2138,13 @@ build-search-no-results = No results match this query.
 # squid/bot/submission/build_browse.py:581
 build-search-no-visible-match = No visible build matches that search.
 
-# squid/bot/submission/search.py:121
+# squid/bot/submission/search.py:122
 build-search-query-help = Search text and filters, e.g. `width:5`.
 
-# squid/bot/submission/search.py:128
+# squid/bot/submission/search.py:129
 build-search-sort-help = Order results by a field, ascending or descending.
 
-# squid/bot/submission/search.py:123
+# squid/bot/submission/search.py:124
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
 
 # squid/builds/errors.py:108
@@ -2342,7 +2342,7 @@ command-build-browse-name = browse
 # squid/bot/command_texts.py:31
 command-build-drafts-help = Reopen saved drafts, or browse the staff correction inbox.
 
-# squid/bot/submission/submit.py:215
+# squid/bot/submission/submit.py:216
 command-build-drafts-inbox-help = Show drafts waiting for staff correction instead of your own.
 
 # squid/bot/command_texts.py:35
@@ -3356,7 +3356,7 @@ draft-editor-title-editing = ## Submit a build · { $category }
 # squid/bot/submission/ui/drafts.py:883
 draft-editor-title-expired = ## Draft expired · { $category }
 
-# squid/bot/submission/submit.py:410
+# squid/bot/submission/submit.py:411
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
 # squid/bot/submission/ui/drafts.py:723
@@ -5268,40 +5268,40 @@ submissions-visible-closing-time = Visible closing time
 # squid/submissions/application/forms.py:457
 submissions-visible-opening-time = Visible opening time
 
-# squid/bot/submission/submit.py:102, squid/bot/submission/submit.py:103, squid/bot/submission/submit.py:104
+# squid/bot/submission/submit.py:103, squid/bot/submission/submit.py:104, squid/bot/submission/submit.py:105
 submit-another-attachment-help = Another schematic, image, or video.
 
-# squid/bot/submission/submit.py:101
+# squid/bot/submission/submit.py:102
 submit-attachment-types-help = Your schematic, an image, or a video.
 
-# squid/bot/submission/submit.py:325
+# squid/bot/submission/submit.py:326
 submit-author-consent-required = The author of this message (<@{ $user_id_text }>) has not consented to data storage. They must grant consent before this build can be ingested.
 
-# squid/bot/submission/submit.py:310
+# squid/bot/submission/submit.py:311
 submit-build-log-channel-required = Builds are only read out of messages posted in a build log channel.
 
-# squid/bot/submission/submit.py:144
+# squid/bot/submission/submit.py:145
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
-# squid/bot/submission/submit.py:98
+# squid/bot/submission/submit.py:99
 submit-comma-separated-examples-help = Restrictions, comma separated, e.g. `seamless, observerless`.
 
-# squid/bot/submission/submit.py:90
+# squid/bot/submission/submit.py:91
 submit-creator-ign-prompt = In-game names of the creators, comma separated.
 
-# squid/bot/submission/submit.py:84
+# squid/bot/submission/submit.py:85
 submit-door-dimensions-help = Door size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
-# squid/bot/submission/submit.py:136
+# squid/bot/submission/submit.py:137
 submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.
 
-# squid/bot/submission/submit.py:95
+# squid/bot/submission/submit.py:96
 submit-pattern-type-examples-help = Patterns, comma separated, e.g. `full lamp, funnel`.
 
-# squid/bot/submission/submit.py:100
+# squid/bot/submission/submit.py:101
 submit-staff-notes-prompt = A short description of the build.
 
-# squid/bot/submission/submit.py:92
+# squid/bot/submission/submit.py:93
 submit-supported-versions-prompt = Minecraft versions it works in, e.g. `1.17-1.18.1, 1.20+`.
 
 # squid/suggestions/application/registry.py:82

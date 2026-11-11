@@ -1,7 +1,7 @@
 """Structural tests for the bot's semantic Components V2 workflows."""
 
-from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, cast, override
+from dataclasses import replace
+from typing import Any, cast, override
 from uuid import UUID
 
 import discord
@@ -9,24 +9,22 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.submission import build_handler as build_handler_module
-from squid.bot.submission.build_handler import BuildHandler
+from squid.bot.submission import build_card as build_card_module
+from squid.bot.submission.build_card import build_description, build_metadata_fields, render_build_card
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui import views as build_views
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
-from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour
+from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour, render_payload
+from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildEditor, BuildService
 from squid.builds.domain import Status
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.models import Build, BuildLink, DoorBuild
 from squid.messages.domain import MessageRef
 from squid.permissions.domain import Subject
-from squid.runtime import BotServices
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
-from squid.versions.application import VersionService
-from squid.versions.domain import Edition
 from squid_ui.text import source_text
 from squid_ui_discord import SessionSpec
 from squid_ui_discord.testing import (
@@ -38,20 +36,6 @@ from squid_ui_discord.testing import (
     message_harness,
 )
 from tests.support.discord import make_layout_bot
-from tests.support.services import bot_services
-
-if TYPE_CHECKING:
-    import squid.bot.app
-
-
-class VersionRecorder(VersionService):
-    def __init__(self) -> None:
-        pass
-
-    @override
-    async def newest(self, edition: Edition) -> str:
-        assert edition == "Java"
-        return "Java 1.20"
 
 
 class SearchRecorder(SearchService):
@@ -87,15 +71,6 @@ class EditRecorder(BuildService):
         return replace(self.build, revision=self.build.revision + 1)
 
 
-@dataclass(frozen=True)
-class HandlerBot:
-    services: BotServices
-
-
-def handler_bot() -> Any:
-    return HandlerBot(bot_services(versions=VersionRecorder()))
-
-
 @pytest.fixture
 def display_build() -> Build:
     return DoorBuild(
@@ -120,10 +95,10 @@ def display_build() -> Build:
 
 
 @pytest.mark.asyncio
-async def test_build_handler_renders_composable_v2_card(display_build: Build) -> None:
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), display_build)
+async def test_build_card_renders_composable_v2_card(display_build: Build) -> None:
+    build = display_build
 
-    presentation = await handler.render_payload()
+    presentation = render_payload([await render_build_card(build, MediaPreviewClient())])
     payload = presentation.layout.to_components()
 
     assert presentation.layout.has_components_v2()
@@ -143,7 +118,7 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     ],
 )
 def test_build_statuses_have_exhaustive_named_colours(status: Status, expected: DiscordColour) -> None:
-    assert build_handler_module._status_colour(status, build_id=7) is expected
+    assert build_card_module._status_colour(status, build_id=7) is expected
 
 
 @pytest.mark.parametrize("status", [None, cast(Status, "legacy")])
@@ -154,12 +129,12 @@ def test_missing_or_unknown_build_status_is_neutral_and_reported(
 ) -> None:
     metrics: list[tuple[str, dict[str, object]]] = []
     monkeypatch.setattr(
-        build_handler_module,
+        build_card_module,
         "add_counter",
         lambda name, *, attributes: metrics.append((name, attributes)),
     )
 
-    colour = build_handler_module._status_colour(status, build_id=7)
+    colour = build_card_module._status_colour(status, build_id=7)
 
     assert colour is DISCORD_GREY
     assert metrics == [
@@ -313,22 +288,19 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
         assert not ui.root.finished
 
 
-@pytest.mark.asyncio
-async def test_build_handler_does_not_repeat_headline_component_restrictions(display_build: Build) -> None:
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), display_build)
+def test_build_card_does_not_repeat_headline_component_restrictions(display_build: Build) -> None:
+    build = display_build
 
-    assert await handler.get_description() is None
+    assert build_description(build) is None
 
 
-@pytest.mark.asyncio
-async def test_build_handler_shows_the_submitter_description_escaped(display_build: Build) -> None:
+def test_build_card_shows_the_submitter_description_escaped(display_build: Build) -> None:
     build = replace(display_build, description="Uses *two* observers")
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), build)
 
-    assert await handler.get_description() == "\nUses \\*two\\* observers"
+    assert build_description(build) == "\nUses \\*two\\* observers"
 
 
-def test_build_handler_credits_the_sponsoring_server_and_website(display_build: Build) -> None:
+def test_build_card_credits_the_sponsoring_server_and_website(display_build: Build) -> None:
     build = replace(
         display_build,
         sponsor=PublicSponsor(
@@ -338,15 +310,14 @@ def test_build_handler_credits_the_sponsoring_server_and_website(display_build: 
             website_url="https://example.test/",
         ),
     )
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", object()), build)
 
-    metadata = handler.get_metadata_fields()
+    metadata = build_metadata_fields(build)
 
     assert metadata["Sponsoring Server"] == "Sponsor Network"
     assert metadata["Sponsor Website"] == "https://example.test/"
 
 
-async def test_build_handler_renders_bounded_human_attachment_evidence(display_build: Build) -> None:
+async def test_build_card_renders_bounded_human_attachment_evidence(display_build: Build) -> None:
     display_build.extra_info["schematic_duplicates"] = [
         {
             "build_id": 7,
@@ -371,10 +342,10 @@ async def test_build_handler_renders_bounded_human_attachment_evidence(display_b
         }
         for index in range(8)
     ]
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), display_build)
+    build = display_build
 
-    metadata = handler.get_metadata_fields()
-    presentation = await handler.render_payload()
+    metadata = build_metadata_fields(build)
+    presentation = render_payload([await render_build_card(build, MediaPreviewClient())])
 
     duplicate = metadata["⚠ Possible duplicate"]
     failure = metadata["⚠ Attachment issues"]

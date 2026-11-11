@@ -9,13 +9,13 @@ from typing import Any, cast, override
 
 import discord
 
-import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.controls import recover_build_editor
 from squid.bot.submission.ui.opening import prepare_build_editor
 from squid.bot.submission.ui.views import BuildEditScreen
+from squid.bot.utils.web import MediaPreviewClient
 from squid.builds.application import BuildService
 from squid.builds.domain import RestrictionTypeLiteral, Status
 from squid.builds.models import DoorBuild, OtherBuild
@@ -100,14 +100,6 @@ class OwnerCheck:
         return False
 
 
-class BuildRenderer:
-    async def render_container(self) -> discord.ui.Container:
-        return discord.ui.Container(discord.ui.TextDisplay("card"))
-
-    async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
-        return sl.paragraph("card")
-
-
 def _cog(
     build: Any, *, allowed: bool = True, account_id: int | None = 1, posts: PostService | None = None
 ) -> BuildEditCommands[Any]:
@@ -129,7 +121,7 @@ def _cog(
             services=services,
             account_ids=AccountIdResolver(account_id),
             is_owner=OwnerCheck(),
-            for_build=lambda _build: BuildRenderer(),
+            media_previews=MediaPreviewClient(),
         ),
     )
     cog.ui = cog.bot.ui.scope(cog)

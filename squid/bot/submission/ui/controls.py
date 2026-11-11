@@ -8,6 +8,7 @@ from discord import Interaction
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.routes._root import _feature_group
+from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui import drafts, inference, opening, revisions
 from squid.bot.ui import text_node
 from squid.bot.utils.permissions import subject_for_interaction
@@ -60,7 +61,7 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
         actor,
         UUID(draft_id),
         changes=interaction.client.topic_bus.topic("submission_draft", draft_id),
-        render_card=lambda build: interaction.client.for_build(build).render_node(),
+        render_card=lambda build: render_build_card(build, interaction.client.media_previews),
     )
     await request.respond(
         screen, audience="personal", session_key=sd.SessionKey.custom("draft", (interaction.user.id, draft_id))
