@@ -239,7 +239,7 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
     )
 
     assert draft.snapshot.schema_id == "build_submission.v1"
-    assert draft.snapshot.schema_revision == 2
+    assert draft.snapshot.schema_revision == 4
     assert draft.expires_at == NOW.add(days=7, days_assumed_24h_ok=True)
 
 

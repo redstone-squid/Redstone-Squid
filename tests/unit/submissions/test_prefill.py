@@ -29,7 +29,7 @@ def test_known_labels_become_keys_and_unknown_names_remain_proposals() -> None:
             "approved_restrictions": (ChoiceOption("observerless", "Observerless"),),
             "approved_source_versions": (ChoiceOption("Java 1.21.0", "Java 1.21.0"),),
         },
-        origin=SubmissionOrigin.DISCORD,
+        origin=SubmissionOrigin.WEB,
     )
     assert result.answers["patterns"] == ["regular"]
     assert result.answers["pattern_proposals"] == ["New pattern"]
@@ -40,6 +40,19 @@ def test_known_labels_become_keys_and_unknown_names_remain_proposals() -> None:
     assert "rights_attestation" not in result.answers
 
 
+def test_discord_drafts_do_not_keep_an_exported_version() -> None:
+    # From form revision 4 only capture clients are asked which version a build was exported from.
+    draft = BuildDraft(category=BuildCategory.DOOR, version_spec="Java 1.21.0")
+    result = project_submission(
+        draft,
+        build_submission_manifest(),
+        {"approved_source_versions": (ChoiceOption("Java 1.21.0", "Java 1.21.0"),)},
+        origin=SubmissionOrigin.DISCORD,
+    )
+    assert "source_version" not in result.answers
+    assert result.answers["version_compatibility"] == "Java 1.21.0"
+
+
 def test_compatibility_range_is_not_an_exact_source_version() -> None:
     draft = BuildDraft(category=BuildCategory.DOOR, version_spec="1.20+", versions=["Java 1.21.0"], door_width=2)
     result = project_submission(
@@ -48,7 +61,7 @@ def test_compatibility_range_is_not_an_exact_source_version() -> None:
         {
             "approved_source_versions": (ChoiceOption("Java 1.21.0", "Java 1.21.0"),),
         },
-        origin=SubmissionOrigin.DISCORD,
+        origin=SubmissionOrigin.WEB,
     )
     assert "source_version" not in result.answers
     assert "opening_height" not in result.answers

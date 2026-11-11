@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol, cast
 from uuid import UUID
 
-from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info, UnresolvedTaxonomy
+from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info, Status, UnresolvedTaxonomy
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError, JSONValue
@@ -96,9 +96,10 @@ class SubmissionBuildPreparation:
             if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
                 return _target_rejected()
             return existing
-        rejection = await self._validate_source_version(submission.source_version)
-        if rejection is not None:
-            return rejection
+        if submission.source_version is not None:
+            rejection = await self._validate_source_version(submission.source_version)
+            if rejection is not None:
+                return rejection
         definitions = await self._resolve_tags(submission)
         if isinstance(definitions, BuildSubmissionRejected):
             return definitions
@@ -165,12 +166,21 @@ class SubmissionBuildPreparation:
         return selected
 
 
+def _restriction_values(keys: Sequence[str], definitions: Mapping[str, TagDefinition]) -> dict[str, list[str]]:
+    """Sort restriction names into the build's wiring, animated, component, and miscellaneous lists.
+
+    Keys without an approved restriction definition are skipped.
+    """
+    values: dict[str, list[str]] = {field_name: [] for field_name in _RESTRICTION_FIELDS.values()}
+    for key in keys:
+        definition = definitions.get(key)
+        if definition is not None and definition.restriction_type in _RESTRICTION_FIELDS:
+            values[_RESTRICTION_FIELDS[definition.restriction_type]].append(definition.display_name)
+    return values
+
+
 def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDefinition]) -> Build:
-    restriction_values: dict[str, list[str]] = {field_name: [] for field_name in _RESTRICTION_FIELDS.values()}
-    for key in submission.taxonomy.restriction_keys:
-        definition = definitions[key]
-        assert definition.restriction_type is not None
-        restriction_values[_RESTRICTION_FIELDS[definition.restriction_type]].append(definition.display_name)
+    restriction_values = _restriction_values(submission.taxonomy.restriction_keys, definitions)
 
     pattern_names: list[str] = []
     pattern_proposals: tuple[str, ...] = ()
@@ -191,7 +201,7 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     ).write(cast(Info, extra_info))
 
     common: dict[str, Any] = {
-        "versions": [submission.source_version],
+        "versions": [submission.source_version] if submission.source_version is not None else [],
         "version_spec": submission.version_compatibility,
         "width": submission.capture_dimensions.width,
         "height": submission.capture_dimensions.height,
@@ -208,11 +218,14 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
         "sponsor": submission.sponsor,
     }
     if isinstance(submission.details, DoorSubmissionDetails):
+        opening = submission.details.opening
+        # DoorSubmissionDetails rejects an opening without a width or height.
+        assert opening.width is not None and opening.height is not None
         return DoorBuild(
             **common,
-            door_width=submission.details.opening.width,
-            door_height=submission.details.opening.height,
-            door_depth=submission.details.opening.depth,
+            door_width=opening.width,
+            door_height=opening.height,
+            door_depth=opening.depth,
             orientation=cast(DoorOrientationLiteral, submission.details.orientation.value.title()),
             patterns=pattern_names,
             normal_opening_time=submission.details.timing.opening,
@@ -287,3 +300,101 @@ def _sponsor_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue
         "description": submission.sponsor.description,
         "website_url": submission.sponsor.website_url,
     }
+
+
+PREVIEW_TITLE_FIELDS: Mapping[str, tuple[str, ...]] = {
+    SubmissionCategory.DOOR: ("opening_width", "opening_height", "door_orientation"),
+    SubmissionCategory.EXTENDER: ("movement_orientation", "extension_length"),
+}
+"""Answers a build title is generated from, by category; preview_build needs them all."""
+
+
+def preview_build(
+    category: str,
+    answers: Mapping[str, JSONValue],
+    definitions: Mapping[str, TagDefinition],
+) -> Build | None:
+    """Build an unsaved, pending build from a draft's answers, for showing its card before submission.
+
+    Unlike _to_build, this accepts incomplete answers: missing values stay None, and option keys
+    without an approved definition are left out. It maps fields the same way so the card matches
+    the build that finalization will create, except for media and schematics, which only attach
+    on finalization.
+
+    Args:
+        definitions: Approved tag definitions keyed by stable key, as public_definitions returns.
+
+    Returns:
+        The build, or None while the facts its title is made from are missing: a door's opening
+        width, height, and type, or an extender's direction and length. PREVIEW_TITLE_FIELDS lists them.
+    """
+    if any(answers.get(field_id) is None for field_id in PREVIEW_TITLE_FIELDS.get(category, ())):
+        return None
+
+    def text(field_id: str) -> str | None:
+        value = answers.get(field_id)
+        return value if isinstance(value, str) and value.strip() else None
+
+    def integer(field_id: str) -> int | None:
+        value = answers.get(field_id)
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    def keys(field_id: str) -> list[str]:
+        value = answers.get(field_id)
+        return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+    pattern_names = [definitions[key].display_name for key in keys("patterns") if key in definitions]
+    extra_info: dict[str, JSONValue] = {}
+    UnresolvedTaxonomy().add(
+        restrictions=[("miscellaneous_restrictions", name) for name in keys("restriction_proposals")],
+        patterns=keys("pattern_proposals"),
+    ).write(cast(Info, extra_info))
+    source_version = text("source_version")
+    common: dict[str, Any] = {
+        "versions": [source_version] if source_version is not None else [],
+        "version_spec": text("version_compatibility"),
+        "width": integer("capture_width"),
+        "height": integer("capture_height"),
+        "depth": integer("capture_depth"),
+        **_restriction_values(keys("restrictions"), definitions),
+        "tags": [
+            TagAssignment(definitions[key], provenance="submitted")
+            for key in keys("showcase_tags")
+            if key in definitions
+        ],
+        "extra_info": cast(Info, extra_info),
+        "creators_ign": [creator.strip() for creator in keys("creators") if creator.strip()],
+        "completion_time": text("completion"),
+        "description": text("description"),
+    }
+    build: Build
+    if category == SubmissionCategory.DOOR:
+        build = DoorBuild(
+            **common,
+            door_width=cast(int, integer("opening_width")),
+            door_height=cast(int, integer("opening_height")),
+            door_depth=integer("opening_depth"),
+            orientation=cast(DoorOrientationLiteral, cast(str, text("door_orientation")).title()),
+            patterns=pattern_names,
+            normal_opening_time=integer("opening_time"),
+            visible_opening_time=integer("visible_opening_time"),
+            normal_closing_time=integer("closing_time"),
+            visible_closing_time=integer("visible_closing_time"),
+        )
+    elif category == SubmissionCategory.EXTENDER:
+        orientation = text("movement_orientation")
+        build = ExtenderBuild(
+            **common,
+            orientation=_EXTENDER_ORIENTATION.get(ExtenderOrientation(orientation))
+            if orientation is not None
+            else None,
+            extension_length=integer("extension_length"),
+            patterns=pattern_names,
+            extender_type=pattern_names[0] if pattern_names else None,
+        )
+    else:
+        build = BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[SubmissionCategory(category)]](**common)
+    build.display_name = text("display_name")
+    build.ai_generated = answers.get("ai_generated") is True
+    build.submission_status = Status.PENDING
+    return build

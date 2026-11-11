@@ -263,7 +263,7 @@ def test_manifest_dto_is_stable_strict_and_json_safe() -> None:
     payload = response.model_dump(mode="json")
 
     assert payload["schema_id"] == "build_submission.v1"
-    assert payload["revision"] == 2
+    assert payload["revision"] == 4
     assert payload["common_sections"][0]["fields"][0]["control"] == "text"
     assert payload["common_sections"][0]["fields"][0]["origins"] == ["cli", "discord", "fabric", "paper", "web"]
     fields = {field["id"] for section in payload["common_sections"] for field in section["fields"]}
@@ -332,6 +332,7 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
     [
         (2, "19a6c9ea5209c84e8aee12a4c1ad2485454b5c4091cbd9e737eb0b8ed8fc400f"),
         (3, "06fc4358f2688a923763f2c7679c7683ecba91af48360fa4d1685c35c9788e8c"),
+        (4, "a83a309e70b20690dbe671443f847e65de62619b4f4166248e34a0fc5692f711"),
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:

@@ -23,9 +23,11 @@ from squid_i18n import Message, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
-# Revision 3 is readable and explicitly upgradeable, but new-draft writers stay on
-# revision 2 until every deployed reader has been upgraded and old workers are drained.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 2
+# New drafts use revision 4. Revisions 2 and 3 stay readable for existing drafts, which can be
+# upgraded one revision at a time. Revision 4 relaxes sizes (build size optional, door depth
+# optional) and stops asking Discord submitters for the exported Minecraft version.
+CURRENT_SUBMISSION_SCHEMA_REVISION = 4
+_CHECKED_IN_REVISIONS = frozenset({2, 3, 4})
 
 
 class FormManifestRegistry(Protocol):
@@ -116,7 +118,7 @@ class CheckedInFormManifestRegistry:
         locale: str | None,
     ) -> FormManifest | None:
         """Return a pinned schema when its exact immutable revision is still available."""
-        if schema_id != CURRENT_SUBMISSION_SCHEMA or revision not in {2, 3}:
+        if schema_id != CURRENT_SUBMISSION_SCHEMA or revision not in _CHECKED_IN_REVISIONS:
             return None
         return build_submission_manifest(locale, revision=revision)
 
@@ -127,7 +129,7 @@ def build_submission_manifest(
     revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION,
 ) -> FormManifest:
     """Build the checked-in schema revision localized for one client."""
-    if revision not in {2, 3}:
+    if revision not in _CHECKED_IN_REVISIONS:
         msg = tr(t"submissions-unsupported-checked-submission = unsupported checked-in submission form revision")
         raise InvalidStateError(msg)
     with localization_scope(localization_for(locale)):
@@ -193,31 +195,47 @@ def _build_submission_manifest(revision: int) -> FormManifest:
                     "capture_width",
                     tr(t"submissions-application-forms-build-width = Build width"),
                     localize,
-                    required=True,
+                    required=revision < 4,
                     maximum=512,
                 ),
                 _integer_field(
                     "capture_height",
                     tr(t"submissions-application-forms-build-height = Build height"),
                     localize,
-                    required=True,
+                    required=revision < 4,
                     maximum=512,
                 ),
                 _integer_field(
                     "capture_depth",
                     tr(t"submissions-application-forms-build-depth = Build depth"),
                     localize,
-                    required=True,
+                    required=revision < 4,
                     maximum=512,
                 ),
                 FormField(
                     id="source_version",
                     label=localize(tr(t"submissions-exact-source-minecraft = Minecraft version")),
+                    help_text=(
+                        localize(
+                            tr(
+                                t"submissions-source-version-help = "
+                                t"The version the schematic or world capture was exported from."
+                            )
+                        )
+                        if revision >= 4
+                        else None
+                    ),
                     control=ControlKind.CHOICE,
                     value_kind=ValueKind.STRING,
                     required=True,
                     option_source="approved_source_versions",
                     constraints=FieldConstraints(min_length=1, max_length=80),
+                    # Only in-game capture clients know the exported version; Discord submitters are not asked.
+                    origins=(
+                        frozenset(SubmissionOrigin) - {SubmissionOrigin.DISCORD}
+                        if revision >= 4
+                        else frozenset(SubmissionOrigin)
+                    ),
                 ),
                 FormField(
                     id="version_compatibility",
@@ -407,7 +425,7 @@ def _door_form(localize: Callable[[Message], str], revision: int = CURRENT_SUBMI
                         "opening_depth",
                         opening_depth,
                         localize,
-                        required=True,
+                        required=revision < 4,
                         maximum=512,
                     ),
                     FormField(

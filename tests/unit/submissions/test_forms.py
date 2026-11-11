@@ -116,7 +116,7 @@ async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None
 
     assert revision_two is not None
     assert revision_three is not None
-    assert current.revision == 2
+    assert current.revision == 4
     old_context = next(section for section in revision_two.common_sections if section.id == "provenance")
     new_context = next(section for section in revision_three.common_sections if section.id == "submission_context")
     assert (
@@ -243,3 +243,26 @@ def test_draft_lifecycle_prevents_edits_while_processing() -> None:
                 ),
             )
         )
+
+
+def test_revision_four_relaxes_sizes_and_hides_the_exported_version_on_discord() -> None:
+    previous = build_submission_manifest(revision=3)
+    current = build_submission_manifest(revision=4)
+    answers = {"creators": ["Builder"], "schematic_visibility": "reviewer_only", "source_version": "Java 1.21"}
+    door_answers = {**answers, "opening_width": 2, "opening_height": 3, "door_orientation": "door"}
+
+    # Revision 3 still needs every size part and the exported version.
+    assert set(previous.validate_answers("door", door_answers, origin=SubmissionOrigin.DISCORD)) == {
+        "capture_width",
+        "capture_height",
+        "capture_depth",
+        "opening_depth",
+    }
+    # Revision 4 accepts a door without depth or build size.
+    assert current.validate_answers("door", door_answers, origin=SubmissionOrigin.DISCORD) == {}
+    # Discord is not asked for the exported version, so a stored one is dropped; capture clients still need it.
+    assert "source_version" not in current.visible_answers("door", door_answers, origin=SubmissionOrigin.DISCORD)
+    capture = current.validate_answers(
+        "other", {"creators": ["Builder"], "schematic_visibility": "reviewer_only"}, origin=SubmissionOrigin.FABRIC
+    )
+    assert capture == {"source_version": "required"}

@@ -359,6 +359,22 @@ class FormManifest:
                 normalized[item.id] = item.default
         return normalized
 
+    def visible_answers(
+        self,
+        category: str,
+        answers: Mapping[str, JSONValue],
+        *,
+        origin: SubmissionOrigin,
+    ) -> dict[str, JSONValue]:
+        """Apply defaults, then keep only answers to fields visible for these answers and origin.
+
+        A hidden field's stale answer, such as a license kept after the schematic was made
+        private, or a source version a client was never asked for, must not reach the build.
+        """
+        normalized = self.apply_defaults(category, answers, origin=origin)
+        visible = {item.id for item in self.fields_for(category) if item.is_visible(normalized, origin)}
+        return {field_id: value for field_id, value in normalized.items() if field_id in visible}
+
 
 def _validate_value(field: FormField, value: JSONValue) -> str | None:
     if not _matches_kind(value, field.value_kind):

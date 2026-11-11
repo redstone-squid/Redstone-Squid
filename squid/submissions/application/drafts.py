@@ -505,7 +505,7 @@ class SubmissionDraftService:
         )
         if errors:
             raise DraftValidationError(errors)
-        normalized = manifest.apply_defaults(
+        normalized = manifest.visible_answers(
             current.snapshot.category,
             current.snapshot.answers,
             origin=current.origin,

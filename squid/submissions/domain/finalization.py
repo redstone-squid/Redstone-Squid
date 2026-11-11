@@ -123,14 +123,18 @@ class SubmissionAttentionIssue:
 
 @dataclass(frozen=True, slots=True)
 class SubmissionDimensions:
-    """A positive width, height, and depth in blocks."""
+    """A width, height, and depth in blocks; None means the submitter did not give that part.
 
-    width: int
-    height: int
-    depth: int
+    Which parts may be None depends on the form revision: from revision 4 the whole build size
+    and a door's depth are optional. Parts that are given must be positive.
+    """
+
+    width: int | None
+    height: int | None
+    depth: int | None
 
     def __post_init__(self) -> None:
-        if min(self.width, self.height, self.depth) < 1:
+        if any(part is not None and part < 1 for part in (self.width, self.height, self.depth)):
             msg = tr(t"submissions-submission-dimensions-positive = submission dimensions must be positive")
             raise ValidationError(msg)
 
@@ -243,7 +247,10 @@ class ExtenderTiming:
 
 @dataclass(frozen=True, slots=True)
 class DoorSubmissionDetails:
-    """Normalized fields specific to a door submission."""
+    """Normalized fields specific to a door submission.
+
+    The opening always has a width and height; its depth may be unknown.
+    """
 
     opening: SubmissionDimensions
     orientation: DoorOrientation
@@ -253,6 +260,9 @@ class DoorSubmissionDetails:
 
     def __post_init__(self) -> None:
         _require_stable_keys(self.pattern_keys, "pattern")
+        if self.opening.width is None or self.opening.height is None:
+            msg = tr(t"submissions-door-opening-required = a door opening needs a width and a height")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,7 +309,8 @@ class NormalizedSubmission:
     description: str | None
     creators: tuple[str, ...]
     capture_dimensions: SubmissionDimensions
-    source_version: str
+    source_version: str | None
+    """The Minecraft version the capture was exported from; None when the form did not ask for it."""
     version_compatibility: str | None
     taxonomy: SubmissionTaxonomy
     schematic_policy: SchematicRightsPolicy
@@ -318,10 +329,10 @@ class NormalizedSubmission:
         if self.schema_revision < 1 or not self.schema_id:
             msg = tr(t"submissions-normalized-submission-schema = normalized submission schema provenance is invalid")
             raise ValidationError(msg)
-        if not self.creators or not self.source_version:
+        if not self.creators or self.source_version == "":
             msg = tr(
                 t"submissions-normalized-creators-required = "
-                t"normalized submissions require creators and an exact source version"
+                t"normalized submissions require creators, and a source version cannot be blank"
             )
             raise ValidationError(msg)
         compatible = (

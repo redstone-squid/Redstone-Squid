@@ -125,6 +125,9 @@ def project_submission(
     for issue in manifest.validate_answers(category, answers, origin=origin, require_complete=False):
         answers.pop(issue, None)
         unresolved.append(issue)
+    # Drop facts for fields this origin is not asked about, such as the exported version on Discord.
+    visible = manifest.visible_answers(category, answers, origin=origin)
+    answers = {field_id: value for field_id, value in answers.items() if field_id in visible}
     return SubmissionPrefill(category, answers, tuple(dict.fromkeys(unresolved)))
 
 

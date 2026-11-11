@@ -33,9 +33,10 @@ class _StrictPayloadModel(BaseModel):
 
 
 class _DimensionsPayload(_StrictPayloadModel):
-    width: int
-    height: int
-    depth: int
+    # Payloads written before form revision 4 always carry all three parts.
+    width: int | None
+    height: int | None
+    depth: int | None
 
     def to_domain(self) -> SubmissionDimensions:
         return SubmissionDimensions(self.width, self.height, self.depth)
@@ -172,7 +173,7 @@ class _FinalizationPayloadBase(_StrictPayloadModel):
     description: str | None
     creators: list[str]
     capture_dimensions: _DimensionsPayload
-    source_version: str
+    source_version: str | None
     version_compatibility: str | None
     taxonomy: _TaxonomyPayload
     schematic_policy: _SchematicPolicyPayload

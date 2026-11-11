@@ -7,9 +7,10 @@ from uuid import UUID
 
 import pytest
 
-from squid.builds.domain import BuildCategory
+from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.errors import ValidationError
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import (
     BuildSubmissionRejected,
@@ -31,7 +32,8 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
+from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation, preview_build
+from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
@@ -412,3 +414,68 @@ async def test_structured_build_rejection_becomes_target_attention() -> None:
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
     )
+
+
+async def test_a_door_without_depth_build_size_or_exported_version_still_becomes_a_build() -> None:
+    # Form revision 4 leaves these optional; the payload codec and adapter must carry the gaps through.
+    submission = replace(
+        _submission(SubmissionCategory.DOOR),
+        schema_revision=4,
+        origin=SubmissionOrigin.DISCORD,
+        capture_dimensions=SubmissionDimensions(None, None, None),
+        source_version=None,
+        details=DoorSubmissionDetails(SubmissionDimensions(2, 3, None), DoorOrientation.DOOR),
+    )
+    assert decode_submission(encode_submission(submission)) == submission
+    builds = FakeBuilds()
+
+    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
+
+    assert isinstance(result, DoorBuild)
+    assert result.versions == []
+    assert (result.width, result.height, result.depth) == (None, None, None)
+    assert (result.door_width, result.door_height, result.door_depth) == (2, 3, None)
+
+
+def test_submission_dimensions_reject_parts_below_one() -> None:
+    with pytest.raises(ValidationError):
+        SubmissionDimensions(2, 0, None)
+
+
+def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None:
+    restriction = _definition("seamless", TagSemanticKind.RESTRICTION, restriction_type="wiring-placement")
+    pattern = _definition("regular", TagSemanticKind.PATTERN)
+    build = preview_build(
+        "door",
+        {
+            "creators": ["Builder"],
+            "opening_width": 2,
+            "opening_height": 2,
+            "door_orientation": "trapdoor",
+            "restrictions": ["seamless", "retired"],
+            "patterns": ["regular"],
+            "pattern_proposals": ["Spiral"],
+            "ai_generated": True,
+        },
+        {definition.stable_key: definition for definition in (restriction, pattern)},
+    )
+    assert isinstance(build, DoorBuild)
+    assert build.id is None
+    assert build.submission_status is Status.PENDING
+    assert (build.door_width, build.door_height, build.door_depth) == (2, 2, None)
+    assert build.orientation == "Trapdoor"
+    assert build.wiring_placement_restrictions == [restriction.display_name]
+    assert build.patterns == [pattern.display_name]
+    assert build.ai_generated
+    assert build.versions == []
+
+
+def test_preview_waits_for_the_facts_the_title_is_made_from() -> None:
+    assert preview_build("door", {"opening_width": 2, "opening_height": 2}, {}) is None
+    assert preview_build("extender", {"movement_orientation": "horizontal"}, {}) is None
+    assert preview_build("other", {}, {}) is not None
+
+
+def test_a_door_opening_needs_width_and_height() -> None:
+    with pytest.raises(ValidationError):
+        DoorSubmissionDetails(SubmissionDimensions(2, None, 1), DoorOrientation.DOOR)

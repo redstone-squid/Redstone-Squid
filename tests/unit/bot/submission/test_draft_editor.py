@@ -206,7 +206,8 @@ def test_every_visible_field_comes_from_the_manifest() -> None:
         changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
     )
     assert {field.id for field in editor.fields} <= {field.id for field in manifest.fields_for("other")}
-    assert "source_version" in {field.id for field in editor.fields}
+    # Discord submitters are not asked which version a capture was exported from.
+    assert "source_version" not in {field.id for field in editor.fields}
     assert "rights_attestation" not in {field.id for field in editor.fields}
 
 
@@ -234,9 +235,10 @@ async def test_required_count_treats_a_size_as_one_field() -> None:
     services, drafts = setup("door")
     editor = await open_editor(services, drafts)
     text = rendered_text(editor)
-    # Creators, build size, Minecraft version, schematic access, door size, and door type.
-    assert "6 required fields are empty" in text
-    assert "Build size: ⚠️ *Required*" in text
+    # Creators, schematic access, door size, and door type; the build size is optional.
+    assert "4 required fields are empty" in text
+    assert "Door size: ⚠️ *Required*" in text
+    assert "Build size: ⚠️" not in text
     submit = next(button for button in find_all(editor.render(), sl.primitives.Button) if button.key == "submit")
     assert submit.disabled
 
@@ -244,15 +246,14 @@ async def test_required_count_treats_a_size_as_one_field() -> None:
 async def test_size_modal_saves_three_fields_together_and_rejects_stale_edits() -> None:
     services, drafts = setup()
     editor = await open_editor(services, drafts)
-    # The section also holds the Minecraft version picker, so Edit opens its focused view.
-    await editor._edit_section("dimensions_versions", Mock(spec=sl.PressEvent))
-    assert editor.focus == "dimensions_versions"
+    # On Discord the section has no catalogue field, so Edit opens its modal directly.
     event = Mock(spec=sl.PressEvent, present_form=AsyncMock())
-    await editor._edit_form("dimensions_versions_0", event)
+    await editor._edit_section("dimensions_versions", event)
+    assert editor.focus is None
     spec = event.present_form.call_args.args[0]
     entries = {entry.key: entry for entry in spec.items}
     assert set(entries) == {"capture_size", "version_compatibility"}
-    assert entries["capture_size"].required
+    assert not entries["capture_size"].required
     submit = event.present_form.call_args.kwargs["on_submit"]
     await submit(Mock(spec=sl.SubmitEvent, values={"capture_size": "3x4x5", "version_compatibility": None}))
     assert len(drafts.changes) == 1
@@ -265,15 +266,21 @@ async def test_size_modal_saves_three_fields_together_and_rejects_stale_edits() 
     assert source_text(editor.notice) == DraftRevisionConflictError(expected=0, actual=1).public_detail()
 
 
-async def test_size_without_depth_leaves_depth_missing() -> None:
-    services, drafts = setup()
+async def test_door_size_may_omit_depth_but_not_width() -> None:
+    services, drafts = setup("door")
     editor = await open_editor(services, drafts)
     event = Mock(spec=sl.PressEvent, present_form=AsyncMock())
-    await editor._edit_form("dimensions_versions_0", event)
+    await editor._edit_form("door_geometry_0", event)
     submit = event.present_form.call_args.kwargs["on_submit"]
-    await submit(Mock(spec=sl.SubmitEvent, values={"capture_size": "5 x 7", "version_compatibility": None}))
-    assert "capture_depth" not in editor.draft.snapshot.answers
-    assert "Build size: 5 x 7 x ? — ⚠️ Required" in rendered_text(editor)
+    await submit(Mock(spec=sl.SubmitEvent, values={"opening_size": "2 x 3", "door_orientation": "door"}))
+    assert "opening_depth" not in editor.draft.snapshot.answers
+    assert "Door size: 2 x 3 x ?\n" in rendered_text(editor) + "\n"
+
+    event = Mock(spec=sl.PressEvent, present_form=AsyncMock())
+    await editor._edit_form("door_geometry_0", event)
+    submit = event.present_form.call_args.kwargs["on_submit"]
+    await submit(Mock(spec=sl.SubmitEvent, values={"opening_size": "? x 3", "door_orientation": "door"}))
+    assert "Door size: ? x 3 x ? — ⚠️ Required" in rendered_text(editor)
 
 
 def test_size_input_rejects_text_that_is_not_a_size() -> None:
@@ -322,6 +329,8 @@ async def test_public_visibility_reveals_required_license_and_permission() -> No
 
 async def test_picker_opens_on_the_page_of_the_current_choice() -> None:
     services, drafts = setup()
+    # Web drafts are still asked for the exported version, which is a paged catalogue field.
+    drafts.current = replace(drafts.current, origin=SubmissionOrigin.WEB)
     editor = await open_editor(services, drafts)
     # The stub catalogue lists Java 1.30 down to 1.1, so 1.2 is on the second page.
     await editor._save_values({"source_version": "Java 1.2"})

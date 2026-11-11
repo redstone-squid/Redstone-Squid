@@ -57,7 +57,7 @@ def normalize_submission(
             opening=SubmissionDimensions(
                 _required_int(answers, "opening_width"),
                 _required_int(answers, "opening_height"),
-                _required_int(answers, "opening_depth"),
+                _optional_int(answers, "opening_depth"),
             ),
             orientation=DoorOrientation(_required_str(answers, "door_orientation")),
             pattern_keys=_string_tuple(answers, "patterns"),
@@ -93,11 +93,12 @@ def normalize_submission(
         description=_optional_str(answers, "description"),
         creators=_string_tuple(answers, "creators"),
         capture_dimensions=SubmissionDimensions(
-            _required_int(answers, "capture_width"),
-            _required_int(answers, "capture_height"),
-            _required_int(answers, "capture_depth"),
+            _optional_int(answers, "capture_width"),
+            _optional_int(answers, "capture_height"),
+            _optional_int(answers, "capture_depth"),
         ),
-        source_version=_required_str(answers, "source_version"),
+        # Older form revisions require these; from revision 4 they may be absent.
+        source_version=_optional_str(answers, "source_version"),
         version_compatibility=_optional_str(answers, "version_compatibility"),
         taxonomy=SubmissionTaxonomy(
             restriction_keys=_string_tuple(answers, "restrictions"),
